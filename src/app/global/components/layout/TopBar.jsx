@@ -121,17 +121,15 @@ const TopBar = ({
                     {t("nav.about", {}, "About")}
                   </button>
                   
-                  {/* Install App Button - Only show when installable */}
-                  {isInstallable && (
-                    <button
-                      onClick={handleInstall}
-                      disabled={installing}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] disabled:opacity-60 transition-colors text-left"
-                    >
-                      <Download className="w-4 h-4 flex-shrink-0" />
-                      {installing ? "Installing..." : "Install HarvestWise"}
-                    </button>
-                  )}
+                  {/* Install App Button - Always show, only disable when already installed */}
+                  <button
+                    onClick={handleInstall}
+                    disabled={isInstalled || installing}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] disabled:opacity-40 disabled:cursor-not-allowed disabled:text-[var(--hw-neutral-500)] transition-colors text-left"
+                  >
+                    <Download className="w-4 h-4 flex-shrink-0" />
+                    {isInstalled ? "App Installed" : installing ? "Installing..." : "Get the App"}
+                  </button>
                 </div>
 
                 {/* Log out */}

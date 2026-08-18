@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { Eye, EyeOff, Check } from "lucide-react";
+import { Eye, EyeOff, Check, Download } from "lucide-react";
 import VerticalLogo from "../../imports/logo";
 import { useAuth } from "../global/contexts/AuthContext";
 import { Footer } from "../global/components/Footer";
+import { usePWAInstall } from "../global/hooks/usePWAInstall";
 const GoogleIcon = () => <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -38,6 +39,7 @@ const inputCls = "w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg
 function RegisterPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -52,6 +54,7 @@ function RegisterPage() {
   const [showCfm, setShowCfm] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [installing, setInstalling] = useState(false);
   const capitalizeWords = (v) => v.replace(/\b\w/g, (c) => c.toUpperCase());
   const set = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));

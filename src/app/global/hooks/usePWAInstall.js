@@ -27,6 +27,7 @@ export function usePWAInstall() {
       setIsInstallable(false);
     };
 
+    // Add event listeners
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
@@ -37,6 +38,13 @@ export function usePWAInstall() {
       isSecure: window.isSecureContext
     });
 
+    // Try to force check if prompt is already available
+    if (window.deferredPrompt) {
+      console.log('[PWA] Found existing deferred prompt on window');
+      setDeferredPrompt(window.deferredPrompt);
+      setIsInstallable(true);
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
@@ -44,21 +52,30 @@ export function usePWAInstall() {
   }, []);
 
   const promptInstall = async () => {
-    console.log('[PWA] Install button clicked', { deferredPrompt });
+    console.log('[PWA] Install button clicked', { 
+      hasDeferredPrompt: !!deferredPrompt,
+      isInstallable,
+      isInstalled 
+    });
     
     if (!deferredPrompt) {
-      console.warn('[PWA] No deferred prompt available');
+      console.error('[PWA] No deferred prompt available');
       return { outcome: 'unavailable' };
     }
 
     try {
-      deferredPrompt.prompt();
+      console.log('[PWA] Calling deferredPrompt.prompt()');
+      await deferredPrompt.prompt();
+      
       const result = await deferredPrompt.userChoice;
       console.log('[PWA] User choice:', result.outcome);
       
       if (result.outcome === 'accepted') {
+        console.log('[PWA] User accepted the install prompt');
         setDeferredPrompt(null);
         setIsInstallable(false);
+      } else {
+        console.log('[PWA] User dismissed the install prompt');
       }
 
       return result;

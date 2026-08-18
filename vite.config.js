@@ -14,9 +14,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {
-        enabled: false
+        enabled: true,
+        type: 'module'
       },
-      includeAssets: ['favicon.png', 'favicon-app.png', 'horizontal-logo.png', 'vertical-logo.png'],
+      includeAssets: ['favicon-browser.png', 'favicon-app.png', 'horizontal-logo.png', 'vertical-logo.png'],
       manifest: {
         name: 'HarvestWise',
         short_name: 'HarvestWise',
