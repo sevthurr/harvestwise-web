@@ -9,7 +9,7 @@ export function ProtectedRoute({ children, requiredRole }) {
     // Wrong role: redirect to their actual home
     if (user?.role === 'admin') return <Navigate to="/admin" replace />;
     if (user?.role === 'dftc') return <Navigate to="/dftc" replace />;
-    return <Navigate to="/" replace />;
+    return <Navigate to="/farmer" replace />;
   }
   return <>{children}</>;
 }

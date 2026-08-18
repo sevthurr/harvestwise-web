@@ -1,5 +1,5 @@
 import React from "react";
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { Layout } from "./global/components/layout/Layout";
 import { AdminLayout } from "./global/components/layout/AdminLayout";
 import { ProtectedRoute } from "./global/components/ProtectedRoute";
@@ -72,7 +72,7 @@ import AdminUserDetails from "./admin/pages/AdminUserDetails";
 
 export const router = createBrowserRouter([
   // ── Auth pages (unprotected) ──────────────────────────────────────────────────
-  { path: "/", element: <LoginPage /> }, // Default to login page
+  { path: "/", element: <Navigate to="/login" replace /> },
   { path: "/login",      element: <LoginPage /> },
   { path: "/register",   element: <RegisterPage /> },
   { path: "/onboarding", element: <OnboardingPage /> },

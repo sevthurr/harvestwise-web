@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff } from "lucide-react";
 import VerticalLogo from "../../imports/logo";
@@ -29,12 +29,8 @@ function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // Auto-redirect if already logged in
-  useEffect(() => {
-    if (isLoggedIn && user) {
-      navigate(roleHome(user.role), { replace: true });
-    }
-  }, [isLoggedIn, user, navigate]);
+  // NO auto-redirect - let user stay on login page even if logged in
+  // They can manually navigate away or we redirect after login action
   
   const handleSignIn = async (e) => {
     e.preventDefault();
