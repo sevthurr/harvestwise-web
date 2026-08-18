@@ -91,7 +91,7 @@ function CropFactorsPage() {
         <Breadcrumb
     items={[
       { label: "My Crops", onClick: () => navigate("/farmer/crops") },
-      { label: crop.commodityName, onClick: () => navigate(`/crops/${crop.id}`) },
+      { label: crop.commodityName, onClick: () => navigate(`/farmer/crops/${crop.id}`) },
       { label: "Detailed Factors" }
     ]}
   />
@@ -124,7 +124,7 @@ function CropFactorsPage() {
     /* Bottom action */
   }
         <button
-    onClick={() => navigate(`/assess?commodity=${crop.commodity}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${crop.commodity}`)}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
   >
           Assess this crop again

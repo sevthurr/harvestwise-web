@@ -84,7 +84,7 @@ function DftcWholesaleForecastPage() {
   }
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
-    onClick={() => navigate(`/forecast/${commodity.id}`)}
+    onClick={() => navigate(`/farmer/forecast/${commodity.id}`)}
     className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
   >
             <ArrowLeft className="w-4 h-4" />
@@ -93,7 +93,7 @@ function DftcWholesaleForecastPage() {
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {COMMODITIES.map((c) => <button
     key={c.id}
-    onClick={() => navigate(`/forecast/${c.id}/wholesale`)}
+    onClick={() => navigate(`/farmer/forecast/${c.id}/wholesale`)}
     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
   >
                 {c.name}
@@ -310,7 +310,7 @@ function DftcWholesaleForecastPage() {
             <p className="text-xs text-[var(--hw-green-700)] mt-0.5">Assess market conditions before you plant</p>
           </div>
           <button
-    onClick={() => navigate(`/assess?commodity=${commodity.id}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
   >
             Assess now

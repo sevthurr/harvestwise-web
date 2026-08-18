@@ -230,7 +230,7 @@ function DftcWholesaleDetailPage() {
             <p className="text-xs text-[var(--hw-green-700)] mt-0.5">Short-term DFTC Wholesale price direction</p>
           </div>
           <button
-    onClick={() => navigate(`/forecast/${commodity.id}/wholesale`)}
+    onClick={() => navigate(`/farmer/forecast/${commodity.id}/wholesale`)}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
   >
             View DFTC Wholesale Forecast
@@ -247,7 +247,7 @@ function DftcWholesaleDetailPage() {
             <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">Assess market conditions before you plant</p>
           </div>
           <button
-    onClick={() => navigate(`/assess?commodity=${commodity.id}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
   >
             Assess now

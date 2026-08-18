@@ -360,7 +360,7 @@ function CommodityDetailPage() {
             </p>
           </div>
           <button
-    onClick={() => navigate(`/assess?commodity=${commodity.id}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
   >
             Check crop

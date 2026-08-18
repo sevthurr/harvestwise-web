@@ -285,7 +285,7 @@ function CropCycleDetailPage() {
               {ADVISORY_SUPPORT[advisory]}
             </p>
             <button
-    onClick={() => navigate(`/crops/${crop.id}/factors`)}
+    onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
     className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
               View basis →

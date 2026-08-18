@@ -31,7 +31,7 @@ export const ceb = {
   nav: {
     home: "Balay",
     prices: "Presyo",
-    guide: "Giya",
+    guide: "Kalendaryo sa Pagtanim",
     my_crops: "Akong Tanom",
     recommendations: "Tambag",
     assess: "Susiha",

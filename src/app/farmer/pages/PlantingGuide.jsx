@@ -185,7 +185,7 @@ function PlantingGuidePage() {
                 {recommended.map((crop) => <CropAdvisoryCard
     key={crop.id}
     crop={crop}
-    onViewGuide={() => navigate(`/assess?commodity=${crop.id}`)}
+    onViewGuide={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
   />)}
               </div>
             </section>
@@ -202,7 +202,7 @@ function PlantingGuidePage() {
                 {conservative.map((crop) => <CropAdvisoryCard
     key={crop.id}
     crop={crop}
-    onViewGuide={() => navigate(`/assess?commodity=${crop.id}`)}
+    onViewGuide={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
   />)}
               </div>
             </section>
@@ -219,7 +219,7 @@ function PlantingGuidePage() {
                 {avoid.map((crop) => <CropAdvisoryCard
     key={crop.id}
     crop={crop}
-    onViewGuide={() => navigate(`/assess?commodity=${crop.id}`)}
+    onViewGuide={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
   />)}
               </div>
             </section>

@@ -151,7 +151,7 @@ function MarketOutlookDetailPage() {
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {Object.entries(COMMODITY_REGISTRY).map(([id, { name }]) => <button
     key={id}
-    onClick={() => navigate(`/market/detail/${id}`)}
+    onClick={() => navigate(`/farmer/market/detail/${id}`)}
     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${id === commodityId ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
   >
                 {name}
@@ -225,7 +225,7 @@ function MarketOutlookDetailPage() {
           </p>
           <p className="text-[var(--hw-neutral-700)] leading-relaxed">{watchText}</p>
           <button
-    onClick={() => navigate(`/assess?commodity=${commodity.id}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
     className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
   >
             Check planting assessment

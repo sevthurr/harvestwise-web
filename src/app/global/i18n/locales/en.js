@@ -31,7 +31,7 @@ export const en = {
   nav: {
     home: "Home",
     prices: "Prices",
-    guide: "Guide",
+    guide: "Crop Calendar",
     my_crops: "My Crops",
     recommendations: "Recommendations",
     assess: "Assess",

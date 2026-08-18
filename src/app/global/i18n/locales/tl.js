@@ -31,7 +31,7 @@ export const tl = {
   nav: {
     home: "Tahanan",
     prices: "Presyo",
-    guide: "Gabay",
+    guide: "Tanim na Kalendaryo",
     my_crops: "Aking Tanim",
     recommendations: "Ulat & Payo",
     assess: "Pagsusuri",

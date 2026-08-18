@@ -487,8 +487,8 @@ function ForecastPage() {
           {visibleCommodities.map((c) => {
     const dual = DUAL_FORECAST[c.id];
     if (!dual) return null;
-    const goToDetail = () => navigate(`/forecast/${c.id}`);
-    const goToWholesale = () => navigate(`/forecast/${c.id}/wholesale`);
+    const goToDetail = () => navigate(`/farmer/forecast/${c.id}`);
+    const goToWholesale = () => navigate(`/farmer/forecast/${c.id}/wholesale`);
     if (marketView === "both") {
       return isAnalytics ? <AnalyticsDualForecastCard key={c.id} commodity={c} dual={dual} period={period} onViewDetail={goToDetail} onViewWholesale={goToWholesale} /> : <DualForecastCard key={c.id} commodity={c} dual={dual} period={period} onViewDetail={goToDetail} onViewWholesale={goToWholesale} />;
     }

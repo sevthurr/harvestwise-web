@@ -403,7 +403,7 @@ function MarketOverviewPage() {
       outlook={outlook}
       isAnalytics={isAnalytics}
       period={filters.period}
-      onViewDetails={() => navigate(`/market/detail/${c.id}`)}
+      onViewDetails={() => navigate(`/farmer/market/detail/${c.id}`)}
     />;
   })}
               </div>
