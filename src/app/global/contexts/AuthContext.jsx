@@ -13,10 +13,10 @@ export function AuthProvider({ children }) {
     try {
       const s = localStorage.getItem(STORAGE_KEY);
       if (s) return JSON.parse(s);
-      // Default to demo farmer user for seamless initial load
-      return DEFAULT_FARMER_USER;
+      // Start with NO user - user must log in
+      return null;
     } catch {
-      return DEFAULT_FARMER_USER;
+      return null;
     }
   });
 

@@ -60,7 +60,7 @@ function LoginPage() {
     setLoading(true);
     await new Promise((r) => setTimeout(r, 600));
     login({ name: "Juan Dela Cruz", email: "juan.delacruz@gmail.com", role: "farmer" });
-    navigate("/", { replace: true });
+    navigate("/farmer", { replace: true });
     setLoading(false);
   };
   return <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
