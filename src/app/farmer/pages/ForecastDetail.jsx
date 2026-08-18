@@ -93,7 +93,7 @@ function ForecastDetailPage() {
   if (!commodity || !forecastEntry) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/forecast")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/forecast")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
           Back to Forecast
         </button>
       </div>;
@@ -121,7 +121,7 @@ function ForecastDetailPage() {
   }
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
-    onClick={() => navigate("/forecast")}
+    onClick={() => navigate("/farmer/forecast")}
     className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
   >
             <ArrowLeft className="w-4 h-4" />
@@ -341,7 +341,7 @@ function ForecastDetailPage() {
             <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">See recorded retail and wholesale prices</p>
           </div>
           <button
-    onClick={() => navigate(`/prices/${commodity.id}`)}
+    onClick={() => navigate(`/farmer/prices/${commodity.id}`)}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
   >
             View price history
@@ -370,7 +370,7 @@ function ForecastDetailPage() {
     /* View another commodity */
   }
         <button
-    onClick={() => navigate("/forecast")}
+    onClick={() => navigate("/farmer/forecast")}
     className="w-full text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-700)] transition-colors py-2"
   >
           View another commodity →

@@ -310,7 +310,7 @@ function DftcArrivalDetailsPage() {
             <p className="text-xs text-[var(--hw-green-700)] mt-0.5">Review the full planting assessment for this commodity</p>
           </div>
           <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
   >
             Assess now

@@ -184,7 +184,7 @@ const AdminLayoutInner = () => {
   }
                 <div className="py-1 border-t border-[var(--hw-neutral-100)]">
                   <button
-    onClick={() => go("/")}
+    onClick={() => go("/farmer")}
     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
   >
                     <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
@@ -226,7 +226,7 @@ const AdminLayoutInner = () => {
   }
         <div className="p-2 border-t border-[var(--hw-neutral-200)] space-y-0.5">
           <button
-    onClick={() => navigate("/")}
+    onClick={() => navigate("/farmer")}
     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
   >
             <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />

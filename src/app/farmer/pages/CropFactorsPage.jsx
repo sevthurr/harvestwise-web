@@ -40,7 +40,7 @@ function CropFactorsPage() {
   if (!crop) {
     return <div className="px-4 py-8 text-center space-y-3">
         <p className="text-[var(--hw-neutral-900)]">Crop not found.</p>
-        <button onClick={() => navigate("/crops")} className="text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/crops")} className="text-sm font-medium text-[var(--hw-green-700)]">
           Go to My Crops
         </button>
       </div>;
@@ -90,7 +90,7 @@ function CropFactorsPage() {
   }
         <Breadcrumb
     items={[
-      { label: "My Crops", onClick: () => navigate("/crops") },
+      { label: "My Crops", onClick: () => navigate("/farmer/crops") },
       { label: crop.commodityName, onClick: () => navigate(`/crops/${crop.id}`) },
       { label: "Detailed Factors" }
     ]}

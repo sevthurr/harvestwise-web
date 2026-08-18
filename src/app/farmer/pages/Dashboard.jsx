@@ -57,7 +57,7 @@ function ProfitCard() {
             Add a crop plan to see how much you might earn.
           </p>
           <button
-      onClick={() => navigate("/assess")}
+      onClick={() => navigate("/farmer/assess")}
       className="inline-flex items-center gap-2 text-sm font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
     >
             <Plus className="w-4 h-4" />
@@ -74,7 +74,7 @@ function ProfitCard() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Estimated Profit</h2>
         <button
-    onClick={() => navigate("/crops")}
+    onClick={() => navigate("/farmer/crops")}
     className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
   >
           View all
@@ -116,7 +116,7 @@ function ProfitCard() {
             Estimate only. Actual income may change.
           </p>
           <button
-    onClick={() => navigate("/crops")}
+    onClick={() => navigate("/farmer/crops")}
     className="flex-shrink-0 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
             View details
@@ -153,7 +153,7 @@ function DashboardPage() {
             Check prices, weather, and estimated profit before planting.
           </p>
           <button
-    onClick={() => navigate("/market")}
+    onClick={() => navigate("/farmer/market")}
     className="mt-4 inline-flex items-center gap-2 bg-white text-[var(--hw-green-700)] px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-green-50 transition-colors"
   >
             Check what to plant
@@ -179,7 +179,7 @@ function DashboardPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Today's prices</h2>
               <button
-    onClick={() => navigate("/prices")}
+    onClick={() => navigate("/farmer/prices")}
     className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
   >
                 See all
@@ -192,7 +192,7 @@ function DashboardPage() {
     const DirIcon = cfg.Icon;
     return <button
       key={item.id}
-      onClick={() => navigate(`/prices/${item.id}`)}
+      onClick={() => navigate(`/farmer/prices/${item.id}`)}
       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
     >
                     <CommodityIllustration commodityId={item.id} className="w-9 h-9 flex-shrink-0" />
@@ -230,7 +230,7 @@ function DashboardPage() {
                   Open the Planting Guide to compare other crops.
                 </p>
                 <button
-    onClick={() => navigate("/market")}
+    onClick={() => navigate("/farmer/market")}
     className="inline-flex items-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
   >
                   Open Planting Guide
@@ -260,7 +260,7 @@ function DashboardPage() {
                         <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{crop.reason}</p>
                       </div>
                       <button
-    onClick={() => navigate("/market")}
+    onClick={() => navigate("/farmer/market")}
     className="flex-shrink-0 text-[12px] font-medium text-[var(--hw-green-700)] hover:opacity-70 whitespace-nowrap"
   >
                         View guide
@@ -278,7 +278,7 @@ function DashboardPage() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">My crop reminders</h2>
             <button
-    onClick={() => navigate("/crops")}
+    onClick={() => navigate("/farmer/crops")}
     className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
   >
               View My Crops
@@ -288,7 +288,7 @@ function DashboardPage() {
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] divide-y divide-[var(--hw-neutral-100)]">
             {MY_REMINDERS.map((item) => <button
     key={item.id}
-    onClick={() => navigate("/crops")}
+    onClick={() => navigate("/farmer/crops")}
     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
                 <CommodityIllustration commodityId={item.id} className="w-9 h-9 flex-shrink-0" />

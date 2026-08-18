@@ -154,7 +154,7 @@ function MyCropsPage() {
             </p>
           </div>
           <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-[var(--shadow-xs)]"
   >
             <Plus className="w-4 h-4" />
@@ -185,7 +185,7 @@ function MyCropsPage() {
         {
     /* Crop list */
   }
-        {visible.length === 0 ? <MyCropsEmpty stage={stageFilter} onNew={() => navigate("/assess")} /> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {visible.length === 0 ? <MyCropsEmpty stage={stageFilter} onNew={() => navigate("/farmer/assess")} /> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {visible.map((crop) => <MyCropCard key={crop.id} crop={crop} onView={(id) => navigate(`/crops/${id}`)} />)}
           </div>}
       </div>

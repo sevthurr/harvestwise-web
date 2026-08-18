@@ -250,7 +250,7 @@ function PricesPage() {
     key={c.id}
     commodity={c}
     data={PRICE_DATA[c.id]}
-    onViewDetails={() => navigate(`/prices/${c.id}`)}
+    onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
   />)}
           </div>}
       </div>

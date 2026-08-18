@@ -114,7 +114,7 @@ function CommodityDetailPage() {
   if (!commodity || !marketMap) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/prices")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/prices")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
           Back to Prices
         </button>
       </div>;
@@ -134,7 +134,7 @@ function CommodityDetailPage() {
       direction: entry.direction,
       range: entry.range
     };
-    navigate(`/prices/${commodity.id}/price-trend`, { state });
+    navigate(`/farmer/prices/${commodity.id}/price-trend`, { state });
   };
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
@@ -145,14 +145,14 @@ function CommodityDetailPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Breadcrumb
     items={[
-      { label: "Prices", onClick: () => navigate("/prices") },
+      { label: "Prices", onClick: () => navigate("/farmer/prices") },
       { label: commodity.name }
     ]}
   />
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {COMMODITIES.map((c) => <button
     key={c.id}
-    onClick={() => navigate(`/prices/${c.id}`)}
+    onClick={() => navigate(`/farmer/prices/${c.id}`)}
     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
   >
                 {c.name}
@@ -368,7 +368,7 @@ function CommodityDetailPage() {
           </button>
           <div className="text-center">
             <button
-    onClick={() => navigate("/prices")}
+    onClick={() => navigate("/farmer/prices")}
     className="text-[13px] font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-700)] transition-colors"
   >
               View another crop

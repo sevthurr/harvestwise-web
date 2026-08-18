@@ -155,7 +155,7 @@ function PlantingGuidePage() {
             Compare crops before planting. HarvestWise checks price, weather, supply, and estimated profit.
           </p>
           <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="mt-4 inline-flex items-center gap-2 bg-white text-[var(--hw-green-700)] px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-green-50 transition-colors"
   >
             Check my crop
@@ -320,7 +320,7 @@ function PlantingGuidePage() {
     /* Link to weather screen */
   }
                 <button
-    onClick={() => navigate("/market/weather")}
+    onClick={() => navigate("/farmer/market/weather")}
     className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
                   View weather forecast
@@ -347,7 +347,7 @@ function PlantingGuidePage() {
             </div>
           </div>
           <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
   >
             Start check

@@ -317,7 +317,7 @@ const SelectedDateCard = ({ year, month, day, markers }) => {
         </div>}
 
       <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
   >
         Check this crop
@@ -538,7 +538,7 @@ const CropDetailView = ({ crop, onBack }) => {
     /* CTA */
   }
         <button
-    onClick={() => navigate(`/assess?commodity=${crop.id}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
   >
           Assess this crop
@@ -675,7 +675,7 @@ function RecommendationPage() {
                 Good crops to plant in {monthName}
               </h2>
               <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity flex-shrink-0 ml-3"
   >
                 View all crops
@@ -701,7 +701,7 @@ function RecommendationPage() {
               </p>
             </div>
             <button
-    onClick={() => navigate("/market/weather")}
+    onClick={() => navigate("/farmer/market/weather")}
     className="flex-shrink-0 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity whitespace-nowrap"
   >
               View weather
@@ -725,7 +725,7 @@ function RecommendationPage() {
             </div>
           </div>
           <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
   >
             Start check

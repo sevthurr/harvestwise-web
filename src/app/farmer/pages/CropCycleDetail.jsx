@@ -153,7 +153,7 @@ function CropCycleDetailPage() {
   if (!crop) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">Crop not found.</p>
-        <button onClick={() => navigate("/crops")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/crops")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
           Go to My Crops
         </button>
       </div>;
@@ -221,7 +221,7 @@ function CropCycleDetailPage() {
     const cropDisplayName = crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName;
     return <Breadcrumb
       items={[
-        { label: "My Crops", onClick: () => navigate("/crops") },
+        { label: "My Crops", onClick: () => navigate("/farmer/crops") },
         { label: cropDisplayName }
       ]}
     />;
@@ -376,7 +376,7 @@ function CropCycleDetailPage() {
                 Forecast: ₱{Math.round(currentPrice * 0.98)}–₱{Math.round(currentPrice * 1.07)}/kg
               </p>
               <button
-    onClick={() => navigate(`/prices/${crop.commodity}`)}
+    onClick={() => navigate(`/farmer/prices/${crop.commodity}`)}
     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
                 View prices <ExternalLink className="w-3 h-3" />
@@ -391,7 +391,7 @@ function CropCycleDetailPage() {
               <p className="text-[13px] font-semibold text-blue-700 leading-snug">Heavy rain</p>
               <p className="text-[12px] text-[var(--hw-neutral-900)]">Jul 12–13 · Clear drainage.</p>
               <button
-    onClick={() => navigate("/market/weather")}
+    onClick={() => navigate("/farmer/market/weather")}
     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
                 View weather <ExternalLink className="w-3 h-3" />
@@ -525,7 +525,7 @@ function CropCycleDetailPage() {
                 <button onClick={() => setDrawerOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors">
                   Start Harvesting
                 </button>
-                <button onClick={() => navigate(`/prices/${crop.commodity}`)} className="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] text-[13px] font-medium rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
+                <button onClick={() => navigate(`/farmer/prices/${crop.commodity}`)} className="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] text-[13px] font-medium rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
                   View Prices
                 </button>
               </div>}
@@ -584,10 +584,10 @@ function CropCycleDetailPage() {
               All figures are estimates. This is a decision-support summary, not final accounting.
             </p>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => navigate("/assess")} className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors">
+              <button onClick={() => navigate("/farmer/assess")} className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors">
                 Start Another Assessment
               </button>
-              <button onClick={() => navigate("/crops")} className="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] text-[13px] font-medium rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
+              <button onClick={() => navigate("/farmer/crops")} className="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] text-[13px] font-medium rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
                 View All Crops
               </button>
             </div>

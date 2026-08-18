@@ -117,7 +117,7 @@ function MarketOutlookDetailPage() {
   if (!commodity || !outlook) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/market")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/market")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
           Back to Market Outlook
         </button>
       </div>;
@@ -143,7 +143,7 @@ function MarketOutlookDetailPage() {
   }
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
-    onClick={() => navigate("/market")}
+    onClick={() => navigate("/farmer/market")}
     className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
   >
             ← Market Overview

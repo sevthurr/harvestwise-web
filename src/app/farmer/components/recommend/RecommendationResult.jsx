@@ -290,7 +290,7 @@ const RecommendationResult = ({ data, onEdit }) => {
             <p className="text-sm text-[var(--hw-green-800)]">You can monitor and update it anytime in My Crops.</p>
           </div>
           <button
-      onClick={() => navigate("/crops")}
+      onClick={() => navigate("/farmer/crops")}
       className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
     >
             Go to My Crops <ChevronRight className="w-4 h-4" />
@@ -399,7 +399,7 @@ const RecommendationResult = ({ data, onEdit }) => {
         commodityId: data.commodity,
         commodityName
       };
-      navigate("/assess/factors", { state: pageState });
+      navigate("/farmer/assess/factors", { state: pageState });
     }}
     className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
@@ -517,7 +517,7 @@ const RecommendationResult = ({ data, onEdit }) => {
             <Sprout className="w-4 h-4" />I already planted this
           </button>
           <button
-    onClick={() => navigate("/assess")}
+    onClick={() => navigate("/farmer/assess")}
     className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-neutral-900)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
   >
             <RefreshCw className="w-4 h-4" />Compare another crop

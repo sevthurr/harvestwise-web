@@ -8,18 +8,18 @@ import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
 import { PwaInstallPrompt } from "../pwa/PwaInstallPrompt";
 
 const NAV_ROUTES = {
-  home: "/",
-  prices: "/prices",
-  guide: "/market",
-  crops: "/crops"
+  home: "/farmer",
+  prices: "/farmer/prices",
+  guide: "/farmer/market",
+  crops: "/farmer/crops"
 };
 
 function resolveActiveNav(pathname) {
-  if (pathname === "/") return "home";
-  if (pathname.startsWith("/prices")) return "prices";
-  if (pathname.startsWith("/forecast")) return "prices";
-  if (pathname.startsWith("/market")) return "guide";
-  if (pathname.startsWith("/crops")) return "crops";
+  if (pathname === "/farmer" || pathname === "/farmer/") return "home";
+  if (pathname.startsWith("/farmer/prices")) return "prices";
+  if (pathname.startsWith("/farmer/forecast")) return "prices";
+  if (pathname.startsWith("/farmer/market")) return "guide";
+  if (pathname.startsWith("/farmer/crops")) return "crops";
   return "";
 }
 
@@ -63,7 +63,7 @@ const Layout = () => {
           }
           onMenuClick={() => setSidebarCollapsed((v) => !v)}
           notificationCount={3}
-          onNotificationClick={() => navigate("/insights")}
+          onNotificationClick={() => navigate("/farmer/insights")}
         />
 
         <main

@@ -41,8 +41,8 @@ function PriceTrendDetailPage() {
   }
         <Breadcrumb
     items={[
-      { label: "Prices", onClick: () => navigate("/prices") },
-      { label: commodityName, onClick: () => navigate(`/prices/${commodity.id}`) },
+      { label: "Prices", onClick: () => navigate("/farmer/prices") },
+      { label: commodityName, onClick: () => navigate(`/farmer/prices/${commodity.id}`) },
       { label: "Price Trend Details" }
     ]}
   />
@@ -66,7 +66,7 @@ function PriceTrendDetailPage() {
     /* CTA */
   }
         <button
-    onClick={() => navigate(`/assess?commodity=${commodity.id}`)}
+    onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
     className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
   >
           Assess this crop

@@ -59,7 +59,7 @@ function DftcWholesaleForecastPage() {
   if (!commodity || !rec) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/forecast")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/forecast")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
           Back to Forecast
         </button>
       </div>;
@@ -293,7 +293,7 @@ function DftcWholesaleForecastPage() {
             <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">See recorded DFTC Wholesale price history</p>
           </div>
           <button
-    onClick={() => navigate(`/prices/${commodity.id}/wholesale`)}
+    onClick={() => navigate(`/farmer/prices/${commodity.id}/wholesale`)}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
   >
             View DFTC Wholesale prices

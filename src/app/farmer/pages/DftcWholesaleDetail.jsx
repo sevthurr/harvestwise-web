@@ -48,7 +48,7 @@ function DftcWholesaleDetailPage() {
   if (!commodity || !record) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/prices")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
+        <button onClick={() => navigate("/farmer/prices")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
           Back to Price Monitoring
         </button>
       </div>;
@@ -72,7 +72,7 @@ function DftcWholesaleDetailPage() {
   }
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
-    onClick={() => navigate(`/prices/${commodity.id}`)}
+    onClick={() => navigate(`/farmer/prices/${commodity.id}`)}
     className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
   >
             <ArrowLeft className="w-4 h-4" />
@@ -81,7 +81,7 @@ function DftcWholesaleDetailPage() {
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {COMMODITIES.map((c) => <button
     key={c.id}
-    onClick={() => navigate(`/prices/${c.id}/wholesale`)}
+    onClick={() => navigate(`/farmer/prices/${c.id}/wholesale`)}
     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
   >
                 {c.name}

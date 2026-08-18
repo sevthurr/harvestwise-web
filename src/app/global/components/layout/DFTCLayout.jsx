@@ -173,7 +173,7 @@ function DFTCLayoutInner() {
 
                 <div className="py-1">
                   <button
-    onClick={() => go("/")}
+    onClick={() => go("/farmer")}
     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
                     <ArrowLeftRight className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
@@ -219,7 +219,7 @@ function DFTCLayoutInner() {
             <span className="text-[13px] font-medium">Profile</span>
           </button>
           <button
-    onClick={() => navigate("/")}
+    onClick={() => navigate("/farmer")}
     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
   >
             <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
