@@ -114,15 +114,85 @@ const COMMODITY_REGISTRY = {
   lettuce: { name: "Lettuce", SVG: LettuceSVG },
   pechay: { name: "Chinese Pechay", SVG: ChinesePechaySVG }
 };
+
+/**
+ * Map database commodity IDs (or base names) to icon keys
+ * This handles variants like "Kamatis - Diamante Big" → "kamatis"
+ */
+function getCommodityIconKey(commodityId, baseName, commodityName) {
+  // Try exact match with commodity ID first
+  const lowerId = commodityId?.toLowerCase();
+  if (COMMODITY_REGISTRY[lowerId]) {
+    return lowerId;
+  }
+  
+  // Try matching the commodity name
+  const nameLower = commodityName?.toLowerCase() || '';
+  
+  // Direct name matches
+  if (nameLower.includes('kamatis') || nameLower.includes('tomato')) return 'kamatis';
+  if (nameLower.includes('talong') || nameLower.includes('eggplant')) return 'talong';
+  if (nameLower.includes('kalabasa') || nameLower.includes('squash')) return 'kalabasa';
+  if (nameLower.includes('pipino') || nameLower.includes('cucumber')) return 'pipino';
+  if (nameLower.includes('ampalaya') || nameLower.includes('bitter gourd')) return 'ampalaya';
+  if (nameLower.includes('chinese pechay') || nameLower.includes('pechay baguio') || nameLower.includes('wongbok')) return 'pechay';
+  if (nameLower.includes('lettuce')) return 'lettuce';
+  if (nameLower.includes('repolyo') || nameLower.includes('cabbage')) return 'repolyo';
+  if (nameLower.includes('carrot')) return 'carrots';
+  if (nameLower.includes('atsal') || nameLower.includes('bell pepper')) return 'atsal';
+  
+  // Try base name matching
+  const baseNameLower = baseName?.toLowerCase() || '';
+  
+  const baseNameMap = {
+    'tomato': 'kamatis',
+    'eggplant': 'talong',
+    'squash fruit': 'kalabasa',
+    'cucumber': 'pipino',
+    'ampalaya fruit': 'ampalaya',
+    'bitter gourd': 'ampalaya',
+    'chinese cabbage': 'pechay',
+    'lettuce': 'lettuce',
+    'cabbage': 'repolyo',
+    'carrot': 'carrots',
+    'bell pepper': 'atsal',
+  };
+  
+  for (const [key, value] of Object.entries(baseNameMap)) {
+    if (baseNameLower.includes(key)) {
+      return value;
+    }
+  }
+  
+  // Check if commodity ID or name contains any icon key
+  for (const key of Object.keys(COMMODITY_REGISTRY)) {
+    if (lowerId?.includes(key) || nameLower.includes(key)) {
+      return key;
+    }
+  }
+  
+  console.log('No icon found for:', commodityName, 'baseName:', baseName, 'id:', commodityId);
+  return null; // No match found
+}
+
 const CommodityIllustration = ({
   commodityId,
+  baseName,
+  commodityName,
   className = "w-12 h-12"
 }) => {
-  const entry = COMMODITY_REGISTRY[commodityId];
-  if (!entry) return <PlaceholderSVG className={className} />;
+  const iconKey = getCommodityIconKey(commodityId, baseName, commodityName);
+  const entry = iconKey ? COMMODITY_REGISTRY[iconKey] : null;
+  
+  if (!entry) {
+    console.log('Using placeholder for:', commodityName);
+    return <PlaceholderSVG className={className} />;
+  }
   return <entry.SVG className={className} />;
 };
+
 export {
   COMMODITY_REGISTRY,
-  CommodityIllustration
+  CommodityIllustration,
+  getCommodityIconKey
 };

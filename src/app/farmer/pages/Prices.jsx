@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   RefreshCw,
@@ -11,21 +11,9 @@ import {
   SlidersHorizontal,
   Check
 } from "lucide-react";
-import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../components/market/CommodityIllustrations";
 import { MarketEmptyState } from "../components/market/MarketStates";
-const PRICE_DATA = {
-  kamatis: { bangkerohanRetail: 85, bangkerohanWholesale: 72, dftcRetail: 80, dftcWholesale: 68, direction: "Rising", range: "\u20B184\u2013\u20B195/kg" },
-  talong: { bangkerohanRetail: 72, bangkerohanWholesale: 60, dftcRetail: 70, dftcWholesale: 58, direction: "Stable", range: "\u20B168\u2013\u20B176/kg" },
-  repolyo: { bangkerohanRetail: 60, bangkerohanWholesale: 50, dftcRetail: 57, dftcWholesale: 47, direction: "Falling", range: "\u20B154\u2013\u20B162/kg" },
-  atsal: { bangkerohanRetail: 120, bangkerohanWholesale: 100, dftcRetail: 115, dftcWholesale: 95, direction: "Rising", range: "\u20B1117\u2013\u20B1130/kg" },
-  carrots: { bangkerohanRetail: 90, bangkerohanWholesale: 76, dftcRetail: 85, dftcWholesale: 72, direction: "Stable", range: "\u20B186\u2013\u20B196/kg" },
-  pipino: { bangkerohanRetail: 40, bangkerohanWholesale: 34, dftcRetail: 38, dftcWholesale: 32, direction: "Stable", range: "\u20B137\u2013\u20B144/kg" },
-  ampalaya: { bangkerohanRetail: 75, bangkerohanWholesale: 63, dftcRetail: 70, dftcWholesale: 60, direction: "Rising", range: "\u20B173\u2013\u20B184/kg" },
-  kalabasa: { bangkerohanRetail: 35, bangkerohanWholesale: 30, dftcRetail: 33, dftcWholesale: 28, direction: "Stable", range: "\u20B132\u2013\u20B139/kg" },
-  lettuce: { bangkerohanRetail: 80, bangkerohanWholesale: 67, dftcRetail: 75, dftcWholesale: 63, direction: "Falling", range: "\u20B170\u2013\u20B180/kg" },
-  pechay: { bangkerohanRetail: 35, bangkerohanWholesale: 30, dftcRetail: 32, dftcWholesale: 27, direction: "Falling", range: "\u20B130\u2013\u20B137/kg" }
-};
+import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 const OUTLOOK_TEXT = {
   Rising: "Price may rise next week",
   Falling: "Price may fall next week",
@@ -109,7 +97,12 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
     /* Header: icon + name + direction */
   }
       <div className="flex items-center gap-3">
-        <CommodityIllustration commodityId={commodity.id} className="w-10 h-10 flex-shrink-0" />
+        <CommodityIllustration 
+          commodityId={commodity.id} 
+          baseName={commodity.baseName}
+          commodityName={commodity.name}
+          className="w-10 h-10 flex-shrink-0" 
+        />
         <p className="flex-1 font-semibold text-[var(--hw-neutral-900)]">{commodity.name}</p>
         <div className={`flex items-center gap-1 flex-shrink-0 ${cfg.color}`}>
           <DirIcon className="w-3.5 h-3.5" />
@@ -123,19 +116,27 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">Bangkerohan Retail</p>
-          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">₱{data.bangkerohanRetail}/kg</p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
+            {data.bangkerohanRetail ? `₱${data.bangkerohanRetail}/kg` : '-'}
+          </p>
         </div>
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">DFTC Retail</p>
-          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">₱{data.dftcRetail}/kg</p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
+            {data.dftcRetail ? `₱${data.dftcRetail}/kg` : '-'}
+          </p>
         </div>
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">Bangkerohan Wholesale</p>
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">₱{data.bangkerohanWholesale}/kg</p>
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+            {data.bangkerohanWholesale ? `₱${data.bangkerohanWholesale}/kg` : '-'}
+          </p>
         </div>
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">DFTC Wholesale</p>
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">₱{data.dftcWholesale}/kg</p>
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+            {data.dftcWholesale ? `₱${data.dftcWholesale}/kg` : '-'}
+          </p>
         </div>
       </div>
 
@@ -172,25 +173,141 @@ function PricesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState(DEFAULT_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
+  
+  // API integration - fetch prices from backend
+  const [commodities, setCommodities] = useState([]);
+  const [priceData, setPriceData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching prices from API...');
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+        const response = await fetch(`${apiUrl}/prices?page_size=100`);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('API response:', data);
+        
+        // Build commodities list from API response - FILTER TO TOP 10 ONLY
+        const commoditiesFromAPI = data.items
+          .filter(item => {
+            // Filter for top 10 commodities
+            const isTop10 = item.is_top10 === true;
+            console.log('Checking commodity:', item.name, 'is_top10:', item.is_top10, 'filtered:', isTop10);
+            return isTop10;
+          })
+          .map(item => {
+            const camelItem = toCamelCase(item);
+            console.log('Mapped top-10 commodity:', camelItem.name, 'baseName:', camelItem.baseName);
+            return {
+              id: camelItem.commodityId,
+              name: camelItem.name,
+              baseName: camelItem.baseName,
+              variety: camelItem.variety,
+              isTop10: camelItem.isTop10,
+              // Store other useful data
+              ...camelItem
+            };
+          });
+        
+        console.log('Top 10 Commodities from API:', commoditiesFromAPI);
+        setCommodities(commoditiesFromAPI);
+        
+        // Transform API response to match our component's expected format
+        const transformed = {};
+        data.items.forEach(item => {
+          const camelItem = toCamelCase(item);
+          console.log('Transformed item:', camelItem);
+          transformed[camelItem.commodityId] = {
+            bangkerohanRetail: camelItem.prices?.bangkerohanRetail || 0,
+            bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale || 0,
+            dftcRetail: camelItem.prices?.dftcRetail || 0,
+            dftcWholesale: camelItem.prices?.dftcWholesale || 0,
+            direction: camelItem.forecast?.trend || 'Stable',
+            range: camelItem.forecast
+              ? `${formatPrice(camelItem.forecast.lowerForecast)}–${formatPrice(camelItem.forecast.upperForecast)}/kg`
+              : '–',
+          };
+        });
+        
+        console.log('Final priceData:', transformed);
+        setPriceData(transformed);
+        if (data.items.length > 0) {
+          setLastUpdated(data.items[0].updated_at);
+        }
+      } catch (error) {
+        console.error('Failed to fetch prices:', error);
+        console.error('Error details:', error.message);
+        // On error, show empty lists
+        setCommodities([]);
+        setPriceData({});
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPrices();
+  }, []);
+  
   const activeCount = (filter.direction !== "All" ? 1 : 0) + (filter.sortBy !== "name" ? 1 : 0);
+  
   const visible = useMemo(() => {
-    let list = COMMODITIES.filter((c) => PRICE_DATA[c.id]);
+    // Use commodities from API (database)
+    let list = commodities.map(commodity => {
+      const hasPriceData = priceData[commodity.id];
+      return {
+        ...commodity,
+        hasPriceData,
+        // Use API data if available, otherwise use placeholders
+        displayData: hasPriceData ? priceData[commodity.id] : {
+          bangkerohanRetail: 0,
+          bangkerohanWholesale: 0,
+          dftcRetail: 0,
+          dftcWholesale: 0,
+          direction: 'Stable',
+          range: '-',
+        }
+      };
+    });
+    
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q));
     }
+    
     if (filter.direction !== "All") {
-      list = list.filter((c) => PRICE_DATA[c.id].direction === filter.direction);
+      list = list.filter((c) => c.displayData.direction === filter.direction);
     }
+    
     list.sort((a, b) => {
       const ORDER_RISING = { Rising: 0, Stable: 1, Falling: 2 };
       const ORDER_FALLING = { Falling: 0, Stable: 1, Rising: 2 };
-      if (filter.sortBy === "rising-first") return ORDER_RISING[PRICE_DATA[a.id].direction] - ORDER_RISING[PRICE_DATA[b.id].direction];
-      if (filter.sortBy === "falling-first") return ORDER_FALLING[PRICE_DATA[a.id].direction] - ORDER_FALLING[PRICE_DATA[b.id].direction];
+      if (filter.sortBy === "rising-first") return ORDER_RISING[a.displayData.direction] - ORDER_RISING[b.displayData.direction];
+      if (filter.sortBy === "falling-first") return ORDER_FALLING[a.displayData.direction] - ORDER_FALLING[b.displayData.direction];
       return a.name.localeCompare(b.name);
     });
+    
     return list;
-  }, [searchQuery, filter]);
+  }, [searchQuery, filter, commodities, priceData]);
+  
+  // Show loading state
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center gap-3">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
+        <p className="text-sm text-[var(--hw-neutral-700)]">Loading prices...</p>
+      </div>
+    </div>;
+  }
+  
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
 
@@ -245,13 +362,30 @@ function PricesPage() {
         {
     /* Cards grid */
   }
-        {visible.length === 0 ? <MarketEmptyState query={searchQuery} /> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-            {visible.map((c) => <CropPriceCard
-    key={c.id}
-    commodity={c}
-    data={PRICE_DATA[c.id]}
-    onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
-  />)}
+        {visible.length === 0 ? (
+          searchQuery.trim() ? (
+            // Filtered/searched to nothing
+            <MarketEmptyState query={searchQuery} />
+          ) : (
+            // No commodities from API
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
+                <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
+              </div>
+              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">No commodities available</p>
+              <p className="text-sm text-[var(--hw-neutral-700)]">Top 10 commodities will appear here once data is available</p>
+            </div>
+          )
+        ) : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+            {visible.map((c) => {
+              console.log('Rendering commodity:', c);
+              return <CropPriceCard
+                key={c.id}
+                commodity={c}
+                data={c.displayData}
+                onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
+              />;
+            })}
           </div>}
       </div>
 
