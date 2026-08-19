@@ -91,6 +91,12 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
 const CropPriceCard = ({ commodity, data, onViewDetails }) => {
   const cfg = DIR_CFG[data.direction];
   const DirIcon = cfg.Icon;
+  
+  const formatPriceValue = (value) => {
+    if (value === null || value === undefined) return '–';
+    return `₱${value}/kg`;
+  };
+  
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
 
       {
@@ -117,25 +123,25 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">Bangkerohan Retail</p>
           <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
-            {data.bangkerohanRetail ? `₱${data.bangkerohanRetail}/kg` : '-'}
+            {formatPriceValue(data.bangkerohanRetail)}
           </p>
         </div>
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">DFTC Retail</p>
           <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
-            {data.dftcRetail ? `₱${data.dftcRetail}/kg` : '-'}
+            {formatPriceValue(data.dftcRetail)}
           </p>
         </div>
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">Bangkerohan Wholesale</p>
           <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-            {data.bangkerohanWholesale ? `₱${data.bangkerohanWholesale}/kg` : '-'}
+            {formatPriceValue(data.bangkerohanWholesale)}
           </p>
         </div>
         <div>
           <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">DFTC Wholesale</p>
           <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-            {data.dftcWholesale ? `₱${data.dftcWholesale}/kg` : '-'}
+            {formatPriceValue(data.dftcWholesale)}
           </p>
         </div>
       </div>
@@ -184,53 +190,40 @@ function PricesPage() {
     const fetchPrices = async () => {
       try {
         setLoading(true);
-        console.log('Fetching prices from API...');
         const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
         const response = await fetch(`${apiUrl}/prices?page_size=100`);
-        console.log('Response status:', response.status);
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('API response:', data);
         
         // Build commodities list from API response - FILTER TO TOP 10 ONLY
         const commoditiesFromAPI = data.items
-          .filter(item => {
-            // Filter for top 10 commodities
-            const isTop10 = item.is_top10 === true;
-            console.log('Checking commodity:', item.name, 'is_top10:', item.is_top10, 'filtered:', isTop10);
-            return isTop10;
-          })
+          .filter(item => item.is_top10 === true)
           .map(item => {
             const camelItem = toCamelCase(item);
-            console.log('Mapped top-10 commodity:', camelItem.name, 'baseName:', camelItem.baseName);
             return {
               id: camelItem.commodityId,
               name: camelItem.name,
               baseName: camelItem.baseName,
               variety: camelItem.variety,
               isTop10: camelItem.isTop10,
-              // Store other useful data
-              ...camelItem
             };
           });
         
-        console.log('Top 10 Commodities from API:', commoditiesFromAPI);
         setCommodities(commoditiesFromAPI);
         
         // Transform API response to match our component's expected format
         const transformed = {};
         data.items.forEach(item => {
           const camelItem = toCamelCase(item);
-          console.log('Transformed item:', camelItem);
           transformed[camelItem.commodityId] = {
-            bangkerohanRetail: camelItem.prices?.bangkerohanRetail || 0,
-            bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale || 0,
-            dftcRetail: camelItem.prices?.dftcRetail || 0,
-            dftcWholesale: camelItem.prices?.dftcWholesale || 0,
+            bangkerohanRetail: camelItem.prices?.bangkerohanRetail || null,
+            bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale || null,
+            dftcRetail: camelItem.prices?.dftcRetail || null,
+            dftcWholesale: camelItem.prices?.dftcWholesale || null,
             direction: camelItem.forecast?.trend || 'Stable',
             range: camelItem.forecast
               ? `${formatPrice(camelItem.forecast.lowerForecast)}–${formatPrice(camelItem.forecast.upperForecast)}/kg`
@@ -238,14 +231,12 @@ function PricesPage() {
           };
         });
         
-        console.log('Final priceData:', transformed);
         setPriceData(transformed);
         if (data.items.length > 0) {
-          setLastUpdated(data.items[0].updated_at);
+          setLastUpdated(data.items[0].updatedAt);
         }
       } catch (error) {
         console.error('Failed to fetch prices:', error);
-        console.error('Error details:', error.message);
         // On error, show empty lists
         setCommodities([]);
         setPriceData({});
@@ -262,18 +253,16 @@ function PricesPage() {
   const visible = useMemo(() => {
     // Use commodities from API (database)
     let list = commodities.map(commodity => {
-      const hasPriceData = priceData[commodity.id];
+      const data = priceData[commodity.id];
       return {
         ...commodity,
-        hasPriceData,
-        // Use API data if available, otherwise use placeholders
-        displayData: hasPriceData ? priceData[commodity.id] : {
-          bangkerohanRetail: 0,
-          bangkerohanWholesale: 0,
-          dftcRetail: 0,
-          dftcWholesale: 0,
+        displayData: data || {
+          bangkerohanRetail: null,
+          bangkerohanWholesale: null,
+          dftcRetail: null,
+          dftcWholesale: null,
           direction: 'Stable',
-          range: '-',
+          range: '–',
         }
       };
     });
@@ -319,7 +308,11 @@ function PricesPage() {
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">Prices</h1>
             <div className="flex items-center gap-1.5 text-[var(--hw-neutral-900)] flex-shrink-0 mt-1">
               <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at 7:30 AM</span>
+              <span className="text-[13px] whitespace-nowrap">
+                {lastUpdated 
+                  ? `Updated ${new Date(lastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                  : 'Updated today'}
+              </span>
             </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
@@ -372,20 +365,17 @@ function PricesPage() {
               <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
                 <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
               </div>
-              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">No commodities available</p>
-              <p className="text-sm text-[var(--hw-neutral-700)]">Top 10 commodities will appear here once data is available</p>
+              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">No price data available</p>
+              <p className="text-sm text-[var(--hw-neutral-700)]">Price data for top 10 commodities will appear here</p>
             </div>
           )
         ) : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-            {visible.map((c) => {
-              console.log('Rendering commodity:', c);
-              return <CropPriceCard
+            {visible.map((c) => <CropPriceCard
                 key={c.id}
                 commodity={c}
                 data={c.displayData}
                 onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
-              />;
-            })}
+              />)}
           </div>}
       </div>
 
