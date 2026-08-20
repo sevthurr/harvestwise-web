@@ -35,12 +35,6 @@ const PERIOD_LABEL = {
   "21": "21 days",
   "28": "28 days"
 };
-const PERIOD_LABEL = {
-  "7": "7 days",
-  "14": "14 days",
-  "21": "21 days",
-  "28": "28 days"
-};
 function getPeriodRange(baseRange, period) {
   const match = baseRange.match(/₱(\d+)–₱(\d+)/);
   if (!match) return baseRange;
