@@ -19,11 +19,6 @@ const OUTLOOK_TEXT = {
   Falling: "Price may fall next week",
   Stable: "Price may stay stable"
 };
-const MEANING_TEXT = {
-  Rising: "Price may improve soon.",
-  Falling: "Be careful before planting more.",
-  Stable: "Price is not changing much."
-};
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp },
   Falling: { color: "text-red-500", Icon: TrendingDown },
@@ -161,9 +156,6 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
     /* Meaning + action */
   }
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug flex-1">
-          {MEANING_TEXT[data.direction]}
-        </p>
         <button
     onClick={onViewDetails}
     className="flex-shrink-0 inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"

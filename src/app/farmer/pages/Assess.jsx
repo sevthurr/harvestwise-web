@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, Save, RotateCcw } from "lucide-react";
 import { RecommendationResult } from "../components/recommend/RecommendationResult";
 import {
   DEFAULT_ASSESSMENT,
-  COMMODITY_OPTIONS,
   STEP_LABELS,
   TOTAL_STEPS,
   getTotalCost
@@ -16,6 +15,7 @@ import { Step2FarmHarvest } from "../components/recommend/Step2FarmHarvest";
 import { Step3ProductionCosts } from "../components/recommend/Step3ProductionCosts";
 import { Step4ReviewBreakEven } from "../components/recommend/Step4ReviewBreakEven";
 import { formatPeso } from "../components/recommend/types";
+import { toCamelCase } from "../../global/utils/apiTransforms";
 function validateStep(step, data) {
   const errors = {};
   if (step === 1) {
@@ -83,6 +83,8 @@ function AssessPage() {
   const [searchParams] = useSearchParams();
   const [view, setView] = useState("entry");
   const [step, setStep] = useState(1);
+  const [commodityOptions, setCommodityOptions] = useState([]);
+  const [loadingCommodities, setLoadingCommodities] = useState(true);
   const [data, setData] = useState(() => {
     const pre = searchParams.get("commodity");
     return pre ? { ...DEFAULT_ASSESSMENT, commodity: pre } : DEFAULT_ASSESSMENT;
@@ -90,6 +92,37 @@ function AssessPage() {
   const [draft, setDraft] = useState(null);
   const [errors, setErrors] = useState({});
   const [showResult, setShowResult] = useState(false);
+
+  // Fetch top10 commodities from API
+  useEffect(() => {
+    const fetchCommodities = async () => {
+      try {
+        setLoadingCommodities(true);
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+        const response = await fetch(`${apiUrl}/prices?page_size=100`);
+        if (response.ok) {
+          const data = await response.json();
+          const top10 = data.items
+            .filter(item => item.is_top10 === true)
+            .map(item => {
+              const camelItem = toCamelCase(item);
+              return {
+                id: camelItem.commodityId,
+                name: camelItem.name,
+              };
+            });
+          setCommodityOptions(top10);
+        }
+      } catch (error) {
+        console.error('Failed to fetch commodities:', error);
+        setCommodityOptions([]);
+      } finally {
+        setLoadingCommodities(false);
+      }
+    };
+
+    fetchCommodities();
+  }, []);
   useEffect(() => {
     const pre = searchParams.get("commodity");
     if (pre) {
@@ -158,7 +191,7 @@ function AssessPage() {
         {data.commodity && <div>
             <p className="text-xs text-[var(--hw-neutral-700)]">Vegetable</p>
             <p className="text-sm font-medium text-[var(--hw-neutral-900)]">
-              {COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name}
+              {commodityOptions.find((c) => c.id === data.commodity)?.name}
             </p>
           </div>}
         {data.harvestQuantity !== "" && <div>

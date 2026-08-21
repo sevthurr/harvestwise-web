@@ -1,26 +1,64 @@
 import { useEffect, useState } from "react";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
-import { COMMODITY_OPTIONS, CROP_DURATIONS, suggestHarvestDate } from "./types";
+import { CROP_DURATIONS, suggestHarvestDate } from "./types";
 import { CommodityIllustration } from "../market/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
+import { toCamelCase } from "../../../global/utils/apiTransforms";
+
 function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
 }
 const PAGE_SIZE = 4;
-const COMMODITY_PAGES = COMMODITY_OPTIONS.reduce((acc, c, i) => {
-  const page = Math.floor(i / PAGE_SIZE);
-  if (!acc[page]) acc[page] = [];
-  acc[page].push(c);
-  return acc;
-}, []);
+
 const Step1CropSchedule = ({ data, onChange, errors }) => {
+  const [commodityOptions, setCommodityOptions] = useState([]);
+  const [loadingCommodities, setLoadingCommodities] = useState(true);
+
+  // Fetch top10 commodities from API
+  useEffect(() => {
+    const fetchCommodities = async () => {
+      try {
+        setLoadingCommodities(true);
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+        const response = await fetch(`${apiUrl}/prices?page_size=100`);
+        if (response.ok) {
+          const data = await response.json();
+          const top10 = data.items
+            .filter(item => item.is_top10 === true)
+            .map(item => {
+              const camelItem = toCamelCase(item);
+              return {
+                id: camelItem.commodityId,
+                name: camelItem.name,
+              };
+            });
+          setCommodityOptions(top10);
+        }
+      } catch (error) {
+        console.error('Failed to fetch commodities:', error);
+        setCommodityOptions([]);
+      } finally {
+        setLoadingCommodities(false);
+      }
+    };
+
+    fetchCommodities();
+  }, []);
+
+  const COMMODITY_PAGES = commodityOptions.reduce((acc, c, i) => {
+    const page = Math.floor(i / PAGE_SIZE);
+    if (!acc[page]) acc[page] = [];
+    acc[page].push(c);
+    return acc;
+  }, []);
+
   const duration = data.commodity ? CROP_DURATIONS[data.commodity] : null;
   const suggestion = suggestHarvestDate(data.plantingDate, data.commodity);
   const selectedPage = Math.floor(
-    COMMODITY_OPTIONS.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
+    commodityOptions.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
   );
   const [page, setPage] = useState(() => selectedPage >= 0 ? selectedPage : 0);
   useEffect(() => {
@@ -31,7 +69,16 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   const applySuggestion = () => {
     if (suggestion) onChange({ harvestDate: suggestion.minDate });
   };
-  const suggestionLabel = suggestion ? suggestion.maxDate ? `${formatDate(suggestion.minDate)} \u2013 ${formatDate(suggestion.maxDate)}` : formatDate(suggestion.minDate) : null;
+  const suggestionLabel = suggestion ? suggestion.maxDate ? `${formatDate(suggestion.minDate)} – ${formatDate(suggestion.maxDate)}` : formatDate(suggestion.minDate) : null;
+
+  if (loadingCommodities) {
+    return <div className="flex items-center justify-center py-8">
+      <div className="flex flex-col items-center gap-2">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--hw-green-700)]"></div>
+        <p className="text-sm text-[var(--hw-neutral-700)]">Loading vegetables...</p>
+      </div>
+    </div>;
+  }
   return <div className="space-y-6">
       {
     /* Commodity selector */
@@ -128,7 +175,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     /* Variant picker — dropdown, shown only when commodity has known varieties */
   }
         {data.commodity && (() => {
-    const displayName = HW_ID_TO_NAME[data.commodity] ?? COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? "";
+    const displayName = HW_ID_TO_NAME[data.commodity] ?? commodityOptions.find((c) => c.id === data.commodity)?.name ?? "";
     const variants = getVariants(displayName);
     if (variants.length === 0) return null;
     return <div className="mt-4">
@@ -231,7 +278,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   }
       {data.commodity && <PlantingActivityContext
     commodityId={data.commodity}
-    commodityName={COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? data.commodity}
+    commodityName={commodityOptions.find((c) => c.id === data.commodity)?.name ?? data.commodity}
     defaultExpanded={false}
   />}
     </div>;

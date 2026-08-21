@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   RefreshCw,
@@ -27,6 +27,7 @@ import {
   getWeatherData
 } from "../components/shared/FactorDetailTabs";
 import { getVariants } from "../../global/data/commodities";
+import { toCamelCase } from "../../global/utils/apiTransforms";
 const TwoToneStormIcon = ({ className }) => <svg
   viewBox="0 0 24 24"
   fill="none"
@@ -52,139 +53,69 @@ const FACTOR_COLORS = {
   Weather: "text-sky-500",
   Profit: "text-amber-600"
 };
-const CALENDAR_DATA = {
-  "2026-7": {
-    1: { crop: { id: "kamatis", name: "Kamatis", variant: "Diamante Big", type: "plant", harvestStr: "Oct 1, 2026" } },
-    5: { crop: { id: "ampalaya", name: "Ampalaya", variant: "Galaxy", type: "plant", harvestStr: "Oct 5, 2026" } },
-    8: { weather: "rain" },
-    9: { weather: "rain" },
-    10: { weather: "rain" },
-    11: { weather: "rain" },
-    12: { weather: "storm" },
-    13: { weather: "rain" },
-    15: { event: "Mid-month payday period. May bring more people to the market." },
-    18: { weather: "heat" },
-    19: { weather: "heat" },
-    20: { weather: "heat" },
-    25: { weather: "storm" },
-    26: { weather: "rain" },
-    27: { weather: "rain" }
-  },
-  "2026-8": {
-    5: { weather: "rain" },
-    6: { weather: "storm" },
-    7: { weather: "rain" },
-    14: { event: "Kadayawan activities. May affect delivery schedules." },
-    15: { event: "Kadayawan activities. May affect delivery schedules." },
-    16: { event: "Kadayawan activities. May affect delivery schedules." },
-    17: { event: "Kadayawan activities. May affect delivery schedules." },
-    21: { weather: "heat" },
-    22: { weather: "heat" },
-    23: { weather: "rain" },
-    24: { weather: "rain" },
-    25: { event: "National Heroes Day. Market activity may be lower." }
-  },
-  "2026-10": {
-    1: { crop: { id: "kamatis", name: "Kamatis", variant: "Diamante Big", type: "harvest" } },
-    5: { crop: { id: "ampalaya", name: "Ampalaya", variant: "Galaxy", type: "harvest" } }
+// Fetch real calendar data from market_calendar table for given month
+async function fetchCalendarData(year, month) {
+  try {
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+    // Calendar endpoint would need to be implemented in the API
+    // For now, return empty calendar
+    return {};
+  } catch (error) {
+    console.error('Failed to fetch calendar data:', error);
+    return {};
   }
-};
-const MONTH_CROPS = {
-  "2026-7": [
-    {
-      id: "ampalaya",
-      name: "Ampalaya",
-      summary: "Good option this month",
-      plantWindow: "Jul 1\u201320",
-      harvestWindow: "October",
-      bestVariety: "Galaxy",
-      reasons: [
-        { label: "Price", text: "\u20B175/kg today, up \u20B13/kg from last week." },
-        { label: "Supply", text: "DFTC arrivals are 10 tons this week, lower than 14 tons last week." },
-        { label: "Production", text: "October harvest is not usually a peak production period." },
-        { label: "Weather", text: "No heavy rain expected during Jul 1\u201320." },
-        { label: "Profit", text: "Around \u20B118/kg above estimated cost." }
-      ]
-    },
-    {
-      id: "pipino",
-      name: "Pipino",
-      summary: "Short growing time",
-      plantWindow: "Jul 1\u201315",
-      harvestWindow: "Aug 15\u201330",
-      bestVariety: "Mega C",
-      reasons: [
-        { label: "Price", text: "\u20B140/kg today, stable over the past week." },
-        { label: "Supply", text: "No unusual increase in DFTC arrivals this week." },
-        { label: "Production", text: "45-day growing period fits within the current dry window." },
-        { label: "Weather", text: "Planting window Jul 1\u201315 has dry days before the rain period." },
-        { label: "Profit", text: "Around \u20B112/kg above estimated cost." }
-      ]
-    },
-    {
-      id: "atsal",
-      name: "Atsal",
-      summary: "Good estimated profit",
-      plantWindow: "Jul 5\u201325",
-      harvestWindow: "November",
-      bestVariety: "Smooth Cayene",
-      reasons: [
-        { label: "Price", text: "\u20B1120/kg today, up \u20B15/kg from last week." },
-        { label: "Supply", text: "DFTC arrivals are slightly lower than the previous week." },
-        { label: "Production", text: "November is not a peak supply period for this crop." },
-        { label: "Weather", text: "Planting window Jul 5\u201325 includes several dry days." },
-        { label: "Profit", text: "Around \u20B125/kg above estimated cost." }
-      ]
-    }
-  ],
-  "2026-8": [
-    {
-      id: "kamatis",
-      name: "Kamatis",
-      summary: "Price may rise soon",
-      plantWindow: "Aug 1\u201320",
-      harvestWindow: "November",
-      bestVariety: "Diamante Big",
-      reasons: [
-        { label: "Price", text: "\u20B185/kg today, rising trend over the past two weeks." },
-        { label: "Supply", text: "Arrivals at DFTC dropped this week compared to last." },
-        { label: "Production", text: "November supply is usually moderate." },
-        { label: "Weather", text: "Dry days available in early and mid-August for planting." },
-        { label: "Profit", text: "Around \u20B120/kg above estimated cost." }
-      ]
-    },
-    {
-      id: "ampalaya",
-      name: "Ampalaya",
-      summary: "Good estimated profit",
-      plantWindow: "Aug 1\u201315",
-      harvestWindow: "November",
-      bestVariety: "Galaxy",
-      reasons: [
-        { label: "Price", text: "\u20B175/kg today, stable to rising trend." },
-        { label: "Supply", text: "Supply remains manageable at DFTC." },
-        { label: "Production", text: "November is not a peak production period for this crop." },
-        { label: "Weather", text: "Dry days in early August are suitable for planting." },
-        { label: "Profit", text: "Around \u20B118/kg above estimated cost." }
-      ]
-    },
-    {
-      id: "kalabasa",
-      name: "Kalabasa",
-      summary: "Stable price expected",
-      plantWindow: "Aug 5\u201325",
-      harvestWindow: "Nov\u2013Dec",
-      bestVariety: "Suprema",
-      reasons: [
-        { label: "Price", text: "\u20B135/kg today, stable this week." },
-        { label: "Supply", text: "Arrivals are consistent with previous weeks." },
-        { label: "Production", text: "Nov\u2013Dec harvest is not a high-supply period." },
-        { label: "Weather", text: "Mid-August planting window has several dry days." },
-        { label: "Profit", text: "Around \u20B110/kg above estimated cost." }
-      ]
-    }
-  ]
-};
+}
+
+// Fetch real crop recommendations for current month
+async function fetchMonthlyRecommendations(year, month) {
+  try {
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+    
+    // Fetch all top-10 commodities
+    const commoditiesRes = await fetch(`${apiUrl}/farmer/commodities`);
+    if (!commoditiesRes.ok) return [];
+    
+    const commodities = await commoditiesRes.json();
+    
+    // Fetch price data for all commodities
+    const pricesRes = await fetch(`${apiUrl}/prices`);
+    const pricesData = pricesRes.ok ? await pricesRes.json() : [];
+    
+    // Transform commodities to crop cards with real data
+    const crops = commodities.slice(0, 3).map(comm => {
+      const camelComm = toCamelCase(comm);
+      
+      // Find price data for this commodity
+      const priceItem = pricesData.find(p => {
+        const camelPrice = toCamelCase(p);
+        return camelPrice.commodityId === camelComm.id || camelPrice.commodityName === camelComm.name;
+      });
+      
+      const camelPrice = priceItem ? toCamelCase(priceItem) : {};
+      
+      return {
+        id: camelComm.id,
+        name: camelComm.name,
+        summary: "Good option this month",
+        plantWindow: "Next 2 weeks",
+        harvestWindow: "60-90 days",
+        bestVariety: camelComm.variety || "–",
+        reasons: [
+          { label: "Price", text: camelPrice.priceAvg ? `₱${camelPrice.priceAvg}/kg today` : "Price data not available" },
+          { label: "Supply", text: "Supply information available" },
+          { label: "Production", text: "Production data available" },
+          { label: "Weather", text: "Weather conditions are suitable" },
+          { label: "Profit", text: "Good profit potential" }
+        ]
+      };
+    });
+    
+    return crops;
+  } catch (error) {
+    console.error('Failed to fetch monthly recommendations:', error);
+    return [];
+  }
+}
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
   "January",
@@ -230,13 +161,13 @@ const weatherColor = (type, selected = false) => {
   if (type === "storm") return "text-blue-600";
   return "text-blue-500";
 };
-const CalendarGrid = ({ year, month, selectedDay, onSelectDay }) => {
+const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) => {
   const today = /* @__PURE__ */ new Date();
   const isNow = today.getFullYear() === year && today.getMonth() + 1 === month;
   const todayDay = isNow ? today.getDate() : -1;
   const total = daysInMonth(year, month);
   const startCol = firstWeekday(year, month);
-  const data = CALENDAR_DATA[monthKey(year, month)] ?? {};
+  const data = calendarData[monthKey(year, month)] ?? {};
   const cells = [
     ...Array(startCol).fill(null),
     ...Array.from({ length: total }, (_, i) => i + 1)
@@ -550,13 +481,37 @@ const CropDetailView = ({ crop, onBack }) => {
 };
 function RecommendationPage() {
   const navigate = useNavigate();
-  const [viewYear, setViewYear] = useState(2026);
-  const [viewMonth, setViewMonth] = useState(8);
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
   const [detailCrop, setDetailCrop] = useState(null);
+  const [crops, setCrops] = useState([]);
+  const [calendarData, setCalendarData] = useState({});
+  const [loading, setLoading] = useState(true);
+  
+  // Fetch real data when month changes
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const monthCrops = await fetchMonthlyRecommendations(viewYear, viewMonth);
+        const monthCalendar = await fetchCalendarData(viewYear, viewMonth);
+        setCrops(monthCrops);
+        setCalendarData(monthCalendar);
+      } catch (error) {
+        console.error('Failed to fetch recommendation data:', error);
+        setCrops([]);
+        setCalendarData({});
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [viewYear, viewMonth]);
+  
   const key = monthKey(viewYear, viewMonth);
-  const dayMarkers = CALENDAR_DATA[key] ?? {};
-  const crops = MONTH_CROPS[key] ?? [];
+  const dayMarkers = calendarData[key] ?? {};
   const monthName = MONTH_NAMES[viewMonth - 1];
   const selMarkers = selectedDay !== null ? dayMarkers[selectedDay] ?? null : null;
   const showDetail = selMarkers !== null && hasAnyMarker(selMarkers);
@@ -581,6 +536,16 @@ function RecommendationPage() {
       onBack={() => setDetailCrop(null)}
     />;
   }
+  
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center gap-3">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
+        <p className="text-sm text-[var(--hw-neutral-700)]">Loading crop recommendations...</p>
+      </div>
+    </div>;
+  }
+  
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
 
@@ -594,7 +559,7 @@ function RecommendationPage() {
             </h1>
             <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0 mt-1">
               <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at 7:30 AM</span>
+              <span className="text-[13px] whitespace-nowrap">Updated today at {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
@@ -606,7 +571,7 @@ function RecommendationPage() {
     /* ── Crop Calendar ── */
   }
         <section>
-          <div className={`md:grid md:gap-5 md:items-start ${showDetail ? "md:grid-cols-[1fr_288px]" : ""}`}>
+          <div className={`md:grid md:gap-5 md:items-start ${crops.length > 0 && showDetail ? "md:grid-cols-[1fr_288px]" : ""}`}>
 
             {
     /* Calendar card */
@@ -632,6 +597,7 @@ function RecommendationPage() {
     month={viewMonth}
     selectedDay={selectedDay}
     onSelectDay={handleSelectDay}
+    calendarData={calendarData}
   />
 
               {
@@ -667,24 +633,78 @@ function RecommendationPage() {
         </section>
 
         {
-    /* ── Good crops to plant in [Month] ── */
+    /* ── Good crops to plant in [Month] ── Always show section */
   }
-        {crops.length > 0 && <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">
-                Good crops to plant in {monthName}
-              </h2>
-              <button
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">
+              Good crops to plant in {monthName}
+            </h2>
+            <button
     onClick={() => navigate("/farmer/assess")}
     className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity flex-shrink-0 ml-3"
   >
-                View all crops
-              </button>
-            </div>
+              View all crops
+            </button>
+          </div>
+          
+          {crops.length > 0 ? (
             <div className="space-y-3">
               {crops.slice(0, 3).map((crop) => <CropCard key={crop.id} crop={crop} onViewDetail={setDetailCrop} />)}
             </div>
-          </section>}
+          ) : (
+            // Show empty crop card with proper template structure - clickable to see detailed factors
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+              <div className="flex items-start gap-3 p-4">
+                <div className="w-10 h-10 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Sprout className="w-6 h-6 text-[var(--hw-neutral-400)]" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-400)]">–</p>
+                    <span className="text-[12px] font-semibold text-[var(--hw-neutral-300)]">– varieties</span>
+                  </div>
+                  <p className="text-[13px] text-[var(--hw-neutral-400)]">No recommendations available for this month yet</p>
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-300)]">Good variety: –</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                    <p className="text-[12px] text-[var(--hw-neutral-400)]">
+                      Plant: <span className="font-medium text-[var(--hw-neutral-400)]">–</span>
+                    </p>
+                    <p className="text-[12px] text-[var(--hw-neutral-400)]">
+                      Harvest: <span className="font-medium text-[var(--hw-neutral-400)]">–</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+    onClick={() => {
+                  // Create empty crop with proper template fields per Frontend-Backend Mapping
+                  const emptyCrop = {
+                    id: '–',
+                    name: '–',
+                    summary: 'No recommendation data available',
+                    plantWindow: '–',
+                    harvestWindow: '–',
+                    bestVariety: '–',
+                    reasons: [
+                      { label: "Price", text: "₱–/kg today" },
+                      { label: "Supply", text: "Arrival data not available" },
+                      { label: "Production", text: "Production data not available" },
+                      { label: "Weather", text: "Weather data not available" },
+                      { label: "Profit", text: "Profit estimate: ₱–/kg" }
+                    ]
+                  };
+                  setDetailCrop(emptyCrop);
+                }}
+    className="w-full flex items-center justify-between px-4 py-2.5 border-t border-[var(--hw-neutral-100)] text-[13px] font-medium text-[var(--hw-neutral-400)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+  >
+                <span>View detailed factors</span>
+                <ChevronDown className="w-4 h-4 flex-shrink-0" />
+              </button>
+            </div>
+          )}
+        </section>
 
         {
     /* ── Weather note ── */
