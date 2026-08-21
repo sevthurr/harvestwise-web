@@ -39,13 +39,22 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function buildUrl(url) {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const path = url.startsWith('/') ? url : `/${url}`;
+  if (path.startsWith('/api/v1')) {
+    return `${API_BASE}${path}`;
+  }
+  return `${API_BASE}/api/v1${path}`;
+}
+
 async function _fetch(url, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     ...authHeaders(),
     ...(options.headers ?? {}),
   };
-  return fetch(`${API_BASE}${url}`, { ...options, headers });
+  return fetch(buildUrl(url), { ...options, headers });
 }
 
 // ---------------------------------------------------------------------------

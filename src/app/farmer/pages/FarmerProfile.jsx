@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router";
 import { MapPin, Phone, Mail, Check, Navigation, ShoppingBag } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
 const FARM = {

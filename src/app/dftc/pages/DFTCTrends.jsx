@@ -2,7 +2,7 @@ import { COMMODITY_CATEGORIES, getCategoryFor } from "../../global/data/commodit
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { ChevronDown, Search, X, Leaf, Info, AlertCircle } from "lucide-react";
-import { CommodityIllustration } from "../../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { CurrentPriceTrendChart } from "../../global/components/shared/CurrentPriceTrendChart";
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";

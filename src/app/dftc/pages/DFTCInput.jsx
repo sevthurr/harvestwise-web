@@ -19,7 +19,7 @@ import {
   TEMP_COMMODITY_RECORDS,
   PRICE_CATEGORIES
 } from "./dftc-add-data-data";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "../../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;

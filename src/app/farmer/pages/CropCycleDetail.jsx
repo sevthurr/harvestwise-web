@@ -23,7 +23,7 @@ import {
 import { useCrops } from "../components/crops/CropsContext";
 import { PhasePill } from "../components/crops/CropCard";
 import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 const CURRENT_PRICES = {
@@ -249,57 +249,51 @@ function CropCycleDetailPage() {
                 </button>
               </div>
               <div className="mt-2 space-y-0.5 text-xs text-[var(--hw-neutral-900)]">
-                {crop.phase === "planning" ? <p>Planned planting: {crop.plantingDate}</p> : <p>Planted: {crop.plantingDate}</p>}
-                <p>Est. harvest: {crop.harvestDate}</p>
-                <p>Farm area: {crop.farmArea} {crop.farmAreaUnit === "sqm" ? "sq m" : "ha"}</p>
+                {crop.phase === "planning" ? <p>Planned planting: {crop.plantingDate || "-"}</p> : <p>Planted: {crop.plantingDate || "-"}</p>}
+                <p>Est. harvest: {crop.harvestDate || "-"}</p>
+                <p>Farm area: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
               </div>
-              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">Last updated {crop.lastUpdated}</p>
+              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">Last updated {crop.lastUpdated || "-"}</p>
             </div>
           </div>
         </div>
 
-        {
-    /* ── On Hold reason — shown between header and advisory ── */
-  }
+        {/* ── On Hold reason — shown between header and advisory ── */}
         {crop.isOnHold && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex items-start gap-3">
             <PauseCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0 space-y-1">
               <p className="text-[13px] font-semibold text-amber-700">On hold</p>
-              {crop.holdReason && <p className="text-[13px] text-[var(--hw-neutral-900)]">Reason: {crop.holdReason}</p>}
+              <p className="text-[13px] text-[var(--hw-neutral-900)]">Reason for putting this crop on hold: {crop.holdReason || "-"}</p>
               {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-900)]">Put on hold: {crop.holdDate}</p>}
             </div>
           </div>}
 
-        {
-    /* ── 2. Main advice — white card, colored foreground only ── */
-  }
+        {/* ── 2. Main advice — white card, colored foreground only ── */}
         {isActive && <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 ${advisoryCfg.border}`}>
             <div className={`flex items-center gap-2 mb-2 ${advisoryCfg.color}`}>
               <AdvisoryIcon className="w-5 h-5 flex-shrink-0" />
-              <p className={`text-[15px] font-bold ${advisoryCfg.color}`}>{advisory}</p>
+              <p className={`text-[15px] font-bold ${advisoryCfg.color}`}>{advisory || "Not available"}</p>
             </div>
             <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-              {ADVISORY_SUMMARY[advisory](crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName)}
+              {ADVISORY_SUMMARY[advisory] ? ADVISORY_SUMMARY[advisory](crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName) : "Recommendation details unavailable."}
             </p>
             <p className={`text-[13px] font-medium mt-1 ${advisoryCfg.color}`}>
-              {ADVISORY_SUPPORT[advisory]}
+              {ADVISORY_SUPPORT[advisory] || "Recommendation details unavailable."}
             </p>
             <button
-    onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
-    className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-  >
+              onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
+              className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
+            >
               View basis →
             </button>
           </div>}
 
-        {
-    /* ── 3. Estimated Profit ── */
-  }
-        {isActive && margin > 0 && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+        {/* ── 3. Estimated Profit ── */}
+        {isActive && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Estimated Profit</p>
 
             <p className="text-[20px] font-bold text-emerald-700 leading-none">
-              ₱{profitLo.toLocaleString("en-PH")} – ₱{profitHi.toLocaleString("en-PH")}
+              {margin > 0 ? `₱${profitLo.toLocaleString("en-PH")} – ₱${profitHi.toLocaleString("en-PH")}` : "-"}
             </p>
 
             <div className="space-y-0.5">
@@ -307,34 +301,36 @@ function CropCycleDetailPage() {
               <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
             </div>
 
-            <ProfitCalcAccordion
-    qty={qty}
-    totalCost={updatedTotalCost}
-    sellingBasis={sellingBasis}
-    costToRecover={costToRecover}
-    hasFarmgate={hasFarmgate}
-    margin={margin}
-  />
+            {margin > 0 ? (
+              <ProfitCalcAccordion
+                qty={qty}
+                totalCost={updatedTotalCost}
+                sellingBasis={sellingBasis}
+                costToRecover={costToRecover}
+                hasFarmgate={hasFarmgate}
+                margin={margin}
+              />
+            ) : (
+              <p className="text-[13px] text-[var(--hw-neutral-900)] italic">Profit details unavailable.</p>
+            )}
 
-            {
-    /* Supporting values below the accordion */
-  }
+            {/* Supporting values below the accordion */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
               <div>
                 <p className="text-[var(--hw-neutral-900)]">Estimated cost</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{formatPeso(updatedTotalCost)}</p>
+                <p className="font-medium text-[var(--hw-neutral-900)]">{updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : "-"}</p>
               </div>
               <div>
                 <p className="text-[var(--hw-neutral-900)]">Expected harvest</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestQuantity} kg</p>
+                <p className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestQuantity ? `${crop.harvestQuantity} kg` : "- kg"}</p>
               </div>
               <div>
                 <p className="text-[var(--hw-neutral-900)]">Price basis</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">₱{sellingBasis}/kg</p>
+                <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis ? `₱${sellingBasis}/kg` : "-/kg"}</p>
               </div>
               <div>
                 <p className="text-[var(--hw-neutral-900)]">Cost to recover</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">₱{costToRecover}/kg</p>
+                <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover ? `₱${costToRecover}/kg` : "-/kg"}</p>
               </div>
             </div>
 

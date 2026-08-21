@@ -13,7 +13,7 @@ import {
   Check
 } from "lucide-react";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import {
   ResponsiveContainer,

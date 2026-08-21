@@ -13,7 +13,7 @@ import {
   Cell
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 const ARRIVAL_WEEKLY = {
   kamatis: {
     classification: "Normal",

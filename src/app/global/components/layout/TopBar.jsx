@@ -27,8 +27,9 @@ const TopBar = ({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const fullName = user?.name || "Juan Dela Cruz";
-  const initials = fullName.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  const fullName = user?.name || (user?.first_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : "");
+  const displayName = fullName || "Farmer";
+  const initials = fullName ? fullName.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase() : "F";
 
   const go = (path) => {
     setOpen(false);
@@ -61,9 +62,9 @@ const TopBar = ({
 
         {/* Right: sync · bell · avatar */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          <div className="hidden sm:flex items-center gap-1.5 pr-2 text-[var(--hw-neutral-400)]">
+          <div className="hidden sm:flex items-center gap-1.5 pr-2 text-black">
             <RefreshCw className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="text-xs whitespace-nowrap">{t("farmer.last_synced", {}, "Last synced")}: {t("common.updated", {}, "Updated")} 8:30 AM</span>
+            <span className="text-xs whitespace-nowrap">{t("farmer.last_synced", {}, "Last synced")}: {t("common.updated", {}, "Updated")} -</span>
           </div>
 
           <button
@@ -99,7 +100,7 @@ const TopBar = ({
                     {initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[14px] font-semibold text-black truncate">{fullName}</p>
+                    <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">{t("auth.role_farmer", {}, "Farmer")}</p>
                   </div>
                 </button>

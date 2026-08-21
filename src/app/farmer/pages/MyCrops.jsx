@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Sprout, ChevronRight } from "lucide-react";
 import { useCrops } from "../components/crops/CropsContext";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { PhasePill } from "../components/crops/CropCard";
 const STAGE_TABS = [
   { id: "all", label: "All" },
@@ -57,52 +57,50 @@ function nextActionText(crop) {
 const MyCropCard = ({ crop, onView }) => {
   const currentPrice = CURRENT_PRICES[crop.commodity];
   const profit = profitRange(crop);
-  const action = nextActionText(crop);
+  const action = crop.isOnHold ? "Resume when market conditions improve" : crop.phase === "completed" ? "Crop cycle completed" : nextActionText(crop);
+  const displayName = crop.commodityName ? (crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName) : "-";
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-      {
-    /* Top: icon + name + status */
-  }
+      {/* Top: icon + name + status */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
         <CommodityIllustration commodityId={crop.commodity} className="w-11 h-11 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[var(--hw-neutral-900)] leading-tight">
-            {crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName}
+            {displayName}
           </p>
         </div>
-        <PhasePill phase={crop.phase} />
+        <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
       </div>
 
-      {
-    /* Details */
-  }
+      {/* Details */}
       <div className="px-4 pb-3 space-y-1.5">
         <div className="flex items-center justify-between text-[13px]">
           <span className="text-[var(--hw-neutral-900)]">Harvest on</span>
-          <span className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestDate}</span>
+          <span className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestDate || "-"}</span>
         </div>
-        {currentPrice != null && <div className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--hw-neutral-900)]">Current price</span>
-            <span className="font-medium text-[var(--hw-neutral-900)]">₱{currentPrice}/kg</span>
-          </div>}
-        {profit && <div className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--hw-neutral-900)]">Estimated Profit</span>
-            <span className="font-semibold text-emerald-700">{profit}</span>
-          </div>}
-        {crop.phase === "completed" && crop.actualSellingPrice && crop.actualHarvestQty && <div className="flex items-center justify-between text-[13px]">
+        <div className="flex items-center justify-between text-[13px]">
+          <span className="text-[var(--hw-neutral-900)]">Current price</span>
+          <span className="font-medium text-[var(--hw-neutral-900)]">{currentPrice != null ? `₱${currentPrice}/kg` : "-/kg"}</span>
+        </div>
+        {crop.phase === "completed" && crop.actualSellingPrice ? (
+          <div className="flex items-center justify-between text-[13px]">
             <span className="text-[var(--hw-neutral-900)]">Sold at</span>
             <span className="font-medium text-[var(--hw-neutral-900)]">₱{crop.actualSellingPrice}/kg</span>
-          </div>}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between text-[13px]">
+            <span className="text-[var(--hw-neutral-900)]">Estimated Profit</span>
+            <span className="font-semibold text-emerald-700">{profit || "-"}</span>
+          </div>
+        )}
       </div>
 
-      {
-    /* Next action + view button */
-  }
+      {/* Next action + view button */}
       <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between gap-3">
-        <p className="text-[12px] text-[var(--hw-neutral-900)] leading-snug flex-1">{action}</p>
+        <p className="text-[12px] text-[var(--hw-neutral-900)] leading-snug flex-1">{action || "-"}</p>
         <button
-    onClick={() => onView(crop.id)}
-    className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-  >
+          onClick={() => onView(crop.id)}
+          className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+        >
           View crop
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
@@ -111,21 +109,21 @@ const MyCropCard = ({ crop, onView }) => {
 };
 const MyCropsEmpty = ({ stage, onNew }) => {
   const messages = {
-    all: { heading: "No crop records yet", sub: "Add a crop plan to start tracking your farm." },
+    all: { heading: "No crop plans yet.", sub: "Add a crop plan to start tracking your farm." },
     planning: { heading: "No crops in planning", sub: "Save a planting assessment to create your first crop plan." },
     planted: { heading: "No planted crops", sub: "Mark a plan as planted to track an active crop." },
     harvesting: { heading: "No crops harvesting", sub: "Crops approaching harvest will appear here." },
     completed: { heading: "No completed crops", sub: "Completed crops and their results will appear here." }
   };
-  const { heading, sub } = messages[stage];
+  const { heading, sub } = messages[stage] || messages.all;
   return <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
       <Sprout className="w-10 h-10 text-[var(--hw-neutral-300)]" />
       <p className="font-semibold text-[var(--hw-neutral-700)]">{heading}</p>
       <p className="text-sm text-[var(--hw-neutral-900)] max-w-xs">{sub}</p>
       <button
-    onClick={onNew}
-    className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-  >
+        onClick={onNew}
+        className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+      >
         <Plus className="w-4 h-4" />
         Add crop
       </button>
@@ -143,9 +141,7 @@ function MyCropsPage() {
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
 
-        {
-    /* Page header */
-  }
+        {/* Page header */}
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">My Crops</h1>
@@ -154,32 +150,30 @@ function MyCropsPage() {
             </p>
           </div>
           <button
-    onClick={() => navigate("/farmer/assess")}
-    className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-[var(--shadow-xs)]"
-  >
+            onClick={() => navigate("/farmer/assess")}
+            className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-[var(--shadow-xs)]"
+          >
             <Plus className="w-4 h-4" />
             <span>Add crop</span>
           </button>
         </div>
 
-        {
-    /* Stage filter chips */
-  }
+        {/* Stage filter chips */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
           {STAGE_TABS.map((tab) => {
-    const count = tabCount(tab.id);
-    const isActive = stageFilter === tab.id;
-    return <button
-      key={tab.id}
-      onClick={() => setStageFilter(tab.id)}
-      className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${isActive ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
-    >
-                {tab.label}
-                {count > 0 && <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-green-600 text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]"}`}>
-                    {count}
-                  </span>}
-              </button>;
-  })}
+            const count = tabCount(tab.id);
+            const isActive = stageFilter === tab.id;
+            return <button
+              key={tab.id}
+              onClick={() => setStageFilter(tab.id)}
+              className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${isActive ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
+            >
+              {tab.label}
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-green-600 text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]"}`}>
+                {count}
+              </span>
+            </button>;
+          })}
         </div>
 
         {

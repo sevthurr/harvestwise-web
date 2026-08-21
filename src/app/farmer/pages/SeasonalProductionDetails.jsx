@@ -24,7 +24,7 @@ import {
   Legend
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 const YEARS = [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_LABELS = {

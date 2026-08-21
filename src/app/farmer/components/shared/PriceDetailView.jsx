@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { TrendingUp, TrendingDown, Minus, ChevronDown } from "lucide-react";
-import { CommodityIllustration } from "../market/CommodityIllustrations";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { CurrentPriceTrendChart } from "../../../global/components/shared/CurrentPriceTrendChart";
 import { ForecastPriceTrendChart } from "../../../global/components/shared/ForecastPriceTrendChart";
 import {
@@ -20,7 +20,8 @@ const DEFAULT_VARIETY_SENTINEL = "Default";
 const DIR_CFG = {
   rising: { Icon: TrendingUp, color: "text-emerald-600", label: "Rising" },
   stable: { Icon: Minus, color: "text-blue-600", label: "Stable" },
-  falling: { Icon: TrendingDown, color: "text-red-500", label: "Falling" }
+  falling: { Icon: TrendingDown, color: "text-red-500", label: "Falling" },
+  none: { Icon: Minus, color: "text-[var(--hw-neutral-500)]", label: "No trend" }
 };
 function SelectFilter({
   label,
@@ -104,7 +105,7 @@ function PriceDetailView({
   const adjFHi = Math.round(baseForecastHigh * adj) + varietyPriceOffset;
   const adjFMid = Math.round((adjFLo + adjFHi) / 2);
   const change = adjCurrent - adjPrevious;
-  const cfg = DIR_CFG[direction];
+  const cfg = DIR_CFG[direction] || DIR_CFG.none;
   const DirIcon = cfg.Icon;
   const marketLabel = market === "Bangkerohan" ? "Bangkerohan Market" : "DFTC";
   const displayCropName = selectedVariety ? `${commodityName} (${selectedVariety})` : commodityName;
@@ -151,13 +152,13 @@ function PriceDetailView({
     /* ── Optional heading ── */
   }
       {showHeading && <div className="flex items-center gap-3">
-          {commodityId && <CommodityIllustration commodityId={commodityId} className="w-12 h-12 flex-shrink-0" />}
+          {commodityId && <CommodityIllustration commodityId={commodityId} commodityName={commodityName} className="w-12 h-12 flex-shrink-0" />}
           <div>
             <h1 className="text-[22px] font-bold text-[var(--hw-neutral-900)] leading-tight">
               {commodityName} — Price Trend
             </h1>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-              {marketLabel} · {priceType} · Updated today
+              {marketLabel} · {priceType} · {baseCurrentPrice > 0 ? "Updated today" : "Updated -"}
             </p>
           </div>
         </div>}
@@ -183,27 +184,32 @@ function PriceDetailView({
       <section className="space-y-3">
         <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Current Price Trend</h2>
 
-        {
-    /* Stat cards */
-  }
-        <div className="grid grid-cols-3 gap-2">
-          <StatCard
-    label="Current Price"
-    value={<>₱{adjCurrent}<span className="text-[13px] font-medium">/kg</span></>}
-    sub={selectedVariety ? `${displayCropName} \xB7 ${priceType}` : `${priceType} \xB7 ${marketLabel}`}
-  />
-          <StatCard
-    label="Previous Recorded"
-    value={`\u20B1${adjPrevious}/kg`}
-    sub={selectedVariety ? displayCropName : "Last record"}
-  />
-          <StatCard
-    label="Price Change"
-    value={`${change >= 0 ? "+" : "\u2212"}\u20B1${Math.abs(change)}`}
-    sub="per kg"
-    valueColor={change >= 0 ? "text-emerald-700" : "text-red-600"}
-  />
-        </div>
+        {(() => {
+          const hasCurrent = baseCurrentPrice > 0;
+          const hasPrevious = basePreviousPrice > 0;
+          const hasChange = hasCurrent && hasPrevious && change !== 0;
+
+          return (
+            <div className="grid grid-cols-3 gap-2">
+              <StatCard
+                label="Current Price"
+                value={hasCurrent ? <>₱{adjCurrent}<span className="text-[13px] font-medium">/kg</span></> : "-/kg"}
+                sub={selectedVariety ? `${displayCropName} · ${priceType}` : `${priceType} · ${marketLabel}`}
+              />
+              <StatCard
+                label="Previous Recorded"
+                value={hasPrevious ? `₱${adjPrevious}/kg` : "-/kg"}
+                sub={selectedVariety ? displayCropName : "Last record"}
+              />
+              <StatCard
+                label="Price Change"
+                value={hasChange ? `${change > 0 ? "+" : "−"}₱${Math.abs(change)}` : "-"}
+                sub="per kg"
+                valueColor={hasChange ? (change > 0 ? "text-emerald-700" : "text-red-600") : "text-[var(--hw-neutral-900)]"}
+              />
+            </div>
+          );
+        })()}
 
         {
     /* Shared line chart — one line per variety */
@@ -223,13 +229,21 @@ function PriceDetailView({
     /* Summary A */
   }
         <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3 space-y-1.5">
-          <div className={`flex items-center gap-1.5 ${cfg.color}`}>
-            <DirIcon className="w-4 h-4" />
-            <span className="text-[12px] font-semibold">{cfg.label} trend</span>
-          </div>
-          <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-            {buildCurrentSummary(displayCropName, adjCurrent, adjPrevious, direction)}
-          </p>
+          {baseCurrentPrice > 0 ? (
+            <>
+              <div className={`flex items-center gap-1.5 ${cfg.color}`}>
+                <DirIcon className="w-4 h-4" />
+                <span className="text-[12px] font-semibold">{cfg.label} trend</span>
+              </div>
+              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
+                {buildCurrentSummary(displayCropName, adjCurrent, adjPrevious, direction)}
+              </p>
+            </>
+          ) : (
+            <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
+              No trend data available.
+            </p>
+          )}
         </div>
       </section>
 
@@ -242,59 +256,62 @@ function PriceDetailView({
           <span className="ml-2 text-[12px] font-medium text-[var(--hw-neutral-900)]">· next {days} days</span>
         </h2>
 
-        {
-    /* 4 stat cards (2×2 mobile → 4 cols desktop) */
-  }
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <StatCard
-    label="Expected Price"
-    value={<>₱{adjFMid}<span className="text-[12px] font-medium">/kg</span></>}
-    sub="Forecast midpoint"
-  />
-          <StatCard
-    label="Forecast Range"
-    value={`\u20B1${adjFLo}\u2013\u20B1${adjFHi}`}
-    sub={`Over ${days} days`}
-  />
-          <StatCard
-    label="Lower Bound"
-    value={`\u20B1${adjFLo}/kg`}
-    sub="Conservative estimate"
-    valueColor="text-amber-700"
-  />
-          <StatCard
-    label="Upper Bound"
-    value={`\u20B1${adjFHi}/kg`}
-    sub="Optimistic estimate"
-    valueColor="text-emerald-700"
-  />
-        </div>
+        {/* 4 stat cards (2×2 mobile → 4 cols desktop) */}
+        {(() => {
+          const hasForecast = baseForecastLow > 0 && baseForecastHigh > 0;
+          return (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <StatCard
+                  label="Expected Price"
+                  value={hasForecast ? <>₱{adjFMid}<span className="text-[12px] font-medium">/kg</span></> : "-/kg"}
+                  sub="Forecast midpoint"
+                />
+                <StatCard
+                  label="Forecast Range"
+                  value={hasForecast ? `₱${adjFLo}–₱${adjFHi}` : "-/kg"}
+                  sub={`Over ${days} days`}
+                />
+                <StatCard
+                  label="Lower Bound"
+                  value={hasForecast ? `₱${adjFLo}/kg` : "-/kg"}
+                  sub="Conservative estimate"
+                  valueColor={hasForecast ? "text-amber-700" : "text-[var(--hw-neutral-900)]"}
+                />
+                <StatCard
+                  label="Upper Bound"
+                  value={hasForecast ? `₱${adjFHi}/kg` : "-/kg"}
+                  sub="Optimistic estimate"
+                  valueColor={hasForecast ? "text-emerald-700" : "text-[var(--hw-neutral-900)]"}
+                />
+              </div>
 
-        {
-    /* Shared forecast chart — forecast band + midpoint line per variety */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-          <ForecastPriceTrendChart
-    commodity={currentChartCommodityKey}
-    chartData={forecastChartData}
-    varieties={forecastChartVarieties}
-    colors={varietyColors}
-    height={260}
-  />
-        </div>
+              {/* Shared forecast chart */}
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
+                <ForecastPriceTrendChart
+                  commodity={currentChartCommodityKey}
+                  chartData={forecastChartData}
+                  varieties={forecastChartVarieties}
+                  colors={varietyColors}
+                  height={260}
+                />
+              </div>
 
-        {
-    /* Summary B */
-  }
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3 space-y-1.5">
-          <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-            {buildForecastSummary(displayCropName, adjFLo, adjFHi, days, direction)}
-          </p>
-          <p className="text-[11px] text-[var(--hw-neutral-900)] italic">
-            {priceType === "Wholesale" ? "Wholesale prices are typically 15\u201320% lower than retail. " : ""}
-            Forecast is based on recent trends and is not guaranteed.
-          </p>
-        </div>
+              {/* Summary B */}
+              <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3 space-y-1.5">
+                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
+                  {hasForecast
+                    ? buildForecastSummary(displayCropName, adjFLo, adjFHi, days, direction)
+                    : "Forecast unavailable for this period."}
+                </p>
+                <p className="text-[11px] text-[var(--hw-neutral-900)] italic">
+                  {priceType === "Wholesale" ? "Wholesale prices are typically 15–20% lower than retail. " : ""}
+                  Forecast is based on recent trends and is not guaranteed.
+                </p>
+              </div>
+            </>
+          );
+        })()}
       </section>
 
     </div>;

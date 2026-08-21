@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { X, ChevronDown, ChevronUp, Leaf } from "lucide-react";
 import { PRICE_CATEGORIES, ARRIVAL_COMMODITIES } from "../../../dftc/pages/dftc-add-data-data";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "./CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../../global/data/commodities";
 const PAGE_SIZE = 20;
 const HW_NAME_TO_ID = _HW_NAME_TO_ID;

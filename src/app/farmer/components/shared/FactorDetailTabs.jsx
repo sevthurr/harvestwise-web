@@ -137,12 +137,27 @@ const WEATHER_DATA = {
   }
 };
 function getWeatherData(risk, cropName) {
+  if (!risk || risk === "none" || !WEATHER_DATA[risk]) {
+    return {
+      risk: "none",
+      riskLabel: null,
+      riskHeadline: null,
+      forecast: [],
+      forecast_14d: [],
+      actions: [],
+      why: "",
+      plantingWindow: null,
+      summary: "Weather data not available",
+      cropName: cropName ?? "-"
+    };
+  }
   const cfg = WEATHER_DATA[risk];
   return {
     risk,
     riskLabel: cfg.riskLabel,
     riskHeadline: cfg.riskHeadline(cropName),
-    forecast: BASE_FORECAST_AUG_2026,
+    forecast: [],
+    forecast_14d: [],
     actions: cfg.actions(cropName),
     why: cfg.why(cropName),
     plantingWindow: cfg.plantingWindow,
@@ -295,47 +310,52 @@ const PriceTab = ({
   commodityId,
   commodityName
 }) => {
-  const match = data.forecastRange.match(/₱(\d+)–₱(\d+)/);
-  const baseFLo = match ? parseInt(match[1]) : Math.round(data.currentPrice * 0.95);
-  const baseFHi = match ? parseInt(match[2]) : Math.round(data.currentPrice * 1.07);
-  const actualPoints = data.points.filter((p) => p.actual !== void 0).map((p) => ({ label: p.label, price: p.actual }));
-  const banner = PRICE_BANNER_CFG[data.direction];
-  const BannerIcon = banner.Icon;
-  return <div className="space-y-4">
-      {
-    /* Classification banner */
-  }
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
-        <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
-        <div>
-          <p className={`text-[15px] font-bold ${banner.color}`}>{banner.label}</p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{banner.desc}</p>
-        </div>
-      </div>
+  const hasData = data && data.currentPrice > 0;
+  const match = data?.forecastRange?.match(/₱(\d+)–₱(\d+)/);
+  const baseFLo = match ? parseInt(match[1]) : (hasData ? Math.round(data.currentPrice * 0.95) : 0);
+  const baseFHi = match ? parseInt(match[2]) : (hasData ? Math.round(data.currentPrice * 1.07) : 0);
+  const actualPoints = (data?.points || []).filter((p) => p.actual !== void 0).map((p) => ({ label: p.label, price: p.actual }));
+  const banner = hasData ? PRICE_BANNER_CFG[data.direction] : null;
+  const BannerIcon = banner?.Icon;
 
-      {
-    /* Detailed price view: filters → stats → charts → summaries */
-  }
+  return <div className="space-y-4">
+      {/* Classification banner */}
+      {hasData && banner ? (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
+          <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
+          <div>
+            <p className={`text-[15px] font-bold ${banner.color}`}>{banner.label}</p>
+            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{banner.desc}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
+          <p className="text-[13px] font-medium">No trend data available.</p>
+        </div>
+      )}
+
+      {/* Detailed price view: filters → stats → charts → summaries */}
       <PriceDetailView
-    commodityId={commodityId}
-    commodityName={commodityName ?? "this crop"}
-    baseCurrentPrice={data.currentPrice}
-    basePreviousPrice={data.previousPrice}
-    direction={data.direction}
-    baseForecastLow={baseFLo}
-    baseForecastHigh={baseFHi}
-    baseActualPoints={actualPoints}
-    showHeading={false}
-  />
+        commodityId={commodityId}
+        commodityName={commodityName ?? "this crop"}
+        baseCurrentPrice={hasData ? data.currentPrice : 0}
+        basePreviousPrice={hasData ? data.previousPrice : 0}
+        direction={hasData ? data.direction : "none"}
+        baseForecastLow={baseFLo}
+        baseForecastHigh={baseFHi}
+        baseActualPoints={actualPoints}
+        showHeading={false}
+      />
     </div>;
 };
 const ArrivalTab = ({ data, commodityId }) => {
-  const change = data.thisWeek - data.lastWeek;
-  const trendColor = data.trend === "lower" ? "text-emerald-600" : data.trend === "higher" ? "text-red-500" : "text-blue-600";
-  const trendLabel = data.trend === "lower" ? "Down" : data.trend === "higher" ? "Up" : "Same";
-  const TrendIcon = data.trend === "lower" ? TrendingDown : data.trend === "higher" ? TrendingUp : Minus;
-  const banner = ARRIVAL_BANNER_CFG[data.trend];
-  const BannerIcon = banner.Icon;
+  const hasData = data && (data.thisWeek > 0 || data.lastWeek > 0);
+  const change = hasData ? data.thisWeek - data.lastWeek : 0;
+  const trendColor = hasData ? (data.trend === "lower" ? "text-emerald-600" : data.trend === "higher" ? "text-red-500" : "text-blue-600") : "text-[var(--hw-neutral-900)]";
+  const trendLabel = hasData ? (data.trend === "lower" ? "Down" : data.trend === "higher" ? "Up" : "Same") : "-";
+  const TrendIcon = data?.trend === "lower" ? TrendingDown : data?.trend === "higher" ? TrendingUp : Minus;
+  const banner = hasData ? ARRIVAL_BANNER_CFG[data.trend] : null;
+  const BannerIcon = banner?.Icon;
   const dftcName = commodityId ? HW_ID_TO_NAME[commodityId] : void 0;
   const dftcSeries = useMemo(() => dftcName ? getArrivalSeries(dftcName) : null, [dftcName]);
   const dftcVarietyKeys = useMemo(() => dftcSeries ? dftcSeries.map((s) => s.variety || (dftcName ?? "Volume")) : [], [dftcSeries, dftcName]);
@@ -344,36 +364,36 @@ const ArrivalTab = ({ data, commodityId }) => {
     [dftcSeries, dftcName]
   );
   return <div className="space-y-4">
-      {
-    /* Classification banner */
-  }
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
-        <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
-        <div>
-          <p className={`text-[15px] font-bold ${banner.color}`}>{banner.label}</p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{banner.desc}</p>
+      {/* Classification banner */}
+      {hasData && banner ? (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
+          <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
+          <div>
+            <p className={`text-[15px] font-bold ${banner.color}`}>{banner.label}</p>
+            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{banner.desc}</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
+          <p className="text-[13px] font-medium">No comparison data available.</p>
+        </div>
+      )}
 
-      {
-    /* Summary stats */
-  }
+      {/* Summary stats */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 text-center">
           <p className="text-[10px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-1">Last Week</p>
-          <p className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{data.lastWeek}</p>
-          <p className="text-[11px] text-[var(--hw-neutral-900)]">tons</p>
+          <p className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{hasData ? `${data.lastWeek} tons` : "- tons"}</p>
         </div>
         <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 text-center">
           <p className="text-[10px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-1">This Week</p>
-          <p className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{data.thisWeek}</p>
-          <p className="text-[11px] text-[var(--hw-neutral-900)]">tons</p>
+          <p className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{hasData ? `${data.thisWeek} tons` : "- tons"}</p>
         </div>
         <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 text-center">
           <p className="text-[10px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-1">Change</p>
           <div className={`flex items-center justify-center gap-0.5 ${trendColor}`}>
-            <TrendIcon className="w-3.5 h-3.5" />
-            <p className="text-[18px] font-bold">{Math.abs(change)}</p>
+            {hasData && <TrendIcon className="w-3.5 h-3.5" />}
+            <p className="text-[18px] font-bold">{hasData ? Math.abs(change) : "-"}</p>
           </div>
           <p className={`text-[11px] font-medium ${trendColor}`}>{trendLabel}</p>
         </div>
@@ -430,68 +450,88 @@ const ArrivalTab = ({ data, commodityId }) => {
       </div>
     </div>;
 };
+const QUARTER_LABELS = ["Q1 (Jan–Mar)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Oct–Dec)"];
+const QUARTER_SHORT = ["Q1", "Q2", "Q3", "Q4"];
 const ProductionTab = ({ data }) => {
-  const cfg = LEVEL_CFG[data.level];
-  const LevelIcon = data.level === "low" ? TrendingDown : data.level === "high" ? TrendingUp : Minus;
+  const hasData = data && data.level && data.level !== "none" && data.summary !== "Production data not available";
+  const cfg = hasData ? LEVEL_CFG[data.level] : null;
+  const LevelIcon = cfg ? (data.level === "low" ? TrendingDown : data.level === "high" ? TrendingUp : Minus) : null;
+  const currentQuarterIdx = Math.floor((data?.currentMonthIdx ?? 7) / 3);
+  const quarterlyData = useMemo(() => {
+    if (!hasData || !data?.monthlyData) {
+      return QUARTER_SHORT.map((q) => ({ quarter: q, level: 0 }));
+    }
+    return [0, 1, 2, 3].map((qIdx) => {
+      const qMonths = data.monthlyData.slice(qIdx * 3, qIdx * 3 + 3);
+      const avgLevel = Math.round(qMonths.reduce((acc, m) => acc + (m.level || 0), 0) / (qMonths.length || 1));
+      return { quarter: QUARTER_SHORT[qIdx], level: avgLevel };
+    });
+  }, [hasData, data]);
   return <div className="space-y-4">
-      {
-    /* Level badge */
-  }
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${cfg.bg} ${cfg.border}`}>
-        <LevelIcon className={`w-5 h-5 ${cfg.color} flex-shrink-0`} />
-        <div>
-          <p className={`text-[15px] font-bold ${cfg.color}`}>{cfg.label} Production Season</p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{MONTH_LABELS_SHORT[data.currentMonthIdx]} is a {data.level}-production month for this crop</p>
-        </div>
-      </div>
+      {/* Level badge */}
+      {hasData && cfg ? <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${cfg.bg} ${cfg.border}`}>
+          <LevelIcon className={`w-5 h-5 ${cfg.color} flex-shrink-0`} />
+          <div>
+            <p className={`text-[15px] font-bold ${cfg.color}`}>{cfg.label} Production Season</p>
+            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
+              {QUARTER_LABELS[currentQuarterIdx]} is a {data.level}-production period for this crop
+            </p>
+          </div>
+        </div> : <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
+          <p className="text-[13px] font-medium">Not available</p>
+        </div>}
 
-      {
-    /* Monthly bar chart */
-  }
+      {/* Quarterly bar chart */}
       <div>
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] mb-2">Typical Monthly Production Volume (Jan–Dec)</p>
-        <ResponsiveContainer width="100%" height={175}>
-          <BarChart data={data.monthlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={16}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#1f2937" }} tickLine={false} axisLine={false} />
-            <YAxis hide domain={[0, 10]} />
-            <Tooltip
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] mb-2">
+          Typical Quarterly Production Volume (PSA Data · Q1–Q4)
+        </p>
+        {hasData ? <>
+            <ResponsiveContainer width="100%" height={175}>
+              <BarChart data={quarterlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={32}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: "#1f2937" }} tickLine={false} axisLine={false} />
+                <YAxis hide domain={[0, 10]} />
+                <Tooltip
     formatter={(value) => [value <= 4 ? "Low" : value <= 7 ? "Moderate" : "High", "Production"]}
     contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb", fontSize: 12 }}
   />
-            <Bar dataKey="level" radius={[4, 4, 0, 0]}>
-              {data.monthlyData.map((entry, index) => <Cell
+                <Bar dataKey="level" radius={[4, 4, 0, 0]}>
+                  {quarterlyData.map((entry, index) => <Cell
     key={index}
-    fill={index === data.currentMonthIdx ? entry.level <= 4 ? "#16a34a" : entry.level <= 7 ? "#f59e0b" : "#ef4444" : "#bfdbfe"}
-    opacity={index === data.currentMonthIdx ? 1 : 0.55}
+    fill={index === currentQuarterIdx ? entry.level <= 4 ? "#16a34a" : entry.level <= 7 ? "#f59e0b" : "#ef4444" : "#bfdbfe"}
+    opacity={index === currentQuarterIdx ? 1 : 0.55}
   />)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="flex items-center gap-4 mt-1 justify-center text-[11px] text-[var(--hw-neutral-900)]">
-          <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" /><span>Low</span></div>
-          <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /><span>Moderate</span></div>
-          <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400 inline-block" /><span>High</span></div>
-          <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-200 inline-block" /><span>Other months</span></div>
-        </div>
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-4 mt-1 justify-center text-[11px] text-[var(--hw-neutral-900)]">
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" /><span>Low</span></div>
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /><span>Moderate</span></div>
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400 inline-block" /><span>High</span></div>
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-200 inline-block" /><span>Other quarters</span></div>
+            </div>
+          </> : <div className="flex items-center justify-center h-[175px] bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
+            No production data available.
+          </div>}
       </div>
 
-      {
-    /* Summary */
-  }
+      {/* Summary */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{data.summary}</p>
+        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
+          {hasData ? data.summary : "Production data not available."}
+        </p>
       </div>
     </div>;
 };
-const WeatherTab = ({ data }) => {
-  const rc = RISK_CFG_WEATHER[data.risk];
-  const RiskIcon = rc.Icon;
+const WeatherTab = ({ data, commodityName }) => {
+  const hasData = data && data.risk && data.risk !== "none";
+  const rc = hasData ? RISK_CFG_WEATHER[data.risk] : null;
+  const RiskIcon = rc?.Icon;
   const carouselRef = useRef(null);
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 90, behavior: "smooth" });
-  const cropName = data.cropName ?? "your crop";
-  const insightBullets = data.risk === "high" ? [
+  const insightBullets = hasData ? data.risk === "high" ? [
     "Heavy rain forecast \u2014 delay planting if possible this week.",
     "Clear all drainage channels before peak rain days.",
     "Protect existing crops from strong winds and waterlogging."
@@ -503,87 +543,88 @@ const WeatherTab = ({ data }) => {
     "Generally clear skies \u2014 a good window for planting.",
     "Water regularly as dry conditions may reduce soil moisture.",
     "Good time for soil preparation and transplanting."
-  ];
-  const highRiskDays = BASE_FORECAST_14D_AUG_2026.filter((d) => d.risk === "high");
-  const moderateRiskDays = BASE_FORECAST_14D_AUG_2026.filter((d) => d.risk === "moderate");
-  let dateRange = "";
-  if (highRiskDays.length > 0) {
-    const first = highRiskDays[0];
-    const last = highRiskDays[highRiskDays.length - 1];
-    dateRange = first.date === last.date ? `${first.date} \xB7 Storm expected` : `${first.date}\u2013${last.date} \xB7 Heavy rain expected`;
-  } else if (moderateRiskDays.length > 0) {
-    const first = moderateRiskDays[0];
-    const last = moderateRiskDays[moderateRiskDays.length - 1];
-    dateRange = first.date === last.date ? `${first.date} \xB7 Moderate rain` : `${first.date}\u2013${last.date} \xB7 Moderate rain expected`;
-  } else {
-    dateRange = "Aug 10\u201323 \xB7 Generally clear";
-  }
+  ] : [];
+  const actions = data?.actions ?? [];
+  const why = data?.why ?? "";
+  const summary = data?.summary ?? "No weather guidance available.";
+  const forecast14 = (hasData && data.forecast_14d && data.forecast_14d.length > 0)
+    ? data.forecast_14d
+    : (hasData && data.forecast && data.forecast.length > 0)
+    ? data.forecast
+    : Array.from({ length: 14 }, (_, i) => ({
+        dayLabel: i === 0 ? "Today" : `+${i}d`,
+        date: "-",
+        icon: "cloud",
+        tempMin: null,
+        tempMax: null,
+        rainPct: null,
+        risk: "none"
+      }));
   return <div className="space-y-4">
-      {
-    /* Risk header */
-  }
-      <div className={`rounded-xl border px-4 py-3 ${rc.bg} ${rc.border}`}>
-        <div className={`flex items-start gap-2 ${rc.color}`}>
-          <RiskIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className={`text-[14px] font-bold ${rc.color}`}>{data.riskLabel}</p>
-            <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{data.riskHeadline}</p>
+      {/* Risk header */}
+      {hasData && rc ? <div className={`rounded-xl border px-4 py-3 ${rc.bg} ${rc.border}`}>
+          <div className={`flex items-start gap-2 ${rc.color}`}>
+            <RiskIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className={`text-[14px] font-bold ${rc.color}`}>{data.riskLabel}</p>
+              <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{data.riskHeadline}</p>
+            </div>
           </div>
-        </div>
-        {data.plantingWindow && <p className="text-[12px] text-[var(--hw-neutral-900)] mt-2 font-medium">Planting window: {data.plantingWindow}</p>}
-      </div>
+          {data.plantingWindow && <p className="text-[12px] text-[var(--hw-neutral-900)] mt-2 font-medium">Planting window: {data.plantingWindow}</p>}
+        </div> : <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
+          <p className="text-[13px] font-medium">No weather guidance available.</p>
+        </div>}
 
-      {
-    /* 14-day forecast carousel */
-  }
+      {/* 14-day forecast carousel */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">14-Day Forecast</p>
           <div className="flex gap-1">
             <button
-    onClick={() => scrollBy(-1)}
-    className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
-    aria-label="Scroll left"
-  >
+              onClick={() => scrollBy(-1)}
+              className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
+              aria-label="Scroll left"
+            >
               <ChevronLeft className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
             </button>
             <button
-    onClick={() => scrollBy(1)}
-    className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
-    aria-label="Scroll right"
-  >
+              onClick={() => scrollBy(1)}
+              className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
+              aria-label="Scroll right"
+            >
               <ChevronRight className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
             </button>
           </div>
         </div>
 
         <div
-    ref={carouselRef}
-    className="flex gap-2 overflow-x-auto pb-1"
-    style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-  >
-          {BASE_FORECAST_14D_AUG_2026.map((day, i) => {
-    const dayRc = RISK_CFG_WEATHER[day.risk];
-    return <div
-      key={i}
-      className="flex-shrink-0 flex flex-col items-center gap-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-2.5 py-2.5 min-w-[68px]"
-    >
+          ref={carouselRef}
+          className="flex gap-2 overflow-x-auto pb-1"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {forecast14.map((day, i) => {
+            const dayRc = day.risk !== "none" ? RISK_CFG_WEATHER[day.risk] : null;
+            return <div
+                key={i}
+                className="flex-shrink-0 flex flex-col items-center gap-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-2.5 py-2.5 min-w-[68px]"
+              >
                 <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{day.dayLabel}</p>
                 <p className="text-[10px] text-[var(--hw-neutral-900)]">{day.date}</p>
                 <WeatherIconEl icon={day.icon} cls="w-6 h-6 mt-0.5" />
                 <div className="text-center mt-0.5">
-                  <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax}°</p>
-                  <p className="text-[11px] text-[var(--hw-neutral-900)]">{day.tempMin}°</p>
+                  <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax != null ? `${day.tempMax}°` : "-°"}</p>
+                  <p className="text-[11px] text-[var(--hw-neutral-900)]">{day.tempMin != null ? `${day.tempMin}°` : "-°"}</p>
                 </div>
-                <p className="text-[11px] font-medium text-blue-600">{day.rainPct}%</p>
-                <div className={`flex items-center gap-1 ${dayRc.color}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dayRc.dot}`} />
-                  <span className="text-[10px] font-semibold">{dayRc.label}</span>
+                <p className="text-[11px] font-medium text-[var(--hw-neutral-900)]">{day.rainPct != null ? `${day.rainPct}%` : "-%"}</p>
+                <div className="text-[var(--hw-neutral-900)] text-[10px]">
+                  {dayRc ? <div className={`flex items-center gap-1 ${dayRc.color}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dayRc.dot}`} />
+                      <span className="text-[10px] font-semibold">{dayRc.label}</span>
+                    </div> : "-"}
                 </div>
               </div>;
-  })}
+          })}
         </div>
-
         <div className="flex items-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-900)]">
           <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /><span>Suitable</span></div>
           <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /><span>Caution</span></div>
@@ -592,42 +633,38 @@ const WeatherTab = ({ data }) => {
         </div>
       </section>
 
-      {
-    /* General weather insight */
-  }
+      {/* General weather insight */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Weather Insight · Davao City</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {data.risk === "high" ? "Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting should be delayed until conditions improve." : data.risk === "moderate" ? "Mixed conditions are expected over the next 14 days \u2014 some rainy days and some dry windows. Plan farming activities around the calmer days mid-forecast." : "Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions \u2014 good for most farming activities."}
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+          Weather Insight · {commodityName ? commodityName.toUpperCase() : "YOUR FARM"}
         </p>
-        <div className="space-y-1.5">
-          {insightBullets.map((b, i) => <div key={i} className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
-              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{b}</p>
-            </div>)}
-        </div>
+        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
+          {hasData ? data.risk === "high" ? `Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting for ${commodityName || 'this crop'} should be delayed until conditions improve.` : data.risk === "moderate" ? `Mixed conditions are expected over the next 14 days \u2014 some rainy days and some dry windows. Plan farming activities for ${commodityName || 'this crop'} around the calmer days mid-forecast.` : `Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions \u2014 good for ${commodityName || 'this crop'}.` : "No weather data available."}
+        </p>
+        {insightBullets.length > 0 && <div className="space-y-1.5">
+            {insightBullets.map((b, i) => <div key={i} className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
+                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{b}</p>
+              </div>)}
+          </div>}
       </div>
 
-      {
-    /* Recommended actions */
-  }
+      {/* Recommended actions */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Recommended Actions</p>
-        <div className="space-y-1.5">
-          {data.actions.map((action, i) => <div key={i} className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
-              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{action}</p>
-            </div>)}
-        </div>
-        <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-0.5">"{data.why}"</p>
+        {actions.length > 0 ? <div className="space-y-1.5">
+            {actions.map((action, i) => <div key={i} className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
+                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{action}</p>
+              </div>)}
+          </div> : <p className="text-[13px] text-[var(--hw-neutral-900)]">No weather guidance available.</p>}
+        {why && <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-0.5">"{why}"</p>}
       </div>
 
-      {
-    /* What this means */
-  }
+      {/* What this means */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{data.summary}</p>
+        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{summary}</p>
         <p className="text-[11px] text-[var(--hw-neutral-900)] italic mt-1">Source: Open-Meteo · Forecast is a guide only.</p>
       </div>
     </div>;
@@ -774,7 +811,7 @@ const FactorDetailTabs = ({
         {safeTab === "price" && <PriceTab data={price} commodityId={commodityId} commodityName={commodityName ?? weather.cropName} />}
         {safeTab === "arrival" && <ArrivalTab data={arrival} commodityId={commodityId} />}
         {safeTab === "production" && <ProductionTab data={production} />}
-        {safeTab === "weather" && <WeatherTab data={weather} />}
+        {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "profitability" && profitability && <ProfitabilityTab data={profitability} />}
       </div>
     </div>;

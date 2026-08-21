@@ -22,7 +22,7 @@ import {
   ReferenceLine,
   Brush
 } from "recharts";
-import { CommodityIllustration } from "../../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 const COMMODITIES = ["Kamatis", "Talong", "Repolyo", "Atsal", "Carrots", "Pipino", "Ampalaya", "Kalabasa", "Lettuce", "Chinese Pechay"];
 const MARKETS = ["Bangkerohan", "DFTC"];
 const PRICE_TYPES = ["Retail", "Wholesale"];

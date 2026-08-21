@@ -8,7 +8,7 @@ import {
   HW_COMMODITY_RECORDS,
   TEMP_COMMODITY_RECORDS
 } from "./dftc-add-data-data";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "../../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { FilePreviewModal } from "../components/DFTCFilePreviewModal";
 const PAGE_SIZE = 20;
 const EXPIRED_FILE_IDS = /* @__PURE__ */ new Set(["DFTC-WS-20260719-001"]);

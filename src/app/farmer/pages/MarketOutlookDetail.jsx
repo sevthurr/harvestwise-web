@@ -9,7 +9,7 @@ import {
   BarChart3
 } from "lucide-react";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { COMMODITY_OUTLOOK } from "./MarketPage";
 const STATUS_MAP = {
   "Favorable": "Favorable",

@@ -2,7 +2,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ChevronDown, Edit2, Info, X } from "lucide-react";
-import { CommodityIllustration } from "../../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import {
   RESULTS,
   MODULE_SUMMARY_CARDS,

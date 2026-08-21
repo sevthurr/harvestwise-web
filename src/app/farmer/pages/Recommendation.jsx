@@ -17,7 +17,7 @@ import {
   Cloud,
   TrendingUp
 } from "lucide-react";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import {
   FactorDetailTabs,
@@ -330,14 +330,17 @@ const CropCard = ({ crop, onViewDetail }) => {
     </div>;
 };
 function extractPrice(text) {
+  if (!text) return 0;
   const m = text.match(/₱(\d+(?:\.\d+)?)/);
-  return m ? parseFloat(m[1]) : 50;
+  return m ? parseFloat(m[1]) : 0;
 }
 function priceTrend(text) {
+  if (!text) return "none";
   const lower = text.toLowerCase();
   if (lower.includes("up") || lower.includes("rising")) return "rising";
   if (lower.includes("falling") || lower.includes("down")) return "falling";
-  return "stable";
+  if (lower.includes("stable")) return "stable";
+  return "none";
 }
 function makeSparkline(basePrice, trend) {
   const points = [];
@@ -352,22 +355,27 @@ function makeSparkline(basePrice, trend) {
   return points;
 }
 function extractSupplyVolumes(text) {
+  if (!text) return { thisWeek: 0, lastWeek: 0 };
   const nums = [...text.matchAll(/(\d+(?:\.\d+)?)\s*ton/gi)].map((m) => parseFloat(m[1]));
   if (nums.length >= 2) return { thisWeek: nums[0], lastWeek: nums[1] };
-  if (nums.length === 1) return { thisWeek: nums[0], lastWeek: nums[0] + 4 };
-  return { thisWeek: 12, lastWeek: 18 };
+  if (nums.length === 1) return { thisWeek: nums[0], lastWeek: nums[0] };
+  return { thisWeek: 0, lastWeek: 0 };
 }
 function productionLevel(text) {
+  if (!text) return "none";
   const lower = text.toLowerCase();
   if (lower.includes("peak") || lower.includes("high")) return "high";
   if (lower.includes("moderate") || lower.includes("usual")) return "moderate";
-  return "low";
+  if (lower.includes("low")) return "low";
+  return "none";
 }
 function weatherRisk(text) {
+  if (!text) return "none";
   const lower = text.toLowerCase();
   if (lower.includes("no heavy") || lower.includes("dry") || lower.includes("suitable")) return "low";
   if (lower.includes("heavy") || lower.includes("storm")) return "high";
-  return "moderate";
+  if (lower.includes("caution") || lower.includes("moderate")) return "moderate";
+  return "none";
 }
 const CropDetailView = ({ crop, onBack }) => {
   const navigate = useNavigate();
@@ -553,15 +561,9 @@ function RecommendationPage() {
     /* ── Header ── */
   }
         <div>
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-              Crop Calendar
-            </h1>
-            <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0 mt-1">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-          </div>
+          <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+            Crop Calendar
+          </h1>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
             Track crop schedules and harvest timing.
           </p>

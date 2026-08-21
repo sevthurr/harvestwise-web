@@ -28,7 +28,7 @@ import {
   Cell
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 const COMMODITY_OUTLOOK = {
   kamatis: { id: "kamatis", status: "Balanced", nearTermOutlook: "Supply may increase during the next period.", mainFactor: "More harvests are expected soon in the region.", action: "Monitor prices before increasing planted area.", arrivalVolume: "Increasing", arrivalDetail: "Kamatis deliveries to DFTC have risen slightly over the past three days.", priceBehavior: "Rising", priceDetail: "Bangkerohan retail prices have improved slightly, currently above break-even for most farms.", seasonalCondition: "Peak harvest season approaching in the coming weeks.", weatherInfluence: "Heavy rain may delay deliveries and briefly reduce supply.", calendarInfluence: "Upcoming payday period may support buyer demand near harvest.", risks: ["Oversupply risk if multiple farms harvest at the same time"], opportunities: ["Current Bangkerohan prices are above average break-even"], demandPressure: 55, arrivalVolumeMock: [82, 85, 88, 91, 90, 94, 96] },

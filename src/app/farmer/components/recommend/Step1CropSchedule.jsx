@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { CROP_DURATIONS, suggestHarvestDate } from "./types";
-import { CommodityIllustration } from "../market/CommodityIllustrations";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { toCamelCase } from "../../../global/utils/apiTransforms";

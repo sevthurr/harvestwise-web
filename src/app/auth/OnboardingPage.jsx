@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ChevronLeft, ChevronRight, Check, MapPin, Loader2 } from "lucide-react";
 import { HW_COMMODITY_ITEMS, getVariants } from "../global/data/commodities";
-import { CommodityIllustration } from "../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../global/components/shared/CommodityIllustrations";
 import { Footer } from "../global/components/Footer";
 import { apiGet, apiPost, parseResponse } from "../global/api";
 

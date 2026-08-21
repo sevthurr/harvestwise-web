@@ -11,7 +11,7 @@ import {
   Sprout,
   ArrowRight
 } from "lucide-react";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 
 const ADV_CFG = {
@@ -145,7 +145,7 @@ function PlantingGuidePage() {
             </h1>
             <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0 mt-1">
               <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today</span>
+              <span className="text-[13px] whitespace-nowrap">Updated -</span>
             </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">

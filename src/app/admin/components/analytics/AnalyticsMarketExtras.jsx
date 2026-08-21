@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, Minus, ChevronRight } from "lucide-react";
-import { CommodityIllustration } from "../../../farmer/components/market/CommodityIllustrations";
+import { CommodityIllustration } from "@/app/global/components/shared/CommodityIllustrations";
 const SPARKLINES = {
   kamatis: [72, 75, 73, 78, 80, 82, 85],
   talong: [63, 62, 61, 60, 60, 61, 60],

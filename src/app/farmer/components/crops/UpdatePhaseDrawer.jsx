@@ -223,7 +223,7 @@ const UpdatePhaseDrawer = ({
   }
           {transitions.length > 0 && <div>
               <p className="text-sm font-semibold text-[var(--hw-neutral-700)] mb-3">
-                {crop.isOnHold ? "Or advance to a new phase" : `Move ${crop.commodityName} to`}
+                {crop.isOnHold ? "Or advance to a new phase" : `Move ${crop.commodityName || '-'} to`}
               </p>
               <div className="space-y-2">
                 {transitions.map((phase) => {

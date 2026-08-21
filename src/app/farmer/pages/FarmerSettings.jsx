@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { HW_COMMODITY_ITEMS, getVariants } from "../../global/data/commodities";
 import {
   inputCls,

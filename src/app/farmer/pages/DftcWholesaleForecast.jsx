@@ -21,7 +21,7 @@ import {
   LabelList
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
 const WHOLESALE_FORECAST_DATA = {
   kamatis: { direction: "rising", directionLabel: "Likely to rise", currentPrice: 78, recentAvg: 76, forecastedPrice: 80, forecastLow: 75, forecastHigh: 86, changePct: 5.3, reliability: "Moderate", reliabilityNote: "Based on available DFTC Wholesale price records." },

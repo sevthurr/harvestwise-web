@@ -100,9 +100,9 @@ function CropFactorsPage() {
     /* Page title */
   }
         <div>
-          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{crop.commodityName} — Detailed Factors</h1>
+          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{crop.commodityName || "-"} — Detailed Factors</h1>
           <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-            Market analysis for your crop plan · {crop.phase.replace(/-/g, " ")} phase
+            Market analysis for your crop plan · {crop.phase ? crop.phase.replace(/-/g, " ") : "-"} phase
           </p>
         </div>
 

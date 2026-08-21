@@ -17,7 +17,7 @@ import {
   Tooltip
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { InformationDisclosure } from "../components/market/DetailCards";
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
 const WHOLESALE_PRICE_DATA = {

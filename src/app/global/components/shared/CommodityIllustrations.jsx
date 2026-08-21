@@ -120,59 +120,29 @@ const COMMODITY_REGISTRY = {
  * This handles variants like "Kamatis - Diamante Big" → "kamatis"
  */
 function getCommodityIconKey(commodityId, baseName, commodityName) {
-  // Try exact match with commodity ID first
-  const lowerId = commodityId?.toLowerCase();
-  if (COMMODITY_REGISTRY[lowerId]) {
-    return lowerId;
-  }
-  
-  // Try matching the commodity name
-  const nameLower = commodityName?.toLowerCase() || '';
-  
-  // Direct name matches
-  if (nameLower.includes('kamatis') || nameLower.includes('tomato')) return 'kamatis';
-  if (nameLower.includes('talong') || nameLower.includes('eggplant')) return 'talong';
-  if (nameLower.includes('kalabasa') || nameLower.includes('squash')) return 'kalabasa';
-  if (nameLower.includes('pipino') || nameLower.includes('cucumber')) return 'pipino';
-  if (nameLower.includes('ampalaya') || nameLower.includes('bitter gourd')) return 'ampalaya';
-  if (nameLower.includes('chinese pechay') || nameLower.includes('pechay baguio') || nameLower.includes('wongbok')) return 'pechay';
-  if (nameLower.includes('lettuce')) return 'lettuce';
-  if (nameLower.includes('repolyo') || nameLower.includes('cabbage')) return 'repolyo';
-  if (nameLower.includes('carrot')) return 'carrots';
-  if (nameLower.includes('atsal') || nameLower.includes('bell pepper')) return 'atsal';
-  
-  // Try base name matching
-  const baseNameLower = baseName?.toLowerCase() || '';
-  
-  const baseNameMap = {
-    'tomato': 'kamatis',
-    'eggplant': 'talong',
-    'squash fruit': 'kalabasa',
-    'cucumber': 'pipino',
-    'ampalaya fruit': 'ampalaya',
-    'bitter gourd': 'ampalaya',
-    'chinese cabbage': 'pechay',
-    'lettuce': 'lettuce',
-    'cabbage': 'repolyo',
-    'carrot': 'carrots',
-    'bell pepper': 'atsal',
-  };
-  
-  for (const [key, value] of Object.entries(baseNameMap)) {
-    if (baseNameLower.includes(key)) {
-      return value;
-    }
-  }
-  
-  // Check if commodity ID or name contains any icon key
+  const lowerId = (commodityId || '')?.toLowerCase();
+  const nameLower = (commodityName || '')?.toLowerCase();
+  const baseNameLower = (baseName || '')?.toLowerCase();
+  const combined = `${lowerId} ${nameLower} ${baseNameLower}`;
+
+  if (combined.includes('kamatis') || combined.includes('tomato')) return 'kamatis';
+  if (combined.includes('talong') || combined.includes('eggplant')) return 'talong';
+  if (combined.includes('kalabasa') || combined.includes('squash')) return 'kalabasa';
+  if (combined.includes('pipino') || combined.includes('cucumber')) return 'pipino';
+  if (combined.includes('ampalaya') || combined.includes('bitter')) return 'ampalaya';
+  if (combined.includes('pechay') || combined.includes('wongbok') || combined.includes('cabbage chinese')) return 'pechay';
+  if (combined.includes('lettuce')) return 'lettuce';
+  if (combined.includes('repolyo') || combined.includes('cabbage')) return 'repolyo';
+  if (combined.includes('carrot')) return 'carrots';
+  if (combined.includes('atsal') || combined.includes('bell pepper')) return 'atsal';
+
   for (const key of Object.keys(COMMODITY_REGISTRY)) {
-    if (lowerId?.includes(key) || nameLower.includes(key)) {
+    if (combined.includes(key)) {
       return key;
     }
   }
-  
-  console.log('No icon found for:', commodityName, 'baseName:', baseName, 'id:', commodityId);
-  return null; // No match found
+
+  return null;
 }
 
 const CommodityIllustration = ({

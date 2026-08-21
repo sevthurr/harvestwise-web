@@ -13,7 +13,7 @@ import {
   Info
 } from "lucide-react";
 import { COMMODITIES } from "./mockData";
-import { CommodityIllustration } from "./CommodityIllustrations";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PriceDirectionIndicator, SupplyConditionIndicator, DataFreshnessLabel } from "./Indicators";
 const CommodityDetailHeader = ({
   commodity,

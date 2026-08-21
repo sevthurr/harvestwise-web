@@ -21,7 +21,7 @@ import {
   LabelList
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
 const RETAIL_FORECAST_DATA = {
   kamatis: {

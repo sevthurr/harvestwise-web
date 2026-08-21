@@ -20,7 +20,7 @@ import {
 import { useNavigate } from "react-router";
 import { COMMODITY_OPTIONS, getTotalCost, formatPeso } from "./types";
 import { useCrops } from "../crops/CropsContext";
-import { CommodityIllustration } from "../market/CommodityIllustrations";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
 import {
   buildPricePoints,
