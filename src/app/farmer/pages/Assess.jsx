@@ -16,6 +16,8 @@ import { Step3ProductionCosts } from "../components/recommend/Step3ProductionCos
 import { Step4ReviewBreakEven } from "../components/recommend/Step4ReviewBreakEven";
 import { formatPeso } from "../components/recommend/types";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { apiGet, parseResponse } from "../../global/api";
+
 function validateStep(step, data) {
   const errors = {};
   if (step === 1) {
@@ -36,6 +38,7 @@ function validateStep(step, data) {
   }
   return errors;
 }
+
 const StepActions = ({
   step,
   onBack,
@@ -78,6 +81,7 @@ const StepActions = ({
       </button>
     </div>
   </div>;
+
 function AssessPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -98,19 +102,23 @@ function AssessPage() {
     const fetchCommodities = async () => {
       try {
         setLoadingCommodities(true);
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-        const response = await fetch(`${apiUrl}/prices?page_size=100`);
+        const response = await apiGet('/prices?page_size=100');
         if (response.ok) {
-          const data = await response.json();
-          const top10 = data.items
-            .filter(item => item.is_top10 === true)
-            .map(item => {
-              const camelItem = toCamelCase(item);
-              return {
-                id: camelItem.commodityId,
-                name: camelItem.name,
-              };
-            });
+          const resData = await parseResponse(response);
+          const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
+          const seen = new Set();
+          const top10 = [];
+          
+          rawItems.forEach(item => {
+            const camelItem = toCamelCase(item);
+            const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+            const cid = camelItem.commodityId || camelItem.id || item.commodity_id;
+            const cname = camelItem.name || camelItem.commodityName || item.name;
+            if (isTop && cid && cname && !seen.has(cid)) {
+              seen.add(cid);
+              top10.push({ id: cid, name: cname });
+            }
+          });
           setCommodityOptions(top10);
         }
       } catch (error) {

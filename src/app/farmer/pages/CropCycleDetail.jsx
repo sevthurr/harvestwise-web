@@ -26,39 +26,15 @@ import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
-const CURRENT_PRICES = {
-  kamatis: 85,
-  talong: 60,
-  repolyo: 45,
-  atsal: 120,
-  carrots: 90,
-  pipino: 40,
-  ampalaya: 75,
-  kalabasa: 35,
-  lettuce: 80,
-  pechay: 35
-};
-const FORECAST_PRICES = {
-  kamatis: { mid: 87, lo: 83, hi: 91 },
-  talong: { mid: 62, lo: 58, hi: 66 },
-  repolyo: { mid: 47, lo: 43, hi: 51 },
-  atsal: { mid: 123, lo: 118, hi: 128 },
-  carrots: { mid: 92, lo: 88, hi: 96 },
-  pipino: { mid: 42, lo: 38, hi: 46 },
-  ampalaya: { mid: 78, lo: 73, hi: 83 },
-  kalabasa: { mid: 37, lo: 33, hi: 41 },
-  lettuce: { mid: 82, lo: 78, hi: 87 },
-  pechay: { mid: 37, lo: 33, hi: 41 }
-};
 const ADVISORY_CFG = {
   "Recommended": { Icon: CheckCircle2, color: "text-emerald-700", border: "border-[var(--hw-neutral-200)]" },
   "Plant Conservatively": { Icon: AlertTriangle, color: "text-amber-700", border: "border-[var(--hw-neutral-200)]" },
   "Avoid for Now": { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]" }
 };
-function getAdvisory(phase, commodity, costToRecover) {
-  const price = CURRENT_PRICES[commodity] ?? 70;
-  const margin = price - costToRecover;
+function getAdvisory(phase, currentPrice, costToRecover) {
   if (phase === "completed") return "Recommended";
+  if (currentPrice == null || costToRecover == null) return null;
+  const margin = currentPrice - costToRecover;
   if (margin >= 20) return "Recommended";
   if (margin >= 5) return "Plant Conservatively";
   return "Avoid for Now";
@@ -188,29 +164,36 @@ function CropCycleDetailPage() {
   const updatedTotalCost = crop.totalCost + extraCost;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 1;
   const costToRecover = Math.ceil(updatedTotalCost / qty);
-  const currentPrice = CURRENT_PRICES[crop.commodity] ?? 70;
-  const forecast = FORECAST_PRICES[crop.commodity] ?? { mid: currentPrice, lo: Math.round(currentPrice * 0.95), hi: Math.round(currentPrice * 1.07) };
+  const currentPrice = crop.currentPrice || null;
+  const forecastLo = crop.forecastLower || null;
+  const forecastHi = crop.forecastUpper || null;
+  const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : null;
   const hasFarmgate = typeof farmgatePrice === "number" && farmgatePrice > 0;
   const useForecast = ["planning", "growing", "on-hold"].includes(crop.phase);
-  const basePrice = useForecast ? forecast.mid : currentPrice;
-  const sellingBasis = hasFarmgate ? farmgatePrice : basePrice;
-  const priceBasisLabel = useForecast ? hasFarmgate ? "Based on estimated farmgate price" : "Based on forecasted price near harvest" : hasFarmgate ? "Based on estimated farmgate price" : "Based on current market price";
-  const priceBasisDetail = useForecast ? hasFarmgate ? `Farmgate price: \u20B1${farmgatePrice}/kg` : `Forecasted price reference: \u20B1${forecast.lo}\u2013\u20B1${forecast.hi}/kg` : hasFarmgate ? `Farmgate price: \u20B1${farmgatePrice}/kg` : `Current market price: \u20B1${currentPrice}/kg`;
-  const margin = sellingBasis - costToRecover;
-  const profitLo = Math.max(0, Math.floor(margin * qty * 0.85 / 1e3) * 1e3);
-  const profitHi = Math.ceil(margin * qty * 1.1 / 1e3) * 1e3;
-  const advisory = getAdvisory(crop.phase, crop.commodity, costToRecover);
-  const advisoryCfg = ADVISORY_CFG[advisory];
-  const AdvisoryIcon = advisoryCfg.Icon;
+  const basePrice = hasFarmgate ? farmgatePrice : (useForecast ? (forecastMid || currentPrice) : currentPrice);
+  const sellingBasis = basePrice;
+  const priceBasisLabel = useForecast ? (hasFarmgate ? "Based on estimated farmgate price" : "Based on forecasted price near harvest") : (hasFarmgate ? "Based on estimated farmgate price" : "Based on current market price");
+  const priceBasisDetail = useForecast
+    ? (hasFarmgate ? `Farmgate price: \u20B1${farmgatePrice}/kg` : (forecastLo != null && forecastHi != null ? `Forecasted price reference: \u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : `Forecasted price reference: -/kg`))
+    : (hasFarmgate ? `Farmgate price: \u20B1${farmgatePrice}/kg` : (currentPrice != null ? `Current market price: \u20B1${currentPrice}/kg` : `Current market price: -/kg`));
+  const margin = sellingBasis != null && costToRecover > 0 ? sellingBasis - costToRecover : null;
+  const profitLo = margin != null ? Math.max(0, Math.floor(margin * qty * 0.85 / 1e3) * 1e3) : 0;
+  const profitHi = margin != null ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
+  const advisory = crop.advisoryCategory || getAdvisory(crop.phase, sellingBasis, costToRecover);
+  const advisoryCfg = advisory ? ADVISORY_CFG[advisory] : null;
+  const AdvisoryIcon = advisoryCfg?.Icon;
   const weeklyActions = crop.isOnHold ? WEEKLY_ACTIONS["on-hold"] ?? [] : WEEKLY_ACTIONS[crop.phase] ?? [];
   const isCompleted = crop.phase === "completed";
   const isActive = !isCompleted;
   const isPlanted = ["growing", "pre-harvest"].includes(crop.phase);
   const isHarvesting = crop.phase === "harvested";
-  const daysSincePlanting = 50;
-  const totalGrowDays = 82;
-  const progressPct = Math.round(daysSincePlanting / totalGrowDays * 100);
-  const daysToHarvest = totalGrowDays - daysSincePlanting;
+  const pDate = crop.plantingDate ? new Date(crop.plantingDate) : null;
+  const hDate = crop.harvestDate ? new Date(crop.harvestDate) : null;
+  const now = new Date();
+  const daysSincePlanting = pDate && !isNaN(pDate.getTime()) ? Math.max(0, Math.floor((now - pDate) / (1000 * 60 * 60 * 24))) : null;
+  const totalGrowDays = pDate && hDate && !isNaN(pDate.getTime()) && !isNaN(hDate.getTime()) ? Math.max(1, Math.floor((hDate - pDate) / (1000 * 60 * 60 * 24))) : null;
+  const progressPct = daysSincePlanting != null && totalGrowDays != null ? Math.min(100, Math.round(daysSincePlanting / totalGrowDays * 100)) : null;
+  const daysToHarvest = hDate && !isNaN(hDate.getTime()) ? Math.max(0, Math.floor((hDate - now) / (1000 * 60 * 60 * 24))) : null;
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
 
@@ -269,16 +252,17 @@ function CropCycleDetailPage() {
           </div>}
 
         {/* ── 2. Main advice — white card, colored foreground only ── */}
-        {isActive && <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 ${advisoryCfg.border}`}>
-            <div className={`flex items-center gap-2 mb-2 ${advisoryCfg.color}`}>
-              <AdvisoryIcon className="w-5 h-5 flex-shrink-0" />
-              <p className={`text-[15px] font-bold ${advisoryCfg.color}`}>{advisory || "Not available"}</p>
+        {isActive && (
+          <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 ${advisoryCfg?.border || "border-[var(--hw-neutral-200)]"}`}>
+            <div className={`flex items-center gap-2 mb-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+              {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
+              <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisory || "Not available"}</p>
             </div>
             <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-              {ADVISORY_SUMMARY[advisory] ? ADVISORY_SUMMARY[advisory](crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName) : "Recommendation details unavailable."}
+              {advisory && ADVISORY_SUMMARY[advisory] ? ADVISORY_SUMMARY[advisory](crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName) : "Recommendation details unavailable."}
             </p>
-            <p className={`text-[13px] font-medium mt-1 ${advisoryCfg.color}`}>
-              {ADVISORY_SUPPORT[advisory] || "Recommendation details unavailable."}
+            <p className={`text-[13px] font-medium mt-1 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+              {advisory && ADVISORY_SUPPORT[advisory] ? ADVISORY_SUPPORT[advisory] : "Recommendation details unavailable."}
             </p>
             <button
               onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
@@ -286,7 +270,8 @@ function CropCycleDetailPage() {
             >
               View basis →
             </button>
-          </div>}
+          </div>
+        )}
 
         {/* ── 3. Estimated Profit ── */}
         {isActive && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
@@ -367,9 +352,9 @@ function CropCycleDetailPage() {
                 <TrendingUp className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                 <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Price</p>
               </div>
-              <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">₱{currentPrice}/kg</p>
+              <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{currentPrice != null ? `\u20B1${currentPrice}/kg` : "-/kg"}</p>
               <p className="text-[12px] text-[var(--hw-neutral-900)]">
-                Forecast: ₱{Math.round(currentPrice * 0.98)}–₱{Math.round(currentPrice * 1.07)}/kg
+                Forecast: {forecastLo != null && forecastHi != null ? `\u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : "-/kg"}
               </p>
               <button
     onClick={() => navigate(`/farmer/prices/${crop.commodity}`)}
@@ -384,8 +369,8 @@ function CropCycleDetailPage() {
                 <CloudRain className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
                 <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Weather</p>
               </div>
-              <p className="text-[13px] font-semibold text-blue-700 leading-snug">Heavy rain</p>
-              <p className="text-[12px] text-[var(--hw-neutral-900)]">Jul 12–13 · Clear drainage.</p>
+              <p className="text-[13px] font-semibold text-blue-700 leading-snug">{crop.weatherCondition || "Not available"}</p>
+              <p className="text-[12px] text-[var(--hw-neutral-900)]">{crop.weatherAction || "-"}</p>
               <button
     onClick={() => navigate("/farmer/market/weather")}
     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
@@ -402,19 +387,19 @@ function CropCycleDetailPage() {
             <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">Crop progress</p>
             <div className="space-y-1">
               <div className="flex justify-between text-[13px]">
-                <span className="text-[var(--hw-neutral-900)]">{daysSincePlanting} of {totalGrowDays} days</span>
-                <span className="font-semibold text-[var(--hw-neutral-900)]">{progressPct}%</span>
+                <span className="text-[var(--hw-neutral-900)]">{daysSincePlanting != null && totalGrowDays != null ? `${daysSincePlanting} of ${totalGrowDays} days` : "-"}</span>
+                <span className="font-semibold text-[var(--hw-neutral-900)]">{progressPct != null ? `${progressPct}%` : "-"}</span>
               </div>
               <div className="h-2.5 bg-[var(--hw-neutral-200)] rounded-full overflow-hidden">
-                <div className="h-full bg-[var(--hw-green-600)] rounded-full" style={{ width: `${progressPct}%` }} />
+                <div className="h-full bg-[var(--hw-green-600)] rounded-full" style={{ width: `${progressPct != null ? progressPct : 0}%` }} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-    { label: "Days planted", value: `${daysSincePlanting}d` },
-    { label: "Days to harvest", value: `${daysToHarvest}d` },
-    { label: "Harvest est.", value: crop.harvestDate }
-  ].map((m) => <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
+                { label: "Days planted", value: daysSincePlanting != null ? `${daysSincePlanting}d` : "-" },
+                { label: "Days to harvest", value: daysToHarvest != null ? `${daysToHarvest}d` : "-" },
+                { label: "Harvest est.", value: crop.harvestDate || "-" }
+              ].map((m) => <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
                   <p className="text-xs text-[var(--hw-neutral-900)]">{m.label}</p>
                   <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mt-0.5">{m.value}</p>
                 </div>)}
@@ -457,15 +442,15 @@ function CropCycleDetailPage() {
 
             <div className="divide-y divide-[var(--hw-neutral-100)]">
               {[
-    { label: "Estimated cost", value: formatPeso(crop.totalCost) },
-    { label: "Added costs", value: extraCost > 0 ? formatPeso(extraCost) : "\u2014" },
-    { label: "Total recorded cost", value: formatPeso(updatedTotalCost), bold: true },
-    { label: "Expected harvest volume", value: `${crop.harvestQuantity} kg` },
-    { label: "Cost to recover per kg", value: `\u20B1${costToRecover}/kg`, bold: true },
-    { label: "Forecasted price reference", value: `\u20B1${forecast.lo}\u2013\u20B1${forecast.hi}/kg` },
-    { label: "Current market price", value: `\u20B1${currentPrice}/kg` },
-    { label: "Estimated farmgate price", value: hasFarmgate ? `\u20B1${farmgatePrice}/kg` : "Not set", muted: !hasFarmgate }
-  ].map((r) => <div key={r.label} className="flex items-center justify-between py-2.5 gap-3">
+                { label: "Estimated cost", value: updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : "-" },
+                { label: "Added costs", value: extraCost > 0 ? formatPeso(extraCost) : "-" },
+                { label: "Total recorded cost", value: updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : "-", bold: true },
+                { label: "Expected harvest volume", value: crop.harvestQuantity ? `${crop.harvestQuantity} kg` : "- kg" },
+                { label: "Cost to recover per kg", value: costToRecover > 0 ? `\u20B1${costToRecover}/kg` : "-/kg", bold: true },
+                { label: "Forecasted price reference", value: forecastLo != null && forecastHi != null ? `\u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : "-/kg" },
+                { label: "Current market price", value: currentPrice != null ? `\u20B1${currentPrice}/kg` : "-/kg" },
+                { label: "Estimated farmgate price", value: hasFarmgate ? `\u20B1${farmgatePrice}/kg` : "Not set", muted: !hasFarmgate }
+              ].map((r) => <div key={r.label} className="flex items-center justify-between py-2.5 gap-3">
                   <p className="text-[13px] text-[var(--hw-neutral-900)]">{r.label}</p>
                   <p className={`text-[13px] flex-shrink-0 ${r.bold ? "font-bold text-[var(--hw-neutral-900)]" : r.muted ? "text-[var(--hw-neutral-400)] italic" : "font-medium text-[var(--hw-neutral-900)]"}`}>{r.value}</p>
                 </div>)}

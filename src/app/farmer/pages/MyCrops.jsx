@@ -19,28 +19,20 @@ function matchesStage(crop, tab) {
   if (tab === "completed") return crop.phase === "completed";
   return false;
 }
-const CURRENT_PRICES = {
-  kamatis: 85,
-  talong: 60,
-  repolyo: 45,
-  atsal: 120,
-  carrots: 90,
-  pipino: 40,
-  ampalaya: 75,
-  kalabasa: 35,
-  lettuce: 80,
-  pechay: 35
-};
 function profitRange(crop) {
   if (crop.phase === "completed") return null;
-  const price = CURRENT_PRICES[crop.commodity] ?? 70;
-  const margin = price - crop.breakEvenPrice;
-  const qty = crop.harvestQuantity;
-  const midProfit = margin * qty;
-  if (midProfit <= 0) return null;
-  const lo = Math.floor(midProfit * 0.85 / 1e3) * 1e3;
-  const hi = Math.ceil(midProfit * 1.15 / 1e3) * 1e3;
-  return `\u20B1${lo.toLocaleString("en-PH")}\u2013\u20B1${hi.toLocaleString("en-PH")}`;
+  if (crop.profitLower != null && crop.profitUpper != null) {
+    return `\u20B1${Number(crop.profitLower).toLocaleString("en-PH")}\u2013\u20B1${Number(crop.profitUpper).toLocaleString("en-PH")}`;
+  }
+  if (crop.currentPrice != null && crop.breakEvenPrice != null && crop.harvestQuantity != null) {
+    const margin = crop.currentPrice - crop.breakEvenPrice;
+    const midProfit = margin * crop.harvestQuantity;
+    if (midProfit <= 0) return null;
+    const lo = Math.floor(midProfit * 0.85 / 1e3) * 1e3;
+    const hi = Math.ceil(midProfit * 1.15 / 1e3) * 1e3;
+    return `\u20B1${lo.toLocaleString("en-PH")}\u2013\u20B1${hi.toLocaleString("en-PH")}`;
+  }
+  return null;
 }
 function nextActionText(crop) {
   if (crop.nextMilestone) return crop.nextMilestone;
@@ -55,7 +47,7 @@ function nextActionText(crop) {
   return map[crop.phase] ?? "";
 }
 const MyCropCard = ({ crop, onView }) => {
-  const currentPrice = CURRENT_PRICES[crop.commodity];
+  const currentPrice = crop.currentPrice;
   const profit = profitRange(crop);
   const action = crop.isOnHold ? "Resume when market conditions improve" : crop.phase === "completed" ? "Crop cycle completed" : nextActionText(crop);
   const displayName = crop.commodityName ? (crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName) : "-";

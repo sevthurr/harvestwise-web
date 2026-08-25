@@ -14,66 +14,7 @@ const LIFECYCLE_PHASES = [
   "harvested",
   "completed"
 ];
-const MOCK_CROPS = [
-  {
-    id: "crop-1",
-    commodity: "kamatis",
-    commodityName: "Kamatis",
-    variant: "Diamante Big",
-    phase: "growing",
-    plantingDate: "May 5, 2026",
-    harvestDate: "Jul 26, 2026",
-    farmArea: 500,
-    farmAreaUnit: "sqm",
-    harvestQuantity: 600,
-    totalCost: 25200,
-    breakEvenPrice: 42,
-    currentPrice: 85,
-    condition: "Heavy rain may affect the farm this week.",
-    nextMilestone: "Expected harvest in 32 days",
-    lastUpdated: "Jun 24, 2026 at 7:30 AM"
-  },
-  {
-    id: "crop-2",
-    commodity: "talong",
-    commodityName: "Talong",
-    phase: "growing",
-    isOnHold: true,
-    holdReason: "Waiting to reassess market conditions before continuing planned crop activities.",
-    holdDate: "Aug 2, 2026",
-    plantingDate: "Jun 20, 2026",
-    harvestDate: "Sep 15, 2026",
-    farmArea: 300,
-    farmAreaUnit: "sqm",
-    harvestQuantity: 350,
-    totalCost: 14e3,
-    breakEvenPrice: 40,
-    currentPrice: 60,
-    condition: "Market conditions under review.",
-    nextMilestone: "Resume when market conditions improve",
-    lastUpdated: "Jun 24, 2026 at 7:30 AM"
-  },
-  {
-    id: "crop-3",
-    commodity: "repolyo",
-    commodityName: "Repolyo",
-    variant: "Wakamini",
-    phase: "completed",
-    plantingDate: "Mar 10, 2026",
-    harvestDate: "Jun 1, 2026",
-    farmArea: 400,
-    farmAreaUnit: "sqm",
-    harvestQuantity: 450,
-    totalCost: 16200,
-    breakEvenPrice: 36,
-    currentPrice: 45,
-    condition: "Crop cycle completed.",
-    nextMilestone: "Crop cycle completed",
-    lastUpdated: "Jun 24, 2026 at 7:30 AM",
-    actualHarvestQty: 450,
-    actualSellingPrice: 38
-  }
-];
+const MOCK_CROPS = [];
 const PHASE_TRANSITIONS = {
   planning: ["growing"],
   growing: ["pre-harvest"],

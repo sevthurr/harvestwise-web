@@ -63,7 +63,7 @@ const Layout = () => {
           }
           onMenuClick={() => setSidebarCollapsed((v) => !v)}
           notificationCount={3}
-          onNotificationClick={() => navigate("/farmer/insights")}
+          onNotificationClick={() => navigate("/farmer/notifications")}
         />
 
         <main

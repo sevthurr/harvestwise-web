@@ -16,6 +16,7 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { Skeleton, SkeletonListRow } from "../components/shared/FarmerSkeletons";
 
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp, label: "Rising" },
@@ -40,10 +41,17 @@ function ProfitCard({ cropPlans, loading }) {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Estimated Profit</h2>
         </div>
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center justify-center h-32">
-          <div className="flex flex-col items-center gap-2">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--hw-green-700)]"></div>
-            <p className="text-xs text-[var(--hw-neutral-700)]">Loading...</p>
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3 animate-pulse">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+            <div className="space-y-1.5 flex-1">
+              <Skeleton className="h-4 w-1/3 rounded" />
+              <Skeleton className="h-3 w-1/4 rounded" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <Skeleton className="h-12 rounded-xl" />
+            <Skeleton className="h-12 rounded-xl" />
           </div>
         </div>
       </section>
@@ -165,7 +173,6 @@ function DashboardPage() {
   const [prices, setPrices] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updatedAt, setUpdatedAt] = useState("just now");
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -212,26 +219,36 @@ function DashboardPage() {
           console.warn('Crop plans fetch failed:', e);
         }
         
-        // Fetch prices (top 10 commodities)
+        // Fetch prices (top 10 base commodities)
         try {
           const pricesRes = await apiGet('/prices?page_size=100');
           if (pricesRes.ok) {
             const pricesData = await parseResponse(pricesRes);
-            const priceItems = (pricesData?.items || [])
-              .filter(item => item.is_top10 === true || item.isTop10 === true)
-              .map(item => {
-                const camelItem = toCamelCase(item);
-                const retailPrice = camelItem.prices?.bangkerohanRetail ?? camelItem.prices?.dftcRetail ?? null;
-                return {
+            const baseMap = new Map();
+            (pricesData?.items || []).forEach(item => {
+              const camelItem = toCamelCase(item);
+              const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+              if (!isTop) return;
+              const name = camelItem.name || '–';
+              const retailPrice = camelItem.prices?.bangkerohanRetail ?? camelItem.prices?.dftcRetail ?? null;
+              
+              if (!baseMap.has(name)) {
+                baseMap.set(name, {
                   id: camelItem.commodityId,
-                  name: camelItem.name || '–',
+                  name: name,
                   baseName: camelItem.baseName,
                   price: retailPrice,
                   uom: camelItem.unitOfMeasure || 'kg',
                   direction: camelItem.forecast?.trend || null
-                };
-              });
-            setPrices(priceItems);
+                });
+              } else if (retailPrice !== null && baseMap.get(name).price === null) {
+                const existing = baseMap.get(name);
+                existing.price = retailPrice;
+                existing.direction = camelItem.forecast?.trend || existing.direction;
+                existing.id = camelItem.commodityId;
+              }
+            });
+            setPrices(Array.from(baseMap.values()));
           }
         } catch (e) {
           console.warn('Prices fetch failed:', e);
@@ -256,11 +273,8 @@ function DashboardPage() {
         } catch (e) {
           console.warn('Recommendations fetch failed:', e);
         }
-
-        setUpdatedAt("-");
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
-        setUpdatedAt("-");
       } finally {
         setLoading(false);
       }
@@ -285,10 +299,6 @@ function DashboardPage() {
             {greetingText}
           </h1>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">{subtitle}</p>
-          <div className="flex items-center gap-1.5 mt-1.5 text-[var(--hw-neutral-900)]">
-            <Clock className="w-3.5 h-3.5" />
-            <span className="text-[13px]">Updated {updatedAt}</span>
-          </div>
         </div>
 
         {/* ── 2. Main action card ── */}
@@ -326,11 +336,10 @@ function DashboardPage() {
             </div>
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
               {loading ? (
-                <div className="flex items-center justify-center p-6">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--hw-green-700)]"></div>
-                    <p className="text-xs text-[var(--hw-neutral-700)]">Loading prices...</p>
-                  </div>
+                <div className="divide-y divide-[var(--hw-neutral-100)]">
+                  <SkeletonListRow />
+                  <SkeletonListRow />
+                  <SkeletonListRow />
                 </div>
               ) : prices.length === 0 ? (
                 <div className="p-4 text-center text-[13px] text-[var(--hw-neutral-700)]">
@@ -383,10 +392,26 @@ function DashboardPage() {
             </div>
 
             {loading ? (
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center justify-center h-32">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--hw-green-700)]"></div>
-                  <p className="text-xs text-[var(--hw-neutral-700)]">Loading...</p>
+              <div className="space-y-2.5">
+                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2 animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-20 rounded" />
+                      <Skeleton className="h-4 w-28 rounded" />
+                      <Skeleton className="h-3 w-36 rounded" />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2 animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-20 rounded" />
+                      <Skeleton className="h-4 w-28 rounded" />
+                      <Skeleton className="h-3 w-36 rounded" />
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : recommendations.length === 0 ? (
@@ -456,11 +481,9 @@ function DashboardPage() {
           </div>
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
             {loading ? (
-              <div className="flex items-center justify-center p-6">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--hw-green-700)]"></div>
-                  <p className="text-xs text-[var(--hw-neutral-700)]">Loading reminders...</p>
-                </div>
+              <div className="divide-y divide-[var(--hw-neutral-100)]">
+                <SkeletonListRow />
+                <SkeletonListRow />
               </div>
             ) : cropPlans.length === 0 ? (
               <div className="p-4 text-center text-[13px] text-[var(--hw-neutral-700)]">

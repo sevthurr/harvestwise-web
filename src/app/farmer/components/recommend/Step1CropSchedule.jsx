@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { CROP_DURATIONS, suggestHarvestDate } from "./types";
-import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
+import { CommodityIllustration, getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
+import { apiGet, parseResponse } from "../../../global/api";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -22,19 +23,42 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     const fetchCommodities = async () => {
       try {
         setLoadingCommodities(true);
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-        const response = await fetch(`${apiUrl}/prices?page_size=100`);
+        const response = await apiGet('/prices?page_size=100');
         if (response.ok) {
-          const data = await response.json();
-          const top10 = data.items
-            .filter(item => item.is_top10 === true)
-            .map(item => {
-              const camelItem = toCamelCase(item);
-              return {
-                id: camelItem.commodityId,
-                name: camelItem.name,
+          const resData = await parseResponse(response);
+          const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
+          const baseMap = {};
+          
+          rawItems.forEach(item => {
+            const camelItem = toCamelCase(item);
+            const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+            if (!isTop) return;
+
+            const nameStr = camelItem.name || camelItem.commodityName || item.name || '';
+            const key = getCommodityIconKey(camelItem.commodityId, camelItem.baseName, nameStr);
+            if (!key) return;
+
+            let baseName = camelItem.baseName || nameStr.split('-')[0].trim();
+            let variety = camelItem.variety || (nameStr.includes('-') ? nameStr.split('-').slice(1).join('-').trim() : '');
+
+            if (!baseMap[key]) {
+              baseMap[key] = {
+                id: key,
+                name: baseName,
+                varieties: new Set()
               };
-            });
+            }
+            if (variety) {
+              baseMap[key].varieties.add(variety);
+            }
+          });
+
+          const top10 = Object.values(baseMap).map(c => ({
+            id: c.id,
+            name: c.name,
+            varieties: Array.from(c.varieties)
+          }));
+
           setCommodityOptions(top10);
         }
       } catch (error) {
@@ -61,23 +85,38 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     commodityOptions.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
   );
   const [page, setPage] = useState(() => selectedPage >= 0 ? selectedPage : 0);
+
+  // Auto-calculate suggested harvest date when planting date or commodity changes
   useEffect(() => {
-    if (suggestion && !data.harvestDate) {
-      onChange({ harvestDate: suggestion.minDate });
+    if (suggestion && suggestion.minDate) {
+      if (!data.harvestDate || data.harvestDate < data.plantingDate) {
+        onChange({ harvestDate: suggestion.minDate });
+      }
     }
   }, [data.plantingDate, data.commodity]);
+
   const applySuggestion = () => {
     if (suggestion) onChange({ harvestDate: suggestion.minDate });
   };
   const suggestionLabel = suggestion ? suggestion.maxDate ? `${formatDate(suggestion.minDate)} – ${formatDate(suggestion.maxDate)}` : formatDate(suggestion.minDate) : null;
 
   if (loadingCommodities) {
-    return <div className="flex items-center justify-center py-8">
-      <div className="flex flex-col items-center gap-2">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--hw-green-700)]"></div>
-        <p className="text-sm text-[var(--hw-neutral-700)]">Loading vegetables...</p>
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="h-4 w-24 bg-[var(--hw-neutral-200)] rounded animate-pulse mb-3" />
+          <div className="flex gap-2.5 overflow-hidden py-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-28 h-32 rounded-2xl bg-white border border-[var(--hw-neutral-200)] p-3 flex flex-col items-center justify-center gap-2 animate-pulse">
+                <div className="w-10 h-10 rounded-full bg-[var(--hw-neutral-200)]" />
+                <div className="h-3 w-16 rounded bg-[var(--hw-neutral-200)]" />
+                <div className="h-2.5 w-12 rounded bg-[var(--hw-neutral-200)]" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>;
+    );
   }
   return <div className="space-y-6">
       {
@@ -91,20 +130,23 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     /* Carousel */
   }
         <div>
-          <div className="grid grid-cols-2 gap-3">
-            {COMMODITY_PAGES[page]?.map((c) => {
-    const selected = data.commodity === c.id;
-    return <button
-      key={c.id}
-      type="button"
-      onClick={() => onChange({ commodity: c.id, variant: "" })}
-      className={`
+          {commodityOptions.length === 0 ? (
+            <p className="text-sm text-[var(--hw-neutral-500)] italic py-4">No top 10 vegetables available in database.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {COMMODITY_PAGES[page]?.map((c) => {
+                const selected = data.commodity === c.id;
+                return <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onChange({ commodity: c.id, variant: "" })}
+                  className={`
                     flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all
                     ${selected ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)]" : "border-[var(--hw-neutral-200)] bg-white hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-neutral-50)]"}
                   `}
-    >
+                >
                   <div className="relative">
-                    <CommodityIllustration commodityId={c.id} className="w-14 h-14" />
+                    <CommodityIllustration commodityId={c.id} commodityName={c.name} className="w-14 h-14" />
                     {selected && <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center">
                         <Check className="w-3 h-3 text-white" />
                       </span>}
@@ -113,49 +155,49 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
                     {c.name}
                   </span>
                 </button>;
-  })}
-          </div>
+              })}
+            </div>
+          )}
 
           {
     /* Page navigation */
   }
-          <div className="flex items-center justify-between mt-3">
-            <button
-    type="button"
-    onClick={() => setPage((p) => Math.max(0, p - 1))}
-    disabled={page === 0}
-    className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-100)] disabled:opacity-30 disabled:cursor-default transition-colors"
-    aria-label="Previous vegetables"
-  >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
+          {COMMODITY_PAGES.length > 1 && (
+            <div className="flex items-center justify-between mt-3">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-100)] disabled:opacity-30 disabled:cursor-default transition-colors"
+                aria-label="Previous vegetables"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
 
-            {
-    /* Dot indicators */
-  }
-            <div className="flex items-center gap-1.5">
-              {COMMODITY_PAGES.map((_, i) => <button
-    key={i}
-    type="button"
-    onClick={() => setPage(i)}
-    className={`rounded-full transition-all ${i === page ? "w-4 h-2 bg-[var(--hw-green-700)]" : "w-2 h-2 bg-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-400)]"}`}
-    aria-label={`Page ${i + 1}`}
-  />)}
+              <div className="flex items-center gap-1.5">
+                {COMMODITY_PAGES.map((_, i) => <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPage(i)}
+                  className={`rounded-full transition-all ${i === page ? "w-4 h-2 bg-[var(--hw-green-700)]" : "w-2 h-2 bg-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-400)]"}`}
+                  aria-label={`Page ${i + 1}`}
+                />)}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(COMMODITY_PAGES.length - 1, p + 1))}
+                disabled={page === COMMODITY_PAGES.length - 1}
+                className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-100)] disabled:opacity-30 disabled:cursor-default transition-colors"
+                aria-label="Next vegetables"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
-
-            <button
-    type="button"
-    onClick={() => setPage((p) => Math.min(COMMODITY_PAGES.length - 1, p + 1))}
-    disabled={page === COMMODITY_PAGES.length - 1}
-    className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-100)] disabled:opacity-30 disabled:cursor-default transition-colors"
-    aria-label="Next vegetables"
-  >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+          )}
 
           <p className="text-[12px] text-[var(--hw-neutral-700)] text-center mt-1">
-            {page + 1} of {COMMODITY_PAGES.length} · {COMMODITY_OPTIONS.length} vegetables
+            {COMMODITY_PAGES.length > 0 ? page + 1 : 0} of {COMMODITY_PAGES.length} · {commodityOptions.length} vegetables
           </p>
         </div>
 
@@ -175,30 +217,36 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     /* Variant picker — dropdown, shown only when commodity has known varieties */
   }
         {data.commodity && (() => {
-    const displayName = HW_ID_TO_NAME[data.commodity] ?? commodityOptions.find((c) => c.id === data.commodity)?.name ?? "";
-    const variants = getVariants(displayName);
-    if (variants.length === 0) return null;
-    return <div className="mt-4">
+          const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
+          const baseName = selectedCommodity?.name || HW_ID_TO_NAME[data.commodity] || "";
+          const dbVariants = selectedCommodity?.varieties || [];
+          const localVariants = getVariants(baseName);
+          const allVariants = Array.from(new Set([...dbVariants, ...localVariants]));
+
+          if (allVariants.length === 0) return null;
+          return (
+            <div className="mt-4">
               <label htmlFor="variety-select" className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5">
                 Variety
               </label>
               <div className="relative">
                 <select
-      id="variety-select"
-      value={data.variant}
-      onChange={(e) => onChange({ variant: e.target.value })}
-      className="w-full h-10 pl-3 pr-8 text-[14px] font-medium text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] appearance-none cursor-pointer hover:border-[var(--hw-neutral-400)] transition-colors"
-    >
+                  id="variety-select"
+                  value={data.variant}
+                  onChange={(e) => onChange({ variant: e.target.value })}
+                  className="w-full h-10 pl-3 pr-8 text-[14px] font-medium text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] appearance-none cursor-pointer hover:border-[var(--hw-neutral-400)] transition-colors"
+                >
                   <option value="">Default</option>
-                  {variants.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {allVariants.map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-500)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </div>
               <p className="mt-1.5 text-[12px] text-[var(--hw-neutral-500)]">
                 Default uses commodity-level pricing.
               </p>
-            </div>;
-  })()}
+            </div>
+          );
+        })()}
       </div>
 
       {

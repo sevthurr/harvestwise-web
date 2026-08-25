@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 const CAT_CFG = {
   "national-holiday-regular": { label: "National Holiday — Regular", dotColor: "bg-red-500", textColor: "text-red-700" },
@@ -197,12 +198,26 @@ function MarketCalendarPage() {
   };
 
   if (loadingEvents) {
-    return <div className="flex items-center justify-center min-h-screen">
-      <div className="flex flex-col items-center gap-3">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-        <p className="text-sm text-[var(--hw-neutral-700)]">Loading calendar...</p>
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-5">
+        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-6 w-36 rounded" />
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-2 pt-2">
+              {Array.from({ length: 28 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 rounded-xl" />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>;
+    );
   }
 
   return <div className="px-4 md:px-8 lg:px-10 py-5">

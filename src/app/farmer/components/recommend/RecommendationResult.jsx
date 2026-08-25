@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Save,
   Sprout,
   RefreshCw,
@@ -22,17 +23,7 @@ import { COMMODITY_OPTIONS, getTotalCost, formatPeso } from "./types";
 import { useCrops } from "../crops/CropsContext";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
-import {
-  buildPricePoints,
-  getArrivalData,
-  getProductionData,
-  getWeatherData
-} from "../shared/FactorDetailTabs";
-const SENTIMENT_COLOR = {
-  favorable: "text-emerald-700",
-  caution: "text-amber-600",
-  unfavorable: "text-red-700"
-};
+
 const ADVISORY_CFG = {
   "Recommended": {
     Icon: CheckCircle2,
@@ -56,86 +47,33 @@ const ADVISORY_CFG = {
     support: "Consider waiting for better timing before committing."
   }
 };
-function getAdvisory(commodityId) {
-  const map = {
-    kamatis: "Plant Conservatively",
-    talong: "Plant Conservatively",
-    repolyo: "Avoid for Now",
-    atsal: "Recommended",
-    carrots: "Recommended",
-    pipino: "Plant Conservatively",
-    ampalaya: "Recommended",
-    kalabasa: "Plant Conservatively",
-    lettuce: "Avoid for Now",
-    pechay: "Avoid for Now"
-  };
-  return map[commodityId] ?? "Plant Conservatively";
-}
-const FORECAST_PRICES = {
-  kamatis: { mid: 87, lo: 83, hi: 91 },
-  talong: { mid: 62, lo: 58, hi: 66 },
-  repolyo: { mid: 47, lo: 43, hi: 51 },
-  atsal: { mid: 123, lo: 118, hi: 128 },
-  carrots: { mid: 92, lo: 88, hi: 96 },
-  pipino: { mid: 42, lo: 38, hi: 46 },
-  ampalaya: { mid: 78, lo: 73, hi: 83 },
-  kalabasa: { mid: 37, lo: 33, hi: 41 },
-  lettuce: { mid: 82, lo: 78, hi: 87 },
-  pechay: { mid: 37, lo: 33, hi: 41 }
-};
-const CURRENT_PRICES = {
-  kamatis: 85,
-  talong: 60,
-  repolyo: 45,
-  atsal: 120,
-  carrots: 90,
-  pipino: 40,
-  ampalaya: 75,
-  kalabasa: 35,
-  lettuce: 80,
-  pechay: 35
-};
-function factorSentiment(advisory, factor) {
-  if (advisory === "Recommended") return factor === "Weather" ? "caution" : "favorable";
-  if (advisory === "Plant Conservatively") return "caution";
-  if (factor === "Price" || factor === "Production") return "caution";
-  return "unfavorable";
-}
-function getWhyFactors(name, commodityId, costToRecover, farmgatePrice, advisory) {
-  const currentPrice = CURRENT_PRICES[commodityId] ?? 70;
-  const forecast = FORECAST_PRICES[commodityId] ?? { mid: currentPrice, lo: currentPrice - 5, hi: currentPrice + 5 };
-  const sellingBasis = farmgatePrice ?? forecast.mid;
-  const margin = sellingBasis - costToRecover;
+
+function getWhyFactors(name, commodityId, costToRecover, farmgatePrice, advisory, currentPrice, forecastLo, forecastHi, data) {
   return [
     {
       label: "Price",
       Icon: TrendingUp,
-      sentiment: factorSentiment(advisory, "Price"),
-      value: `\u20B1${currentPrice}/kg today, up \u20B15/kg from last week.`
+      value: data.priceInsight || "Not available"
     },
     {
-      label: "Supply",
+      label: "Arrival",
       Icon: Package,
-      sentiment: factorSentiment(advisory, "Supply"),
-      value: "DFTC arrivals are 12 tons this week, lower than 18 tons last week."
+      value: data.arrivalInsight || data.supplyInsight || "Not available"
     },
     {
       label: "Production",
       Icon: Leaf,
-      sentiment: factorSentiment(advisory, "Production"),
-      value: advisory === "Recommended" ? `Q3 (Jul\u2013Sep) production is usually lower for ${name}, which may reduce supply pressure near harvest.` : `Q3 (Jul\u2013Sep) production is usually moderate to high for ${name}, so some harvest competition is expected.`
+      value: data.productionInsight || "Not available"
     },
     {
       label: "Weather",
       Icon: CloudRain,
-      sentiment: factorSentiment(advisory, "Weather"),
-      value: "Heavy rain is expected on Jul 12\u201313, so field work may need caution."
+      value: data.weatherInsight || "Not available"
     },
     {
-      label: "Profit",
+      label: "Profitability",
       Icon: PhilippinePeso,
-      sentiment: factorSentiment(advisory, "Profit"),
-      value: margin >= 0 ? `Around \u20B1${margin}/kg above cost to recover, using ${farmgatePrice ? "estimated farmgate price" : "forecasted price reference"}.` : `Currently \u20B1${Math.abs(margin)}/kg below cost to recover at forecasted price.`
+      value: data.profitabilityInsight || "Not available"
     }
   ];
 }
@@ -209,54 +147,45 @@ const RecommendationResult = ({ data, onEdit }) => {
   const totalCost = getTotalCost(data);
   const qty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
   const costToRecover = qty ? Math.ceil(totalCost / qty) : null;
-  const advisory = getAdvisory(data.commodity);
-  const advisoryCfg = ADVISORY_CFG[advisory];
-  const AdvisoryIcon = advisoryCfg.Icon;
+  const advisory = data.advisoryCategory || null;
+  const advisoryCfg = advisory ? ADVISORY_CFG[advisory] : null;
+  const AdvisoryIcon = advisoryCfg ? advisoryCfg.Icon : null;
   const hasFarmgate = data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0;
   const farmgateNum = hasFarmgate ? data.farmgatePrice : null;
-  const forecast = FORECAST_PRICES[data.commodity] ?? { mid: 70, lo: 65, hi: 75 };
-  const sellingBasis = hasFarmgate ? data.farmgatePrice : forecast.mid;
+  const currentPx = data.currentPrice || null;
+  const forecastLo = data.forecastLower || null;
+  const forecastHi = data.forecastUpper || null;
+  const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : currentPx;
+  const sellingBasis = hasFarmgate ? data.farmgatePrice : forecastMid;
   const priceBasisLabel = hasFarmgate ? "Based on estimated farmgate price" : "Based on forecasted market price";
   const priceBasisShort = hasFarmgate ? "Estimated farmgate price" : "Forecasted market price";
-  const priceBasisDetail = hasFarmgate ? `Farmgate price: \u20B1${data.farmgatePrice}/kg` : `Forecasted price reference: \u20B1${forecast.lo}\u2013\u20B1${forecast.hi}/kg`;
-  const margin = costToRecover !== null ? sellingBasis - costToRecover : null;
+  const priceBasisDetail = hasFarmgate ? `Farmgate price: \u20B1${data.farmgatePrice}/kg` : (forecastLo != null && forecastHi != null ? `Forecasted price reference: \u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : `Forecasted price reference: -/kg`);
+  const margin = costToRecover !== null && sellingBasis != null ? sellingBasis - costToRecover : null;
   const hasProfit = margin !== null && qty !== null && margin > 0;
   const profitLo = hasProfit ? Math.floor(margin * qty * 0.85 / 1e3) * 1e3 : 0;
   const profitHi = hasProfit ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
-  const whyFactors = getWhyFactors(commodityName, data.commodity, costToRecover ?? 0, farmgateNum, advisory);
+  const whyFactors = getWhyFactors(commodityName, data.commodity, costToRecover ?? 0, farmgateNum, advisory, currentPx, forecastLo, forecastHi, data);
   const dirMap = {
     "Recommended": "rising",
     "Plant Conservatively": "stable",
     "Avoid for Now": "falling"
   };
-  const priceDir = dirMap[advisory];
-  const currentPx = CURRENT_PRICES[data.commodity] ?? 70;
-  const fcast = forecast;
-  const pricePoints = buildPricePoints(
-    Array.from({ length: 7 }, (_, i) => ({
-      label: i === 0 ? "7d ago" : i === 6 ? "Today" : `Day ${i + 1}`,
-      price: Math.round(currentPx + (priceDir === "rising" ? -0.5 : priceDir === "falling" ? 0.5 : 0.1) * (6 - i) + Math.sin(i * 1.9) * 2)
-    })),
-    currentPx,
-    priceDir,
-    fcast.lo,
-    fcast.hi,
-    7
-  );
+  const priceDir = advisory ? dirMap[advisory] : "stable";
+  const pricePoints = data.pricePoints || [];
   const priceTabData = {
     currentPrice: currentPx,
-    previousPrice: Math.round(currentPx + (priceDir === "rising" ? -5 : priceDir === "falling" ? 5 : 0)),
-    market: "Bangkerohan Retail",
+    previousPrice: currentPx ? Math.round(currentPx + (priceDir === "rising" ? -5 : priceDir === "falling" ? 5 : 0)) : null,
+    market: data.market || "Not available",
     direction: priceDir,
     directionLabel: priceDir === "rising" ? "Price may rise" : priceDir === "falling" ? "Price may fall" : "Price likely stable",
-    forecastRange: `\u20B1${fcast.lo}\u2013\u20B1${fcast.hi}/kg`,
+    forecastRange: forecastLo != null && forecastHi != null ? `\u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : "-/kg",
     points: pricePoints,
     summary: whyFactors.find((f) => f.label === "Price")?.value ?? ""
   };
-  const arrivalTabData = getArrivalData(data.commodity, whyFactors.find((f) => f.label === "Supply")?.value);
-  const productionTabData = getProductionData(data.commodity, (/* @__PURE__ */ new Date()).getMonth());
+  const arrivalTabData = data.arrivalData || null;
+  const productionTabData = data.productionData || null;
+  const weatherTabData = data.weatherData || null;
   const weatherRisk = advisory === "Recommended" ? "low" : advisory === "Plant Conservatively" ? "moderate" : "high";
-  const weatherTabData = getWeatherData(weatherRisk, displayName);
   const profitabilityData = costToRecover !== null && qty !== null ? {
     costPerKg: costToRecover,
     sellingPricePerKg: sellingBasis,
@@ -351,7 +280,7 @@ const RecommendationResult = ({ data, onEdit }) => {
         {
     /* 1. Advisory card */
   }
-        <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 space-y-3 ${advisoryCfg.border}`}>
+        <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 space-y-3 ${advisoryCfg ? advisoryCfg.border : "border-[var(--hw-neutral-200)]"}`}>
 
           {
     /* Commodity header */
@@ -361,51 +290,61 @@ const RecommendationResult = ({ data, onEdit }) => {
             <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">{displayName}</p>
           </div>
 
-          {
-    /* Advisory level — prominent */
-  }
-          <div className={`flex items-center gap-2.5 ${advisoryCfg.color}`}>
-            <AdvisoryIcon className={`w-7 h-7 flex-shrink-0 ${advisoryCfg.color}`} />
-            <p className={`text-[28px] font-bold leading-tight ${advisoryCfg.color}`}>{advisory}</p>
-          </div>
+          {!advisory ? (
+            <div>
+              <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug font-medium">
+                Assessment result not available yet.
+              </p>
+            </div>
+          ) : (
+            <>
+              {
+        /* Advisory level — prominent */
+      }
+              <div className={`flex items-center gap-2.5 ${advisoryCfg.color}`}>
+                <AdvisoryIcon className={`w-7 h-7 flex-shrink-0 ${advisoryCfg.color}`} />
+                <p className={`text-[28px] font-bold leading-tight ${advisoryCfg.color}`}>{advisory}</p>
+              </div>
 
-          {
-    /* Explanation */
-  }
-          <div>
-            <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-              {advisoryCfg.summary(displayName)}
-            </p>
-            <p className={`text-[13px] font-medium mt-1 ${advisoryCfg.color}`}>
-              {advisoryCfg.support}
-            </p>
-            <button
-    onClick={() => {
-      const pageState = {
-        title: `${displayName} \u2014 Detailed Factors`,
-        subtitle: `Assessment result \xB7 ${advisory}`,
-        breadcrumbs: [
-          { label: "Crop Assessment", path: "/assess" },
-          { label: "Result" },
-          { label: "Detailed Factors" }
-        ],
-        backPath: "/assess",
-        backLabel: "Assessment Result",
-        price: priceTabData,
-        arrival: arrivalTabData,
-        production: productionTabData,
-        weather: weatherTabData,
-        profitability: profitabilityData,
-        commodityId: data.commodity,
-        commodityName
-      };
-      navigate("/farmer/assess/factors", { state: pageState });
-    }}
-    className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-  >
-              View basis →
-            </button>
-          </div>
+              {
+        /* Explanation */
+      }
+              <div>
+                <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
+                  {advisoryCfg.summary(displayName)}
+                </p>
+                <p className={`text-[13px] font-medium mt-1 ${advisoryCfg.color}`}>
+                  {advisoryCfg.support}
+                </p>
+                <button
+        onClick={() => {
+          const pageState = {
+            title: `${displayName} — Detailed Factors`,
+            subtitle: `Assessment result · ${advisory}`,
+            breadcrumbs: [
+              { label: "Crop Assessment", path: "/assess" },
+              { label: "Result" },
+              { label: "Detailed Factors" }
+            ],
+            backPath: "/assess",
+            backLabel: "Assessment Result",
+            price: priceTabData,
+            arrival: arrivalTabData,
+            production: productionTabData,
+            weather: weatherTabData,
+            profitability: profitabilityData,
+            commodityId: data.commodity,
+            commodityName
+          };
+          navigate("/farmer/assess/factors", { state: pageState });
+        }}
+        className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
+      >
+                  View basis →
+                </button>
+              </div>
+            </>
+          )}
 
           {
     /* Date chips */
@@ -421,65 +360,92 @@ const RecommendationResult = ({ data, onEdit }) => {
                 </div>}
             </div>}
 
-          <p className="text-[12px] text-[var(--hw-neutral-900)]">Based on available market data · Jul 11, 2026</p>
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">Based on available market data · {data.generatedDate || "Jul 11, 2026"}</p>
         </div>
 
         {
-    /* 2. Estimated Profit card */
+    /* 2. Why this recommendation? Factors card */
   }
-        {hasProfit && qty && margin !== null && costToRecover !== null && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Estimated Profit</p>
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            Why this recommendation?
+          </p>
+          <div className="space-y-2.5">
+            {whyFactors.map((f) => {
+              const Icon = f.Icon || TrendingUp;
+              return (
+                <div key={f.label} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
+                  <Icon className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-neutral-900)]" />
+                  <div>
+                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{f.label}</p>
+                    <p className="text-[12px] text-[var(--hw-neutral-700)]">{f.value || "Not available"}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-            <p className="text-[20px] font-bold text-emerald-700 leading-none">
-              ₱{profitLo.toLocaleString("en-PH")} – ₱{profitHi.toLocaleString("en-PH")}
-            </p>
+        {
+    /* 3. Estimated Profit card — Always retained with empty states when data is null */
+  }
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Estimated Profit</p>
 
-            <div className="space-y-0.5">
-              <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
-              {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)]">
-                  Price may still change before harvest. Update this as harvest gets closer.
-                </p>}
-            </div>
+          <p className={`text-[20px] font-bold leading-none ${hasProfit ? "text-emerald-700" : "text-[var(--hw-neutral-700)]"}`}>
+            {hasProfit
+              ? `₱${profitLo.toLocaleString("en-PH")} – ₱${profitHi.toLocaleString("en-PH")}`
+              : margin !== null && qty !== null
+                ? `₱${(margin * qty).toLocaleString("en-PH")}`
+                : "-"}
+          </p>
 
-            <ProfitCalcAccordion
-    qty={qty}
-    totalCost={totalCost}
-    costToRecover={costToRecover}
-    sellingBasis={sellingBasis}
-    priceBasisShort={priceBasisShort}
-    margin={margin}
-    hasFarmgate={hasFarmgate}
-  />
+          <div className="space-y-0.5">
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
+            {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)]">
+                Price may still change before harvest. Update this as harvest gets closer.
+              </p>}
+          </div>
 
-            {
+          <ProfitCalcAccordion
+            qty={qty || "-"}
+            totalCost={totalCost}
+            costToRecover={costToRecover != null ? costToRecover : "-"}
+            sellingBasis={sellingBasis != null ? sellingBasis : "-"}
+            priceBasisShort={priceBasisShort}
+            margin={margin != null ? margin : "-"}
+            hasFarmgate={hasFarmgate}
+          />
+
+          {
     /* Supporting values */
   }
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Estimated cost</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{formatPeso(totalCost)}</p>
-              </div>
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Expected harvest</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{qty} kg</p>
-              </div>
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Price basis</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">₱{sellingBasis}/kg</p>
-              </div>
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Cost to recover</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">₱{costToRecover}/kg</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-[var(--hw-neutral-900)]">Estimated farmgate price</p>
-                {hasFarmgate ? <p className="font-medium text-[var(--hw-neutral-900)]">₱{data.farmgatePrice}/kg</p> : <p className="text-[var(--hw-neutral-900)] italic">Not set — using market price as reference.</p>}
-              </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">Estimated cost</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : "-"}</p>
             </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">Expected harvest</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{qty ? `${qty} kg` : "- kg"}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">Price basis</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis != null ? `₱${sellingBasis}/kg` : "-/kg"}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">Cost to recover</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover != null ? `₱${costToRecover}/kg` : "-/kg"}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[var(--hw-neutral-900)]">Estimated farmgate price</p>
+              {hasFarmgate ? <p className="font-medium text-[var(--hw-neutral-900)]">₱{data.farmgatePrice}/kg</p> : <p className="text-[var(--hw-neutral-900)] italic">Not set — using market price as reference.</p>}
+            </div>
+          </div>
 
-            <p className="text-[12px] text-[var(--hw-neutral-900)]">Estimate only. Actual income may change.</p>
-          </div>}
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">Estimate only. Actual income may change.</p>
+        </div>
 
         {
     /* 3. What to do next */

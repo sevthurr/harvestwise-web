@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
+import { apiGet, parseResponse } from "../../global/api";
+import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 const RISK_CFG = {
   Suitable: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
@@ -135,12 +137,42 @@ function MarketWeatherPage() {
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">
-      <div className="flex flex-col items-center gap-3">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-        <p className="text-sm text-[var(--hw-neutral-700)]">Loading weather data...</p>
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-5">
+        <div className="max-w-2xl mx-auto md:max-w-3xl space-y-6">
+          <div className="space-y-1">
+            <Skeleton className="h-7 w-32 rounded" />
+            <Skeleton className="h-4 w-64 rounded" />
+          </div>
+          {/* Main Weather Card Skeleton */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-28 rounded" />
+              <Skeleton className="h-4 w-20 rounded-full" />
+            </div>
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-16 h-16 rounded-2xl flex-shrink-0" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-24 rounded" />
+                <Skeleton className="h-3 w-40 rounded" />
+              </div>
+            </div>
+            {/* 14-day carousel skeleton */}
+            <div className="flex gap-2 pt-2 overflow-hidden">
+              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+            </div>
+          </div>
+          {/* Advisories Skeleton */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+            <Skeleton className="h-5 w-44 rounded" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+          </div>
+        </div>
       </div>
-    </div>;
+    );
   }
 
   const hasCrops = weatherData?.has_crops ?? false;

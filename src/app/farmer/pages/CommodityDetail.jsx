@@ -5,6 +5,7 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 const PRICE_TYPE_KEY = {
   "bangkerohan": "bangkerohan_retail",
@@ -67,17 +68,25 @@ function CommodityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [topCommodities, setTopCommodities] = useState([]);
 
-  // Fetch commodity list for navigation chips (strictly top 10)
+  // Fetch commodity list for navigation chips (strictly top 10 base commodities)
   useEffect(() => {
     const fetchTopCommodities = async () => {
       try {
         const response = await apiGet('/prices?page_size=100');
         if (response.ok) {
           const data = await parseResponse(response);
-          const top10 = (data.items || [])
-            .filter(item => item.is_top10 === true || item.isTop10 === true)
-            .map(item => toCamelCase(item));
-          setTopCommodities(top10);
+          const seen = new Set();
+          const uniqueTop10 = [];
+          for (const item of (data.items || [])) {
+            const camelItem = toCamelCase(item);
+            const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+            const name = camelItem.name;
+            if (isTop && name && !seen.has(name)) {
+              seen.add(name);
+              uniqueTop10.push(camelItem);
+            }
+          }
+          setTopCommodities(uniqueTop10);
         }
       } catch (error) {
         console.error('Failed to fetch top commodities:', error);
@@ -160,10 +169,35 @@ function CommodityDetailPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-          <p className="text-sm text-[var(--hw-neutral-700)]">Loading price details...</p>
+      <div className="px-4 md:px-8 lg:px-10 py-5">
+        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+          {/* Breadcrumb Skeleton */}
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-16 rounded" />
+            <span className="text-[var(--hw-neutral-300)]">/</span>
+            <Skeleton className="h-4 w-24 rounded" />
+          </div>
+
+          {/* Header Card Skeleton */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-14 h-14 rounded-2xl flex-shrink-0" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-6 w-36 rounded" />
+                <Skeleton className="h-3.5 w-24 rounded" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Skeleton className="h-20 rounded-xl" />
+              <Skeleton className="h-20 rounded-xl" />
+            </div>
+          </div>
+
+          {/* Section Skeletons */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+            <Skeleton className="h-5 w-40 rounded" />
+            <Skeleton className="h-32 w-full rounded-xl" />
+          </div>
         </div>
       </div>
     );

@@ -13,8 +13,9 @@ import {
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { MarketEmptyState } from "../components/market/MarketStates";
-import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
+import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
 
 const OUTLOOK_TEXT = {
   Rising: "Price may rise next week",
@@ -200,33 +201,22 @@ function PricesPage() {
         
         const data = await parseResponse(response);
         
-        // Build commodities list from API response - STRICTLY FILTER TO TOP 10 ONLY
+        // Build commodities list from API response - STRICTLY FILTER TO TOP 10 AND GROUP BY BASE COMMODITY
         const items = data.items || [];
-        const commoditiesFromAPI = items
-          .filter(item => item.is_top10 === true || item.isTop10 === true)
-          .map(item => {
-            const camelItem = toCamelCase(item);
-            return {
-              id: camelItem.commodityId,
-              name: camelItem.name || '–',
-              baseName: camelItem.baseName,
-              variety: camelItem.variety,
-              unitOfMeasure: camelItem.unitOfMeasure || 'kg',
-              isTop10: camelItem.isTop10,
-            };
-          });
-        
-        setCommodities(commoditiesFromAPI);
-        
-        // Transform API response to match our component's expected format
+        const baseMap = new Map();
         const transformed = {};
+
         items.forEach(item => {
           const camelItem = toCamelCase(item);
+          const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+          if (!isTop) return;
+
+          const baseName = camelItem.name || '–';
           const uom = camelItem.unitOfMeasure || 'kg';
           const hasLower = camelItem.forecast?.lowerForecast != null;
           const hasUpper = camelItem.forecast?.upperForecast != null;
 
-          transformed[camelItem.commodityId] = {
+          const itemPrices = {
             bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
             bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
             dftcRetail: camelItem.prices?.dftcRetail ?? null,
@@ -237,8 +227,30 @@ function PricesPage() {
               ? `₱${formatPrice(camelItem.forecast.lowerForecast)}–₱${formatPrice(camelItem.forecast.upperForecast)}/${uom}`
               : `-/${uom}`,
           };
+
+          transformed[camelItem.commodityId] = itemPrices;
+
+          if (!baseMap.has(baseName)) {
+            baseMap.set(baseName, {
+              id: camelItem.commodityId,
+              name: baseName,
+              baseName: camelItem.baseName,
+              unitOfMeasure: uom,
+              isTop10: true,
+              displayData: itemPrices,
+            });
+          } else {
+            const existing = baseMap.get(baseName);
+            const existingHasPrice = Object.values(existing.displayData).some(v => v !== null && typeof v === 'number');
+            const thisHasPrice = Object.values(itemPrices).some(v => v !== null && typeof v === 'number');
+            if (!existingHasPrice && thisHasPrice) {
+              existing.displayData = itemPrices;
+              existing.id = camelItem.commodityId;
+            }
+          }
         });
-        
+
+        setCommodities(Array.from(baseMap.values()));
         setPriceData(transformed);
         if (items.length > 0 && items[0].updated_at) {
           setLastUpdated(items[0].updated_at);
@@ -261,7 +273,7 @@ function PricesPage() {
   
   const visible = useMemo(() => {
     let list = commodities.map(commodity => {
-      const data = priceData[commodity.id];
+      const data = priceData[commodity.id] || commodity.displayData;
       return {
         ...commodity,
         displayData: data || {
@@ -296,18 +308,6 @@ function PricesPage() {
     return list;
   }, [searchQuery, filter, commodities, priceData]);
   
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-          <p className="text-sm text-[var(--hw-neutral-700)]">Loading prices...</p>
-        </div>
-      </div>
-    );
-  }
-  
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
@@ -327,6 +327,7 @@ function PricesPage() {
             <input
               type="text"
               value={searchQuery}
+              disabled={loading}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search commodity…"
               className="w-full pl-9 pr-9 py-2.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
@@ -355,7 +356,9 @@ function PricesPage() {
         </div>
 
         {/* Cards grid */}
-        {visible.length === 0 ? (
+        {loading ? (
+          <SkeletonPriceGrid count={6} />
+        ) : visible.length === 0 ? (
           searchQuery.trim() ? (
             <MarketEmptyState query={searchQuery} />
           ) : (

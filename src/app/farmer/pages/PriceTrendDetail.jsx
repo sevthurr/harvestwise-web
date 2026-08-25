@@ -5,6 +5,7 @@ import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { PriceDetailView } from "../components/shared/PriceDetailView";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 function PriceTrendDetailPage() {
   const { commodityId } = useParams();
@@ -74,10 +75,23 @@ function PriceTrendDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-          <p className="text-sm text-[var(--hw-neutral-700)]">Loading price details...</p>
+      <div className="px-4 md:px-8 lg:px-10 py-5">
+        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-16 rounded" />
+            <span className="text-[var(--hw-neutral-300)]">/</span>
+            <Skeleton className="h-4 w-24 rounded" />
+          </div>
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+            <div className="flex items-center gap-4">
+              <Skeleton className="w-12 h-12 rounded-2xl flex-shrink-0" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-6 w-36 rounded" />
+                <Skeleton className="h-3.5 w-24 rounded" />
+              </div>
+            </div>
+            <Skeleton className="h-48 w-full rounded-xl" />
+          </div>
         </div>
       </div>
     );

@@ -8,30 +8,6 @@ import {
   getProductionData,
   getWeatherData
 } from "../components/shared/FactorDetailTabs";
-const CURRENT_PRICES = {
-  kamatis: 85,
-  talong: 60,
-  repolyo: 45,
-  atsal: 120,
-  carrots: 90,
-  pipino: 40,
-  ampalaya: 75,
-  kalabasa: 35,
-  lettuce: 80,
-  pechay: 35
-};
-const FORECAST_PRICES = {
-  kamatis: { mid: 87, lo: 83, hi: 91 },
-  talong: { mid: 62, lo: 58, hi: 66 },
-  repolyo: { mid: 47, lo: 43, hi: 51 },
-  atsal: { mid: 123, lo: 118, hi: 128 },
-  carrots: { mid: 92, lo: 88, hi: 96 },
-  pipino: { mid: 42, lo: 38, hi: 46 },
-  ampalaya: { mid: 78, lo: 73, hi: 83 },
-  kalabasa: { mid: 37, lo: 33, hi: 41 },
-  lettuce: { mid: 82, lo: 78, hi: 87 },
-  pechay: { mid: 37, lo: 33, hi: 41 }
-};
 function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
@@ -45,21 +21,21 @@ function CropFactorsPage() {
         </button>
       </div>;
   }
-  const currentPrice = CURRENT_PRICES[crop.commodity] ?? 70;
-  const forecast = FORECAST_PRICES[crop.commodity] ?? { mid: currentPrice, lo: Math.round(currentPrice * 0.95), hi: Math.round(currentPrice * 1.07) };
+  const currentPrice = crop.currentPrice || null;
+  const fLo = crop.forecastLower || null;
+  const fHi = crop.forecastUpper || null;
+  const forecastMid = fLo != null && fHi != null ? (fLo + fHi) / 2 : null;
   const useForecast = ["planning", "on-hold", "growing"].includes(crop.phase);
-  const basePrice = useForecast ? forecast.mid : currentPrice;
-  const updatedTotalCost = crop.totalCost;
-  const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 1;
-  const costToRecover = Math.ceil(updatedTotalCost / qty);
+  const basePrice = useForecast ? (forecastMid || currentPrice) : currentPrice;
+  const updatedTotalCost = crop.totalCost || 0;
+  const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
+  const costToRecover = qty > 0 ? Math.ceil(updatedTotalCost / qty) : 0;
   const sellingBasis = basePrice;
-  const margin = sellingBasis - costToRecover;
+  const margin = sellingBasis != null && costToRecover > 0 ? sellingBasis - costToRecover : 0;
   const priceDir = margin > 15 ? "rising" : margin > 0 ? "stable" : "falling";
-  const fLo = forecast.lo;
-  const fHi = forecast.hi;
   const actualPts = Array.from({ length: 7 }, (_, i) => ({
     label: i === 0 ? "7d ago" : i === 6 ? "Today" : `Day ${i + 1}`,
-    price: Math.round(basePrice + (priceDir === "rising" ? -0.5 : priceDir === "falling" ? 0.5 : 0.1) * (6 - i) + Math.sin(i * 1.9) * 2)
+    price: basePrice ? Math.round(basePrice + (priceDir === "rising" ? -0.5 : priceDir === "falling" ? 0.5 : 0.1) * (6 - i) + Math.sin(i * 1.9) * 2) : 0
   }));
   const priceTabData = {
     currentPrice: basePrice,
@@ -67,9 +43,9 @@ function CropFactorsPage() {
     market: useForecast ? "Forecasted price reference" : "Bangkerohan Retail",
     direction: priceDir,
     directionLabel: priceDir === "rising" ? "Price may rise" : priceDir === "falling" ? "Price may fall" : "Price likely stable",
-    forecastRange: `\u20B1${fLo}\u2013\u20B1${fHi}/kg`,
-    points: buildPricePoints(actualPts.map((p) => ({ label: p.label, price: p.price })), basePrice, priceDir, fLo, fHi, 7),
-    summary: `Current ${useForecast ? "forecasted" : "market"} price for ${crop.commodityName} is \u20B1${basePrice}/kg. ${priceDir === "rising" ? "Prices are trending upward \u2014 good news if your harvest is near." : priceDir === "falling" ? "Prices are softening. Monitor closely before deciding to sell." : "Prices are stable. Good conditions for planning your sale."}`
+    forecastRange: fLo != null && fHi != null ? `\u20B1${fLo}\u2013\u20B1${fHi}/kg` : "-/kg",
+    points: buildPricePoints(actualPts.map((p) => ({ label: p.label, price: p.price })), basePrice || 0, priceDir, fLo || 0, fHi || 0, 7),
+    summary: basePrice ? `Current ${useForecast ? "forecasted" : "market"} price for ${crop.commodityName} is \u20B1${basePrice}/kg. ${priceDir === "rising" ? "Prices are trending upward \u2014 good news if your harvest is near." : priceDir === "falling" ? "Prices are softening. Monitor closely before deciding to sell." : "Prices are stable. Good conditions for planning your sale."}` : "Price data unavailable."
   };
   const arrivalTabData = getArrivalData(crop.commodity);
   const productionTabData = getProductionData(crop.commodity, (/* @__PURE__ */ new Date()).getMonth());

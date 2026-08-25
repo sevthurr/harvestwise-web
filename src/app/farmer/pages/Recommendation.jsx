@@ -28,6 +28,7 @@ import {
 } from "../components/shared/FactorDetailTabs";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { Skeleton } from "../components/shared/FarmerSkeletons";
 const TwoToneStormIcon = ({ className }) => <svg
   viewBox="0 0 24 24"
   fill="none"
@@ -546,12 +547,54 @@ function RecommendationPage() {
   }
   
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">
-      <div className="flex flex-col items-center gap-3">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-        <p className="text-sm text-[var(--hw-neutral-700)]">Loading crop recommendations...</p>
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-5">
+        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
+          <div className="space-y-1">
+            <Skeleton className="h-7 w-40 rounded" />
+            <Skeleton className="h-4 w-64 rounded" />
+          </div>
+          {/* Calendar Month Selector Skeleton */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3 animate-pulse">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-32 rounded" />
+              <Skeleton className="h-8 w-20 rounded-xl" />
+            </div>
+            <div className="grid grid-cols-7 gap-2 pt-2">
+              {Array.from({ length: 14 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 rounded-xl" />
+              ))}
+            </div>
+          </div>
+          {/* Recommended Crops Cards Skeleton */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-44 rounded" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-3 w-16 rounded" />
+                  </div>
+                </div>
+                <Skeleton className="h-16 w-full rounded-xl" />
+              </div>
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-3 w-16 rounded" />
+                  </div>
+                </div>
+                <Skeleton className="h-16 w-full rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>;
+    );
   }
   
   return <div className="px-4 md:px-8 lg:px-10 py-5">

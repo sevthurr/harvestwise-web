@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 const ADV_CFG = {
   recommended: { label: "Recommended", Icon: CheckCircle2, color: "text-[var(--hw-green-700)]", border: "border-[var(--hw-green-300)]" },
@@ -124,12 +125,35 @@ function PlantingGuidePage() {
   const avoid = advisories.filter((a) => a.advisory === "avoid");
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">
-      <div className="flex flex-col items-center gap-3">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--hw-green-700)]"></div>
-        <p className="text-sm text-[var(--hw-neutral-700)]">Loading planting guide...</p>
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-5">
+        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
+          <div className="space-y-1">
+            <Skeleton className="h-7 w-40 rounded" />
+            <Skeleton className="h-4 w-60 rounded" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-32 rounded" />
+            <div className="space-y-3">
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center gap-3 animate-pulse">
+                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-36 rounded" />
+                  <Skeleton className="h-3 w-48 rounded" />
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center gap-3 animate-pulse">
+                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-36 rounded" />
+                  <Skeleton className="h-3 w-48 rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>;
+    );
   }
 
   return <div className="px-4 md:px-8 lg:px-10 py-5">
