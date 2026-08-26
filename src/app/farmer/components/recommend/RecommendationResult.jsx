@@ -21,6 +21,7 @@ import {
 import { useNavigate } from "react-router";
 import { COMMODITY_OPTIONS, getTotalCost, formatPeso } from "./types";
 import { useCrops } from "../crops/CropsContext";
+import { apiPost, parseResponse } from "../../../global/api";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
 
@@ -108,6 +109,34 @@ const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, pric
 function makeCropId() {
   return `crop-${Date.now()}`;
 }
+
+function buildCropPlanPayload(data, status = "Draft") {
+  const totalCost = getTotalCost(data);
+  const productionCosts = data.costMethod === "detailed"
+    ? (data.expenses || [])
+        .filter((e) => typeof e.amount === "number" && e.amount > 0)
+        .map((e) => ({
+          category: e.name || "Additional",
+          amount: e.amount,
+          cost_type: "initial",
+        }))
+    : totalCost > 0
+      ? [{ category: "Total Cost", amount: totalCost, cost_type: "initial" }]
+      : [];
+
+  return {
+    commodity_id: data.commodity,
+    planned_planting_date: data.plantingDate || null,
+    expected_harvest_date: data.harvestDate || null,
+    farm_area: typeof data.farmArea === "number" && data.farmArea > 0 ? data.farmArea : null,
+    expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
+    expected_farmgate_price: typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
+    status,
+    cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
+    production_costs: productionCosts,
+  };
+}
+
 function buildCropRecord(data, phase, overrides = {}) {
   const commodityName = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? data.commodity;
   const totalCost = getTotalCost(data);
@@ -132,10 +161,58 @@ function buildCropRecord(data, phase, overrides = {}) {
     ...overrides
   };
 }
+
+const STATUS_TO_PHASE = {
+  Draft: "planning",
+  Planning: "planning",
+  Planted: "growing",
+  "Pre-Harvest": "pre-harvest",
+  Harvesting: "harvested",
+  "On Hold": "planning",
+  Completed: "completed",
+  Cancelled: "completed",
+};
+
+function transformSavedPlan(plan) {
+  const rawStatus = plan.status || "Planning";
+  const phase = STATUS_TO_PHASE[rawStatus] || "planning";
+  const commodity = plan.commodity || {};
+  const totalCost = (plan.production_costs || []).reduce(
+    (sum, c) => sum + Number(c.amount || 0), 0
+  );
+  const qty = Number(plan.expected_harvest_qty) || 1;
+  return {
+    id: plan.id,
+    commodity: plan.commodity_id,
+    commodityName: commodity.name || "\u2013",
+    variant: commodity.variety || null,
+    phase,
+    status: rawStatus,
+    isOnHold: rawStatus === "On Hold",
+    holdReason: plan.hold_reason || null,
+    plantingDate: plan.actual_planting_date
+      ? new Date(plan.actual_planting_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : plan.planned_planting_date
+        ? new Date(plan.planned_planting_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        : null,
+    harvestDate: plan.expected_harvest_date
+      ? new Date(plan.expected_harvest_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : null,
+    farmArea: plan.farm_area || null,
+    farmAreaUnit: "sqm",
+    harvestQuantity: plan.expected_harvest_qty || null,
+    totalCost,
+    breakEvenPrice: qty > 0 ? Math.ceil(totalCost / qty) : 0,
+    nextMilestone: null,
+    lastUpdated: "Just now",
+  };
+}
 const RecommendationResult = ({ data, onEdit }) => {
   const navigate = useNavigate();
   const { addCrop } = useCrops();
   const [saved, setSaved] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [showPlantedForm, setShowPlantedForm] = useState(false);
   const [plantedForm, setPlantedForm] = useState({
     actualPlantingDate: data.plantingDate,
@@ -194,18 +271,37 @@ const RecommendationResult = ({ data, onEdit }) => {
     harvestQty: qty,
     summary: hasProfit ? `At \u20B1${sellingBasis}/kg, you may earn around \u20B1${margin}/kg above your cost to recover. Total estimated profit: \u20B1${((margin ?? 0) * qty).toLocaleString("en-PH")}.` : `Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.`
   } : void 0;
-  const handleSavePlan = () => {
-    addCrop(buildCropRecord(data, "planning"));
-    setSaved("plan");
+  const handleSavePlan = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = buildCropPlanPayload(data, "Planning");
+      const res = await apiPost("/crop-plans", payload);
+      const savedPlan = await parseResponse(res);
+      addCrop(transformSavedPlan(savedPlan));
+      setSaved("plan");
+    } catch (err) {
+      setSaveError(err.message || "Failed to save crop plan. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
-  const handleConfirmPlanted = () => {
-    addCrop(buildCropRecord(data, "growing", {
-      plantingDate: plantedForm.actualPlantingDate || data.plantingDate,
-      harvestDate: plantedForm.updatedHarvestDate || data.harvestDate,
-      farmArea: typeof plantedForm.actualArea === "number" ? plantedForm.actualArea : typeof data.farmArea === "number" ? data.farmArea : 0
-    }));
-    setSaved("planted");
-    setShowPlantedForm(false);
+  const handleConfirmPlanted = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = buildCropPlanPayload(data, "Planted");
+      payload.actual_planting_date = plantedForm.actualPlantingDate || data.plantingDate || null;
+      const res = await apiPost("/crop-plans", payload);
+      const savedPlan = await parseResponse(res);
+      addCrop(transformSavedPlan(savedPlan));
+      setSaved("planted");
+      setShowPlantedForm(false);
+    } catch (err) {
+      setSaveError(err.message || "Failed to save crop plan. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
   if (saved) {
     const lm = { plan: "saved as a crop plan", planted: "marked as planted and growing", "on-hold": "saved and put on hold" };
@@ -258,9 +354,10 @@ const RecommendationResult = ({ data, onEdit }) => {
           </div>
           <button
       onClick={handleConfirmPlanted}
-      className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+      disabled={saving}
+      className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
-            <Sprout className="w-4 h-4" />Confirm — I planted this
+            <Sprout className="w-4 h-4" />{saving ? "Saving..." : "Confirm — I planted this"}
           </button>
         </div>
       </div>;
@@ -470,15 +567,18 @@ const RecommendationResult = ({ data, onEdit }) => {
     /* 5. Actions */
   }
         <div className="space-y-3 pt-1">
+          {saveError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{saveError}</p>}
           <button
     onClick={handleSavePlan}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+    disabled={saving}
+    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
   >
-            <Save className="w-4 h-4" />Save to My Crops
+            <Save className="w-4 h-4" />{saving ? "Saving..." : "Save to My Crops"}
           </button>
           <button
     onClick={() => setShowPlantedForm(true)}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors"
+    disabled={saving}
+    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
   >
             <Sprout className="w-4 h-4" />I already planted this
           </button>

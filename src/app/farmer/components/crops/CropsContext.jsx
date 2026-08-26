@@ -1,21 +1,33 @@
 import { createContext, useContext, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, parseResponse } from "../../../global/api";
+import { apiGet, apiPost, apiPut, parseResponse } from "../../../global/api";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
 
 const CropsContext = createContext(null);
+
+const STATUS_TO_PHASE = {
+  Draft: "planning",
+  Planning: "planning",
+  Planted: "growing",
+  "Pre-Harvest": "pre-harvest",
+  Harvesting: "harvested",
+  "On Hold": "planning",
+  Completed: "completed",
+  Cancelled: "completed",
+};
 
 function transformCropItems(rawItems) {
   return rawItems.map((c) => {
     const item = toCamelCase(c);
     const rawStatus = item.status || "Planning";
-    const phase = rawStatus.toLowerCase().replace(/\s+/g, "-");
+    const phase = STATUS_TO_PHASE[rawStatus] || "planning";
+    const commodity = item.commodity || {};
     return {
       id: item.id,
-      commodity: item.commodityId || (item.commodity?.name ? item.commodity.name.toLowerCase() : ""),
-      commodityName: item.commodityName || item.commodity?.name || "\u2013",
-      variant: item.variety || item.commodity?.variety || null,
-      phase: phase === "on-hold" ? "planning" : phase,
+      commodity: item.commodityId || commodity.id || "",
+      commodityName: commodity.name || item.commodityName || "\u2013",
+      variant: commodity.variety || item.variety || null,
+      phase: rawStatus === "On Hold" ? "planning" : phase,
       status: rawStatus,
       isOnHold: rawStatus === "On Hold",
       holdReason: item.holdReason || null,
@@ -68,11 +80,13 @@ const CropsProvider = ({ children }) => {
       return transformCropItems(rawItems);
     },
     staleTime: 1000 * 60 * 30,
+    refetchOnMount: true,
   });
 
   const addCrop = useCallback(
     (crop) => {
       queryClient.setQueryData(["farmer", "crops"], (old) => [crop, ...(old || [])]);
+      queryClient.invalidateQueries({ queryKey: ["farmer", "crops"] });
     },
     [queryClient]
   );
@@ -90,8 +104,48 @@ const CropsProvider = ({ children }) => {
     return queryClient.invalidateQueries({ queryKey: ["farmer", "crops"] });
   }, [queryClient]);
 
+  const addCostApi = useCallback(
+    async (planId, { category, amount, costType = "additional" }) => {
+      const res = await apiPost(`/crop-plans/${planId}/costs`, {
+        category,
+        amount,
+        cost_type: costType,
+      });
+      const data = await parseResponse(res);
+      await refreshCrops();
+      return data;
+    },
+    [refreshCrops]
+  );
+
+  const updateCropStatusApi = useCallback(
+    async (planId, targetStatus, holdReason = null) => {
+      const body = { target_status: targetStatus };
+      if (holdReason) body.hold_reason = holdReason;
+      const res = await apiPut(`/crop-plans/${planId}/status`, body);
+      const data = await parseResponse(res);
+      await refreshCrops();
+      return data;
+    },
+    [refreshCrops]
+  );
+
+  const logHarvestApi = useCallback(
+    async (planId, harvestDate, harvestQty, sellingPricePerKg = null) => {
+      const res = await apiPost(`/crop-plans/${planId}/harvest`, {
+        actual_harvest_date: harvestDate,
+        actual_harvest_qty: harvestQty,
+        actual_selling_price_per_kg: sellingPricePerKg,
+      });
+      const data = await parseResponse(res);
+      await refreshCrops();
+      return data;
+    },
+    [refreshCrops]
+  );
+
   return (
-    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops }}>
+    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi }}>
       {children}
     </CropsContext.Provider>
   );

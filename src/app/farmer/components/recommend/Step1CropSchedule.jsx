@@ -6,6 +6,7 @@ import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../../global/api";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../global/components/ui/select";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -214,7 +215,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
           </div>}
 
         {
-    /* Variant picker — dropdown, shown only when commodity has known varieties */
+    /* Variant picker — dropdown, shown only when commodity has 2+ varieties */
   }
         {data.commodity && (() => {
           const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
@@ -223,27 +224,24 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
           const localVariants = getVariants(baseName);
           const allVariants = Array.from(new Set([...dbVariants, ...localVariants]));
 
-          if (allVariants.length === 0) return null;
+          if (allVariants.length <= 1) return null;
           return (
             <div className="mt-4">
-              <label htmlFor="variety-select" className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5">
+              <label className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5">
                 Variety
               </label>
-              <div className="relative">
-                <select
-                  id="variety-select"
-                  value={data.variant}
-                  onChange={(e) => onChange({ variant: e.target.value })}
-                  className="w-full h-10 pl-3 pr-8 text-[14px] font-medium text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] appearance-none cursor-pointer hover:border-[var(--hw-neutral-400)] transition-colors"
-                >
-                  <option value="">Default</option>
-                  {allVariants.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-500)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-              </div>
-              <p className="mt-1.5 text-[12px] text-[var(--hw-neutral-500)]">
-                Default uses commodity-level pricing.
-              </p>
+              <Select value={data.variant || undefined} onValueChange={(v) => onChange({ variant: v })}>
+                <SelectTrigger className="w-full h-10 text-[14px] font-medium text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] hover:border-[var(--hw-neutral-400)] transition-colors">
+                  <SelectValue placeholder="Select a variety" />
+                </SelectTrigger>
+                <SelectContent position="popper" sideOffset={4} className="rounded-xl border border-[var(--hw-neutral-200)] shadow-lg">
+                  {allVariants.map((v) => (
+                    <SelectItem key={v} value={v} className="text-[14px] font-medium rounded-lg cursor-pointer">
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           );
         })()}

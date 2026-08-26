@@ -125,6 +125,7 @@ function CropCycleDetailPage() {
   const [farmgatePrice, setFarmgatePrice] = useState("");
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
+  const [actionError, setActionError] = useState(null);
   const crop = crops.find((c) => c.id === cropId);
   if (!crop) {
     return <div className="px-4 py-8 text-center">
@@ -143,38 +144,43 @@ function CropCycleDetailPage() {
       completed: "Completed"
     };
 
-    if (action.kind === "phase") {
-      const targetStatus = statusMap[action.phase] || "Planning";
-      if (targetStatus === "Completed" && action.fields?.finalQtySold && action.fields?.avgSellingPrice) {
-        const harvestDate = action.fields.actualHarvestDate || new Date().toISOString().split('T')[0];
-        await logHarvestApi(crop.id, harvestDate, action.fields.finalQtySold, action.fields.avgSellingPrice);
-      } else {
-        await updateCropStatusApi(crop.id, targetStatus);
+    setActionError(null);
+    try {
+      if (action.kind === "phase") {
+        const targetStatus = statusMap[action.phase] || "Planning";
+        if (targetStatus === "Completed" && action.fields?.finalQtySold && action.fields?.avgSellingPrice) {
+          const harvestDate = action.fields.actualHarvestDate || new Date().toISOString().split('T')[0];
+          await logHarvestApi(crop.id, harvestDate, action.fields.finalQtySold, action.fields.avgSellingPrice);
+        } else {
+          await updateCropStatusApi(crop.id, targetStatus);
+        }
+        updateCrop(crop.id, {
+          phase: action.phase,
+          lastUpdated: "Just now",
+          isOnHold: false,
+          ...action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {},
+          ...action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}
+        });
+      } else if (action.kind === "hold") {
+        await updateCropStatusApi(crop.id, "On Hold", action.reason);
+        const today = (new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        updateCrop(crop.id, {
+          isOnHold: true,
+          holdReason: action.reason,
+          holdDate: today,
+          lastUpdated: "Just now"
+        });
+      } else if (action.kind === "resume") {
+        await updateCropStatusApi(crop.id, "Planning");
+        updateCrop(crop.id, {
+          isOnHold: false,
+          lastUpdated: "Just now"
+        });
       }
-      updateCrop(crop.id, {
-        phase: action.phase,
-        lastUpdated: "Just now",
-        isOnHold: false,
-        ...action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {},
-        ...action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}
-      });
-    } else if (action.kind === "hold") {
-      await updateCropStatusApi(crop.id, "On Hold", action.reason);
-      const today = (new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-      updateCrop(crop.id, {
-        isOnHold: true,
-        holdReason: action.reason,
-        holdDate: today,
-        lastUpdated: "Just now"
-      });
-    } else if (action.kind === "resume") {
-      await updateCropStatusApi(crop.id, crop.status === "On Hold" ? "Planning" : crop.status);
-      updateCrop(crop.id, {
-        isOnHold: false,
-        lastUpdated: "Just now"
-      });
+      setDrawerOpen(false);
+    } catch (err) {
+      setActionError(err.message || "Action failed. Please try again.");
     }
-    setDrawerOpen(false);
   };
   const extraCost = typeof additionalCost === "number" ? additionalCost : 0;
   const updatedTotalCost = crop.totalCost + extraCost;
@@ -212,6 +218,8 @@ function CropCycleDetailPage() {
   const daysToHarvest = hDate && !isNaN(hDate.getTime()) ? Math.max(0, Math.floor((hDate - now) / (1000 * 60 * 60 * 24))) : null;
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+
+        {actionError && <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[13px] text-red-700">{actionError}</div>}
 
         {
     /* Breadcrumb */

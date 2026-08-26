@@ -32,9 +32,9 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, label: "No trend data" }
 };
 
-const DEFAULT_FILTER = { direction: "All", sortBy: "name" };
+const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All", variety: "All", unit: "All", showTop10: true };
 
-const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
+const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, varieties, units }) => {
   const [draft, setDraft] = useState(filter);
   React.useEffect(() => {
     if (open) setDraft(filter);
@@ -48,10 +48,20 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
         : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
     }`;
 
+  const toggle = (active) =>
+    `relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+      active ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-300)]"
+    }`;
+
+  const toggleKnob = (active) =>
+    `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+      active ? "translate-x-6" : "translate-x-1"
+    }`;
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-72 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
+      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-80 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
           <p className="font-semibold text-[var(--hw-neutral-900)]">Filter & Sort</p>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]">
@@ -60,13 +70,29 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+          {/* Top-10 toggle */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">Top 10 commodities only</p>
+            <button
+              onClick={() => setDraft((d) => ({ ...d, showTop10: !d.showTop10 }))}
+              className={toggle(draft.showTop10)}
+              role="switch"
+              aria-checked={draft.showTop10}
+            >
+              <span className={toggleKnob(draft.showTop10)} />
+            </button>
+          </div>
+
+          {/* Sort by */}
           <div>
             <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Sort by</p>
             <div className="flex flex-col gap-2">
               {[
                 ["name", "Commodity name (A–Z)"],
                 ["rising-first", "Price rising first"],
-                ["falling-first", "Price falling first"]
+                ["falling-first", "Price falling first"],
+                ["price-low", "Lowest price first"],
+                ["price-high", "Highest price first"]
               ].map(([v, label]) => (
                 <button key={v} onClick={() => setDraft((d) => ({ ...d, sortBy: v }))} className={chip(draft.sortBy === v)}>
                   {label}
@@ -75,6 +101,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
             </div>
           </div>
 
+          {/* Price direction */}
           <div>
             <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Price direction</p>
             <div className="flex flex-wrap gap-2">
@@ -85,6 +112,48 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
               ))}
             </div>
           </div>
+
+          {/* Category */}
+          {categories.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Category</p>
+              <div className="flex flex-wrap gap-2">
+                {["All", ...categories].map((v) => (
+                  <button key={v} onClick={() => setDraft((d) => ({ ...d, category: v }))} className={chip(draft.category === v)}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Variety */}
+          {varieties.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Variety</p>
+              <div className="flex flex-wrap gap-2">
+                {["All", ...varieties].map((v) => (
+                  <button key={v} onClick={() => setDraft((d) => ({ ...d, variety: v }))} className={chip(draft.variety === v)}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Unit */}
+          {units.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Unit</p>
+              <div className="flex flex-wrap gap-2">
+                {["All", ...units].map((v) => (
+                  <button key={v} onClick={() => setDraft((d) => ({ ...d, unit: v }))} className={chip(draft.unit === v)}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3">
@@ -225,8 +294,6 @@ function PricesPage() {
 
     items.forEach(item => {
       const camelItem = toCamelCase(item);
-      const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-      if (!isTop) return;
 
       const rawName = camelItem.baseName || camelItem.name || '\u2013';
       const baseName = rawName.includes(' - ') ? rawName.split(' - ')[0].trim() : rawName;
@@ -251,6 +318,7 @@ function PricesPage() {
       const variantItem = {
         id: camelItem.commodityId,
         name: camelItem.name,
+        category: camelItem.category,
         variety: camelItem.variety,
         unitOfMeasure: uom,
         displayData: itemPrices,
@@ -261,6 +329,7 @@ function PricesPage() {
           id: camelItem.commodityId,
           name: baseName,
           baseName: baseName,
+          category: camelItem.category,
           unitOfMeasure: uom,
           isTop10: true,
           displayData: itemPrices,
@@ -284,7 +353,32 @@ function PricesPage() {
     };
   }, [apiData]);
   
-  const activeCount = (filter.direction !== "All" ? 1 : 0) + (filter.sortBy !== "name" ? 1 : 0);
+  const activeCount = (filter.direction !== "All" ? 1 : 0)
+    + (filter.sortBy !== "name" ? 1 : 0)
+    + (filter.category !== "All" ? 1 : 0)
+    + (filter.variety !== "All" ? 1 : 0)
+    + (filter.unit !== "All" ? 1 : 0)
+    + (!filter.showTop10 ? 1 : 0);
+
+  const categories = useMemo(() => {
+    const set = new Set();
+    commodities.forEach((c) => { if (c.category) set.add(c.category); });
+    return [...set].sort();
+  }, [commodities]);
+
+  const varieties = useMemo(() => {
+    const set = new Set();
+    commodities.forEach((c) => {
+      c.variants?.forEach((v) => { if (v.variety) set.add(v.variety); });
+    });
+    return [...set].sort();
+  }, [commodities]);
+
+  const units = useMemo(() => {
+    const set = new Set();
+    commodities.forEach((c) => { if (c.unitOfMeasure) set.add(c.unitOfMeasure); });
+    return [...set].sort();
+  }, [commodities]);
   
   const visible = useMemo(() => {
     let list = commodities.map(commodity => {
@@ -302,6 +396,10 @@ function PricesPage() {
         }
       };
     });
+
+    if (!filter.showTop10) {
+      list = list.filter((c) => c.isTop10 === false);
+    }
     
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -311,12 +409,29 @@ function PricesPage() {
     if (filter.direction !== "All") {
       list = list.filter((c) => c.displayData.direction === filter.direction);
     }
+
+    if (filter.category !== "All") {
+      list = list.filter((c) => c.category === filter.category);
+    }
+
+    if (filter.variety !== "All") {
+      list = list.filter((c) => c.variants?.some((v) => v.variety === filter.variety));
+    }
+
+    if (filter.unit !== "All") {
+      list = list.filter((c) => c.unitOfMeasure === filter.unit);
+    }
     
     list.sort((a, b) => {
       const ORDER_RISING = { Rising: 0, Stable: 1, Falling: 2 };
       const ORDER_FALLING = { Falling: 0, Stable: 1, Rising: 2 };
       if (filter.sortBy === "rising-first") return (ORDER_RISING[a.displayData.direction] ?? 1) - (ORDER_RISING[b.displayData.direction] ?? 1);
       if (filter.sortBy === "falling-first") return (ORDER_FALLING[a.displayData.direction] ?? 1) - (ORDER_FALLING[b.displayData.direction] ?? 1);
+      if (filter.sortBy === "price-low" || filter.sortBy === "price-high") {
+        const priceA = a.displayData.bangkerohanRetail ?? a.displayData.dftcRetail ?? Infinity;
+        const priceB = b.displayData.bangkerohanRetail ?? b.displayData.dftcRetail ?? Infinity;
+        return filter.sortBy === "price-low" ? priceA - priceB : priceB - priceA;
+      }
       return (a.name || '').localeCompare(b.name || '');
     });
     
@@ -413,6 +528,9 @@ function PricesPage() {
           setFilter(f);
           setFilterOpen(false);
         }}
+        categories={categories}
+        varieties={varieties}
+        units={units}
       />
     </div>
   );
