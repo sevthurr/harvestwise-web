@@ -45,10 +45,32 @@ const AdminLayoutInner = () => {
   const navigate = useNavigate();
   const active = getActive(location.pathname);
   const { user, logout } = useAuth();
-  const displayName = "HarvestWise Admin";
-  const initials = "HA";
+  // Build a proper display name whether or not the profile fields are populated.
+  // If first_name is available, use "First Last". Otherwise parse the username
+  // (which may contain dots, e.g. "kaye.mayugba") and title-case it.
+  function toTitleCase(str) {
+    return str
+      .split(/[._\s]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+  const displayName =
+    user?.first_name
+      ? `${user.first_name} ${user.last_name || ""}`.trim()
+      : user?.username
+      ? toTitleCase(user.username)
+      : "HarvestWise Admin";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "HA";
+
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
+
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -58,26 +80,24 @@ const AdminLayoutInner = () => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
   const go = (path) => {
     setAvatarOpen(false);
     navigate(path);
   };
+
   const handleLogout = () => {
     setAvatarOpen(false);
     logout();
     navigate("/login");
   };
-  return <div className="min-h-screen bg-[var(--hw-neutral-50)]">
 
-      {
-    /* ── Compact top bar ── */
-  }
+  return (
+    <div className="min-h-screen bg-[var(--hw-neutral-50)]">
+      {/* ── Compact top bar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)] h-13">
         <div className="flex items-center h-13 px-4 gap-3">
-
-          {
-    /* Logo + label */
-  }
+          {/* Logo + label */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <img 
               src="/horizontal-logo.png" 
@@ -94,30 +114,17 @@ const AdminLayoutInner = () => {
 
           <div className="flex-1" />
 
-          {
-    /* Sync indicator — desktop only */
-  }
-          <div className="hidden lg:flex items-center gap-1.5 text-[var(--hw-neutral-400)] flex-shrink-0">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="text-[12px]">Jun 24, 5:12 AM</span>
-          </div>
-
-          {
-    /* Bell */
-  }
+          {/* Bell */}
           <button className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0">
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />
           </button>
 
-          {
-    /* Admin avatar + dropdown */
-  }
+          {/* Admin avatar + dropdown */}
           <div className="relative flex-shrink-0" ref={dropdownRef}>
             <button
-    onClick={() => setAvatarOpen((v) => !v)}
-    className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
-  >
+              onClick={() => setAvatarOpen((v) => !v)}
+              className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
+            >
               <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center">
                 <span className="text-white text-[11px] font-bold select-none">{initials}</span>
               </div>
@@ -280,11 +287,14 @@ const AdminLayoutInner = () => {
   })}
         </div>
       </nav>
-    </div>;
+    </div>
+  );
 };
-const AdminLayout = () => <TextSizeProvider storageKey="hw_admin_text_size">
+
+const AdminLayout = () => (
+  <TextSizeProvider storageKey="hw_admin_text_size">
     <AdminLayoutInner />
-  </TextSizeProvider>;
-export {
-  AdminLayout
-};
+  </TextSizeProvider>
+);
+
+export { AdminLayout };

@@ -8,115 +8,7 @@ import {
   ChevronDown,
   ChevronUp
 } from "lucide-react";
-const ALL_SOURCES = [
-  {
-    id: "DS-001",
-    sourceId: "bangk-retail",
-    name: "Bangkerohan Retail Prices",
-    sourceType: "Manual upload",
-    status: "Updated",
-    lastSuccessfulUpdate: "Jun 24, 2026 \xB7 7:30 AM",
-    recordsFetched: 140,
-    recordsImported: 140,
-    recordsAccepted: 140,
-    recordsRejected: 0,
-    relatedModule: "Price Outlook",
-    updateFrequency: "Manual (daily upload expected)",
-    isApi: false
-  },
-  {
-    id: "DS-002",
-    sourceId: "dftc-retail",
-    name: "DFTC Retail Prices",
-    sourceType: "Manual upload",
-    status: "Requires Review",
-    lastSuccessfulUpdate: "Jun 23, 2026 \xB7 5:31 AM",
-    latestIssue: "38 records failed price range validation (Jun 24 import)",
-    recordsFetched: 95,
-    recordsImported: 57,
-    recordsAccepted: 57,
-    recordsRejected: 38,
-    relatedModule: "Price Outlook",
-    updateFrequency: "Manual (daily upload expected)",
-    isApi: false
-  },
-  {
-    id: "DS-003",
-    sourceId: "dftc-wholesale",
-    name: "DFTC Wholesale Prices",
-    sourceType: "Manual upload",
-    status: "Updated",
-    lastSuccessfulUpdate: "Jun 24, 2026 \xB7 5:10 AM",
-    recordsFetched: 88,
-    recordsImported: 88,
-    recordsAccepted: 88,
-    recordsRejected: 0,
-    relatedModule: "Price Outlook",
-    updateFrequency: "Manual (daily upload expected)",
-    isApi: false
-  },
-  {
-    id: "DS-004",
-    sourceId: "dftc-arrivals",
-    name: "DFTC Arrival Volume",
-    sourceType: "Manual upload",
-    status: "Updated",
-    lastSuccessfulUpdate: "Jun 24, 2026 \xB7 5:22 AM",
-    recordsFetched: 70,
-    recordsImported: 70,
-    recordsAccepted: 70,
-    recordsRejected: 0,
-    relatedModule: "Arrival Pressure",
-    updateFrequency: "Manual (weekly upload expected)",
-    isApi: false
-  },
-  {
-    id: "DS-005",
-    sourceId: "psa",
-    name: "Historical Production Volume",
-    sourceType: "API",
-    status: "Updated",
-    lastSuccessfulUpdate: "Jun 24, 2026 \xB7 1:00 AM",
-    recordsFetched: 3200,
-    recordsImported: 3200,
-    recordsAccepted: 3200,
-    recordsRejected: 0,
-    relatedModule: "Historical Seasonal Production Level",
-    updateFrequency: "Automated (daily, 1:00 AM)",
-    isApi: true
-  },
-  {
-    id: "DS-006",
-    sourceId: "meteo-fore",
-    name: "Weather Forecast",
-    sourceType: "API",
-    status: "Failed",
-    lastSuccessfulUpdate: "Jun 23, 2026 \xB7 5:00 AM",
-    latestIssue: "Retrieval failed \u2014 Jun 24, 2026 \xB7 5:00 AM. API responded with a 503 error. Next retry scheduled.",
-    recordsFetched: 0,
-    recordsImported: 0,
-    recordsAccepted: 0,
-    recordsRejected: 0,
-    relatedModule: "Weather Risk",
-    updateFrequency: "Automated (daily, 5:00 AM)",
-    isApi: true
-  },
-  {
-    id: "DS-007",
-    sourceId: "gcal",
-    name: "Holidays",
-    sourceType: "API",
-    status: "Updated",
-    lastSuccessfulUpdate: "Jun 24, 2026 \xB7 1:00 AM",
-    recordsFetched: 22,
-    recordsImported: 22,
-    recordsAccepted: 22,
-    recordsRejected: 0,
-    relatedModule: "Calendar context",
-    updateFrequency: "Automated (daily, 1:00 AM)",
-    isApi: true
-  }
-];
+const ALL_SOURCES = [];
 const STATUS_TEXT = {
   Updated: "text-emerald-700",
   "Requires Review": "text-amber-700",
@@ -299,11 +191,11 @@ function AdminDataSourceDetail() {
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             {[
-    { label: "ID", value: source.id },
-    { label: "Source type", value: source.sourceType },
-    { label: "Used by", value: source.relatedModule },
-    { label: "Update frequency", value: source.updateFrequency },
-    { label: "Last successful update", value: source.lastSuccessfulUpdate, highlight: true }
+    { label: "ID", value: source.id || "-" },
+    { label: "Source type", value: source.sourceType || "-" },
+    { label: "Used by", value: source.relatedModule || "-" },
+    { label: "Update frequency", value: source.updateFrequency || "-" },
+    { label: "Last successful update", value: source.lastSuccessfulUpdate || "-", highlight: !!source.lastSuccessfulUpdate }
   ].map((row) => <div key={row.label} className="flex items-center justify-between gap-3 px-5 py-3">
                 <p className="text-[13px] text-[var(--hw-neutral-800)]">{row.label}</p>
                 <p className={`text-[13px] font-medium text-right ${"highlight" in row && row.highlight ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-800)]"}`}>
@@ -322,10 +214,10 @@ function AdminDataSourceDetail() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[var(--hw-neutral-100)]">
             {[
-    { label: source.isApi ? "Fetched" : "Uploaded", value: source.recordsFetched },
-    { label: "Imported", value: source.recordsImported },
-    { label: "Accepted", value: source.recordsAccepted, color: "text-emerald-700" },
-    { label: "Rejected", value: source.recordsRejected, color: source.recordsRejected > 0 ? "text-red-600" : void 0 }
+    { label: source.isApi ? "Fetched" : "Uploaded", value: source.recordsFetched != null ? source.recordsFetched : 0 },
+    { label: "Imported", value: source.recordsImported != null ? source.recordsImported : 0 },
+    { label: "Accepted", value: source.recordsAccepted != null ? source.recordsAccepted : 0, color: "text-emerald-700" },
+    { label: "Rejected", value: source.recordsRejected != null ? source.recordsRejected : 0, color: (source.recordsRejected || 0) > 0 ? "text-red-600" : void 0 }
   ].map((s) => <div key={s.label} className="px-4 py-4 text-center">
                 <p className="text-[12px] text-[var(--hw-neutral-700)] mb-1">{s.label}</p>
                 <p className={`text-2xl font-bold ${"color" in s && s.color ? s.color : "text-[var(--hw-neutral-900)]"}`}>
@@ -337,7 +229,7 @@ function AdminDataSourceDetail() {
           {
     /* View Records expandable */
   }
-          {records.total > 0 && <div className="border-t border-[var(--hw-neutral-100)]">
+          <div className="border-t border-[var(--hw-neutral-100)]">
               <button
     onClick={() => {
       setShowRecords((v) => !v);
@@ -349,7 +241,9 @@ function AdminDataSourceDetail() {
                 {showRecords ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
-              {showRecords && <div>
+              {showRecords && (records.total === 0 ? <div className="px-5 py-8 text-center text-[13px] text-[var(--hw-neutral-500)] border-t border-[var(--hw-neutral-100)]">
+                  No records available.
+                </div> : <div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-[12px]">
                       <thead>
@@ -389,8 +283,8 @@ function AdminDataSourceDetail() {
                         </button>
                       </div>
                     </div>}
-                </div>}
-            </div>}
+                </div>)}
+            </div>
         </div>
 
         {
@@ -401,11 +295,12 @@ function AdminDataSourceDetail() {
             <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Current status</p>
           </div>
           <div className="px-5 py-4">
-            <p className={`font-semibold ${statusColor}`}>{source.status}</p>
+            <p className={`font-semibold ${statusColor || "text-[var(--hw-neutral-600)]"}`}>{source.status || "Not yet updated"}</p>
             <p className="text-[13px] text-[var(--hw-neutral-800)] mt-1 leading-relaxed">
               {source.status === "Updated" && (source.isApi ? "Connection is active. Data retrieval is running as expected." : "Latest data has been successfully imported and is ready for use.")}
               {source.status === "Requires Review" && "Data was partially imported. Some records failed validation and were not accepted."}
               {source.status === "Failed" && "Last sync attempt failed. No new data was retrieved. Manual retry recommended."}
+              {!["Updated", "Requires Review", "Failed"].includes(source.status) && "No processing history is available yet."}
             </p>
           </div>
         </div>

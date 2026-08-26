@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router";
 import { Phone, Mail, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
 function DFTCProfile() {
@@ -11,12 +12,11 @@ function DFTCProfile() {
   const initials = parts.map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   const firstName = parts[0] || "";
   const lastName = parts[parts.length - 1] || "";
-  return <div className="max-w-2xl mx-auto px-4 py-6 pb-24 md:pb-8 space-y-4">
-
-      <div className="mb-2">
-        <h1 className="text-[22px] font-bold text-black">Profile</h1>
-        <p className="text-[15px] text-black mt-0.5">Your account and submission overview</p>
-      </div>
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      <PageHeader
+        title="Profile"
+        description="Your account and submission overview."
+      />
 
       {
     /* ── Card 1: Profile Header ── */

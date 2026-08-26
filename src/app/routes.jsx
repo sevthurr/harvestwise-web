@@ -69,6 +69,7 @@ import AdminSettings from "./admin/pages/AdminSettings";
 import AdminAbout from "./admin/pages/AdminAbout";
 import AdminSystemManagement from "./admin/pages/AdminSystemManagement";
 import AdminUserDetails from "./admin/pages/AdminUserDetails";
+import AdminAuditLogs from "./admin/pages/AdminAuditLogs";
 
 export const router = createBrowserRouter([
   // ── Auth pages (unprotected) ──────────────────────────────────────────────────
@@ -171,6 +172,7 @@ export const router = createBrowserRouter([
       { path: "about",                Component: AdminAbout            },
       { path: "system",               Component: AdminSystemManagement },
       { path: "system/user/:userId", Component: AdminUserDetails      },
+      { path: "audit-logs",            Component: AdminAuditLogs        },
     ],
   },
 ]);

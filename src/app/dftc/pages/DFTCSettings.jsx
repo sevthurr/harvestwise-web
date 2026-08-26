@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { Loader2, RefreshCw, Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
   SUFFIX_OPTIONS,
@@ -446,15 +447,15 @@ function DFTCSettings() {
     showToast("Account removal request sent.");
   };
 
-  return <div className="max-w-2xl mx-auto px-4 py-6 pb-24 md:pb-8">
-      <div className="mb-5">
-        <h1 className="text-[22px] font-bold text-black">Settings</h1>
-        <p className="text-[15px] text-black mt-0.5">Manage your account, submission preferences, and interface settings.</p>
-      </div>
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      <PageHeader
+        title="Settings"
+        description="Manage your account, submission preferences, and interface settings."
+      />
 
       <div
     ref={tabBarRef}
-    className="flex gap-1 border-b border-[var(--hw-neutral-200)] mb-5 -mx-4 px-4"
+    className="flex gap-1 border-b border-[var(--hw-neutral-200)] mb-5"
     style={{ overflowX: "auto", scrollbarWidth: "none" }}
   >
         {TABS.map((tab) => <button

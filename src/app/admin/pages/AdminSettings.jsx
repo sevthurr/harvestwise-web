@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { Loader2, RefreshCw, Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
   SUFFIX_OPTIONS,
@@ -416,11 +417,11 @@ function AdminSettings() {
     setToast(msg);
     setTimeout(() => setToast(""), 3e3);
   };
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1240px] mx-auto">
-      <div className="mb-5">
-        <h1 className="text-[22px] font-bold text-black">Settings</h1>
-        <p className="text-[15px] text-black mt-0.5">Manage your admin account, security, preferences, and notifications.</p>
-      </div>
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      <PageHeader
+        title="Settings"
+        description="Manage your admin account, security, preferences, and notifications."
+      />
 
       <div
     ref={tabBarRef}

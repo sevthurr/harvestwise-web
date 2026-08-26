@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, Loader2, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   Card,
   SectionLabel,
@@ -567,11 +568,11 @@ function AdminSystemManagement() {
     setActiveTab(tab);
     setParams({ tab });
   };
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1240px] mx-auto">
-      <div className="mb-5">
-        <h1 className="text-[22px] font-bold text-black">System Management</h1>
-        <p className="text-[15px] text-black mt-0.5">Manage users, permissions, security, and system health.</p>
-      </div>
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      <PageHeader
+        title="System Management"
+        description="Manage users, permissions, security, and system health."
+      />
 
       <div
     ref={tabBarRef}

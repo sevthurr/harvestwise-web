@@ -61,7 +61,7 @@ const CONFIG_AREAS = [
 ];
 function AdminConfiguration() {
   const navigate = useNavigate();
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1400px] mx-auto space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 
       {
     /* Page header */

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { ChevronDown, Check, Send } from "lucide-react";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 const SECTIONS = [
   { id: "about", title: "About HarvestWise" },
   { id: "privacy", title: "Privacy Policy" },
@@ -164,11 +165,11 @@ function DFTCAbout() {
     }
   }, [sectionParam]);
   const toggle = (id) => setOpenId((prev) => prev === id ? null : id);
-  return <div className="max-w-2xl mx-auto px-4 py-6 pb-24 md:pb-8 space-y-3">
-      <div className="mb-4">
-        <h1 className="text-[22px] font-bold text-black">About</h1>
-        <p className="text-[15px] text-black mt-0.5">Information, support, and legal details.</p>
-      </div>
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      <PageHeader
+        title="About"
+        description="Information, support, and legal details."
+      />
 
       {SECTIONS.map((sec) => <AccordionItem
     key={sec.id}

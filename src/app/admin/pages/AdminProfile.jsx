@@ -1,17 +1,17 @@
 import { useNavigate } from "react-router";
 import { Phone, Mail, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
 function AdminProfile() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1240px] mx-auto space-y-4">
-
-      <div className="mb-2">
-        <h1 className="text-[22px] font-bold text-black">Profile</h1>
-        <p className="text-[15px] text-black mt-0.5">Your admin account and access information.</p>
-      </div>
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      <PageHeader
+        title="Profile"
+        description="Your admin account and access information."
+      />
 
       {
     /* ── Card 1: Profile Header ── */

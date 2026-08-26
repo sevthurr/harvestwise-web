@@ -151,7 +151,7 @@ function AdminUserDetails() {
       <span className="text-[14px] font-semibold text-black flex-shrink-0">{label}</span>
       <span className="text-[14px] text-black text-right">{value || "\u2014"}</span>
     </div>;
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1240px] mx-auto space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
       {
     /* Back */

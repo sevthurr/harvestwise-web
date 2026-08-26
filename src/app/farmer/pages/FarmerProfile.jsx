@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { MapPin, Phone, Mail, Navigation, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
@@ -71,7 +72,7 @@ function FarmerProfile() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-6 pb-6 md:pb-8 space-y-4">
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
         <div className="space-y-1 mb-2">
           <Skeleton className="h-7 w-32 rounded" />
           <Skeleton className="h-4 w-60 rounded" />
@@ -91,11 +92,11 @@ function FarmerProfile() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-6 md:pb-8 space-y-4">
-      <div className="mb-2">
-        <h1 className="text-[22px] font-bold text-black">Profile</h1>
-        <p className="text-[15px] text-black mt-0.5">Your personal and farm information</p>
-      </div>
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      <PageHeader
+        title="Profile"
+        description="Your personal and farm information."
+      />
 
       {/* ── Section 1: Profile Header ── */}
       <Card>

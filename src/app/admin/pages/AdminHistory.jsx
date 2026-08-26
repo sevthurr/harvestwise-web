@@ -53,7 +53,7 @@ function AdminHistory() {
   }
   const inputCls = "px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition text-[var(--hw-neutral-700)]";
   const selectCls = inputCls + " cursor-pointer";
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 
       {
     /* Header */

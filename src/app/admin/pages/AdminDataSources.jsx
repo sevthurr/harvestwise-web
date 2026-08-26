@@ -15,20 +15,13 @@ import {
   Trash2,
   List
 } from "lucide-react";
-const DATA_SOURCES = [
-  { id: "bangk-retail", name: "Bangkerohan Retail Prices", type: "Manual Upload", lastImport: "Jun 24, 7:30 AM", records: 140, status: "Updated", isManual: true },
-  { id: "bangk-wholesale", name: "Bangkerohan Wholesale Prices", type: "Manual Upload", lastImport: "Jun 24, 7:35 AM", records: 140, status: "Updated", isManual: true },
-  { id: "dftc-retail", name: "DFTC Retail Prices", type: "Manual Upload", lastImport: "Jun 24, 5:31 AM", records: 57, status: "Requires Review", isManual: true, issue: "38 records failed price range validation" },
-  { id: "dftc-wholesale", name: "DFTC Wholesale Prices", type: "Manual Upload", lastImport: "Jun 24, 5:10 AM", records: 88, status: "Updated", isManual: true },
-  { id: "dftc-arrivals", name: "DFTC Arrival Volume", type: "Manual Upload", lastImport: "Jun 24, 5:22 AM", records: 70, status: "Updated", isManual: true },
-  { id: "psa", name: "Historical Production Volume", type: "PSA OpenStat API", lastImport: "Jun 24, 1:00 AM", records: 3200, status: "Updated", isManual: false },
-  { id: "meteo-fore", name: "Weather Forecast", type: "OpenMeteo API", lastImport: "Jun 23, 5:00 AM", records: 0, status: "Failed", isManual: false, issue: "Retrieval failed \u2014 Jun 24, 5:00 AM" },
-  { id: "gcal", name: "Holidays", type: "Google Calendar API", lastImport: "Jun 24, 1:00 AM", records: 22, status: "Updated", isManual: false }
-];
+const DATA_SOURCES = [];
 const STATUS_TEXT = {
   Updated: "text-emerald-700",
   "Requires Review": "text-amber-700",
-  Failed: "text-red-600"
+  Failed: "text-red-600",
+  "Not yet updated": "text-[var(--hw-neutral-500)]",
+  "Not yet synced": "text-[var(--hw-neutral-500)]"
 };
 const IMPORT_DATASETS = [
   { id: "bangk-retail", label: "Bangkerohan Retail Prices", required: "Date, Commodity, Retail Price (\u20B1/kg)" },
@@ -38,43 +31,16 @@ const IMPORT_DATASETS = [
   { id: "dftc-arrivals", label: "DFTC Arrival Volume", required: "Week ending date, Commodity, Volume (MT)" }
 ];
 const PROCESSING_STEPS = ["Uploaded", "Standardized", "Cleaned", "Validated", "Stored", "Ready for processing"];
-const MOCK_PREVIEW = [
-  { date: "Jun 24, 2026", commodity: "Kamatis", variety: "Diamante Big", price: "\u20B185.00" },
-  { date: "Jun 24, 2026", commodity: "Talong", variety: "Banate King", price: "\u20B160.00" },
-  { date: "Jun 24, 2026", commodity: "Repolyo", variety: "Wakamini", price: "\u20B145.00" },
-  { date: "Jun 24, 2026", commodity: "Atsal", variety: "Smooth Cayene", price: "\u20B1120.00" },
-  { date: "Jun 24, 2026", commodity: "Carrots", variety: "Big", price: "\u20B190.00" }
-];
-const VALIDATION_ISSUES = [
-  { row: 12, field: "price", issue: "Value out of expected range", value: "\u20B1580.00" },
-  { row: 28, field: "date", issue: "Date format not recognized", value: "24-06-26" },
-  { row: 45, field: "commodity", issue: "Commodity not in registry", value: "Sibuyas Tagalog" }
-];
-const API_SYNC_SOURCES = [
-  { id: "psa", name: "Historical Production Volume", apiSource: "PSA OpenStat API", lastSync: "Jun 24, 1:00 AM", nextSync: "Jun 25, 1:00 AM", recordsFetched: 3200, recordsAccepted: 3200, status: "Updated" },
-  { id: "meteo-fore", name: "Weather Forecast", apiSource: "OpenMeteo API", lastSync: "Jun 23, 5:00 AM", nextSync: "\u2014", recordsFetched: 0, recordsAccepted: 0, status: "Failed", issue: "Retrieval failed \u2014 Jun 24, 5:00 AM. API responded with a 503 error. Next retry is scheduled." },
-  { id: "gcal", name: "Holidays", apiSource: "Google Calendar API", lastSync: "Jun 24, 1:00 AM", nextSync: "Jun 25, 1:00 AM", recordsFetched: 22, recordsAccepted: 22, status: "Updated" }
-];
+const MOCK_PREVIEW = [];
+const VALIDATION_ISSUES = [];
+const API_SYNC_SOURCES = [];
 const syncHasFailed = API_SYNC_SOURCES.some((s) => s.status === "Failed");
 const syncSummary = syncHasFailed ? `${API_SYNC_SOURCES.filter((s) => s.status === "Failed").length} source failed \u2014 retry recommended` : "All sources updated";
 const syncSummaryColor = syncHasFailed ? "text-red-600" : "text-emerald-700";
-const BASE_EVENTS = [
-  { id: "CE-001", name: "Araw ng Kagitingan", date: new Date(2026, 3, 9), from: "Apr 9, 2026", to: "Apr 9, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-002", name: "Labor Day", date: new Date(2026, 4, 1), from: "May 1, 2026", to: "May 1, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-003", name: "Independence Day", date: new Date(2026, 5, 12), from: "Jun 12, 2026", to: "Jun 12, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-004", name: "Araw ng Dabaw", date: new Date(2026, 6, 4), from: "Jul 4, 2026", to: "Jul 4, 2026", type: "Local Event", source: "Manual Entry", recurrence: "Yearly", status: "Active", lastUpdated: "Jun 1, 2026", description: "Local Davao City holiday." },
-  { id: "CE-005", name: "Kadayawan Festival", date: new Date(2026, 7, 15), from: "Aug 15, 2026", to: "Aug 17, 2026", type: "Local Event", source: "Manual Entry", recurrence: "Yearly", status: "Active", lastUpdated: "Jun 1, 2026", description: "Annual Kadayawan festival in Davao City." },
-  { id: "CE-006", name: "Ninoy Aquino Day", date: new Date(2026, 7, 21), from: "Aug 21, 2026", to: "Aug 21, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-007", name: "National Heroes Day", date: new Date(2026, 7, 31), from: "Aug 31, 2026", to: "Aug 31, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-008", name: "Davao City Charter Day", date: new Date(2026, 9, 16), from: "Oct 16, 2026", to: "Oct 16, 2026", type: "Local Event", source: "Manual Entry", recurrence: "Yearly", status: "Active", lastUpdated: "Jun 1, 2026" },
-  { id: "CE-009", name: "Bonifacio Day", date: new Date(2026, 10, 30), from: "Nov 30, 2026", to: "Nov 30, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-010", name: "Immaculate Conception", date: new Date(2026, 11, 8), from: "Dec 8, 2026", to: "Dec 8, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-011", name: "Christmas Day", date: new Date(2026, 11, 25), from: "Dec 25, 2026", to: "Dec 25, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-012", name: "Rizal Day", date: new Date(2026, 11, 30), from: "Dec 30, 2026", to: "Dec 30, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" }
-];
+const BASE_EVENTS = [];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const TODAY_DATE = new Date(2026, 5, 24);
+const TODAY_DATE = new Date();
 function buildGrid(year, month) {
   const first = new Date(year, month, 1).getDay();
   const lastDate = new Date(year, month + 1, 0).getDate();
@@ -131,8 +97,8 @@ function AdminDataSources() {
   const [importStep, setImportStep] = useState(0);
   const [selectedDs, setSelectedDs] = useState(IMPORT_DATASETS[0].id);
   const [fileUploaded, setFileUploaded] = useState(false);
-  const [calYear, setCalYear] = useState(2026);
-  const [calMonth, setCalMonth] = useState(5);
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calFilter, setCalFilter] = useState("30d");
   const [events, setEvents] = useState(BASE_EVENTS);
   const [showConfiguredEvents, setShowConfiguredEvents] = useState(false);
@@ -194,9 +160,9 @@ function AdminDataSources() {
   const inputCls = "w-full px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
   const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
   const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
-  const renderEventFormFields = (form, setForm) => <div className="px-5 py-4 space-y-3">
+  const renderEventFormFields = (form, setForm, error) => <div className="px-5 py-4 space-y-3">
       <div>
-        <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Event name</label>
+        <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Event name *</label>
         <input
     value={form.name}
     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -215,7 +181,7 @@ function AdminDataSources() {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">From</label>
+          <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">From *</label>
           <input
     type="date"
     value={form.from}
@@ -233,9 +199,11 @@ function AdminDataSources() {
   />
         </div>
       </div>
+      {error && <p className="text-[12px] text-red-600">{error}</p>}
       <div>
         <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Recurrence</label>
         <select value={form.recurrence} onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))} className={inputCls}>
+          <option value="None">None</option>
           <option value="Bi-weekly">Bi-weekly</option>
           <option value="Monthly">Monthly</option>
           <option value="Yearly">Yearly</option>
@@ -258,10 +226,12 @@ function AdminDataSources() {
         </select>
       </div>
     </div>;
+  const [formError, setFormError] = useState("");
   const renderAddModal = () => <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30" onClick={() => {
     setShowAddModal(false);
     setAddForm(EMPTY_FORM);
+    setFormError("");
   }} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
@@ -270,38 +240,47 @@ function AdminDataSources() {
     onClick={() => {
       setShowAddModal(false);
       setAddForm(EMPTY_FORM);
+      setFormError("");
     }}
     className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
   >
             <X className="w-4 h-4" />
           </button>
         </div>
-        {renderEventFormFields(addForm, setAddForm)}
+        {renderEventFormFields(addForm, setAddForm, formError)}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
           <button onClick={() => {
     setShowAddModal(false);
     setAddForm(EMPTY_FORM);
+    setFormError("");
   }} className={btnSecondary}>Cancel</button>
           <button onClick={() => {
-    if (addForm.name.trim() && addForm.from) {
-      const d = new Date(addForm.from);
-      const newId = `CE-${String(events.length + 1).padStart(3, "0")}`;
-      setEvents((prev) => [...prev, {
-        id: newId,
-        name: addForm.name,
-        date: d,
-        from: fmtDate(addForm.from),
-        to: addForm.to ? fmtDate(addForm.to) : fmtDate(addForm.from),
-        type: addForm.type,
-        source: "Manual Entry",
-        recurrence: addForm.recurrence,
-        description: addForm.description || void 0,
-        status: addForm.status,
-        lastUpdated: "Jun 24, 2026"
-      }]);
-      setShowAddModal(false);
-      setAddForm(EMPTY_FORM);
+    if (!addForm.name.trim() || !addForm.from) {
+      setFormError("Event name and 'From' date are required.");
+      return;
     }
+    if (addForm.to && addForm.from && addForm.to < addForm.from) {
+      setFormError("'To' date cannot be earlier than 'From' date.");
+      return;
+    }
+    const d = new Date(addForm.from);
+    const newId = `CE-${String(events.length + 1).padStart(3, "0")}`;
+    setEvents((prev) => [...prev, {
+      id: newId,
+      name: addForm.name,
+      date: d,
+      from: fmtDate(addForm.from),
+      to: addForm.to ? fmtDate(addForm.to) : fmtDate(addForm.from),
+      type: addForm.type,
+      source: "Manual Entry",
+      recurrence: addForm.recurrence,
+      description: addForm.description || void 0,
+      status: addForm.status,
+      lastUpdated: fmtDate(new Date())
+    }]);
+    setShowAddModal(false);
+    setAddForm(EMPTY_FORM);
+    setFormError("");
   }} className={btnPrimary}>Save Event</button>
         </div>
       </div>
@@ -309,36 +288,52 @@ function AdminDataSources() {
   const renderEditModal = () => {
     if (!editEventId) return null;
     return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/30" onClick={() => setEditEventId(null)} />
+        <div className="absolute inset-0 bg-black/30" onClick={() => {
+          setEditEventId(null);
+          setFormError("");
+        }} />
         <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="font-semibold text-[var(--hw-neutral-800)]">Edit Calendar Event</p>
             <button
-      onClick={() => setEditEventId(null)}
+      onClick={() => {
+        setEditEventId(null);
+        setFormError("");
+      }}
       className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
     >
               <X className="w-4 h-4" />
             </button>
           </div>
-          {renderEventFormFields(editForm, setEditForm)}
+          {renderEventFormFields(editForm, setEditForm, formError)}
           <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-            <button onClick={() => setEditEventId(null)} className={btnSecondary}>Cancel</button>
             <button onClick={() => {
-      if (editForm.name.trim() && editForm.from) {
-        setEvents((prev) => prev.map((e) => e.id !== editEventId ? e : {
-          ...e,
-          name: editForm.name,
-          type: editForm.type,
-          date: new Date(editForm.from),
-          from: fmtDate(editForm.from),
-          to: editForm.to ? fmtDate(editForm.to) : fmtDate(editForm.from),
-          recurrence: editForm.recurrence,
-          description: editForm.description || void 0,
-          status: editForm.status,
-          lastUpdated: "Jun 24, 2026"
-        }));
-        setEditEventId(null);
+              setEditEventId(null);
+              setFormError("");
+            }} className={btnSecondary}>Cancel</button>
+            <button onClick={() => {
+      if (!editForm.name.trim() || !editForm.from) {
+        setFormError("Event name and 'From' date are required.");
+        return;
       }
+      if (editForm.to && editForm.from && editForm.to < editForm.from) {
+        setFormError("'To' date cannot be earlier than 'From' date.");
+        return;
+      }
+      setEvents((prev) => prev.map((e) => e.id !== editEventId ? e : {
+        ...e,
+        name: editForm.name,
+        type: editForm.type,
+        date: new Date(editForm.from),
+        from: fmtDate(editForm.from),
+        to: editForm.to ? fmtDate(editForm.to) : fmtDate(editForm.from),
+        recurrence: editForm.recurrence,
+        description: editForm.description || void 0,
+        status: editForm.status,
+        lastUpdated: fmtDate(new Date())
+      }));
+      setEditEventId(null);
+      setFormError("");
     }} className={btnPrimary}>Save Changes</button>
           </div>
         </div>
@@ -443,7 +438,7 @@ function AdminDataSources() {
         <div className="grid grid-cols-7 gap-y-1">
           {calGrid.map((day, i) => {
       if (day === null) return <div key={i} />;
-      const isToday = calYear === 2026 && calMonth === 5 && day === 24;
+      const isToday = calYear === new Date().getFullYear() && calMonth === new Date().getMonth() && day === new Date().getDate();
       const isSelected = selectedCalDay === day;
       const dayEvents = eventsInMonth.filter((e) => e.date.getDate() === day);
       const hasEvents = dayEvents.length > 0;
@@ -520,25 +515,23 @@ function AdminDataSources() {
         </div>
       </div>;
   };
-  const renderConfiguredEventsPage = () => <div className="space-y-4">
-      {
-    /* Back */
-  }
-      <button
-    onClick={() => setShowConfiguredEvents(false)}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors"
-  >
-        <ChevronLeft className="w-4 h-4" />Back to Calendar &amp; Events
-      </button>
+  const renderConfiguredEventsPage = () => <div className="space-y-6">
+      {/* Back */}
+      <div>
+        <button
+          onClick={() => setShowConfiguredEvents(false)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />Back to Calendar &amp; Events
+        </button>
+      </div>
 
-      {
-    /* Header */
-  }
-      <div className="flex items-center justify-between gap-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 pt-1">
         <div>
-          <h2 className="font-semibold text-[var(--hw-neutral-800)]">Configured Events</h2>
-          <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-            Manually added events configured by admins. {manualEvents.length} {manualEvents.length === 1 ? "event" : "events"} total.
+          <h2 className="text-[18px] font-bold text-[var(--hw-neutral-900)]">Configured Events</h2>
+          <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+            Manage custom holidays and special market events for the platform.
           </p>
         </div>
         <button onClick={() => setShowAddModal(true)} className={`${btnPrimary} flex-shrink-0`}>
@@ -807,20 +800,15 @@ function AdminDataSources() {
       {deleteEventId && renderDeleteConfirmModal()}
       {viewEventId && renderViewEventModal()}
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 
-        {
-    /* Header */
-  }
+        {/* Header */}
         <PageHeader
-    title="Data"
-    description="Manage data sources, API sync, and calendar events."
-    action={<div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] text-[12px]"><RefreshCw className="w-3.5 h-3.5" /><span>Jun 24, 7:30 AM</span></div>}
-  />
+          title="Data"
+          description="Manage data sources, API sync, and calendar events."
+        />
 
-        {
-    /* Tabs (hidden during import subview) */
-  }
+        {/* Tabs (hidden during import subview) */}
         {!showImport && <div className="flex border-b border-[var(--hw-neutral-200)]">
             {[["sources", "Data Sources"], ["api-sync", "API Sync"], ["calendar", "Calendar & Events"]].map(([id, label]) => <button key={id} onClick={() => {
     setTab(id);
@@ -828,14 +816,10 @@ function AdminDataSources() {
   }} className={tabCls(id)}>{label}</button>)}
           </div>}
 
-        {
-    /* Import subview */
-  }
+        {/* Import subview */}
         {showImport && renderImport()}
 
-        {
-    /* ══ TAB: DATA SOURCES ══ */
-  }
+        {/* ══ TAB: DATA SOURCES ══ */}
         {!showImport && tab === "sources" && <div className="space-y-3">
             <div className="flex items-center justify-end">
               <button onClick={() => {
@@ -851,55 +835,64 @@ function AdminDataSources() {
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                      {["Source", "Type", "Last Import", "Records Imported", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+                      {["Source", "Type", "Last Update", "Records Imported", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                    {DATA_SOURCES.map((s) => <tr
-    key={s.id}
-    onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-    className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-  >
+                    {DATA_SOURCES.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                          No data sources configured.
+                        </td>
+                      </tr>
+                    ) : (
+                      DATA_SOURCES.map((s) => <tr
+                        key={s.id}
+                        onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                        className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                      >
                         <td className="px-4 py-3">
                           <p className="font-medium text-[var(--hw-neutral-800)]">{s.name}</p>
                           {s.issue && <p className="text-[11px] text-amber-600 mt-0.5">{s.issue}</p>}
                         </td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.type}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastImport}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">{s.records > 0 ? s.records.toLocaleString() : "\u2014"}</td>
-                        <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status]}`}>{s.status}</td>
-                      </tr>)}
+                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastImport || "-"}</td>
+                        <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
+                          {s.records != null ? s.records.toLocaleString() : "-"}
+                        </td>
+                        <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
+                      </tr>)
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>}
 
-        {
-    /* ══ TAB: API SYNC ══ */
-  }
+        {/* ══ TAB: API SYNC ══ */}
         {!showImport && tab === "api-sync" && <div className="space-y-4">
-            {
-    /* Header row */
-  }
+            {/* Header row */}
             <div className="flex items-center justify-end gap-2 flex-shrink-0">
-              <button className={btnPrimary}>
-                {syncHasFailed ? <><RotateCcw className="w-4 h-4" />Retry Sync</> : <><RefreshCw className="w-4 h-4" />Sync Now</>}
+              <button className={btnPrimary} disabled={API_SYNC_SOURCES.length === 0}>
+                {syncHasFailed ? <><RotateCcw className="w-4 h-4" />Retry Failed Syncs</> : <><RefreshCw className="w-4 h-4" />Sync Now</>}
               </button>
               <button onClick={() => navigate("/admin/history")} className={btnSecondary}>
                 View Sync History
               </button>
             </div>
 
-            {
-    /* Sources list */
-  }
+            {/* Sources list */}
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden divide-y divide-[var(--hw-neutral-100)]">
-              {API_SYNC_SOURCES.map((s) => <div
-    key={s.id}
-    onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-    className="px-5 py-4 space-y-3 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-  >
+              {API_SYNC_SOURCES.length === 0 ? (
+                <div className="px-5 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                  No API sources configured.
+                </div>
+              ) : (
+                API_SYNC_SOURCES.map((s) => <div
+                  key={s.id}
+                  onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                  className="px-5 py-4 space-y-3 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                >
                   <div className="flex items-start gap-3 flex-wrap">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -911,11 +904,11 @@ function AdminDataSources() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
                     {[
-    { label: "Last sync", value: s.lastSync },
-    { label: "Next scheduled", value: s.nextSync },
-    { label: "Records fetched", value: s.recordsFetched.toLocaleString() },
-    { label: "Records accepted", value: s.recordsAccepted.toLocaleString() }
-  ].map((f) => <div key={f.label}>
+                      { label: "Last sync", value: s.lastSync || "-" },
+                      { label: "Next scheduled", value: s.nextSync || "-" },
+                      { label: "Records fetched", value: s.recordsFetched != null ? s.recordsFetched.toLocaleString() : "0" },
+                      { label: "Records accepted", value: s.recordsAccepted != null ? s.recordsAccepted.toLocaleString() : "0" }
+                    ].map((f) => <div key={f.label}>
                         <p className="text-[12px] text-[var(--hw-neutral-700)]">{f.label}</p>
                         <p className="text-[13px] font-medium text-[var(--hw-neutral-700)] mt-0.5">{f.value}</p>
                       </div>)}
@@ -923,17 +916,14 @@ function AdminDataSources() {
                   {s.issue && <p className="text-[12px] text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100">
                       {s.issue}
                     </p>}
-                </div>)}
+                </div>)
+              )}
             </div>
           </div>}
 
-        {
-    /* ══ TAB: CALENDAR & EVENTS ══ */
-  }
+        {/* ══ TAB: CALENDAR & EVENTS ══ */}
         {!showImport && tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-5">
-              {
-    /* Top row */
-  }
+              {/* Top row */}
               <div className="flex items-center justify-end gap-2 flex-shrink-0">
                 <button onClick={() => setShowConfiguredEvents(true)} className={btnSecondary}>
                   <List className="w-4 h-4" />View Configured Events
@@ -943,14 +933,10 @@ function AdminDataSources() {
                 </button>
               </div>
 
-              {
-    /* Calendar widget — full width */
-  }
+              {/* Calendar widget — full width */}
               {renderCalendarWidget()}
 
-              {
-    /* Filter */
-  }
+              {/* Filter */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[12px] text-[var(--hw-neutral-800)] font-medium">Show:</span>
                 {[["30d", "Next 30 days"], ["3m", "Next 3 months"], ["6m", "Next 6 months"], ["1y", "Next 1 year"]].map(([val, label]) => <button
@@ -962,9 +948,7 @@ function AdminDataSources() {
                   </button>)}
               </div>
 
-              {
-    /* Events table */
-  }
+              {/* Events table */}
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
@@ -974,14 +958,14 @@ function AdminDataSources() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                      {filteredEvents.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-700)]">No events in this period.</td></tr> : filteredEvents.map((e) => <tr
+                      {filteredEvents.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">No events found for this period.</td></tr> : filteredEvents.map((e) => <tr
     key={e.id}
     onClick={() => setViewEventId(e.id)}
     className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
   >
                           <td className="px-4 py-3 font-medium text-[var(--hw-neutral-800)]">{e.name}</td>
                           <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">
-                            {e.from === e.to ? e.from : `${e.from} \u2013 ${e.to}`}
+                            {e.from === e.to || !e.to ? e.from : `${e.from} \u2013 ${e.to}`}
                           </td>
                           <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{e.type}</td>
                           <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{e.source}</td>
