@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Bell, Menu, RefreshCw, Settings, LogOut, ChevronDown, ArrowLeftRight, Info, Download } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
@@ -15,9 +16,34 @@ const TopBar = ({
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
+  const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
+
   const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
   const ref = useRef(null);
+
+  const isSyncing = isManualSyncing || isFetching > 0;
+
+  const handleResync = async () => {
+    if (isSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await queryClient.refetchQueries();
+      await queryClient.invalidateQueries();
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    } catch (e) {
+      console.error("Data resync failed:", e);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -61,11 +87,22 @@ const TopBar = ({
         <div className="flex-1" />
 
         {/* Right: sync · bell · avatar */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <div className="hidden sm:flex items-center gap-1.5 pr-2 text-black">
-            <RefreshCw className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="text-xs whitespace-nowrap">{t("farmer.last_synced", {}, "Last synced")}: {t("common.updated", {}, "Updated")} -</span>
-          </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={handleResync}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
+            title={isSyncing ? "Syncing data..." : "Click to resync data"}
+            aria-label="Resync data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline whitespace-nowrap">
+              {isSyncing ? "Syncing..." : `Resync (${lastSyncedTime})`}
+            </span>
+            <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
+              {isSyncing ? "Syncing" : "Resync"}
+            </span>
+          </button>
 
           <button
             onClick={onNotificationClick}

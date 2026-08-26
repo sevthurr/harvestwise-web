@@ -8,8 +8,11 @@ import {
   parseResponse,
   storeTokens,
 } from '../api';
+import { get, set } from 'idb-keyval';
 
 const AuthContext = createContext(null);
+
+const USER_CACHE_KEY = 'HARVESTWISE_USER_CACHE_V1';
 
 /**
  * Map backend role_name to frontend route prefix.
@@ -24,29 +27,49 @@ export function roleHome(roleName) {
 }
 
 export function AuthProvider({ children }) {
-  // user shape: UserResponse from GET /auth/me
-  // { id, username, email, phone, preferred_language, is_active, role: { id, role_name }, created_at }
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // true while restoring session on mount
+  const [loading, setLoading] = useState(true);
 
   // ------------------------------------------------------------------
-  // Restore session on mount — if we have stored tokens, fetch /me
+  // Restore session on mount
+  // - If online: fetch /auth/me, cache user in IndexedDB
+  // - If offline but tokens exist: restore user from IndexedDB cache
+  // - If no tokens: not logged in
   // ------------------------------------------------------------------
   useEffect(() => {
-    if (!getAccessToken()) {
-      setLoading(false);
-      return;
-    }
-    apiGet('/api/v1/auth/me')
-      .then(parseResponse)
-      .then(setUser)
-      .catch(() => {
-        // Tokens invalid / expired — clearTokens already happened via
-        // apiFetch's 401 handler; just ensure clean state.
-        clearTokens();
-        setUser(null);
-      })
-      .finally(() => setLoading(false));
+    const restore = async () => {
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+        setUser(me);
+        // Cache user profile for offline restoration
+        await set(USER_CACHE_KEY, me);
+      } catch {
+        // Network failure (not 401) — try to restore from IndexedDB cache
+        try {
+          const cachedUser = await get(USER_CACHE_KEY);
+          if (cachedUser) {
+            setUser(cachedUser);
+            // Don't clear tokens — farmer is still "logged in", just offline
+          } else {
+            clearTokens();
+            setUser(null);
+          }
+        } catch {
+          clearTokens();
+          setUser(null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    restore();
   }, []);
 
   // ------------------------------------------------------------------
@@ -67,6 +90,7 @@ export function AuthProvider({ children }) {
     storeTokens(tokens);
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
     setUser(me);
+    await set(USER_CACHE_KEY, me);
     return me;
   };
 

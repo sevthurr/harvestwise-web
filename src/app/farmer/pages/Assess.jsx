@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Save, RotateCcw } from "lucide-react";
 import { RecommendationResult } from "../components/recommend/RecommendationResult";
 import {
@@ -87,8 +88,6 @@ function AssessPage() {
   const [searchParams] = useSearchParams();
   const [view, setView] = useState("entry");
   const [step, setStep] = useState(1);
-  const [commodityOptions, setCommodityOptions] = useState([]);
-  const [loadingCommodities, setLoadingCommodities] = useState(true);
   const [data, setData] = useState(() => {
     const pre = searchParams.get("commodity");
     return pre ? { ...DEFAULT_ASSESSMENT, commodity: pre } : DEFAULT_ASSESSMENT;
@@ -97,40 +96,33 @@ function AssessPage() {
   const [errors, setErrors] = useState({});
   const [showResult, setShowResult] = useState(false);
 
-  // Fetch top10 commodities from API
-  useEffect(() => {
-    const fetchCommodities = async () => {
-      try {
-        setLoadingCommodities(true);
-        const response = await apiGet('/prices?page_size=100');
-        if (response.ok) {
-          const resData = await parseResponse(response);
-          const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
-          const seen = new Set();
-          const top10 = [];
-          
-          rawItems.forEach(item => {
-            const camelItem = toCamelCase(item);
-            const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-            const cid = camelItem.commodityId || camelItem.id || item.commodity_id;
-            const cname = camelItem.name || camelItem.commodityName || item.name;
-            if (isTop && cid && cname && !seen.has(cid)) {
-              seen.add(cid);
-              top10.push({ id: cid, name: cname });
-            }
-          });
-          setCommodityOptions(top10);
-        }
-      } catch (error) {
-        console.error('Failed to fetch commodities:', error);
-        setCommodityOptions([]);
-      } finally {
-        setLoadingCommodities(false);
-      }
-    };
+  // Reuse prefetched prices list for top10 commodities
+  const { data: pricesListData, isLoading: loadingCommodities } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: async () => {
+      const response = await apiGet('/prices?page_size=100');
+      if (!response.ok) return { items: [] };
+      return parseResponse(response);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
-    fetchCommodities();
-  }, []);
+  const commodityOptions = useMemo(() => {
+    const rawItems = pricesListData?.items || (Array.isArray(pricesListData) ? pricesListData : []);
+    const seen = new Set();
+    const top10 = [];
+    rawItems.forEach(item => {
+      const camelItem = toCamelCase(item);
+      const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+      const cid = camelItem.commodityId || camelItem.id || item.commodity_id;
+      const cname = camelItem.name || camelItem.commodityName || item.name;
+      if (isTop && cid && cname && !seen.has(cid)) {
+        seen.add(cid);
+        top10.push({ id: cid, name: cname });
+      }
+    });
+    return top10;
+  }, [pricesListData]);
   useEffect(() => {
     const pre = searchParams.get("commodity");
     if (pre) {

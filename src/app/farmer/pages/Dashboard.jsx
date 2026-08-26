@@ -11,7 +11,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
@@ -166,122 +166,104 @@ function ProfitCard({ cropPlans, loading }) {
 
 function DashboardPage() {
   const navigate = useNavigate();
-  
-  // State management
-  const [farmerProfile, setFarmerProfile] = useState(null);
-  const [cropPlans, setCropPlans] = useState([]);
-  const [prices, setPrices] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch farmer profile
-        try {
-          const profileRes = await apiGet('/farmer/profile');
-          if (profileRes.ok) {
-            const profile = await parseResponse(profileRes);
-            setFarmerProfile(profile);
-          }
-        } catch (e) {
-          console.warn('Profile fetch failed:', e);
-        }
-        
-        // Fetch crop plans
-        try {
-          const cropsRes = await apiGet('/crop-plans');
-          if (cropsRes.ok) {
-            const data = await parseResponse(cropsRes);
-            const cropsData = data?.crop_plans || data?.items || [];
-            
-            // Transform crop plans
-            const transformedCrops = cropsData.map((crop) => {
-              const camelCrop = toCamelCase(crop);
-              return {
-                id: camelCrop.id,
-                commodityId: camelCrop.commodityId,
-                commodityName: camelCrop.commodityName || '–',
-                variety: camelCrop.variety,
-                status: camelCrop.status,
-                expectedHarvestDate: camelCrop.expectedHarvestDate,
-                expectedHarvestQty: camelCrop.expectedHarvestQty,
-                profitLower: camelCrop.profitLower || 0,
-                profitUpper: camelCrop.profitUpper || 0,
-                notes: camelCrop.notes
-              };
-            });
-            setCropPlans(transformedCrops);
-          }
-        } catch (e) {
-          console.warn('Crop plans fetch failed:', e);
-        }
-        
-        // Fetch prices (top 10 base commodities)
-        try {
-          const pricesRes = await apiGet('/prices?page_size=100');
-          if (pricesRes.ok) {
-            const pricesData = await parseResponse(pricesRes);
-            const baseMap = new Map();
-            (pricesData?.items || []).forEach(item => {
-              const camelItem = toCamelCase(item);
-              const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-              if (!isTop) return;
-              const name = camelItem.name || '–';
-              const retailPrice = camelItem.prices?.bangkerohanRetail ?? camelItem.prices?.dftcRetail ?? null;
-              
-              if (!baseMap.has(name)) {
-                baseMap.set(name, {
-                  id: camelItem.commodityId,
-                  name: name,
-                  baseName: camelItem.baseName,
-                  price: retailPrice,
-                  uom: camelItem.unitOfMeasure || 'kg',
-                  direction: camelItem.forecast?.trend || null
-                });
-              } else if (retailPrice !== null && baseMap.get(name).price === null) {
-                const existing = baseMap.get(name);
-                existing.price = retailPrice;
-                existing.direction = camelItem.forecast?.trend || existing.direction;
-                existing.id = camelItem.commodityId;
-              }
-            });
-            setPrices(Array.from(baseMap.values()));
-          }
-        } catch (e) {
-          console.warn('Prices fetch failed:', e);
-        }
-        
-        // Fetch monthly crop recommendations
-        try {
-          const recsRes = await apiGet('/advisory/crops');
-          if (recsRes.ok) {
-            const recsData = await parseResponse(recsRes);
-            const recItems = (recsData?.recommendations || []).slice(0, 2).map(rec => {
-              const camelRec = toCamelCase(rec);
-              return {
-                id: camelRec.commodityId,
-                name: camelRec.commodityName || '–',
-                reason: camelRec.explanation || '–',
-                bestVariety: camelRec.bestVariety || null
-              };
-            });
-            setRecommendations(recItems);
-          }
-        } catch (e) {
-          console.warn('Recommendations fetch failed:', e);
-        }
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const profileQuery = useQuery({
+    queryKey: ["dashboard", "profile"],
+    queryFn: async () => {
+      const res = await apiGet("/farmer/profile");
+      if (res.ok) return parseResponse(res);
+      return null;
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
-    fetchDashboardData();
-  }, []);
+  const cropsQuery = useQuery({
+    queryKey: ["farmer", "crops"],
+    queryFn: async () => {
+      const res = await apiGet("/crop-plans");
+      if (!res.ok) return [];
+      const data = await parseResponse(res);
+      return data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
+    },
+    select: (rawItems) => {
+      return rawItems.map((crop) => {
+        const camelCrop = toCamelCase(crop);
+        return {
+          id: camelCrop.id,
+          commodityId: camelCrop.commodityId,
+          commodityName: camelCrop.commodityName || '\u2013',
+          variety: camelCrop.variety,
+          status: camelCrop.status,
+          expectedHarvestDate: camelCrop.expectedHarvestDate,
+          expectedHarvestQty: camelCrop.expectedHarvestQty,
+          profitLower: camelCrop.profitLower || 0,
+          profitUpper: camelCrop.profitUpper || 0,
+          notes: camelCrop.notes
+        };
+      });
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const pricesQuery = useQuery({
+    queryKey: ["dashboard", "prices"],
+    queryFn: async () => {
+      const res = await apiGet("/prices?page_size=100");
+      if (!res.ok) return [];
+      const pricesData = await parseResponse(res);
+      const baseMap = new Map();
+      (pricesData?.items || []).forEach(item => {
+        const camelItem = toCamelCase(item);
+        const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+        if (!isTop) return;
+        const name = camelItem.name || '\u2013';
+        const retailPrice = camelItem.prices?.bangkerohanRetail ?? camelItem.prices?.dftcRetail ?? null;
+        if (!baseMap.has(name)) {
+          baseMap.set(name, {
+            id: camelItem.commodityId,
+            name,
+            baseName: camelItem.baseName,
+            price: retailPrice,
+            uom: camelItem.unitOfMeasure || 'kg',
+            direction: camelItem.forecast?.trend || null
+          });
+        } else if (retailPrice !== null && baseMap.get(name).price === null) {
+          const existing = baseMap.get(name);
+          existing.price = retailPrice;
+          existing.direction = camelItem.forecast?.trend || existing.direction;
+          existing.id = camelItem.commodityId;
+        }
+      });
+      return Array.from(baseMap.values());
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const recsQuery = useQuery({
+    queryKey: ["dashboard", "recommendations"],
+    queryFn: async () => {
+      const res = await apiGet("/market/monthly-recommendations");
+      if (!res.ok) return [];
+      const recsData = await parseResponse(res);
+      const rawItems = recsData?.items || recsData?.recommendations || (Array.isArray(recsData) ? recsData : []);
+      return rawItems.slice(0, 2).map(rec => {
+        const camelRec = toCamelCase(rec);
+        return {
+          id: camelRec.commodityId,
+          name: camelRec.commodityName || '\u2013',
+          reason: camelRec.explanation || '\u2013',
+          bestVariety: camelRec.bestVarietyName || camelRec.bestVariety || null
+        };
+      });
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const farmerProfile = profileQuery.data;
+  const cropPlans = cropsQuery.data ?? [];
+  const prices = pricesQuery.data ?? [];
+  const recommendations = recsQuery.data ?? [];
+  const isLoading = profileQuery.isLoading || cropsQuery.isLoading || pricesQuery.isLoading || recsQuery.isLoading;
 
   const greeting = getGreeting();
   const firstName = farmerProfile?.first_name;
@@ -317,7 +299,7 @@ function DashboardPage() {
         </div>
 
         {/* ── 3. Estimated Profit ── */}
-        <ProfitCard cropPlans={cropPlans} loading={loading} />
+        <ProfitCard cropPlans={cropPlans} loading={isLoading} />
 
         {/* ── 4 + 5: Two-column on desktop — prices + good crops ── */}
         <div className="md:grid md:grid-cols-2 md:gap-5 space-y-5 md:space-y-0">
@@ -335,7 +317,7 @@ function DashboardPage() {
               </button>
             </div>
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-              {loading ? (
+              {isLoading ? (
                 <div className="divide-y divide-[var(--hw-neutral-100)]">
                   <SkeletonListRow />
                   <SkeletonListRow />
@@ -391,7 +373,7 @@ function DashboardPage() {
               <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Good crops to plant</h2>
             </div>
 
-            {loading ? (
+            {isLoading ? (
               <div className="space-y-2.5">
                 <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2 animate-pulse">
                   <div className="flex items-start gap-3">
@@ -480,7 +462,7 @@ function DashboardPage() {
             </button>
           </div>
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-            {loading ? (
+            {isLoading ? (
               <div className="divide-y divide-[var(--hw-neutral-100)]">
                 <SkeletonListRow />
                 <SkeletonListRow />

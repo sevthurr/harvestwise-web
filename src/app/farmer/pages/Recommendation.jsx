@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   ChevronLeft,
@@ -28,6 +29,7 @@ import {
 } from "../components/shared/FactorDetailTabs";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 const TwoToneStormIcon = ({ className }) => <svg
   viewBox="0 0 24 24"
@@ -54,68 +56,94 @@ const FACTOR_COLORS = {
   Weather: "text-sky-500",
   Profit: "text-amber-600"
 };
-// Fetch real calendar data from market_calendar table for given month
-async function fetchCalendarData(year, month) {
-  try {
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-    // Calendar endpoint would need to be implemented in the API
-    // For now, return empty calendar
-    return {};
-  } catch (error) {
-    console.error('Failed to fetch calendar data:', error);
-    return {};
-  }
+// Build calendar markers from market events and crop plans for the grid
+function buildCalendarMarkers(marketEvents, cropPlans, year, month) {
+  const markers = {};
+  const mk = `${year}-${month}`;
+
+  (marketEvents || []).forEach((item) => {
+    const camel = toCamelCase(item);
+    const origDate = camel.calendarDate || camel.date;
+    if (!origDate) return;
+    const ds = String(origDate);
+    const d = parseInt(ds.split("-")[2], 10);
+    if (isNaN(d)) return;
+
+    if (camel.holidayName || camel.eventName) {
+      if (!markers[d]) markers[d] = {};
+      markers[d].event = camel.holidayName || camel.eventName;
+    }
+  });
+
+  (cropPlans || []).forEach((c) => {
+    const camel = toCamelCase(c);
+    const pDate = camel.actualPlantingDate || camel.plannedPlantingDate;
+    if (pDate) {
+      const ds = String(pDate);
+      const parts = ds.split("-");
+      if (parts[0] === String(year) && parseInt(parts[1], 10) === month) {
+        const d = parseInt(parts[2], 10);
+        if (!markers[d]) markers[d] = {};
+        markers[d].crop = {
+          id: camel.commodityId || "crop",
+          name: camel.commodityName || "Crop",
+          variant: camel.variety || null,
+          type: "plant",
+          harvestStr: camel.expectedHarvestDate
+            ? new Date(camel.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+            : null,
+        };
+      }
+    }
+    const hDate = camel.expectedHarvestDate;
+    if (hDate) {
+      const ds = String(hDate);
+      const parts = ds.split("-");
+      if (parts[0] === String(year) && parseInt(parts[1], 10) === month) {
+        const d = parseInt(parts[2], 10);
+        if (!markers[d]) markers[d] = {};
+        markers[d].crop = {
+          id: camel.commodityId || "crop",
+          name: camel.commodityName || "Crop",
+          variant: camel.variety || null,
+          type: "harvest",
+        };
+      }
+    }
+  });
+
+  return markers;
 }
 
-// Fetch real crop recommendations for current month
-async function fetchMonthlyRecommendations(year, month) {
-  try {
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-    
-    // Fetch all top-10 commodities
-    const commoditiesRes = await fetch(`${apiUrl}/farmer/commodities`);
-    if (!commoditiesRes.ok) return [];
-    
-    const commodities = await commoditiesRes.json();
-    
-    // Fetch price data for all commodities
-    const pricesRes = await fetch(`${apiUrl}/prices`);
-    const pricesData = pricesRes.ok ? await pricesRes.json() : [];
-    
-    // Transform commodities to crop cards with real data
-    const crops = commodities.slice(0, 3).map(comm => {
-      const camelComm = toCamelCase(comm);
-      
-      // Find price data for this commodity
-      const priceItem = pricesData.find(p => {
-        const camelPrice = toCamelCase(p);
-        return camelPrice.commodityId === camelComm.id || camelPrice.commodityName === camelComm.name;
-      });
-      
-      const camelPrice = priceItem ? toCamelCase(priceItem) : {};
-      
-      return {
-        id: camelComm.id,
-        name: camelComm.name,
-        summary: "Good option this month",
-        plantWindow: "Next 2 weeks",
-        harvestWindow: "60-90 days",
-        bestVariety: camelComm.variety || "–",
-        reasons: [
-          { label: "Price", text: camelPrice.priceAvg ? `₱${camelPrice.priceAvg}/kg today` : "Price data not available" },
-          { label: "Supply", text: "Supply information available" },
-          { label: "Production", text: "Production data available" },
-          { label: "Weather", text: "Weather conditions are suitable" },
-          { label: "Profit", text: "Good profit potential" }
-        ]
-      };
+// Transform price data into crop recommendation cards
+function buildRecommendations(pricesData) {
+  const rawItems = pricesData?.items || (Array.isArray(pricesData) ? pricesData : []);
+  const seen = new Set();
+  const crops = [];
+  rawItems.forEach((item) => {
+    const camel = toCamelCase(item);
+    const isTop = camel.isTop10 === true || item.is_top10 === true;
+    const id = camel.commodityId || camel.id || item.commodity_id;
+    const name = camel.name || camel.commodityName || item.name;
+    if (!isTop || !id || !name || seen.has(id)) return;
+    seen.add(id);
+    crops.push({
+      id,
+      name,
+      summary: camel.priceAvg ? `Good option this month` : "Good option this month",
+      plantWindow: "Next 2 weeks",
+      harvestWindow: "60-90 days",
+      bestVariety: camel.variety || "–",
+      reasons: [
+        { label: "Price", text: camel.priceAvg ? `₱${camel.priceAvg}/kg today` : "Price data not available" },
+        { label: "Supply", text: camel.volumeTotal ? `${camel.volumeTotal} kg traded this week` : "Supply information available" },
+        { label: "Production", text: "Production data available" },
+        { label: "Weather", text: "Weather conditions are suitable" },
+        { label: "Profit", text: camel.priceAvg ? `Good profit potential at ₱${camel.priceAvg}/kg` : "Good profit potential" }
+      ]
     });
-    
-    return crops;
-  } catch (error) {
-    console.error('Failed to fetch monthly recommendations:', error);
-    return [];
-  }
+  });
+  return crops.slice(0, 3);
 }
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
@@ -494,30 +522,49 @@ function RecommendationPage() {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
   const [detailCrop, setDetailCrop] = useState(null);
-  const [crops, setCrops] = useState([]);
-  const [calendarData, setCalendarData] = useState({});
-  const [loading, setLoading] = useState(true);
-  
-  // Fetch real data when month changes
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const monthCrops = await fetchMonthlyRecommendations(viewYear, viewMonth);
-        const monthCalendar = await fetchCalendarData(viewYear, viewMonth);
-        setCrops(monthCrops);
-        setCalendarData(monthCalendar);
-      } catch (error) {
-        console.error('Failed to fetch recommendation data:', error);
-        setCrops([]);
-        setCalendarData({});
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchData();
-  }, [viewYear, viewMonth]);
+
+  // Reuse prefetched market calendar
+  const { data: rawMarketEvents = [] } = useQuery({
+    queryKey: ["marketCalendar"],
+    queryFn: async () => {
+      const res = await apiGet("/market/calendar");
+      if (!res.ok) return [];
+      const data = await parseResponse(res);
+      return data.items || [];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Reuse prefetched crop plans
+  const { data: cropPlansData = [] } = useQuery({
+    queryKey: ["farmer", "crops"],
+    queryFn: async () => {
+      const res = await apiGet("/crop-plans");
+      if (!res.ok) return [];
+      const data = await parseResponse(res);
+      return data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Reuse prefetched prices list for recommendations
+  const { data: pricesListData, isLoading: loading } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: async () => {
+      const res = await apiGet("/prices?page_size=100");
+      if (!res.ok) return { items: [] };
+      return parseResponse(res);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Build calendar data and recommendations from cached data
+  const calendarData = useMemo(
+    () => ({ [monthKey(viewYear, viewMonth)]: buildCalendarMarkers(rawMarketEvents, cropPlansData, viewYear, viewMonth) }),
+    [rawMarketEvents, cropPlansData, viewYear, viewMonth]
+  );
+
+  const crops = useMemo(() => buildRecommendations(pricesListData), [pricesListData]);
   
   const key = monthKey(viewYear, viewMonth);
   const dayMarkers = calendarData[key] ?? {};

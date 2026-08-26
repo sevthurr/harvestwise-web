@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 const ADV_CFG = {
@@ -78,14 +79,12 @@ function PlantingGuidePage() {
     const fetchRecommendations = async () => {
       try {
         setLoading(true);
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-        const response = await fetch(`${apiUrl}/advisory/crops`);
+        const response = await apiGet('/market/monthly-recommendations');
         if (response.ok) {
-          const data = await response.json();
-          // Transform API data to match advisories format
-          const transformedAdvisories = (data.recommendations || []).map(rec => {
+          const data = await parseResponse(response);
+          const rawItems = data?.items || data?.recommendations || (Array.isArray(data) ? data : []);
+          const transformedAdvisories = rawItems.map(rec => {
             const camelRec = toCamelCase(rec);
-            // Map advisory_category to advisory status
             let advisory = "recommended";
             if (camelRec.advisoryCategory) {
               if (camelRec.advisoryCategory.includes("Conservatively")) {
@@ -99,9 +98,11 @@ function PlantingGuidePage() {
               id: camelRec.commodityId,
               name: camelRec.commodityName || "–",
               advisory,
-              profit: "–", // API doesn't provide estimated profit per crop
+              advisoryCategory: camelRec.advisoryCategory || "Recommended",
+              profit: "–",
               harvest: camelRec.harvestWindowStart ? new Date(camelRec.harvestWindowStart).toLocaleDateString('en-US', { month: 'short' }) : "–",
               reason: camelRec.explanation || "–",
+              bestVariety: camelRec.bestVarietyName || null,
               note: null
             };
           });

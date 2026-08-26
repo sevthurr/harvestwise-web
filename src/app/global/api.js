@@ -94,12 +94,20 @@ async function _refreshAndRetry(url, options) {
 
     // Retry the original request.
     return _fetch(url, options);
-  } catch {
-    clearTokens();
-    window.dispatchEvent(new Event('hw:auth:expired'));
-    _refreshQueue.forEach(({ reject }) => reject(new Error('Session expired')));
+  } catch (err) {
+    // Only clear tokens if the refresh actually failed (not a network error)
+    // Network errors mean we're offline — keep tokens for when we reconnect
+    if (err.message === 'refresh_failed') {
+      clearTokens();
+      window.dispatchEvent(new Event('hw:auth:expired'));
+      _refreshQueue.forEach(({ reject }) => reject(new Error('Session expired')));
+      _refreshQueue = [];
+      throw new Error('Session expired. Please log in again.');
+    }
+    // Network error — don't clear tokens, just fail this request
+    _refreshQueue.forEach(({ reject }) => reject(err));
     _refreshQueue = [];
-    throw new Error('Session expired. Please log in again.');
+    throw err;
   } finally {
     _refreshing = false;
   }

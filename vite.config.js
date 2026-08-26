@@ -53,7 +53,28 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/]
+        navigateFallbackDenylist: [/^\/api/],
+        // Runtime caching for API responses — enables offline-first for farmers
+        runtimeCaching: [
+          {
+            // Cache all API GET responses with NetworkFirst strategy
+            // (try network, fall back to cache when offline)
+            // Match any origin with /api/v1/ path — works for localhost, production domains, etc.
+            urlPattern: /\/api\/v1\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'harvestwise-api-cache',
+              networkTimeoutSeconds: 5,
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       }
     })
   ],

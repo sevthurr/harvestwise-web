@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   ChevronRight,
@@ -108,16 +109,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
 const CropPriceCard = ({ commodity, data, onViewDetails }) => {
   const unit = commodity.unitOfMeasure || 'kg';
   
-  const primarySource = [
-    { key: 'bangkerohanRetail', source: 'Bangkerohan', type: 'Retail' },
-    { key: 'dftcRetail', source: 'DFTC', type: 'Retail' },
-    { key: 'bangkerohanWholesale', source: 'Bangkerohan', type: 'Wholesale' },
-    { key: 'dftcWholesale', source: 'DFTC', type: 'Wholesale' }
-  ].find(s => data[s.key] != null) || { source: '-', type: '-', key: null };
-  
-  const hasPrice = primarySource.key != null && data[primarySource.key] != null;
-  const hasForecast = hasPrice && data.range && data.range !== `-/${unit}`;
-  
+  const hasForecast = data.range && data.range !== `-/${unit}` && data.range !== `-\u2009/\u2009${unit}`;
   const cfg = hasForecast ? (DIR_CFG[data.direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const outlook = hasForecast ? (OUTLOOK_TEXT[data.direction] || OUTLOOK_TEXT.default) : "No trend data";
@@ -130,32 +122,60 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
   return (
     <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
       {/* Header: icon + name + direction */}
-      <div className="flex items-center gap-3">
-        <CommodityIllustration 
-          commodityId={commodity.id} 
-          baseName={commodity.baseName}
-          commodityName={commodity.name}
-          className="w-10 h-10 flex-shrink-0" 
-        />
-        <p className="flex-1 font-semibold text-[var(--hw-neutral-900)]">{commodity.name || '–'}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <CommodityIllustration 
+            commodityId={commodity.id} 
+            baseName={commodity.baseName}
+            commodityName={commodity.name}
+            className="w-10 h-10 flex-shrink-0" 
+          />
+          <p className="font-semibold text-[var(--hw-neutral-900)] text-base truncate">{commodity.name || '–'}</p>
+        </div>
         <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
           {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
           <span className="text-[13px] font-medium">{hasForecast ? cfg.label : 'No trend data'}</span>
         </div>
       </div>
 
-      {/* Current prices — Single Primary Price */}
-      <div className="mb-2">
-        <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">
-          {primarySource.source !== "-" ? `${primarySource.source} ${primarySource.type}` : "-"}
-        </p>
-        <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
-          {formatPriceValue(primarySource.key ? data[primarySource.key] : null)}
-        </p>
+      {/* 4-Tier Market Price Grid */}
+      <div className="grid grid-cols-2 gap-y-3 gap-x-4 my-1">
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            BANGKEROHAN RETAIL
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.bangkerohanRetail)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            DFTC RETAIL
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.dftcRetail)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            BANGKEROHAN WHOLESALE
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.bangkerohanWholesale)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            DFTC WHOLESALE
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.dftcWholesale)}
+          </p>
+        </div>
       </div>
 
-      {/* Outlook */}
-      <div className="rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 space-y-0.5">
+      {/* Outlook summary */}
+      <div className="rounded-xl bg-[var(--hw-neutral-50)] px-3.5 py-3 space-y-0.5">
         <p className={`text-[13px] font-medium ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>{outlook}</p>
         <p className="text-[12px] text-[var(--hw-neutral-900)]">
           Expected next {data.horizonDays || 7} days:{" "}
@@ -163,11 +183,14 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
         </p>
       </div>
 
-      {/* Action */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Action footer */}
+      <div className="flex items-center justify-between gap-3 pt-0.5">
+        <p className="text-[12px] text-[var(--hw-neutral-500)] truncate">
+          {data.advisoryText || (data.direction === 'Rising' ? 'Price may improve soon.' : data.direction === 'Falling' ? 'Price may drop soon.' : 'Price is steady.')}
+        </p>
         <button
-          onClick={onViewDetails}
-          className="flex-shrink-0 inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+          onClick={() => onViewDetails(commodity.id)}
+          className="flex-shrink-0 inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
         >
           View details
           <ChevronRight className="w-4 h-4" />
@@ -182,92 +205,84 @@ function PricesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState(DEFAULT_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
-  
-  // API integration - fetch prices from backend
-  const [commodities, setCommodities] = useState([]);
-  const [priceData, setPriceData] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState(null);
 
-  useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        setLoading(true);
-        const response = await apiGet('/prices?page_size=100');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await parseResponse(response);
-        
-        // Build commodities list from API response - STRICTLY FILTER TO TOP 10 AND GROUP BY BASE COMMODITY
-        const items = data.items || [];
-        const baseMap = new Map();
-        const transformed = {};
+  const { data: apiData, isLoading: loading } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: async () => {
+      const response = await apiGet("/prices?page_size=100");
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return parseResponse(response);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
-        items.forEach(item => {
-          const camelItem = toCamelCase(item);
-          const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-          if (!isTop) return;
+  const { commodities, priceData } = useMemo(() => {
+    if (!apiData) return { commodities: [], priceData: {} };
 
-          const baseName = camelItem.name || '–';
-          const uom = camelItem.unitOfMeasure || 'kg';
-          const hasLower = camelItem.forecast?.lowerForecast != null;
-          const hasUpper = camelItem.forecast?.upperForecast != null;
+    const items = apiData.items || [];
+    const baseMap = new Map();
+    const transformed = {};
 
-          const itemPrices = {
-            bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
-            bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
-            dftcRetail: camelItem.prices?.dftcRetail ?? null,
-            dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
-            direction: camelItem.forecast?.trend || 'Stable',
-            horizonDays: camelItem.forecast?.horizonDays || 7,
-            range: (hasLower && hasUpper)
-              ? `₱${formatPrice(camelItem.forecast.lowerForecast)}–₱${formatPrice(camelItem.forecast.upperForecast)}/${uom}`
-              : `-/${uom}`,
-          };
+    items.forEach(item => {
+      const camelItem = toCamelCase(item);
+      const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+      if (!isTop) return;
 
-          transformed[camelItem.commodityId] = itemPrices;
+      const rawName = camelItem.baseName || camelItem.name || '\u2013';
+      const baseName = rawName.includes(' - ') ? rawName.split(' - ')[0].trim() : rawName;
+      const uom = camelItem.unitOfMeasure || 'kg';
+      const hasLower = camelItem.forecast?.lowerForecast != null;
+      const hasUpper = camelItem.forecast?.upperForecast != null;
 
-          if (!baseMap.has(baseName)) {
-            baseMap.set(baseName, {
-              id: camelItem.commodityId,
-              name: baseName,
-              baseName: camelItem.baseName,
-              unitOfMeasure: uom,
-              isTop10: true,
-              displayData: itemPrices,
-            });
-          } else {
-            const existing = baseMap.get(baseName);
-            const existingHasPrice = Object.values(existing.displayData).some(v => v !== null && typeof v === 'number');
-            const thisHasPrice = Object.values(itemPrices).some(v => v !== null && typeof v === 'number');
-            if (!existingHasPrice && thisHasPrice) {
-              existing.displayData = itemPrices;
-              existing.id = camelItem.commodityId;
-            }
-          }
+      const itemPrices = {
+        bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
+        bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
+        dftcRetail: camelItem.prices?.dftcRetail ?? null,
+        dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
+        direction: camelItem.forecast?.trend || 'Stable',
+        horizonDays: camelItem.forecast?.horizonDays || 7,
+        range: (hasLower && hasUpper)
+          ? `${formatPrice(camelItem.forecast.lowerForecast)}\u2013${formatPrice(camelItem.forecast.upperForecast)}/${uom}`
+          : `-\u2009/\u2009${uom}`,
+      };
+
+      transformed[camelItem.commodityId] = itemPrices;
+
+      const variantItem = {
+        id: camelItem.commodityId,
+        name: camelItem.name,
+        variety: camelItem.variety,
+        unitOfMeasure: uom,
+        displayData: itemPrices,
+      };
+
+      if (!baseMap.has(baseName)) {
+        baseMap.set(baseName, {
+          id: camelItem.commodityId,
+          name: baseName,
+          baseName: baseName,
+          unitOfMeasure: uom,
+          isTop10: true,
+          displayData: itemPrices,
+          variants: [variantItem],
         });
-
-        setCommodities(Array.from(baseMap.values()));
-        setPriceData(transformed);
-        if (items.length > 0 && items[0].updated_at) {
-          setLastUpdated(items[0].updated_at);
-        } else if (items.length > 0 && items[0].updatedAt) {
-          setLastUpdated(items[0].updatedAt);
+      } else {
+        const existing = baseMap.get(baseName);
+        existing.variants.push(variantItem);
+        const existingHasPrice = Object.values(existing.displayData).some(v => v !== null && typeof v === 'number');
+        const thisHasPrice = Object.values(itemPrices).some(v => v !== null && typeof v === 'number');
+        if (!existingHasPrice && thisHasPrice) {
+          existing.displayData = itemPrices;
+          existing.id = camelItem.commodityId;
         }
-      } catch (error) {
-        console.error('Failed to fetch prices:', error);
-        setCommodities([]);
-        setPriceData({});
-      } finally {
-        setLoading(false);
       }
-    };
+    });
 
-    fetchPrices();
-  }, []);
+    return {
+      commodities: Array.from(baseMap.values()),
+      priceData: transformed,
+    };
+  }, [apiData]);
   
   const activeCount = (filter.direction !== "All" ? 1 : 0) + (filter.sortBy !== "name" ? 1 : 0);
   
@@ -313,11 +328,17 @@ function PricesPage() {
       <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
 
         {/* Header */}
-        <div>
-          <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">Prices</h1>
-          <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-            Check today's price and likely price movement.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">Prices</h1>
+            <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
+              Check today's price and likely price movement.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-[13px] text-[var(--hw-neutral-600)] flex-shrink-0 mt-1">
+            <RefreshCw className="w-3.5 h-3.5 text-[var(--hw-neutral-500)]" />
+            <span>Updated today at 7:30 AM</span>
+          </div>
         </div>
 
         {/* Search + filter */}

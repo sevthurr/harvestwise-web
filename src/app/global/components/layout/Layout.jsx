@@ -6,6 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { Footer } from "../Footer";
 import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
 import { PwaInstallPrompt } from "../pwa/PwaInstallPrompt";
+import { useFarmerPrefetch } from "../../hooks/useFarmerPrefetch";
 
 const NAV_ROUTES = {
   home: "/farmer",
@@ -35,6 +36,7 @@ function FarmerMain({ children }) {
 }
 
 const Layout = () => {
+  useFarmerPrefetch();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -62,7 +64,7 @@ const Layout = () => {
             />
           }
           onMenuClick={() => setSidebarCollapsed((v) => !v)}
-          notificationCount={3}
+          notificationCount={0}
           onNotificationClick={() => navigate("/farmer/notifications")}
         />
 

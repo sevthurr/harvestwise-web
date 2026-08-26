@@ -1,5 +1,6 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   Sun,
@@ -90,49 +91,44 @@ const CropWeatherCard = ({ crop }) => {
 function MarketWeatherPage() {
   const navigate = useNavigate();
   const carouselRef = useRef(null);
-  const [weatherData, setWeatherData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchWeatherForecast();
-  }, []);
+  const { data: weatherData, isLoading: loading, error } = useQuery({
+    queryKey: ["weather", "advisory"],
+    queryFn: async () => {
+      const response = await apiGet('/weather/advisory?latitude=7.0722&longitude=125.6131');
+      if (!response.ok) throw new Error('Failed to fetch weather forecast');
+      const data = await parseResponse(response);
+      const daily = data.daily_forecasts || [];
+      const forecast14 = daily.map((d, i) => ({
+        dayLabel: d.day_label || (i === 0 ? 'Today' : `+${i}d`),
+        date: d.date ? new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-',
+        icon: _mapWeatherConditionToIcon(d.weather_condition),
+        tempMin: d.temperature_min != null ? Math.round(d.temperature_min) : null,
+        tempMax: d.temperature_max != null ? Math.round(d.temperature_max) : null,
+        rainPct: d.rain_probability_pct != null ? Math.round(d.rain_probability_pct) : 0,
+        risk: d.suitability ? (d.suitability === 'Severe' ? 'high' : d.suitability === 'Caution' ? 'moderate' : 'low') : 'low'
+      }));
 
-  const fetchWeatherForecast = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-      const response = await fetch(`${apiUrl}/crop-plans/weather/forecast`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch weather forecast');
-      }
-
-      const data = await response.json();
-      setWeatherData(data);
-    } catch (err) {
-      console.error('Weather forecast fetch error:', err);
-      setError(err.message);
-      // Set empty state data so UI doesn't crash
-      setWeatherData({
+      return {
         updated_at: new Date().toISOString(),
-        location_name: 'Your Farm',
-        forecast_14d: [],
-        weather_summary: 'No weather data available',
-        crop_advisories: [],
-        has_crops: false,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+        location_name: data.location || 'Davao City',
+        forecast_14d: forecast14,
+        weather_summary: data.weather_risk_level ? `7-day weather suitability forecast: ${data.weather_risk_level}` : '7-day weather forecast for Davao City',
+        crop_advisories: (data.advisories || []).map((adv, idx) => ({
+          crop_id: adv.commodity_id || `crop-${idx}`,
+          crop_name: adv.commodity_name || 'Crop',
+          status: 'Monitoring',
+          risk_level: adv.suitability || 'Suitable',
+          headline: adv.headline || `${adv.suitability || 'Suitable'} weather conditions`,
+          date_range: 'Next 7 Days',
+          recommended_actions: adv.recommended_actions || ['Monitor field drainage and moisture'],
+          crop_sensitivity: adv.explanation || null
+        })),
+        has_crops: (data.advisories || []).length > 0
+      };
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
 

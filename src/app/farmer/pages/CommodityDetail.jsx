@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -57,6 +58,7 @@ const periodChipCls = (active) =>
 function CommodityDetailPage() {
   const { commodityId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [market, setMarket] = useState("bangkerohan");
   const [period, setPeriod] = useState(7);
   const [showMore, setShowMore] = useState(false);
@@ -65,87 +67,94 @@ function CommodityDetailPage() {
   const [commodity, setCommodity] = useState(null);
   const [priceDetail, setPriceDetail] = useState(null);
   const [priceRecords, setPriceRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [topCommodities, setTopCommodities] = useState([]);
 
-  // Fetch commodity list for navigation chips (strictly top 10 base commodities)
+  // Prefetch all 4 price types whenever commodityId or period is active
   useEffect(() => {
-    const fetchTopCommodities = async () => {
-      try {
-        const response = await apiGet('/prices?page_size=100');
-        if (response.ok) {
+    if (!commodityId) return;
+    const priceTypes = ["bangkerohan_retail", "bangkerohan_wholesale", "dftc_retail", "dftc_wholesale"];
+    priceTypes.forEach((pt) => {
+      queryClient.prefetchQuery({
+        queryKey: ["prices", "detail", commodityId, pt, period],
+        queryFn: async () => {
+          const response = await apiGet(
+            `/prices/${commodityId}?price_type=${pt}&horizon=${period}&records_limit=5`
+          );
+          if (!response.ok) return null;
           const data = await parseResponse(response);
-          const seen = new Set();
-          const uniqueTop10 = [];
-          for (const item of (data.items || [])) {
-            const camelItem = toCamelCase(item);
-            const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-            const name = camelItem.name;
-            if (isTop && name && !seen.has(name)) {
-              seen.add(name);
-              uniqueTop10.push(camelItem);
-            }
-          }
-          setTopCommodities(uniqueTop10);
-        }
-      } catch (error) {
-        console.error('Failed to fetch top commodities:', error);
-      }
-    };
-    fetchTopCommodities();
-  }, []);
+          return toCamelCase(data);
+        },
+        staleTime: 1000 * 60 * 30,
+      });
+    });
+  }, [commodityId, period, queryClient]);
 
-  // Fetch detailed price data for the current commodity
+  // Reuse prefetched prices list for navigation chips and variety dropdowns
+  const { data: pricesListData } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: async () => {
+      const response = await apiGet('/prices?page_size=100');
+      if (!response.ok) return { items: [] };
+      return parseResponse(response);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const { allCommodities, topCommodities } = useMemo(() => {
+    const rawItems = (pricesListData?.items || []).map(toCamelCase);
+    const top10Items = rawItems.filter(item => item.isTop10 === true || item.is_top10 === true);
+
+    const seen = new Set();
+    const uniqueTop10 = [];
+    for (const item of top10Items) {
+      const rawName = item.baseName || item.name;
+      const name = rawName && rawName.includes(' - ') ? rawName.split(' - ')[0].trim() : rawName;
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        uniqueTop10.push({ ...item, displayName: name });
+      }
+    }
+
+    return { allCommodities: top10Items, topCommodities: uniqueTop10 };
+  }, [pricesListData]);
+
+  const priceTypeKey = PRICE_TYPE_KEY[market];
+
+  // Fetch detailed price data with React Query
+  const { data: detailData, isLoading: loading } = useQuery({
+    queryKey: ["prices", "detail", commodityId, priceTypeKey, period],
+    queryFn: async () => {
+      const response = await apiGet(
+        `/prices/${commodityId}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await parseResponse(response);
+      return toCamelCase(data);
+    },
+    enabled: Boolean(commodityId),
+    staleTime: 1000 * 60 * 30,
+    placeholderData: (previousData) => previousData,
+  });
+
   useEffect(() => {
-    const fetchPriceDetail = async () => {
-      if (!commodityId) return;
-      
-      try {
-        setLoading(true);
-        const priceTypeKey = PRICE_TYPE_KEY[market];
-        
-        // Fetch price detail with forecast
-        const detailResponse = await apiGet(
-          `/prices/${commodityId}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
-        );
-        
-        if (!detailResponse.ok) {
-          throw new Error(`HTTP error! status: ${detailResponse.status}`);
-        }
-        
-        const detailData = await parseResponse(detailResponse);
-        const camelDetail = toCamelCase(detailData);
-        
-        setCommodity({
-          id: camelDetail.commodityId,
-          name: camelDetail.name || '–',
-          baseName: camelDetail.baseName,
-          variety: camelDetail.variety,
-          icon: camelDetail.icon,
-          unitOfMeasure: camelDetail.unitOfMeasure || 'kg'
-        });
-        setPriceDetail(camelDetail);
-        setPriceRecords(camelDetail.recentRecords || []);
-        
-      } catch (error) {
-        console.error('Failed to fetch price detail:', error);
-        setCommodity(null);
-        setPriceDetail(null);
-        setPriceRecords([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPriceDetail();
-  }, [commodityId, market, period]);
+    if (detailData) {
+      setCommodity({
+        id: detailData.commodityId,
+        name: detailData.name || '–',
+        baseName: detailData.baseName,
+        variety: detailData.variety,
+        icon: detailData.icon,
+        unitOfMeasure: detailData.unitOfMeasure || 'kg'
+      });
+      setPriceDetail(detailData);
+      setPriceRecords(detailData.recentRecords || []);
+    }
+  }, [detailData]);
 
   // Fetch extended records when "View more" is clicked
   const fetchMoreRecords = async () => {
     if (!commodityId) return;
     
     try {
-      const priceTypeKey = PRICE_TYPE_KEY[market];
       const response = await apiGet(
         `/prices/${commodityId}/records?price_type=${priceTypeKey}&limit=30`
       );
@@ -166,8 +175,92 @@ function CommodityDetailPage() {
     setShowMore(!showMore);
   };
 
-  // Loading state
-  if (loading) {
+  const forecast = priceDetail?.forecast || {};
+  const cfg = DIR_CFG[forecast.trend] || DIR_CFG.default;
+  const DirIcon = cfg.Icon;
+  const uom = commodity?.unitOfMeasure || 'kg';
+
+  const currentPrice = forecast.currentPrice != null ? forecast.currentPrice : (priceRecords[0]?.priceAvg ?? null);
+  const lowerForecast = forecast.lowerForecast != null ? forecast.lowerForecast : null;
+  const upperForecast = forecast.upperForecast != null ? forecast.upperForecast : null;
+
+  const familyVariants = useMemo(() => {
+    if (!commodity || !allCommodities.length) return [];
+    const base = (commodity.baseName || commodity.name || "").toLowerCase().trim();
+    const matches = allCommodities.filter(item => {
+      const itemBase = (item.baseName || item.name || "").toLowerCase().trim();
+      return itemBase === base || itemBase.startsWith(base);
+    });
+    return matches.length > 0 ? matches : [commodity];
+  }, [commodity, allCommodities]);
+
+  const variantRows = useMemo(() => {
+    if (!familyVariants.length) {
+      if (!commodity) return [];
+      const priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? null;
+      const currentPriceText = priceVal != null ? `₱${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
+      const forecastRangeText = (lowerForecast != null && upperForecast != null)
+        ? `₱${formatPrice(lowerForecast)}–₱${formatPrice(upperForecast)}/${uom}`
+        : `-/${uom}`;
+      return [{
+        id: commodity.id,
+        label: commodity.variety || commodity.name,
+        currentPriceText,
+        forecastRangeText,
+      }];
+    }
+
+    const mapCamelKey = {
+      "bangkerohan": "bangkerohanRetail",
+      "bangkerohan-wholesale": "bangkerohanWholesale",
+      "dftc-retail": "dftcRetail",
+      "dftc-wholesale": "dftcWholesale"
+    }[market];
+
+    return familyVariants.map((v, i) => {
+      const isCurrentActive = String(v.commodityId || v.id) === String(commodityId);
+
+      let label = v.variety;
+      if (!label && v.name && v.baseName && v.name !== v.baseName) {
+        label = v.name.replace(v.baseName, '').replace(/[()]/g, '').trim();
+      }
+      if (!label && v.name && v.name.includes(' - ')) {
+        label = v.name.split(' - ')[1]?.trim();
+      }
+      if (!label) {
+        label = familyVariants.length > 1 ? v.name : (v.baseName || v.name);
+      }
+
+      let priceVal = null;
+      let lower = null;
+      let upper = null;
+
+      if (isCurrentActive && detailData) {
+        priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? v.prices?.[mapCamelKey] ?? null;
+        lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
+        upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
+      } else {
+        priceVal = v.prices?.[mapCamelKey] ?? null;
+        lower = v.forecast?.lowerForecast ?? null;
+        upper = v.forecast?.upperForecast ?? null;
+      }
+
+      const currentPriceText = priceVal != null ? `₱${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
+      const forecastRangeText = (lower != null && upper != null)
+        ? `₱${formatPrice(lower)}–₱${formatPrice(upper)}/${uom}`
+        : `-/${uom}`;
+
+      return {
+        id: v.commodityId || v.id || i,
+        label,
+        currentPriceText,
+        forecastRangeText,
+      };
+    });
+  }, [familyVariants, market, uom, commodity, commodityId, detailData, forecast, priceRecords, lowerForecast, upperForecast]);
+
+  // Loading state (only show full screen skeleton on cold start if NO data exists in cache)
+  if (loading && !detailData && !priceDetail) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-5">
         <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
@@ -215,20 +308,6 @@ function CommodityDetailPage() {
     );
   }
 
-  const forecast = priceDetail.forecast || {};
-  const cfg = DIR_CFG[forecast.trend] || DIR_CFG.default;
-  const DirIcon = cfg.Icon;
-  const uom = commodity.unitOfMeasure || 'kg';
-
-  const currentPrice = forecast.currentPrice != null ? forecast.currentPrice : (priceRecords[0]?.priceAvg ?? null);
-  const formattedCurrentPrice = currentPrice != null ? `₱${formatPrice(currentPrice)}` : '-';
-
-  const lowerForecast = forecast.lowerForecast != null ? forecast.lowerForecast : null;
-  const upperForecast = forecast.upperForecast != null ? forecast.upperForecast : null;
-  const formattedForecastRange = (lowerForecast != null && upperForecast != null)
-    ? `₱${formatPrice(lowerForecast)}–₱${formatPrice(upperForecast)}`
-    : '-';
-
   const handleViewPriceTrend = () => {
     const state = {
       commodityName: commodity.name,
@@ -236,7 +315,7 @@ function CommodityDetailPage() {
       currentPrice: currentPrice,
       direction: forecast.trend || 'Stable',
       range: (lowerForecast != null && upperForecast != null)
-        ? `₱${formatPrice(lowerForecast)}–₱${formatPrice(upperForecast)}/${uom}`
+        ? `${formatPrice(lowerForecast)}–${formatPrice(upperForecast)}/${uom}`
         : `-/${uom}`
     };
     navigate(`/farmer/prices/${commodity.id}/price-trend`, { state });
@@ -253,7 +332,7 @@ function CommodityDetailPage() {
           <Breadcrumb
             items={[
               { label: "Prices", onClick: () => navigate("/farmer/prices") },
-              { label: commodity.name || '–' }
+              { label: commodity.baseName || commodity.name || '–' }
             ]}
           />
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
@@ -267,7 +346,7 @@ function CommodityDetailPage() {
                     : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
                 }`}
               >
-                {c.name}
+                {c.displayName || c.name}
               </button>
             ))}
           </div>
@@ -283,8 +362,12 @@ function CommodityDetailPage() {
               className="w-14 h-14 flex-shrink-0" 
             />
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name || '–'}</h1>
-              <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">Price Details</p>
+              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.baseName || commodity.name || '–'}</h1>
+              <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">Price Details</p>
+              <div className="flex items-center gap-1.5 text-[12px] text-[var(--hw-neutral-500)] mt-1">
+                <RefreshCw className="w-3 h-3 text-[var(--hw-neutral-400)]" />
+                <span>Updated today at 7:30 AM</span>
+              </div>
             </div>
           </div>
         </div>
@@ -311,7 +394,7 @@ function CommodityDetailPage() {
         {/* Price Outlook — period selector */}
         <div className="space-y-2">
           <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-            Price Outlook
+            PRICE OUTLOOK
           </p>
           <div className="flex gap-2">
             {[7, 14, 21, 28].map((p) => (
@@ -323,46 +406,58 @@ function CommodityDetailPage() {
         </div>
 
         {/* Two side-by-side price cards */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Card 1: Current price */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-1.5">
-            <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide">
-              Current Price
-            </p>
-            {commodity.variety && (
-              <p className="text-[13px] font-medium text-[var(--hw-neutral-700)] truncate">
-                {commodity.variety}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col justify-between min-h-[160px]">
+            <div>
+              <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-3">
+                CURRENT PRICE
               </p>
-            )}
-            <p className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-none">
-              {formattedCurrentPrice}
-              <span className="text-[12px] font-medium">/{uom}</span>
-            </p>
-            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-auto pt-1">
-              {priceRecords[0]?.isToday ? 'Today' : (priceRecords[0]?.priceDate ? new Date(priceRecords[0].priceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-')} · {MARKET_LABEL[market] || '–'}
+              <div className="space-y-2.5">
+                {variantRows.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between gap-2">
+                    <span className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                      {row.label}
+                    </span>
+                    <span className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
+                      {row.currentPriceText}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-4 pt-2 border-t border-[var(--hw-neutral-100)]">
+              Today · {MARKET_LABEL[market] || '–'}
             </p>
           </div>
 
           {/* Card 2: Forecasted price */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-1.5">
-            <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide">
-              Forecasted Price
-            </p>
-            {commodity.variety && (
-              <p className="text-[13px] font-medium text-[var(--hw-neutral-700)] truncate">
-                {commodity.variety}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col justify-between min-h-[160px]">
+            <div>
+              <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-3">
+                FORECASTED PRICE
               </p>
-            )}
-            <p className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-none">
-              {formattedForecastRange}
-              <span className="text-[12px] font-medium">/{uom}</span>
-            </p>
-            <p className="text-[12px] text-[var(--hw-neutral-500)]">
-              Next {PERIOD_LABEL[period] || `${period} days`}
-            </p>
-            <div className={`flex items-center gap-1 ${cfg.color} mt-auto`}>
-              <DirIcon className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="text-[12px] font-medium">{forecast.advisoryText || OUTLOOK_TEXT[forecast.trend] || OUTLOOK_TEXT.default}</span>
+              <div className="space-y-2.5">
+                {variantRows.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between gap-2">
+                    <span className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                      {row.label}
+                    </span>
+                    <span className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
+                      {row.forecastRangeText}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 pt-2 border-t border-[var(--hw-neutral-100)] space-y-1">
+              <p className="text-[12px] text-[var(--hw-neutral-500)]">
+                Next {PERIOD_LABEL[period] || `${period} days`}
+              </p>
+              <div className={`flex items-center gap-1 ${cfg.color}`}>
+                <DirIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="text-[12px] font-medium">{forecast.advisoryText || OUTLOOK_TEXT[forecast.trend] || OUTLOOK_TEXT.default}</span>
+              </div>
             </div>
           </div>
         </div>

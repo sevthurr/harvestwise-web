@@ -118,7 +118,7 @@ const ProfitCalcAccordion = ({
 function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
-  const { crops, updateCrop } = useCrops();
+  const { crops, updateCrop, updateCropStatusApi, addCostApi, logHarvestApi } = useCrops();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addCostOpen, setAddCostOpen] = useState(false);
   const [additionalCost, setAdditionalCost] = useState("");
@@ -134,18 +134,33 @@ function CropCycleDetailPage() {
         </button>
       </div>;
   }
-  const handleDrawerAction = (action) => {
+  const handleDrawerAction = async (action) => {
+    const statusMap = {
+      planning: "Planning",
+      growing: "Planted",
+      "pre-harvest": "Pre-Harvest",
+      harvested: "Harvesting",
+      completed: "Completed"
+    };
+
     if (action.kind === "phase") {
+      const targetStatus = statusMap[action.phase] || "Planning";
+      if (targetStatus === "Completed" && action.fields?.finalQtySold && action.fields?.avgSellingPrice) {
+        const harvestDate = action.fields.actualHarvestDate || new Date().toISOString().split('T')[0];
+        await logHarvestApi(crop.id, harvestDate, action.fields.finalQtySold, action.fields.avgSellingPrice);
+      } else {
+        await updateCropStatusApi(crop.id, targetStatus);
+      }
       updateCrop(crop.id, {
         phase: action.phase,
         lastUpdated: "Just now",
         isOnHold: false,
-        // advancing phase also resumes
-        ...action.fields.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {},
-        ...action.fields.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}
+        ...action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {},
+        ...action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}
       });
     } else if (action.kind === "hold") {
-      const today = (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      await updateCropStatusApi(crop.id, "On Hold", action.reason);
+      const today = (new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
       updateCrop(crop.id, {
         isOnHold: true,
         holdReason: action.reason,
@@ -153,6 +168,7 @@ function CropCycleDetailPage() {
         lastUpdated: "Just now"
       });
     } else if (action.kind === "resume") {
+      await updateCropStatusApi(crop.id, crop.status === "On Hold" ? "Planning" : crop.status);
       updateCrop(crop.id, {
         isOnHold: false,
         lastUpdated: "Just now"

@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
   Info,
   X
 } from "lucide-react";
+import { apiGet, parseResponse } from "../../global/api";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
@@ -14,7 +16,9 @@ const CAT_CFG = {
   "national-holiday-regular": { label: "National Holiday — Regular", dotColor: "bg-red-500", textColor: "text-red-700" },
   "national-holiday-special": { label: "National Holiday — Special Non-Working Day", dotColor: "bg-orange-400", textColor: "text-orange-700" },
   "local-event": { label: "Local Event", dotColor: "bg-blue-500", textColor: "text-blue-700" },
-  "payday": { label: "Payday Period", dotColor: "bg-emerald-500", textColor: "text-emerald-700" }
+  "payday": { label: "Payday Period", dotColor: "bg-emerald-500", textColor: "text-emerald-700" },
+  "crop-planting": { label: "My Crop Planting", dotColor: "bg-green-600", textColor: "text-green-700" },
+  "crop-harvest": { label: "My Crop Harvest", dotColor: "bg-amber-600", textColor: "text-amber-700" }
 };
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -98,8 +102,6 @@ function MarketCalendarPage() {
   const navigate = useNavigate();
   const { mode } = useDisplayMode();
   const isAnalytics = mode === "analytics";
-  const [events, setEvents] = useState([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState(null);
@@ -107,57 +109,125 @@ function MarketCalendarPage() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [reminderToast, setReminderToast] = useState(false);
 
-  // Fetch market calendar events from API
-  useEffect(() => {
-    const fetchCalendarEvents = async () => {
-      try {
-        setLoadingEvents(true);
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-        const response = await fetch(`${apiUrl}/market-calendar`);
-        if (response.ok) {
-          const data = await response.json();
-          // Transform API data to match calendar event format
-          const transformedEvents = (data.items || []).map(item => {
-            const camelItem = toCamelCase(item);
-            let category = "other";
-            let title = "Market Activity";
-            
-            if (camelItem.isPublicHoliday) {
-              category = camelItem.isWeekend || camelItem.holidayName ? "national-holiday-regular" : "national-holiday-special";
-              title = camelItem.holidayName || "Public Holiday";
-            } else if (camelItem.isLocalEvent) {
-              category = "local-event";
-              title = camelItem.eventName || "Local Event";
-            } else if (camelItem.isPayday) {
-              category = "payday";
-              title = "Payday Period";
-            }
-            
-            return {
-              id: camelItem.id || `cal-${camelItem.calendarDate}`,
-              date: camelItem.calendarDate,
-              endDate: camelItem.eventEnd,
-              category,
-              title,
-              description: title,
-              marketRelevance: "Market activity may be affected. Check schedules in advance.",
-              source: "Market Calendar"
-            };
-          });
-          setEvents(transformedEvents);
-        } else {
-          setEvents([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch calendar events:', error);
-        setEvents([]);
-      } finally {
-        setLoadingEvents(false);
-      }
-    };
+  // Fetch market calendar events with React Query
+  const { data: rawMarketEvents, isLoading: loadingEvents } = useQuery({
+    queryKey: ["marketCalendar"],
+    queryFn: async () => {
+      const marketRes = await apiGet('/market/calendar');
+      if (!marketRes.ok) return [];
+      const data = await parseResponse(marketRes);
+      return data.items || [];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
-    fetchCalendarEvents();
-  }, []);
+  // Fetch farmer crop plans
+  const { data: cropPlansData } = useQuery({
+    queryKey: ["farmer", "crops"],
+    queryFn: async () => {
+      const cropRes = await apiGet('/crop-plans');
+      if (!cropRes.ok) return [];
+      const cropData = await parseResponse(cropRes);
+      return cropData?.crop_plans || cropData?.items || [];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Process all events once, then filter by view month
+  const allEvents = useMemo(() => {
+    const marketEvents = [];
+    (rawMarketEvents || []).forEach(item => {
+      const camelItem = toCamelCase(item);
+      const origDate = camelItem.calendarDate || camelItem.date;
+      if (!origDate) return;
+
+      // Use original date from DB — no year remapping
+      const eventDate = String(origDate);
+
+      if (camelItem.isPublicHoliday || camelItem.holidayName) {
+        marketEvents.push({
+          id: `${camelItem.id || 'cal'}-holiday-${eventDate}`,
+          date: eventDate,
+          endDate: camelItem.eventEnd,
+          category: camelItem.holidayName ? "national-holiday-regular" : "national-holiday-special",
+          title: camelItem.holidayName || "Public Holiday",
+          description: camelItem.holidayName || "Public Holiday",
+          marketRelevance: "Public Holiday. Market operations and delivery schedules may be affected.",
+          source: "Market Calendar"
+        });
+      }
+
+      if (camelItem.isLocalEvent || camelItem.eventName) {
+        marketEvents.push({
+          id: `${camelItem.id || 'cal'}-local-${eventDate}`,
+          date: eventDate,
+          endDate: camelItem.eventEnd,
+          category: "local-event",
+          title: camelItem.eventName || "Davao Local Event",
+          description: camelItem.eventName || "Davao City Local Event",
+          marketRelevance: "Davao City local event. Consumer turnout and market activity may increase.",
+          source: "Local Davao Event"
+        });
+      }
+
+      if (camelItem.isPayday) {
+        marketEvents.push({
+          id: `${camelItem.id || 'cal'}-payday-${eventDate}`,
+          date: eventDate,
+          endDate: camelItem.eventEnd,
+          category: "payday",
+          title: "Payday Period",
+          description: "Payday Period",
+          marketRelevance: "Payday period. Higher consumer spending and market demand expected.",
+          source: "Market Calendar"
+        });
+      }
+    });
+
+    const cropEvents = [];
+    (cropPlansData || []).forEach(c => {
+      const camelC = toCamelCase(c);
+      const name = camelC.commodityName || 'Crop';
+      if (camelC.plannedPlantingDate || camelC.actualPlantingDate) {
+        const pDate = camelC.actualPlantingDate || camelC.plannedPlantingDate;
+        cropEvents.push({
+          id: `crop-plant-${camelC.id}`,
+          date: pDate,
+          category: "crop-planting",
+          title: `Planting: ${name}`,
+          description: `Target/actual planting for ${name}`,
+          marketRelevance: "Farmer crop schedule event",
+          source: "My Crops"
+        });
+      }
+      if (camelC.expectedHarvestDate) {
+        cropEvents.push({
+          id: `crop-harvest-${camelC.id}`,
+          date: camelC.expectedHarvestDate,
+          category: "crop-harvest",
+          title: `Expected Harvest: ${name}`,
+          description: `Expected harvest window for ${name}`,
+          marketRelevance: "Farmer crop harvest milestone",
+          source: "My Crops"
+        });
+      }
+    });
+
+    return [...marketEvents, ...cropEvents];
+  }, [rawMarketEvents, cropPlansData]);
+
+  // Filter events to current view month
+  const events = useMemo(() => {
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+    return allEvents.filter(e => {
+      if (!e.date) return false;
+      // Event starts in this month, or spans into this month
+      const eventStartMonth = e.date.substring(0, 7);
+      if (eventStartMonth === monthPrefix) return true;
+      if (e.endDate && e.endDate >= `${monthPrefix}-01` && e.date <= `${monthPrefix}-31`) return true;
+      return false;
+    });
+  }, [allEvents, year, month]);
 
   const prevMonth = () => {
     if (month === 0) {
@@ -175,8 +245,8 @@ function MarketCalendarPage() {
   const selectedEvents = selectedDate ? events.filter((e) => !e.endDate ? e.date === selectedDate : selectedDate >= e.date && selectedDate <= e.endDate) : [];
   const TODAY = new Date().toISOString().split('T')[0];
   const periodDays = analyticsPeriod === "7d" ? 7 : analyticsPeriod === "14d" ? 14 : 28;
-  
-  const comingEvents = events.filter((e) => {
+
+  const comingEvents = allEvents.filter((e) => {
     const fromDate = new Date(TODAY);
     const toDate = new Date(TODAY);
     toDate.setDate(toDate.getDate() + 90);
@@ -184,7 +254,7 @@ function MarketCalendarPage() {
     return start >= fromDate && start <= toDate;
   }).sort((a, b) => a.date.localeCompare(b.date));
 
-  const analyticsEvents = events.filter((e) => {
+  const analyticsEvents = allEvents.filter((e) => {
     const fromDate = new Date(TODAY);
     const toDate = new Date(TODAY);
     toDate.setDate(toDate.getDate() + periodDays);
@@ -197,7 +267,7 @@ function MarketCalendarPage() {
     setTimeout(() => setReminderToast(false), 2500);
   };
 
-  if (loadingEvents) {
+  if (loadingEvents && (!rawMarketEvents || rawMarketEvents.length === 0)) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-5">
         <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
@@ -223,9 +293,6 @@ function MarketCalendarPage() {
   return <div className="px-4 md:px-8 lg:px-10 py-5">
       <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
 
-        {
-    /* Info button */
-  }
         <div className="flex items-center justify-end">
           <button
     onClick={() => setNoteOpen(true)}
@@ -236,9 +303,6 @@ function MarketCalendarPage() {
           </button>
         </div>
 
-        {
-    /* Analytics period selector */
-  }
         {isAnalytics && <div className="flex items-center gap-2">
             <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] flex-shrink-0">Period:</span>
             {["7d", "14d", "28d"].map((p) => <button
@@ -250,33 +314,18 @@ function MarketCalendarPage() {
               </button>)}
           </div>}
 
-        {
-    /* Main grid: calendar + upcoming */
-  }
         <div className="md:grid md:grid-cols-[1fr_280px] md:gap-5 space-y-5 md:space-y-0">
 
-          {
-    /* ── Calendar widget ── */
-  }
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
 
-            {
-    /* Month navigation */
-  }
             <div className="flex items-center justify-between gap-3">
               <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"><ChevronLeft className="w-4 h-4" /></button>
               <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">{MONTHS[month]} {year}</p>
               <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"><ChevronRight className="w-4 h-4" /></button>
             </div>
 
-            {
-    /* Calendar grid */
-  }
             <CalendarGrid year={year} month={month} selectedDate={selectedDate} onSelect={setSelectedDate} events={events} />
 
-            {
-    /* Legend */
-  }
             <div className="flex flex-wrap gap-3 pt-2 border-t border-[var(--hw-neutral-100)]">
               {Object.entries(CAT_CFG).map(([cat, cfg]) => <div key={cat} className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dotColor}`} />
@@ -284,9 +333,6 @@ function MarketCalendarPage() {
                 </div>)}
             </div>
 
-            {
-    /* Selected-date inline detail */
-  }
             {selectedDate && <div className="border-t border-[var(--hw-neutral-100)] pt-3 space-y-2">
                 <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{formatDate(selectedDate)}</p>
                 {selectedEvents.length === 0 ? <p className="text-[13px] text-[var(--hw-neutral-900)]">No market events recorded for this date.</p> : <div className="space-y-2">
@@ -305,9 +351,6 @@ function MarketCalendarPage() {
               </div>}
           </div>
 
-          {
-    /* ── Upcoming events list ── */
-  }
           <div className="space-y-3">
             <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Upcoming events</p>
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-0.5" style={{ scrollbarWidth: "none" }}>
@@ -339,9 +382,6 @@ function MarketCalendarPage() {
           </div>
         </div>
 
-        {
-    /* Analytics: events in selected period */
-  }
         {isAnalytics && analyticsEvents.length > 0 && <section className="space-y-3">
             <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
               Events in next {analyticsPeriod === "7d" ? "7" : analyticsPeriod === "14d" ? "14" : "28"} days
