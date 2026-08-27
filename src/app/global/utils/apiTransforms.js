@@ -61,8 +61,11 @@ export function formatDate(isoDate) {
  * formatPrice("125.50") // Returns: "₱125.50"
  */
 export function formatPrice(price) {
-  if (price === null || price === undefined) return '₱0';
-  return `₱${Number(price).toLocaleString('en-PH')}`;
+  if (price === null || price === undefined || price === '') return '₱0';
+  const str = String(price).replace(/^₱+/, '');
+  const num = Number(str);
+  if (isNaN(num)) return `₱${str}`;
+  return `₱${num.toLocaleString('en-PH')}`;
 }
 
 /**

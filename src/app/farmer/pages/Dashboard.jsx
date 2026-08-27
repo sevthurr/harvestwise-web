@@ -208,7 +208,7 @@ function DashboardPage() {
   const pricesQuery = useQuery({
     queryKey: ["dashboard", "prices"],
     queryFn: async () => {
-      const res = await apiGet("/prices?page_size=100");
+      const res = await apiGet("/prices?is_top10=true&page_size=50");
       if (!res.ok) return [];
       const pricesData = await parseResponse(res);
       const baseMap = new Map();

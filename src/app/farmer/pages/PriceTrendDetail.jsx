@@ -24,7 +24,7 @@ function PriceTrendDetailPage() {
         setLoading(true);
         setError(null);
         
-        const response = await apiGet('/prices?page_size=100');
+        const response = await apiGet('/prices?is_top10=true&page_size=50');
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);

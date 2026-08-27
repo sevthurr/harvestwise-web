@@ -24,7 +24,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     const fetchCommodities = async () => {
       try {
         setLoadingCommodities(true);
-        const response = await apiGet('/prices?page_size=100');
+        const response = await apiGet('/prices?is_top10=true&page_size=50');
         if (response.ok) {
           const resData = await parseResponse(response);
           const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);

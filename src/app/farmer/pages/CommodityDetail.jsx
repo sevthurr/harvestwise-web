@@ -92,7 +92,7 @@ function CommodityDetailPage() {
   const { data: pricesListData } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: async () => {
-      const response = await apiGet('/prices?page_size=100');
+      const response = await apiGet('/prices?is_top10=true&page_size=50');
       if (!response.ok) return { items: [] };
       return parseResponse(response);
     },
@@ -103,14 +103,31 @@ function CommodityDetailPage() {
     const rawItems = (pricesListData?.items || []).map(toCamelCase);
     const top10Items = rawItems.filter(item => item.isTop10 === true || item.is_top10 === true);
 
+    const getBase = (str) => {
+      if (!str) return '';
+      let s = String(str);
+      if (s.includes(' - ')) s = s.split(' - ')[0];
+      if (s.includes(' (')) s = s.split(' (')[0];
+      return s.trim();
+    };
+
     const seen = new Set();
     const uniqueTop10 = [];
     for (const item of top10Items) {
       const rawName = item.baseName || item.name;
-      const name = rawName && rawName.includes(' - ') ? rawName.split(' - ')[0].trim() : rawName;
-      if (name && !seen.has(name)) {
-        seen.add(name);
-        uniqueTop10.push({ ...item, displayName: name });
+      const name = getBase(rawName);
+      const hasPrices = item.prices && Object.values(item.prices).some(v => v != null);
+
+      if (name) {
+        if (!seen.has(name)) {
+          seen.add(name);
+          uniqueTop10.push({ ...item, displayName: name });
+        } else if (hasPrices) {
+          const idx = uniqueTop10.findIndex(u => u.displayName === name);
+          if (idx !== -1) {
+            uniqueTop10[idx] = { ...item, displayName: name };
+          }
+        }
       }
     }
 
@@ -186,10 +203,17 @@ function CommodityDetailPage() {
 
   const familyVariants = useMemo(() => {
     if (!commodity || !allCommodities.length) return [];
-    const base = (commodity.baseName || commodity.name || "").toLowerCase().trim();
+    const getBase = (str) => {
+      if (!str) return '';
+      let s = String(str);
+      if (s.includes(' - ')) s = s.split(' - ')[0];
+      if (s.includes(' (')) s = s.split(' (')[0];
+      return s.trim().toLowerCase();
+    };
+    const targetBase = getBase(commodity.baseName || commodity.name);
     const matches = allCommodities.filter(item => {
-      const itemBase = (item.baseName || item.name || "").toLowerCase().trim();
-      return itemBase === base || itemBase.startsWith(base);
+      const itemBase = getBase(item.baseName || item.name);
+      return itemBase === targetBase || (targetBase && itemBase.startsWith(targetBase)) || (itemBase && targetBase.startsWith(itemBase));
     });
     return matches.length > 0 ? matches : [commodity];
   }, [commodity, allCommodities]);
@@ -198,9 +222,9 @@ function CommodityDetailPage() {
     if (!familyVariants.length) {
       if (!commodity) return [];
       const priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? null;
-      const currentPriceText = priceVal != null ? `₱${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
+      const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
       const forecastRangeText = (lowerForecast != null && upperForecast != null)
-        ? `₱${formatPrice(lowerForecast)}–₱${formatPrice(upperForecast)}/${uom}`
+        ? `${formatPrice(lowerForecast)}–${formatPrice(upperForecast)}/${uom}`
         : `-/${uom}`;
       return [{
         id: commodity.id,
@@ -217,12 +241,17 @@ function CommodityDetailPage() {
       "dftc-wholesale": "dftcWholesale"
     }[market];
 
+    const getAvailablePrice = (pricesObj) => {
+      if (!pricesObj) return null;
+      return pricesObj[mapCamelKey] ?? pricesObj.bangkerohanRetail ?? pricesObj.dftcRetail ?? pricesObj.dftcWholesale ?? pricesObj.bangkerohanWholesale ?? null;
+    };
+
     return familyVariants.map((v, i) => {
       const isCurrentActive = String(v.commodityId || v.id) === String(commodityId);
 
       let label = v.variety;
       if (!label && v.name && v.baseName && v.name !== v.baseName) {
-        label = v.name.replace(v.baseName, '').replace(/[()]/g, '').trim();
+        label = v.name.replace(v.baseName, '').replace(/^[\s\-()]+|[\s\-()]+$/g, '').trim();
       }
       if (!label && v.name && v.name.includes(' - ')) {
         label = v.name.split(' - ')[1]?.trim();
@@ -236,18 +265,18 @@ function CommodityDetailPage() {
       let upper = null;
 
       if (isCurrentActive && detailData) {
-        priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? v.prices?.[mapCamelKey] ?? null;
+        priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? getAvailablePrice(v.prices);
         lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
       } else {
-        priceVal = v.prices?.[mapCamelKey] ?? null;
+        priceVal = getAvailablePrice(v.prices);
         lower = v.forecast?.lowerForecast ?? null;
         upper = v.forecast?.upperForecast ?? null;
       }
 
-      const currentPriceText = priceVal != null ? `₱${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
+      const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
       const forecastRangeText = (lower != null && upper != null)
-        ? `₱${formatPrice(lower)}–₱${formatPrice(upper)}/${uom}`
+        ? `${formatPrice(lower)}–${formatPrice(upper)}/${uom}`
         : `-/${uom}`;
 
       return {

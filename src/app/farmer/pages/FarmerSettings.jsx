@@ -509,7 +509,7 @@ const FarmTab = ({ showToast }) => {
 
       // 2. Fetch available Top 10 crops
       try {
-        const cropsRes = await apiGet("/prices?page_size=100");
+        const cropsRes = await apiGet("/prices?is_top10=true&page_size=50");
         if (cropsRes.ok && active) {
           const cData = await parseResponse(cropsRes);
           const items = cData?.items || [];

@@ -551,7 +551,7 @@ function RecommendationPage() {
   const { data: pricesListData, isLoading: loading } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: async () => {
-      const res = await apiGet("/prices?page_size=100");
+      const res = await apiGet("/prices?is_top10=true&page_size=50");
       if (!res.ok) return { items: [] };
       return parseResponse(res);
     },

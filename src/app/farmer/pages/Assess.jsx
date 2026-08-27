@@ -100,7 +100,7 @@ function AssessPage() {
   const { data: pricesListData, isLoading: loadingCommodities } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: async () => {
-      const response = await apiGet('/prices?page_size=100');
+      const response = await apiGet('/prices?is_top10=true&page_size=50');
       if (!response.ok) return { items: [] };
       return parseResponse(response);
     },

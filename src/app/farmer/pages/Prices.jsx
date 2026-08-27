@@ -32,9 +32,9 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, label: "No trend data" }
 };
 
-const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All", variety: "All", unit: "All", showTop10: true };
+const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All", unit: "All" };
 
-const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, varieties, units }) => {
+const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units }) => {
   const [draft, setDraft] = useState(filter);
   React.useEffect(() => {
     if (open) setDraft(filter);
@@ -46,16 +46,6 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, variet
       active
         ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
         : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
-    }`;
-
-  const toggle = (active) =>
-    `relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-      active ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-300)]"
-    }`;
-
-  const toggleKnob = (active) =>
-    `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-      active ? "translate-x-6" : "translate-x-1"
     }`;
 
   return (
@@ -70,18 +60,6 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, variet
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
-          {/* Top-10 toggle */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">Top 10 commodities only</p>
-            <button
-              onClick={() => setDraft((d) => ({ ...d, showTop10: !d.showTop10 }))}
-              className={toggle(draft.showTop10)}
-              role="switch"
-              aria-checked={draft.showTop10}
-            >
-              <span className={toggleKnob(draft.showTop10)} />
-            </button>
-          </div>
 
           {/* Sort by */}
           <div>
@@ -120,20 +98,6 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, variet
               <div className="flex flex-wrap gap-2">
                 {["All", ...categories].map((v) => (
                   <button key={v} onClick={() => setDraft((d) => ({ ...d, category: v }))} className={chip(draft.category === v)}>
-                    {v}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Variety */}
-          {varieties.length > 0 && (
-            <div>
-              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Variety</p>
-              <div className="flex flex-wrap gap-2">
-                {["All", ...varieties].map((v) => (
-                  <button key={v} onClick={() => setDraft((d) => ({ ...d, variety: v }))} className={chip(draft.variety === v)}>
                     {v}
                   </button>
                 ))}
@@ -185,7 +149,8 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
 
   const formatPriceValue = (value) => {
     if (value === null || value === undefined || value === '') return `-/${unit}`;
-    return `₱${value}/${unit}`;
+    const clean = typeof value === 'string' ? value.replace(/^₱+/, '') : value;
+    return `₱${clean}/${unit}`;
   };
 
   return (
@@ -278,7 +243,7 @@ function PricesPage() {
   const { data: apiData, isLoading: loading } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: async () => {
-      const response = await apiGet("/prices?page_size=100");
+      const response = await apiGet("/prices?is_top10=true&page_size=50");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return parseResponse(response);
     },
@@ -295,8 +260,14 @@ function PricesPage() {
     items.forEach(item => {
       const camelItem = toCamelCase(item);
 
-      const rawName = camelItem.baseName || camelItem.name || '\u2013';
-      const baseName = rawName.includes(' - ') ? rawName.split(' - ')[0].trim() : rawName;
+      const rawName = camelItem.baseName || camelItem.name || '–';
+      let baseName = rawName;
+      if (baseName.includes(' - ')) {
+        baseName = baseName.split(' - ')[0].trim();
+      }
+      if (baseName.includes(' (')) {
+        baseName = baseName.split(' (')[0].trim();
+      }
       const uom = camelItem.unitOfMeasure || 'kg';
       const hasLower = camelItem.forecast?.lowerForecast != null;
       const hasUpper = camelItem.forecast?.upperForecast != null;
@@ -332,18 +303,44 @@ function PricesPage() {
           category: camelItem.category,
           unitOfMeasure: uom,
           isTop10: true,
-          displayData: itemPrices,
+          displayData: { ...itemPrices },
           variants: [variantItem],
         });
       } else {
         const existing = baseMap.get(baseName);
         existing.variants.push(variantItem);
-        const existingHasPrice = Object.values(existing.displayData).some(v => v !== null && typeof v === 'number');
-        const thisHasPrice = Object.values(itemPrices).some(v => v !== null && typeof v === 'number');
+
+        const existingHasPrice = [
+          existing.displayData.bangkerohanRetail,
+          existing.displayData.bangkerohanWholesale,
+          existing.displayData.dftcRetail,
+          existing.displayData.dftcWholesale
+        ].some(v => v != null);
+
+        const thisHasPrice = [
+          itemPrices.bangkerohanRetail,
+          itemPrices.bangkerohanWholesale,
+          itemPrices.dftcRetail,
+          itemPrices.dftcWholesale
+        ].some(v => v != null);
+
         if (!existingHasPrice && thisHasPrice) {
-          existing.displayData = itemPrices;
           existing.id = camelItem.commodityId;
         }
+
+        existing.displayData = {
+          bangkerohanRetail: existing.displayData.bangkerohanRetail ?? itemPrices.bangkerohanRetail,
+          bangkerohanWholesale: existing.displayData.bangkerohanWholesale ?? itemPrices.bangkerohanWholesale,
+          dftcRetail: existing.displayData.dftcRetail ?? itemPrices.dftcRetail,
+          dftcWholesale: existing.displayData.dftcWholesale ?? itemPrices.dftcWholesale,
+          direction: (existing.displayData.direction && existing.displayData.direction !== 'Stable') 
+            ? existing.displayData.direction 
+            : itemPrices.direction,
+          horizonDays: existing.displayData.horizonDays || itemPrices.horizonDays,
+          range: (existing.displayData.range && !existing.displayData.range.startsWith('-')) 
+            ? existing.displayData.range 
+            : itemPrices.range,
+        };
       }
     });
 
@@ -356,21 +353,11 @@ function PricesPage() {
   const activeCount = (filter.direction !== "All" ? 1 : 0)
     + (filter.sortBy !== "name" ? 1 : 0)
     + (filter.category !== "All" ? 1 : 0)
-    + (filter.variety !== "All" ? 1 : 0)
-    + (filter.unit !== "All" ? 1 : 0)
-    + (!filter.showTop10 ? 1 : 0);
+    + (filter.unit !== "All" ? 1 : 0);
 
   const categories = useMemo(() => {
     const set = new Set();
     commodities.forEach((c) => { if (c.category) set.add(c.category); });
-    return [...set].sort();
-  }, [commodities]);
-
-  const varieties = useMemo(() => {
-    const set = new Set();
-    commodities.forEach((c) => {
-      c.variants?.forEach((v) => { if (v.variety) set.add(v.variety); });
-    });
     return [...set].sort();
   }, [commodities]);
 
@@ -396,10 +383,6 @@ function PricesPage() {
         }
       };
     });
-
-    if (!filter.showTop10) {
-      list = list.filter((c) => c.isTop10 === false);
-    }
     
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -412,10 +395,6 @@ function PricesPage() {
 
     if (filter.category !== "All") {
       list = list.filter((c) => c.category === filter.category);
-    }
-
-    if (filter.variety !== "All") {
-      list = list.filter((c) => c.variants?.some((v) => v.variety === filter.variety));
     }
 
     if (filter.unit !== "All") {
@@ -529,7 +508,6 @@ function PricesPage() {
           setFilterOpen(false);
         }}
         categories={categories}
-        varieties={varieties}
         units={units}
       />
     </div>
