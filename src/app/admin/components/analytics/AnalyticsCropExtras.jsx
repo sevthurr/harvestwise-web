@@ -123,7 +123,7 @@ const PlanningAnalytics = ({ crop }) => <>
     <Section title="Updated risk assessment">
       <div className="pt-3 space-y-3">
         <div>
-          <p className="text-sm font-semibold text-amber-700">Plant Conservatively</p>
+          <p className="text-sm font-semibold text-amber-700">Proceed with Caution</p>
           <p className="text-xs text-[var(--hw-neutral-500)] mt-0.5">Moderate risk · Updated today</p>
         </div>
         <div className="space-y-1.5 pt-1">
@@ -260,7 +260,7 @@ const CompletedAnalytics = ({ crop }) => {
     { label: "Original break-even price", value: `${formatPeso(crop.breakEvenPrice)}/kg` },
     { label: "Original forecast range", value: "\u20B177\u2013\u20B195/kg" },
     { label: "Forecast vs actual result", value: avgPrice >= 77 ? "Within forecast range" : "Below forecast range", accent: avgPrice >= 77 },
-    { label: "Original recommendation", value: "Plant Conservatively" }
+    { label: "Original recommendation", value: "Proceed with Caution" }
   ].map((r) => <div key={r.label} className={`flex justify-between gap-4 px-3 py-2.5 flex-wrap ${r.accent ? "bg-[var(--hw-green-50)]" : ""}`}>
               <span className={`text-xs ${r.accent ? "font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-500)]"}`}>{r.label}</span>
               <span className={`text-xs font-semibold ${r.accent ? "text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)]"}`}>{r.value}</span>

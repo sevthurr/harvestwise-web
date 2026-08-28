@@ -9,6 +9,7 @@ import {
   AlertOctagon,
   X
 } from "lucide-react";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
 
 const URGENCY_CONFIG = {
@@ -34,7 +35,11 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
             </span>
             <span className="text-[12px] text-[var(--hw-neutral-500)]">{alert.timestamp}</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)]">
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] cursor-pointer"
+            aria-label="Close drawer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -65,7 +70,7 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
                 onMarkRead(alert.id);
                 onClose();
               }}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
             >
               Mark as read
             </button>
@@ -76,7 +81,7 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
                 onClose();
                 onNavigate(alert.action.route);
               }}
-              className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors text-center"
+              className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors text-center cursor-pointer"
             >
               {alert.action.label}
             </button>
@@ -87,7 +92,7 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
   );
 };
 
-function NotificationsPage() {
+function AdminNotifications() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
@@ -104,43 +109,41 @@ function NotificationsPage() {
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[22px] font-bold text-black">Notifications</h1>
-          <p className="text-[14px] text-[var(--hw-neutral-600)] mt-0.5">
-            Stay updated on crop alerts, weather updates, and market movements.
-          </p>
-        </div>
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={markAllAsRead}
-            className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] flex-shrink-0"
-          >
-            <CheckCheck className="w-4 h-4" />
-            Mark all read
-          </button>
-        )}
-      </div>
+      {/* Consistent Full-Width Admin Page Header */}
+      <PageHeader
+        title="Notifications"
+        description="Stay updated on data submissions, pipeline status, and system alerts."
+        action={
+          unreadCount > 0 ? (
+            <button
+              type="button"
+              onClick={markAllAsRead}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold text-[var(--hw-green-900)] bg-white hover:bg-[var(--hw-neutral-50)] rounded-xl flex-shrink-0 cursor-pointer transition-colors shadow-sm"
+            >
+              <CheckCheck className="w-4 h-4 text-[var(--hw-green-700)]" />
+              Mark all as read
+            </button>
+          ) : null
+        }
+      />
 
       {/* Notifications list or Empty State */}
       {notifications.length === 0 ? (
         <Card className="py-16 text-center">
           <div className="flex flex-col items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
-              <Bell className="w-8 h-8 text-[var(--hw-neutral-400)]" />
+            <div className="w-14 h-14 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] flex items-center justify-center mb-3.5 text-[var(--hw-neutral-400)]">
+              <Bell className="w-7 h-7" />
             </div>
-            <p className="text-[16px] font-semibold text-[var(--hw-neutral-900)] mb-1">
+            <p className="text-[16px] font-bold text-[var(--hw-neutral-900)] mb-1">
               No notifications yet
             </p>
             <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm">
-              You are all caught up. Reminders for your crops, weather risks, and price movement alerts will appear here.
+              You are all caught up. System alerts, data reviews, and pipeline notifications will appear here.
             </p>
           </div>
         </Card>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {notifications.map((item) => {
             const urgency = URGENCY_CONFIG[item.urgency] || URGENCY_CONFIG.information;
             return (
@@ -149,21 +152,23 @@ function NotificationsPage() {
                 onClick={() => setSelectedAlert(item)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
                   item.read
-                    ? "bg-white border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
-                    : "bg-white border-l-4 border-l-[var(--hw-green-700)] border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
+                    ? "bg-white border-[var(--hw-neutral-200)] opacity-75 hover:opacity-100 hover:border-[var(--hw-neutral-300)]"
+                    : "bg-white border-[var(--hw-green-300)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-[var(--hw-green-500)]"
                 }`}
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${urgency.bg}`}>
+                <div className={`p-2 rounded-xl flex-shrink-0 ${urgency.bg}`}>
                   <urgency.Icon className={`w-4 h-4 ${urgency.color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`text-[14px] leading-snug ${item.read ? "font-medium text-[var(--hw-neutral-900)]" : "font-bold text-[var(--hw-neutral-900)]"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className={`text-[14px] leading-snug truncate ${item.read ? "font-medium text-[var(--hw-neutral-800)]" : "font-bold text-[var(--hw-neutral-900)]"}`}>
                       {item.title}
                     </p>
-                    <span className="text-[11px] text-[var(--hw-neutral-500)] flex-shrink-0">{item.timestamp}</span>
+                    <span className="text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap flex-shrink-0">
+                      {item.timestamp}
+                    </span>
                   </div>
-                  <p className="text-[13px] text-[var(--hw-neutral-600)] mt-1 line-clamp-2 leading-relaxed">
+                  <p className="text-[13px] text-[var(--hw-neutral-600)] line-clamp-2 leading-relaxed">
                     {item.summary}
                   </p>
                 </div>
@@ -174,15 +179,15 @@ function NotificationsPage() {
         </div>
       )}
 
-      {/* Alert Detail Drawer */}
+      {/* Drawer */}
       <AlertDetailDrawer
         alert={selectedAlert}
         onClose={() => setSelectedAlert(null)}
         onMarkRead={markRead}
-        onNavigate={(route) => navigate(route)}
+        onNavigate={navigate}
       />
     </div>
   );
 }
 
-export { NotificationsPage as default };
+export { AdminNotifications as default };

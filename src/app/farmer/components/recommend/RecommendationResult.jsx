@@ -33,12 +33,19 @@ const ADVISORY_CFG = {
     summary: (n) => `Current conditions support your ${n} plan.`,
     support: "Prices are fair and weather is manageable this week."
   },
+  "Proceed with Caution": {
+    Icon: MinusCircle,
+    color: "text-amber-700",
+    border: "border-[var(--hw-neutral-200)]",
+    summary: (n) => `${n} may still proceed, but monitor conditions and risks closely.`,
+    support: "Proceed with caution until conditions improve."
+  },
   "Plant Conservatively": {
     Icon: MinusCircle,
     color: "text-amber-700",
     border: "border-[var(--hw-neutral-200)]",
-    summary: (n) => `${n} may still be planted, but consider starting with a smaller area.`,
-    support: "Consider a smaller area until conditions improve."
+    summary: (n) => `${n} may still proceed, but monitor conditions and risks closely.`,
+    support: "Proceed with caution until conditions improve."
   },
   "Avoid for Now": {
     Icon: XCircle,
@@ -244,10 +251,11 @@ const RecommendationResult = ({ data, onEdit }) => {
   const whyFactors = getWhyFactors(commodityName, data.commodity, costToRecover ?? 0, farmgateNum, advisory, currentPx, forecastLo, forecastHi, data);
   const dirMap = {
     "Recommended": "rising",
+    "Proceed with Caution": "stable",
     "Plant Conservatively": "stable",
     "Avoid for Now": "falling"
   };
-  const priceDir = advisory ? dirMap[advisory] : "stable";
+  const priceDir = advisory ? (dirMap[advisory] || "stable") : "stable";
   const pricePoints = data.pricePoints || [];
   const priceTabData = {
     currentPrice: currentPx,
@@ -255,21 +263,22 @@ const RecommendationResult = ({ data, onEdit }) => {
     market: data.market || "Not available",
     direction: priceDir,
     directionLabel: priceDir === "rising" ? "Price may rise" : priceDir === "falling" ? "Price may fall" : "Price likely stable",
-    forecastRange: forecastLo != null && forecastHi != null ? `\u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : "-/kg",
+    forecastRange: forecastLo != null && forecastHi != null ? `₱${forecastLo}–₱${forecastHi}/kg` : "-/kg",
     points: pricePoints,
     summary: whyFactors.find((f) => f.label === "Price")?.value ?? ""
   };
   const arrivalTabData = data.arrivalData || null;
   const productionTabData = data.productionData || null;
   const weatherTabData = data.weatherData || null;
-  const weatherRisk = advisory === "Recommended" ? "low" : advisory === "Plant Conservatively" ? "moderate" : "high";
+  const weatherRisk = advisory === "Recommended" ? "low" : (advisory === "Proceed with Caution" || advisory === "Plant Conservatively") ? "moderate" : "high";
   const profitabilityData = costToRecover !== null && qty !== null ? {
     costPerKg: costToRecover,
     sellingPricePerKg: sellingBasis,
     profitPerKg: margin ?? 0,
     totalCost,
     harvestQty: qty,
-    summary: hasProfit ? `At \u20B1${sellingBasis}/kg, you may earn around \u20B1${margin}/kg above your cost to recover. Total estimated profit: \u20B1${((margin ?? 0) * qty).toLocaleString("en-PH")}.` : `Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.`
+    expenses: data.costMethod === "detailed" ? data.expenses : null,
+    summary: hasProfit ? `At ₱${sellingBasis}/kg, you may earn around ₱${margin}/kg above your cost to recover. Total estimated profit: ₱${((margin ?? 0) * qty).toLocaleString("en-PH")}.` : `Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.`
   } : void 0;
   const handleSavePlan = async () => {
     setSaving(true);
@@ -305,8 +314,7 @@ const RecommendationResult = ({ data, onEdit }) => {
   };
   if (saved) {
     const lm = { plan: "saved as a crop plan", planted: "marked as planted and growing", "on-hold": "saved and put on hold" };
-    return <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-        <div className="max-w-lg mx-auto space-y-5">
+    return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
           <div className="bg-[var(--hw-green-50)] border border-[var(--hw-green-400)] rounded-2xl p-5 text-center space-y-2">
             <div className="flex justify-center mb-2">
               <div className="p-3 bg-[var(--hw-green-700)] rounded-full"><Check className="w-6 h-6 text-white" /></div>
@@ -315,23 +323,21 @@ const RecommendationResult = ({ data, onEdit }) => {
             <p className="text-sm text-[var(--hw-green-800)]">You can monitor and update it anytime in My Crops.</p>
           </div>
           <button
-      onClick={() => navigate("/farmer/crops")}
-      className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-    >
+            onClick={() => navigate("/farmer/crops")}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+          >
             Go to My Crops <ChevronRight className="w-4 h-4" />
           </button>
-        </div>
       </div>;
   }
   if (showPlantedForm) {
     const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition bg-white";
-    return <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-        <div className="max-w-lg mx-auto space-y-5">
+    return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
           <Breadcrumb items={[{ label: "Crop Assessment" }, { label: "Result" }]} />
           <button
-      onClick={() => setShowPlantedForm(false)}
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
-    >
+            onClick={() => setShowPlantedForm(false)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+          >
             <ChevronLeft className="w-4 h-4" />Back to recommendation
           </button>
           <div>
@@ -353,37 +359,31 @@ const RecommendationResult = ({ data, onEdit }) => {
             </div>
           </div>
           <button
-      onClick={handleConfirmPlanted}
-      disabled={saving}
-      className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-    >
+            onClick={handleConfirmPlanted}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Sprout className="w-4 h-4" />{saving ? "Saving..." : "Confirm — I planted this"}
           </button>
-        </div>
       </div>;
   }
-  return <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-      <div className="max-w-lg mx-auto md:max-w-2xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         <Breadcrumb items={[{ label: "Crop Assessment" }, { label: "Result" }]} />
 
         <button
-    onClick={onEdit}
-    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
-  >
+          onClick={onEdit}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+        >
           <ChevronLeft className="w-4 h-4" />Edit information
         </button>
 
-        {
-    /* 1. Advisory card */
-  }
+        {/* 1. Advisory card */}
         <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 space-y-3 ${advisoryCfg ? advisoryCfg.border : "border-[var(--hw-neutral-200)]"}`}>
 
-          {
-    /* Commodity header */
-  }
+          {/* Commodity header */}
           <div className="flex items-center gap-2.5">
-            <CommodityIllustration commodityId={data.commodity} className="w-10 h-10 flex-shrink-0" />
+            <CommodityIllustration commodityId={data.commodity} commodityName={commodityName} className="w-10 h-10 flex-shrink-0" />
             <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">{displayName}</p>
           </div>
 
@@ -595,7 +595,6 @@ const RecommendationResult = ({ data, onEdit }) => {
           <p className="text-[13px]">Results are estimates and do not guarantee income.</p>
         </div>
 
-      </div>
     </div>;
 };
 export {

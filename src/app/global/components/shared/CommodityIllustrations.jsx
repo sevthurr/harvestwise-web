@@ -120,9 +120,10 @@ const COMMODITY_REGISTRY = {
  * This handles variants like "Kamatis - Diamante Big" → "kamatis"
  */
 function getCommodityIconKey(commodityId, baseName, commodityName) {
-  const lowerId = (commodityId || '')?.toLowerCase();
-  const nameLower = (commodityName || '')?.toLowerCase();
-  const baseNameLower = (baseName || '')?.toLowerCase();
+  const idStr = typeof commodityId === 'object' && commodityId !== null ? (commodityId.name || commodityId.id || '') : (commodityId || '');
+  const lowerId = String(idStr).toLowerCase();
+  const nameLower = String(commodityName || '').toLowerCase();
+  const baseNameLower = String(baseName || '').toLowerCase();
   const combined = `${lowerId} ${nameLower} ${baseNameLower}`;
 
   if (combined.includes('kamatis') || combined.includes('tomato')) return 'kamatis';

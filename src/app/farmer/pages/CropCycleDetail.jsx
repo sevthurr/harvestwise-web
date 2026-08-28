@@ -28,6 +28,7 @@ import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 const ADVISORY_CFG = {
   "Recommended": { Icon: CheckCircle2, color: "text-emerald-700", border: "border-[var(--hw-neutral-200)]" },
+  "Proceed with Caution": { Icon: AlertTriangle, color: "text-amber-700", border: "border-[var(--hw-neutral-200)]" },
   "Plant Conservatively": { Icon: AlertTriangle, color: "text-amber-700", border: "border-[var(--hw-neutral-200)]" },
   "Avoid for Now": { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]" }
 };
@@ -36,17 +37,19 @@ function getAdvisory(phase, currentPrice, costToRecover) {
   if (currentPrice == null || costToRecover == null) return null;
   const margin = currentPrice - costToRecover;
   if (margin >= 20) return "Recommended";
-  if (margin >= 5) return "Plant Conservatively";
+  if (margin >= 5) return "Proceed with Caution";
   return "Avoid for Now";
 }
 const ADVISORY_SUMMARY = {
   "Recommended": (name) => `Current conditions support your ${name} plan.`,
-  "Plant Conservatively": (name) => `Your ${name} plan is possible, but monitor rain and price changes.`,
+  "Proceed with Caution": (name) => `Your ${name} plan is possible, but monitor conditions and price changes.`,
+  "Plant Conservatively": (name) => `Your ${name} plan is possible, but monitor conditions and price changes.`,
   "Avoid for Now": (name) => `Market price is below your cost to recover for ${name}.`
 };
 const ADVISORY_SUPPORT = {
   "Recommended": "Prices are fair and weather is manageable this week.",
-  "Plant Conservatively": "Consider a smaller planting area until conditions improve.",
+  "Proceed with Caution": "Proceed with caution and monitor conditions closely.",
+  "Plant Conservatively": "Proceed with caution and monitor conditions closely.",
   "Avoid for Now": "Consider waiting before committing to further planting."
 };
 const WEEKLY_ACTIONS = {
@@ -216,8 +219,7 @@ function CropCycleDetailPage() {
   const totalGrowDays = pDate && hDate && !isNaN(pDate.getTime()) && !isNaN(hDate.getTime()) ? Math.max(1, Math.floor((hDate - pDate) / (1000 * 60 * 60 * 24))) : null;
   const progressPct = daysSincePlanting != null && totalGrowDays != null ? Math.min(100, Math.round(daysSincePlanting / totalGrowDays * 100)) : null;
   const daysToHarvest = hDate && !isNaN(hDate.getTime()) ? Math.max(0, Math.floor((hDate - now) / (1000 * 60 * 60 * 24))) : null;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {actionError && <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[13px] text-red-700">{actionError}</div>}
 
@@ -239,7 +241,7 @@ function CropCycleDetailPage() {
   }
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
           <div className="flex items-start gap-4">
-            <CommodityIllustration commodityId={crop.commodity} className="w-14 h-14 flex-shrink-0" />
+            <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-14 h-14 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div>
@@ -597,8 +599,6 @@ function CropCycleDetailPage() {
               </button>
             </div>
           </div>}
-
-      </div>
 
       <UpdatePhaseDrawer
     open={drawerOpen}

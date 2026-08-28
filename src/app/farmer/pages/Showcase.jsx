@@ -76,8 +76,7 @@ function ShowcasePage() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [selectedDate, setSelectedDate] = useState(void 0);
   const [radioValue, setRadioValue] = useState("tomato");
-  return <div className="px-4 md:px-6 lg:px-8 py-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-8">
         
         {
     /* Hero Section */
@@ -119,11 +118,8 @@ function ShowcasePage() {
           <p>HarvestWise Design System v1.0 • Built with React, TypeScript, and Tailwind CSS</p>
           <p className="mt-1">Mobile-First • Accessible • Production-Ready</p>
         </div>
-      </div>
 
-      {
-    /* Modals and Toasts */
-  }
+      {/* Modals and Toasts */}
       {showToast && <ToastContainer>
           <Toast
     variant="success"

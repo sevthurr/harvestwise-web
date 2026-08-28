@@ -132,12 +132,13 @@ const MODULE_RULES = [
 
 const FINAL_ADVISORY_CUTOFFS = [
   { advisory: "Recommended", range: "0.00–0.99", description: "Most factors support planting. Proceed with planning.", color: "text-emerald-700" },
-  { advisory: "Plant Conservatively", range: "1.00–1.99", description: "Some factors add caution. Plant with reduced area or added monitoring.", color: "text-amber-700" },
+  { advisory: "Proceed with Caution", range: "1.00–1.99", description: "Some factors add caution. Plant with reduced area or added monitoring.", color: "text-amber-700" },
   { advisory: "Avoid for Now", range: "2.00–3.00", description: "Multiple unfavorable factors. Consider delaying planting.", color: "text-red-700" }
 ];
 
 const ADVISORY_CFG = {
   "Recommended": { color: "text-emerald-700" },
+  "Proceed with Caution": { color: "text-amber-700" },
   "Plant Conservatively": { color: "text-amber-700" },
   "Avoid for Now": { color: "text-red-700" }
 };

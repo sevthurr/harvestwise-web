@@ -272,8 +272,7 @@ function DashboardPage() {
   const subtitle = city ? `${city} Vegetable Farmer` : "Vegetable Farmer";
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5 md:space-y-6">
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5 md:space-y-6">
 
         {/* ── 1. Greeting ── */}
         <div>
@@ -419,7 +418,7 @@ function DashboardPage() {
                       className="bg-white rounded-2xl border border-[var(--hw-green-300)] shadow-[var(--shadow-xs)] p-4"
                     >
                       <div className="flex items-start gap-3">
-                        <CommodityIllustration commodityId={crop.id} className="w-9 h-9 flex-shrink-0 mt-0.5" />
+                        <CommodityIllustration commodityId={crop.id} commodityName={crop.name} baseName={crop.name} className="w-9 h-9 flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-0.5 text-[var(--hw-green-700)]">
                             <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -479,7 +478,7 @@ function DashboardPage() {
                     onClick={() => navigate("/farmer/crops")}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
                   >
-                    <CommodityIllustration commodityId={item.commodityId} className="w-9 h-9 flex-shrink-0" />
+                    <CommodityIllustration commodityId={item.commodityId} commodityName={item.commodityName} baseName={item.commodityName} className="w-9 h-9 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
                         {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
@@ -494,7 +493,6 @@ function DashboardPage() {
           </div>
         </section>
 
-      </div>
     </div>
   );
 }

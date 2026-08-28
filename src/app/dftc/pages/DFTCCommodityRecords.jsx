@@ -482,7 +482,7 @@ function DFTCCommodityRecords() {
         </button>
       </div>;
   }
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
       {
     /* Back */

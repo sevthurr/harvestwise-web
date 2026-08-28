@@ -40,7 +40,7 @@ const CropCard = ({ crop, onView }) => {
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
       {/* Top row: icon + name + pill */}
       <div className="flex items-center gap-3">
-        <CommodityIllustration commodityId={crop.commodity} className="w-10 h-10 flex-shrink-0" />
+        <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-10 h-10 flex-shrink-0" />
         <p className="font-bold text-[var(--hw-neutral-900)] flex-1 leading-tight">{crop.commodityName || "-"}</p>
         <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
       </div>

@@ -25,6 +25,7 @@ import {
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 const YEARS = [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_LABELS = {
@@ -254,8 +255,7 @@ function SeasonalProductionDetailsPage() {
     [commodityId, location]
   );
   const filterSummary = view === "quarterly" ? `Quarterly \xB7 ${SOURCE_LABELS[location]} \xB7 ${QUARTER_LABELS[quarter]}` : `Annual \xB7 ${SOURCE_LABELS[location]}`;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {
     /* Page header */
@@ -381,9 +381,16 @@ function SeasonalProductionDetailsPage() {
                 </div>)}
             </div>
 
-            {
-    /* Quarterly table */
-  }
+            {/* Production Sources Distribution */}
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2">
+              <div>
+                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Production Source Distribution</p>
+                <p className="text-[12px] text-[var(--hw-neutral-600)]">Regional production contribution (Davao City, Davao Del Sur, Bukidnon).</p>
+              </div>
+              <ProductionSourcePieChart height={200} />
+            </div>
+
+            {/* Quarterly table */}
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
               <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
                 <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
@@ -545,11 +552,7 @@ function SeasonalProductionDetailsPage() {
           </button>
         </div>
 
-      </div>
-
-      {
-    /* Filter drawer */
-  }
+      {/* Filter drawer */}
       <FilterDrawer
     open={drawerOpen}
     filters={filters}

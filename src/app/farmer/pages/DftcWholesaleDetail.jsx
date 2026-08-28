@@ -64,8 +64,7 @@ function DftcWholesaleDetailPage() {
   const dir = dirConfig[record.direction];
   const DirIcon = dir.Icon;
   const changeStr = changeAmount === 0 ? `unchanged from ${comparisonDate}` : changeAmount > 0 ? `up \u20B1${Math.abs(changeAmount).toFixed(0)}/kg since ${comparisonDate}` : `down \u20B1${Math.abs(changeAmount).toFixed(0)}/kg since ${comparisonDate}`;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {
     /* Back + commodity switcher */
@@ -259,7 +258,6 @@ function DftcWholesaleDetailPage() {
     /* About this information */
   }
         <InformationDisclosure />
-      </div>
     </div>;
 }
 export {

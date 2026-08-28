@@ -102,7 +102,7 @@ function ForecastPriceTrendChart({
   >
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 16, bottom: 4, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--hw-neutral-100)" />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--hw-neutral-100)" />
           <XAxis
     dataKey="date"
     tick={{ fontSize: 11, fill: "#1f2937" }}
@@ -122,9 +122,9 @@ function ForecastPriceTrendChart({
     const key = variety || commodity;
     const color = palette[idx % palette.length];
     return <Fragment key={`fc-${key}`}>
-                <Area dataKey={`${key}__hi`} stroke="none" fill={color} fillOpacity={0.12} legendType="none" tooltipType="none" connectNulls />
-                <Area dataKey={`${key}__lo`} stroke="none" fill="white" fillOpacity={1} legendType="none" tooltipType="none" connectNulls />
-                <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} connectNulls activeDot={{ r: 4, strokeWidth: 0 }} legendType="none" />
+                <Area dataKey={`${key}__hi`} stroke="none" fill={color} fillOpacity={0.12} legendType="none" tooltipType="none" connectNulls={false} />
+                <Area dataKey={`${key}__lo`} stroke="none" fill="white" fillOpacity={1} legendType="none" tooltipType="none" connectNulls={false} />
+                <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={{ r: 4, fill: "white", stroke: color, strokeWidth: 2 }} connectNulls={false} activeDot={{ r: 6, strokeWidth: 0, fill: color }} legendType="none" />
               </Fragment>;
   })}
           <Brush

@@ -1109,7 +1109,7 @@ function DFTCInput() {
     else navigate("/dftc/price-input", { state: setup });
   }
   const displayedFiles = showAll ? files : files.slice(0, 10);
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
       {successMessage && <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
           <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />

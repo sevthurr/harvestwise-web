@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 const ARRIVAL_WEEKLY = {
   kamatis: {
     classification: "Normal",
@@ -125,8 +126,7 @@ function DftcArrivalDetailsPage() {
     tons: w.tons,
     isCurrent: i === 3
   }));
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {
     /* Page header */
@@ -244,9 +244,16 @@ function DftcArrivalDetailsPage() {
             </div>)}
         </div>
 
-        {
-    /* Table — 4 rows */
-  }
+        {/* Arrival Sources Distribution */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2">
+          <div>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Arrival Source Distribution</p>
+            <p className="text-[12px] text-[var(--hw-neutral-600)]">DFTC registered farms vs other supplying sources.</p>
+          </div>
+          <ArrivalSourcePieChart height={200} />
+        </div>
+
+        {/* Table — 4 rows */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
             <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
@@ -318,7 +325,6 @@ function DftcArrivalDetailsPage() {
           </button>
         </div>
 
-      </div>
     </div>;
 }
 export {

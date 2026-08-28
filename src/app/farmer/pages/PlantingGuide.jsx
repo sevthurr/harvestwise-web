@@ -18,8 +18,9 @@ import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 const ADV_CFG = {
   recommended: { label: "Recommended", Icon: CheckCircle2, color: "text-[var(--hw-green-700)]", border: "border-[var(--hw-green-300)]" },
-  "Plant Conservatively": { label: "Plant Conservatively", Icon: AlertTriangle, color: "text-amber-600", border: "border-amber-200" },
-  conservative: { label: "Plant Conservatively", Icon: AlertTriangle, color: "text-amber-600", border: "border-amber-200" },
+  "Proceed with Caution": { label: "Proceed with Caution", Icon: AlertTriangle, color: "text-amber-600", border: "border-amber-200" },
+  "Plant Conservatively": { label: "Proceed with Caution", Icon: AlertTriangle, color: "text-amber-600", border: "border-amber-200" },
+  conservative: { label: "Proceed with Caution", Icon: AlertTriangle, color: "text-amber-600", border: "border-amber-200" },
   "Avoid for Now": { label: "Avoid for Now", Icon: AlertOctagon, color: "text-red-500", border: "border-red-200" },
   avoid: { label: "Avoid for Now", Icon: AlertOctagon, color: "text-red-500", border: "border-red-200" }
 };
@@ -127,28 +128,26 @@ function PlantingGuidePage() {
 
   if (loading) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5">
-        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
-          <div className="space-y-1">
-            <Skeleton className="h-7 w-40 rounded" />
-            <Skeleton className="h-4 w-60 rounded" />
-          </div>
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+        <div className="space-y-1">
+          <Skeleton className="h-7 w-40 rounded" />
+          <Skeleton className="h-4 w-60 rounded" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-32 rounded" />
           <div className="space-y-3">
-            <Skeleton className="h-5 w-32 rounded" />
-            <div className="space-y-3">
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center gap-3 animate-pulse">
-                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-36 rounded" />
-                  <Skeleton className="h-3 w-48 rounded" />
-                </div>
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center gap-3 animate-pulse">
+              <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-36 rounded" />
+                <Skeleton className="h-3 w-48 rounded" />
               </div>
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center gap-3 animate-pulse">
-                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-36 rounded" />
-                  <Skeleton className="h-3 w-48 rounded" />
-                </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex items-center gap-3 animate-pulse">
+              <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-36 rounded" />
+                <Skeleton className="h-3 w-48 rounded" />
               </div>
             </div>
           </div>
@@ -157,8 +156,7 @@ function PlantingGuidePage() {
     );
   }
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
         {
     /* ── Header ── */
@@ -226,16 +224,14 @@ function PlantingGuidePage() {
               )}
             </section>
 
-            {
-    /* Plant Conservatively */
-  }
+                {/* Proceed with Caution */}
             <section>
               <div className="mb-3">
-                <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Plant Conservatively</h2>
-                <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">Can be planted, but consider a smaller area first.</p>
+                <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Proceed with Caution</h2>
+                <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">Can proceed, but monitor conditions and risks closely.</p>
               </div>
               {conservative.length === 0 ? (
-                <div className="text-[13px] text-[var(--hw-neutral-700)]">No conservative recommendations at this time.</div>
+                <div className="text-[13px] text-[var(--hw-neutral-700)]">No caution recommendations at this time.</div>
               ) : (
                 <div className="space-y-3">
                   {conservative.map((crop) => <CropAdvisoryCard
@@ -367,7 +363,6 @@ function PlantingGuidePage() {
           </button>
         </div>
 
-      </div>
     </div>;
 }
 export {

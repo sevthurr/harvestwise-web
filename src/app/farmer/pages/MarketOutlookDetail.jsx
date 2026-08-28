@@ -135,8 +135,7 @@ function MarketOutlookDetailPage() {
     { label: "Weather", path: "/market/weather", icon: <CloudRain className="w-4 h-4" /> },
     { label: "Market calendar", path: "/market/calendar", icon: <CalendarDays className="w-4 h-4" /> }
   ];
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {
     /* Back + commodity switcher */
@@ -255,7 +254,6 @@ function MarketOutlookDetailPage() {
           </div>
         </div>
 
-      </div>
     </div>;
 }
 export {

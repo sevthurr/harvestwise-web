@@ -391,8 +391,7 @@ function ForecastPage() {
     }
     return list;
   }, [selectedIds, searchQuery]);
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {
     /* Header */
@@ -500,7 +499,6 @@ function ForecastPage() {
     return isAnalytics ? <AnalyticsSingleForecastCard key={c.id} commodity={c} rec={rec} marketLabel={mLabel} lineColor={lineColor} period={period} showWholesaleLink={showWholesaleLink} onViewDetail={goToDetail} /> : <SingleForecastCard key={c.id} commodity={c} rec={rec} marketLabel={mLabel} period={period} showWholesaleLink={showWholesaleLink} onViewDetail={goToDetail} />;
   })}
         </div>
-      </div>
 
       <ForecastFilterDrawer
     open={filterOpen}

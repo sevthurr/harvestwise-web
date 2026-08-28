@@ -134,38 +134,36 @@ function MarketWeatherPage() {
 
   if (loading) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5">
-        <div className="max-w-2xl mx-auto md:max-w-3xl space-y-6">
-          <div className="space-y-1">
-            <Skeleton className="h-7 w-32 rounded" />
-            <Skeleton className="h-4 w-64 rounded" />
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+        <div className="space-y-1">
+          <Skeleton className="h-7 w-32 rounded" />
+          <Skeleton className="h-4 w-64 rounded" />
+        </div>
+        {/* Main Weather Card Skeleton */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-28 rounded" />
+            <Skeleton className="h-4 w-20 rounded-full" />
           </div>
-          {/* Main Weather Card Skeleton */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-4 w-28 rounded" />
-              <Skeleton className="h-4 w-20 rounded-full" />
-            </div>
-            <div className="flex items-center gap-4">
-              <Skeleton className="w-16 h-16 rounded-2xl flex-shrink-0" />
-              <div className="space-y-2">
-                <Skeleton className="h-8 w-24 rounded" />
-                <Skeleton className="h-3 w-40 rounded" />
-              </div>
-            </div>
-            {/* 14-day carousel skeleton */}
-            <div className="flex gap-2 pt-2 overflow-hidden">
-              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
-              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
-              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
-              <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+          <div className="flex items-center gap-4">
+            <Skeleton className="w-16 h-16 rounded-2xl flex-shrink-0" />
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-24 rounded" />
+              <Skeleton className="h-3 w-40 rounded" />
             </div>
           </div>
-          {/* Advisories Skeleton */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
-            <Skeleton className="h-5 w-44 rounded" />
-            <Skeleton className="h-16 w-full rounded-xl" />
+          {/* 14-day carousel skeleton */}
+          <div className="flex gap-2 pt-2 overflow-hidden">
+            <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+            <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+            <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
+            <Skeleton className="h-24 w-20 rounded-xl flex-shrink-0" />
           </div>
+        </div>
+        {/* Advisories Skeleton */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+          <Skeleton className="h-5 w-44 rounded" />
+          <Skeleton className="h-16 w-full rounded-xl" />
         </div>
       </div>
     );
@@ -178,8 +176,7 @@ function MarketWeatherPage() {
   const weatherSummary = weatherData?.weather_summary ?? 'No weather data available';
   const updatedAt = weatherData?.updated_at ? new Date(weatherData.updated_at).toLocaleTimeString() : 'Unknown';
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-6">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
         {/* ── Header ── */}
         <div>
@@ -209,10 +206,10 @@ function MarketWeatherPage() {
         )}
 
         {/* ── 1. 14-day forecast carousel ── */}
-        <section className="space-y-2">
+        <section className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">14-Day Forecast</p>
-            <div className="flex gap-1">
+            <div className="flex gap-1 lg:hidden">
               <button
                 onClick={() => scrollBy(-1)}
                 className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
@@ -232,7 +229,7 @@ function MarketWeatherPage() {
 
           <div
             ref={carouselRef}
-            className="flex gap-2 overflow-x-auto pb-1"
+            className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-14 lg:gap-2 lg:overflow-visible"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {forecast14d.length > 0 ? forecast14d.map((day, i) => {
@@ -241,16 +238,18 @@ function MarketWeatherPage() {
               return (
                 <div
                   key={i}
-                  className="flex-shrink-0 flex flex-col items-center gap-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-2.5 py-2.5 min-w-[68px]"
+                  className="flex-shrink-0 lg:flex-shrink w-[76px] lg:w-auto flex flex-col items-center justify-between gap-1.5 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 hover:border-[var(--hw-neutral-300)] transition-colors"
                 >
-                  <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{day.day_label}</p>
-                  <p className="text-[10px] text-[var(--hw-neutral-900)]">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
-                  <WeatherIconEl icon={icon} cls="w-6 h-6 mt-0.5" />
-                  <div className="text-center mt-0.5">
-                    <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{day.temp_max ?? '–'}°</p>
-                    <p className="text-[11px] text-[var(--hw-neutral-900)]">{day.temp_min ?? '–'}°</p>
+                  <div className="text-center">
+                    <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{day.day_label}</p>
+                    <p className="text-[10px] text-[var(--hw-neutral-600)]">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                   </div>
-                  <p className="text-[11px] font-medium text-[var(--hw-neutral-900)]">{day.rain_probability_pct ?? '–'}%</p>
+                  <WeatherIconEl icon={icon} cls="w-6 h-6 my-0.5" />
+                  <div className="text-center">
+                    <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{day.temp_max ?? '–'}°</p>
+                    <p className="text-[11px] text-[var(--hw-neutral-500)]">{day.temp_min ?? '–'}°</p>
+                  </div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">{day.rain_probability_pct ?? '–'}%</p>
                   <div className={`flex items-center gap-1 ${rc.color}`}>
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${rc.dot}`} />
                     <span className="text-[10px] font-semibold">{rc.label}</span>
@@ -263,23 +262,25 @@ function MarketWeatherPage() {
                 return (
                   <div
                     key={i}
-                    className="flex-shrink-0 flex flex-col items-center gap-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-2.5 py-2.5 min-w-[68px]"
+                    className="flex-shrink-0 lg:flex-shrink w-[76px] lg:w-auto flex flex-col items-center justify-between gap-1.5 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 hover:border-[var(--hw-neutral-300)] transition-colors"
                   >
-                    <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{dayLabel}</p>
-                    <p className="text-[10px] text-[var(--hw-neutral-900)]">-</p>
-                    <Cloud className="w-6 h-6 mt-0.5 text-[var(--hw-neutral-600)]" />
-                    <div className="text-center mt-0.5">
-                      <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">-°</p>
-                      <p className="text-[11px] text-[var(--hw-neutral-900)]">-°</p>
+                    <div className="text-center">
+                      <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{dayLabel}</p>
+                      <p className="text-[10px] text-[var(--hw-neutral-600)]">-</p>
                     </div>
-                    <p className="text-[11px] font-medium text-[var(--hw-neutral-900)]">-%</p>
-                    <div className="text-[var(--hw-neutral-900)] text-[10px]">-</div>
+                    <Cloud className="w-6 h-6 my-0.5 text-[var(--hw-neutral-400)]" />
+                    <div className="text-center">
+                      <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">-°</p>
+                      <p className="text-[11px] text-[var(--hw-neutral-500)]">-°</p>
+                    </div>
+                    <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">-%</p>
+                    <div className="text-[var(--hw-neutral-500)] text-[10px]">-</div>
                   </div>
                 );
               })}
           </div>
 
-          <div className="flex items-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-900)]">
+          <div className="flex items-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-700)]">
             <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /><span>Suitable</span></div>
             <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /><span>Caution</span></div>
             <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /><span>Severe</span></div>
@@ -325,7 +326,6 @@ function MarketWeatherPage() {
           </p>
         </div>
 
-      </div>
     </div>;
 }
 export {

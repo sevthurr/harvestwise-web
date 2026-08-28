@@ -118,7 +118,7 @@ const LegalDrawer = ({ id, onClose }) => {
 };
 const HELP_ITEMS = [
   { title: "How recommendations work", body: "A recommendation is based on your planting schedule, expected harvest date, production costs, and current market conditions. HarvestWise compares your cost to recover to the expected market price at harvest and considers supply and weather risks." },
-  { title: "What the advisory labels mean", body: '"Recommended" means conditions look favorable for your crop. "Plant Conservatively" means risks are present \u2014 consider a smaller area and monitor conditions. "Avoid for Now" means significant risks exist and it may be better to wait.' },
+  { title: "What the advisory labels mean", body: '"Recommended" means conditions look favorable for your crop. "Proceed with Caution" means risks are present — monitor conditions closely. "Avoid for Now" means significant risks exist and it may be better to wait.' },
   { title: "How estimated profit is calculated", body: "Estimated profit is calculated by multiplying your expected harvest volume by the difference between the expected selling price and your cost to recover per kilogram. This is an estimate only \u2014 actual income depends on your final selling price and harvest volume." },
   { title: "How weather affects crops", body: "Heavy rain and strong winds can damage crops, delay field work, and affect harvest quality. HarvestWise shows weather warnings and action tips based on your crop phase and the current forecast for Davao City." },
   { title: "Offline use", body: "HarvestWise saves recent market information, weather data, and your crop records on this device. You can view saved information while offline, but prices and forecasts will not update until you reconnect and sync." }
@@ -180,8 +180,7 @@ function MenuPage() {
     { key: "crops", icon: <Sprout className="w-4 h-4" />, label: "Crop reminders", desc: "Reminders tied to your saved crop plans" },
     { key: "harvest", icon: <Clock className="w-4 h-4" />, label: "Harvest reminders", desc: "Alerts when your harvest window is approaching" }
   ];
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-lg mx-auto md:max-w-2xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {
     /* ── 1. Farmer profile ── */
@@ -460,9 +459,6 @@ function MenuPage() {
           <LogOut className="w-5 h-5" />
           Sign out
         </button>
-
-        <div className="pb-2" />
-      </div>
 
       <LegalDrawer id={legalOpen} onClose={() => setLegalOpen(null)} />
 

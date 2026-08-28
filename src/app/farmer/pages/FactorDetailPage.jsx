@@ -16,37 +16,27 @@ function FactorDetailPage() {
     label: bc.label,
     onClick: bc.path ? () => navigate(bc.path) : void 0
   }));
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
-
-        {
-    /* Breadcrumb */
-  }
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+        {/* Breadcrumb */}
         <Breadcrumb items={breadcrumbItems} />
 
-        {
-    /* Page title */
-  }
+        {/* Page title */}
         <div>
           <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{title}</h1>
           {subtitle && <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">{subtitle}</p>}
         </div>
 
-        {
-    /* Factor tabs */
-  }
+        {/* Factor tabs */}
         <FactorDetailTabs
-    price={price}
-    arrival={arrival}
-    production={production}
-    weather={weather}
-    profitability={profitability}
-    defaultTab="price"
-    commodityId={commodityId}
-    commodityName={commodityName}
-  />
-
-      </div>
+          price={price}
+          arrival={arrival}
+          production={production}
+          weather={weather}
+          profitability={profitability}
+          defaultTab="price"
+          commodityId={commodityId}
+          commodityName={commodityName}
+        />
     </div>;
 }
 export {

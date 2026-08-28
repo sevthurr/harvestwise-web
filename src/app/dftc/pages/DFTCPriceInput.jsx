@@ -457,7 +457,7 @@ function DFTCPriceInput() {
         (com) => getVariants(com).filter((v) => hasValue(fields[v.id] ?? { price: "", uom: "kg" })).map((v) => ({ com, v, f: fields[v.id] }))
       )
     })).filter((g) => g.entries.length > 0);
-    return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto">
+    return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Price Data</h1>
@@ -546,7 +546,7 @@ function DFTCPriceInput() {
         </div>
       </div>;
   }
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
 
       {
     /* Draft restore banner */

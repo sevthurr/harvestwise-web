@@ -217,7 +217,7 @@ function DFTCArrivalInput() {
       </div>;
   }
   if (reviewMode) {
-    return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto">
+    return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Arrival Volume</h1>
@@ -343,7 +343,7 @@ function DFTCArrivalInput() {
     }
     return true;
   });
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
 
       {
     /* Draft restore banner */

@@ -342,8 +342,7 @@ function MarketOverviewPage() {
   const nearTermOutlook = filters.period === "7d" ? OVERALL_MARKET.nearTermOutlook7d : filters.period === "14d" ? OVERALL_MARKET.nearTermOutlook14d : OVERALL_MARKET.nearTermOutlook28d;
   const overallStatus = STATUS_CONFIG[OVERALL_MARKET.status];
   const OverallIcon = overallStatus.icon;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {
     /* Filter button — below tabs, compact height */
@@ -440,8 +439,6 @@ function MarketOverviewPage() {
           </div>
         </div>
 
-      </div>
-
       <MarketOutlookFilterDrawer
     open={filterOpen}
     filters={filters}
@@ -503,8 +500,7 @@ const MarketLayout = () => {
     </div>;
 };
 function MarketWeatherPage() {
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-6 py-14 text-center">
           <CloudRain className="w-10 h-10 text-[var(--hw-neutral-300)] mx-auto mb-3" />
           <p className="font-semibold text-[var(--hw-neutral-900)]">Weather Forecast</p>
@@ -512,12 +508,10 @@ function MarketWeatherPage() {
             This view will show detailed weather conditions that may affect field activity, farm-to-market transport, and delivery volumes.
           </p>
         </div>
-      </div>
     </div>;
 }
 function MarketCalendarPage() {
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-6 py-14 text-center">
           <CalendarDays className="w-10 h-10 text-[var(--hw-neutral-300)] mx-auto mb-3" />
           <p className="font-semibold text-[var(--hw-neutral-900)]">Market Calendar</p>
@@ -525,7 +519,6 @@ function MarketCalendarPage() {
             This view will show upcoming payday periods, public holidays, market-day schedules, and other calendar factors.
           </p>
         </div>
-      </div>
     </div>;
 }
 export {

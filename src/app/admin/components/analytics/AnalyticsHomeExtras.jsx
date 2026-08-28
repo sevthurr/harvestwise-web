@@ -38,8 +38,8 @@ const AnalyticsRecommendationDetails = () => {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {[
-    { label: "Category", value: "Plant Conservatively", highlight: true },
-    { label: "Break-even price", value: "\u20B142/kg" },
+          { label: "Category", value: "Proceed with Caution", highlight: true },
+          { label: "Break-even price", value: "₱42/kg" },
     { label: "Forecasted range", value: "\u20B155 \u2013 \u20B170/kg" },
     { label: "Main risk factor", value: "Supply increase" },
     { label: "Last calculated", value: "Jun 24, 2026" }

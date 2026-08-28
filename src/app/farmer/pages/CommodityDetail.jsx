@@ -8,6 +8,7 @@ import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 
+
 const PRICE_TYPE_KEY = {
   "bangkerohan": "bangkerohan_retail",
   "bangkerohan-wholesale": "bangkerohan_wholesale",
@@ -291,35 +292,33 @@ function CommodityDetailPage() {
   // Loading state (only show full screen skeleton on cold start if NO data exists in cache)
   if (loading && !detailData && !priceDetail) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5">
-        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
-          {/* Breadcrumb Skeleton */}
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-16 rounded" />
-            <span className="text-[var(--hw-neutral-300)]">/</span>
-            <Skeleton className="h-4 w-24 rounded" />
-          </div>
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+        {/* Breadcrumb Skeleton */}
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-16 rounded" />
+          <span className="text-[var(--hw-neutral-300)]">/</span>
+          <Skeleton className="h-4 w-24 rounded" />
+        </div>
 
-          {/* Header Card Skeleton */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
-            <div className="flex items-center gap-4">
-              <Skeleton className="w-14 h-14 rounded-2xl flex-shrink-0" />
-              <div className="space-y-2 flex-1">
-                <Skeleton className="h-6 w-36 rounded" />
-                <Skeleton className="h-3.5 w-24 rounded" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <Skeleton className="h-20 rounded-xl" />
-              <Skeleton className="h-20 rounded-xl" />
+        {/* Header Card Skeleton */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+          <div className="flex items-center gap-4">
+            <Skeleton className="w-14 h-14 rounded-2xl flex-shrink-0" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-6 w-36 rounded" />
+              <Skeleton className="h-3.5 w-24 rounded" />
             </div>
           </div>
-
-          {/* Section Skeletons */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
-            <Skeleton className="h-5 w-40 rounded" />
-            <Skeleton className="h-32 w-full rounded-xl" />
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <Skeleton className="h-20 rounded-xl" />
+            <Skeleton className="h-20 rounded-xl" />
           </div>
+        </div>
+
+        {/* Section Skeletons */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+          <Skeleton className="h-5 w-40 rounded" />
+          <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       </div>
     );
@@ -353,8 +352,7 @@ function CommodityDetailPage() {
   const displayRecords = showMore ? priceRecords : priceRecords.slice(0, 5);
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {/* Breadcrumb + commodity switcher */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -576,6 +574,8 @@ function CommodityDetailPage() {
           )}
         </div>
 
+
+
         {/* Bottom action card */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
           <div>
@@ -603,7 +603,6 @@ function CommodityDetailPage() {
           </div>
         </div>
 
-      </div>
     </div>
   );
 }

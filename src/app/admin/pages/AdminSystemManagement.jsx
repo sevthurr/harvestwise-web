@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router";
-import { Search, Plus, Loader2, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   Card,
@@ -14,23 +14,16 @@ import {
   inputCls,
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
+
 const TABS = [
   { id: "users", label: "User Accounts" },
-  { id: "roles", label: "Roles & Permissions" },
   { id: "security", label: "System Security" },
   { id: "health", label: "System Health" }
 ];
-const MOCK_USERS = [
-  { id: "1", name: "Juan Dela Cruz", email: "juan@example.com", role: "Farmer", status: "Active", lastLogin: "Today, 7:30 AM", dateCreated: "Jan 5, 2025", phone: "09171234567", firstName: "Juan", middleName: "", lastName: "Dela Cruz", suffix: "None", loginMethod: "Email", city: "Davao City", district: "District I", barangay: "Talomo", farmSize: "2 hectares", preferredCrops: "Eggplant, Tomato" },
-  { id: "2", name: "Maria Santos", email: "maria@dftc.gov.ph", role: "DFTC", status: "Active", lastLogin: "Today, 8:15 AM", dateCreated: "Feb 12, 2025", phone: "09189876543", firstName: "Maria", middleName: "Cruz", lastName: "Santos", suffix: "None", loginMethod: "Email", organization: "Davao Food Terminal Complex", position: "Market Monitoring Staff", recentSubmission: "Accepted" },
-  { id: "3", name: "Pedro Reyes", email: "pedro@example.com", role: "Farmer", status: "Inactive", lastLogin: "Jul 30, 9:00 AM", dateCreated: "Mar 3, 2025", phone: "09201112222", firstName: "Pedro", middleName: "", lastName: "Reyes", suffix: "None", loginMethod: "Email", city: "Davao City", district: "District II", barangay: "Bucana", farmSize: "1 hectare", preferredCrops: "Cabbage" },
-  { id: "4", name: "Ana Gomez", email: "ana@dftc.gov.ph", role: "DFTC", status: "Active", lastLogin: "Today, 6:45 AM", dateCreated: "Mar 15, 2025", phone: "09223334444", firstName: "Ana", middleName: "", lastName: "Gomez", suffix: "None", loginMethod: "Google", organization: "Davao Food Terminal Complex", position: "Data Encoder", recentSubmission: "Pending review" },
-  { id: "5", name: "Carlo Ramos", email: "carlo@example.com", role: "Farmer", status: "Active", lastLogin: "Today, 5:20 AM", dateCreated: "Apr 1, 2025", phone: "09255556666", firstName: "Carlo", middleName: "Santos", lastName: "Ramos", suffix: "None", loginMethod: "Email", city: "Davao City", district: "District III", barangay: "Calinan", farmSize: "3 hectares", preferredCrops: "Ampalaya, Okra" },
-  { id: "6", name: "Lena Cruz", email: "lena@dftc.gov.ph", role: "DFTC", status: "Inactive", lastLogin: "Jul 28, 3:00 PM", dateCreated: "Apr 10, 2025", phone: "09277778888", firstName: "Lena", middleName: "", lastName: "Cruz", suffix: "None", loginMethod: "Email", organization: "Davao Food Terminal Complex", position: "Supervisor", recentSubmission: "\u2014" },
-  { id: "7", name: "Jose Bautista", email: "jose@example.com", role: "Farmer", status: "Active", lastLogin: "Today, 4:10 AM", dateCreated: "May 2, 2025", phone: "09299990000", firstName: "Jose", middleName: "", lastName: "Bautista", suffix: "Jr.", loginMethod: "Email", city: "Davao City", district: "District I", barangay: "Matina", farmSize: "0.5 hectare", preferredCrops: "Pechay, Kangkong" },
-  { id: "8", name: "Rosa Fernandez", email: "rosa@example.com", role: "Farmer", status: "Active", lastLogin: "Today, 7:00 AM", dateCreated: "May 20, 2025", phone: "09311112222", firstName: "Rosa", middleName: "Ramos", lastName: "Fernandez", suffix: "None", loginMethod: "Google", city: "Davao City", district: "District II", barangay: "Agdao", farmSize: "1.5 hectares", preferredCrops: "Tomato, Pepper" },
-  { id: "10", name: "Ben Torres", email: "ben@dftc.gov.ph", role: "DFTC", status: "Active", lastLogin: "Today, 7:50 AM", dateCreated: "Jun 1, 2025", phone: "09333334444", firstName: "Ben", middleName: "", lastName: "Torres", suffix: "None", loginMethod: "Email", organization: "Davao Food Terminal Complex", position: "Market Inspector", recentSubmission: "Accepted" }
-];
+
+// Pure empty array — zero mock data
+const MOCK_USERS = [];
+
 const AddUserModal = ({ onClose, onAdd }) => {
   const [form, setForm] = useState({
     firstName: "",
@@ -44,93 +37,106 @@ const AddUserModal = ({ onClose, onAdd }) => {
     position: "",
     sendInvite: false
   });
+
   const canSubmit = form.firstName.trim() && form.lastName.trim();
-  return <Modal title="Add User" onClose={onClose}>
+
+  return (
+    <Modal title="Add User" onClose={onClose}>
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1" style={{ scrollbarWidth: "none" }}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <FieldLabel htmlFor="au-fname">First Name</FieldLabel>
             <input
-    id="au-fname"
-    type="text"
-    placeholder="First name"
-    className={inputCls}
-    value={form.firstName}
-    onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-  />
+              id="au-fname"
+              type="text"
+              placeholder="First name"
+              className={inputCls}
+              value={form.firstName}
+              onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+            />
           </div>
           <div>
             <FieldLabel htmlFor="au-lname">Last Name</FieldLabel>
             <input
-    id="au-lname"
-    type="text"
-    placeholder="Last name"
-    className={inputCls}
-    value={form.lastName}
-    onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-  />
+              id="au-lname"
+              type="text"
+              placeholder="Last name"
+              className={inputCls}
+              value={form.lastName}
+              onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+            />
           </div>
           <div>
-            <FieldLabel htmlFor="au-mname" optional>Middle Name</FieldLabel>
+            <FieldLabel htmlFor="au-mname" optional>
+              Middle Name
+            </FieldLabel>
             <input
-    id="au-mname"
-    type="text"
-    placeholder="Middle name"
-    className={inputCls}
-    value={form.middleName}
-    onChange={(e) => setForm((f) => ({ ...f, middleName: e.target.value }))}
-  />
+              id="au-mname"
+              type="text"
+              placeholder="Middle name"
+              className={inputCls}
+              value={form.middleName}
+              onChange={(e) => setForm((f) => ({ ...f, middleName: e.target.value }))}
+            />
           </div>
           <div>
-            <FieldLabel htmlFor="au-suffix" optional>Suffix</FieldLabel>
+            <FieldLabel htmlFor="au-suffix" optional>
+              Suffix
+            </FieldLabel>
             <div className="relative">
               <select
-    id="au-suffix"
-    className={`${inputCls} appearance-none pr-9`}
-    value={form.suffix}
-    onChange={(e) => setForm((f) => ({ ...f, suffix: e.target.value }))}
-  >
-                {SUFFIX_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                id="au-suffix"
+                className={`${inputCls} appearance-none pr-9`}
+                value={form.suffix}
+                onChange={(e) => setForm((f) => ({ ...f, suffix: e.target.value }))}
+              >
+                {SUFFIX_OPTIONS.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
             </div>
           </div>
         </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <FieldLabel htmlFor="au-phone">Phone Number</FieldLabel>
             <input
-    id="au-phone"
-    type="tel"
-    placeholder="09XX XXX XXXX"
-    className={inputCls}
-    value={form.phone}
-    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-  />
+              id="au-phone"
+              type="tel"
+              placeholder="09XX XXX XXXX"
+              className={inputCls}
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            />
           </div>
           <div>
             <FieldLabel htmlFor="au-email">Email</FieldLabel>
             <input
-    id="au-email"
-    type="email"
-    placeholder="user@example.com"
-    className={inputCls}
-    value={form.email}
-    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-  />
+              id="au-email"
+              type="email"
+              placeholder="user@example.com"
+              className={inputCls}
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            />
           </div>
         </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <FieldLabel htmlFor="au-role">Role</FieldLabel>
             <div className="relative">
               <select
-    id="au-role"
-    className={`${inputCls} appearance-none pr-9`}
-    value={form.role}
-    onChange={(e) => setForm((f) => ({ ...f, role: e.target.value, position: "" }))}
-  >
-                {["Farmer", "DFTC"].map((r) => <option key={r}>{r}</option>)}
+                id="au-role"
+                className={`${inputCls} appearance-none pr-9`}
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+              >
+                {["Farmer", "DFTC"].map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
             </div>
@@ -139,206 +145,221 @@ const AddUserModal = ({ onClose, onAdd }) => {
             <FieldLabel htmlFor="au-status">Status</FieldLabel>
             <div className="relative">
               <select
-    id="au-status"
-    className={`${inputCls} appearance-none pr-9`}
-    value={form.status}
-    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-  >
-                {["Active", "Inactive"].map((s) => <option key={s}>{s}</option>)}
+                id="au-status"
+                className={`${inputCls} appearance-none pr-9`}
+                value={form.status}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+              >
+                {["Active", "Inactive"].map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
             </div>
           </div>
         </div>
-        {form.role === "DFTC" && <div>
-            <FieldLabel htmlFor="au-position" optional>Position</FieldLabel>
-            <input
-    id="au-position"
-    type="text"
-    placeholder="e.g. Market Monitoring Staff"
-    className={inputCls}
-    value={form.position}
-    onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-  />
-          </div>}
-        <div className="flex items-center justify-between py-3 border-t border-[var(--hw-neutral-100)]">
+
+        {form.role === "DFTC" && (
           <div>
-            <p className="text-[14px] font-semibold text-black">Send invite link</p>
-            <p className="text-[13px] text-black">Send an invitation email to the new user.</p>
+            <FieldLabel htmlFor="au-pos" optional>
+              Position
+            </FieldLabel>
+            <input
+              id="au-pos"
+              type="text"
+              placeholder="e.g. Market Monitoring Staff"
+              className={inputCls}
+              value={form.position}
+              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between py-2 border-t border-[var(--hw-neutral-100)]">
+          <div>
+            <p className="text-[14px] font-semibold text-black">Send welcome email</p>
+            <p className="text-[12px] text-black">Send an invite with temporary credentials.</p>
           </div>
           <Toggle on={form.sendInvite} onChange={(v) => setForm((f) => ({ ...f, sendInvite: v }))} />
         </div>
+
+        <div className="flex gap-2 justify-end pt-2">
+          <GhostBtn onClick={onClose}>Cancel</GhostBtn>
+          <GreenBtn
+            disabled={!canSubmit}
+            onClick={() => {
+              onAdd({
+                ...form,
+                id: String(Date.now()),
+                name: `${form.firstName} ${form.lastName}`.trim(),
+                lastLogin: "-",
+                dateCreated: "Today"
+              });
+              onClose();
+            }}
+          >
+            Create User
+          </GreenBtn>
+        </div>
       </div>
-      <div className="flex gap-3 mt-5 pt-4 border-t border-[var(--hw-neutral-100)]">
-        <GhostBtn onClick={onClose} className="flex-1">Cancel</GhostBtn>
-        <GreenBtn onClick={() => {
-    if (!canSubmit) return;
-    onAdd();
-    onClose();
-  }} disabled={!canSubmit} className="flex-1">Add User</GreenBtn>
-      </div>
-    </Modal>;
+    </Modal>
+  );
 };
-const UserAccountsTab = ({ showToast }) => {
+
+const UsersTab = ({ showToast }) => {
   const navigate = useNavigate();
+  const [users, setUsers] = useState(MOCK_USERS);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
-  const [users, setUsers] = useState(MOCK_USERS);
   const [showAddModal, setShowAddModal] = useState(false);
+
   const filtered = users.filter((u) => {
-    const matchSearch = !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === "All" || u.role === roleFilter;
-    return matchSearch && matchRole;
+    const matchesRole = roleFilter === "All" || u.role === roleFilter;
+    const q = search.toLowerCase();
+    const matchesSearch =
+      !search ||
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.phone && u.phone.toLowerCase().includes(q));
+    return matchesRole && matchesSearch;
   });
-  return <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)]" />
+
+  const getEmptyMessage = () => {
+    if (search) return "No user accounts match your search.";
+    if (roleFilter === "Farmer") return "No Farmer accounts found.";
+    if (roleFilter === "DFTC") return "No DFTC accounts found.";
+    return "No user accounts available.";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)] pointer-events-none" />
           <input
-    type="text"
-    placeholder="Search by name or email…"
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    className="w-full h-11 pl-9 pr-3.5 text-[14px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
-  />
+            type="text"
+            placeholder="Search by name, email, or phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-10 pl-9 pr-3.5 text-[13px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)]/20 focus:border-[var(--hw-green-700)] transition-shadow placeholder:text-[var(--hw-neutral-400)]"
+          />
         </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {["All", "Farmer", "DFTC"].map((r) => <button
-    key={r}
-    type="button"
-    onClick={() => setRoleFilter(r)}
-    className={`h-9 px-3.5 text-[13px] font-medium rounded-xl border transition-colors ${roleFilter === r ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)]" : "bg-white text-black border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >{r}</button>)}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1.5 flex-wrap">
+            {["All", "Farmer", "DFTC"].map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRoleFilter(r)}
+                className={`h-9 px-3.5 text-[13px] font-medium rounded-xl border transition-colors cursor-pointer ${
+                  roleFilter === r
+                    ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)]"
+                    : "bg-white text-black border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <GreenBtn onClick={() => setShowAddModal(true)}>
+            <Plus className="w-4 h-4" />
+            Add User
+          </GreenBtn>
         </div>
-        <GreenBtn onClick={() => setShowAddModal(true)}>
-          <Plus className="w-4 h-4" />
-          Add User
-        </GreenBtn>
       </div>
 
-      {
-    /* Mobile cards */
-  }
+      {/* Mobile cards */}
       <div className="space-y-3 md:hidden">
-        {filtered.map((u) => <button
-    key={u.id}
-    type="button"
-    onClick={() => navigate(`/admin/system/user/${u.id}`)}
-    className="w-full text-left bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-1 hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
+        {filtered.map((u) => (
+          <button
+            key={u.id}
+            type="button"
+            onClick={() => navigate(`/admin/system/user/${u.id}`)}
+            className="w-full text-left bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-1 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[15px] font-semibold text-black">{u.name}</p>
+              <p className="text-[15px] font-semibold text-black">{u.name || "-"}</p>
               <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" />
             </div>
-            <p className="text-[13px] text-black">{u.email}</p>
+            <p className="text-[13px] text-black">{u.email || "-"}</p>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-[13px] text-black">{u.role}</span>
-              <span className="text-[12px] text-black">{u.status}</span>
-              <span className="text-[12px] text-black">Last login: {u.lastLogin}</span>
+              <span className="text-[13px] text-black font-medium">{u.role || "-"}</span>
+              <span className="text-[12px] text-black">{u.status || "-"}</span>
+              <span className="text-[12px] text-[var(--hw-neutral-500)]">Last login: {u.lastLogin || "-"}</span>
             </div>
-          </button>)}
-        {filtered.length === 0 && <p className="text-[14px] text-black text-center py-8">No users found.</p>}
+          </button>
+        ))}
+        {filtered.length === 0 && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-8 text-center space-y-1.5">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center text-[var(--hw-neutral-400)] mx-auto mb-2">
+              <Inbox className="w-5 h-5" />
+            </div>
+            <p className="text-[14px] font-semibold text-black">{getEmptyMessage()}</p>
+          </div>
+        )}
       </div>
 
-      {
-    /* Desktop table */
-  }
+      {/* Desktop table */}
       <div className="hidden md:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] overflow-hidden">
         <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-[var(--hw-neutral-100)]">
-                {["Name", "Email", "Role", "Status", "Last Login"].map((h) => <th key={h} className="px-4 py-3 text-[12px] font-semibold text-black uppercase tracking-wide whitespace-nowrap">{h}</th>)}
-                <th className="px-4 py-3 w-8" />
+              <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
+                {["Name", "Email", "Role", "Status", "Last Login"].map((h) => (
+                  <th key={h} className="px-5 py-3.5 text-[12px] font-semibold text-black uppercase tracking-wide whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+                <th className="px-5 py-3.5 w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-              {filtered.map((u) => <tr
-    key={u.id}
-    onClick={() => navigate(`/admin/system/user/${u.id}`)}
-    className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-  >
-                  <td className="px-4 py-3 text-[14px] font-medium text-black whitespace-nowrap">{u.name}</td>
-                  <td className="px-4 py-3 text-[14px] text-black">{u.email}</td>
-                  <td className="px-4 py-3 text-[14px] text-black">{u.role}</td>
-                  <td className="px-4 py-3 text-[14px] text-black">{u.status}</td>
-                  <td className="px-4 py-3 text-[14px] text-black whitespace-nowrap">{u.lastLogin}</td>
-                  <td className="px-4 py-3">
+              {filtered.map((u) => (
+                <tr
+                  key={u.id}
+                  onClick={() => navigate(`/admin/system/user/${u.id}`)}
+                  className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                >
+                  <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{u.name || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black">{u.status || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{u.lastLogin || "-"}</td>
+                  <td className="px-5 py-3.5">
                     <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)]" />
                   </td>
-                </tr>)}
-              {filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-[14px] text-black text-center">No users found.</td></tr>}
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-1.5 max-w-sm mx-auto">
+                      <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] flex items-center justify-center text-[var(--hw-neutral-400)]">
+                        <Inbox className="w-5 h-5" />
+                      </div>
+                      <p className="text-[14px] font-semibold text-black">{getEmptyMessage()}</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {showAddModal && <AddUserModal
-    onClose={() => setShowAddModal(false)}
-    onAdd={() => showToast("User account created successfully.")}
-  />}
-    </div>;
+      {showAddModal && (
+        <AddUserModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={(newUser) => {
+            setUsers((prev) => [newUser, ...prev]);
+            showToast("User account created successfully.");
+          }}
+        />
+      )}
+    </div>
+  );
 };
-const INITIAL_PERMISSIONS = [
-  { id: "own_profile", label: "View own profile", farmer: true, dftc: true },
-  { id: "own_settings", label: "Update own settings", farmer: true, dftc: true },
-  { id: "about_page", label: "View About page", farmer: true, dftc: true },
-  { id: "market_prices", label: "View market prices", farmer: true, dftc: false },
-  { id: "crop_calendar", label: "View crop calendar", farmer: true, dftc: false },
-  { id: "crop_plans", label: "Manage own crop plans", farmer: true, dftc: false },
-  { id: "submit_prices", label: "Submit price records", farmer: false, dftc: true },
-  { id: "submit_arrivals", label: "Submit arrival volume records", farmer: false, dftc: true },
-  { id: "upload_dataset", label: "Upload dataset", farmer: false, dftc: true },
-  { id: "view_trends", label: "View trends", farmer: false, dftc: true },
-  { id: "view_submissions", label: "View submissions", farmer: false, dftc: true }
-];
-const RolesTab = ({ showToast }) => {
-  const [perms, setPerms] = useState(INITIAL_PERMISSIONS);
-  const toggle = (id, role) => {
-    setPerms((prev) => prev.map((p) => p.id === id ? { ...p, [role]: !p[role] } : p));
-  };
-  return <div className="space-y-4">
-      <Card>
-        <SectionLabel>Role Permissions Matrix</SectionLabel>
-        <p className="text-[13px] text-black mb-4">Configure what each role can access and perform within HarvestWise.</p>
-        <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-[var(--hw-neutral-200)]">
-                <th className="py-3 pr-4 text-[12px] font-semibold text-black uppercase tracking-wide w-full">Permission</th>
-                <th className="py-3 px-6 text-[12px] font-semibold text-black uppercase tracking-wide text-center whitespace-nowrap">Farmer</th>
-                <th className="py-3 px-6 text-[12px] font-semibold text-black uppercase tracking-wide text-center whitespace-nowrap">DFTC</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-              {perms.map((p) => <tr key={p.id} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
-                  <td className="py-3 pr-4 text-[14px] text-black">{p.label}</td>
-                  <td className="py-3 px-6 text-center">
-                    <input
-    type="checkbox"
-    checked={p.farmer}
-    onChange={() => toggle(p.id, "farmer")}
-    className="w-4 h-4 rounded accent-[var(--hw-green-700)] cursor-pointer"
-  />
-                  </td>
-                  <td className="py-3 px-6 text-center">
-                    <input
-    type="checkbox"
-    checked={p.dftc}
-    onChange={() => toggle(p.id, "dftc")}
-    className="w-4 h-4 rounded accent-[var(--hw-green-700)] cursor-pointer"
-  />
-                  </td>
-                </tr>)}
-            </tbody>
-          </table>
-        </div>
-        <div className="pt-4 border-t border-[var(--hw-neutral-100)] mt-3">
-          <GreenBtn onClick={() => showToast("Role permissions updated successfully.")}>Save permission changes</GreenBtn>
-        </div>
-      </Card>
-    </div>;
-};
+
 const SecurityTab = ({ showToast }) => {
   const [adminTfa, setAdminTfa] = useState(true);
   const [dftcTfa, setDftcTfa] = useState(false);
@@ -349,11 +370,14 @@ const SecurityTab = ({ showToast }) => {
   const [failLimit, setFailLimit] = useState(5);
   const [lockoutDur, setLockoutDur] = useState("15 minutes");
   const [sessionTo, setSessionTo] = useState("1 hour");
+
   const handleTfaToggle = (setter, v) => {
     setter(v);
     showToast("Security setting updated.");
   };
-  return <div className="space-y-4">
+
+  return (
+    <div className="space-y-4">
       <Card>
         <SectionLabel>Two-Factor Authentication Requirement</SectionLabel>
         <div className="divide-y divide-[var(--hw-neutral-100)]">
@@ -380,24 +404,26 @@ const SecurityTab = ({ showToast }) => {
           <div>
             <FieldLabel htmlFor="sec-minlen">Minimum password length</FieldLabel>
             <input
-    id="sec-minlen"
-    type="number"
-    min={6}
-    max={32}
-    value={minLength}
-    onChange={(e) => setMinLength(Number(e.target.value))}
-    className={inputCls}
-  />
+              id="sec-minlen"
+              type="number"
+              min={6}
+              max={32}
+              value={minLength}
+              onChange={(e) => setMinLength(Number(e.target.value))}
+              className={inputCls}
+            />
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             {[
-    { label: "Require uppercase letter", val: reqUpper, set: setReqUpper },
-    { label: "Require number", val: reqNumber, set: setReqNumber },
-    { label: "Require special character", val: reqSpecial, set: setReqSpecial }
-  ].map((row) => <div key={row.label} className="flex items-center justify-between py-3">
+              { label: "Require uppercase letter", val: reqUpper, set: setReqUpper },
+              { label: "Require number", val: reqNumber, set: setReqNumber },
+              { label: "Require special character", val: reqSpecial, set: setReqSpecial }
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between py-3">
                 <p className="text-[14px] font-semibold text-black">{row.label}</p>
                 <Toggle on={row.val} onChange={(v) => row.set(v)} />
-              </div>)}
+              </div>
+            ))}
           </div>
           <GreenBtn onClick={() => showToast("System security settings saved.")}>Save security settings</GreenBtn>
         </div>
@@ -409,25 +435,27 @@ const SecurityTab = ({ showToast }) => {
           <div>
             <FieldLabel htmlFor="sec-fail">Failed attempt limit</FieldLabel>
             <input
-    id="sec-fail"
-    type="number"
-    min={3}
-    max={20}
-    value={failLimit}
-    onChange={(e) => setFailLimit(Number(e.target.value))}
-    className={inputCls}
-  />
+              id="sec-fail"
+              type="number"
+              min={3}
+              max={20}
+              value={failLimit}
+              onChange={(e) => setFailLimit(Number(e.target.value))}
+              className={inputCls}
+            />
           </div>
           <div>
             <FieldLabel htmlFor="sec-lockout">Lockout duration</FieldLabel>
             <div className="relative">
               <select
-    id="sec-lockout"
-    value={lockoutDur}
-    onChange={(e) => setLockoutDur(e.target.value)}
-    className={`${inputCls} appearance-none pr-9`}
-  >
-                {["5 minutes", "15 minutes", "30 minutes", "1 hour", "24 hours"].map((o) => <option key={o}>{o}</option>)}
+                id="sec-lockout"
+                value={lockoutDur}
+                onChange={(e) => setLockoutDur(e.target.value)}
+                className={`${inputCls} appearance-none pr-9`}
+              >
+                {["5 minutes", "15 minutes", "30 minutes", "1 hour", "24 hours"].map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
             </div>
@@ -443,12 +471,14 @@ const SecurityTab = ({ showToast }) => {
             <FieldLabel htmlFor="sec-session">Timeout duration</FieldLabel>
             <div className="relative">
               <select
-    id="sec-session"
-    value={sessionTo}
-    onChange={(e) => setSessionTo(e.target.value)}
-    className={`${inputCls} appearance-none pr-9`}
-  >
-                {["15 minutes", "30 minutes", "1 hour", "4 hours", "8 hours", "Never"].map((o) => <option key={o}>{o}</option>)}
+                id="sec-session"
+                value={sessionTo}
+                onChange={(e) => setSessionTo(e.target.value)}
+                className={`${inputCls} appearance-none pr-9`}
+              >
+                {["15 minutes", "30 minutes", "1 hour", "4 hours", "8 hours", "Never"].map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
             </div>
@@ -456,149 +486,246 @@ const SecurityTab = ({ showToast }) => {
           <GreenBtn onClick={() => showToast("System security settings saved.")}>Save security settings</GreenBtn>
         </div>
       </Card>
-    </div>;
+    </div>
+  );
 };
-const INITIAL_SERVICES = [
-  { id: "postgres", label: "PostgreSQL Database", status: "Connected", lastChecked: "Today, 7:55 AM", notes: "Database operational" },
-  { id: "fastapi", label: "FastAPI Backend", status: "Running", lastChecked: "Today, 7:55 AM", notes: "All endpoints responsive" },
-  { id: "forecast", label: "Forecast Service", status: "Running", lastChecked: "Today, 7:55 AM", notes: "Latest forecast completed" },
-  { id: "psa", label: "PSA OpenStat API", status: "Connected", lastChecked: "Today, 7:30 AM", notes: "Production data available" },
-  { id: "weather", label: "OpenMeteo Weather API", status: "Connected", lastChecked: "Today, 7:30 AM", notes: "Weather forecast available" },
-  { id: "gcal", label: "Google Calendar API", status: "Connected", lastChecked: "Today, 7:30 AM", notes: "Holiday data synced" },
-  { id: "upload", label: "File Upload Service", status: "Running", lastChecked: "Today, 7:55 AM", notes: "Upload processing active" },
-  { id: "sync", label: "Offline Sync Service", status: "Running", lastChecked: "Today, 7:55 AM", notes: "Sync queue empty" }
+
+// The 4 core architectural dependencies of HarvestWise
+const INITIAL_CORE_SERVICES = [
+  {
+    id: "postgres",
+    label: "PostgreSQL Database",
+    status: "Not checked",
+    lastChecked: "-",
+    notes: "Core database and table storage"
+  },
+  {
+    id: "fastapi",
+    label: "FastAPI Backend Service",
+    status: "Not checked",
+    lastChecked: "-",
+    notes: "REST API, authentication, and backend endpoints"
+  },
+  {
+    id: "open_meteo",
+    label: "Open-Meteo Weather API",
+    status: "Not checked",
+    lastChecked: "-",
+    notes: "Precipitation and temperature forecast endpoint"
+  },
+  {
+    id: "psa_openstat",
+    label: "PSA OpenStat API",
+    status: "Not checked",
+    lastChecked: "-",
+    notes: "Regional historical production volume endpoint"
+  }
 ];
+
+function getStatusStyle(status) {
+  if (["Healthy", "Connected", "Running", "Operational"].includes(status)) {
+    return {
+      text: "text-emerald-700 font-medium",
+      dot: "bg-emerald-500",
+      label: status
+    };
+  }
+  if (["Degraded", "Slow", "Warning"].includes(status)) {
+    return {
+      text: "text-amber-700 font-medium",
+      dot: "bg-amber-500",
+      label: status
+    };
+  }
+  if (["Unavailable", "Disconnected", "Failed", "Offline"].includes(status)) {
+    return {
+      text: "text-rose-600 font-medium",
+      dot: "bg-rose-500",
+      label: status
+    };
+  }
+  return {
+    text: "text-[var(--hw-neutral-500)]",
+    dot: "bg-[var(--hw-neutral-400)]",
+    label: status || "Not checked"
+  };
+}
+
 const HealthTab = ({ showToast }) => {
   const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState("Today, 8:00 AM");
-  const [services, setServices] = useState(INITIAL_SERVICES);
+  const [lastRefreshed, setLastRefreshed] = useState("-");
+  const [services, setServices] = useState(INITIAL_CORE_SERVICES);
+
   const handleRefresh = () => {
     if (refreshing) return;
     setRefreshing(true);
     setTimeout(() => {
-      const now = /* @__PURE__ */ new Date();
+      const now = new Date();
       const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
       const ts = `Today, ${timeStr}`;
       setLastRefreshed(ts);
-      setServices((prev) => prev.map((s) => ({ ...s, lastChecked: ts })));
+      setServices([
+        {
+          id: "postgres",
+          label: "PostgreSQL Database",
+          status: "Healthy",
+          lastChecked: ts,
+          notes: "Database reachable & responsive"
+        },
+        {
+          id: "fastapi",
+          label: "FastAPI Backend Service",
+          status: "Healthy",
+          lastChecked: ts,
+          notes: "Application server operational"
+        },
+        {
+          id: "open_meteo",
+          label: "Open-Meteo Weather API",
+          status: "Healthy",
+          lastChecked: ts,
+          notes: "Weather forecast endpoint active"
+        },
+        {
+          id: "psa_openstat",
+          label: "PSA OpenStat API",
+          status: "Healthy",
+          lastChecked: ts,
+          notes: "OpenStat data sync endpoint active"
+        }
+      ]);
       setRefreshing(false);
-      showToast("System status updated.");
-    }, 1800);
+      showToast("System health status updated.");
+    }, 1000);
   };
-  const isGood = (s) => ["Connected", "Running", "Operational"].includes(s);
-  return <Card>
+
+  return (
+    <Card>
       <div className="flex items-center justify-between mb-4">
         <SectionLabel>System Status</SectionLabel>
-        <span className="text-[12px] text-black">Last refreshed: {lastRefreshed}</span>
+        <span className="text-[12px] text-[var(--hw-neutral-500)]">Last refreshed: {lastRefreshed}</span>
       </div>
 
-      {
-    /* Desktop table */
-  }
-      <div className="hidden sm:block overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b border-[var(--hw-neutral-100)]">
-              {["Service", "Status", "Last Checked", "Notes"].map((h) => <th key={h} className="pb-3 pr-6 text-[12px] font-semibold text-black uppercase tracking-wide whitespace-nowrap">{h}</th>)}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-            {services.map((svc) => <tr key={svc.id}>
-                <td className="py-3 pr-6 text-[14px] font-semibold text-black whitespace-nowrap">{svc.label}</td>
-                <td className="py-3 pr-6">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isGood(svc.status) ? "bg-emerald-500" : "bg-red-500"}`} />
-                    <span className="text-[14px] text-black whitespace-nowrap">{svc.status}</span>
+      {services.length > 0 ? (
+        <>
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-[var(--hw-neutral-200)]">
+                  <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Service / Dependency</th>
+                  <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Status</th>
+                  <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Last Checked</th>
+                  <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                {services.map((s) => {
+                  const style = getStatusStyle(s.status);
+                  return (
+                    <tr key={s.id} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                      <td className="py-3.5 text-[14px] font-medium text-black">{s.label}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-2 text-[13px] ${style.text}`}>
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
+                          {style.label}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-[13px] text-black whitespace-nowrap">{s.lastChecked}</td>
+                      <td className="py-3.5 text-[13px] text-[var(--hw-neutral-600)]">{s.notes}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile list */}
+          <div className="sm:hidden divide-y divide-[var(--hw-neutral-100)]">
+            {services.map((s) => {
+              const style = getStatusStyle(s.status);
+              return (
+                <div key={s.id} className="py-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[14px] font-medium text-black">{s.label}</p>
+                    <span className={`inline-flex items-center gap-1.5 text-[12px] ${style.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
+                      {style.label}
+                    </span>
                   </div>
-                </td>
-                <td className="py-3 pr-6 text-[14px] text-black whitespace-nowrap">{svc.lastChecked}</td>
-                <td className="py-3 text-[14px] text-black">{svc.notes}</td>
-              </tr>)}
-          </tbody>
-        </table>
-      </div>
+                  <div className="flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)]">
+                    <span>{s.notes}</span>
+                    <span>{s.lastChecked}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="py-12 text-center text-[14px] text-black">
+          No health checks are configured.
+        </div>
+      )}
 
-      {
-    /* Mobile stacked */
-  }
-      <div className="sm:hidden divide-y divide-[var(--hw-neutral-100)]">
-        {services.map((svc) => <div key={svc.id} className="py-3 space-y-0.5">
-            <p className="text-[14px] font-semibold text-black">{svc.label}</p>
-            <div className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isGood(svc.status) ? "bg-emerald-500" : "bg-red-500"}`} />
-              <span className="text-[13px] text-black">{svc.status}</span>
-            </div>
-            <p className="text-[12px] text-black">{svc.lastChecked} · {svc.notes}</p>
-          </div>)}
+      <div className="pt-4 border-t border-[var(--hw-neutral-100)] mt-4">
+        <button
+          type="button"
+          disabled={refreshing}
+          onClick={handleRefresh}
+          className="inline-flex items-center gap-2 h-10 px-4 text-[13px] font-semibold text-black bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 transition-colors cursor-pointer"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Refreshing status..." : "Refresh status"}
+        </button>
       </div>
-
-      <div className="pt-4 border-t border-[var(--hw-neutral-100)] mt-2">
-        <GhostBtn onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? <><Loader2 className="w-4 h-4 animate-spin" />Refreshing system status…</> : <><RefreshCw className="w-4 h-4" />Refresh status</>}
-        </GhostBtn>
-      </div>
-    </Card>;
-};
-function AdminSystemManagement() {
-  const [params, setParams] = useSearchParams();
-  const tabParam = params.get("tab");
-  const [activeTab, setActiveTab] = useState(
-    tabParam && ["users", "roles", "security", "health"].includes(tabParam) ? tabParam : "users"
+    </Card>
   );
-  const [toastMsg, setToastMsg] = useState("");
-  const toastTimer = useRef(null);
-  const tabBarRef = useRef(null);
-  useEffect(() => {
-    if (tabParam && ["users", "roles", "security", "health"].includes(tabParam)) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
-  useEffect(() => {
-    const bar = tabBarRef.current;
-    if (!bar) return;
-    const btn = bar.querySelector('[data-active="true"]');
-    if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [activeTab]);
-  const showToast = (msg) => {
-    setToastMsg(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastMsg(""), 2800);
-  };
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setParams({ tab });
-  };
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+};
+
+function AdminSystemManagement() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "users";
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const showToast = (msg) => setToastMsg(msg);
+
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
       <PageHeader
         title="System Management"
-        description="Manage users, permissions, security, and system health."
+        description="Manage users, security, and system health."
       />
 
-      <div
-    ref={tabBarRef}
-    className="flex gap-1 border-b border-[var(--hw-neutral-200)] mb-5"
-    style={{ overflowX: "auto", scrollbarWidth: "none" }}
-  >
-        {TABS.map((t) => <button
-    key={t.id}
-    data-active={activeTab === t.id ? "true" : "false"}
-    type="button"
-    onClick={() => handleTabChange(t.id)}
-    className={`flex-shrink-0 px-3.5 py-2.5 text-[14px] font-medium rounded-t-lg border-b-2 transition-all whitespace-nowrap ${activeTab === t.id ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]" : "border-transparent text-black hover:text-[var(--hw-green-700)]"}`}
-  >
+      {/* Tab bar */}
+      <div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setSearchParams({ tab: t.id })}
+            className={`pb-3 px-4 text-[14px] font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
+              activeTab === t.id
+                ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]"
+                : "border-transparent text-black hover:text-[var(--hw-green-700)]"
+            }`}
+          >
             {t.label}
-          </button>)}
+          </button>
+        ))}
       </div>
 
-      {activeTab === "users" && <UserAccountsTab showToast={showToast} />}
-      {activeTab === "roles" && <RolesTab showToast={showToast} />}
+      {/* Tab content */}
+      {activeTab === "users" && <UsersTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
       {activeTab === "health" && <HealthTab showToast={showToast} />}
 
-      <Toast message={toastMsg} />
-    </div>;
+      {toastMsg && <Toast msg={toastMsg} onDismiss={() => setToastMsg(null)} />}
+    </div>
+  );
 }
+
 export {
-  MOCK_USERS,
-  AdminSystemManagement as default
+  AdminSystemManagement as default,
+  MOCK_USERS
 };

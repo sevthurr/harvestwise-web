@@ -3,8 +3,7 @@ const RecommendEntry = ({
   hasDraft,
   onStart,
   onContinueDraft
-}) => <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-    <div className="max-w-lg mx-auto space-y-6">
+}) => <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
       {
   /* Icon + title */
 }
@@ -61,16 +60,13 @@ const RecommendEntry = ({
           </button>}
       </div>
 
-      {
-  /* Disclaimer */
-}
+      {/* Disclaimer */}
       <div className="flex items-start gap-2 text-[var(--hw-neutral-700)]">
         <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <p className="text-xs leading-relaxed">
           Results are estimates and do not guarantee income.
         </p>
       </div>
-    </div>
   </div>;
 export {
   RecommendEntry

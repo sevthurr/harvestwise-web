@@ -113,8 +113,7 @@ function ForecastDetailPage() {
   const allHistoryRows = getHistoryRows(commodity.id, marketStr, "Retail", rec.currentPrice);
   const periodCount = period === "7d" ? 7 : period === "14d" ? 14 : period === "21d" ? 21 : 28;
   const historyRows = allHistoryRows.slice(0, Math.min(periodCount, allHistoryRows.length));
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {
     /* Back + commodity switcher */
@@ -376,7 +375,6 @@ function ForecastDetailPage() {
           View another commodity →
         </button>
 
-      </div>
     </div>;
 }
 export {

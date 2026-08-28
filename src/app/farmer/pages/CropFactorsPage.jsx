@@ -56,10 +56,10 @@ function CropFactorsPage() {
     profitPerKg: margin,
     totalCost: updatedTotalCost,
     harvestQty: qty,
-    summary: margin >= 0 ? `At \u20B1${sellingBasis}/kg selling price, you may earn about \u20B1${margin}/kg above your cost to recover of \u20B1${costToRecover}/kg. Total estimated profit for ${qty} kg harvest: \u20B1${(margin * qty).toLocaleString("en-PH")}.` : `The current price of \u20B1${sellingBasis}/kg is below your cost to recover of \u20B1${costToRecover}/kg. Selling now would result in a loss. Consider waiting for prices to improve.`
+    expenses: crop.expenses || (crop.costMethod === "detailed" ? crop.expenses : null),
+    summary: margin >= 0 ? `At ₱${sellingBasis}/kg selling price, you may earn about ₱${margin}/kg above your cost to recover of ₱${costToRecover}/kg. Total estimated profit for ${qty} kg harvest: ₱${(margin * qty).toLocaleString("en-PH")}.` : `The current price of ₱${sellingBasis}/kg is below your cost to recover of ₱${costToRecover}/kg. Selling now would result in a loss. Consider waiting for prices to improve.`
   };
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {
     /* Breadcrumb */
@@ -106,7 +106,6 @@ function CropFactorsPage() {
           Assess this crop again
         </button>
 
-      </div>
     </div>;
 }
 export {

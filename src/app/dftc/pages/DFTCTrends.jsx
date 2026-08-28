@@ -941,7 +941,7 @@ function DFTCTrends() {
       </div>
     </div>;
   return <div className="min-h-screen bg-[var(--hw-neutral-50)]">
-      <div className="max-w-[1240px] mx-auto px-4 md:px-8 lg:px-10 py-5">
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8">
         <PageHeader
     title="Market Trends"
     description="Explore commodity price trends and arrival volume trends at DFTC markets."

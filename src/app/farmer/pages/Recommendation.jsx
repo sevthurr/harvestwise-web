@@ -449,12 +449,8 @@ const CropDetailView = ({ crop, onBack }) => {
   const wRisk = weatherRisk(weatherReason?.text ?? "");
   const weatherTabData = getWeatherData(wRisk, crop.name);
   if (weatherReason?.text) weatherTabData.summary = weatherReason.text;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
-
-        {
-    /* Breadcrumb */
-  }
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+        {/* Breadcrumb */}
         <Breadcrumb
     items={[
       { label: "Crop Calendar", onClick: onBack },
@@ -513,7 +509,6 @@ const CropDetailView = ({ crop, onBack }) => {
           <ArrowRight className="w-4 h-4" />
         </button>
 
-      </div>
     </div>;
 };
 function RecommendationPage() {
@@ -595,48 +590,46 @@ function RecommendationPage() {
   
   if (loading) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5">
-        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
-          <div className="space-y-1">
-            <Skeleton className="h-7 w-40 rounded" />
-            <Skeleton className="h-4 w-64 rounded" />
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+        <div className="space-y-1">
+          <Skeleton className="h-7 w-40 rounded" />
+          <Skeleton className="h-4 w-64 rounded" />
+        </div>
+        {/* Calendar Month Selector Skeleton */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3 animate-pulse">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-32 rounded" />
+            <Skeleton className="h-8 w-20 rounded-xl" />
           </div>
-          {/* Calendar Month Selector Skeleton */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3 animate-pulse">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-5 w-32 rounded" />
-              <Skeleton className="h-8 w-20 rounded-xl" />
-            </div>
-            <div className="grid grid-cols-7 gap-2 pt-2">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 rounded-xl" />
-              ))}
-            </div>
+          <div className="grid grid-cols-7 gap-2 pt-2">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 rounded-xl" />
+            ))}
           </div>
-          {/* Recommended Crops Cards Skeleton */}
-          <div className="space-y-3">
-            <Skeleton className="h-5 w-44 rounded" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-                  <div className="space-y-1.5 flex-1">
-                    <Skeleton className="h-4 w-28 rounded" />
-                    <Skeleton className="h-3 w-16 rounded" />
-                  </div>
+        </div>
+        {/* Recommended Crops Cards Skeleton */}
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-44 rounded" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-28 rounded" />
+                  <Skeleton className="h-3 w-16 rounded" />
                 </div>
-                <Skeleton className="h-16 w-full rounded-xl" />
               </div>
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-                  <div className="space-y-1.5 flex-1">
-                    <Skeleton className="h-4 w-28 rounded" />
-                    <Skeleton className="h-3 w-16 rounded" />
-                  </div>
+              <Skeleton className="h-16 w-full rounded-xl" />
+            </div>
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-28 rounded" />
+                  <Skeleton className="h-3 w-16 rounded" />
                 </div>
-                <Skeleton className="h-16 w-full rounded-xl" />
               </div>
+              <Skeleton className="h-16 w-full rounded-xl" />
             </div>
           </div>
         </div>
@@ -644,12 +637,9 @@ function RecommendationPage() {
     );
   }
   
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-6">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
-        {
-    /* ── Header ── */
-  }
+        {/* ── Header ── */}
         <div>
           <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
             Crop Calendar
@@ -845,8 +835,7 @@ function RecommendationPage() {
           </button>
         </div>
 
-      </div>
-    </div>;
+      </div>;
 }
 export {
   RecommendationPage as default

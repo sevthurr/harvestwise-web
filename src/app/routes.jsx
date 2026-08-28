@@ -70,6 +70,7 @@ import AdminAbout from "./admin/pages/AdminAbout";
 import AdminSystemManagement from "./admin/pages/AdminSystemManagement";
 import AdminUserDetails from "./admin/pages/AdminUserDetails";
 import AdminAuditLogs from "./admin/pages/AdminAuditLogs";
+import AdminNotifications from "./admin/pages/AdminNotifications";
 
 export const router = createBrowserRouter([
   // ── Auth pages (unprotected) ──────────────────────────────────────────────────
@@ -161,6 +162,9 @@ export const router = createBrowserRouter([
       { path: "data-sources/:sourceId",   Component: AdminDataSourceDetail  },
       { path: "import",                   Component: AdminImport            },
       { path: "forecasting",     Component: AdminForecasting  },
+      { path: "modules",                  Component: AdminAnalytics      },
+      { path: "modules/basis/:resultId",  Component: AdminAnalyticsBasis },
+      { path: "modules/thresholds",       Component: AdminAnalyticsThresholds },
       { path: "analytics",                Component: AdminAnalytics      },
       { path: "analytics/basis/:resultId", Component: AdminAnalyticsBasis },
       { path: "analytics/thresholds",      Component: AdminAnalyticsThresholds },
@@ -173,6 +177,7 @@ export const router = createBrowserRouter([
       { path: "system",               Component: AdminSystemManagement },
       { path: "system/user/:userId", Component: AdminUserDetails      },
       { path: "audit-logs",            Component: AdminAuditLogs        },
+      { path: "notifications",         Component: AdminNotifications    },
     ],
   },
 ]);

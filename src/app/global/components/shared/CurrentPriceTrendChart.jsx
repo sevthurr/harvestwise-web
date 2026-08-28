@@ -90,7 +90,7 @@ function CurrentPriceTrendChart({
   >
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={chartData} margin={{ top: 10, right: 16, bottom: 4, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--hw-neutral-100)" />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--hw-neutral-100)" />
           <XAxis
     dataKey={xDataKey}
     tick={{ fontSize: 11, fill: "#1f2937" }}
@@ -108,15 +108,16 @@ function CurrentPriceTrendChart({
           <Tooltip content={<PriceTooltip commodity={commodity} />} />
           {varieties.map(({ variety }, idx) => {
     const key = variety || commodity;
+    const color = palette[idx % palette.length];
     return <Line
       key={key}
       type="monotone"
       dataKey={key}
-      stroke={palette[idx % palette.length]}
+      stroke={color}
       strokeWidth={2}
-      dot={false}
+      dot={{ r: 4, fill: "white", stroke: color, strokeWidth: 2 }}
       connectNulls={false}
-      activeDot={{ r: 4, strokeWidth: 0 }}
+      activeDot={{ r: 6, strokeWidth: 0, fill: color }}
     />;
   })}
           <Brush

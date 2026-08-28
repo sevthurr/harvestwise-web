@@ -29,6 +29,9 @@ import {
 } from "lucide-react";
 import { PriceDetailView } from "./PriceDetailView";
 import { ArrivalVolumeTrendChart } from "../../../global/components/shared/ArrivalVolumeTrendChart";
+import { ProductionSourcePieChart } from "../../../global/components/shared/ProductionSourcePieChart";
+import { ArrivalSourcePieChart } from "../../../global/components/shared/ArrivalSourcePieChart";
+import { CostBreakdownPieChart } from "../../../global/components/shared/CostBreakdownPieChart";
 import {
   HW_ID_TO_NAME,
   getArrivalSeries,
@@ -441,9 +444,16 @@ const ArrivalTab = ({ data, commodityId }) => {
           </>}
       </div>
 
-      {
-    /* What this means */
-  }
+      {/* Arrival Volume Sources Breakdown */}
+      <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
+        <div>
+          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Arrival Volume by Source</p>
+          <p className="text-[11px] text-[var(--hw-neutral-600)]">DFTC registered farms vs other supplying sources.</p>
+        </div>
+        <ArrivalSourcePieChart data={data?.sources} height={190} />
+      </div>
+
+      {/* What this means */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{data.summary}</p>
@@ -514,6 +524,15 @@ const ProductionTab = ({ data }) => {
           </> : <div className="flex items-center justify-center h-[175px] bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
             No production data available.
           </div>}
+      </div>
+
+      {/* Production Sources Breakdown */}
+      <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
+        <div>
+          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Major Production Sources</p>
+          <p className="text-[11px] text-[var(--hw-neutral-600)]">Production volume distribution across Davao City, Davao Del Sur, and Bukidnon.</p>
+        </div>
+        <ProductionSourcePieChart data={data?.sources} height={190} />
       </div>
 
       {/* Summary */}
@@ -738,20 +757,29 @@ const ProfitabilityTab = ({ data }) => {
         </div>
       </div>
 
-      {
-    /* Total projections */
-  }
+      {/* Total projections */}
       {data.harvestQty != null && data.totalCost != null && totalRevenue != null && totalProfit != null && <div className="border border-[var(--hw-neutral-200)] rounded-xl divide-y divide-[var(--hw-neutral-100)] overflow-hidden">
           {[
     { label: "Harvest quantity", value: `${data.harvestQty} kg` },
-    { label: "Total estimated cost", value: `\u20B1${data.totalCost.toLocaleString("en-PH")}` },
-    { label: "Total estimated revenue", value: `\u20B1${totalRevenue.toLocaleString("en-PH")}` },
-    { label: isProfit ? "Total estimated profit" : "Estimated loss", value: `${isProfit ? "+" : ""}\u20B1${totalProfit.toLocaleString("en-PH")}`, accent: true }
+    { label: "Total estimated cost", value: `₱${data.totalCost.toLocaleString("en-PH")}` },
+    { label: "Total estimated revenue", value: `₱${totalRevenue.toLocaleString("en-PH")}` },
+    { label: isProfit ? "Total estimated profit" : "Estimated loss", value: `${isProfit ? "+" : ""}₱${totalProfit.toLocaleString("en-PH")}`, accent: true }
   ].map((r) => <div key={r.label} className={`flex items-center justify-between px-4 py-2.5 text-[13px] ${"accent" in r && r.accent ? "bg-[var(--hw-green-50)]" : ""}`}>
               <span className={"accent" in r && r.accent ? "font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-900)]"}>{r.label}</span>
               <span className={"accent" in r && r.accent ? "font-bold text-[var(--hw-green-800)]" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
             </div>)}
         </div>}
+
+      {/* Detailed Cost Breakdown Pie Chart (only if detailed expenses are provided) */}
+      {data.expenses && data.expenses.length > 0 && (
+        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
+          <div>
+            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Detailed Cost Breakdown</p>
+            <p className="text-[11px] text-[var(--hw-neutral-600)]">Itemized expenses entered for this planting cycle.</p>
+          </div>
+          <CostBreakdownPieChart expenses={data.expenses} height={200} />
+        </div>
+      )}
 
       {
     /* Summary */

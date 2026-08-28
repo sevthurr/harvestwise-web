@@ -78,7 +78,7 @@ function AdminDashboard() {
       insight: "Advisory outputs generated from analytical processing.",
       color: "text-blue-700",
       dot: "bg-blue-500",
-      path: "/admin/analytics"
+      path: "/admin/modules"
     },
     {
       value: kpis.forReview.toString(),
@@ -112,7 +112,7 @@ function AdminDashboard() {
           <button
             key={c.label}
             onClick={() => navigate(c.path)}
-            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98] group"
+            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98] group flex flex-col justify-between"
           >
             <div className="flex items-center gap-1.5 mb-2">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
@@ -120,10 +120,12 @@ function AdminDashboard() {
                 {c.label}
               </span>
             </div>
-            <p className={`text-3xl font-bold ${c.color} leading-none`}>{c.value}</p>
-            <p className={`text-[11px] font-medium mt-2 ${c.color} opacity-0 group-hover:opacity-100 transition-opacity`}>
-              View →
-            </p>
+            <div className="flex items-end justify-between mt-auto pt-1">
+              <p className={`text-[11px] font-semibold ${c.color} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                View →
+              </p>
+              <p className={`text-3xl font-bold ${c.color} leading-none text-right ml-auto`}>{c.value}</p>
+            </div>
           </button>
         ))}
       </div>

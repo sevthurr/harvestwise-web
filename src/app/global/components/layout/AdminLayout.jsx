@@ -13,7 +13,8 @@ import {
   ArrowLeftRight,
   RefreshCw,
   Info,
-  Shield
+  Shield,
+  Layers
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
@@ -21,16 +22,16 @@ import { useAuth } from "../../contexts/AuthContext";
 const FONT_SIZE_MAP = { small: "13px", medium: "15px", large: "17px" };
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", path: "/admin", Icon: LayoutDashboard },
-  { id: "data", label: "Data", path: "/admin/data-sources", Icon: Database },
+  { id: "modules", label: "Analytical Modules", path: "/admin/modules", Icon: Layers },
   { id: "forecasting", label: "Forecasting", path: "/admin/forecasting", Icon: TrendingUp },
-  { id: "analytics", label: "Analytics", path: "/admin/analytics", Icon: LineChart },
+  { id: "data", label: "Data Sources", path: "/admin/data-sources", Icon: Database },
   { id: "history", label: "History", path: "/admin/history", Icon: History }
 ];
 function getActive(pathname) {
   if (pathname === "/admin") return "dashboard";
   if (pathname.startsWith("/admin/data-sources") || pathname.startsWith("/admin/import")) return "data";
   if (pathname.startsWith("/admin/forecasting")) return "forecasting";
-  if (pathname.startsWith("/admin/analytics")) return "analytics";
+  if (pathname.startsWith("/admin/modules") || pathname.startsWith("/admin/analytics")) return "modules";
   if (pathname.startsWith("/admin/history")) return "history";
   return "";
 }
@@ -115,7 +116,11 @@ const AdminLayoutInner = () => {
           <div className="flex-1" />
 
           {/* Bell */}
-          <button className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0">
+          <button
+            onClick={() => navigate("/admin/notifications")}
+            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0 cursor-pointer"
+            aria-label="Notifications"
+          >
             <Bell className="w-4 h-4" />
           </button>
 

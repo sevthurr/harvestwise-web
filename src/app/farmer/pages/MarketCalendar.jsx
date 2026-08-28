@@ -269,29 +269,26 @@ function MarketCalendarPage() {
 
   if (loadingEvents && (!rawMarketEvents || rawMarketEvents.length === 0)) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5">
-        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-6 w-36 rounded" />
-              <div className="flex gap-2">
-                <Skeleton className="h-8 w-8 rounded-lg" />
-                <Skeleton className="h-8 w-8 rounded-lg" />
-              </div>
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-36 rounded" />
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-8 rounded-lg" />
+              <Skeleton className="h-8 w-8 rounded-lg" />
             </div>
-            <div className="grid grid-cols-7 gap-2 pt-2">
-              {Array.from({ length: 28 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 rounded-xl" />
-              ))}
-            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-2 pt-2">
+            {Array.from({ length: 28 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 rounded-xl" />
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         <div className="flex items-center justify-end">
           <button
@@ -403,8 +400,6 @@ function MarketCalendarPage() {
   })}
             </div>
           </section>}
-
-      </div>
 
       <InfoOverlay open={noteOpen} onClose={() => setNoteOpen(false)} />
 

@@ -75,23 +75,21 @@ function PriceTrendDetailPage() {
 
   if (loading) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5">
-        <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-16 rounded" />
-            <span className="text-[var(--hw-neutral-300)]">/</span>
-            <Skeleton className="h-4 w-24 rounded" />
-          </div>
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
-            <div className="flex items-center gap-4">
-              <Skeleton className="w-12 h-12 rounded-2xl flex-shrink-0" />
-              <div className="space-y-2 flex-1">
-                <Skeleton className="h-6 w-36 rounded" />
-                <Skeleton className="h-3.5 w-24 rounded" />
-              </div>
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-16 rounded" />
+          <span className="text-[var(--hw-neutral-300)]">/</span>
+          <Skeleton className="h-4 w-24 rounded" />
+        </div>
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4 animate-pulse">
+          <div className="flex items-center gap-4">
+            <Skeleton className="w-12 h-12 rounded-2xl flex-shrink-0" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-6 w-36 rounded" />
+              <Skeleton className="h-3.5 w-24 rounded" />
             </div>
-            <Skeleton className="h-48 w-full rounded-xl" />
           </div>
+          <Skeleton className="h-48 w-full rounded-xl" />
         </div>
       </div>
     );
@@ -122,8 +120,7 @@ function PriceTrendDetailPage() {
   ];
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {/* Breadcrumb */}
         <Breadcrumb
@@ -156,7 +153,6 @@ function PriceTrendDetailPage() {
           <TrendingUp className="w-4 h-4" />
         </button>
 
-      </div>
     </div>
   );
 }

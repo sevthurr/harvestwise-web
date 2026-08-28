@@ -88,14 +88,14 @@ const RULE_EDIT_CONFIGS = {
     fields: [
       { key: "rec_min", label: "Recommended minimum", defaultValue: "0.00" },
       { key: "rec_max", label: "Recommended maximum", defaultValue: "0.99" },
-      { key: "cons_min", label: "Plant Conservatively minimum", defaultValue: "1.00" },
-      { key: "cons_max", label: "Plant Conservatively maximum", defaultValue: "1.99" },
+      { key: "cons_min", label: "Proceed with Caution minimum", defaultValue: "1.00" },
+      { key: "cons_max", label: "Proceed with Caution maximum", defaultValue: "1.99" },
       { key: "avoid_min", label: "Avoid for Now minimum", defaultValue: "2.00" },
       { key: "avoid_max", label: "Avoid for Now maximum", defaultValue: "3.00" }
     ],
     sample: [
       { scenario: "Final weighted score = 0.75", result: "Recommended", color: "text-emerald-700" },
-      { scenario: "Final weighted score = 1.35", result: "Plant Conservatively", color: "text-amber-700" },
+      { scenario: "Final weighted score = 1.35", result: "Proceed with Caution", color: "text-amber-700" },
       { scenario: "Final weighted score = 2.20", result: "Avoid for Now", color: "text-red-700" }
     ]
   }

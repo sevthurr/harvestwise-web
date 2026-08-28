@@ -54,7 +54,7 @@ const MyCropCard = ({ crop, onView }) => {
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
       {/* Top: icon + name + status */}
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <CommodityIllustration commodityId={crop.commodity} className="w-11 h-11 flex-shrink-0" />
+        <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-11 h-11 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[var(--hw-neutral-900)] leading-tight">
             {displayName}
@@ -130,8 +130,7 @@ function MyCropsPage() {
     [crops, stageFilter]
   );
   const tabCount = (tab) => crops.filter((c) => matchesStage(c, tab)).length;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {/* Page header */}
         <div className="flex items-start justify-between gap-4">
@@ -174,7 +173,6 @@ function MyCropsPage() {
         {visible.length === 0 ? <MyCropsEmpty stage={stageFilter} onNew={() => navigate("/farmer/assess")} /> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {visible.map((crop) => <MyCropCard key={crop.id} crop={crop} onView={(id) => navigate(`/farmer/crops/${id}`)} />)}
           </div>}
-      </div>
     </div>;
 }
 export {
