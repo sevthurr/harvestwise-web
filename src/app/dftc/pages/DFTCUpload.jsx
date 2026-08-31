@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Loader2
 } from "lucide-react";
+import { DFTCKpiCard } from "../components/DFTCKpiCard";
 const DATASET_TYPES = [
   "Daily Retail Prices",
   "Daily Wholesale Prices",
@@ -705,23 +706,44 @@ function DFTCUpload() {
             </p>
           </div>
 
-          {
-    /* 4 summary cards */
-  }
+          {/* 4 summary cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-    { key: "accepted", label: "Accepted for HarvestWise Processing", count: VALIDATION_COUNTS.accepted, numCls: "text-emerald-700" },
-    { key: "temporary", label: "Temporary Market Records", count: VALIDATION_COUNTS.temporary, numCls: "text-[var(--hw-neutral-800)]" },
-    { key: "correction", label: "Needs Correction", count: Math.max(0, VALIDATION_COUNTS.correction - correctedRows.size), numCls: "text-amber-700" },
-    { key: "duplicate", label: "Duplicate Records", count: VALIDATION_COUNTS.duplicate, numCls: "text-[var(--hw-neutral-800)]" }
-  ].map((c) => <button
-    key={c.key}
-    onClick={() => setActiveTab(c.key)}
-    className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 text-left transition-colors ${activeTab === c.key ? "border-[var(--hw-green-400)]" : "border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)]"}`}
-  >
-                <p className={`text-2xl font-bold leading-none ${c.numCls}`}>{c.count}</p>
-                <p className="text-[11px] font-medium text-[var(--hw-neutral-700)] mt-1.5 leading-snug">{c.label}</p>
-              </button>)}
+            <DFTCKpiCard
+              label="Accepted for Analytics"
+              value={VALIDATION_COUNTS.accepted ?? 0}
+              dotColor="bg-emerald-500"
+              labelColor="text-[var(--hw-neutral-700)]"
+              valueColor="text-emerald-700"
+              active={activeTab === "accepted"}
+              onClick={() => setActiveTab("accepted")}
+            />
+            <DFTCKpiCard
+              label="Reporting-Only Records"
+              value={VALIDATION_COUNTS.temporary ?? 0}
+              dotColor="bg-[var(--hw-neutral-400)]"
+              labelColor="text-[var(--hw-neutral-700)]"
+              valueColor="text-[var(--hw-neutral-800)]"
+              active={activeTab === "temporary"}
+              onClick={() => setActiveTab("temporary")}
+            />
+            <DFTCKpiCard
+              label="Needs Correction"
+              value={Math.max(0, VALIDATION_COUNTS.correction - correctedRows.size)}
+              dotColor="bg-amber-500"
+              labelColor="text-[var(--hw-neutral-700)]"
+              valueColor="text-amber-700"
+              active={activeTab === "correction"}
+              onClick={() => setActiveTab("correction")}
+            />
+            <DFTCKpiCard
+              label="Duplicate Records"
+              value={VALIDATION_COUNTS.duplicate ?? 0}
+              dotColor="bg-[var(--hw-neutral-400)]"
+              labelColor="text-[var(--hw-neutral-700)]"
+              valueColor="text-[var(--hw-neutral-800)]"
+              active={activeTab === "duplicate"}
+              onClick={() => setActiveTab("duplicate")}
+            />
           </div>
 
           {

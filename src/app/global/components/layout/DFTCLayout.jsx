@@ -54,7 +54,8 @@ function DFTCLayoutInner() {
   const active = getActive(location.pathname);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
-  const name = user?.name ?? "DFTC Personnel";
+  const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
+  const name = user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : (user?.name || user?.username || "DFTC Personnel");
   const initials = getInitials(name);
   useEffect(() => {
     const handler = (e) => {
@@ -101,11 +102,6 @@ function DFTCLayoutInner() {
 
           <div className="flex-1" />
 
-          <div className="hidden lg:flex items-center gap-1.5 text-[var(--hw-neutral-400)] flex-shrink-0">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="text-[12px]">Aug 2, 8:30 AM</span>
-          </div>
-
           <button className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0">
             <Bell className="w-4 h-4" />
           </button>
@@ -139,7 +135,7 @@ function DFTCLayoutInner() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{name}</p>
-                    <p className="text-[12px] text-black">DFTC</p>
+                    <p className="text-[12px] text-black">{roleName}</p>
                   </div>
                 </button>
 
@@ -231,7 +227,7 @@ function DFTCLayoutInner() {
             </div>
             <div className="min-w-0">
               <p className="text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">{name}</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)]">DFTC</p>
+              <p className="text-[12px] text-[var(--hw-neutral-500)]">{roleName}</p>
             </div>
           </div>
         </div>
