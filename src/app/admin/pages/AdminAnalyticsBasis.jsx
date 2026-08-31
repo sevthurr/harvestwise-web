@@ -22,6 +22,7 @@ import {
 } from "../components/analytics/adminAnalyticsMockData";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
+import { analyticsApi } from "../../../services/api";
 
 const TOP_10_COMMODITIES = [
   "Ampalaya",
@@ -402,6 +403,62 @@ function AdminAnalyticsBasis() {
 
   const availableVariants = useMemo(() => selectedCommodity !== "-" ? getVariants(selectedCommodity) : [], [selectedCommodity]);
 
+  const [commodities, setCommodities] = useState(TOP_10_COMMODITIES);
+  const [thresholdRules, setThresholdRules] = useState([]);
+  const [thresholdsError, setThresholdsError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadCommodities() {
+      try {
+        const data = await analyticsApi.listCommodities();
+        if (!active) return;
+        const raw = Array.isArray(data) ? data : data?.items || [];
+        const names = raw
+          .filter((c) => (c.isTop10 ?? c.is_top10 ?? true) && (c.isActive ?? c.is_active ?? true))
+          .map((c) => c.name || c.baseName || c.base_name)
+          .filter(Boolean);
+        if (names.length > 0) setCommodities(names);
+      } catch {
+        // keep the TOP_10 fallback list
+      }
+    }
+    loadCommodities();
+    return () => { active = false; };
+  }, []);
+
+  // Load the threshold rules for the current module from the admin API
+  useEffect(() => {
+    let active = true;
+    async function loadThresholds() {
+      try {
+        const data = await analyticsApi.listThresholds();
+        if (!active) return;
+        const module = (data?.items || []).find((m) => m.module_name === result.module);
+        if (!module) return;
+        const rules =
+          module.rules && module.rules.length > 0
+            ? module.rules
+            : (await analyticsApi.listThresholdRules(module.id))?.items || [];
+        if (active) setThresholdRules(rules);
+      } catch (err) {
+        if (active) setThresholdsError(err.message || "Failed to load threshold rules.");
+      }
+    }
+    loadThresholds();
+    return () => { active = false; };
+  }, [result.module]);
+
+  const shownThresholds =
+    thresholdRules.length > 0
+      ? thresholdRules.map((r) => ({
+          classification: r.classification,
+          rule:
+            r.display_text ||
+            (((r.operator || "") + " " + (r.threshold_value != null ? Math.round(Number(r.threshold_value) * 100) / 100 : "")).trim())
+        }))
+      : result.thresholds || [];
+
   const handleCommodityChange = (newCommodity) => {
     navigate(`/admin/modules/basis/${resultId}?commodity=${encodeURIComponent(newCommodity)}&variety=All%20Varieties`, { replace: true });
   };
@@ -464,7 +521,7 @@ function AdminAnalyticsBasis() {
             <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Commodity</label>
             <CustomCommodityDropdown
               value={selectedCommodity}
-              options={TOP_10_COMMODITIES}
+              options={commodities}
               onChange={handleCommodityChange}
             />
           </div>
@@ -679,9 +736,12 @@ function AdminAnalyticsBasis() {
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
           </div>
+          {thresholdsError && (
+            <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
+          )}
           <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
-            {result.thresholds && result.thresholds.length > 0 ? (
-              result.thresholds.map((t) => {
+            {shownThresholds && shownThresholds.length > 0 ? (
+              shownThresholds.map((t) => {
                 const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
                 return (
                   <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">

@@ -1,15 +1,43 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 import {
-  HISTORY,
   STATUS_CFG,
   ACTIVITY_TYPES,
   JOB_STATUSES
 } from "../components/analytics/adminHistoryMockData";
+import { ingestionApi } from "../../../services/api";
 
 const PAGE_SIZE = 20;
+
+function formatHistoryDT(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function mapHistory(rec) {
+  const source = rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
+  const result = rec.error_message
+    ? rec.error_message
+    : rec.records_imported != null
+      ? `${rec.records_imported.toLocaleString()} records imported`
+      : "No result summary available.";
+  return {
+    id: rec.id,
+    historyId: rec.id,
+    datetime: formatHistoryDT(rec.finished_at || rec.started_at),
+    sourceModule: source,
+    activity: "File Upload",
+    result,
+    status: rec.status,
+    initiatedBy: rec.uploaded_by_user_id || "System",
+    details: rec.error_message ? { "Error message": rec.error_message } : {},
+    relatedArea: rec.file_format || "—"
+  };
+}
 
 function parseRecordDate(datetime) {
   if (!datetime) return new Date(0);
@@ -26,11 +54,30 @@ function AdminHistory() {
   const [dateTo, setDateTo] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const data = await ingestionApi.getHistory({ page, page_size: PAGE_SIZE });
+        if (!active) return;
+        setHistory((data?.items || []).map(mapHistory));
+      } catch (err) {
+        if (active) setHistory([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [page]);
 
   const hasActiveFilters = !!(filterType || filterStatus || dateFrom || dateTo || search.trim());
 
   const filtered = useMemo(() => {
-    return HISTORY.filter((r) => {
+    return history.filter((r) => {
       if (filterType && r.activity !== filterType) return false;
       if (filterStatus && r.status !== filterStatus) return false;
       if (dateFrom) {
@@ -64,7 +111,7 @@ function AdminHistory() {
       }
       return true;
     });
-  }, [filterType, filterStatus, dateFrom, dateTo, search]);
+  }, [filterType, filterStatus, dateFrom, dateTo, search, history]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -189,9 +236,9 @@ function AdminHistory() {
           </button>
         </div>
 
-        {HISTORY.length > 0 && filtered.length !== HISTORY.length && (
+        {history.length > 0 && filtered.length !== history.length && (
           <p className="text-[12px] text-[var(--hw-neutral-500)]">
-            Showing {filtered.length} of {HISTORY.length} activities
+            Showing {filtered.length} of {history.length} activities
           </p>
         )}
       </div>
@@ -252,9 +299,9 @@ function AdminHistory() {
                         <Inbox className="w-5 h-5" />
                       </div>
                       <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">
-                        {HISTORY.length === 0 ? "No processing history available." : "No processing history matches your search."}
+                        {history.length === 0 ? "No processing history available." : "No processing history matches your search."}
                       </p>
-                      {hasActiveFilters && HISTORY.length > 0 && (
+                      {hasActiveFilters && history.length > 0 && (
                         <button
                           onClick={resetFilters}
                           className="text-[13px] text-[var(--hw-green-700)] font-medium hover:underline cursor-pointer"
@@ -331,9 +378,9 @@ function AdminHistory() {
         ) : (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-8 text-center space-y-2">
             <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">
-              {HISTORY.length === 0 ? "No processing history available." : "No processing history matches your search."}
+              {history.length === 0 ? "No processing history available." : "No processing history matches your search."}
             </p>
-            {hasActiveFilters && HISTORY.length > 0 && (
+            {hasActiveFilters && history.length > 0 && (
               <button
                 onClick={resetFilters}
                 className="text-[13px] text-[var(--hw-green-700)] font-medium hover:underline"

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { ChevronLeft, Edit2, X, Info } from "lucide-react";
 import {
-  MODULE_RULES,
+  CLASSIFICATION_COLORS,
   FINAL_ADVISORY_CUTOFFS
 } from "../components/analytics/adminAnalyticsMockData";
+import { analyticsApi } from "../../../services/api";
 const RULE_EDIT_CONFIGS = {
   "Price Outlook": {
     description: "Compares the forecast midpoint with the recent average price to classify the price direction.",
@@ -108,14 +109,48 @@ const RULE_IDS = {
   "Profitability": "RULE-PROF-001",
   "Final Advisory Cutoffs": "RULE-FAC-001"
 };
-const EditModal = ({ ruleName, onClose }) => {
+const MODULE_ORDER = [
+  "Price Outlook",
+  "Arrival Pressure",
+  "Historical Seasonal Production Level",
+  "Weather Risk",
+  "Profitability"
+];
+function fmtUpdated(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function ruleText(r) {
+  if (r.display_text) return r.display_text;
+  if (r.operator == null || r.threshold_value == null) return "-";
+  return `${r.operator} ${Math.round(Number(r.threshold_value) * 100) / 100}`;
+}
+const EditModal = ({ ruleName, rules = [], onSaved, onClose }) => {
   const config = RULE_EDIT_CONFIGS[ruleName];
   const [values, setValues] = useState(
     Object.fromEntries(config.fields.map((f) => [f.key, f.defaultValue]))
   );
   const [saved, setSaved] = useState(false);
   const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
-  const handleSave = () => {
+  const handleSave = async () => {
+    try {
+      for (const f of config.fields) {
+        if (f.isSelect) continue;
+        const rule = rules.find((r) => r.rule_key === f.key);
+        if (!rule) continue;
+        const val = Number(values[f.key]);
+        if (isNaN(val)) continue;
+        await analyticsApi.updateThresholdRule(rule.id, {
+          threshold_value: val,
+          display_text: f.unit ? `${values[f.key]} ${f.unit}` : values[f.key]
+        });
+      }
+      onSaved();
+    } catch (err) {
+      return;
+    }
     setSaved(true);
     setTimeout(onClose, 800);
   };
@@ -189,8 +224,55 @@ const EditModal = ({ ruleName, onClose }) => {
 function AdminAnalyticsThresholds() {
   const navigate = useNavigate();
   const [editingRule, setEditingRule] = useState(null);
+  const [modules, setModules] = useState([]);
+  const [rulesByModule, setRulesByModule] = useState({});
+  const [thresholdsLoading, setThresholdsLoading] = useState(true);
+  const [thresholdsError, setThresholdsError] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      setThresholdsError("");
+      const data = await analyticsApi.listThresholds();
+      const mods = data?.items || [];
+      setModules(mods);
+      const byMod = {};
+      for (const m of mods) {
+        const rules =
+          m.rules && m.rules.length > 0
+            ? m.rules
+            : (await analyticsApi.listThresholdRules(m.id))?.items || [];
+        byMod[m.id] = rules;
+      }
+      setRulesByModule(byMod);
+    } catch (err) {
+      setThresholdsError(err.message || "Failed to load threshold modules.");
+    } finally {
+      setThresholdsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const displayModules = modules
+    .map((m) => ({
+      id: m.id,
+      module: m.module_name,
+      ruleId: m.id,
+      source: m.source_label || "-",
+      lastUpdated: fmtUpdated(m.updated_at) || "-",
+      rules: (rulesByModule[m.id] || []).map((r) => ({
+        classification: r.classification,
+        rule: ruleText(r),
+        color: CLASSIFICATION_COLORS[r.classification] ?? "text-[var(--hw-neutral-700)]"
+      }))
+    }))
+    .sort((a, b) => MODULE_ORDER.indexOf(a.module) - MODULE_ORDER.indexOf(b.module));
+
+  const editingModule = editingRule ? modules.find((m) => m.module_name === editingRule) : null;
+  const editingRules = editingModule ? rulesByModule[editingModule.id] || [] : [];
+
   return <>
-      {editingRule && <EditModal ruleName={editingRule} onClose={() => setEditingRule(null)} />}
+      {editingRule && <EditModal ruleName={editingRule} rules={editingRules} onSaved={refresh} onClose={() => setEditingRule(null)} />}
 
       <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 
@@ -214,7 +296,13 @@ function AdminAnalyticsThresholds() {
         {
     /* Module rule cards */
   }
-        {MODULE_RULES.map((mr) => <div key={mr.module} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        {thresholdsLoading ? <div className="px-5 py-10 text-center text-[13px] text-[var(--hw-neutral-500)] bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
+            Loading threshold modules…
+          </div> : thresholdsError ? <div className="px-5 py-4 text-[13px] text-red-600 bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
+            {thresholdsError}
+          </div> : displayModules.length === 0 ? <div className="px-5 py-10 text-center text-[13px] text-[var(--hw-neutral-500)] bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
+            No threshold modules configured.
+          </div> : displayModules.map((mr) => <div key={mr.module} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
             <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[var(--hw-neutral-100)]">
               <div>
                 <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mb-0.5">{mr.ruleId}</p>
@@ -241,7 +329,7 @@ function AdminAnalyticsThresholds() {
               </div>
             </div>
             <div className="divide-y divide-[var(--hw-neutral-100)]">
-              {mr.rules.map((r) => <div key={r.classification} className="flex items-center justify-between gap-4 px-5 py-3">
+              {mr.rules.length === 0 ? <div className="px-5 py-4 text-[12px] text-[var(--hw-neutral-500)]">No rules configured for this module.</div> : mr.rules.map((r) => <div key={r.classification} className="flex items-center justify-between gap-4 px-5 py-3">
                   <span className={`text-[13px] font-semibold flex-shrink-0 ${r.color}`}>{r.classification}</span>
                   <span className="text-[13px] text-[var(--hw-neutral-800)] text-right">{r.rule}</span>
                 </div>)}

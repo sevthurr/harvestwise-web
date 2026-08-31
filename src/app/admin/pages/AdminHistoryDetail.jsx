@@ -1,14 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ChevronLeft, ChevronRight, Inbox } from "lucide-react";
-import {
-  HISTORY,
-  STATUS_CFG,
-  STEP_STATUS_CFG,
-  generateProcessedRecords
-} from "../components/analytics/adminHistoryMockData";
+import { STATUS_CFG, STEP_STATUS_CFG } from "../components/analytics/adminHistoryMockData";
+import { ingestionApi } from "../../../services/api";
 
 const PAGE_SIZE = 20;
+
+function formatDT(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function mapDetail(rec) {
+  const source = rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
+  const result = rec.error_message
+    ? rec.error_message
+    : rec.records_imported != null
+      ? `${rec.records_imported.toLocaleString()} records imported`
+      : "No result summary available.";
+  return {
+    id: rec.id,
+    historyId: rec.id,
+    datetime: formatDT(rec.finished_at || rec.started_at),
+    sourceModule: source,
+    activity: "File Upload",
+    result,
+    status: rec.status,
+    initiatedBy: rec.uploaded_by_user_id || "System",
+    details: rec.error_message ? { "Error message": rec.error_message, "File format": rec.file_format || "—" } : (rec.file_format ? { "File format": rec.file_format } : {}),
+    relatedArea: rec.file_format || "—"
+  };
+}
 
 function getEmptyRecordsMessage(activity) {
   switch (activity) {
@@ -29,8 +53,34 @@ function AdminHistoryDetail() {
   const { historyId } = useParams();
   const navigate = useNavigate();
   const [recordsPage, setRecordsPage] = useState(1);
+  const [record, setRecord] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const record = HISTORY.find((r) => r.id === historyId);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setRecord(null);
+    (async () => {
+      try {
+        const data = await ingestionApi.getHistoryDetail(historyId);
+        if (!active) return;
+        setRecord(mapDetail(data));
+      } catch (err) {
+        if (active) setRecord(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [historyId]);
+
+  if (loading) {
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-16 max-w-[1440px] mx-auto text-center space-y-3">
+        <p className="text-[15px] font-semibold text-[var(--hw-neutral-800)]">Loading history entry…</p>
+      </div>
+    );
+  }
 
   if (!record) {
     return (
@@ -51,12 +101,13 @@ function AdminHistoryDetail() {
   }
 
   const statusCfg = STATUS_CFG[record.status] || { color: "text-[var(--hw-neutral-700)]", dot: "bg-[var(--hw-neutral-400)]" };
-  const { columns, rows } = generateProcessedRecords(record);
-  const totalPages = columns.length > 0 && rows.length > 0 ? Math.ceil(rows.length / PAGE_SIZE) : 0;
-  const pageRows = rows.slice((recordsPage - 1) * PAGE_SIZE, recordsPage * PAGE_SIZE);
+  const columns = [];
+  const rows = [];
+  const totalPages = 0;
+  const pageRows = [];
 
-  const hasSteps = Array.isArray(record.steps) && record.steps.length > 0;
-  const supportsProcessedRecords = record.activity !== "Weight / Threshold Update";
+  const hasSteps = false;
+  const supportsProcessedRecords = true;
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">

@@ -1,5 +1,5 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   RefreshCw,
@@ -15,6 +15,40 @@ import {
   Trash2,
   List
 } from "lucide-react";
+import { calendarApi } from "../../../services/api";
+
+function fmtISO(dateStr) {
+  return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "";
+}
+
+function toApiEvent(form) {
+  return {
+    event_name: form.name,
+    event_type: form.type,
+    start_date: form.from,
+    end_date: form.to || form.from,
+    recurrence: form.recurrence === "None" ? null : form.recurrence,
+    description: form.description || null,
+    status: form.status.toLowerCase()
+  };
+}
+
+function mapEvent(ev) {
+  return {
+    id: ev.id,
+    name: ev.event_name || "Untitled",
+    type: ev.event_type || "Others",
+    date: new Date(ev.start_date),
+    from: fmtDate(ev.start_date),
+    to: ev.end_date ? fmtDate(ev.end_date) : fmtDate(ev.start_date),
+    source: "Manual Entry",
+    recurrence: ev.recurrence || "None",
+    description: ev.description || undefined,
+    status: ev.status === "active" ? "Active" : "Inactive",
+    lastUpdated: ev.updated_at ? fmtDate(ev.updated_at) : fmtDate(ev.created_at)
+  };
+}
+
 const DATA_SOURCES = [];
 const STATUS_TEXT = {
   Updated: "text-emerald-700",
@@ -109,6 +143,22 @@ function AdminDataSources() {
   const [deleteEventId, setDeleteEventId] = useState(null);
   const [addForm, setAddForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await calendarApi.listEvents();
+        if (!active) return;
+        setEvents((data?.items || []).map(mapEvent));
+      } catch (err) {
+        if (active) setEvents([]);
+        // Calendar load failure keeps the dashboard usable with an empty calendar.
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   const calGrid = useMemo(() => buildGrid(calYear, calMonth), [calYear, calMonth]);
   const filteredEvents = useMemo(() => {
     const end = filterEnd(calFilter);
@@ -254,7 +304,7 @@ function AdminDataSources() {
     setAddForm(EMPTY_FORM);
     setFormError("");
   }} className={btnSecondary}>Cancel</button>
-          <button onClick={() => {
+          <button onClick={async () => {
     if (!addForm.name.trim() || !addForm.from) {
       setFormError("Event name and 'From' date are required.");
       return;
@@ -263,24 +313,15 @@ function AdminDataSources() {
       setFormError("'To' date cannot be earlier than 'From' date.");
       return;
     }
-    const d = new Date(addForm.from);
-    const newId = `CE-${String(events.length + 1).padStart(3, "0")}`;
-    setEvents((prev) => [...prev, {
-      id: newId,
-      name: addForm.name,
-      date: d,
-      from: fmtDate(addForm.from),
-      to: addForm.to ? fmtDate(addForm.to) : fmtDate(addForm.from),
-      type: addForm.type,
-      source: "Manual Entry",
-      recurrence: addForm.recurrence,
-      description: addForm.description || void 0,
-      status: addForm.status,
-      lastUpdated: fmtDate(new Date())
-    }]);
-    setShowAddModal(false);
-    setAddForm(EMPTY_FORM);
-    setFormError("");
+    try {
+      const created = await calendarApi.createEvent(toApiEvent(addForm));
+      setEvents((prev) => [...prev, mapEvent(created)]);
+      setShowAddModal(false);
+      setAddForm(EMPTY_FORM);
+      setFormError("");
+    } catch (err) {
+      setFormError(err.message || "Failed to create event.");
+    }
   }} className={btnPrimary}>Save Event</button>
         </div>
       </div>
@@ -311,7 +352,7 @@ function AdminDataSources() {
               setEditEventId(null);
               setFormError("");
             }} className={btnSecondary}>Cancel</button>
-            <button onClick={() => {
+            <button onClick={async () => {
       if (!editForm.name.trim() || !editForm.from) {
         setFormError("Event name and 'From' date are required.");
         return;
@@ -320,20 +361,14 @@ function AdminDataSources() {
         setFormError("'To' date cannot be earlier than 'From' date.");
         return;
       }
-      setEvents((prev) => prev.map((e) => e.id !== editEventId ? e : {
-        ...e,
-        name: editForm.name,
-        type: editForm.type,
-        date: new Date(editForm.from),
-        from: fmtDate(editForm.from),
-        to: editForm.to ? fmtDate(editForm.to) : fmtDate(editForm.from),
-        recurrence: editForm.recurrence,
-        description: editForm.description || void 0,
-        status: editForm.status,
-        lastUpdated: fmtDate(new Date())
-      }));
-      setEditEventId(null);
-      setFormError("");
+      try {
+        const updated = await calendarApi.updateEvent(editEventId, toApiEvent(editForm));
+        setEvents((prev) => prev.map((e) => e.id !== editEventId ? e : mapEvent(updated)));
+        setEditEventId(null);
+        setFormError("");
+      } catch (err) {
+        setFormError(err.message || "Failed to update event.");
+      }
     }} className={btnPrimary}>Save Changes</button>
           </div>
         </div>
@@ -360,8 +395,14 @@ function AdminDataSources() {
           </div>
           <div className="flex items-center justify-end gap-2">
             <button onClick={() => setDeleteEventId(null)} className={btnSecondary}>Cancel</button>
-            <button onClick={() => {
-      setEvents((prev) => prev.filter((e) => e.id !== deleteEventId));
+            <button onClick={async () => {
+      const id = deleteEventId;
+      try {
+        await calendarApi.deleteEvent(id);
+        setEvents((prev) => prev.filter((e) => e.id !== id));
+      } catch (err) {
+        // Keep the modal open context; deletion failure leaves event in place.
+      }
       setDeleteEventId(null);
     }} className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors">
               <Trash2 className="w-3.5 h-3.5" />Delete

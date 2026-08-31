@@ -5,6 +5,7 @@ import { ChevronDown, Info, X, Edit2, Sliders } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
+import { analyticsApi } from "../../../services/api";
 import {
   RESULTS,
   MODULES,
@@ -373,6 +374,12 @@ function AdminAnalytics() {
   const [phaseWeights, setPhaseWeights] = useState({});
   const [priceOutlookRules, setPriceOutlookRules] = useState(null);
   const [weatherRulesByCrop, setWeatherRulesByCrop] = useState({});
+  const [weightsLoading, setWeightsLoading] = useState(false);
+  const [weightsError, setWeightsError] = useState("");
+  const [weightIds, setWeightIds] = useState({});
+  const [thresholdsLoading, setThresholdsLoading] = useState(false);
+  const [thresholdsError, setThresholdsError] = useState("");
+  const [priceOutlookRuleIds, setPriceOutlookRuleIds] = useState({ fav: null, unfav: null });
 
   // Modals state
   const [editingPhase, setEditingPhase] = useState(null);
@@ -411,6 +418,76 @@ function AdminAnalytics() {
       }
     }
     loadCommodities();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Load adaptive weights from the admin weights API
+  useEffect(() => {
+    let active = true;
+    async function loadWeights() {
+      try {
+        setWeightsLoading(true);
+        const data = await analyticsApi.listWeights();
+        if (!active) return;
+        const byPhase = {};
+        const ids = {};
+        (data?.items || []).forEach((w) => {
+          if (!w.crop_stage) return;
+          byPhase[w.crop_stage] = {
+            "Price Outlook": Number((Number(w.price_outlook_weight) * 100).toFixed(2)),
+            "Arrival Pressure": Number((Number(w.arrival_pressure_weight) * 100).toFixed(2)),
+            "Historical Seasonal Production Level": Number((Number(w.historical_seasonal_production_weight) * 100).toFixed(2)),
+            "Weather Risk": Number((Number(w.weather_risk_weight) * 100).toFixed(2)),
+            Profitability: Number((Number(w.profitability_weight) * 100).toFixed(2))
+          };
+          ids[w.crop_stage] = w.id;
+        });
+        setPhaseWeights(byPhase);
+        setWeightIds(ids);
+      } catch (err) {
+        if (active) setWeightsError(err.message || "Failed to load weights.");
+      } finally {
+        if (active) setWeightsLoading(false);
+      }
+    }
+    loadWeights();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Load the Price Outlook threshold rules from the admin thresholds API
+  useEffect(() => {
+    let active = true;
+    async function loadThresholds() {
+      try {
+        setThresholdsLoading(true);
+        const data = await analyticsApi.listThresholds();
+        if (!active) return;
+        const poModule = (data?.items || []).find((m) => m.module_name === "Price Outlook");
+        if (!poModule) return;
+        const rules =
+          poModule.rules && poModule.rules.length > 0
+            ? poModule.rules
+            : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
+        const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
+        const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
+        if (fav && unfav) {
+          setPriceOutlookRules({
+            favMin: Math.round(Number(fav.threshold_value) * 100),
+            unfavMax: Math.round(Number(unfav.threshold_value) * 100)
+          });
+          setPriceOutlookRuleIds({ fav, unfav });
+        }
+      } catch (err) {
+        if (active) setThresholdsError(err.message || "Failed to load threshold rules.");
+      } finally {
+        if (active) setThresholdsLoading(false);
+      }
+    }
+    loadThresholds();
     return () => {
       active = false;
     };
@@ -471,6 +548,46 @@ function AdminAnalytics() {
   const currentCropWeatherKey = `${scopedCommodity}_${scopedVariety || "Standard"}`;
   const currentWeatherConfig = weatherRulesByCrop[currentCropWeatherKey];
 
+  const handleWeightSave = async (phase, updated) => {
+    try {
+      setWeightsError("");
+      const keys = ["price_outlook_weight", "arrival_pressure_weight", "historical_seasonal_production_weight", "weather_risk_weight", "profitability_weight"];
+      const vals = keys.map((_, i) => Math.round((updated[WEIGHT_MODULES[i]] || 0) * 100) / 10000);
+      vals[vals.length - 1] = Number((vals[vals.length - 1] + (1 - vals.reduce((a, b) => a + b, 0))).toFixed(4));
+      const payload = Object.fromEntries(keys.map((k, i) => [k, vals[i]]));
+      const existingId = weightIds[phase];
+      const saved = existingId
+        ? await analyticsApi.updateWeight(existingId, payload)
+        : await analyticsApi.createWeight({ crop_stage: phase, ...payload });
+      setWeightIds((prev) => ({ ...prev, [phase]: saved.id }));
+      setPhaseWeights((prev) => ({ ...prev, [phase]: updated }));
+    } catch (err) {
+      setWeightsError(err.message || "Failed to save weights.");
+    }
+  };
+
+  const handlePriceOutlookSave = async (updated) => {
+    try {
+      setThresholdsError("");
+      const { fav, unfav } = priceOutlookRuleIds;
+      const calls = [];
+      if (fav) {
+        calls.push(analyticsApi.updateThresholdRule(fav.id, {
+          threshold_value: Math.round(Number(updated.favMin) * 100) / 10000
+        }));
+      }
+      if (unfav) {
+        calls.push(analyticsApi.updateThresholdRule(unfav.id, {
+          threshold_value: Math.round(Number(updated.unfavMax) * 100) / 10000
+        }));
+      }
+      await Promise.all(calls);
+      setPriceOutlookRules({ favMin: Number(updated.favMin), unfavMax: Number(updated.unfavMax) });
+    } catch (err) {
+      setThresholdsError(err.message || "Failed to save threshold rules.");
+    }
+  };
+
   return (
     <>
       {editingPhase && (
@@ -478,16 +595,14 @@ function AdminAnalytics() {
           phase={editingPhase}
           currentWeights={phaseWeights[editingPhase]}
           onClose={() => setEditingPhase(null)}
-          onSave={(phase, updated) => {
-            setPhaseWeights((prev) => ({ ...prev, [phase]: updated }));
-          }}
+          onSave={handleWeightSave}
         />
       )}
       {editingPriceOutlook && (
         <EditPriceOutlookModal
           currentRules={priceOutlookRules}
           onClose={() => setEditingPriceOutlook(false)}
-          onSave={(updated) => setPriceOutlookRules(updated)}
+          onSave={handlePriceOutlookSave}
         />
       )}
       {editingWeather && (
@@ -777,6 +892,13 @@ function AdminAnalytics() {
                 </p>
               </div>
 
+                {weightsLoading && (
+                  <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading adaptive weights…</p>
+                )}
+                {weightsError && (
+                  <p className="text-[12px] text-red-600">{weightsError}</p>
+                )}
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {["Planning", "Planting", "Harvesting"].map((phase) => {
                   const weights = phaseWeights[phase];
@@ -841,6 +963,13 @@ function AdminAnalytics() {
                   Threshold configurations and classification boundaries used by each analytical module.
                 </p>
               </div>
+
+                {thresholdsLoading && (
+                  <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading threshold rules…</p>
+                )}
+                {thresholdsError && (
+                  <p className="text-[12px] text-red-600">{thresholdsError}</p>
+                )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Price Outlook (Global Admin Configured) */}

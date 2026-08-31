@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Upload,
   Check,
@@ -8,16 +8,23 @@ import {
   Download,
   RefreshCw
 } from "lucide-react";
-const DATASET_TYPES = [
-  "Bangkerohan Retail Prices",
-  "DFTC Retail Prices",
-  "DFTC Wholesale Prices",
-  "DFTC Arrival Volume",
-  "PSA Historical Production",
-  "Weather Data",
-  "Public Holidays",
-  "Local Events"
-];
+import { ingestionApi } from "../../../services/api";
+
+const DATA_TYPE_MAP = {
+  "DFTC Wholesale Prices": "dftc_daily_wholesale",
+  "DFTC Retail Prices": "dftc_daily_retail",
+  "Bangkerohan Retail Prices": "bankerohan_daily_retail",
+  "Bangkerohan Wholesale Prices": "bankerohan_daily_wholesale",
+  "DFTC Arrival Volume": "arrival",
+  "PSA Historical Production": "production",
+  "Weather Data": "weather",
+  "Commodity Metadata": "commodity",
+  "Price Consolidated Wholesale": "price_consolidated_wholesale",
+  "Price Consolidated Retail": "price_consolidated_retail",
+  "Price Consolidated Landing": "price_consolidated_landing"
+};
+
+const DATASET_TYPES = Object.keys(DATA_TYPE_MAP);
 const ORGS = [
   "DA-AMAD Davao City",
   "DFTC Davao City",
@@ -49,22 +56,50 @@ function AdminImport() {
   const [org, setOrg] = useState("");
   const [period, setPeriod] = useState("");
   const [fileName, setFileName] = useState("");
+  const [file, setFile] = useState(null);
   const [currentStep, setCurrentStep] = useState(0);
-  const handleMockUpload = () => {
-    setFileName("bangkerohan_prices_jun23_2026.csv");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const fileRef = useRef(null);
+  const handleFileSelect = (e) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    setFile(selected);
+    setFileName(selected.name);
+    setUploadError("");
+    setUploadMessage("");
     setStep("preview");
+    setCurrentStep(0);
   };
   const handleValidate = () => {
+    if (!datasetType) {
+      setUploadError("Select a dataset type before validating.");
+      return;
+    }
     setStep("validated");
     setCurrentStep(1);
   };
-  const handleImport = () => {
+  const handleImport = async () => {
+    if (!file) return;
+    setUploading(true);
+    setUploadError("");
+    setUploadMessage("");
     setStep("importing");
     setCurrentStep(2);
-    setTimeout(() => {
+    try {
+      const dataType = DATA_TYPE_MAP[datasetType];
+      const res = await ingestionApi.uploadFile(file, dataType, false);
+      setUploadMessage(res?.message || "Import accepted and processing.");
       setStep("done");
       setCurrentStep(3);
-    }, 1500);
+    } catch (err) {
+      setUploadError(err.message || "Upload failed.");
+      setStep("validated");
+      setCurrentStep(1);
+    } finally {
+      setUploading(false);
+    }
   };
   const handleReset = () => {
     setStep("form");
@@ -73,6 +108,10 @@ function AdminImport() {
     setDatasetType("");
     setOrg("");
     setPeriod("");
+    setFile(null);
+    setUploadError("");
+    setUploadMessage("");
+    if (fileRef.current) fileRef.current.value = "";
   };
   const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
   return <div className="px-4 md:px-8 lg:px-10 py-5">
@@ -141,7 +180,7 @@ function AdminImport() {
     /* File upload area */
   }
             {!fileName ? <button
-    onClick={handleMockUpload}
+    onClick={() => fileRef.current?.click()}
     className="w-full border-2 border-dashed border-[var(--hw-neutral-300)] rounded-2xl p-8 flex flex-col items-center gap-3 hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors"
   >
                 <div className="p-3 bg-[var(--hw-neutral-100)] rounded-2xl">
@@ -151,16 +190,20 @@ function AdminImport() {
                   <p className="text-[15px] font-medium text-[var(--hw-neutral-700)]">Drop file here or click to upload</p>
                   <p className="text-[13px] text-[var(--hw-neutral-800)] mt-1">CSV or Excel (.xlsx) · Max 10 MB</p>
                 </div>
+                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm,.ods,.tsv,.parquet,.feather" className="hidden" onChange={handleFileSelect} />
               </button> : <div className="flex items-center gap-3 p-3.5 bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl">
                 <FileText className="w-5 h-5 text-[var(--hw-green-700)] flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{fileName}</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-700)]">42 KB · Ready to validate</p>
+                  <p className="text-[12px] text-[var(--hw-neutral-700)]">{file ? `${(file.size / 1024).toFixed(1)} KB` : ""} · Ready to validate</p>
                 </div>
-                <button onClick={() => setFileName("")} className="p-1 text-[var(--hw-neutral-400)] hover:text-red-500 transition-colors">
+                <button onClick={handleReset} className="p-1 text-[var(--hw-neutral-400)] hover:text-red-500 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>}
+            {uploadError && (
+              <p className="text-[12px] text-red-600 font-medium">{uploadError}</p>
+            )}
           </div>}
 
         {
@@ -231,7 +274,7 @@ function AdminImport() {
                   <Download className="w-3.5 h-3.5" />
                   Download Error Report
                 </button>
-                <button onClick={() => setFileName("")} className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
+                <button onClick={handleReset} className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" />
                   Replace File
                 </button>
@@ -239,14 +282,14 @@ function AdminImport() {
 
             {step === "importing" && <div className="flex items-center gap-3 py-2">
                 <RefreshCw className="w-4 h-4 text-[var(--hw-green-700)] animate-spin flex-shrink-0" />
-                <p className="text-[13px] text-[var(--hw-neutral-800)]">Importing {VALIDATION_RESULT.valid} valid records…</p>
+                <p className="text-[13px] text-[var(--hw-neutral-800)]">Uploading file for processing…</p>
               </div>}
 
             {step === "done" && <div className="space-y-3">
                 <div className="flex items-center gap-2 py-1">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                   <p className="text-[13px] font-medium text-emerald-700">
-                    Import complete. {VALIDATION_RESULT.valid} records stored successfully.
+                    {uploadMessage || "Import accepted and processing in the background."}
                   </p>
                 </div>
                 <button

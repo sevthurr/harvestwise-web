@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useNavigate } from "react-router";
 import {
@@ -10,6 +10,7 @@ import {
   ClipboardList
 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { adminApi } from "../../../services/api";
 
 const QUICK_ACCESS = [
   { Icon: Upload,             label: "Import & Validate",    path: "/admin/import" },
@@ -54,6 +55,46 @@ function AdminDashboard() {
 
   // Today's activity list (empty by default until populated by live logs)
   const [todayActivities, setTodayActivities] = useState([]);
+
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadDashboard() {
+      try {
+        const data = await adminApi.getDashboard();
+        if (!active) return;
+        const s = data?.summary || {};
+        setKpis({
+          uploadedToday: s.uploaded_today ?? 0,
+          advisoriesCreated: s.advisories_created_today ?? 0,
+          forReview: s.for_review ?? 0,
+          failedUploads: s.failed_uploads_today ?? 0
+        });
+        setAttentionSources((data?.sources_requiring_attention || []).map((src) => ({
+          source: src.source_name || "Unknown source",
+          type: src.source_type || src.ingestion_method || "—",
+          issue: src.reason || "Requires attention"
+        })));
+        setTodayActivities((data?.recent_audit_logs || []).map((log) => ({
+          time: log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
+          activity: log.action || "Activity recorded",
+          performedBy: log.user_id || "—",
+          status: "Completed"
+        })));
+        setNotificationCount(data?.notification_bell_count ?? 0);
+        setError(null);
+      } catch (e) {
+        if (active) setError(e.message || "Failed to load dashboard");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadDashboard();
+    return () => { active = false; };
+  }, []);
 
   // Greeting: use first_name; if unavailable, parse username before the first dot/underscore
   const rawFirstName =
@@ -105,6 +146,12 @@ function AdminDashboard() {
         title={greeting}
         description="Manage uploads, API sync, processed outputs, and publishing for the farmer app."
       />
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          Unable to load dashboard data: {error}
+        </div>
+      )}
 
       {/* ── KPI task cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
