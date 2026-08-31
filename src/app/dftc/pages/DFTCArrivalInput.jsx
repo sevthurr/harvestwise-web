@@ -6,7 +6,8 @@ import {
   MoreHorizontal,
   Check,
   Cloud,
-  CloudOff
+  CloudOff,
+  ArrowLeft
 } from "lucide-react";
 import {
   ARRIVAL_COMMODITIES,
@@ -376,22 +377,37 @@ function DFTCArrivalInput() {
           </div>
         </div>}
 
-      {
-    /* Header */
-  }
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Arrival Volume</h1>
-          <p className="text-[13px] text-[var(--hw-neutral-700)] mt-1">
+      {/* Header with ArrowLeft Back Button, SaveStatusIndicator, Subtext, and Review Button */}
+      <div className="space-y-1.5 mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/dftc/input")}
+              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors"
+              title="Back to Submit Data"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Arrival Volume</h1>
+          </div>
+          <SaveStatusIndicator />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 pl-8">
+          <p className="text-[13px] text-[var(--hw-neutral-700)]">
             DFTC · {formatDateLabel(defaultDate)}
           </p>
+          <button
+            onClick={() => { setDataName(generateArrivalName(defaultDate)); setReviewMode(true); }}
+            disabled={!canReview}
+            className="shrink-0 py-2 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[var(--shadow-xs)]"
+          >
+            {!canReview ? "Review (0)" : `Review (${enteredCount})`}
+          </button>
         </div>
-        <SaveStatusIndicator />
       </div>
 
-      {
-    /* Toolbar */
-  }
+      {/* Toolbar */}
       <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
@@ -590,28 +606,7 @@ function DFTCArrivalInput() {
   })}
       </div>
 
-      {
-    /* ActionBar */
-  }
-      <div className="h-14 md:hidden" />
-      <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-[var(--hw-neutral-200)] shadow-[var(--shadow-lg)] px-4 py-3 flex items-center justify-between gap-3 md:static md:shadow-none md:border-0 md:px-0 md:py-0 md:bg-transparent md:mb-8">
-        <button
-    onClick={() => navigate("/dftc/input")}
-    className="py-2.5 px-4 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-          Cancel
-        </button>
-        <button
-    onClick={() => {
-      setDataName(generateArrivalName(defaultDate));
-      setReviewMode(true);
-    }}
-    disabled={!canReview}
-    className="flex-1 md:flex-none md:min-w-[140px] py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-  >
-          {!canReview ? "Review (no data)" : `Review (${enteredCount})`}
-        </button>
-      </div>
+      {/* End of Container */}
     </div>;
 }
 export {

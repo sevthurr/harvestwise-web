@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ChevronLeft, AlertCircle, X, Download, Loader2, FileSpreadsheet } from "lucide-react";
+import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import { DATASETS } from "./dftc-submissions-data";
 const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]";
 const tdCls = "px-4 py-3 whitespace-nowrap text-[var(--hw-neutral-800)] text-[14px]";
@@ -239,20 +240,43 @@ function DFTCSubmissionDetail() {
         <p className="text-[14px] text-[var(--hw-neutral-800)]">Saved by {ds.savedBy}</p>
       </div>
 
-      {
-    /* Summary cards */
-  }
+      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-    { label: "Total Records", value: ds.totalRecords },
-    { label: "Analytics-Supported", value: ds.analyticsSupported },
-    { label: "Other Commodity Records", value: ds.otherCommodities },
-    { label: "Needs Correction", value: ds.needsCorrection },
-    { label: "Duplicate Records", value: ds.duplicate }
-  ].map((c) => <div key={c.label} className={`${cardCls} p-4`}>
-            <p className="text-2xl font-bold leading-none text-[var(--hw-neutral-900)]">{c.value}</p>
-            <p className="text-[12px] font-medium text-[var(--hw-neutral-800)] mt-1.5 leading-snug">{c.label}</p>
-          </div>)}
+        <DFTCKpiCard
+          label="Total Records"
+          value={ds.totalRecords ?? 0}
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-800)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
+        <DFTCKpiCard
+          label="Analytics-Supported"
+          value={ds.analyticsSupported ?? 0}
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-800)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
+        <DFTCKpiCard
+          label="Other Commodities"
+          value={ds.otherCommodities ?? 0}
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-800)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
+        <DFTCKpiCard
+          label="Needs Correction"
+          value={ds.needsCorrection ?? 0}
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-800)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
+        <DFTCKpiCard
+          label="Duplicate Records"
+          value={ds.duplicate ?? 0}
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-800)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
       </div>
 
       {
