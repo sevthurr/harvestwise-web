@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { authApi } from "../../../services/api";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
@@ -69,7 +70,7 @@ const NOTIF_ITEMS = [
 ];
 
 const AccountTab = ({ showToast }) => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const staff = user?.staff_profile || user?.staffProfile || {};
   const [form, setForm] = useState({
     firstName: staff?.first_name || staff?.firstName || user?.first_name || user?.firstName || "",
@@ -96,9 +97,27 @@ const AccountTab = ({ showToast }) => {
     setShowSaveModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setShowSaveModal(false);
-    showToast("Account updated successfully.");
+    setErrorMsg("");
+    try {
+      const payload = {};
+      if (form.firstName?.trim()) payload.first_name = form.firstName.trim();
+      if (form.lastName?.trim()) payload.last_name = form.lastName.trim();
+      if (form.middleName?.trim()) payload.middle_name = form.middleName.trim();
+      if (form.suffix && form.suffix !== "None") payload.suffix = form.suffix;
+      if (form.email?.trim()) payload.email = form.email.trim();
+      if (form.phone?.trim()) payload.phone = form.phone.trim();
+      await authApi.updateProfile(payload);
+      try {
+        await refreshUser();
+      } catch {
+        // Profile refresh is best-effort; the save already succeeded.
+      }
+      showToast("Account updated successfully.");
+    } catch (err) {
+      setErrorMsg(err.message || "Could not save your account information.");
+    }
   };
 
   return (
@@ -228,7 +247,7 @@ const SecurityTab = ({ showToast }) => {
   const [showCfm, setShowCfm] = useState(false);
   const [pwError, setPwError] = useState("");
 
-  const handlePasswordSave = () => {
+  const handlePasswordSave = async () => {
     if (!pw.current || !pw.newPw || !pw.confirm) {
       setPwError("Please fill in all fields.");
       return;
@@ -242,8 +261,16 @@ const SecurityTab = ({ showToast }) => {
       return;
     }
     setPwError("");
-    setPw({ current: "", newPw: "", confirm: "" });
-    showToast("Password updated successfully.");
+    try {
+      await authApi.changePassword({
+        current_password: pw.current,
+        new_password: pw.newPw,
+      });
+      setPw({ current: "", newPw: "", confirm: "" });
+      showToast("Password updated successfully.");
+    } catch (err) {
+      setPwError(err.message || "Could not update your password.");
+    }
   };
 
   const handlePasswordCancel = () => {

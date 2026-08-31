@@ -351,7 +351,7 @@ function AdminAnalyticsThresholds() {
             <div className="flex items-center gap-3 flex-shrink-0">
               <div className="text-right">
                 <p className="text-[11px] font-medium text-emerald-700">Active</p>
-                <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated Jun 1, 2026</p>
+                <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated -</p>
               </div>
               <button
     onClick={() => setEditingRule("Final Advisory Cutoffs")}

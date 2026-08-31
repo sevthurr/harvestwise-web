@@ -49,11 +49,16 @@ function buildUrl(url) {
 }
 
 async function _fetch(url, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...authHeaders(),
     ...(options.headers ?? {}),
   };
+  if (isFormData) {
+    delete headers['Content-Type'];
+    delete headers['content-type'];
+  }
   return fetch(buildUrl(url), { ...options, headers });
 }
 
@@ -153,6 +158,10 @@ export async function apiPut(url, body, options = {}) {
     method: 'PUT',
     body: JSON.stringify(body),
   });
+}
+
+export async function apiDelete(url, options = {}) {
+  return apiFetch(url, { ...options, method: 'DELETE' });
 }
 
 /**

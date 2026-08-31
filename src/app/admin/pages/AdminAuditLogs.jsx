@@ -21,7 +21,7 @@
  * the backend endpoint is wired up.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search,
   Download,
@@ -34,6 +34,7 @@ import {
   Eye
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
+import { adminApi } from "../../../services/api";
 
 // ─── Action colour mapping ─────────────────────────────────────────────────
 // Actions follow dot-notation: "<resource>.<verb>"
@@ -141,9 +142,10 @@ function AdminAuditLogs() {
 
   // ── Data state (empty until backend wired) ───────────────────────────────
   // Shape: { items: LogResponse[], total: number, page: number, page_size: number }
-  // LogResponse: { id, user_id, action, details, ip_address, created_at }
-  // NOTE: backend should also return actor_name (resolved from user_id join)
-  const [data] = useState({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
+  // LogResponse: { id, user_id, action, details, actor_name, ip_address, created_at }
+  const [data, setData] = useState({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const hasFilters = search.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
 
@@ -154,6 +156,31 @@ function AdminAuditLogs() {
     setDateTo("");
     setPage(1);
   };
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const params = { page, page_size: PAGE_SIZE };
+    const actionParts = [];
+    if (actionPrefix) actionParts.push(actionPrefix);
+    if (search.trim()) actionParts.push(search.trim());
+    if (actionParts.length) params.action = actionParts.join(".");
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    try {
+      const res = await adminApi.getAuditLogs(params);
+      setData(res || { items: [], total: 0, page, page_size: PAGE_SIZE });
+    } catch (err) {
+      setError(err.message || "Failed to load audit logs.");
+      setData((d) => ({ ...d, items: [], total: 0 }));
+    } finally {
+      setLoading(false);
+    }
+  }, [actionPrefix, search, dateFrom, dateTo, page]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
@@ -295,7 +322,22 @@ function AdminAuditLogs() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-              {data.items.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-6 h-6 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading audit logs...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <p className="text-[13px] text-red-600">{error}</p>
+                  </td>
+                </tr>
+              ) : data.items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-16 text-center">
                     <EmptyState filtered={hasFilters} />
@@ -332,7 +374,16 @@ function AdminAuditLogs() {
 
         {/* Mobile card list */}
         <div className="md:hidden">
-          {data.items.length === 0 ? (
+          {loading ? (
+            <div className="px-5 py-16 flex flex-col items-center gap-3">
+              <div className="w-6 h-6 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading audit logs...</p>
+            </div>
+          ) : error ? (
+            <div className="px-5 py-16 flex justify-center">
+              <p className="text-[13px] text-red-600">{error}</p>
+            </div>
+          ) : data.items.length === 0 ? (
             <div className="px-5 py-16 flex justify-center">
               <EmptyState filtered={hasFilters} />
             </div>

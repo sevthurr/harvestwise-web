@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -14,6 +14,7 @@ import {
   inputCls,
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
+import { adminApi } from "../../../services/api";
 
 const TABS = [
   { id: "users", label: "User Accounts" },
@@ -21,11 +22,7 @@ const TABS = [
   { id: "health", label: "System Health" }
 ];
 
-// Pure empty array — zero mock data
-const MOCK_USERS = [];
-
-const AddUserModal = ({ onClose, onAdd }) => {
-  const [form, setForm] = useState({
+const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     middleName: "",
@@ -37,8 +34,32 @@ const AddUserModal = ({ onClose, onAdd }) => {
     position: "",
     sendInvite: false
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const canSubmit = form.firstName.trim() && form.lastName.trim();
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setErrorMsg("");
+    try {
+      const created = await onAdd({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        middleName: form.middleName || null,
+        suffix: form.suffix === "None" ? null : form.suffix,
+        phone: form.phone || null,
+        email: form.email || null,
+        role: form.role,
+        is_active: form.status === "Active",
+        position: form.position || null
+      });
+      onClose();
+    } catch (err) {
+      setErrorMsg(err.message || "Failed to create user.");
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Modal title="Add User" onClose={onClose}>
@@ -186,21 +207,13 @@ const AddUserModal = ({ onClose, onAdd }) => {
         <div className="flex gap-2 justify-end pt-2">
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
           <GreenBtn
-            disabled={!canSubmit}
-            onClick={() => {
-              onAdd({
-                ...form,
-                id: String(Date.now()),
-                name: `${form.firstName} ${form.lastName}`.trim(),
-                lastLogin: "-",
-                dateCreated: "Today"
-              });
-              onClose();
-            }}
+            disabled={!canSubmit || submitting}
+            onClick={handleSubmit}
           >
-            Create User
+            {submitting ? "Creating..." : "Create User"}
           </GreenBtn>
         </div>
+        {errorMsg && <p className="text-[13px] text-red-600 font-medium text-right">{errorMsg}</p>}
       </div>
     </Modal>
   );
@@ -208,23 +221,52 @@ const AddUserModal = ({ onClose, onAdd }) => {
 
 const UsersTab = ({ showToast }) => {
   const navigate = useNavigate();
-  const [users, setUsers] = useState(MOCK_USERS);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
 
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await adminApi.listUsers({ page_size: 100 });
+      setUsers(res.items || []);
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const createUser = async (payload) => {
+    const created = await adminApi.createUser({
+      ...payload,
+      password: "Temp!pass123"
+    });
+    await loadUsers();
+    showToast("User account created successfully.");
+    return created;
+  };
+
   const filtered = users.filter((u) => {
-    const matchesRole = roleFilter === "All" || u.role === roleFilter;
+    const matchesRole = roleFilter === "All" || (u.role && u.role.role_name === roleFilter);
     const q = search.toLowerCase();
+    const name = `${u.first_name || ""} ${u.last_name || ""}`.trim().toLowerCase();
     const matchesSearch =
       !search ||
-      (u.name && u.name.toLowerCase().includes(q)) ||
+      name.includes(q) ||
       (u.email && u.email.toLowerCase().includes(q)) ||
       (u.phone && u.phone.toLowerCase().includes(q));
     return matchesRole && matchesSearch;
   });
 
   const getEmptyMessage = () => {
+    if (loading) return "Loading user accounts...";
     if (search) return "No user accounts match your search.";
     if (roleFilter === "Farmer") return "No Farmer accounts found.";
     if (roleFilter === "DFTC") return "No DFTC accounts found.";
@@ -278,14 +320,13 @@ const UsersTab = ({ showToast }) => {
             className="w-full text-left bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-1 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[15px] font-semibold text-black">{u.name || "-"}</p>
+              <p className="text-[15px] font-semibold text-black">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</p>
               <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" />
             </div>
             <p className="text-[13px] text-black">{u.email || "-"}</p>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-[13px] text-black font-medium">{u.role || "-"}</span>
-              <span className="text-[12px] text-black">{u.status || "-"}</span>
-              <span className="text-[12px] text-[var(--hw-neutral-500)]">Last login: {u.lastLogin || "-"}</span>
+              <span className="text-[13px] text-black font-medium">{u.role?.role_name || "-"}</span>
+              <span className="text-[12px] text-black">{u.is_active ? "Active" : "Inactive"}</span>
             </div>
           </button>
         ))}
@@ -320,11 +361,11 @@ const UsersTab = ({ showToast }) => {
                   onClick={() => navigate(`/admin/system/user/${u.id}`)}
                   className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                 >
-                  <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{u.name || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</td>
                   <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role || "-"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black">{u.status || "-"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{u.lastLogin || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role?.role_name || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black">{u.is_active ? "Active" : "Inactive"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">-</td>
                   <td className="px-5 py-3.5">
                     <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)]" />
                   </td>
@@ -350,10 +391,7 @@ const UsersTab = ({ showToast }) => {
       {showAddModal && (
         <AddUserModal
           onClose={() => setShowAddModal(false)}
-          onAdd={(newUser) => {
-            setUsers((prev) => [newUser, ...prev]);
-            showToast("User account created successfully.");
-          }}
+          onAdd={createUser}
         />
       )}
     </div>
@@ -727,5 +765,4 @@ function AdminSystemManagement() {
 
 export {
   AdminSystemManagement as default,
-  MOCK_USERS
 };

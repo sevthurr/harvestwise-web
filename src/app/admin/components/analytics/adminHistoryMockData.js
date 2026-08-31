@@ -25,24 +25,9 @@ const JOB_STATUSES = [
   "Failed"
 ];
 
-// Pure empty array — zero mock data
-const HISTORY = [];
-
-function generateProcessedRecords(record) {
-  if (!record) return { columns: [], rows: [] };
-  const meta = record.recordsMeta ?? {};
-  const total = meta.totalRows ?? 0;
-  if (record.recordsType === "none" || total === 0 || !record.rows) {
-    return { columns: [], rows: [] };
-  }
-  return { columns: record.columns || [], rows: record.rows || [] };
-}
-
 export {
   ACTIVITY_TYPES,
-  HISTORY,
   JOB_STATUSES,
   STATUS_CFG,
-  STEP_STATUS_CFG,
-  generateProcessedRecords
+  STEP_STATUS_CFG
 };

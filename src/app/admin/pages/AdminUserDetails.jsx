@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ChevronLeft, ChevronDown, Inbox } from "lucide-react";
 import {
@@ -12,18 +12,18 @@ import {
   inputCls,
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
-import { MOCK_USERS } from "./AdminSystemManagement";
+import { adminApi } from "../../../services/api";
 
 const EditForm = ({ user, onSave, onCancel }) => {
   const [form, setForm] = useState({
-    firstName: user?.firstName || "",
-    middleName: user?.middleName || "",
-    lastName: user?.lastName || "",
+    firstName: user?.first_name || "",
+    middleName: user?.middle_name || "",
+    lastName: user?.last_name || "",
     suffix: user?.suffix || "None",
     email: user?.email || "",
     phone: user?.phone || "",
-    role: user?.role || "Farmer",
-    status: user?.status || "Active",
+    role: user?.roleName || "Farmer",
+    status: user?.is_active ? "Active" : "Inactive",
     position: user?.position || ""
   });
 
@@ -32,14 +32,14 @@ const EditForm = ({ user, onSave, onCancel }) => {
   const handleSave = () => {
     onSave({
       ...user,
-      firstName: form.firstName,
-      middleName: form.middleName,
-      lastName: form.lastName,
-      suffix: form.suffix,
-      email: form.email,
-      phone: form.phone,
-      role: form.role,
-      status: form.status,
+      first_name: form.firstName,
+      middle_name: form.middleName || null,
+      last_name: form.lastName,
+      suffix: form.suffix === "None" ? null : form.suffix,
+      email: form.email || null,
+      phone: form.phone || null,
+      roleName: form.role,
+      is_active: form.status === "Active",
       name: `${form.firstName} ${form.lastName}`.trim(),
       position: form.position
     });
@@ -149,8 +149,8 @@ const EditForm = ({ user, onSave, onCancel }) => {
 function AdminUserDetails() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const initial = MOCK_USERS.find((u) => u.id === userId);
-  const [user, setUser] = useState(initial);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [disableModal, setDisableModal] = useState(false);
   const [enableModal, setEnableModal] = useState(false);
@@ -160,6 +160,38 @@ function AdminUserDetails() {
     setToast(msg);
     setTimeout(() => setToast(""), 3000);
   };
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    adminApi
+      .getUser(userId)
+      .then((u) => {
+        if (!active) return;
+        setUser({
+          ...u,
+          roleName: u.role?.role_name,
+          name: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
+        });
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-16 max-w-[1440px] mx-auto text-center space-y-3">
+        <p className="text-[15px] font-semibold text-black">Loading user account...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -180,22 +212,48 @@ function AdminUserDetails() {
     );
   }
 
-  const handleSaveEdit = (updated) => {
-    setUser(updated);
-    setEditing(false);
-    showToast("User account updated successfully.");
+  const handleSaveEdit = async (updated) => {
+    try {
+      await adminApi.updateUser(userId, {
+        first_name: updated.first_name,
+        last_name: updated.last_name,
+        middle_name: updated.middle_name,
+        suffix: updated.suffix,
+        email: updated.email,
+        phone: updated.phone,
+        role: updated.roleName,
+        is_active: updated.is_active,
+      });
+      setUser(updated);
+      setEditing(false);
+      showToast("User account updated successfully.");
+    } catch (err) {
+      showToast(err.message || "Failed to update user.");
+    }
   };
 
-  const handleDisable = () => {
-    setUser((u) => (u ? { ...u, status: "Inactive" } : u));
-    setDisableModal(false);
-    showToast("Account disabled successfully.");
+  const handleDisable = async () => {
+    try {
+      await adminApi.updateUser(userId, { is_active: false });
+      setUser((u) => (u ? { ...u, is_active: false, status: "Inactive" } : u));
+      setDisableModal(false);
+      showToast("Account disabled successfully.");
+    } catch (err) {
+      showToast(err.message || "Failed to disable account.");
+      setDisableModal(false);
+    }
   };
 
-  const handleEnable = () => {
-    setUser((u) => (u ? { ...u, status: "Active" } : u));
-    setEnableModal(false);
-    showToast("Account enabled successfully.");
+  const handleEnable = async () => {
+    try {
+      await adminApi.updateUser(userId, { is_active: true });
+      setUser((u) => (u ? { ...u, is_active: true, status: "Active" } : u));
+      setEnableModal(false);
+      showToast("Account enabled successfully.");
+    } catch (err) {
+      showToast(err.message || "Failed to enable account.");
+      setEnableModal(false);
+    }
   };
 
   const infoRow = (label, value) => (
@@ -222,12 +280,12 @@ function AdminUserDetails() {
         <div>
           <h1 className="text-[22px] font-bold text-black">{user.name || "User Details"}</h1>
           <p className="text-[15px] text-black mt-0.5">
-            {user.role || "-"} · {user.status || "-"}
+            {user.roleName || "-"} · {user.is_active ? "Active" : "Inactive"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!editing && <GhostBtn onClick={() => setEditing(true)}>Edit</GhostBtn>}
-          {user.status === "Active" ? (
+          {user.is_active ? (
             <button
               type="button"
               onClick={() => setDisableModal(true)}
@@ -249,14 +307,14 @@ function AdminUserDetails() {
         <Card>
           <SectionLabel>Account Information</SectionLabel>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {infoRow("First Name", user.firstName || "-")}
-            {infoRow("Middle Name", user.middleName || "—")}
-            {infoRow("Last Name", user.lastName || "-")}
+            {infoRow("First Name", user.first_name || "-")}
+            {infoRow("Middle Name", user.middle_name || "—")}
+            {infoRow("Last Name", user.last_name || "-")}
             {infoRow("Suffix", user.suffix && user.suffix !== "None" ? user.suffix : "—")}
             {infoRow("Email", user.email || "-")}
             {infoRow("Phone Number", user.phone || "-")}
-            {infoRow("Role", user.role || "-")}
-            {infoRow("Status", user.status || "-")}
+            {infoRow("Role", user.roleName || "-")}
+            {infoRow("Status", user.is_active ? "Active" : "Inactive")}
           </div>
         </Card>
       )}
@@ -266,36 +324,29 @@ function AdminUserDetails() {
         <Card>
           <SectionLabel>Access Information</SectionLabel>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {infoRow("Role", user.role || "-")}
-            {infoRow("Account status", user.status || "-")}
-            {infoRow("Last login", user.lastLogin || "-")}
-            {infoRow("Date created", user.dateCreated || "-")}
-            {infoRow("Login method", user.loginMethod || "-")}
+            {infoRow("Role", user.roleName || "-")}
+            {infoRow("Account status", user.is_active ? "Active" : "Inactive")}
+            {infoRow("Date created", user.created_at ? new Date(user.created_at).toLocaleDateString("en-PH") : "-")}
           </div>
         </Card>
       )}
 
       {/* Role-specific Information */}
-      {!editing && user.role === "Farmer" && (
+      {!editing && user.roleName === "Farmer" && (
         <Card>
           <SectionLabel>Farm Information</SectionLabel>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {infoRow("City", user.city || "—")}
-            {infoRow("District", user.district || "—")}
-            {infoRow("Barangay", user.barangay || "—")}
             {infoRow("Farm size", user.farmSize || "—")}
-            {infoRow("Preferred crops", user.preferredCrops || "—")}
           </div>
         </Card>
       )}
 
-      {!editing && user.role === "DFTC" && (
+      {!editing && user.roleName === "DFTC" && (
         <Card>
           <SectionLabel>DFTC Information</SectionLabel>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {infoRow("Organization", user.organization || "Davao Food Terminal Complex")}
+            {infoRow("Organization", "Davao Food Terminal Complex")}
             {infoRow("Position", user.position || "—")}
-            {infoRow("Recent submission", user.recentSubmission || "—")}
           </div>
         </Card>
       )}

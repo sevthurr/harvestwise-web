@@ -109,8 +109,18 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // ------------------------------------------------------------------
+  // Re-fetch /auth/me and update state + offline cache (after profile edits)
+  // ------------------------------------------------------------------
+  const refreshUser = async () => {
+    const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+    setUser(me);
+    await set(USER_CACHE_KEY, me);
+    return me;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

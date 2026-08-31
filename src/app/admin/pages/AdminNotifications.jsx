@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import {
   Bell,
@@ -11,12 +11,77 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
+import { adminApi } from "../../../services/api";
 
 const URGENCY_CONFIG = {
   urgent: { label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
   attention: { label: "Attention", Icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
   information: { label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" }
 };
+
+// Map audit-log action resource prefixes to notification urgency and a
+// sensible admin destination. Action format is "<resource>.<verb>".
+const ACTION_META = {
+  import:     { urgency: "attention",   route: "/admin/history" },
+  processing: { urgency: "attention",   route: "/admin/analytics" },
+  advisory:   { urgency: "attention",   route: "/admin/analytics" },
+  data:       { urgency: "attention",   route: "/admin/data-sources" },
+  system:     { urgency: "urgent",      route: "/admin/system" },
+  config:     { urgency: "attention",   route: "/admin/configuration" },
+  user:       { urgency: "information", route: "/admin/system" },
+  auth:       { urgency: "information", route: "/admin/system" }
+};
+
+const DEFAULT_META = { urgency: "information", route: null };
+
+const ROUTE_LABELS = {
+  "/admin/history": "View import history",
+  "/admin/analytics": "View analytics",
+  "/admin/data-sources": "View data sources",
+  "/admin/system": "View system",
+  "/admin/configuration": "View configuration"
+};
+
+function humanizeAction(action = "") {
+  return action
+    .split(".")
+    .map((part) => part.replace(/_/g, " "))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" · ");
+}
+
+function fmtTimestamp(isoStr) {
+  if (!isoStr) return "";
+  try {
+    return new Date(isoStr).toLocaleString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+  } catch {
+    return isoStr;
+  }
+}
+
+function logToNotification(log) {
+  const resource = (log.action || "").split(".")[0].toLowerCase();
+  const meta = ACTION_META[resource] || DEFAULT_META;
+  const route = meta.route;
+  return {
+    id: log.id,
+    title: `${resource.charAt(0).toUpperCase() + resource.slice(1)} · ${humanizeAction(log.action)}`,
+    summary: log.details || `${log.action} recorded in the audit trail.`,
+    detail: log.details || null,
+    timestamp: fmtTimestamp(log.created_at),
+    urgency: meta.urgency,
+    read: false,
+    relatedTo: log.actor_name || log.user_id || null,
+    action: route ? { route, label: ROUTE_LABELS[route] || "View details" } : null
+  };
+}
 
 const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
   if (!alert) return null;
@@ -96,6 +161,25 @@ function AdminNotifications() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await adminApi.getAuditLogs({ page_size: 30 });
+      setNotifications((data.items || []).map(logToNotification));
+      setLoading(false);
+    } catch (err) {
+      setError(err.message || "Could not load notifications.");
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -128,7 +212,37 @@ function AdminNotifications() {
       />
 
       {/* Notifications list or Empty State */}
-      {notifications.length === 0 ? (
+      {loading ? (
+        <Card className="py-16 text-center">
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] flex items-center justify-center mb-3.5 text-[var(--hw-neutral-400)]">
+              <Bell className="w-7 h-7 animate-pulse" />
+            </div>
+            <p className="text-[16px] font-bold text-[var(--hw-neutral-900)] mb-1">
+              Loading notifications…
+            </p>
+          </div>
+        </Card>
+      ) : error ? (
+        <Card className="py-16 text-center">
+          <div className="flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center mb-3.5 text-red-500">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <p className="text-[16px] font-bold text-[var(--hw-neutral-900)] mb-1">
+              Unable to load notifications
+            </p>
+            <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm mb-4">{error}</p>
+            <button
+              type="button"
+              onClick={loadNotifications}
+              className="px-4 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+            >
+              Try again
+            </button>
+          </div>
+        </Card>
+      ) : notifications.length === 0 ? (
         <Card className="py-16 text-center">
           <div className="flex flex-col items-center justify-center">
             <div className="w-14 h-14 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] flex items-center justify-center mb-3.5 text-[var(--hw-neutral-400)]">

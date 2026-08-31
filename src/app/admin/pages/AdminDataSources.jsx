@@ -5,9 +5,7 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Check,
   FileText,
-  Download,
   Plus,
   RotateCcw,
   X,
@@ -15,7 +13,7 @@ import {
   Trash2,
   List
 } from "lucide-react";
-import { calendarApi } from "../../../services/api";
+import { calendarApi, adminApi, ingestionApi } from "../../../services/api";
 
 function fmtISO(dateStr) {
   return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "";
@@ -49,7 +47,6 @@ function mapEvent(ev) {
   };
 }
 
-const DATA_SOURCES = [];
 const STATUS_TEXT = {
   Updated: "text-emerald-700",
   "Requires Review": "text-amber-700",
@@ -57,20 +54,6 @@ const STATUS_TEXT = {
   "Not yet updated": "text-[var(--hw-neutral-500)]",
   "Not yet synced": "text-[var(--hw-neutral-500)]"
 };
-const IMPORT_DATASETS = [
-  { id: "bangk-retail", label: "Bangkerohan Retail Prices", required: "Date, Commodity, Retail Price (\u20B1/kg)" },
-  { id: "bangk-wholesale", label: "Bangkerohan Wholesale Prices", required: "Date, Commodity, Wholesale Price (\u20B1/kg)" },
-  { id: "dftc-retail", label: "DFTC Retail Prices", required: "Date, Commodity, Retail Price (\u20B1/kg)" },
-  { id: "dftc-wholesale", label: "DFTC Wholesale Prices", required: "Date, Commodity, Wholesale Price (\u20B1/kg)" },
-  { id: "dftc-arrivals", label: "DFTC Arrival Volume", required: "Week ending date, Commodity, Volume (MT)" }
-];
-const PROCESSING_STEPS = ["Uploaded", "Standardized", "Cleaned", "Validated", "Stored", "Ready for processing"];
-const MOCK_PREVIEW = [];
-const VALIDATION_ISSUES = [];
-const API_SYNC_SOURCES = [];
-const syncHasFailed = API_SYNC_SOURCES.some((s) => s.status === "Failed");
-const syncSummary = syncHasFailed ? `${API_SYNC_SOURCES.filter((s) => s.status === "Failed").length} source failed \u2014 retry recommended` : "All sources updated";
-const syncSummaryColor = syncHasFailed ? "text-red-600" : "text-emerald-700";
 const BASE_EVENTS = [];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -127,10 +110,6 @@ const EMPTY_FORM = {
 function AdminDataSources() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("sources");
-  const [showImport, setShowImport] = useState(false);
-  const [importStep, setImportStep] = useState(0);
-  const [selectedDs, setSelectedDs] = useState(IMPORT_DATASETS[0].id);
-  const [fileUploaded, setFileUploaded] = useState(false);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calFilter, setCalFilter] = useState("30d");
@@ -144,6 +123,27 @@ function AdminDataSources() {
   const [addForm, setAddForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
 
+  const [dataSources, setDataSources] = useState([]);
+  const [apiSyncSources, setApiSyncSources] = useState([]);
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
+  const [apiSyncLoading, setApiSyncLoading] = useState(false);
+  const [dataSourcesError, setDataSourcesError] = useState(null);
+  const [apiSyncError, setApiSyncError] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState("");
+
+  const handleSyncAll = async () => {
+    setSyncing(true);
+    setSyncError("");
+    try {
+      await ingestionApi.syncNow();
+    } catch (err) {
+      setSyncError(err.message || "Failed to start sync.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -153,11 +153,56 @@ function AdminDataSources() {
         setEvents((data?.items || []).map(mapEvent));
       } catch (err) {
         if (active) setEvents([]);
-        // Calendar load failure keeps the dashboard usable with an empty calendar.
       }
     })();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setDataSourcesLoading(true);
+    setDataSourcesError(null);
+    (async () => {
+      try {
+        const res = await adminApi.listDataSources();
+        if (!active) return;
+        setDataSources(res?.items || []);
+      } catch (err) {
+        if (active) {
+          setDataSourcesError(err.message || "Failed to load data sources.");
+          setDataSources([]);
+        }
+      } finally {
+        if (active) setDataSourcesLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setApiSyncLoading(true);
+    setApiSyncError(null);
+    (async () => {
+      try {
+        const res = await adminApi.listApiSyncSources();
+        if (!active) return;
+        setApiSyncSources(res?.items || []);
+      } catch (err) {
+        if (active) {
+          setApiSyncError(err.message || "Failed to load API sync sources.");
+          setApiSyncSources([]);
+        }
+      } finally {
+        if (active) setApiSyncLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const syncHasFailed = apiSyncSources.some((s) => s.status === "Failed");
+  const syncSummary = syncHasFailed ? `${apiSyncSources.filter((s) => s.status === "Failed").length} source failed \u2014 retry recommended` : apiSyncSources.length > 0 ? "All sources updated" : "";
+  const syncSummaryColor = syncHasFailed ? "text-red-600" : "text-emerald-700";
 
   const calGrid = useMemo(() => buildGrid(calYear, calMonth), [calYear, calMonth]);
   const filteredEvents = useMemo(() => {
@@ -174,7 +219,6 @@ function AdminDataSources() {
   );
   const viewEvent = viewEventId ? events.find((e) => e.id === viewEventId) : null;
   const deleteEvent = deleteEventId ? events.find((e) => e.id === deleteEventId) : null;
-  const ds = IMPORT_DATASETS.find((d) => d.id === selectedDs);
   const prevMonth = () => {
     if (calMonth === 0) {
       setCalMonth(11);
@@ -186,11 +230,6 @@ function AdminDataSources() {
       setCalMonth(0);
       setCalYear((y) => y + 1);
     } else setCalMonth((m) => m + 1);
-  };
-  const closeImport = () => {
-    setShowImport(false);
-    setImportStep(0);
-    setFileUploaded(false);
   };
   const openEdit = (id) => {
     const ev = events.find((e) => e.id === id);
@@ -639,199 +678,6 @@ function AdminDataSources() {
         </div>
       </div>
     </div>;
-  const renderImport = () => <div className="max-w-2xl mx-auto space-y-5 pt-2">
-      <button
-    onClick={closeImport}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors"
-  >
-        <ChevronLeft className="w-4 h-4" />Back to Data Sources
-      </button>
-
-      {
-    /* Step indicator */
-  }
-      <div className="flex items-center">
-        {["Select dataset", "Upload file", "Preview", "Validate", "Result"].map((label, i) => <React.Fragment key={label}>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${i < importStep ? "bg-[var(--hw-green-700)] text-white" : i === importStep ? "bg-[var(--hw-green-700)] text-white ring-2 ring-[var(--hw-green-200)]" : "bg-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)]"}`}>
-                {i < importStep ? <Check className="w-3.5 h-3.5" /> : i + 1}
-              </div>
-              <span className={`text-[11px] font-medium hidden sm:block whitespace-nowrap ${i === importStep ? "text-[var(--hw-green-700)]" : i < importStep ? "text-[var(--hw-neutral-800)]" : "text-[var(--hw-neutral-700)]"}`}>
-                {label}
-              </span>
-            </div>
-            {i < 4 && <div className={`flex-1 h-0.5 mx-2 rounded ${i < importStep ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-200)]"}`} />}
-          </React.Fragment>)}
-      </div>
-
-      {
-    /* Step 0: Select dataset */
-  }
-      {importStep === 0 && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-          <p className="font-semibold text-[var(--hw-neutral-800)]">Select dataset</p>
-          <div className="space-y-2">
-            {IMPORT_DATASETS.map((d) => <label key={d.id} className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${selectedDs === d.id ? "border-[var(--hw-green-600)] bg-[var(--hw-green-50)]" : "border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"}`}>
-                <input type="radio" name="dataset" checked={selectedDs === d.id} onChange={() => setSelectedDs(d.id)} className="mt-0.5 accent-[var(--hw-green-700)]" />
-                <div>
-                  <p className="font-medium text-[var(--hw-neutral-800)]">{d.label}</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">CSV · {d.required}</p>
-                </div>
-              </label>)}
-          </div>
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <button className="text-[13px] font-medium text-[var(--hw-neutral-800)] hover:opacity-70 flex items-center gap-1">
-              <Download className="w-4 h-4" />Download Template
-            </button>
-            <button onClick={() => setImportStep(1)} className={btnPrimary}>Continue →</button>
-          </div>
-        </div>}
-
-      {
-    /* Step 1: Upload */
-  }
-      {importStep === 1 && <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-[var(--hw-neutral-800)]">Upload file</p>
-              <span className="text-[12px] text-[var(--hw-neutral-700)]">{ds.label}</span>
-            </div>
-            {!fileUploaded ? <div
-    onClick={() => setFileUploaded(true)}
-    className="border-2 border-dashed border-[var(--hw-neutral-300)] rounded-xl p-8 text-center space-y-3 hover:border-[var(--hw-green-500)] transition-colors cursor-pointer"
-  >
-                <div className="w-10 h-10 mx-auto rounded-xl bg-[var(--hw-neutral-100)] flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-[var(--hw-neutral-700)]" />
-                </div>
-                <div>
-                  <p className="font-medium text-[var(--hw-neutral-700)]">Drag and drop your file here</p>
-                  <p className="text-[13px] text-[var(--hw-neutral-700)] mt-0.5">CSV only · Max 10 MB</p>
-                </div>
-                <button type="button" className={btnSecondary + " mx-auto"}>Browse File</button>
-              </div> : <div className="flex items-center gap-3 p-3.5 bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded-xl">
-                <FileText className="w-5 h-5 text-[var(--hw-green-700)] flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-800)]">bangk_retail_jun24.csv</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)]">24.8 KB · 140 rows</p>
-                </div>
-                <button onClick={() => setFileUploaded(false)} className="text-[12px] text-[var(--hw-neutral-800)] hover:opacity-70">Replace</button>
-              </div>}
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <button onClick={() => setImportStep(0)} className="text-[13px] text-[var(--hw-neutral-800)] hover:opacity-70">← Back</button>
-            <button onClick={() => {
-    if (fileUploaded) setImportStep(2);
-  }} disabled={!fileUploaded} className={`${btnPrimary} disabled:opacity-40`}>
-              Preview Records →
-            </button>
-          </div>
-        </div>}
-
-      {
-    /* Step 2: Preview */
-  }
-      {importStep === 2 && <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
-            <p className="font-semibold text-[var(--hw-neutral-800)]">Preview — first 5 rows</p>
-            <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)]">
-              <table className="w-full text-[12px]">
-                <thead><tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                  {["Date", "Commodity", "Variety", "Price"].map((h) => <th key={h} className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-800)]">{h}</th>)}
-                </tr></thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {MOCK_PREVIEW.map((r, i) => <tr key={i}><td className="px-3 py-2">{r.date}</td><td className="px-3 py-2">{r.commodity}</td><td className="px-3 py-2 text-[var(--hw-neutral-500)] italic">{r.variety}</td><td className="px-3 py-2">{r.price}</td></tr>)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <button onClick={() => setImportStep(1)} className="text-[13px] text-[var(--hw-neutral-800)] hover:opacity-70">← Back</button>
-            <button onClick={() => setImportStep(3)} className={btnPrimary}>Validate Records →</button>
-          </div>
-        </div>}
-
-      {
-    /* Step 3: Validate */
-  }
-      {importStep === 3 && <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-    { label: "Total", value: "140", color: "text-[var(--hw-neutral-900)]" },
-    { label: "Accepted", value: "137", color: "text-emerald-700" },
-    { label: "Rejected", value: "3", color: "text-red-600" },
-    { label: "Warnings", value: "3", color: "text-amber-700" }
-  ].map((s) => <div key={s.label} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 py-3 text-center">
-                <p className="text-[12px] text-[var(--hw-neutral-700)]">{s.label}</p>
-                <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-              </div>)}
-          </div>
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[13px] font-semibold text-amber-700">{VALIDATION_ISSUES.length} issues found</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead><tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                  {["Row", "Field", "Issue", "Value"].map((h) => <th key={h} className="px-4 py-2 text-left font-semibold text-[var(--hw-neutral-800)]">{h}</th>)}
-                </tr></thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {VALIDATION_ISSUES.map((r, i) => <tr key={i}>
-                      <td className="px-4 py-2.5 text-[var(--hw-neutral-700)]">Row {r.row}</td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--hw-neutral-700)]">{r.field}</td>
-                      <td className="px-4 py-2.5 text-amber-700">{r.issue}</td>
-                      <td className="px-4 py-2.5 font-mono text-[var(--hw-neutral-800)]">{r.value}</td>
-                    </tr>)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setImportStep(2)} className="text-[13px] text-[var(--hw-neutral-800)] hover:opacity-70">← Back</button>
-            <div className="flex-1" />
-            <button className={btnSecondary}><Download className="w-3.5 h-3.5" />Error Report</button>
-            <button onClick={() => setImportStep(4)} className={btnPrimary}>Import 137 Valid Records →</button>
-          </div>
-        </div>}
-
-      {
-    /* Step 4: Result */
-  }
-      {importStep === 4 && <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-                <Check className="w-5 h-5 text-white" />
-              </div>
-              <p className="font-semibold text-[var(--hw-neutral-800)]">Import completed</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Processing checklist</p>
-              <div className="space-y-1.5">
-                {PROCESSING_STEPS.map((step) => <div key={step} className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-emerald-700" />
-                    </div>
-                    <span className="text-[13px] text-[var(--hw-neutral-700)]">{step}</span>
-                  </div>)}
-              </div>
-            </div>
-            <div className="divide-y divide-[var(--hw-neutral-100)] rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden">
-              {[
-    { label: "Dataset", value: ds.label },
-    { label: "Imported records", value: "137", color: "text-emerald-700" },
-    { label: "Rejected records", value: "3", color: "text-amber-700" },
-    { label: "Completed", value: "Jun 24, 2026 \xB7 7:52 AM" }
-  ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <p className="text-[13px] text-[var(--hw-neutral-800)]">{r.label}</p>
-                  <p className={`text-[13px] font-semibold ${"color" in r ? r.color : "text-[var(--hw-neutral-800)]"}`}>{r.value}</p>
-                </div>)}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => navigate("/admin/history")} className={btnPrimary}>View Processing History</button>
-            <button onClick={closeImport} className={btnSecondary}>Done</button>
-          </div>
-        </div>}
-    </div>;
   return <>
       {
     /* Modals */
@@ -849,28 +695,31 @@ function AdminDataSources() {
           description="Manage data sources, API sync, and calendar events."
         />
 
-        {/* Tabs (hidden during import subview) */}
-        {!showImport && <div className="flex border-b border-[var(--hw-neutral-200)]">
+        {/* Tabs */}
+        {<div className="flex border-b border-[var(--hw-neutral-200)]">
             {[["sources", "Data Sources"], ["api-sync", "API Sync"], ["calendar", "Calendar & Events"]].map(([id, label]) => <button key={id} onClick={() => {
     setTab(id);
     setShowConfiguredEvents(false);
   }} className={tabCls(id)}>{label}</button>)}
           </div>}
 
-        {/* Import subview */}
-        {showImport && renderImport()}
-
         {/* ══ TAB: DATA SOURCES ══ */}
-        {!showImport && tab === "sources" && <div className="space-y-3">
+        {tab === "sources" && <div className="space-y-3">
             <div className="flex items-center justify-end">
-              <button onClick={() => {
-    setShowImport(true);
-    setImportStep(0);
-    setFileUploaded(false);
-  }} className={btnPrimary}>
+              <button onClick={() => navigate("/admin/import")} className={btnPrimary}>
                 <FileText className="w-4 h-4" />Import Data
               </button>
             </div>
+            {dataSourcesLoading ? (
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading data sources...</p>
+              </div>
+            ) : dataSourcesError ? (
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <p className="text-[13px] text-red-600">{dataSourcesError}</p>
+              </div>
+            ) : (
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-[13px]">
@@ -880,24 +729,23 @@ function AdminDataSources() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                    {DATA_SOURCES.length === 0 ? (
+                    {dataSources.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
                           No data sources configured.
                         </td>
                       </tr>
                     ) : (
-                      DATA_SOURCES.map((s) => <tr
+                      dataSources.map((s) => <tr
                         key={s.id}
                         onClick={() => navigate(`/admin/data-sources/${s.id}`)}
                         className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                       >
                         <td className="px-4 py-3">
                           <p className="font-medium text-[var(--hw-neutral-800)]">{s.name}</p>
-                          {s.issue && <p className="text-[11px] text-amber-600 mt-0.5">{s.issue}</p>}
                         </td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.type}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastImport || "-"}</td>
+                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "-"}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
                           {s.records != null ? s.records.toLocaleString() : "-"}
                         </td>
@@ -908,28 +756,45 @@ function AdminDataSources() {
                 </table>
               </div>
             </div>
+            )}
           </div>}
 
         {/* ══ TAB: API SYNC ══ */}
-        {!showImport && tab === "api-sync" && <div className="space-y-4">
+        {tab === "api-sync" && <div className="space-y-4">
             {/* Header row */}
             <div className="flex items-center justify-end gap-2 flex-shrink-0">
-              <button className={btnPrimary} disabled={API_SYNC_SOURCES.length === 0}>
-                {syncHasFailed ? <><RotateCcw className="w-4 h-4" />Retry Failed Syncs</> : <><RefreshCw className="w-4 h-4" />Sync Now</>}
+              <button className={btnPrimary} onClick={handleSyncAll} disabled={syncing || apiSyncSources.length === 0}>
+                {syncing ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Syncing...
+                  </span>
+                ) : syncHasFailed ? <><RotateCcw className="w-4 h-4" />Retry Failed Syncs</> : <><RefreshCw className="w-4 h-4" />Sync Now</>}
               </button>
               <button onClick={() => navigate("/admin/history")} className={btnSecondary}>
                 View Sync History
               </button>
             </div>
 
-            {/* Sources list */}
+            {syncError && <p className="text-[13px] text-red-600">{syncError}</p>}
+
+            {apiSyncLoading ? (
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading sync sources...</p>
+              </div>
+            ) : apiSyncError ? (
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <p className="text-[13px] text-red-600">{apiSyncError}</p>
+              </div>
+            ) : (
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden divide-y divide-[var(--hw-neutral-100)]">
-              {API_SYNC_SOURCES.length === 0 ? (
+              {apiSyncSources.length === 0 ? (
                 <div className="px-5 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
                   No API sources configured.
                 </div>
               ) : (
-                API_SYNC_SOURCES.map((s) => <div
+                apiSyncSources.map((s) => <div
                   key={s.id}
                   onClick={() => navigate(`/admin/data-sources/${s.id}`)}
                   className="px-5 py-4 space-y-3 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
@@ -945,7 +810,7 @@ function AdminDataSources() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
                     {[
-                      { label: "Last sync", value: s.lastSync || "-" },
+                      { label: "Last sync", value: s.lastSync ? fmtDate(s.lastSync) : "-" },
                       { label: "Next scheduled", value: s.nextSync || "-" },
                       { label: "Records fetched", value: s.recordsFetched != null ? s.recordsFetched.toLocaleString() : "0" },
                       { label: "Records accepted", value: s.recordsAccepted != null ? s.recordsAccepted.toLocaleString() : "0" }
@@ -960,10 +825,11 @@ function AdminDataSources() {
                 </div>)
               )}
             </div>
+            )}
           </div>}
 
         {/* ══ TAB: CALENDAR & EVENTS ══ */}
-        {!showImport && tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-5">
+        {tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-5">
               {/* Top row */}
               <div className="flex items-center justify-end gap-2 flex-shrink-0">
                 <button onClick={() => setShowConfiguredEvents(true)} className={btnSecondary}>
