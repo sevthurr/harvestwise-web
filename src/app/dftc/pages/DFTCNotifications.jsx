@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   CheckCheck,
@@ -7,80 +8,35 @@ import {
   Info,
   AlertTriangle,
   AlertOctagon,
-  X
+  CheckCircle2,
+  X,
+  Loader2
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
-import { adminApi } from "../../../services/api";
+import { apiGet, parseResponse } from "../../global/api";
+import { useAuth } from "../../global/contexts/AuthContext";
 
 const URGENCY_CONFIG = {
   urgent: { label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
   attention: { label: "Attention", Icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
-  information: { label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" }
+  information: { label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" },
+  success: { label: "Completed", Icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" }
 };
-
-// Map audit-log action resource prefixes to notification urgency and a
-// sensible admin destination. Action format is "<resource>.<verb>".
-const ACTION_META = {
-  import:     { urgency: "attention",   route: "/admin/history" },
-  processing: { urgency: "attention",   route: "/admin/analytics" },
-  advisory:   { urgency: "attention",   route: "/admin/analytics" },
-  data:       { urgency: "attention",   route: "/admin/data-sources" },
-  system:     { urgency: "urgent",      route: "/admin/system" },
-  config:     { urgency: "attention",   route: "/admin/configuration" },
-  user:       { urgency: "information", route: "/admin/system" },
-  auth:       { urgency: "information", route: "/admin/system" }
-};
-
-const DEFAULT_META = { urgency: "information", route: null };
-
-const ROUTE_LABELS = {
-  "/admin/history": "View import history",
-  "/admin/analytics": "View analytics",
-  "/admin/data-sources": "View data sources",
-  "/admin/system": "View system",
-  "/admin/configuration": "View configuration"
-};
-
-function humanizeAction(action = "") {
-  return action
-    .split(".")
-    .map((part) => part.replace(/_/g, " "))
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" · ");
-}
 
 function fmtTimestamp(isoStr) {
   if (!isoStr) return "";
   try {
-    return new Date(isoStr).toLocaleString("en-PH", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true
-    });
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    if (isToday) return `Today · ${timeStr}`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ` · ${timeStr}`;
   } catch {
     return isoStr;
   }
-}
-
-function logToNotification(log) {
-  const resource = (log.action || "").split(".")[0].toLowerCase();
-  const meta = ACTION_META[resource] || DEFAULT_META;
-  const route = meta.route;
-  return {
-    id: log.id,
-    title: `${resource.charAt(0).toUpperCase() + resource.slice(1)} · ${humanizeAction(log.action)}`,
-    summary: log.details || `${log.action} recorded in the audit trail.`,
-    detail: log.details || null,
-    timestamp: fmtTimestamp(log.created_at),
-    urgency: meta.urgency,
-    read: false,
-    relatedTo: log.actor_name || log.user_id || null,
-    action: route ? { route, label: ROUTE_LABELS[route] || "View details" } : null
-  };
 }
 
 const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
@@ -115,14 +71,14 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
 
           {alert.relatedTo && (
             <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)]">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)] mb-0.5">Related to</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)] mb-0.5">Related Dataset</p>
               <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{alert.relatedTo}</p>
             </div>
           )}
 
           {alert.reason && (
             <div className="space-y-1">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Why you received this</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Notification Type</p>
               <p className="text-[13px] text-[var(--hw-neutral-600)] leading-relaxed">{alert.reason}</p>
             </div>
           )}
@@ -157,46 +113,106 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
   );
 };
 
-function AdminNotifications() {
+function DFTCNotifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
+  const { user } = useAuth();
+  const [readIds, setReadIds] = useState(() => new Set());
   const [selectedAlert, setSelectedAlert] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  const loadNotifications = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await adminApi.getAuditLogs({ page_size: 30 });
-      setNotifications((data.items || []).map(logToNotification));
-      setLoading(false);
-    } catch (err) {
-      setError(err.message || "Could not load notifications.");
-      setLoading(false);
+  const { data: submissionsData, isLoading, error, refetch } = useQuery({
+    queryKey: ["dftc-notifications-submissions"],
+    queryFn: async () => {
+      const res = await apiGet("/dftc/submissions", { page_size: 50 });
+      return parseResponse(res);
+    },
+    staleTime: 30 * 1000
+  });
+
+  const notifications = useMemo(() => {
+    if (!submissionsData?.items) return [];
+
+    const list = [];
+    for (const sub of submissionsData.items) {
+      const isArrival = (sub.data_type || "").toLowerCase().includes("arrival");
+      const subType = isArrival ? "Arrival Volume" : `Daily ${sub.price_type || "Retail"} Price`;
+      const timeStr = fmtTimestamp(sub.saved_at || sub.created_at || sub.validation_completed_at);
+
+      if (sub.status === "Saved" || sub.status === "saved") {
+        list.push({
+          id: `sub-saved-${sub.id}`,
+          title: "Submission Accepted",
+          summary: `${subType} dataset ${sub.id} has been validated and accepted for processing.`,
+          detail: `Dataset ${sub.id} containing ${sub.total_records ?? 0} records was accepted and saved into HarvestWise records on ${timeStr}.`,
+          timestamp: timeStr,
+          urgency: "success",
+          relatedTo: sub.id,
+          reason: "Submission accepted notification (submission_accepted)",
+          action: { route: `/dftc/submissions/${sub.id}`, label: "View Dataset" }
+        });
+      } else if (sub.status === "Failed" || sub.status === "failed") {
+        list.push({
+          id: `sub-failed-${sub.id}`,
+          title: "Submission Failed",
+          summary: `${subType} dataset ${sub.id} encountered an issue and was not saved.`,
+          detail: sub.failure_reason || `The dataset submission ${sub.id} could not be processed. Review the error details or re-upload.`,
+          timestamp: timeStr,
+          urgency: "urgent",
+          relatedTo: sub.id,
+          reason: "Submission failed alert (submission_failed)",
+          action: { route: `/dftc/submissions/${sub.id}`, label: "View Error" }
+        });
+      }
+
+      if ((sub.needs_correction_count || 0) > 0) {
+        list.push({
+          id: `sub-corr-${sub.id}`,
+          title: "Records Need Correction",
+          summary: `${sub.needs_correction_count} record(s) in dataset ${sub.id} need review or correction.`,
+          detail: `${sub.needs_correction_count} invalid or incomplete entries were excluded from ${sub.id}. Inspect the validation table for specific issues.`,
+          timestamp: timeStr,
+          urgency: "attention",
+          relatedTo: sub.id,
+          reason: "Correction required notification (records_need_correction)",
+          action: { route: `/dftc/submissions/${sub.id}`, label: "Review Records" }
+        });
+      }
+
+      if (sub.validation_completed_at) {
+        list.push({
+          id: `sub-val-${sub.id}`,
+          title: "Upload Validation Completed",
+          summary: `Validation finished for dataset ${sub.id}.`,
+          detail: `Upload validation finished at ${fmtTimestamp(sub.validation_completed_at)}. ${sub.analytics_supported_count ?? 0} analytics-supported records ready.`,
+          timestamp: fmtTimestamp(sub.validation_completed_at),
+          urgency: "information",
+          relatedTo: sub.id,
+          reason: "Validation completion notice (upload_validation_completed)",
+          action: { route: `/dftc/submissions/${sub.id}`, label: "View Summary" }
+        });
+      }
     }
-  }, []);
 
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    return list.map((item) => ({
+      ...item,
+      read: readIds.has(item.id)
+    }));
+  }, [submissionsData, readIds]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setReadIds(new Set(notifications.map((n) => n.id)));
   };
 
   const markRead = (id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    setReadIds((prev) => new Set([...prev, id]));
   };
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-      {/* Consistent Full-Width Admin Page Header */}
       <PageHeader
         title="Notifications"
-        description="Stay updated on data submissions, pipeline status, and system alerts."
+        description="Stay updated on data submissions, validation outcomes, and system alerts."
         action={
           unreadCount > 0 ? (
             <button
@@ -211,8 +227,7 @@ function AdminNotifications() {
         }
       />
 
-      {/* Notifications list or Empty State */}
-      {loading ? (
+      {isLoading ? (
         <div className="space-y-2.5">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
@@ -239,10 +254,12 @@ function AdminNotifications() {
             <p className="text-[16px] font-bold text-[var(--hw-neutral-900)] mb-1">
               Unable to load notifications
             </p>
-            <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm mb-4">{error}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm mb-4">
+              {error?.message || "Could not retrieve DFTC notifications."}
+            </p>
             <button
               type="button"
-              onClick={loadNotifications}
+              onClick={() => refetch()}
               className="px-4 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
             >
               Try again
@@ -259,38 +276,47 @@ function AdminNotifications() {
               No notifications yet
             </p>
             <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm">
-              You are all caught up. System alerts, data reviews, and pipeline notifications will appear here.
+              You're all caught up! Updates about data submissions, validation results, and alerts will appear here.
             </p>
           </div>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {notifications.map((item) => {
-            const urgency = URGENCY_CONFIG[item.urgency] || URGENCY_CONFIG.information;
+        <div className="space-y-2.5">
+          {notifications.map((alert) => {
+            const urgency = URGENCY_CONFIG[alert.urgency] || URGENCY_CONFIG.information;
+            const UrgencyIcon = urgency.Icon;
             return (
               <div
-                key={item.id}
-                onClick={() => setSelectedAlert(item)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
-                  item.read
+                key={alert.id}
+                onClick={() => {
+                  setSelectedAlert(alert);
+                  markRead(alert.id);
+                }}
+                className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                  alert.read
                     ? "bg-white border-[var(--hw-neutral-200)] opacity-75 hover:opacity-100 hover:border-[var(--hw-neutral-300)]"
-                    : "bg-white border-[var(--hw-green-300)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-[var(--hw-green-500)]"
+                    : "bg-white border-[var(--hw-neutral-300)] shadow-[var(--shadow-xs)] hover:border-[var(--hw-green-600)]"
                 }`}
               >
-                <div className={`p-2 rounded-xl flex-shrink-0 ${urgency.bg}`}>
-                  <urgency.Icon className={`w-4 h-4 ${urgency.color}`} />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${urgency.bg} ${urgency.color}`}>
+                  <UrgencyIcon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className={`text-[14px] leading-snug truncate ${item.read ? "font-medium text-[var(--hw-neutral-800)]" : "font-bold text-[var(--hw-neutral-900)]"}`}>
-                      {item.title}
-                    </p>
-                    <span className="text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap flex-shrink-0">
-                      {item.timestamp}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <p className={`text-[14px] font-bold ${alert.read ? "text-[var(--hw-neutral-700)]" : "text-[var(--hw-neutral-900)]"}`}>
+                        {alert.title}
+                      </p>
+                      {!alert.read && (
+                        <span className="w-2 h-2 rounded-full bg-[var(--hw-green-600)] flex-shrink-0" />
+                      )}
+                    </div>
+                    <span className="text-[12px] text-[var(--hw-neutral-500)] whitespace-nowrap flex-shrink-0">
+                      {alert.timestamp}
                     </span>
                   </div>
-                  <p className="text-[13px] text-[var(--hw-neutral-600)] line-clamp-2 leading-relaxed">
-                    {item.summary}
+                  <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5 line-clamp-2">
+                    {alert.summary}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0 self-center" />
@@ -300,15 +326,16 @@ function AdminNotifications() {
         </div>
       )}
 
-      {/* Drawer */}
-      <AlertDetailDrawer
-        alert={selectedAlert}
-        onClose={() => setSelectedAlert(null)}
-        onMarkRead={markRead}
-        onNavigate={navigate}
-      />
+      {selectedAlert && (
+        <AlertDetailDrawer
+          alert={selectedAlert}
+          onClose={() => setSelectedAlert(null)}
+          onMarkRead={markRead}
+          onNavigate={(route) => navigate(route)}
+        />
+      )}
     </div>
   );
 }
 
-export { AdminNotifications as default };
+export { DFTCNotifications as default };

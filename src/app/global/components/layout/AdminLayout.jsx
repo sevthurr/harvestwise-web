@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Database,
@@ -87,6 +88,31 @@ const AdminLayoutInner = () => {
     navigate(path);
   };
 
+  const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+
+  const isSyncing = isManualSyncing || isFetching > 0;
+
+  const handleResync = async () => {
+    if (isSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await queryClient.refetchQueries();
+      await queryClient.invalidateQueries();
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    } catch (e) {
+      console.error("Data resync failed:", e);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
   const handleLogout = () => {
     setAvatarOpen(false);
     logout();
@@ -114,6 +140,23 @@ const AdminLayoutInner = () => {
           </div>
 
           <div className="flex-1" />
+
+          {/* Resync */}
+          <button
+            onClick={handleResync}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
+            title={isSyncing ? "Syncing data..." : "Click to resync data"}
+            aria-label="Resync data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline whitespace-nowrap">
+              {isSyncing ? "Syncing..." : `Resync (${lastSyncedTime})`}
+            </span>
+            <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
+              {isSyncing ? "Syncing" : "Resync"}
+            </span>
+          </button>
 
           {/* Bell */}
           <button

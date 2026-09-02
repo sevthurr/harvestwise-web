@@ -27,25 +27,45 @@ const TABS = [
 const NOTIF_ITEMS = [
   { id: "submission_accepted", label: "Submission accepted", desc: "Get notified when submitted records are accepted for processing.", defaultOn: true },
   { id: "submission_failed", label: "Submission failed", desc: "Get notified when a submission fails and needs attention.", defaultOn: true },
-  { id: "needs_correction", label: "Records need correction", desc: "Get notified when submitted records require review or correction.", defaultOn: true },
-  { id: "upload_validated", label: "Upload validation completed", desc: "Get notified when an uploaded dataset has finished validation.", defaultOn: true },
-  { id: "temp_expiry", label: "Temporary records near expiry", desc: "Get notified when temporary market records are close to their 15-day retention period.", defaultOn: true },
-  { id: "sync_issue", label: "Connection or sync issue", desc: "Get notified when the system has trouble syncing submitted data.", defaultOn: true },
-  { id: "price_alert", label: "Price change alerts", desc: "Get notified when monitored vegetable prices change significantly.", defaultOn: false },
-  { id: "arrival_alert", label: "Arrival volume change alerts", desc: "Get notified when commodity arrival volume changes significantly.", defaultOn: false }
+  { id: "records_need_correction", label: "Records need correction", desc: "Get notified when submitted records require review or correction.", defaultOn: true },
+  { id: "upload_validation_completed", label: "Upload validation completed", desc: "Get notified when an uploaded dataset has finished validation.", defaultOn: true },
+  { id: "sync_required", label: "Connection or sync issue", desc: "Get notified when the system has trouble syncing submitted data.", defaultOn: true },
+  { id: "price_movement", label: "Price change alerts", desc: "Get notified when monitored vegetable prices change significantly.", defaultOn: false },
+  { id: "arrival_volume_change", label: "Arrival volume change alerts", desc: "Get notified when commodity arrival volume changes significantly.", defaultOn: false }
 ];
+
 const AccountTab = ({ showToast, onRemovalRequest }) => {
   const { user } = useAuth();
-  const nameParts = (user?.name || "Maria Santos").split(" ");
+  const staff = user?.staff_profile || user?.staffProfile || {};
+  const firstName = staff.first_name || user?.first_name || (user?.name ? user.name.split(" ")[0] : "") || "";
+  const lastName = staff.last_name || user?.last_name || (user?.name && user.name.split(" ").length > 1 ? user.name.split(" ").slice(-1)[0] : "") || "";
+  const middleName = staff.middle_name || "";
+  const suffix = staff.suffix || "None";
+  const phone = user?.phone || "";
+  const email = user?.email || "";
+  const position = staff.position_title || user?.position || "";
+
   const [form, setForm] = useState({
-    firstName: nameParts[0] || "",
-    lastName: nameParts[nameParts.length - 1] || "",
-    middleName: "",
-    suffix: "None",
-    phone: "09XX XXX XXXX",
-    email: user?.email || "",
-    position: "Market Monitoring Staff"
+    firstName,
+    lastName,
+    middleName,
+    suffix,
+    phone,
+    email,
+    position
   });
+
+  useEffect(() => {
+    setForm({
+      firstName,
+      lastName,
+      middleName,
+      suffix,
+      phone,
+      email,
+      position
+    });
+  }, [firstName, lastName, middleName, suffix, phone, email, position]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
@@ -107,7 +127,7 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
             </div>
             <div>
               <FieldLabel htmlFor="ac-mn" optional>Middle Name</FieldLabel>
-              <input id="ac-mn" type="text" value={form.middleName} onChange={set("middleName")} placeholder="Santos" className={inputCls} />
+              <input id="ac-mn" type="text" value={form.middleName} onChange={set("middleName")} placeholder="" className={inputCls} />
             </div>
             <div>
               <FieldLabel htmlFor="ac-sfx" optional>Suffix</FieldLabel>
@@ -132,12 +152,12 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
           <div>
             <FieldLabel htmlFor="ac-role">Role</FieldLabel>
             <input
-    id="ac-role"
-    type="text"
-    value="DFTC"
-    readOnly
-    className={`${inputCls} bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed`}
-  />
+              id="ac-role"
+              type="text"
+              value={user?.role?.role_name || user?.role || "DFTC"}
+              readOnly
+              className={`${inputCls} bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed`}
+            />
           </div>
           <div>
             <FieldLabel htmlFor="ac-pos">Position</FieldLabel>
@@ -320,83 +340,108 @@ const SubmissionsTab = ({ showToast }) => {
   });
   const [reportFormat, setReportFormat] = useState("excel");
   const setToggle = (k) => (v) => setToggles((prev) => ({ ...prev, [k]: v }));
-  return <Card>
+  return (
+    <Card>
       <SectionLabel>Submission Behavior</SectionLabel>
       <div className="divide-y divide-[var(--hw-neutral-100)]">
         {[
-    { key: "ask_before_submit", label: "Ask before submitting records", desc: "Show a confirmation prompt before each submission." },
-    { key: "show_validation", label: "Show validation summary before submit", desc: "Preview validation results before confirming a submission." },
-    { key: "download_after_upload", label: "Download report after dataset upload", desc: "Automatically download a validation report after uploading a dataset." }
-  ].map((item) => <div key={item.key} className="flex items-start justify-between gap-4 py-4">
+          { key: "ask_before_submit", label: "Ask before submitting records", desc: "Show a confirmation prompt before each submission." },
+          { key: "show_validation", label: "Show validation summary before submit", desc: "Preview validation results before confirming a submission." },
+          { key: "download_after_upload", label: "Download report after dataset upload", desc: "Automatically download a validation report after uploading a dataset." }
+        ].map((item) => (
+          <div key={item.key} className="flex items-start justify-between gap-4 py-4">
             <div className="min-w-0">
               <p className="text-[15px] font-semibold text-black">{item.label}</p>
               <p className="text-[13px] text-black mt-0.5 leading-relaxed">{item.desc}</p>
             </div>
             <Toggle on={toggles[item.key]} onChange={setToggle(item.key)} />
-          </div>)}
+          </div>
+        ))}
       </div>
-      <div className="pt-4 border-t border-[var(--hw-neutral-100)]">
-        <p className="text-[14px] font-semibold text-black mb-3">Report Format</p>
-        <div className="flex gap-2">
-          {["excel", "csv"].map((fmt) => <button
-    key={fmt}
-    type="button"
-    onClick={() => setReportFormat(fmt)}
-    className={`h-10 px-5 rounded-xl border text-[14px] font-medium transition-all ${reportFormat === fmt ? "bg-[var(--hw-green-50)] border-[var(--hw-green-700)] text-[var(--hw-green-700)]" : "bg-white border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-              {fmt === "excel" ? "Excel" : "CSV"}
-            </button>)}
+      {toggles.download_after_upload && (
+        <div className="pt-4 border-t border-[var(--hw-neutral-100)]">
+          <p className="text-[14px] font-semibold text-black mb-3">Report Format</p>
+          <div className="flex gap-2">
+            {["excel", "csv"].map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => setReportFormat(fmt)}
+                className={`h-10 px-5 rounded-xl border text-[14px] font-medium transition-all cursor-pointer ${
+                  reportFormat === fmt
+                    ? "bg-[var(--hw-green-50)] border-[var(--hw-green-700)] text-[var(--hw-green-700)] font-semibold"
+                    : "bg-white border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)]"
+                }`}
+              >
+                {fmt === "excel" ? "Excel" : "CSV"}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="pt-4">
         <GreenBtn onClick={() => showToast("Submission settings saved.")} className="w-full sm:w-auto">
           Save submission settings
         </GreenBtn>
       </div>
-    </Card>;
+    </Card>
+  );
 };
 const PreferencesTab = ({ showToast }) => {
+  const { user } = useAuth();
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
+  const [lastSyncTime, setLastSyncTime] = useState(
+    user?.last_synced_at
+      ? new Date(user.last_synced_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+      : "—"
+  );
+
   const handleSync = () => {
     setSyncing(true);
     setSyncStatus(null);
     setTimeout(() => {
       setSyncing(false);
       setSyncStatus("ok");
+      const nowStr = `Today, ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`;
+      setLastSyncTime(nowStr);
       showToast("Offline data updated successfully.");
     }, 2200);
   };
-  return <div className="space-y-4">
+  return (
+    <div className="space-y-4">
       <TextSizeSlider
-    showToast={showToast}
-    description="Adjusts text size across your DFTC interface."
-  />
+        showToast={showToast}
+        description="Adjusts text size across your DFTC interface."
+      />
 
       <Card>
         <SectionLabel>Offline Data</SectionLabel>
         <div className="space-y-2.5 mb-4">
           {[
-    { label: "Last synced", value: "Today, 7:30 AM" },
-    { label: "Offline data", value: "Available" },
-    { label: "Status", value: syncStatus === "ok" ? "Updated" : syncStatus === "error" ? "Sync failed" : "Up to date", error: syncStatus === "error" }
-  ].map((row) => <div key={row.label} className="flex items-center justify-between">
+            { label: "Last synced", value: lastSyncTime },
+            { label: "Offline data", value: "Available" },
+            { label: "Status", value: syncStatus === "ok" ? "Updated" : syncStatus === "error" ? "Sync failed" : "Up to date", error: syncStatus === "error" }
+          ].map((row) => (
+            <div key={row.label} className="flex items-center justify-between">
               <span className="text-[14px] text-black">{row.label}</span>
               <span className={`text-[14px] font-medium ${"error" in row && row.error ? "text-red-600" : "text-black"}`}>
                 {row.value}
               </span>
-            </div>)}
+            </div>
+          ))}
         </div>
         <button
-    type="button"
-    onClick={handleSync}
-    disabled={syncing}
+          type="button"
+          onClick={handleSync}
+          disabled={syncing}
     className="h-10 px-4 flex items-center gap-2 border border-[var(--hw-neutral-200)] text-[14px] font-medium text-black rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
   >
           {syncing ? <><Loader2 className="w-4 h-4 animate-spin" />Syncing latest data…</> : <><RefreshCw className="w-4 h-4" />Sync now</>}
         </button>
       </Card>
-    </div>;
+    </div>
+  );
 };
 const NotificationsTab = ({ showToast }) => {
   const [prefs, setPrefs] = useState(

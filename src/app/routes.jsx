@@ -49,6 +49,7 @@ import DFTCTemporaryRecords    from "./dftc/pages/DFTCTemporaryRecords";
 import DFTCTemporaryRecordDetail from "./dftc/pages/DFTCTemporaryRecordDetail";
 import DFTCSubmissionDetail      from "./dftc/pages/DFTCSubmissionDetail";
 import DFTCCommodityRecords      from "./dftc/pages/DFTCCommodityRecords";
+import DFTCNotifications         from "./dftc/pages/DFTCNotifications";
 import DFTCProfile               from "./dftc/pages/DFTCProfile";
 import DFTCSettings              from "./dftc/pages/DFTCSettings";
 import DFTCAbout                 from "./dftc/pages/DFTCAbout";
@@ -146,6 +147,7 @@ export const router = createBrowserRouter([
       { path: "upload",                        Component: DFTCUpload              },
       { path: "temporary-records",             Component: DFTCTemporaryRecords    },
       { path: "temporary-records/:recordId",   Component: DFTCTemporaryRecordDetail },
+      { path: "notifications",                  Component: DFTCNotifications },
       { path: "profile",                        Component: DFTCProfile    },
       { path: "settings",                       Component: DFTCSettings   },
       { path: "about",                          Component: DFTCAbout      },

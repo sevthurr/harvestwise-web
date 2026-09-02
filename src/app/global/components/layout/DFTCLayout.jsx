@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import {
   Home,
   FileInput,
@@ -51,11 +52,12 @@ function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const active = getActive(location.pathname);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const active = getActive(location.pathname);
   const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
-  const name = user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : (user?.name || user?.username || "DFTC Personnel");
+  const staff = user?.staff_profile || user?.staffProfile || {};
+  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
   const initials = getInitials(name);
   useEffect(() => {
     const handler = (e) => {
@@ -70,22 +72,42 @@ function DFTCLayoutInner() {
     setAvatarOpen(false);
     navigate(path);
   };
+  const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+
+  const isSyncing = isManualSyncing || isFetching > 0;
+
+  const handleResync = async () => {
+    if (isSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await queryClient.refetchQueries();
+      await queryClient.invalidateQueries();
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    } catch (e) {
+      console.error("Data resync failed:", e);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
   const handleLogout = () => {
     setAvatarOpen(false);
     logout();
     navigate("/login", { replace: true });
   };
-  return <div className="min-h-screen bg-[var(--hw-neutral-50)]">
-
-      {
-    /* ── Top bar ── */
-  }
+  return (
+    <div className="min-h-screen bg-[var(--hw-neutral-50)]">
+      {/* ── Top bar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)] h-13">
         <div className="flex items-center h-13 px-4 gap-3">
-
-          {
-    /* Logo + label */
-  }
+          {/* Logo + label */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <img 
               src="/horizontal-logo.png" 
@@ -102,7 +124,28 @@ function DFTCLayoutInner() {
 
           <div className="flex-1" />
 
-          <button className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0">
+          {/* Resync */}
+          <button
+            onClick={handleResync}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
+            title={isSyncing ? "Syncing data..." : "Click to resync data"}
+            aria-label="Resync data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline whitespace-nowrap">
+              {isSyncing ? "Syncing..." : `Resync (${lastSyncedTime})`}
+            </span>
+            <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
+              {isSyncing ? "Syncing" : "Resync"}
+            </span>
+          </button>
+
+          <button
+            onClick={() => navigate("/dftc/notifications")}
+            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0 cursor-pointer"
+            aria-label="Notifications"
+          >
             <Bell className="w-4 h-4" />
           </button>
 
@@ -259,7 +302,8 @@ function DFTCLayoutInner() {
   })}
         </div>
       </nav>
-    </div>;
+    </div>
+  );
 }
 const DFTCLayout = () => <TextSizeProvider storageKey="hw_dftc_text_size">
     <DFTCLayoutInner />

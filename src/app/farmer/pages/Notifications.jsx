@@ -91,6 +91,7 @@ function NotificationsPage() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -125,7 +126,25 @@ function NotificationsPage() {
       </div>
 
       {/* Notifications list or Empty State */}
-      {notifications.length === 0 ? (
+      {loading ? (
+        <div className="space-y-2.5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-[var(--hw-neutral-200)] animate-pulse"
+            >
+              <div className="w-8 h-8 rounded-full bg-[var(--hw-neutral-200)] flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-4 bg-[var(--hw-neutral-200)] rounded w-1/3" />
+                  <div className="h-3 bg-[var(--hw-neutral-100)] rounded w-16" />
+                </div>
+                <div className="h-3.5 bg-[var(--hw-neutral-100)] rounded w-4/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : notifications.length === 0 ? (
         <Card className="py-16 text-center">
           <div className="flex flex-col items-center justify-center">
             <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
