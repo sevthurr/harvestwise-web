@@ -21,7 +21,9 @@
  * the backend endpoint is wired up.
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useCallback } from "react";
+
 import {
   Search,
   Download,
@@ -137,15 +139,22 @@ function AdminAuditLogs() {
   const [actionPrefix, setPrefix]   = useState("");   // resource prefix filter
   const [dateFrom, setDateFrom]     = useState("");   // ISO date string
   const [dateTo, setDateTo]         = useState("");   // ISO date string
-  const [page, setPage]             = useState(1);
-  const [showExportMenu, setShowExportMenu] = useState(false);
+  const { data: logsRes, isLoading: loading } = useQuery({
+    queryKey: ["adminAuditLogs", actionPrefix, search, dateFrom, dateTo, page],
+    queryFn: () => {
+      const params = { page, page_size: PAGE_SIZE };
+      const actionParts = [];
+      if (actionPrefix) actionParts.push(actionPrefix);
+      if (search.trim()) actionParts.push(search.trim());
+      if (actionParts.length) params.action = actionParts.join(".");
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+      return adminApi.getAuditLogs(params);
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
-  // ── Data state (empty until backend wired) ───────────────────────────────
-  // Shape: { items: LogResponse[], total: number, page: number, page_size: number }
-  // LogResponse: { id, user_id, action, details, actor_name, ip_address, created_at }
-  const [data, setData] = useState({ items: [], total: 0, page: 1, page_size: PAGE_SIZE });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const data = logsRes || { items: [], total: 0, page, page_size: PAGE_SIZE };
 
   const hasFilters = search.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
 
@@ -157,32 +166,6 @@ function AdminAuditLogs() {
     setPage(1);
   };
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    const params = { page, page_size: PAGE_SIZE };
-    const actionParts = [];
-    if (actionPrefix) actionParts.push(actionPrefix);
-    if (search.trim()) actionParts.push(search.trim());
-    if (actionParts.length) params.action = actionParts.join(".");
-    if (dateFrom) params.date_from = dateFrom;
-    if (dateTo) params.date_to = dateTo;
-    try {
-      const res = await adminApi.getAuditLogs(params);
-      setData(res || { items: [], total: 0, page, page_size: PAGE_SIZE });
-    } catch (err) {
-      setError(err.message || "Failed to load audit logs.");
-      setData((d) => ({ ...d, items: [], total: 0 }));
-    } finally {
-      setLoading(false);
-    }
-  }, [actionPrefix, search, dateFrom, dateTo, page]);
-
-  useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
-
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
   // Format ISO datetime for display
   function fmtDatetime(isoStr) {

@@ -22,6 +22,7 @@ import {
 } from "./dftc-add-data-data";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
+import { apiPost, parseResponse } from "../../global/api";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -171,7 +172,7 @@ function SetupModal({ initial, onClose, onApply }) {
           </div>
 
           <div>
-            <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Date</label>
+            <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Reporting Date</label>
             {changingDate ? (
               <div className="flex gap-2 items-center">
                 <input
@@ -635,14 +636,42 @@ function DFTCPriceInput() {
   const otherCount = reviewEntries.filter((e) => !e.com.isHW).length;
   const canReview = reviewEntries.length > 0;
 
-  function handleSave() {
-    try { localStorage.removeItem("dftc_price_draft"); } catch { }
-    setSaved(true);
-    setTimeout(() => {
-      navigate("/dftc/input", {
-        state: { successMsg: `${dataName} saved successfully.` }
-      });
-    }, 1000);
+  async function handleSave() {
+    const records = reviewEntries.map(({ com, v, f }) => ({
+      commodity_id: com.name,
+      variety: v.name,
+      uom: f.uom,
+      sample_prices: parseValid(f.samples),
+      price_avg: f.prevailing,
+      observation_status: "Reported value"
+    }));
+
+    const payload = {
+      data_type: "price",
+      source_id: setup.market,
+      price_type: setup.priceType,
+      reporting_date: setup.date,
+      records
+    };
+
+    try {
+      await parseResponse(await apiPost("/dftc/submissions/manual", payload));
+      try { localStorage.removeItem("dftc_price_draft"); } catch { }
+      setSaved(true);
+      setTimeout(() => {
+        navigate("/dftc/input", {
+          state: { successMsg: `${dataName} saved successfully.` }
+        });
+      }, 1000);
+    } catch {
+      setSaveStatus("offline");
+      try { localStorage.setItem("dftc_price_draft", "true"); } catch { }
+      setTimeout(() => {
+        navigate("/dftc/input", {
+          state: { errorMsg: "Could not save to server. Your draft was kept on this device." }
+        });
+      }, 1200);
+    }
   }
 
   function SaveStatusIndicator() {

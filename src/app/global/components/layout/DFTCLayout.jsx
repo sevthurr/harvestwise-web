@@ -16,7 +16,10 @@ import {
   User
 } from "lucide-react";
 import { Footer } from "../Footer";
+
+
 import { useAuth } from "../../contexts/AuthContext";
+import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
 const FONT_SIZE_MAP = {
   small: "13px",
@@ -74,12 +77,24 @@ function DFTCLayoutInner() {
   };
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
+  const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   );
 
   const isSyncing = isManualSyncing || isFetching > 0;
+
+  // Keep the "Last updated" timestamp in sync when a background process
+  // completes and triggers an automatic live resync.
+  useEffect(() => {
+    if (processState.completed || processState.error) {
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processState.completed, processState.error]);
 
   const handleResync = async () => {
     if (isSyncing) return;
@@ -140,6 +155,8 @@ function DFTCLayoutInner() {
               {isSyncing ? "Syncing" : "Resync"}
             </span>
           </button>
+
+
 
           <button
             onClick={() => navigate("/dftc/notifications")}

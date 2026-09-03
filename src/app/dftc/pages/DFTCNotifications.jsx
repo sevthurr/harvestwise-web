@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -119,14 +119,54 @@ function DFTCNotifications() {
   const [readIds, setReadIds] = useState(() => new Set());
   const [selectedAlert, setSelectedAlert] = useState(null);
 
+  const { data: preferencesData } = useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: async () => {
+      const res = await apiGet("/notifications");
+      return parseResponse(res);
+    },
+    staleTime: 60 * 1000
+  });
+
   const { data: submissionsData, isLoading, error, refetch } = useQuery({
     queryKey: ["dftc-notifications-submissions"],
     queryFn: async () => {
       const res = await apiGet("/dftc/submissions", { page_size: 50 });
       return parseResponse(res);
     },
-    staleTime: 30 * 1000
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000
   });
+
+  useEffect(() => {
+    let es;
+    try {
+      es = new EventSource("/api/v1/notifications/stream");
+      es.addEventListener("DATASET_INGESTED", () => {
+        refetch();
+      });
+    } catch {
+      // SSE fallback
+    }
+    return () => {
+      if (es) es.close();
+    };
+  }, [refetch]);
+
+  const enabledTypes = useMemo(() => {
+    if (!Array.isArray(preferencesData)) return null;
+    const map = {};
+    for (const p of preferencesData) {
+      map[p.notification_type] = p.enabled;
+    }
+    return map;
+  }, [preferencesData]);
+
+  const isEnabled = (type) => {
+    if (!enabledTypes) return true;
+    return enabledTypes[type] !== false;
+  };
+
 
   const notifications = useMemo(() => {
     if (!submissionsData?.items) return [];
@@ -137,7 +177,7 @@ function DFTCNotifications() {
       const subType = isArrival ? "Arrival Volume" : `Daily ${sub.price_type || "Retail"} Price`;
       const timeStr = fmtTimestamp(sub.saved_at || sub.created_at || sub.validation_completed_at);
 
-      if (sub.status === "Saved" || sub.status === "saved") {
+      if ((sub.status === "Saved" || sub.status === "saved") && isEnabled("submission_accepted")) {
         list.push({
           id: `sub-saved-${sub.id}`,
           title: "Submission Accepted",
@@ -149,7 +189,7 @@ function DFTCNotifications() {
           reason: "Submission accepted notification (submission_accepted)",
           action: { route: `/dftc/submissions/${sub.id}`, label: "View Dataset" }
         });
-      } else if (sub.status === "Failed" || sub.status === "failed") {
+      } else if ((sub.status === "Failed" || sub.status === "failed") && isEnabled("submission_failed")) {
         list.push({
           id: `sub-failed-${sub.id}`,
           title: "Submission Failed",
@@ -163,7 +203,7 @@ function DFTCNotifications() {
         });
       }
 
-      if ((sub.needs_correction_count || 0) > 0) {
+      if ((sub.needs_correction_count || 0) > 0 && isEnabled("records_need_correction")) {
         list.push({
           id: `sub-corr-${sub.id}`,
           title: "Records Need Correction",
@@ -177,7 +217,7 @@ function DFTCNotifications() {
         });
       }
 
-      if (sub.validation_completed_at) {
+      if (sub.validation_completed_at && isEnabled("upload_validation_completed")) {
         list.push({
           id: `sub-val-${sub.id}`,
           title: "Upload Validation Completed",
@@ -196,7 +236,8 @@ function DFTCNotifications() {
       ...item,
       read: readIds.has(item.id)
     }));
-  }, [submissionsData, readIds]);
+  }, [submissionsData, readIds, enabledTypes]);
+
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

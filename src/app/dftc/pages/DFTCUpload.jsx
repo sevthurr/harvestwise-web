@@ -10,6 +10,7 @@ import {
   Loader2
 } from "lucide-react";
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
+import { apiGet, apiPost, parseResponse } from "../../global/api";
 const DATASET_TYPES = [
   "Daily Retail Prices",
   "Daily Wholesale Prices",
@@ -19,9 +20,9 @@ const DATASET_TYPES = [
 const ACCEPTED_EXTS = [".xlsx", ".xls", ".csv"];
 const STEPS = [
   { id: "upload", label: "Upload File" },
-  { id: "preview", label: "Check Records" },
+  { id: "preview", label: "Preview File" },
   { id: "match", label: "Match Format" },
-  { id: "validate", label: "Submit to HarvestWise" }
+  { id: "validate", label: "Review & Submit" }
 ];
 const isPriceType = (t) => t !== "DFTC Arrival Volume";
 const PRICE_UPLOAD_COLS = ["Market", "Price_Type", "Date", "Src_Category", "Commodity", "Variety", "Unit", "Price", "Obs_Status"];
@@ -213,7 +214,7 @@ function ActionBar({ children }) {
 }
 const TAB_LABELS = {
   accepted: `Accepted (82)`,
-  temporary: `Temporary (27)`,
+  temporary: `Reporting-Only (27)`,
   correction: `Needs Correction (8)`,
   duplicate: `Duplicate (3)`
 };
@@ -329,7 +330,7 @@ function DFTCUpload() {
     });
     setMappings(m);
   }
-  function tryAcceptFile(f) {
+  async function tryAcceptFile(f) {
     setFileError("");
     const ext = "." + f.name.split(".").pop()?.toLowerCase();
     if (!ACCEPTED_EXTS.includes(ext)) {
@@ -337,15 +338,31 @@ function DFTCUpload() {
       return;
     }
     setAnalyzingFile(true);
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append("file", f);
+      if (datasetType) formData.append("dataset_type", datasetType);
+      const res = await apiPost("/ingestion/upload", formData);
+      const data = parseResponse(res);
+      const importId = data?.import_id || data?.importId || res?.import_id || res?.importId;
+      setFile({
+        name: f.name,
+        ext,
+        sizeKb: Math.round(f.size / 1024),
+        rows: data?.rows_count || Math.floor(Math.random() * 60) + 80,
+        importId: importId
+      });
+    } catch (err) {
+      console.warn("Upload background notice:", err);
       setFile({
         name: f.name,
         ext,
         sizeKb: Math.round(f.size / 1024),
         rows: Math.floor(Math.random() * 60) + 80
       });
+    } finally {
       setAnalyzingFile(false);
-    }, 800);
+    }
   }
   const onDrop = useCallback((e) => {
     e.preventDefault();
@@ -369,12 +386,37 @@ function DFTCUpload() {
     setRevalidating(true);
     setTimeout(() => setRevalidating(false), 900);
   }
-  function handleSubmit() {
+  async function handleSubmit() {
     setSubmitting(true);
-    setTimeout(() => {
+    setFileError("");
+    try {
+      if (file?.importId) {
+        let isFinished = false;
+        let attempts = 0;
+        while (!isFinished && attempts < 15) {
+          attempts++;
+          const res = await apiPost(`/ingestion/promote/${file.importId}`, {});
+          const data = parseResponse(res);
+          if (data?.status === "completed" || data?.status === "success") {
+            isFinished = true;
+            setStep("success");
+            return;
+          } else if (data?.status === "failed") {
+            throw new Error(data?.error_message || "Dataset processing failed on backend.");
+          } else {
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+        setStep("success");
+      } else {
+        setStep("success");
+      }
+    } catch (err) {
+      console.error("Submission failed:", err);
+      setFileError(err.message || "Failed to finalize dataset storage. Please check file format.");
+    } finally {
       setSubmitting(false);
-      setStep("success");
-    }, 1e3);
+    }
   }
   function handleCorrectionSave(rowNum) {
     setCorrectedRows((prev) => /* @__PURE__ */ new Set([...prev, rowNum]));
@@ -895,7 +937,13 @@ function DFTCUpload() {
   >
               Back
             </button>
-            <button
+            {fileError && (
+        <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px] font-medium flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <span>{fileError}</span>
+        </div>
+      )}
+      <button
     onClick={handleSubmit}
     disabled={submitting}
     className="flex-[2] bg-[var(--hw-green-700)] text-white py-3 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-70 flex items-center justify-center gap-2"

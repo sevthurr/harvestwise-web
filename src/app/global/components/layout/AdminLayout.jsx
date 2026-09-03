@@ -18,7 +18,11 @@ import {
   Layers
 } from "lucide-react";
 import { Footer } from "../Footer";
+import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
+
+
 import { useAuth } from "../../contexts/AuthContext";
 const FONT_SIZE_MAP = { small: "13px", medium: "15px", large: "17px" };
 const ADMIN_NAV = [
@@ -59,9 +63,10 @@ const AdminLayoutInner = () => {
   const displayName =
     user?.first_name
       ? `${user.first_name} ${user.last_name || ""}`.trim()
-      : user?.username
-      ? toTitleCase(user.username)
-      : "HarvestWise Admin";
+      : user?.email
+      ? user.email
+      : "Admin";
+
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -90,10 +95,23 @@ const AdminLayoutInner = () => {
 
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
+  const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   );
+
+  const syncTimeLabel = () =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  // Keep the "Last updated" timestamp in sync when a background process
+  // completes and triggers an automatic live resync.
+  useEffect(() => {
+    if (processState.completed || processState.error) {
+      setLastSyncedTime(syncTimeLabel());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processState.completed, processState.error]);
 
   const isSyncing = isManualSyncing || isFetching > 0;
 
@@ -141,22 +159,12 @@ const AdminLayoutInner = () => {
 
           <div className="flex-1" />
 
-          {/* Resync */}
-          <button
-            onClick={handleResync}
-            disabled={isSyncing}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
-            title={isSyncing ? "Syncing data..." : "Click to resync data"}
-            aria-label="Resync data"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline whitespace-nowrap">
-              {isSyncing ? "Syncing..." : `Resync (${lastSyncedTime})`}
-            </span>
-            <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
-              {isSyncing ? "Syncing" : "Resync"}
-            </span>
-          </button>
+          {/* Background Process Badge (pops up when process active) + Clickable Last Updated button */}
+          <BackgroundProcessBadge />
+          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
+
+
+
 
           {/* Bell */}
           <button
@@ -166,6 +174,7 @@ const AdminLayoutInner = () => {
           >
             <Bell className="w-4 h-4" />
           </button>
+
 
           {/* Admin avatar + dropdown */}
           <div className="relative flex-shrink-0" ref={dropdownRef}>

@@ -1,5 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 import {
@@ -23,26 +24,29 @@ function mapHistory(rec) {
   const result = rec.error_message
     ? rec.error_message
     : rec.records_imported != null
-      ? `${rec.records_imported.toLocaleString()} records imported`
-      : "No result summary available.";
+    ? `${rec.records_imported} records processed`
+    : "Processed";
+
+  let status = "Completed";
+  if (rec.status === "failed") status = "Failed";
+
   return {
     id: rec.id,
-    historyId: rec.id,
-    datetime: formatHistoryDT(rec.finished_at || rec.started_at),
-    sourceModule: source,
-    activity: "File Upload",
+    datetime: formatHistoryDT(rec.started_at),
+    rawDate: rec.started_at,
+    activity: rec.source_name || "Data Import",
+    source,
+    submittedBy: rec.user_id || "Admin",
+    recordsCount: rec.records_imported != null ? String(rec.records_imported) : "—",
     result,
-    status: rec.status,
-    initiatedBy: rec.uploaded_by_user_id || "System",
-    details: rec.error_message ? { "Error message": rec.error_message } : {},
-    relatedArea: rec.file_format || "—"
+    status
   };
 }
 
-function parseRecordDate(datetime) {
-  if (!datetime) return new Date(0);
-  const datePart = datetime.split("·")[0].trim();
-  return new Date(datePart);
+function parseRecordDate(str) {
+  if (!str || str === "—") return new Date(0);
+  const parsed = Date.parse(str);
+  return Number.isNaN(parsed) ? new Date(0) : new Date(parsed);
 }
 
 function AdminHistory() {
@@ -54,25 +58,14 @@ function AdminHistory() {
   const [dateTo, setDateTo] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    (async () => {
-      try {
-        const data = await ingestionApi.getHistory({ page, page_size: PAGE_SIZE });
-        if (!active) return;
-        setHistory((data?.items || []).map(mapHistory));
-      } catch (err) {
-        if (active) setHistory([]);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [page]);
+  const { data: historyRes, isLoading: loading } = useQuery({
+    queryKey: ["adminHistory", page],
+    queryFn: () => ingestionApi.getHistory({ page, page_size: PAGE_SIZE }),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const history = useMemo(() => (historyRes?.items || []).map(mapHistory), [historyRes]);
 
   const hasActiveFilters = !!(filterType || filterStatus || dateFrom || dateTo || search.trim());
 

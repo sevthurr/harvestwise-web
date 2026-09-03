@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
@@ -14,6 +15,7 @@ import {
   List
 } from "lucide-react";
 import { calendarApi, adminApi, ingestionApi } from "../../../services/api";
+
 
 function fmtISO(dateStr) {
   return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "";
@@ -109,11 +111,12 @@ const EMPTY_FORM = {
 };
 function AdminDataSources() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("sources");
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calFilter, setCalFilter] = useState("30d");
-  const [events, setEvents] = useState(BASE_EVENTS);
+
   const [showConfiguredEvents, setShowConfiguredEvents] = useState(false);
   const [selectedCalDay, setSelectedCalDay] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -123,14 +126,9 @@ function AdminDataSources() {
   const [addForm, setAddForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
 
-  const [dataSources, setDataSources] = useState([]);
-  const [apiSyncSources, setApiSyncSources] = useState([]);
-  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
-  const [apiSyncLoading, setApiSyncLoading] = useState(false);
-  const [dataSourcesError, setDataSourcesError] = useState(null);
-  const [apiSyncError, setApiSyncError] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
+
 
   const handleSyncAll = async () => {
     setSyncing(true);
@@ -144,61 +142,40 @@ function AdminDataSources() {
     }
   };
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const data = await calendarApi.listEvents();
-        if (!active) return;
-        setEvents((data?.items || []).map(mapEvent));
-      } catch (err) {
-        if (active) setEvents([]);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+  const { data: eventsData } = useQuery({
+    queryKey: ["adminCalendarEvents"],
+    queryFn: calendarApi.listEvents,
+    staleTime: 1000 * 60 * 5,
+  });
 
-  useEffect(() => {
-    let active = true;
-    setDataSourcesLoading(true);
-    setDataSourcesError(null);
-    (async () => {
-      try {
-        const res = await adminApi.listDataSources();
-        if (!active) return;
-        setDataSources(res?.items || []);
-      } catch (err) {
-        if (active) {
-          setDataSourcesError(err.message || "Failed to load data sources.");
-          setDataSources([]);
-        }
-      } finally {
-        if (active) setDataSourcesLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+  const { data: dataSourcesRes, isLoading: dataSourcesLoading, error: dsErr } = useQuery({
+    queryKey: ["adminDataSources"],
+    queryFn: adminApi.listDataSources,
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    let active = true;
-    setApiSyncLoading(true);
-    setApiSyncError(null);
-    (async () => {
-      try {
-        const res = await adminApi.listApiSyncSources();
-        if (!active) return;
-        setApiSyncSources(res?.items || []);
-      } catch (err) {
-        if (active) {
-          setApiSyncError(err.message || "Failed to load API sync sources.");
-          setApiSyncSources([]);
-        }
-      } finally {
-        if (active) setApiSyncLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+  const { data: apiSyncRes, isLoading: apiSyncLoading, error: syncErr } = useQuery({
+    queryKey: ["adminApiSyncSources"],
+    queryFn: adminApi.listApiSyncSources,
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: true,
+  });
+
+
+
+  const events = useMemo(() => {
+    if (eventsData?.items && eventsData.items.length > 0) {
+      return eventsData.items.map(mapEvent);
+    }
+    return BASE_EVENTS;
+  }, [eventsData]);
+
+  const dataSources = dataSourcesRes?.items || [];
+  const apiSyncSources = apiSyncRes?.items || [];
+  const dataSourcesError = dsErr ? (dsErr.message || "Failed to load data sources.") : null;
+  const apiSyncError = syncErr ? (syncErr.message || "Failed to load API sync sources.") : null;
+
 
   const syncHasFailed = apiSyncSources.some((s) => s.status === "Failed");
   const syncSummary = syncHasFailed ? `${apiSyncSources.filter((s) => s.status === "Failed").length} source failed \u2014 retry recommended` : apiSyncSources.length > 0 ? "All sources updated" : "";
@@ -353,8 +330,8 @@ function AdminDataSources() {
       return;
     }
     try {
-      const created = await calendarApi.createEvent(toApiEvent(addForm));
-      setEvents((prev) => [...prev, mapEvent(created)]);
+      await calendarApi.createEvent(toApiEvent(addForm));
+      queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
       setShowAddModal(false);
       setAddForm(EMPTY_FORM);
       setFormError("");
@@ -401,8 +378,8 @@ function AdminDataSources() {
         return;
       }
       try {
-        const updated = await calendarApi.updateEvent(editEventId, toApiEvent(editForm));
-        setEvents((prev) => prev.map((e) => e.id !== editEventId ? e : mapEvent(updated)));
+        await calendarApi.updateEvent(editEventId, toApiEvent(editForm));
+        queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
         setEditEventId(null);
         setFormError("");
       } catch (err) {
@@ -438,7 +415,7 @@ function AdminDataSources() {
       const id = deleteEventId;
       try {
         await calendarApi.deleteEvent(id);
-        setEvents((prev) => prev.filter((e) => e.id !== id));
+        queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
       } catch (err) {
         // Keep the modal open context; deletion failure leaves event in place.
       }
@@ -711,6 +688,8 @@ function AdminDataSources() {
               </button>
             </div>
             {dataSourcesLoading ? (
+
+
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
                 <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading data sources...</p>
@@ -779,6 +758,8 @@ function AdminDataSources() {
             {syncError && <p className="text-[13px] text-red-600">{syncError}</p>}
 
             {apiSyncLoading ? (
+
+
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
                 <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading sync sources...</p>

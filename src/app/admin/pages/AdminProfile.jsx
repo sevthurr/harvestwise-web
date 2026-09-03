@@ -14,7 +14,7 @@ function extractRoleName(role, fallback = "Admin") {
   return fallback;
 }
 
-function getInitials(firstName, lastName) {
+function getInitials(firstName, lastName, email) {
   const f = typeof firstName === "string" ? firstName.trim() : "";
   const l = typeof lastName === "string" ? lastName.trim() : "";
   if (f && l) {
@@ -23,10 +23,13 @@ function getInitials(firstName, lastName) {
   if (f) {
     return f.charAt(0).toUpperCase();
   }
-  return "HA";
+  if (typeof email === "string" && email.trim()) {
+    return email.trim().charAt(0).toUpperCase();
+  }
+  return "A";
 }
 
-function formatFullName(first, middle, last, suffix) {
+function formatFullName(first, middle, last, suffix, email) {
   const parts = [];
   if (typeof first === "string" && first.trim()) parts.push(first.trim());
   if (typeof middle === "string" && middle.trim()) parts.push(middle.trim());
@@ -34,7 +37,9 @@ function formatFullName(first, middle, last, suffix) {
   if (typeof suffix === "string" && suffix.trim() && suffix !== "None" && suffix !== "—") {
     parts.push(suffix.trim());
   }
-  return parts.length > 0 ? parts.join(" ") : "HarvestWise Admin";
+  if (parts.length > 0) return parts.join(" ");
+  if (typeof email === "string" && email.trim()) return email.trim();
+  return "Admin";
 }
 
 function AdminProfile() {
@@ -55,8 +60,9 @@ function AdminProfile() {
 
   const lastLogin = typeof user?.lastLogin === "string" ? user.lastLogin : typeof user?.last_login === "string" ? user.last_login : "-";
 
-  const initials = getInitials(firstName, lastName);
-  const displayName = formatFullName(firstName, middleName, lastName, suffix);
+  const initials = getInitials(firstName, lastName, email);
+  const displayName = formatFullName(firstName, middleName, lastName, suffix, email);
+
 
   const phoneVerified = Boolean(user?.phone_verified_at || user?.phoneVerifiedAt || user?.phoneVerified);
   const emailVerified = Boolean(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useNavigate } from "react-router";
 import {
@@ -42,59 +42,36 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Dynamic KPI counts (defaults to 0 per specification)
-  const [kpis, setKpis] = useState({
-    uploadedToday: 0,
-    advisoriesCreated: 0,
-    forReview: 0,
-    failedUploads: 0
+  const { data, error: queryErr } = useQuery({
+    queryKey: ["adminDashboard"],
+    queryFn: () => adminApi.getDashboard(),
+    staleTime: 1000 * 60 * 5,
   });
 
-  // Sources requiring attention (empty by default until populated by live data)
-  const [attentionSources, setAttentionSources] = useState([]);
 
-  // Today's activity list (empty by default until populated by live logs)
-  const [todayActivities, setTodayActivities] = useState([]);
+  const error = queryErr ? (queryErr.message || "Failed to load dashboard") : null;
 
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const s = data?.summary || {};
+  const kpis = {
+    uploadedToday: s.uploaded_today ?? 0,
+    advisoriesCreated: s.advisories_created_today ?? 0,
+    forReview: s.for_review ?? 0,
+    failedUploads: s.failed_uploads_today ?? 0
+  };
 
-  useEffect(() => {
-    let active = true;
-    async function loadDashboard() {
-      try {
-        const data = await adminApi.getDashboard();
-        if (!active) return;
-        const s = data?.summary || {};
-        setKpis({
-          uploadedToday: s.uploaded_today ?? 0,
-          advisoriesCreated: s.advisories_created_today ?? 0,
-          forReview: s.for_review ?? 0,
-          failedUploads: s.failed_uploads_today ?? 0
-        });
-        setAttentionSources((data?.sources_requiring_attention || []).map((src) => ({
-          source: src.source_name || "Unknown source",
-          type: src.source_type || src.ingestion_method || "—",
-          issue: src.reason || "Requires attention"
-        })));
-        setTodayActivities((data?.recent_audit_logs || []).map((log) => ({
-          time: log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
-          activity: log.action || "Activity recorded",
-          performedBy: log.user_id || "—",
-          status: "Completed"
-        })));
-        setNotificationCount(data?.notification_bell_count ?? 0);
-        setError(null);
-      } catch (e) {
-        if (active) setError(e.message || "Failed to load dashboard");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    loadDashboard();
-    return () => { active = false; };
-  }, []);
+  const attentionSources = (data?.sources_requiring_attention || []).map((src) => ({
+    source: src.source_name || "Unknown source",
+    type: src.source_type || src.ingestion_method || "—",
+    issue: src.reason || "Requires attention"
+  }));
+
+  const todayActivities = (data?.recent_audit_logs || []).map((log) => ({
+    time: log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
+    activity: log.action || "Activity recorded",
+    performedBy: log.user_id || "—",
+    status: "Completed"
+  }));
+
 
   // Greeting: use first_name; if unavailable, parse username before the first dot/underscore
   const rawFirstName =

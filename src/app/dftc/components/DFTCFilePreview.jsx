@@ -1,5 +1,7 @@
 import React, { useState, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Download, Check, AlertCircle, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
+import { apiGet, parseResponse } from "../../global/api";
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -434,10 +436,23 @@ function DFTCFilePreview({ file, onClose }) {
   const pageRefs = useRef([]);
   const total = PAGE_CATEGORY_GROUPS.length;
 
-  const reportingDate = formatDisplayDate(file.reportingDate || file.savedDate);
   const reportingDateShort = formatDisplayDateShort(file.reportingDate || file.savedDate);
-  const reportReference = file.reportId || file.reportReferenceNo || file.fileId || "—";
-  const encodedByName = getEncodedByName(file);
+
+  const { data: reportPreviewData } = useQuery({
+    queryKey: ["dftc-report-preview", reportingDateShort],
+    queryFn: async () => {
+      const res = await apiGet(`/dftc/reports/preview?date=${reportingDateShort}`);
+      return parseResponse(res);
+    },
+    enabled: !!reportingDateShort
+  });
+
+  const reportingDate = reportPreviewData?.subtitle
+    ? reportPreviewData.subtitle.replace("Prevailing Market Prices as of ", "")
+    : formatDisplayDate(file.reportingDate || file.savedDate);
+  const reportReference = reportPreviewData?.report_reference_no || file.reportId || file.reportReferenceNo || file.fileId || "—";
+  const encodedByName = reportPreviewData?.encoded_by || getEncodedByName(file);
+
 
   function updatePersonnel(field, name) {
     const user = DFTC_PERSONNEL_LIST.find((p) => p.name === name);

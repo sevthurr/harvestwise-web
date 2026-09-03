@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
@@ -15,6 +16,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
+
 
 const TABS = [
   { id: "users", label: "User Accounts" },
@@ -221,37 +223,29 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
 
 const UsersTab = ({ showToast }) => {
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      const res = await adminApi.listUsers({ page_size: 100 });
-      setUsers(res.items || []);
-    } catch {
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: usersRes, isLoading: loading } = useQuery({
+    queryKey: ["adminUsers"],
+    queryFn: () => adminApi.listUsers({ page_size: 100 }),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  const users = usersRes?.items || [];
 
   const createUser = async (payload) => {
     const created = await adminApi.createUser({
       ...payload,
       password: "Temp!pass123"
     });
-    await loadUsers();
+    await queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
     showToast("User account created successfully.");
     return created;
   };
+
 
   const filtered = users.filter((u) => {
     const matchesRole = roleFilter === "All" || (u.role && u.role.role_name === roleFilter);

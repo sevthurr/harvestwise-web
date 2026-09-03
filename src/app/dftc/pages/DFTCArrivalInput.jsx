@@ -14,6 +14,7 @@ import {
   UOM_OPTIONS,
   OBS_STATUS_LABELS
 } from "./dftc-add-data-data";
+import { apiPost, parseResponse } from "../../global/api";
 function formatDateLabel(iso) {
   const d = /* @__PURE__ */ new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
@@ -196,17 +197,53 @@ function DFTCArrivalInput() {
   const tempCount = allEntries.filter((e) => !e.com.isHW).length;
   const enteredCount = allEntries.length;
   const canReview = enteredCount > 0;
-  function handleSave() {
+  async function handleSave() {
+    const records = allEntries.map(({ com, v, f }) => {
+      const farm = f.farmSource === "" ? null : parseFloat(f.farmSource);
+      const other = f.otherSource === "" ? null : parseFloat(f.otherSource);
+      const hasVolume = farm != null || other != null;
+      const combined = (farm ?? 0) + (other ?? 0);
+      return {
+        commodity_id: com.name,
+        variety: v.name,
+        farm_source_volume_kg: farm,
+        other_source_volume_kg: other,
+        reported_combined_volume_kg: hasVolume ? Number(combined.toFixed(2)) : null,
+        observation_status: "Reported value"
+      };
+    });
+
+    const payload = {
+      data_type: "arrival_volume",
+      source_id: "DFTC Taboan",
+      reporting_date: defaultDate,
+      records
+    };
+
     try {
-      localStorage.removeItem("dftc_arrival_draft");
+      await parseResponse(await apiPost("/dftc/submissions/manual", payload));
+      try {
+        localStorage.removeItem("dftc_arrival_draft");
+      } catch {
+      }
+      setSaved(true);
+      setTimeout(() => {
+        navigate("/dftc/input", {
+          state: { successMsg: `${dataName} saved successfully.` }
+        });
+      }, 1e3);
     } catch {
+      setSaveStatus("offline");
+      try {
+        localStorage.setItem("dftc_arrival_draft", "true");
+      } catch {
+      }
+      setTimeout(() => {
+        navigate("/dftc/input", {
+          state: { errorMsg: "Could not save to server. Your draft was kept on this device." }
+        });
+      }, 1200);
     }
-    setSaved(true);
-    setTimeout(() => {
-      navigate("/dftc/input", {
-        state: { successMsg: `${dataName} saved successfully.` }
-      });
-    }, 1e3);
   }
   function SaveStatusIndicator() {
     if (saveStatus === "idle") return null;

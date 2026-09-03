@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import React, { useState, useRef } from "react";
 import {
   Upload,
   Check,
@@ -11,6 +12,8 @@ import {
   Loader2
 } from "lucide-react";
 import { ingestionApi } from "../../../services/api";
+import { useBackgroundProcess } from "../../global/contexts/BackgroundProcessContext";
+
 
 const DATA_TYPE_MAP = {
   "DFTC Wholesale Prices": "dftc_daily_wholesale",
@@ -186,7 +189,9 @@ function computeValidationResult(rows, headers) {
 }
 
 function AdminImport() {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState("form");
+
   const [datasetType, setDatasetType] = useState("");
   const [org, setOrg] = useState("");
   const [period, setPeriod] = useState("");
@@ -213,43 +218,7 @@ function AdminImport() {
   const [ingestionRecord, setIngestionRecord] = useState(null);
   const fileRef = useRef(null);
 
-  useEffect(() => {
-    if (step !== "done" || ingestionStatus === "success" || ingestionStatus === "failed") return;
 
-    let isMounted = true;
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const historyRes = await ingestionApi.getHistory({ page: 1, page_size: 5 });
-        const items = historyRes?.items || [];
-        const match = items.find(
-          (item) => item.original_file_name === fileName || item.status !== "running"
-        );
-        if (match && isMounted) {
-          if (match.status === "success") {
-            setIngestionStatus("success");
-            setIngestionRecord(match);
-            setUploadMessage(`Import completed successfully! ${match.records_imported ?? 0} records processed.`);
-            clearInterval(interval);
-          } else if (match.status === "failed") {
-            setIngestionStatus("failed");
-            setIngestionRecord(match);
-            setUploadError(match.error_message || "Background ingestion encountered an error.");
-            clearInterval(interval);
-          }
-        }
-      } catch (err) {
-        console.warn("Polling import history error:", err);
-      }
-      if (attempts >= 30) clearInterval(interval);
-    }, 2000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [step, fileName, ingestionStatus]);
 
   const handleFileSelect = async (e) => {
     const selected = e.target.files?.[0];
@@ -284,6 +253,8 @@ function AdminImport() {
     setCurrentStep(1);
   };
 
+  const { startProcess, updateProgress, finishProcess } = useBackgroundProcess();
+
   const handleImport = async () => {
     if (!file) return;
     if (!datasetType) {
@@ -298,14 +269,60 @@ function AdminImport() {
     try {
       const dataType = DATA_TYPE_MAP[datasetType];
       const res = await ingestionApi.uploadFile(file, dataType, overwrite);
+      const importId = res?.import_id || res?.importId || res?.data?.import_id;
+
       setUploadMessage(res?.message || "Import accepted and processing in background.");
       setIngestionStatus("processing");
       setStep("done");
       setCurrentStep(3);
+
+      startProcess({
+        title: `Importing ${datasetType}`,
+        statusText: "Uploading file...",
+        initialProgress: 10,
+        importId,
+      });
+      updateProgress(15, "File uploaded, processing in background...");
+
+      if (importId) {
+        let isFinished = false;
+        let attempts = 0;
+        while (!isFinished && attempts < 60) {
+          attempts++;
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const statusRes = await ingestionApi.getHistoryDetail(importId);
+            if (statusRes?.status === "completed" || statusRes?.status === "success") {
+              isFinished = true;
+              setIngestionStatus("success");
+              setUploadMessage(`Import completed successfully! Stored ${statusRes.records_imported || 0} records.`);
+              finishProcess(`Stored ${statusRes.records_imported || 0} records`);
+              queryClient.invalidateQueries();
+              queryClient.refetchQueries();
+            } else if (statusRes?.status === "failed") {
+              isFinished = true;
+              setIngestionStatus("failed");
+              setUploadError(statusRes.error_message || "Background ingestion task failed.");
+              finishProcess(statusRes.error_message || "Import failed", true);
+              queryClient.invalidateQueries();
+              queryClient.refetchQueries();
+            } else {
+              const pct = Math.min(90, 20 + attempts * 3);
+              updateProgress(pct, `Processing records... (${attempts * 2}s)`);
+            }
+          } catch (statusErr) {
+            console.warn("Status poll error:", statusErr);
+          }
+        }
+        if (!isFinished) {
+          finishProcess("Import timed out", true);
+        }
+      }
     } catch (err) {
       setUploadError(err.message || "Upload failed.");
       setStep("validated");
       setCurrentStep(1);
+      finishProcess("Upload failed", true);
     } finally {
       setUploading(false);
     }

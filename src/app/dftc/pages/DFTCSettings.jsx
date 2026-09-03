@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { Loader2, RefreshCw, Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
@@ -76,7 +77,7 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
   const [showNew, setShowNew] = useState(false);
   const [showCfm, setShowCfm] = useState(false);
   const [pwError, setPwError] = useState("");
-  const handlePasswordSave = () => {
+  const handlePasswordSave = async () => {
     if (!pw.current || !pw.newPw || !pw.confirm) {
       setPwError("Please fill in all fields.");
       return;
@@ -90,17 +91,41 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
       return;
     }
     setPwError("");
-    setPw({ current: "", newPw: "", confirm: "" });
-    showToast("Password updated successfully.");
+    try {
+      await parseResponse(
+        await apiPost("/auth/change-password", {
+          current_password: pw.current,
+          new_password: pw.newPw
+        })
+      );
+      setPw({ current: "", newPw: "", confirm: "" });
+      showToast("Password updated successfully.");
+    } catch {
+      setPwError("Could not update password. Check your current password and try again.");
+    }
   };
   const handlePasswordCancel = () => {
     setPw({ current: "", newPw: "", confirm: "" });
     setPwError("");
   };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const handleSave = () => {
+  const handleSave = async () => {
     setShowSaveModal(false);
-    showToast("Account updated successfully.");
+    const payload = {
+      first_name: form.firstName,
+      last_name: form.lastName,
+      middle_name: form.middleName || null,
+      suffix: form.suffix === "None" ? null : form.suffix,
+      position_title: form.position || null,
+      phone: form.phone || null,
+      email: form.email || null
+    };
+    try {
+      await parseResponse(await apiPut("/dftc/staff/me", payload));
+      showToast("Account updated successfully.");
+    } catch {
+      showToast("Could not save account changes. Please try again.");
+    }
   };
   const handleRemoveSubmit = () => {
     if (!removeReason.trim()) {
@@ -109,8 +134,9 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
     }
     setRemoveReasonErr("");
     setShowRemoveModal(false);
+    const reason = removeReason;
     setRemoveReason("");
-    onRemovalRequest();
+    onRemovalRequest(reason);
   };
   return <div className="space-y-4">
       <Card>
@@ -339,7 +365,47 @@ const SubmissionsTab = ({ showToast }) => {
     download_after_upload: false
   });
   const [reportFormat, setReportFormat] = useState("excel");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet("/dftc/submission-preferences")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !data) return;
+        setToggles({
+          ask_before_submit: data.ask_before_submit ?? true,
+          show_validation: data.show_validation_summary ?? true,
+          download_after_upload: data.auto_download_validation_report ?? false
+        });
+        if (data.report_format) {
+          setReportFormat(data.report_format.toLowerCase() === "csv" ? "csv" : "excel");
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const setToggle = (k) => (v) => setToggles((prev) => ({ ...prev, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await parseResponse(
+        await apiPut("/dftc/submission-preferences", {
+          ask_before_submit: toggles.ask_before_submit,
+          show_validation_summary: toggles.show_validation,
+          auto_download_validation_report: toggles.download_after_upload,
+          report_format: reportFormat === "csv" ? "CSV" : "Excel"
+        })
+      );
+      showToast("Submission settings saved.");
+    } catch {
+      showToast("Could not save submission settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <Card>
       <SectionLabel>Submission Behavior</SectionLabel>
@@ -380,8 +446,8 @@ const SubmissionsTab = ({ showToast }) => {
         </div>
       )}
       <div className="pt-4">
-        <GreenBtn onClick={() => showToast("Submission settings saved.")} className="w-full sm:w-auto">
-          Save submission settings
+        <GreenBtn onClick={handleSave} disabled={saving} className="w-full sm:w-auto">
+          {saving ? "Saving…" : "Save submission settings"}
         </GreenBtn>
       </div>
     </Card>
@@ -447,9 +513,46 @@ const NotificationsTab = ({ showToast }) => {
   const [prefs, setPrefs] = useState(
     Object.fromEntries(NOTIF_ITEMS.map((item) => [item.id, item.defaultOn]))
   );
-  const toggle = (id) => {
-    setPrefs((p) => ({ ...p, [id]: !p[id] }));
-    showToast("Notification preference updated.");
+  const prefIdsRef = useRef({});
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet("/notifications")
+      .then((res) => res.json())
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const ids = {};
+        const next = {};
+        NOTIF_ITEMS.forEach((item) => {
+          const found = list.find((p) => p.notification_type === item.id);
+          ids[item.id] = found ? found.id : null;
+          next[item.id] = found ? found.enabled : item.defaultOn;
+        });
+        prefIdsRef.current = ids;
+        setPrefs(next);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggle = async (id) => {
+    const next = !prefs[id];
+    setPrefs((p) => ({ ...p, [id]: next }));
+    try {
+      const existingId = prefIdsRef.current[id];
+      if (existingId) {
+        await parseResponse(await apiPut(`/notifications/${existingId}`, { enabled: next }));
+      } else {
+        const data = await parseResponse(
+          await apiPost("/notifications", { notification_type: id, enabled: next })
+        );
+        prefIdsRef.current[id] = data?.id || null;
+      }
+      showToast("Notification preference updated.");
+    } catch {
+      setPrefs((p) => ({ ...p, [id]: !next }));
+      showToast("Could not update notification preference.");
+    }
   };
   return <Card>
       <SectionLabel>Notification Preferences</SectionLabel>
@@ -488,8 +591,15 @@ function DFTCSettings() {
     setTimeout(() => setToast(""), 3e3);
   };
 
-  const handleRemovalRequest = () => {
-    showToast("Account removal request sent.");
+  const handleRemovalRequest = async (reason) => {
+    try {
+      await parseResponse(
+        await apiPost("/dftc/removal-requests", { reason: reason || null })
+      );
+      showToast("Account removal request sent.");
+    } catch {
+      showToast("Could not send removal request. Please try again.");
+    }
   };
 
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">

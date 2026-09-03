@@ -113,7 +113,17 @@ function DFTCHome() {
     }
   });
 
-  const isLoading = loadingSubmissions || loadingRequirements;
+  const { data: homeData, isLoading: loadingHome } = useQuery({
+    queryKey: ["dftc", "home"],
+    queryFn: async () => {
+      const res = await apiGet("/dftc/home");
+      return parseResponse(res);
+    },
+    staleTime: 30_000
+  });
+
+  const kpis = homeData?.kpis || {};
+  const isLoading = loadingSubmissions || loadingRequirements || loadingHome;
   const submissions = submissionsData?.items || [];
   const requirements = requirementsData?.items || [];
 
@@ -267,7 +277,7 @@ function DFTCHome() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <DFTCKpiCard
           label="Price Records Today"
-          value={priceSubmissionsToday.length || 0}
+          value={kpis.price_records_today ?? (priceSubmissionsToday.length || 0)}
           loading={isLoading}
           dotColor="bg-[var(--hw-neutral-400)]"
           labelColor="text-[var(--hw-neutral-800)]"
@@ -276,7 +286,7 @@ function DFTCHome() {
         />
         <DFTCKpiCard
           label="Arrival Records Today"
-          value={arrivalSubmissionsToday.length || 0}
+          value={kpis.arrival_records_today ?? (arrivalSubmissionsToday.length || 0)}
           loading={isLoading}
           dotColor="bg-[var(--hw-neutral-400)]"
           labelColor="text-[var(--hw-neutral-800)]"
@@ -285,7 +295,7 @@ function DFTCHome() {
         />
         <DFTCKpiCard
           label="Datasets Saved Today"
-          value={datasetsSavedToday.length || 0}
+          value={kpis.datasets_saved_today ?? (datasetsSavedToday.length || 0)}
           loading={isLoading}
           dotColor="bg-[var(--hw-green-700)]"
           labelColor="text-[var(--hw-neutral-800)]"
@@ -294,7 +304,7 @@ function DFTCHome() {
         />
         <DFTCKpiCard
           label="Needs Correction"
-          value={needsCorrectionSubmissions.length || 0}
+          value={kpis.needs_correction_count ?? (needsCorrectionSubmissions.length || 0)}
           loading={isLoading}
           dotColor="bg-orange-500"
           labelColor="text-[var(--hw-neutral-800)]"
@@ -517,9 +527,42 @@ function DFTCHome() {
             <p className="font-semibold text-[var(--hw-neutral-900)]">Price Movement</p>
             <TrendingUp className="w-4 h-4 text-[var(--hw-neutral-400)]" />
           </div>
-          <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-            No price movement data available yet.
-          </div>
+          {loadingHome ? (
+            <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">Loading…</div>
+          ) : (homeData?.price_movement || []).length === 0 ? (
+            <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
+              No price movement data available yet.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {(homeData?.price_movement || []).map((item) => (
+                <button
+                  key={item.commodity_id}
+                  onClick={() => navigate(`/dftc/trends?commodity=${item.commodity_id}`)}
+                  className="w-full flex items-center justify-between gap-3 text-left hover:bg-[var(--hw-neutral-50)] rounded-lg p-2 -m-2 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">
+                      {item.crop_name}{item.variety ? ` · ${item.variety}` : ""}
+                    </p>
+                    <p className="text-[12px] text-[var(--hw-neutral-800)] truncate">
+                      {formatMarketName(item.market)} · {item.price_type || "Retail"}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                      {item.current_price != null ? `₱${item.current_price}/${item.unit || ""}` : "\u2014"}
+                    </p>
+                    <p className={`text-[12px] font-medium ${item.direction === "down" ? "text-red-600" : item.direction === "up" ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}>
+                      {item.change_pct != null
+                        ? `${item.direction === "down" ? "↓" : "↑"} ${Math.abs(item.change_pct)}%`
+                        : "\u2014"}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => navigate("/dftc/trends")}
             className="mt-4 flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
@@ -533,9 +576,32 @@ function DFTCHome() {
             <p className="font-semibold text-[var(--hw-neutral-900)]">Latest Arrival Volume</p>
             <Truck className="w-4 h-4 text-[var(--hw-neutral-400)]" />
           </div>
-          <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-            No arrival volume records available yet.
-          </div>
+          {loadingHome ? (
+            <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">Loading…</div>
+          ) : (!homeData?.latest_arrival_volume || (homeData.latest_arrival_volume.combined_volume_kg || 0) <= 0) ? (
+            <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
+              No arrival volume records available yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[12px] text-[var(--hw-neutral-800)]">
+                  Reporting Period {homeData.latest_arrival_volume.reporting_period || "\u2014"}
+                </p>
+                <p className="text-[22px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+                  {Number(homeData.latest_arrival_volume.combined_volume_kg).toLocaleString()} <span className="text-[13px] font-medium text-[var(--hw-neutral-800)]">kg</span>
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                {(homeData.latest_arrival_volume.provenance || []).map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-[13px]">
+                    <span className="text-[var(--hw-neutral-800)]">{p.origin_province}</span>
+                    <span className="font-medium text-[var(--hw-neutral-900)]">{Number(p.volume_kg).toLocaleString()} kg</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             onClick={() => navigate("/dftc/trends")}
             className="mt-4 flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"

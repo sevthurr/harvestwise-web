@@ -3,6 +3,7 @@ import { Bell, Menu, RefreshCw, Settings, LogOut, ChevronDown, ArrowLeftRight, I
 import { useNavigate } from "react-router";
 import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
+import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
 
@@ -26,8 +27,20 @@ const TopBar = ({
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   );
   const ref = useRef(null);
+  const { processState } = useBackgroundProcess();
 
   const isSyncing = isManualSyncing || isFetching > 0;
+
+  // Keep the "Last updated" timestamp in sync when a background process
+  // completes and triggers an automatic live resync.
+  useEffect(() => {
+    if (processState.completed || processState.error) {
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processState.completed, processState.error]);
 
   const handleResync = async () => {
     if (isSyncing) return;

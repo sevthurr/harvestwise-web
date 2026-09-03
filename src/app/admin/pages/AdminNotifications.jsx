@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   Bell,
@@ -18,6 +19,7 @@ const URGENCY_CONFIG = {
   attention: { label: "Attention", Icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
   information: { label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" }
 };
+
 
 // Map audit-log action resource prefixes to notification urgency and a
 // sensible admin destination. Action format is "<resource>.<verb>".
@@ -159,37 +161,33 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
 
 function AdminNotifications() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [readIds, setReadIds] = useState(new Set());
 
-  const loadNotifications = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await adminApi.getAuditLogs({ page_size: 30 });
-      setNotifications((data.items || []).map(logToNotification));
-      setLoading(false);
-    } catch (err) {
-      setError(err.message || "Could not load notifications.");
-      setLoading(false);
-    }
-  }, []);
+  const { data: logsRes, isLoading: loading, error: queryErr, refetch } = useQuery({
+    queryKey: ["adminNotifications"],
+    queryFn: () => adminApi.getAuditLogs({ page_size: 30 }),
+    staleTime: 1000 * 60 * 2,
+  });
 
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+  const rawNotifications = useMemo(() => (logsRes?.items || []).map(logToNotification), [logsRes]);
+  const notifications = useMemo(
+    () => rawNotifications.map((n) => (readIds.has(n.id) ? { ...n, read: true } : n)),
+    [rawNotifications, readIds]
+  );
+  const error = queryErr ? (queryErr.message || "Could not load notifications.") : "";
+
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setReadIds(new Set(rawNotifications.map((n) => n.id)));
   };
 
   const markRead = (id) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    setReadIds((prev) => new Set([...prev, id]));
   };
+
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -242,7 +240,7 @@ function AdminNotifications() {
             <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm mb-4">{error}</p>
             <button
               type="button"
-              onClick={loadNotifications}
+              onClick={() => refetch()}
               className="px-4 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
             >
               Try again

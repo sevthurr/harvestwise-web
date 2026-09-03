@@ -83,7 +83,7 @@ export const router = createBrowserRouter([
   // ── Farmer workspace ─────────────────────────────────────────────────────────
   {
     path: "/farmer",
-    element: <ProtectedRoute><Layout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole="Farmer"><Layout /></ProtectedRoute>,
     children: [
       { index: true, Component: DashboardPage },
 
@@ -134,7 +134,7 @@ export const router = createBrowserRouter([
   // ── DFTC workspace ────────────────────────────────────────────────────────────
   {
     path: "/dftc",
-    element: <ProtectedRoute><DFTCLayout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole={["DFTC", "Admin", "SuperAdmin"]}><DFTCLayout /></ProtectedRoute>,
     children: [
       { index: true,               Component: DFTCHome         },
       { path: "input",             Component: DFTCInput        },
@@ -157,7 +157,7 @@ export const router = createBrowserRouter([
   // ── Admin workspace ───────────────────────────────────────────────────────────
   {
     path: "/admin",
-    element: <ProtectedRoute><AdminLayout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole={["Admin", "SuperAdmin"]}><AdminLayout /></ProtectedRoute>,
     children: [
       { index: true,             Component: AdminDashboard   },
       { path: "data-sources",             Component: AdminDataSources      },

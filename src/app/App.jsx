@@ -7,6 +7,8 @@ import { DisplayModeProvider } from './global/contexts/DisplayModeContext';
 import { AuthProvider } from './global/contexts/AuthContext';
 import { LanguageProvider } from './global/contexts/LanguageContext';
 
+import { BackgroundProcessProvider } from './global/contexts/BackgroundProcessContext';
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -14,7 +16,9 @@ export default function App() {
         <LanguageProvider>
           <DisplayModeProvider>
             <CropsProvider>
-              <RouterProvider router={router} />
+              <BackgroundProcessProvider>
+                <RouterProvider router={router} />
+              </BackgroundProcessProvider>
             </CropsProvider>
           </DisplayModeProvider>
         </LanguageProvider>
@@ -22,3 +26,4 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+

@@ -1,4 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
+
 import { useParams, useNavigate } from "react-router";
 import {
   ChevronLeft,
@@ -53,34 +55,17 @@ function AdminDataSourceDetail() {
   const navigate = useNavigate();
   const [showRecords, setShowRecords] = useState(false);
   const [recordPage, setRecordPage] = useState(1);
-  const [dataSource, setDataSource] = useState(null);
-  const [records, setRecords] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
-    (async () => {
-      try {
-        const data = await adminApi.getDataSourceRecords(sourceId, { page: recordPage, page_size: PAGE_SIZE });
-        if (!active) return;
-        setDataSource(data?.data_source || null);
-        setRecords(data?.items || []);
-        setTotal(data?.total ?? 0);
-        setLoading(false);
-      } catch (err) {
-        if (!active) return;
-        setError(err.message || "Failed to load data source.");
-        setRecords([]);
-        setTotal(0);
-        setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [sourceId, recordPage]);
+  const { data, isLoading: loading, error: queryErr } = useQuery({
+    queryKey: ["adminDataSourceRecords", sourceId, recordPage],
+    queryFn: () => adminApi.getDataSourceRecords(sourceId, { page: recordPage, page_size: PAGE_SIZE }),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const dataSource = data?.data_source || null;
+  const records = data?.items || [];
+  const total = data?.total ?? 0;
+  const error = queryErr ? (queryErr.message || "Failed to load data source.") : null;
 
   const src = dataSource || {};
   const statusCode = src.status;
