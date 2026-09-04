@@ -134,7 +134,7 @@ export const router = createBrowserRouter([
   // ── DFTC workspace ────────────────────────────────────────────────────────────
   {
     path: "/dftc",
-    element: <ProtectedRoute requiredRole={["DFTC", "Admin", "SuperAdmin"]}><DFTCLayout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole={["DFTC"]}><DFTCLayout /></ProtectedRoute>,
     children: [
       { index: true,               Component: DFTCHome         },
       { path: "input",             Component: DFTCInput        },
