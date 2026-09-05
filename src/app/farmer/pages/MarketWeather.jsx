@@ -19,10 +19,16 @@ import {
 import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+import {
+  WEATHER_SUITABILITY_CODES,
+  normalizeWeatherSuitability,
+} from "../utils/farmerCodes";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+
 const RISK_CFG = {
-  Suitable: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
-  Caution: { Icon: AlertTriangle, color: "text-amber-700", dot: "bg-amber-400", label: "Caution" },
-  Severe: { Icon: AlertOctagon, color: "text-red-600", dot: "bg-red-500", label: "Severe" }
+  [WEATHER_SUITABILITY_CODES.SUITABLE]: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
+  [WEATHER_SUITABILITY_CODES.CAUTION]: { Icon: AlertTriangle, color: "text-amber-700", dot: "bg-amber-400", label: "Caution" },
+  [WEATHER_SUITABILITY_CODES.SEVERE]: { Icon: AlertOctagon, color: "text-red-600", dot: "bg-red-500", label: "Severe" },
 };
 
 function _mapWeatherConditionToIcon(condition) {
@@ -47,7 +53,8 @@ function WeatherIconEl({ icon, cls = "w-6 h-6" }) {
 }
 
 const CropWeatherCard = ({ crop }) => {
-  const rc = RISK_CFG[crop.risk_level];
+  const riskCode = normalizeWeatherSuitability(crop.risk_level) || WEATHER_SUITABILITY_CODES.SUITABLE;
+  const rc = RISK_CFG[riskCode] || RISK_CFG[WEATHER_SUITABILITY_CODES.SUITABLE];
   const RiskIcon = rc.Icon;
   const displayName = crop.variety ? `${crop.crop_name} (${crop.variety})` : crop.crop_name;
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
@@ -91,12 +98,13 @@ const CropWeatherCard = ({ crop }) => {
 function MarketWeatherPage() {
   const navigate = useNavigate();
   const carouselRef = useRef(null);
+  const { t } = useLanguage();
 
   const { data: weatherData, isLoading: loading, error } = useQuery({
     queryKey: ["weather", "advisory"],
     queryFn: async () => {
       const response = await apiGet('/weather/advisory?latitude=7.0722&longitude=125.6131');
-      if (!response.ok) throw new Error('Failed to fetch weather forecast');
+      if (!response.ok) throw new Error(t('farmer.errors.fetch_weather_failed'));
       const data = await parseResponse(response);
       const daily = data.daily_forecasts || [];
       const forecast14 = daily.map((d, i) => ({
@@ -106,14 +114,14 @@ function MarketWeatherPage() {
         tempMin: d.temperature_min != null ? Math.round(d.temperature_min) : null,
         tempMax: d.temperature_max != null ? Math.round(d.temperature_max) : null,
         rainPct: d.rain_probability_pct != null ? Math.round(d.rain_probability_pct) : 0,
-        risk: d.suitability ? (d.suitability === 'Severe' ? 'high' : d.suitability === 'Caution' ? 'moderate' : 'low') : 'low'
+        risk: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE ? 'high' : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION ? 'moderate' : 'low'
       }));
 
       return {
         updated_at: new Date().toISOString(),
         location_name: data.location || 'Davao City',
         forecast_14d: forecast14,
-        weather_summary: data.weather_risk_level ? `7-day weather suitability forecast: ${data.weather_risk_level}` : '7-day weather forecast for Davao City',
+        weather_summary: data.weather_risk_level ? t('farmer.factors.weather.summary_headline', { risk_level: data.weather_risk_level }) : t('farmer.factors.weather.forecast_fallback_davao'),
         crop_advisories: (data.advisories || []).map((adv, idx) => ({
           crop_id: adv.commodity_id || `crop-${idx}`,
           crop_name: adv.commodity_name || 'Crop',
@@ -184,7 +192,7 @@ function MarketWeatherPage() {
             Weather
           </h1>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-            See how weather may affect your planted crops.
+            {t("farmer.factors.weather.page_subtitle")}
           </p>
         </div>
 
@@ -201,14 +209,14 @@ function MarketWeatherPage() {
           </div>
         ) : (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
-            <p className="text-[13px] font-medium">No weather guidance available.</p>
+            <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
           </div>
         )}
 
         {/* ── 1. 14-day forecast carousel ── */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">14-Day Forecast</p>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Forecast"}</p>
             <div className="flex gap-1 lg:hidden">
               <button
                 onClick={() => scrollBy(-1)}
@@ -233,7 +241,8 @@ function MarketWeatherPage() {
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {forecast14d.length > 0 ? forecast14d.map((day, i) => {
-              const rc = RISK_CFG[day.suitability] || RISK_CFG.Suitable;
+              const riskCode = normalizeWeatherSuitability(day.suitability);
+              const rc = RISK_CFG[riskCode] || RISK_CFG[WEATHER_SUITABILITY_CODES.SUITABLE];
               const icon = _mapWeatherConditionToIcon(day.weather_condition);
               return (
                 <div
@@ -281,10 +290,10 @@ function MarketWeatherPage() {
           </div>
 
           <div className="flex items-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-700)]">
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /><span>Suitable</span></div>
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /><span>Caution</span></div>
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /><span>Severe</span></div>
-            <span>· % = rain chance</span>
+            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /><span>{t ? t("farmer.factors.weather.suitability_suitable") : "Suitable"}</span></div>
+            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /><span>{t ? t("farmer.factors.weather.suitability_caution") : "Caution"}</span></div>
+            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /><span>{t ? t("farmer.factors.weather.suitability_severe") : "Severe"}</span></div>
+            <span>{t ? t("farmer.factors.weather.rain_chance_note") : "· % = rain chance"}</span>
           </div>
         </section>
 
@@ -298,7 +307,7 @@ function MarketWeatherPage() {
 
         {/* ── 3. Crop-specific advisories ── */}
         <section className="space-y-3">
-          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Your Crop Advisories</p>
+          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t("farmer.factors.weather.crop_advisories_title")}</p>
           
           {cropAdvisories.length > 0 ? (
             cropAdvisories.map((crop) => <CropWeatherCard key={crop.crop_id} crop={crop} />)
@@ -306,7 +315,7 @@ function MarketWeatherPage() {
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center space-y-3">
               <Sprout className="w-8 h-8 text-[var(--hw-neutral-300)] mx-auto" />
               <div>
-                <p className="text-[15px] font-semibold text-[var(--hw-neutral-700)]">No crop-specific weather advisory available.</p>
+                <p className="text-[15px] font-semibold text-[var(--hw-neutral-700)]">{t("farmer.empty.no_weather_advisory")}</p>
               </div>
               <button
                 onClick={() => navigate("/farmer/assess")}
@@ -322,7 +331,7 @@ function MarketWeatherPage() {
         {/* ── 4. Notes ── */}
         <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3">
           <p className="text-[11px] text-[var(--hw-neutral-900)] italic">
-            Source: Open-Meteo · Forecast is a guide only.
+            {t("farmer.factors.weather.source_open_meteo_notice")}
           </p>
         </div>
 

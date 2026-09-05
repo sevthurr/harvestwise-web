@@ -26,6 +26,9 @@ import {
 import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
+import { LEVEL_CODES, normalizeLevelCode } from "../utils/farmerCodes";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+
 const YEARS = [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_LABELS = {
@@ -88,40 +91,79 @@ function getProduction(commodityId, quarter, year, location) {
 function classifyValues(values) {
   const avg = values.reduce((s, v) => s + v, 0) / values.length;
   const last = values[values.length - 1];
-  if (last > avg * 1.12) return "High";
-  if (last < avg * 0.88) return "Low";
-  return "Normal";
+  if (last > avg * 1.12) return LEVEL_CODES.HIGH;
+  if (last < avg * 0.88) return LEVEL_CODES.LOW;
+  return LEVEL_CODES.NORMAL;
 }
 const pressureCfg = {
-  Low: { color: "text-emerald-700", borderColor: "border-l-emerald-500", Icon: TrendingDown },
-  Normal: { color: "text-blue-600", borderColor: "border-l-blue-500", Icon: Minus },
-  High: { color: "text-amber-700", borderColor: "border-l-amber-500", Icon: TrendingUp }
+  [LEVEL_CODES.LOW]: { color: "text-emerald-700", borderColor: "border-l-emerald-500", Icon: TrendingDown, label: "Low" },
+  [LEVEL_CODES.NORMAL]: { color: "text-blue-600", borderColor: "border-l-blue-500", Icon: Minus, label: "Normal" },
+  [LEVEL_CODES.HIGH]: { color: "text-amber-700", borderColor: "border-l-amber-500", Icon: TrendingUp, label: "High" },
+  Low: { color: "text-emerald-700", borderColor: "border-l-emerald-500", Icon: TrendingDown, label: "Low" },
+  Normal: { color: "text-blue-600", borderColor: "border-l-blue-500", Icon: Minus, label: "Normal" },
+  High: { color: "text-amber-700", borderColor: "border-l-amber-500", Icon: TrendingUp, label: "High" }
 };
-function buildProductionInsight(name, classification, quarter, locationLabel, avg) {
+function buildProductionInsight(name, classification, quarter, locationLabel, avg, t) {
   const qLabel = QUARTER_LABELS[quarter];
   const qFull = QUARTER_FULL[quarter];
-  if (classification === "High") {
+  const levelCode = normalizeLevelCode(classification) || LEVEL_CODES.NORMAL;
+  if (levelCode === LEVEL_CODES.HIGH) {
     return {
-      headline: `Historical ${name} production in ${qLabel} (${qFull}) averaged ${avg.toLocaleString()} tons in ${locationLabel}.`,
-      meaning: `More ${name} is usually produced during this quarter, which may increase supply near harvest.`,
-      action: `Based on historical production, if your harvest may fall in ${qLabel.split(" ")[0]}, consider reviewing your planting area or schedule. Review the full planting assessment for a complete picture.`
+      headline: t
+        ? t("farmer.factors.production.insight_headline_high", {
+            name,
+            quarter_label: qLabel,
+            quarter_range: qFull,
+            avg: avg.toLocaleString(),
+            location: locationLabel
+          })
+        : `Historical ${name} production in ${qLabel} (${qFull}) averaged ${avg.toLocaleString()} tons in ${locationLabel}.`,
+      meaning: t
+        ? t("farmer.factors.production.meaning_high", { name })
+        : `More ${name} is usually produced during this quarter, which may increase supply near harvest.`,
+      action: t
+        ? t("farmer.factors.production.action_high", { quarter: qLabel.split(" ")[0] })
+        : `Based on historical production, if your harvest may fall in ${qLabel.split(" ")[0]}, consider reviewing your planting area or schedule. Review the full planting assessment for a complete picture.`
     };
   }
-  if (classification === "Low") {
+  if (levelCode === LEVEL_CODES.LOW) {
     return {
-      headline: `Historical ${name} production in ${qLabel} (${qFull}) was below its usual level in ${locationLabel}.`,
-      meaning: `Seasonal supply pressure from production may be lower during this quarter.`,
-      action: `Based on historical production, seasonal supply pressure may be lower. Confirm the price and profitability outlook before planting.`
+      headline: t
+        ? t("farmer.factors.production.insight_headline_low", {
+            name,
+            quarter_label: qLabel,
+            quarter_range: qFull,
+            location: locationLabel
+          })
+        : `Historical ${name} production in ${qLabel} (${qFull}) was below its usual level in ${locationLabel}.`,
+      meaning: t
+        ? t("farmer.factors.production.meaning_low")
+        : `Seasonal supply pressure from production may be lower during this quarter.`,
+      action: t
+        ? t("farmer.factors.production.action_low")
+        : `Based on historical production, seasonal supply pressure may be lower. Confirm the price and profitability outlook before planting.`
     };
   }
   return {
-    headline: `Historical ${name} production in ${qLabel} (${qFull}) was near its usual level in ${locationLabel}.`,
-    meaning: `No strong seasonal production pressure is indicated for this quarter.`,
-    action: `Based on historical production, no strong seasonal warning is present. Review prices, arrivals, weather, and costs before planting.`
+    headline: t
+      ? t("farmer.factors.production.insight_headline_normal", {
+          name,
+          quarter_label: qLabel,
+          quarter_range: qFull,
+          location: locationLabel
+        })
+      : `Historical ${name} production in ${qLabel} (${qFull}) was near its usual level in ${locationLabel}.`,
+    meaning: t
+      ? t("farmer.factors.production.meaning_normal")
+      : `No strong seasonal production pressure is indicated for this quarter.`,
+    action: t
+      ? t("farmer.factors.production.action_normal")
+      : `Based on historical production, no strong seasonal warning is present. Review prices, arrivals, weather, and costs before planting.`
   };
 }
 const DEFAULT_FILTERS = { view: "quarterly", location: "davao-city", quarter: "Q3" };
 const FilterDrawer = ({ open, filters, onClose, onApply }) => {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState(filters);
   React.useEffect(() => {
     if (open) setDraft(filters);
@@ -167,7 +209,7 @@ const FilterDrawer = ({ open, filters, onClose, onApply }) => {
     /* Quarter — shown only when Quarterly is selected */
   }
           {draft.view === "quarterly" && <div>
-              <p className="text-sm font-semibold text-[var(--hw-neutral-700)] mb-2">Quarter</p>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-700)] mb-2">{t ? t("farmer.factors.production.quarter_label") : "Quarter"}</p>
               <div className="flex flex-wrap gap-2">
                 {QUARTERS.map((q) => <button key={q} onClick={() => setDraft((d) => ({ ...d, quarter: q }))} className={chipCls(draft.quarter === q)}>
                     {QUARTER_LABELS[q]}
@@ -206,6 +248,7 @@ const chipBtn = (active) => `flex-shrink-0 flex items-center gap-1.5 px-3 py-2 r
 const tooltipStyle = { backgroundColor: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 11 };
 function SeasonalProductionDetailsPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const defaultId = searchParams.get("commodity") ?? "kamatis";
   const [commodityId, setCommodityId] = useState(
@@ -229,7 +272,7 @@ function SeasonalProductionDetailsPage() {
   const qPressure = classifyValues(qValues);
   const qCfg = pressureCfg[qPressure];
   const QPIcon = qCfg.Icon;
-  const qInsight = buildProductionInsight(commodity.name, qPressure, quarter, SOURCE_LABELS[location], qAvg);
+  const qInsight = buildProductionInsight(commodity.name, qPressure, quarter, SOURCE_LABELS[location], qAvg, t);
   const annualData = useMemo(
     () => YEARS.map((yr) => ({
       year: String(yr),
@@ -263,7 +306,7 @@ function SeasonalProductionDetailsPage() {
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-              Seasonal Production
+              {t("farmer.factors.production.page_title")}
             </h1>
             <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0">
               <RefreshCw className="w-3.5 h-3.5" />
@@ -271,7 +314,7 @@ function SeasonalProductionDetailsPage() {
             </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)]">
-            View historical seasonal production patterns used as regional context.
+            {t("farmer.factors.production.page_subtitle")}
           </p>
         </div>
 
@@ -311,16 +354,16 @@ function SeasonalProductionDetailsPage() {
             <div className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] border-l-4 ${qCfg.borderColor} p-4 space-y-3`}>
               <div className={`flex items-center gap-1.5 ${qCfg.color}`}>
                 <QPIcon className="w-5 h-5" />
-                <span className="font-semibold">Production Pressure: {qPressure}</span>
+                <span className="font-semibold">{t("farmer.factors.production.pressure_label", { level: qPressure })}</span>
               </div>
               <p className="text-[var(--hw-neutral-900)] leading-relaxed">{qInsight.headline}</p>
               <div className="space-y-1.5">
                 <div>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.what_this_means_title")}</p>
                   <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed mt-0.5">{qInsight.meaning}</p>
                 </div>
                 <div>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Suggested action</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.suggested_action_title")}</p>
                   <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed mt-0.5">{qInsight.action}</p>
                 </div>
               </div>
@@ -332,10 +375,10 @@ function SeasonalProductionDetailsPage() {
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
               <div>
                 <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
-                  {quarter} production by year
+                  {t("farmer.factors.production.quarter_by_year_title", { quarter })}
                 </p>
                 <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">
-                  Historical production from {SOURCE_LABELS[location].toLowerCase()}.
+                  {t("farmer.factors.production.historical_from_location", { location: SOURCE_LABELS[location].toLowerCase() })}
                 </p>
               </div>
               <div className="h-52">
@@ -361,7 +404,7 @@ function SeasonalProductionDetailsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-[12px] text-[var(--hw-neutral-700)]">Values in tons · Darker bar = most recent year</p>
+              <p className="text-[12px] text-[var(--hw-neutral-700)]">{t("farmer.factors.production.chart_footnote_quarterly")}</p>
             </div>
 
             {
@@ -369,12 +412,12 @@ function SeasonalProductionDetailsPage() {
   }
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
-    { label: "Selected quarter", value: QUARTER_LABELS[quarter] },
-    { label: "Source location", value: SOURCE_LABELS[location] },
-    { label: "10-year average", value: `${qAvg.toLocaleString()} tons` },
-    { label: "Highest recorded", value: `${qHigh.toLocaleString()} tons` },
-    { label: "Lowest recorded", value: `${qLow.toLocaleString()} tons` },
-    { label: "Production Pressure", value: qPressure, accent: qCfg.color }
+    { label: t("farmer.factors.production.summary_selected_quarter"), value: QUARTER_LABELS[quarter] },
+    { label: t("farmer.factors.production.summary_source_location"), value: SOURCE_LABELS[location] },
+    { label: t("farmer.factors.production.summary_10yr_avg"), value: `${qAvg.toLocaleString()} tons` },
+    { label: t("farmer.factors.production.summary_highest"), value: `${qHigh.toLocaleString()} tons` },
+    { label: t("farmer.factors.production.summary_lowest"), value: `${qLow.toLocaleString()} tons` },
+    { label: t("farmer.factors.production.summary_pressure"), value: qPressure, accent: qCfg.color }
   ].map((m) => <div key={m.label} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 py-2.5">
                   <p className="text-xs text-[var(--hw-neutral-700)]">{m.label}</p>
                   <p className={`font-semibold text-sm mt-0.5 ${m.accent ?? "text-[var(--hw-neutral-900)]"}`}>{m.value}</p>
@@ -384,8 +427,8 @@ function SeasonalProductionDetailsPage() {
             {/* Production Sources Distribution */}
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2">
               <div>
-                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Production Source Distribution</p>
-                <p className="text-[12px] text-[var(--hw-neutral-600)]">Regional production contribution (Davao City, Davao Del Sur, Bukidnon).</p>
+                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.source_dist_title")}</p>
+                <p className="text-[12px] text-[var(--hw-neutral-600)]">{t("farmer.factors.production.source_dist_subtitle")}</p>
               </div>
               <ProductionSourcePieChart height={200} />
             </div>
@@ -394,30 +437,32 @@ function SeasonalProductionDetailsPage() {
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
               <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
                 <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
-                  Quarterly production records
+                  {t("farmer.factors.production.quarterly_records_title")}
                 </p>
               </div>
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
-                    <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Year</th>
-                    <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Quarter</th>
-                    <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Production</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {[...quarterlyData].reverse().map((d, i) => <tr key={i} className={i === 0 ? "bg-[var(--hw-neutral-50)]" : ""}>
-                      <td className="px-4 py-2.5 font-medium text-[var(--hw-neutral-700)]">
-                        {d.year}
-                        {i === 0 && <span className="ml-1.5 text-[10px] font-semibold text-[var(--hw-green-700)]">Latest</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--hw-neutral-900)]">{quarter}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-[var(--hw-neutral-900)]">
-                        {d.production.toLocaleString()} tons
-                      </td>
-                    </tr>)}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
+                      <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Year</th>
+                      <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Quarter</th>
+                      <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Production</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                    {[...quarterlyData].reverse().map((d, i) => <tr key={i} className={i === 0 ? "bg-[var(--hw-neutral-50)]" : ""}>
+                        <td className="px-4 py-2.5 font-medium text-[var(--hw-neutral-700)]">
+                          {d.year}
+                          {i === 0 && <span className="ml-1.5 text-[10px] font-semibold text-[var(--hw-green-700)]">{t("farmer.factors.production.badge_latest")}</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-[var(--hw-neutral-900)]">{quarter}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-[var(--hw-neutral-900)]">
+                          {d.production.toLocaleString()} tons
+                        </td>
+                      </tr>)}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>}
 
@@ -431,17 +476,21 @@ function SeasonalProductionDetailsPage() {
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] border-l-4 border-l-[var(--hw-green-600)] p-4 space-y-3">
               <div className="flex items-center gap-1.5 text-[var(--hw-green-700)]">
                 <TrendingUp className="w-5 h-5" />
-                <span className="font-semibold">Annual production pattern</span>
+                <span className="font-semibold">{t("farmer.factors.production.annual_pattern_title")}</span>
               </div>
               <p className="text-[var(--hw-neutral-900)] leading-relaxed">
-                {commodity.name} production was highest in{" "}
-                <strong>{bestYear.year} at {bestYear.total.toLocaleString()} tons</strong>,
-                with {QUARTER_LABELS[bestQ].split(" ")[0]} contributing the largest share in {SOURCE_LABELS[location].toLowerCase()}.
+                {t("farmer.factors.production.annual_insight", {
+                  name: commodity.name,
+                  year: bestYear.year,
+                  total: bestYear.total.toLocaleString(),
+                  quarter: QUARTER_LABELS[bestQ].split(" ")[0],
+                  location: SOURCE_LABELS[location].toLowerCase()
+                })}
               </p>
               <div>
-                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Suggested action</p>
+                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.suggested_action_title")}</p>
                 <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed mt-0.5">
-                  Based on historical production, review the full planting assessment to see how seasonal production interacts with market prices and other factors.
+                  {t("farmer.factors.production.annual_action")}
                 </p>
               </div>
             </div>
@@ -452,10 +501,10 @@ function SeasonalProductionDetailsPage() {
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
               <div>
                 <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
-                  Annual production by quarter
+                  {t("farmer.factors.production.annual_by_quarter_title")}
                 </p>
                 <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">
-                  Historical production from {SOURCE_LABELS[location].toLowerCase()}.
+                  {t("farmer.factors.production.historical_from_location", { location: SOURCE_LABELS[location].toLowerCase() })}
                 </p>
               </div>
               <div className="h-56">
@@ -480,7 +529,7 @@ function SeasonalProductionDetailsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-[12px] text-[var(--hw-neutral-700)]">Values in tons · {SOURCE_LABELS[location]}</p>
+              <p className="text-[12px] text-[var(--hw-neutral-700)]">{t("farmer.factors.production.chart_footnote_annual", { location: SOURCE_LABELS[location] })}</p>
             </div>
 
             {
@@ -489,30 +538,34 @@ function SeasonalProductionDetailsPage() {
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
               <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
                 <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
-                  Annual production records
+                  {t("farmer.factors.production.annual_records_title")}
                 </p>
               </div>
-              <table className="w-full text-[13px]">
-                <thead className="sticky top-0 z-10 bg-white">
-                  <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
-                    <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Year</th>
-                    <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Quarter</th>
-                    <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Production</th>
-                  </tr>
-                </thead>
-              </table>
-              <div className="overflow-y-auto" style={{ maxHeight: "400px", scrollbarWidth: "thin" }}>
+              <div className="overflow-x-auto">
                 <table className="w-full text-[13px]">
-                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                    {annualTableRows.map((r, i) => <tr key={i} className={r.year === 2025 ? "bg-[var(--hw-neutral-50)]" : ""}>
-                        <td className="px-4 py-2 font-medium text-[var(--hw-neutral-700)]">{r.year}</td>
-                        <td className="px-4 py-2 text-[var(--hw-neutral-900)]">{r.quarter}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-[var(--hw-neutral-900)]">
-                          {r.production.toLocaleString()} tons
-                        </td>
-                      </tr>)}
-                  </tbody>
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
+                      <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Year</th>
+                      <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Quarter</th>
+                      <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Production</th>
+                    </tr>
+                  </thead>
                 </table>
+              </div>
+              <div className="overflow-x-auto">
+                <div className="overflow-y-auto" style={{ maxHeight: "400px", scrollbarWidth: "thin" }}>
+                  <table className="w-full text-[13px]">
+                    <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                      {annualTableRows.map((r, i) => <tr key={i} className={r.year === 2025 ? "bg-[var(--hw-neutral-50)]" : ""}>
+                          <td className="px-4 py-2 font-medium text-[var(--hw-neutral-700)]">{r.year}</td>
+                          <td className="px-4 py-2 text-[var(--hw-neutral-900)]">{r.quarter}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-[var(--hw-neutral-900)]">
+                            {r.production.toLocaleString()} tons
+                          </td>
+                        </tr>)}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </>}
@@ -524,14 +577,14 @@ function SeasonalProductionDetailsPage() {
           <div className="flex items-start gap-2">
             <Info className="w-4 h-4 text-[var(--hw-neutral-700)] flex-shrink-0 mt-0.5" />
             <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-              Historical production provides seasonal context and does not predict the exact amount that will be produced this year.
+              {t("farmer.factors.production.disclaimer_context")}
             </p>
           </div>
           <div className="pt-1 space-y-0.5 text-[12px] text-[var(--hw-neutral-700)]">
-            <p>Source: PSA OpenStat</p>
-            <p>Default source location: Davao City · Other available locations: Davao del Sur and Bukidnon</p>
-            <p>Coverage: Quarterly historical production records · Available years: 2016–present</p>
-            <p>Last updated: Jun 24, 2026</p>
+            <p>{t("farmer.factors.production.source_psa")}</p>
+            <p>{t("farmer.factors.production.source_locations_note")}</p>
+            <p>{t("farmer.factors.production.coverage_note")}</p>
+            <p>{t("farmer.factors.production.last_updated_note")}</p>
           </div>
         </div>
 
@@ -540,14 +593,14 @@ function SeasonalProductionDetailsPage() {
   }
         <div className="bg-[var(--hw-green-50)] border border-[var(--hw-green-400)] rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <p className="text-sm font-medium text-[var(--hw-green-900)]">Check planting assessment</p>
-            <p className="text-xs text-[var(--hw-green-700)] mt-0.5">Review the full planting assessment for this commodity</p>
+            <p className="text-sm font-medium text-[var(--hw-green-900)]">{t("farmer.factors.production.assess_callout_title")}</p>
+            <p className="text-xs text-[var(--hw-green-700)] mt-0.5">{t("farmer.factors.production.assess_callout_desc")}</p>
           </div>
           <button
     onClick={() => navigate("/farmer/assess")}
     className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
   >
-            Assess now
+            {t("farmer.factors.production.assess_now_btn")}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
