@@ -38,6 +38,15 @@ import {
   buildArrivalChartData,
   ARRIVAL_ALL_MONTHS
 } from "../../../global/components/shared/trendChartData";
+import {
+  PRICE_TREND_CODES,
+  WEATHER_SUITABILITY_CODES,
+  LEVEL_CODES,
+  normalizePriceTrendCode,
+  normalizeWeatherSuitability,
+  normalizeLevelCode
+} from "../../utils/farmerCodes";
+import { useLanguage } from "../../../global/contexts/LanguageContext";
 const ARRIVAL_HISTORY = {
   kamatis: [18, 15, 20, 14, 16, 12],
   talong: [10, 12, 9, 11, 10, 9],
@@ -170,7 +179,8 @@ function getWeatherData(risk, cropName) {
 }
 function buildPricePoints(actualData, currentPrice, direction, forecastLow, forecastHigh, days = 7) {
   const forecastMid = (forecastLow + forecastHigh) / 2;
-  const trend = direction === "rising" ? (forecastMid - currentPrice) / days : direction === "falling" ? (forecastMid - currentPrice) / days : 0;
+  const trendCode = normalizePriceTrendCode(direction);
+  const trend = trendCode === PRICE_TREND_CODES.RISING ? (forecastMid - currentPrice) / days : trendCode === PRICE_TREND_CODES.FALLING ? (forecastMid - currentPrice) / days : 0;
   const actualPoints = actualData.map((d) => ({ label: d.label, actual: d.price }));
   const lastActual = actualPoints[actualPoints.length - 1];
   if (lastActual?.label === "Today") {
@@ -189,22 +199,22 @@ function buildPricePoints(actualData, currentPrice, direction, forecastLow, fore
   return [...actualPoints, ...forecastPoints];
 }
 const DIR_CFG = {
-  rising: { Icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", label: "Rising" },
-  stable: { Icon: Minus, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Stable" },
-  falling: { Icon: TrendingDown, color: "text-red-500", bg: "bg-red-50", border: "border-red-200", label: "Falling" }
+  [PRICE_TREND_CODES.RISING]: { Icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", label: "Rising" },
+  [PRICE_TREND_CODES.STABLE]: { Icon: Minus, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Stable" },
+  [PRICE_TREND_CODES.FALLING]: { Icon: TrendingDown, color: "text-red-500", bg: "bg-red-50", border: "border-red-200", label: "Falling" }
 };
 const RISK_CFG_WEATHER = {
-  low: { Icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", label: "Suitable" },
-  moderate: { Icon: AlertTriangle, color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-400", label: "Caution" },
-  high: { Icon: AlertOctagon, color: "text-red-700", bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", label: "Severe" }
+  [WEATHER_SUITABILITY_CODES.SUITABLE]: { Icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", label: "Suitable" },
+  [WEATHER_SUITABILITY_CODES.CAUTION]: { Icon: AlertTriangle, color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-400", label: "Caution" },
+  [WEATHER_SUITABILITY_CODES.SEVERE]: { Icon: AlertOctagon, color: "text-red-700", bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", label: "Severe" }
 };
 const LEVEL_CFG = {
-  low: { color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", label: "Low" },
-  moderate: { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", label: "Moderate" },
-  high: { color: "text-red-700", bg: "bg-red-50", border: "border-red-200", label: "High" }
+  [LEVEL_CODES.LOW]: { color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", label: "Low" },
+  [LEVEL_CODES.MODERATE]: { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", label: "Moderate" },
+  [LEVEL_CODES.HIGH]: { color: "text-red-700", bg: "bg-red-50", border: "border-red-200", label: "High" }
 };
 const PRICE_BANNER_CFG = {
-  rising: {
+  [PRICE_TREND_CODES.RISING]: {
     Icon: TrendingUp,
     color: "text-emerald-700",
     bg: "bg-emerald-50",
@@ -212,7 +222,7 @@ const PRICE_BANNER_CFG = {
     label: "Favorable Price",
     desc: "Prices are trending upward \u2014 a good signal for upcoming sales."
   },
-  stable: {
+  [PRICE_TREND_CODES.STABLE]: {
     Icon: Minus,
     color: "text-amber-700",
     bg: "bg-amber-50",
@@ -220,7 +230,7 @@ const PRICE_BANNER_CFG = {
     label: "Watch",
     desc: "Prices are stable \u2014 monitor for changes before deciding to sell."
   },
-  falling: {
+  [PRICE_TREND_CODES.FALLING]: {
     Icon: TrendingDown,
     color: "text-red-700",
     bg: "bg-red-50",
@@ -318,7 +328,8 @@ const PriceTab = ({
   const baseFLo = match ? parseInt(match[1]) : (hasData ? Math.round(data.currentPrice * 0.95) : 0);
   const baseFHi = match ? parseInt(match[2]) : (hasData ? Math.round(data.currentPrice * 1.07) : 0);
   const actualPoints = (data?.points || []).filter((p) => p.actual !== void 0).map((p) => ({ label: p.label, price: p.actual }));
-  const banner = hasData ? PRICE_BANNER_CFG[data.direction] : null;
+  const trendCode = hasData ? normalizePriceTrendCode(data.direction) : null;
+  const banner = trendCode ? PRICE_BANNER_CFG[trendCode] : null;
   const BannerIcon = banner?.Icon;
 
   return <div className="space-y-4">
@@ -352,6 +363,7 @@ const PriceTab = ({
     </div>;
 };
 const ArrivalTab = ({ data, commodityId }) => {
+  const { t } = useLanguage();
   const hasData = data && (data.thisWeek > 0 || data.lastWeek > 0);
   const change = hasData ? data.thisWeek - data.lastWeek : 0;
   const trendColor = hasData ? (data.trend === "lower" ? "text-emerald-600" : data.trend === "higher" ? "text-red-500" : "text-blue-600") : "text-[var(--hw-neutral-900)]";
@@ -411,7 +423,7 @@ const ArrivalTab = ({ data, commodityId }) => {
               {dftcName} · Arrival Volume Trend
             </div>
             <div className="text-[12px] text-[var(--hw-neutral-800)] mb-4">
-              Combined Total by variety · Last 7 months · kg
+              {t("farmer.factors.arrival.chart_subtitle_combined")}
             </div>
             <ArrivalVolumeTrendChart
     commodity={dftcName ?? ""}
@@ -448,7 +460,7 @@ const ArrivalTab = ({ data, commodityId }) => {
       <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
         <div>
           <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Arrival Volume by Source</p>
-          <p className="text-[11px] text-[var(--hw-neutral-600)]">DFTC registered farms vs other supplying sources.</p>
+          <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.arrival.source_breakdown_subtitle")}</p>
         </div>
         <ArrivalSourcePieChart data={data?.sources} height={190} />
       </div>
@@ -463,6 +475,7 @@ const ArrivalTab = ({ data, commodityId }) => {
 const QUARTER_LABELS = ["Q1 (Jan–Mar)", "Q2 (Apr–Jun)", "Q3 (Jul–Sep)", "Q4 (Oct–Dec)"];
 const QUARTER_SHORT = ["Q1", "Q2", "Q3", "Q4"];
 const ProductionTab = ({ data }) => {
+  const { t } = useLanguage();
   const hasData = data && data.level && data.level !== "none" && data.summary !== "Production data not available";
   const cfg = hasData ? LEVEL_CFG[data.level] : null;
   const LevelIcon = cfg ? (data.level === "low" ? TrendingDown : data.level === "high" ? TrendingUp : Minus) : null;
@@ -522,7 +535,7 @@ const ProductionTab = ({ data }) => {
               <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-200 inline-block" /><span>Other quarters</span></div>
             </div>
           </> : <div className="flex items-center justify-center h-[175px] bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
-            No production data available.
+            {t("farmer.empty.no_production_data")}
           </div>}
       </div>
 
@@ -539,22 +552,24 @@ const ProductionTab = ({ data }) => {
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {hasData ? data.summary : "Production data not available."}
+          {hasData ? data.summary : t("farmer.empty.no_production_data")}
         </p>
       </div>
     </div>;
 };
 const WeatherTab = ({ data, commodityName }) => {
-  const hasData = data && data.risk && data.risk !== "none";
-  const rc = hasData ? RISK_CFG_WEATHER[data.risk] : null;
+  const { t } = useLanguage();
+  const riskCode = data && data.risk && data.risk !== "none" ? normalizeWeatherSuitability(data.risk) : null;
+  const hasData = Boolean(riskCode);
+  const rc = riskCode ? RISK_CFG_WEATHER[riskCode] : null;
   const RiskIcon = rc?.Icon;
   const carouselRef = useRef(null);
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 90, behavior: "smooth" });
-  const insightBullets = hasData ? data.risk === "high" ? [
+  const insightBullets = hasData ? riskCode === WEATHER_SUITABILITY_CODES.SEVERE ? [
     "Heavy rain forecast \u2014 delay planting if possible this week.",
     "Clear all drainage channels before peak rain days.",
     "Protect existing crops from strong winds and waterlogging."
-  ] : data.risk === "moderate" ? [
+  ] : riskCode === WEATHER_SUITABILITY_CODES.CAUTION ? [
     "Some rainy days expected \u2014 plan field work for drier windows.",
     "Clear drainage to prevent waterlogging in low-lying areas.",
     "Delay fertilizer application during heavy rain days."
@@ -658,7 +673,13 @@ const WeatherTab = ({ data, commodityName }) => {
           Weather Insight · {commodityName ? commodityName.toUpperCase() : "YOUR FARM"}
         </p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {hasData ? data.risk === "high" ? `Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting for ${commodityName || 'this crop'} should be delayed until conditions improve.` : data.risk === "moderate" ? `Mixed conditions are expected over the next 14 days \u2014 some rainy days and some dry windows. Plan farming activities for ${commodityName || 'this crop'} around the calmer days mid-forecast.` : `Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions \u2014 good for ${commodityName || 'this crop'}.` : "No weather data available."}
+          {hasData
+            ? riskCode === WEATHER_SUITABILITY_CODES.SEVERE
+              ? t("farmer.factors.weather.insight_severe", { crop_name: commodityName || "this crop" })
+              : riskCode === WEATHER_SUITABILITY_CODES.CAUTION
+              ? t("farmer.factors.weather.insight_caution", { crop_name: commodityName || "this crop" })
+              : t("farmer.factors.weather.insight_suitable", { crop_name: commodityName || "this crop" })
+            : t("farmer.empty.no_weather_data")}
         </p>
         {insightBullets.length > 0 && <div className="space-y-1.5">
             {insightBullets.map((b, i) => <div key={i} className="flex items-start gap-2">
@@ -689,6 +710,7 @@ const WeatherTab = ({ data, commodityName }) => {
     </div>;
 };
 const ProfitabilityTab = ({ data }) => {
+  const { t } = useLanguage();
   const maxVal = Math.max(data.costPerKg, data.sellingPricePerKg) * 1.15;
   const costPct = data.costPerKg / maxVal * 100;
   const pricePct = data.sellingPricePerKg / maxVal * 100;
@@ -739,7 +761,7 @@ const ProfitabilityTab = ({ data }) => {
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Cost vs. Selling Price (per kg)</p>
         <div>
           <div className="flex justify-between mb-1">
-            <span className="text-[12px] text-[var(--hw-neutral-900)]">Break-even cost (to recover)</span>
+            <span className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover_label")}</span>
             <span className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">₱{data.costPerKg}/kg</span>
           </div>
           <div className="h-5 bg-[var(--hw-neutral-100)] rounded-full overflow-hidden">

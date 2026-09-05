@@ -16,6 +16,13 @@ import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import {
+  PRICE_TREND_CODES,
+  LEVEL_CODES,
+  normalizePriceTrendCode,
+  normalizeLevelCode
+} from "../utils/farmerCodes";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import {
   ResponsiveContainer,
   ComposedChart,
   Area,
@@ -39,11 +46,19 @@ const DUAL_FORECAST = {
 };
 const tooltipStyle = { backgroundColor: "white", border: "1px solid var(--hw-neutral-200)", borderRadius: 8, fontSize: 11 };
 const dirCfg = {
+  [PRICE_TREND_CODES.RISING]: { Icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50" },
+  [PRICE_TREND_CODES.STABLE]: { Icon: Minus, color: "text-blue-600", bg: "bg-blue-50" },
+  [PRICE_TREND_CODES.FALLING]: { Icon: TrendingDown, color: "text-red-500", bg: "bg-red-50" },
   rising: { Icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50" },
   stable: { Icon: Minus, color: "text-blue-600", bg: "bg-blue-50" },
   falling: { Icon: TrendingDown, color: "text-red-500", bg: "bg-red-50" }
 };
-const relDot = (r) => r === "High" ? "bg-emerald-500" : r === "Moderate" ? "bg-amber-400" : "bg-[var(--hw-neutral-300)]";
+const relDot = (r) => {
+  const code = normalizeLevelCode(r);
+  if (code === LEVEL_CODES.HIGH) return "bg-emerald-500";
+  if (code === LEVEL_CODES.MODERATE) return "bg-amber-400";
+  return "bg-[var(--hw-neutral-300)]";
+};
 const periodDays = (p) => p === "7d" ? 7 : p === "14d" ? 14 : p === "21d" ? 21 : 28;
 const periodLabel = (p) => p === "7d" ? "7 days" : p === "14d" ? "14 days" : p === "21d" ? "21 days" : "28 days";
 function makeChart(rec, period) {
@@ -57,20 +72,23 @@ function makeChart(rec, period) {
     low: Math.round(rec.forecastLow + step * i * 0.9)
   }));
 }
-function dualComparisonNote(b, d) {
-  if (b.direction === d.direction) {
-    const ds = b.direction === "rising" ? "likely to rise" : b.direction === "falling" ? "likely to fall" : "likely to be stable";
+function dualComparisonNote(b, d, t) {
+  const bTrend = normalizePriceTrendCode(b.direction);
+  const dTrend = normalizePriceTrendCode(d.direction);
+  if (bTrend === dTrend) {
+    const ds = bTrend === PRICE_TREND_CODES.RISING ? "rising" : bTrend === PRICE_TREND_CODES.FALLING ? "falling" : "stable";
     const bChange = Math.abs(b.changePct), dChange = Math.abs(d.changePct);
-    if (bChange > dChange + 2) return `Both markets are ${ds}. Bangkerohan shows the stronger expected movement.`;
-    if (dChange > bChange + 2) return `Both markets are ${ds}. DFTC shows the stronger expected movement.`;
-    return `Both markets are ${ds}. Expected movements are similar.`;
+    if (bChange > dChange + 2) return t ? t("farmer.factors.price.dual_stronger_bangkerohan", { direction: ds }) : `Both markets are ${ds}. Bangkerohan shows the stronger expected movement.`;
+    if (dChange > bChange + 2) return t ? t("farmer.factors.price.dual_stronger_dftc", { direction: ds }) : `Both markets are ${ds}. DFTC shows the stronger expected movement.`;
+    return t ? t("farmer.factors.price.dual_similar", { direction: ds }) : `Both markets are ${ds}. Expected movements are similar.`;
   }
-  const bStr = b.direction === "rising" ? "likely to rise" : b.direction === "falling" ? "likely to fall" : "likely to be stable";
-  const dStr = d.direction === "rising" ? "likely to rise" : d.direction === "falling" ? "likely to fall" : "likely to be stable";
-  return `Bangkerohan retail prices are ${bStr}, while DFTC retail prices are ${dStr}.`;
+  const bStr = bTrend === PRICE_TREND_CODES.RISING ? "rising" : bTrend === PRICE_TREND_CODES.FALLING ? "falling" : "stable";
+  const dStr = dTrend === PRICE_TREND_CODES.RISING ? "rising" : dTrend === PRICE_TREND_CODES.FALLING ? "falling" : "stable";
+  return t ? t("farmer.factors.price.dual_divergent", { b_trend: bStr, d_trend: dStr }) : `Bangkerohan retail prices are ${bStr}, while DFTC retail prices are ${dStr}.`;
 }
 const ForecastRow = ({ label, rec }) => {
-  const { Icon, color } = dirCfg[rec.direction];
+  const trendCode = normalizePriceTrendCode(rec.direction) || PRICE_TREND_CODES.STABLE;
+  const { Icon, color } = dirCfg[trendCode] || dirCfg[PRICE_TREND_CODES.STABLE];
   return <div className="flex items-center justify-between gap-2 py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
       <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] flex-shrink-0 min-w-[130px]">{label}</span>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -83,7 +101,8 @@ const ForecastRow = ({ label, rec }) => {
     </div>;
 };
 const DualForecastCard = ({ commodity, dual, period, onViewDetail, onViewWholesale }) => {
-  const note = dualComparisonNote(dual.bangkerohan, dual.dftcRetail);
+  const { t } = useLanguage();
+  const note = dualComparisonNote(dual.bangkerohan, dual.dftcRetail, t);
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
       {
     /* Header */
@@ -130,7 +149,8 @@ const DualForecastCard = ({ commodity, dual, period, onViewDetail, onViewWholesa
     </div>;
 };
 const SingleForecastCard = ({ commodity, rec, marketLabel, period, showWholesaleLink, onViewDetail }) => {
-  const { Icon, color } = dirCfg[rec.direction];
+  const trendCode = normalizePriceTrendCode(rec.direction) || PRICE_TREND_CODES.STABLE;
+  const { Icon, color } = dirCfg[trendCode] || dirCfg[PRICE_TREND_CODES.STABLE];
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
       <div className="flex items-start gap-3">
         <CommodityIllustration commodityId={commodity.id} className="w-11 h-11 flex-shrink-0" />
@@ -166,9 +186,10 @@ const SingleForecastCard = ({ commodity, rec, marketLabel, period, showWholesale
     </div>;
 };
 const AnalyticsDualForecastCard = ({ commodity, dual, period, onViewDetail, onViewWholesale }) => {
+  const { t } = useLanguage();
   const bChart = makeChart(dual.bangkerohan, period);
   const dChart = makeChart(dual.dftcRetail, period);
-  const note = dualComparisonNote(dual.bangkerohan, dual.dftcRetail);
+  const note = dualComparisonNote(dual.bangkerohan, dual.dftcRetail, t);
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <CommodityIllustration commodityId={commodity.id} className="w-10 h-10 flex-shrink-0" />
@@ -183,7 +204,8 @@ const AnalyticsDualForecastCard = ({ commodity, dual, period, onViewDetail, onVi
     { label: "Bangkerohan Retail", rec: dual.bangkerohan, chart: bChart, lineColor: "#245501", bg: "bg-[var(--hw-green-50)]" },
     { label: "DFTC Retail", rec: dual.dftcRetail, chart: dChart, lineColor: "#2563eb", bg: "bg-blue-50" }
   ].map(({ label, rec, chart, lineColor, bg }) => {
-    const { Icon, color } = dirCfg[rec.direction];
+    const trendCode = normalizePriceTrendCode(rec.direction) || PRICE_TREND_CODES.STABLE;
+    const { Icon, color } = dirCfg[trendCode] || dirCfg[PRICE_TREND_CODES.STABLE];
     return <div key={label} className={`rounded-xl p-2.5 space-y-1.5 ${bg}`}>
               <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{label}</p>
               <div className={`flex items-center gap-1 font-semibold text-[13px] ${color}`}>
@@ -228,7 +250,9 @@ const AnalyticsDualForecastCard = ({ commodity, dual, period, onViewDetail, onVi
     </div>;
 };
 const AnalyticsSingleForecastCard = ({ commodity, rec, marketLabel, lineColor, period, showWholesaleLink, onViewDetail }) => {
-  const { Icon, color } = dirCfg[rec.direction];
+  const { t } = useLanguage();
+  const trendCode = normalizePriceTrendCode(rec.direction) || PRICE_TREND_CODES.STABLE;
+  const { Icon, color } = dirCfg[trendCode] || dirCfg[PRICE_TREND_CODES.STABLE];
   const chartData = makeChart(rec, period);
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
       <div className="flex items-start gap-3">
@@ -241,15 +265,15 @@ const AnalyticsSingleForecastCard = ({ commodity, rec, marketLabel, lineColor, p
 
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-[var(--hw-neutral-50)] rounded-xl px-2 py-1.5">
-          <p className="text-[12px] text-[var(--hw-neutral-700)]">Recent avg</p>
+          <p className="text-[12px] text-[var(--hw-neutral-700)]">{t ? t("farmer.factors.price.recent_avg_label") : "Recent avg"}</p>
           <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">₱{rec.recentAvg}</p>
         </div>
-        <div className={`rounded-xl px-2 py-1.5 ${dirCfg[rec.direction].bg}`}>
-          <p className="text-[12px] text-[var(--hw-neutral-700)]">Forecast</p>
+        <div className={`rounded-xl px-2 py-1.5 ${dirCfg[trendCode]?.bg || dirCfg[PRICE_TREND_CODES.STABLE].bg}`}>
+          <p className="text-[12px] text-[var(--hw-neutral-700)]">{t ? t("farmer.factors.price.forecast_label") : "Forecast"}</p>
           <p className={`text-sm font-semibold ${color}`}>₱{rec.forecastedPrice}</p>
         </div>
         <div className="bg-[var(--hw-neutral-50)] rounded-xl px-2 py-1.5">
-          <p className="text-[12px] text-[var(--hw-neutral-700)]">Range</p>
+          <p className="text-[12px] text-[var(--hw-neutral-700)]">{t ? t("farmer.factors.price.range_label") : "Range"}</p>
           <p className="text-sm font-semibold text-[var(--hw-neutral-700)]">₱{rec.forecastLow}–{rec.forecastHigh}</p>
         </div>
       </div>

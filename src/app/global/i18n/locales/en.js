@@ -113,6 +113,266 @@ export const en = {
     last_synced: "Last synced",
     sync_now: "Sync Now",
     syncing: "Syncing latest data...",
-    offline_available: "Offline data available"
+    offline_available: "Offline data available",
+
+    advisory: {
+      labels: {
+        recommended: "Recommended",
+        proceed_with_caution: "Proceed with Caution",
+        avoid_for_now: "Avoid for Now"
+      },
+      recommended_summary: "Current conditions support your {crop_name} plan.",
+      recommended_support: "Prices are fair and weather is manageable this week.",
+      caution_summary: "{crop_name} may still proceed, but monitor conditions and risks closely.",
+      caution_support: "Proceed with caution until conditions improve.",
+      avoid_summary: "Conditions are not favorable for planting {crop_name} at this time.",
+      avoid_support: "Consider waiting for better timing before committing.",
+      cycle_recommended_summary: "Current conditions support your {crop_name} plan.",
+      cycle_caution_summary: "Your {crop_name} plan is possible, but monitor conditions and price changes.",
+      cycle_avoid_summary: "Market price is below your cost to recover for {crop_name}.",
+      cycle_recommended_support: "Prices are fair and weather is manageable this week.",
+      cycle_caution_support: "Proceed with caution and monitor conditions closely.",
+      cycle_avoid_support: "Consider waiting before committing to further planting.",
+      not_available: "Assessment result not available yet.",
+      why_recommendation_title: "Why this recommendation?"
+    },
+
+    phases: {
+      planning: "Planning",
+      on_hold: "On Hold",
+      planted: "Planted",
+      growing: "Growing",
+      pre_harvest: "Pre-Harvest",
+      harvesting: "Harvesting",
+      harvested: "Harvested",
+      completed: "Completed"
+    },
+
+    cropCard: {
+      harvest_label: "Harvest",
+      current_price_label: "Current price",
+      sold_at_label: "Sold at",
+      estimated_profit_label: "Estimated Profit",
+      view_crop_btn: "View crop",
+      resume_when_improved: "Resume when market conditions improve",
+      cycle_completed: "Crop cycle completed",
+      price_label: "Price",
+      weather_label: "Weather",
+      market_label: "Market",
+      duration_label: "Duration",
+      view_details_btn: "View details",
+      view_guide_btn: "View guide",
+      monitor_btn: "Monitor",
+      assess_btn: "Assess",
+      saved_label: "Saved",
+      last_updated_label: "Last updated",
+      recommended_reason: "Favorable market and weather conditions.",
+      caution_reason: "Proceed with caution and monitor price changes.",
+      avoid_reason: "High market supply or weather risks.",
+      harvest_in_days: "Harvest in {days} days",
+      harvest_today: "Harvest today",
+      harvest_overdue: "Harvest was expected {days} days ago",
+      estimated_profit_value: "Estimated profit: ₱{amount}",
+      price_per_kg: "₱{price}/kg",
+      updated_at: "Updated {date}"
+    },
+
+    monitoring: {
+      action_planning_1: "Check weather before planting.",
+      action_planning_2: "Review forecasted price and your estimated profit.",
+      action_planning_3: "Prepare drainage, labor, and inputs in advance.",
+      action_growing_1: "Check drainage and crop condition.",
+      action_growing_2: "Update added costs if you have new inputs.",
+      action_growing_3: "Monitor weather and price changes.",
+      action_pre_harvest_1: "Check current price and the 7-day forecast.",
+      action_pre_harvest_2: "Update farmgate price if a buyer gives an offer.",
+      action_pre_harvest_3: "Prepare harvest labor and transport.",
+      action_harvested_1: "Compare market price and buyer price.",
+      action_harvested_2: "Protect harvested produce from rain and moisture.",
+      action_harvested_3: "Record actual harvest and selling price.",
+      action_completed_1: "Record final harvest volume and selling price.",
+      action_completed_2: "Review your profit or loss for this cycle.",
+      action_completed_3: "Save notes for your next planting cycle.",
+      action_on_hold_1: "Reassess market conditions before resuming.",
+      action_on_hold_2: "Check if the current price has improved.",
+      action_on_hold_3: "Update your expected cost if input prices changed."
+    },
+
+    factors: {
+      price: {
+        trend_label_rising: "Price may rise",
+        trend_label_falling: "Price may fall",
+        trend_label_stable: "Price likely stable",
+        recent_avg_label: "Recent avg",
+        forecast_label: "Forecast",
+        range_label: "Range",
+        forecast_reference_range: "Forecasted price reference: ₱{forecast_lo}–₱{forecast_hi}/kg",
+        dual_stronger_bangkerohan: "Both markets are {direction}. Bangkerohan shows the stronger expected movement.",
+        dual_stronger_dftc: "Both markets are {direction}. DFTC shows the stronger expected movement.",
+        dual_similar: "Both markets are {direction}. Expected movements are similar.",
+        dual_divergent: "Bangkerohan retail prices are {b_trend}, while DFTC retail prices are {d_trend}.",
+        driver_overview: "Prices have remained mostly stable. Sibuyas, Luya, and Okra are rising. Repolyo, Bawang, and Pechay are falling."
+      },
+
+      profitability: {
+        cost_to_recover_label: "Break-even cost (to recover)",
+        summary_positive: "At ₱{selling_price}/kg, you may earn around ₱{margin}/kg above your cost to recover. Total estimated profit: ₱{total_profit}.",
+        summary_negative: "Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.",
+        forecast_reference_notice: "Using forecasted price as reference. Actual buyer price may be different.",
+        calc_accordion_title: "How was this calculated?"
+      },
+
+      weather: {
+        page_subtitle: "See how weather may affect your planted crops.",
+        summary_headline: "7-day weather suitability forecast: {risk_level}",
+        source_open_meteo_notice: "Source: Open-Meteo · Forecast is a guide only.",
+        crop_advisories_title: "Crop weather advisories",
+        forecast_title: "Weather forecast",
+        forecast_14day_title: "14-Day Forecast",
+        suitability_label: "Suitability",
+        suitability_suitable: "Suitable",
+        suitability_caution: "Caution",
+        suitability_severe: "Severe",
+        rain_chance_note: "· % = rain chance",
+        risk_level_label: "Risk level",
+        forecast_fallback_davao: "7-day weather forecast for Davao City",
+        insight_severe: "Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting for {crop_name} should be delayed until conditions improve.",
+        insight_caution: "Mixed conditions are expected over the next 14 days — some rainy days and some dry windows. Plan farming activities for {crop_name} around the calmer days mid-forecast.",
+        insight_suitable: "Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions — good for {crop_name}.",
+        actions: {
+          clear_drainage: "Clear drainage before planting",
+          avoid_heavy_rain: "Avoid planting during strong rain",
+          protect_harvest: "Protect harvested crops from moisture"
+        }
+      },
+
+      arrival: {
+        source_breakdown_subtitle: "DFTC registered farms vs other supplying sources.",
+        chart_subtitle_combined: "Combined Total by variety · Last 7 months · kg",
+        driver_overview: "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases.",
+        bangkerohan_unverified_notice: "Bangkerohan does not have verified arrival volume data."
+      },
+
+      production: {
+        driver_overview: "More farms in the Davao Region may begin harvesting in the coming weeks, which could increase market supply.",
+        page_title: "Seasonal Production",
+        page_subtitle: "View historical seasonal production patterns used as regional context.",
+        pressure_label: "Production Pressure: {level}",
+        what_this_means_title: "What this means",
+        suggested_action_title: "Suggested action",
+        insight_headline_high: "Historical {name} production in {quarter_label} ({quarter_range}) averaged {avg} tons in {location}.",
+        meaning_high: "More {name} is usually produced during this quarter, which may increase supply near harvest.",
+        action_high: "Based on historical production, if your harvest may fall in {quarter}, consider reviewing your planting area or schedule. Review the full planting assessment for a complete picture.",
+        insight_headline_low: "Historical {name} production in {quarter_label} ({quarter_range}) was below its usual level in {location}.",
+        meaning_low: "Seasonal supply pressure from production may be lower during this quarter.",
+        action_low: "Based on historical production, seasonal supply pressure may be lower. Confirm the price and profitability outlook before planting.",
+        insight_headline_normal: "Historical {name} production in {quarter_label} ({quarter_range}) was near its usual level in {location}.",
+        meaning_normal: "No strong seasonal production pressure is indicated for this quarter.",
+        action_normal: "Based on historical production, no strong seasonal warning is present. Review prices, arrivals, weather, and costs before planting.",
+        quarter_label: "Quarter",
+        quarter_by_year_title: "{quarter} production by year",
+        historical_from_location: "Historical production from {location}.",
+        chart_footnote_quarterly: "Values in tons · Darker bar = most recent year",
+        summary_selected_quarter: "Selected quarter",
+        summary_source_location: "Source location",
+        summary_10yr_avg: "10-year average",
+        summary_highest: "Highest recorded",
+        summary_lowest: "Lowest recorded",
+        summary_pressure: "Production Pressure",
+        source_dist_title: "Production Source Distribution",
+        source_dist_subtitle: "Regional production contribution (Davao City, Davao Del Sur, Bukidnon).",
+        quarterly_records_title: "Quarterly production records",
+        badge_latest: "Latest",
+        annual_pattern_title: "Annual production pattern",
+        annual_insight: "{name} production was highest in {year} at {total} tons, with {quarter} contributing the largest share in {location}.",
+        annual_action: "Based on historical production, review the full planting assessment to see how seasonal production interacts with market prices and other factors.",
+        annual_by_quarter_title: "Annual production by quarter",
+        chart_footnote_annual: "Values in tons · {location}",
+        annual_records_title: "Annual production records",
+        disclaimer_context: "Historical production provides seasonal context and does not predict the exact amount that will be produced this year.",
+        source_psa: "Source: PSA OpenStat",
+        source_locations_note: "Default source location: Davao City · Other available locations: Davao del Sur and Bukidnon",
+        coverage_note: "Coverage: Quarterly historical production records · Available years: 2016–present",
+        last_updated_note: "Last updated: Jun 24, 2026",
+        assess_callout_title: "Check planting assessment",
+        assess_callout_desc: "Review the full planting assessment for this commodity",
+        assess_now_btn: "Assess now"
+      }
+    },
+
+    calendar: {
+      driver_payday_detail: "An upcoming payday period may support buyer demand at markets this week.",
+      opportunity_payday_detail: "Upcoming payday periods historically support higher retail prices."
+    },
+
+    plantingGuide: {
+      page_title: "Planting Guide",
+      page_subtitle: "See which crops are better to plant, based on price, weather, and estimated profit.",
+      updated_recent: "Updated -",
+      hero_title: "What can I plant now?",
+      hero_desc: "Compare crops before planting. HarvestWise checks price, weather, supply, and estimated profit.",
+      check_crop_btn: "Check my crop",
+      recommended_title: "Recommended",
+      recommended_subtitle: "Good options to consider planting.",
+      caution_title: "Proceed with Caution",
+      caution_subtitle: "Can proceed, but monitor conditions and risks closely.",
+      avoid_title: "Avoid for Now",
+      avoid_subtitle: "Better to wait or check another crop.",
+      no_recommendations: "No recommendations available at this time.",
+      no_caution_recommendations: "No caution recommendations at this time.",
+      no_avoid_recommendations: "No crops to avoid at this time.",
+      estimated_profit_label: "Estimated profit:",
+      harvest_label: "Harvest:",
+      view_guide_btn: "View guide",
+      upcoming_market_events_title: "Upcoming market events",
+      event_payday_title: "Mid-month payday period",
+      event_payday_date: "Mid-month",
+      event_payday_note: "May increase people going to the market.",
+      event_market_conditions_title: "Market conditions",
+      event_market_conditions_date: "Current",
+      event_market_conditions_note: "Check prices and availability before planting.",
+      weather_advice_title: "Weather advice",
+      check_weather_title: "Check weather conditions",
+      check_weather_subtitle: "Review current weather before making planting decisions.",
+      view_weather_forecast_btn: "View weather forecast",
+      check_crop_card_title: "Check a crop before planting",
+      check_crop_card_desc: "Enter your crop, farm size, cost, and expected harvest to get a planting advisory.",
+      start_check_btn: "Start check",
+      crop_guide_heading: "Planting guide for {crop_name}",
+      duration_summary: "{crop_name} usually takes around {duration} before harvest.",
+      variety_duration_summary: "{variety} usually takes around {duration} before harvest.",
+      harvest_window_summary: "Expected harvest window: {start_date} to {end_date}",
+      weather_note: "{crop_name} grows best under {condition} conditions.",
+      no_variety_note: "No specific variety selected. Showing the default guide for {crop_name}."
+    },
+
+    empty: {
+      no_production_data: "Production data not available",
+      no_weather_data: "No weather data available.",
+      no_weather_advisory: "No crop-specific weather advisory available.",
+      no_planting_guide: "No planting guide available.",
+      crop_not_found: "Crop not found.",
+      commodity_not_found: "Commodity not found.",
+      profit_unavailable: "Profit details unavailable.",
+      no_active_crop_plan: "No active crop plan yet."
+    },
+
+    dataNotes: {
+      market_data_as_of: "Based on available market data · {date}",
+      reliability_bangkerohan_moderate: "Moderate reliability based on recent Bangkerohan price records.",
+      reliability_pechay_low: "Low reliability. DFTC Arrival Volume unavailable; relies on Bangkerohan Price Behavior only."
+    },
+
+    common: {
+      crop_plan_saved_toast: "{displayName} has been {action_status}.",
+      crop_plan_saved_desc: "You can monitor and update it anytime in My Crops."
+    },
+
+    errors: {
+      save_plan_failed: "Failed to save crop plan. Please try again.",
+      fetch_weather_failed: "Failed to fetch weather forecast",
+      fetch_production_failed: "Failed to fetch seasonal production data",
+      fetch_planting_guide_failed: "Failed to fetch planting guide recommendations"
+    }
   }
 };
