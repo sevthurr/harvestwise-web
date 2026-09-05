@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -36,7 +37,8 @@ const NOTIF_ITEMS = [
 ];
 
 const AccountTab = ({ showToast, onRemovalRequest }) => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
   const staff = user?.staff_profile || user?.staffProfile || {};
   const firstName = staff.first_name || user?.first_name || (user?.name ? user.name.split(" ")[0] : "") || "";
   const lastName = staff.last_name || user?.last_name || (user?.name && user.name.split(" ").length > 1 ? user.name.split(" ").slice(-1)[0] : "") || "";
@@ -44,7 +46,7 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
   const suffix = staff.suffix || "None";
   const phone = user?.phone || "";
   const email = user?.email || "";
-  const position = staff.position_title || user?.position || "";
+  const position = user?.position || staff.position_title || "";
 
   const [form, setForm] = useState({
     firstName,
@@ -122,9 +124,15 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
     };
     try {
       await parseResponse(await apiPut("/dftc/staff/me", payload));
+      try {
+        await refreshUser();
+        queryClient.invalidateQueries({ queryKey: ["auth-me-profile"] });
+      } catch {
+        // Profile refresh is best-effort; the save already succeeded.
+      }
       showToast("Account updated successfully.");
-    } catch {
-      showToast("Could not save account changes. Please try again.");
+    } catch (err) {
+      showToast(err?.message || "Could not save account changes. Please try again.");
     }
   };
   const handleRemoveSubmit = () => {

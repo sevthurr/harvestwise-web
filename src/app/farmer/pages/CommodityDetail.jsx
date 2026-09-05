@@ -244,7 +244,7 @@ function CommodityDetailPage() {
 
     const getAvailablePrice = (pricesObj) => {
       if (!pricesObj) return null;
-      return pricesObj[mapCamelKey] ?? pricesObj.bangkerohanRetail ?? pricesObj.dftcRetail ?? pricesObj.dftcWholesale ?? pricesObj.bangkerohanWholesale ?? null;
+      return pricesObj[mapCamelKey] ?? null;
     };
 
     return familyVariants.map((v, i) => {

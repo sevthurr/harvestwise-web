@@ -58,7 +58,7 @@ function DFTCProfile() {
   const email = user?.email || "—";
   const isEmailVerified = !!user?.email_verified_at;
   const roleName = user?.role?.role_name || user?.role || "DFTC";
-  const position = staff.position_title || user?.position || "—";
+  const position = user?.position || staff.position_title || "—";
   const accountStatus = user?.is_active === false ? "Inactive" : "Active";
   const lastLogin = formatDateTime(user?.last_login_at || user?.last_login || user?.created_at);
 

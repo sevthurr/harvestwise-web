@@ -54,7 +54,8 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
         email: form.email || null,
         role: form.role,
         is_active: form.status === "Active",
-        position: form.position || null
+        position: form.position || null,
+        sendInvite: form.sendInvite
       });
       onClose();
     } catch (err) {
