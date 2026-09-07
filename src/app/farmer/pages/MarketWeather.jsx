@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw,
   Sun,
@@ -99,11 +99,18 @@ function MarketWeatherPage() {
   const navigate = useNavigate();
   const carouselRef = useRef(null);
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
+
+  const DEFAULT_WEATHER_LAT = 7.0722;
+  const DEFAULT_WEATHER_LON = 125.6131;
+  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
 
   const { data: weatherData, isLoading: loading, error } = useQuery({
-    queryKey: ["weather", "advisory"],
+    queryKey: ["weather", "advisory", weatherLat, weatherLon],
     queryFn: async () => {
-      const response = await apiGet('/weather/advisory?latitude=7.0722&longitude=125.6131');
+      const response = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
       if (!response.ok) throw new Error(t('farmer.errors.fetch_weather_failed'));
       const data = await parseResponse(response);
       const daily = data.daily_forecasts || [];
@@ -119,7 +126,7 @@ function MarketWeatherPage() {
 
       return {
         updated_at: new Date().toISOString(),
-        location_name: data.location || 'Davao City',
+        location_name: data.location || t('farmer.factors.weather.fallback_location'),
         forecast_14d: forecast14,
         weather_summary: data.weather_risk_level ? t('farmer.factors.weather.summary_headline', { risk_level: data.weather_risk_level }) : t('farmer.factors.weather.forecast_fallback_davao'),
         crop_advisories: (data.advisories || []).map((adv, idx) => ({
@@ -182,14 +189,14 @@ function MarketWeatherPage() {
   const cropAdvisories = weatherData?.crop_advisories ?? [];
   const locationName = weatherData?.location_name ?? '-';
   const weatherSummary = weatherData?.weather_summary ?? 'No weather data available';
-  const updatedAt = weatherData?.updated_at ? new Date(weatherData.updated_at).toLocaleTimeString() : 'Unknown';
+  const updatedAt = weatherData?.updated_at ? new Date(weatherData.updated_at).toLocaleTimeString() : t('farmer.factors.weather.unknown_time');
 
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
         {/* ── Header ── */}
         <div>
           <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-            Weather
+            {t("farmer.factors.weather.page_title")}
           </h1>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
             {t("farmer.factors.weather.page_subtitle")}
@@ -267,7 +274,7 @@ function MarketWeatherPage() {
               );
             }) : 
               Array.from({ length: 14 }).map((_, i) => {
-                const dayLabel = i === 0 ? "Today" : `+${i}d`;
+                const dayLabel = i === 0 ? t("farmer.factors.weather.today_day_label") : t("farmer.factors.weather.day_offset_label", { days: i });
                 return (
                   <div
                     key={i}
@@ -299,7 +306,7 @@ function MarketWeatherPage() {
 
         {/* ── 2. General weather insight ── */}
         <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
-          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Weather Insight · {locationName}</p>
+          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t("farmer.factors.weather.insight_label", { location: locationName })}</p>
           <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
             {weatherSummary}
           </p>

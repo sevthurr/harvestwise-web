@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw,
   ChevronLeft,
@@ -30,6 +30,7 @@ import {
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 const TwoToneStormIcon = ({ className }) => <svg
   viewBox="0 0 24 24"
@@ -56,8 +57,20 @@ const FACTOR_COLORS = {
   Weather: "text-sky-500",
   Profit: "text-amber-600"
 };
-// Build calendar markers from market events and crop plans for the grid
-function buildCalendarMarkers(marketEvents, cropPlans, year, month) {
+// Build calendar markers from market events, crop plans, and the weather
+// forecast for the grid
+function forecastMarkerType(f) {
+  const condition = String(f.suitability || f.weather_condition || "").toLowerCase();
+  if (condition.includes("severe")) return "storm";
+  if (condition.includes("heat")) return "heat";
+  const rainfall = Number(f.rainfall_mm) || 0;
+  const rainProb = Number(f.rain_probability_pct) || 0;
+  if (rainfall >= 5 || rainProb >= 60) return "rain";
+  if (condition.includes("caution") && rainfall > 0) return "rain";
+  return "sun";
+}
+
+function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, month) {
   const markers = {};
   const mk = `${year}-${month}`;
 
@@ -109,6 +122,25 @@ function buildCalendarMarkers(marketEvents, cropPlans, year, month) {
           type: "harvest",
         };
       }
+    }
+  });
+
+  (weatherForecasts || []).forEach((f) => {
+    const ds = String(f.date || "");
+    const parts = ds.split("-");
+    if (parts.length < 3) return;
+    if (parts[0] === String(year) && parseInt(parts[1], 10) === month) {
+      const d = parseInt(parts[2], 10);
+      if (isNaN(d)) return;
+      if (!markers[d]) markers[d] = {};
+      markers[d].weather = forecastMarkerType(f);
+      markers[d].weatherInfo = {
+        tempMin: f.temperature_min,
+        tempMax: f.temperature_max,
+        rainfall: f.rainfall_mm,
+        rainProb: f.rain_probability_pct,
+        condition: f.suitability || f.weather_condition || null,
+      };
     }
   });
 
@@ -190,6 +222,19 @@ const weatherColor = (type, selected = false) => {
   if (type === "storm") return "text-blue-600";
   return "text-blue-500";
 };
+const _weatherNote = (type, info, t) => {
+  const hasInfo = !!(info && (info.rainProb != null || info.rainfall != null || info.tempMax != null));
+  const rainProb = hasInfo && info.rainProb != null ? ` (${Math.round(info.rainProb)}% chance)` : "";
+  const rainMm = hasInfo && info.rainfall != null ? ` ~${info.rainfall} mm` : "";
+  const temps =
+    hasInfo && info.tempMax != null && info.tempMin != null
+      ? ` ${Math.round(info.tempMin)}°–${Math.round(info.tempMax)}°`
+      : "";
+  if (type === "storm") return t("farmer.calendar.weather_note_storm", { rain_mm: rainMm });
+  if (type === "heat") return t("farmer.calendar.weather_note_heat");
+  if (type === "rain") return t("farmer.calendar.weather_note_rain", { rain_mm: rainMm, rain_chance: rainProb });
+  return t("farmer.calendar.weather_note_fair", { temps });
+};
 const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) => {
   const today = /* @__PURE__ */ new Date();
   const isNow = today.getFullYear() === year && today.getMonth() + 1 === month;
@@ -239,6 +284,7 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
 };
 const SelectedDateCard = ({ year, month, day, markers }) => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
       <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">{longDate(year, month, day)}</p>
 
@@ -263,7 +309,7 @@ const SelectedDateCard = ({ year, month, day, markers }) => {
           <div>
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">Weather note</p>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-              {markers.weather === "storm" ? "Heavy rain with thunderstorm expected. Avoid planting and protect harvested crops." : markers.weather === "heat" ? "Unusually hot days. Water crops early in the morning and monitor soil moisture." : "Rain is expected. Clear drainage before planting."}
+              {_weatherNote(markers.weather, markers.weatherInfo || null, t)}
             </p>
           </div>
         </div>}
@@ -513,10 +559,18 @@ const CropDetailView = ({ crop, onBack }) => {
 };
 function RecommendationPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
   const [detailCrop, setDetailCrop] = useState(null);
+
+  // Farmer profile coordinates reused by the weather advisory query
+  const DEFAULT_WEATHER_LAT = 7.0722;
+  const DEFAULT_WEATHER_LON = 125.6131;
+  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
 
   // Reuse prefetched market calendar
   const { data: rawMarketEvents = [] } = useQuery({
@@ -542,6 +596,24 @@ function RecommendationPage() {
     staleTime: 1000 * 60 * 30,
   });
 
+  // Weather forecast — fills the calendar's daily weather note + icons
+  const { data: weatherForecasts = [] } = useQuery({
+    queryKey: ["weather", "advisory"],
+    queryFn: async () => {
+      const res = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
+      if (!res.ok) return [];
+      const data = await parseResponse(res);
+      return data.daily_forecasts || [];
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // The prefetched cache may hold the raw advisory object instead of the array
+  const weatherForecastList = useMemo(
+    () => (Array.isArray(weatherForecasts) ? weatherForecasts : weatherForecasts?.daily_forecasts || []),
+    [weatherForecasts]
+  );
+
   // Reuse prefetched prices list for recommendations
   const { data: pricesListData, isLoading: loading } = useQuery({
     queryKey: ["prices", "list"],
@@ -555,8 +627,8 @@ function RecommendationPage() {
 
   // Build calendar data and recommendations from cached data
   const calendarData = useMemo(
-    () => ({ [monthKey(viewYear, viewMonth)]: buildCalendarMarkers(rawMarketEvents, cropPlansData, viewYear, viewMonth) }),
-    [rawMarketEvents, cropPlansData, viewYear, viewMonth]
+    () => ({ [monthKey(viewYear, viewMonth)]: buildCalendarMarkers(rawMarketEvents, cropPlansData, weatherForecastList, viewYear, viewMonth) }),
+    [rawMarketEvents, cropPlansData, weatherForecastList, viewYear, viewMonth]
   );
 
   const crops = useMemo(() => buildRecommendations(pricesListData), [pricesListData]);

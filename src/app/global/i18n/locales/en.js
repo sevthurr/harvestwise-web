@@ -224,6 +224,7 @@ export const en = {
 
       weather: {
         page_subtitle: "See how weather may affect your planted crops.",
+        page_title: "Weather",
         summary_headline: "7-day weather suitability forecast: {risk_level}",
         source_open_meteo_notice: "Source: Open-Meteo · Forecast is a guide only.",
         crop_advisories_title: "Crop weather advisories",
@@ -236,6 +237,11 @@ export const en = {
         rain_chance_note: "· % = rain chance",
         risk_level_label: "Risk level",
         forecast_fallback_davao: "7-day weather forecast for Davao City",
+        fallback_location: "Davao City",
+        insight_label: "Weather Insight · {location}",
+        unknown_time: "Unknown",
+        today_day_label: "Today",
+        day_offset_label: "+{days}d",
         insight_severe: "Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting for {crop_name} should be delayed until conditions improve.",
         insight_caution: "Mixed conditions are expected over the next 14 days — some rainy days and some dry windows. Plan farming activities for {crop_name} around the calmer days mid-forecast.",
         insight_suitable: "Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions — good for {crop_name}.",
@@ -302,7 +308,11 @@ export const en = {
 
     calendar: {
       driver_payday_detail: "An upcoming payday period may support buyer demand at markets this week.",
-      opportunity_payday_detail: "Upcoming payday periods historically support higher retail prices."
+      opportunity_payday_detail: "Upcoming payday periods historically support higher retail prices.",
+      weather_note_storm: "Heavy rain with thunderstorm expected{rain_mm}. Avoid planting and protect harvested crops.",
+      weather_note_heat: "Unusually hot days. Water crops early in the morning and monitor soil moisture.",
+      weather_note_rain: "Rain expected{rain_mm}{rain_chance}. Clear drainage before planting.",
+      weather_note_fair: "Fair conditions{temps}. Weather is suitable for farming activity."
     },
 
     plantingGuide: {

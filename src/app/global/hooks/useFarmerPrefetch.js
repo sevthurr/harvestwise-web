@@ -100,11 +100,18 @@ export function useFarmerPrefetch() {
       staleTime: STALE_TIME,
     });
 
-    // 7. Weather advisory for Market Weather page
+    // 7. Weather advisory for Market Weather page.
+    // Uses the farmer profile district coordinates when available, otherwise
+    // falls back to the default Davao City coordinates.
+    const DEFAULT_WEATHER_LAT = 7.0722;
+    const DEFAULT_WEATHER_LON = 125.6131;
     queryClient.prefetchQuery({
       queryKey: ["weather", "advisory"],
       queryFn: async () => {
-        const res = await apiGet("/weather/advisory?latitude=7.0722&longitude=125.6131");
+        const profile = queryClient.getQueryData(["dashboard", "profile"]);
+        const lat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+        const lon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+        const res = await apiGet(`/weather/advisory?latitude=${lat}&longitude=${lon}`);
         if (!res.ok) return null;
         return parseResponse(res);
       },
