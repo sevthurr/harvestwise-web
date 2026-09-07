@@ -57,7 +57,6 @@ import DFTCAbout                 from "./dftc/pages/DFTCAbout";
 import AdminDashboard from "./admin/pages/AdminDashboard";
 import AdminDataSources from "./admin/pages/AdminDataSources";
 import AdminImport from "./admin/pages/AdminImport";
-import AdminForecasting from "./admin/pages/AdminForecasting";
 import AdminAnalytics from "./admin/pages/AdminAnalytics";
 import AdminAnalyticsBasis from "./admin/pages/AdminAnalyticsBasis";
 import AdminAnalyticsThresholds from "./admin/pages/AdminAnalyticsThresholds";
@@ -72,6 +71,7 @@ import AdminSystemManagement from "./admin/pages/AdminSystemManagement";
 import AdminUserDetails from "./admin/pages/AdminUserDetails";
 import AdminAuditLogs from "./admin/pages/AdminAuditLogs";
 import AdminNotifications from "./admin/pages/AdminNotifications";
+import AdminForecasting from "./admin/pages/AdminForecasting";
 
 export const router = createBrowserRouter([
   // ── Auth pages (unprotected) ──────────────────────────────────────────────────
@@ -163,8 +163,8 @@ export const router = createBrowserRouter([
       { path: "data-sources",             Component: AdminDataSources      },
       { path: "data-sources/:sourceId",   Component: AdminDataSourceDetail  },
       { path: "import",                   Component: AdminImport            },
-      { path: "forecasting",     Component: AdminForecasting  },
       { path: "modules",                  Component: AdminAnalytics      },
+      { path: "forecasting",              Component: AdminForecasting    },
       { path: "modules/basis/:resultId",  Component: AdminAnalyticsBasis },
       { path: "modules/thresholds",       Component: AdminAnalyticsThresholds },
       { path: "analytics",                Component: AdminAnalytics      },
