@@ -14,6 +14,7 @@ import * as authApi from '../services/api/authApi';
 import * as adminApi from '../services/api/adminApi';
 import * as ingestionApi from '../services/api/ingestionApi';
 import * as calendarApi from '../services/api/calendarApi';
+import * as pricesApi from '../services/api/pricesApi';
 
 const PREFIX = '/api/v1';
 
@@ -151,6 +152,36 @@ describe('calendarApi', () => {
     const [url, opts] = fetchFn.lastArgs();
     expect(url).toContain(`${PREFIX}/admin/calendar/events/EV-9`);
     expect(opts.method).toBe('DELETE');
+  });
+});
+
+describe('pricesApi', () => {
+  it('getPriceList GETs /prices with is_top10 and page_size', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0, page: 1, page_size: 100 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await pricesApi.getPriceList({ is_top10: true, page_size: 100 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/prices`);
+    expect(url).toContain('is_top10=true');
+    expect(url).toContain('page_size=100');
+    expect(url).not.toContain('/forecasts');
+  });
+
+  it('getPriceDetail GETs /prices/{id} with price_type and horizon', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: { commodity_id: 'COM-1', forecast: { forecast_midpoint: 80, forecast_date: '2026-08-07' }, recent_records: [] },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await pricesApi.getPriceDetail('COM-1', { price_type: 'dftc_wholesale', horizon: 21, records_limit: 20 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/prices/COM-1`);
+    expect(url).toContain('price_type=dftc_wholesale');
+    expect(url).toContain('horizon=21');
+    expect(url).toContain('records_limit=20');
   });
 });
 
