@@ -145,18 +145,20 @@ export async function apiGet(url, options = {}) {
 }
 
 export async function apiPost(url, body, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   return apiFetch(url, {
     ...options,
     method: 'POST',
-    body: JSON.stringify(body),
+    body: isFormData ? body : JSON.stringify(body),
   });
 }
 
 export async function apiPut(url, body, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   return apiFetch(url, {
     ...options,
     method: 'PUT',
-    body: JSON.stringify(body),
+    body: isFormData ? body : JSON.stringify(body),
   });
 }
 

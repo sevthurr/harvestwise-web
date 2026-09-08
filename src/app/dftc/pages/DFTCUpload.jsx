@@ -12,11 +12,26 @@ import {
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
 const DATASET_TYPES = [
-  "Daily Retail Prices",
-  "Daily Wholesale Prices",
-  "Daily Landing Prices",
+  "DFTC Retail Prices",
+  "DFTC Wholesale Prices",
+  "DFTC Landing Prices",
+  "Bankerohan Retail Prices",
+  "Bankerohan Wholesale Prices",
+  "Bankerohan Landing Prices",
   "DFTC Arrival Volume"
 ];
+const DFTC_DATA_TYPE_MAP = {
+  "DFTC Retail Prices": "dftc_daily_retail",
+  "DFTC Wholesale Prices": "dftc_daily_wholesale",
+  "DFTC Landing Prices": "dftc_daily_landing",
+  "Bankerohan Retail Prices": "bankerohan_daily_retail",
+  "Bankerohan Wholesale Prices": "bankerohan_daily_wholesale",
+  "Bankerohan Landing Prices": "bankerohan_daily_landing",
+  "Daily Retail Prices": "dftc_daily_retail",
+  "Daily Wholesale Prices": "dftc_daily_wholesale",
+  "Daily Landing Prices": "dftc_daily_landing",
+  "DFTC Arrival Volume": "arrival"
+};
 const ACCEPTED_EXTS = [".xlsx", ".xls", ".csv"];
 const STEPS = [
   { id: "upload", label: "Upload File" },
@@ -332,6 +347,10 @@ function DFTCUpload() {
   }
   async function tryAcceptFile(f) {
     setFileError("");
+    if (!datasetType) {
+      setFileError("Please select a Dataset Type before uploading a file.");
+      return;
+    }
     const ext = "." + f.name.split(".").pop()?.toLowerCase();
     if (!ACCEPTED_EXTS.includes(ext)) {
       setFileError(`Unsupported file type: ${ext}. Use .xlsx, .xls, or .csv.`);
@@ -341,7 +360,10 @@ function DFTCUpload() {
     try {
       const formData = new FormData();
       formData.append("file", f);
-      if (datasetType) formData.append("dataset_type", datasetType);
+      const mappedDataType = DFTC_DATA_TYPE_MAP[datasetType];
+      if (mappedDataType) {
+        formData.append("data_type", mappedDataType);
+      }
       const res = await apiPost("/ingestion/upload", formData);
       const data = parseResponse(res);
       const importId = data?.import_id || data?.importId || res?.import_id || res?.importId;
