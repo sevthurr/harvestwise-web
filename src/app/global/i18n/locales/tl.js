@@ -110,9 +110,10 @@ export const tl = {
     pref_language: "Wika",
     pref_text_size: "Laki ng Letra",
     offline_data: "Offline na Data",
-    last_synced: "Huling na-sync",
+    last_synced: "Huling na-update",
+    last_updated: "Huling na-update",
     sync_now: "I-sync Ngayon",
-    syncing: "Nagsi-sync ng bagong data...",
+    syncing: "Nag-u-update ng bagong data...",
     offline_available: "Handa ang offline data",
     advisory: {
       labels: {

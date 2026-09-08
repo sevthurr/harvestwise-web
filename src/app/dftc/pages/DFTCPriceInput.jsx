@@ -637,8 +637,12 @@ function DFTCPriceInput() {
   const canReview = reviewEntries.length > 0;
 
   async function handleSave() {
+    const marketLower = (setup.market || "").toLowerCase();
+    const isDftc = marketLower.includes("dftc") || marketLower.includes("taboan");
+    const sourceId = isDftc ? "dftc" : "bankerohan";
+
     const records = reviewEntries.map(({ com, v, f }) => ({
-      commodity_id: com.name,
+      commodity_id: com.id,
       variety: v.name,
       uom: f.uom,
       sample_prices: parseValid(f.samples),
@@ -648,7 +652,7 @@ function DFTCPriceInput() {
 
     const payload = {
       data_type: "price",
-      source_id: setup.market,
+      source_id: sourceId,
       price_type: setup.priceType,
       reporting_date: setup.date,
       records

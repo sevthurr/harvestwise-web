@@ -110,9 +110,10 @@ export const ceb = {
     pref_language: "Pinulongan",
     pref_text_size: "Dako sa Letra",
     offline_data: "Data nga Offline",
-    last_synced: "Katapusang na-sync",
+    last_synced: "Katapusang na-update",
+    last_updated: "Katapusang na-update",
     sync_now: "I-sync Karon",
-    syncing: "Nagsync sa bag-ong data...",
+    syncing: "Nag-update sa bag-ong data...",
     offline_available: "Andam ang data nga offline",
     advisory: {
       labels: {

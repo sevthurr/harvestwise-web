@@ -870,7 +870,7 @@ const PreferencesTab = ({ showToast }) => {
         <SectionLabel>Offline Data</SectionLabel>
         <div className="space-y-2.5 mb-4">
           {[
-            { label: "Last synced", value: lastSynced ? lastSynced : "Never" },
+            { label: "Last updated", value: lastSynced ? lastSynced : "Never" },
             { label: "Offline data", value: hasOfflineCache ? "Available" : "Unavailable" },
             { label: "Status", value: syncStatus === "ok" ? "Up to date" : "Needs sync" }
           ].map((row) => (

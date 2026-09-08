@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   AlertCircle,
   CheckCircle,
+  CheckCircle2,
   Loader2
 } from "lucide-react";
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
@@ -324,6 +325,9 @@ function DFTCUpload() {
   const [file, setFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [ingestionStatus, setIngestionStatus] = useState("idle");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [analyzingFile, setAnalyzingFile] = useState(false);
   const [previewPage, setPreviewPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -411,6 +415,8 @@ function DFTCUpload() {
   async function handleSubmit() {
     setSubmitting(true);
     setFileError("");
+    setIngestionStatus("processing");
+    setUploadMessage("Dataset accepted and processing in the background...");
     try {
       if (file?.importId) {
         let isFinished = false;
@@ -421,20 +427,30 @@ function DFTCUpload() {
           const data = parseResponse(res);
           if (data?.status === "completed" || data?.status === "success") {
             isFinished = true;
+            setIngestionStatus("success");
+            setUploadMessage("Dataset processed and imported successfully into HarvestWise DB.");
             setStep("success");
             return;
           } else if (data?.status === "failed") {
+            setIngestionStatus("failed");
+            setUploadError(data?.error_message || "Dataset processing failed on backend.");
             throw new Error(data?.error_message || "Dataset processing failed on backend.");
           } else {
             await new Promise((r) => setTimeout(r, 1000));
           }
         }
+        setIngestionStatus("success");
+        setUploadMessage("Dataset processed and imported successfully into HarvestWise DB.");
         setStep("success");
       } else {
+        setIngestionStatus("success");
+        setUploadMessage("Dataset processed and imported successfully into HarvestWise DB.");
         setStep("success");
       }
     } catch (err) {
       console.error("Submission failed:", err);
+      setIngestionStatus("failed");
+      setUploadError(err.message || "Failed to finalize dataset storage.");
       setFileError(err.message || "Failed to finalize dataset storage. Please check file format.");
     } finally {
       setSubmitting(false);
@@ -981,6 +997,36 @@ function DFTCUpload() {
     ═══════════════════════════════════════════════════════════ */
   }
       {step === "success" && <div className="flex flex-col items-center text-center space-y-5 py-8 px-4 max-w-sm mx-auto">
+          {ingestionStatus === "processing" && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 w-full text-left">
+              <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[13px] font-bold text-blue-950">Background Task In Progress</p>
+                <p className="text-[13px] text-blue-800 mt-0.5">{uploadMessage || "Import accepted and processing in background."}</p>
+                <p className="text-[12px] text-blue-600 mt-1">Polling background worker status…</p>
+              </div>
+            </div>
+          )}
+          {ingestionStatus === "success" && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 w-full text-left">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[13px] font-bold text-emerald-950">Import Completed Successfully</p>
+                <p className="text-[13px] text-emerald-800 mt-0.5">{uploadMessage || "Dataset processed and imported into HarvestWise DB."}</p>
+                {file?.name && <p className="text-[12px] text-emerald-700 mt-1">File: <span className="font-mono">{file.name}</span></p>}
+              </div>
+            </div>
+          )}
+          {ingestionStatus === "failed" && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 w-full text-left">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[13px] font-bold text-red-950">Background Import Failed</p>
+                <p className="text-[13px] text-red-800 mt-0.5">{uploadError || "The background ingestion task failed."}</p>
+              </div>
+            </div>
+          )}
+
           <div className="w-16 h-16 rounded-full bg-[var(--hw-green-50)] flex items-center justify-center">
             <CheckCircle className="w-8 h-8 text-[var(--hw-green-700)]" />
           </div>

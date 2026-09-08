@@ -203,8 +203,9 @@ function DFTCArrivalInput() {
       const other = f.otherSource === "" ? null : parseFloat(f.otherSource);
       const hasVolume = farm != null || other != null;
       const combined = (farm ?? 0) + (other ?? 0);
+      const commodityId = (com.id || "").replace(/^a-/, "");
       return {
-        commodity_id: com.name,
+        commodity_id: commodityId,
         variety: v.name,
         farm_source_volume_kg: farm,
         other_source_volume_kg: other,
@@ -215,7 +216,7 @@ function DFTCArrivalInput() {
 
     const payload = {
       data_type: "arrival_volume",
-      source_id: "DFTC Taboan",
+      source_id: "dftc_volume",
       reporting_date: defaultDate,
       records
     };

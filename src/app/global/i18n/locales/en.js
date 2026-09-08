@@ -110,9 +110,10 @@ export const en = {
     pref_language: "Language Preference",
     pref_text_size: "Text Size",
     offline_data: "Offline Data",
-    last_synced: "Last synced",
+    last_synced: "Last updated",
+    last_updated: "Last updated",
     sync_now: "Sync Now",
-    syncing: "Syncing latest data...",
+    syncing: "Updating latest data...",
     offline_available: "Offline data available",
 
     advisory: {
