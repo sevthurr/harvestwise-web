@@ -28,7 +28,7 @@ function mapDetail(rec) {
     activity: "File Upload",
     result,
     status: rec.status,
-    initiatedBy: rec.uploaded_by_user_id || "System",
+    initiatedBy: rec.uploaded_by_name || rec.uploaded_by_user_id || "System",
     details: rec.error_message ? { "Error message": rec.error_message, "File format": rec.file_format || "—" } : (rec.file_format ? { "File format": rec.file_format } : {}),
     relatedArea: rec.file_format || "—"
   };

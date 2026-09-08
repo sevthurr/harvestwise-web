@@ -36,7 +36,7 @@ function mapHistory(rec) {
     rawDate: rec.started_at,
     activity: rec.source_name || "Data Import",
     source,
-    submittedBy: rec.user_id || "Admin",
+    submittedBy: rec.uploaded_by_name || rec.uploaded_by_user_id || "Admin",
     recordsCount: rec.records_imported != null ? String(rec.records_imported) : "—",
     result,
     status
