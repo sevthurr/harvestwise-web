@@ -113,6 +113,27 @@ export const tl = {
     last_synced: "Huling na-sync",
     sync_now: "I-sync Ngayon",
     syncing: "Nagsi-sync ng bagong data...",
-    offline_available: "Handa ang offline data"
+    offline_available: "Handa ang offline data",
+    advisory: {
+      labels: {
+        recommended: "Inirerekomenda",
+        proceed_with_caution: "Magpatuloy nang may Pag-iingat",
+        avoid_for_now: "Iwasan Muna"
+      },
+      recommended_summary: "Sinusuportahan ng kasalukuyang kondisyon ang iyong plano para sa {crop_name}.",
+      recommended_support: "Maayos ang presyo at kontrolado ang panahon ngayong linggo.",
+      caution_summary: "Maaari pa ring magpatuloy ang {crop_name}, ngunit bantayan ang mga kondisyon at panganib.",
+      caution_support: "Magpatuloy nang may pag-iingat hanggang bumuti ang kondisyon.",
+      avoid_summary: "Hindi paborable ang kondisyon para sa pagtatanim ng {crop_name} sa ngayon.",
+      avoid_support: "Isaalang-alang ang paghihintay sa mas magandang timing bago magdesisyon.",
+      cycle_recommended_summary: "Sinusuportahan ng kasalukuyang kondisyon ang iyong plano para sa {crop_name}.",
+      cycle_caution_summary: "Posible ang iyong plano para sa {crop_name}, ngunit bantayan ang mga kondisyon at pagbabago ng presyo.",
+      cycle_avoid_summary: "Mas mababa ang presyo sa merkado kaysa sa iyong gasto para mabawi ang {crop_name}.",
+      cycle_recommended_support: "Maayos ang presyo at kontrolado ang panahon ngayong linggo.",
+      cycle_caution_support: "Magpatuloy nang may pag-iingat at bantayang mabuti ang kondisyon.",
+      cycle_avoid_support: "Isaalang-alang ang paghihintay bago magpatuloy sa karagdagang pagtatanim.",
+      not_available: "Wala pang available na resulta ng assessment.",
+      why_recommendation_title: "Bakit itong rekomendasyon?"
+    }
   }
 };

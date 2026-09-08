@@ -113,6 +113,27 @@ export const ceb = {
     last_synced: "Katapusang na-sync",
     sync_now: "I-sync Karon",
     syncing: "Nagsync sa bag-ong data...",
-    offline_available: "Andam ang data nga offline"
+    offline_available: "Andam ang data nga offline",
+    advisory: {
+      labels: {
+        recommended: "Girekomendar",
+        proceed_with_caution: "Padayon uban ang Pag-amping",
+        avoid_for_now: "Likayi Una"
+      },
+      recommended_summary: "Suportahan sa karon nga kahimtang ang imong plano alang sa {crop_name}.",
+      recommended_support: "Maayo ang presyo ug kontrolado ang panahon karong semanaha.",
+      caution_summary: "Mahimo pa ring itanom ang {crop_name}, apan bantayan pag-ayo ang mga kondisyon ug risgo.",
+      caution_support: "Mag-amping hangtod nga mouswag ang kahimtang.",
+      avoid_summary: "Dili maayo ang kahimtang sa pagtanom sa {crop_name} karong panahona.",
+      avoid_support: "Ikonsiderar ang paghulat sa mas maayong panahon sa dili pa modesisyon.",
+      cycle_recommended_summary: "Suportahan sa karon nga kahimtang ang imong {crop_name} plano.",
+      cycle_caution_summary: "Posible ang imong {crop_name} plano, apan bantayan ang mga kondisyon ug pagbag-o sa presyo.",
+      cycle_avoid_summary: "Ubos ang presyo sa merkado kaysa imong gasto aron mabawi para sa {crop_name}.",
+      cycle_recommended_support: "Maayo ang presyo ug kontrolado ang panahon karong semanaha.",
+      cycle_caution_support: "Padayon nga mag-amping ug bantayan pag-ayo ang kahimtang.",
+      cycle_avoid_support: "Ikonsiderar ang paghulat sa dili pa mopadayon sa dugang pagtanom.",
+      not_available: "Wala pa ang resulta sa assessment.",
+      why_recommendation_title: "Ngano kini nga tambag?"
+    }
   }
 };
