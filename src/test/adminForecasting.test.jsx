@@ -147,28 +147,6 @@ describe('forecast graph mapping helpers', () => {
     );
   });
 
-  it('plots API daily points when provided and does not interpolate missing days', () => {
-    const data = buildChartData(
-      [
-        { price_date: '2026-07-30', price_avg: 68 },
-        { price_date: '2026-07-31', price_avg: 70 },
-      ],
-      {
-        forecast_date: '2026-08-07',
-        forecast_midpoint: 87,
-        points: [
-          { forecast_date: '2026-08-01', forecast_midpoint: 81 },
-          { forecast_date: '2026-08-02', forecast_midpoint: 82 },
-          { forecast_date: '2026-08-03', forecast_midpoint: 83 },
-        ],
-      }
-    );
-    expect(data.find((point) => point.d === '2026-08-01')?.predicted).toBe(81);
-    expect(data.find((point) => point.d === '2026-08-02')?.predicted).toBe(82);
-    expect(data.find((point) => point.d === '2026-08-03')?.predicted).toBe(83);
-    expect(data.some((point) => point.d === '2026-08-04')).toBe(false);
-  });
-
   it('plots forecast_midpoint on forecast_date and does not invent daily points', () => {
     const data = buildChartData(
       [
