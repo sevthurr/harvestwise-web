@@ -30,31 +30,48 @@ import {
   normalizePhaseCode,
   normalizePriceTrendCode,
 } from "../../utils/farmerCodes";
+import {
+  composeAdvisorySummary,
+  composeAdvisoryBadge,
+  composeAdvisoryReasons,
+  composeAdvisoryAction,
+  renderComposedMessage,
+  normalizeLifecycleStage,
+} from "../../utils/advisoryMessageComposer";
 import { apiPost, parseResponse } from "../../../global/api";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
 
 const ADVISORY_CFG = {
-  [ADVISORY_CODES.RECOMMENDED]: {
+  recommended: {
     Icon: CheckCircle2,
     color: "text-emerald-700",
     border: "border-[var(--hw-neutral-200)]",
-    summaryKey: "farmer.advisory.recommended_summary",
-    supportKey: "farmer.advisory.recommended_support",
   },
-  [ADVISORY_CODES.PROCEED_WITH_CAUTION]: {
+  proceed_with_caution: {
     Icon: MinusCircle,
     color: "text-amber-700",
     border: "border-[var(--hw-neutral-200)]",
-    summaryKey: "farmer.advisory.caution_summary",
-    supportKey: "farmer.advisory.caution_support",
   },
-  [ADVISORY_CODES.AVOID_FOR_NOW]: {
+  caution: {
+    Icon: MinusCircle,
+    color: "text-amber-700",
+    border: "border-[var(--hw-neutral-200)]",
+  },
+  avoid_for_now: {
     Icon: XCircle,
     color: "text-red-700",
     border: "border-[var(--hw-neutral-200)]",
-    summaryKey: "farmer.advisory.avoid_summary",
-    supportKey: "farmer.advisory.avoid_support",
+  },
+  avoid: {
+    Icon: XCircle,
+    color: "text-red-700",
+    border: "border-[var(--hw-neutral-200)]",
+  },
+  high_risk: {
+    Icon: XCircle,
+    color: "text-red-700",
+    border: "border-[var(--hw-neutral-200)]",
   },
 };
 
@@ -102,13 +119,13 @@ const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, pric
       </button>
       {open && <div className="px-3 py-3 space-y-1.5 border-t border-[var(--hw-neutral-200)] bg-white">
           {[
-    { label: "Expected harvest volume", value: `${qty} kg` },
-    { label: "Total estimated cost", value: formatPeso(totalCost) },
-    { label: "Price basis used", value: priceBasisShort },
-    { label: "Price basis (per kg)", value: `\u20B1${sellingBasis}/kg` },
-    { label: "Cost to recover", value: `\u20B1${costToRecover}/kg` },
-    { label: `Estimated profit per kg (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
-  ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
+            { label: t("farmer.factors.profitability.expected_harvest_volume_label"), value: `${qty} kg` },
+            { label: t("farmer.factors.profitability.total_estimated_cost_label"), value: formatPeso(totalCost) },
+            { label: t("farmer.factors.profitability.price_basis_used_label"), value: priceBasisShort },
+            { label: t("farmer.factors.profitability.price_basis_per_kg_label"), value: `\u20B1${sellingBasis}/kg` },
+            { label: t("farmer.factors.profitability.cost_to_recover_short_label"), value: `\u20B1${costToRecover}/kg` },
+            { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label")} (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
+          ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
               <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
               <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
             </div>)}
@@ -220,7 +237,7 @@ function transformSavedPlan(plan) {
   };
 }
 const RecommendationResult = ({ data, onEdit }) => {
-  const { t } = useLanguage();
+  const { t, langCode } = useLanguage();
   const navigate = useNavigate();
   const { addCrop } = useCrops();
   const [saved, setSaved] = useState(null);
@@ -237,10 +254,22 @@ const RecommendationResult = ({ data, onEdit }) => {
   const totalCost = getTotalCost(data);
   const qty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
   const costToRecover = qty ? Math.ceil(totalCost / qty) : null;
-  const advisoryCode = normalizeAdvisoryCode(data.advisoryCategory);
-  const advisoryCfg = advisoryCode ? ADVISORY_CFG[advisoryCode] : null;
+
+  // Real backend advisory & module results from POST /api/v1/advisory/plan
+  const advisoryResponse = data.advisoryResponse;
+  const cropStage = advisoryResponse?.crop_stage || "before_planting";
+  const moduleResults = advisoryResponse?.module_results || {};
+  const rawAdvisory = advisoryResponse?.advisory?.advisory || data.advisoryCategory;
+  const advisoryCode = normalizeAdvisoryCode(rawAdvisory);
+  const badge = composeAdvisoryBadge(advisoryCode, cropStage);
+  const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
   const AdvisoryIcon = advisoryCfg ? advisoryCfg.Icon : null;
-  const advisoryLabel = advisoryCode ? t(`farmer.advisory.labels.${advisoryCode}`) : t("farmer.advisory.not_available");
+  const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");
+
+  const composedSummary = composeAdvisorySummary(advisoryCode, cropStage, displayName);
+  const summaryText = renderComposedMessage(composedSummary, langCode, advisoryCode ? t(`farmer.advisory.${advisoryCode}_summary`, { crop_name: displayName }) : "");
+  const composedReasons = composeAdvisoryReasons(moduleResults, advisoryCode, cropStage, displayName, 14);
+  const composedAction = composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName);
   const hasFarmgate = data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0;
   const farmgateNum = hasFarmgate ? data.farmgatePrice : null;
   const currentPx = data.currentPrice || null;
@@ -350,35 +379,35 @@ const RecommendationResult = ({ data, onEdit }) => {
             onClick={() => navigate("/farmer/crops")}
             className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
           >
-            Go to My Crops <ChevronRight className="w-4 h-4" />
+            {t("farmer.crops.title", {}, "Go to My Crops")} <ChevronRight className="w-4 h-4" />
           </button>
       </div>;
   }
   if (showPlantedForm) {
     const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition bg-white";
     return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-          <Breadcrumb items={[{ label: "Crop Assessment" }, { label: "Result" }]} />
+          <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
           <button
             onClick={() => setShowPlantedForm(false)}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" />Back to recommendation
+            <ChevronLeft className="w-4 h-4" />{t("farmer.common.back", {}, "Back to recommendation")}
           </button>
           <div>
-            <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">Adjust planting details</h2>
-            <p className="text-sm text-[var(--hw-neutral-900)] mt-1">Confirm your details to start monitoring {displayName}.</p>
+            <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">{t("farmer.crops.adjust_planting_details", {}, "Adjust planting details")}</h2>
+            <p className="text-sm text-[var(--hw-neutral-900)] mt-1">{t("farmer.crops.confirm_details_monitoring", { displayName }, `Confirm your details to start monitoring ${displayName}.`)}</p>
           </div>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">Actual planting date</label>
+              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planting_date", {}, "Actual planting date")}</label>
               <input type="date" value={plantedForm.actualPlantingDate} onChange={(e) => setPlantedForm((f) => ({ ...f, actualPlantingDate: e.target.value }))} className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">Actual planted area (sq m)</label>
+              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planted_area", {}, "Actual planted area (sq m)")}</label>
               <input type="number" min="0" value={plantedForm.actualArea} onChange={(e) => setPlantedForm((f) => ({ ...f, actualArea: e.target.value === "" ? "" : Number(e.target.value) }))} placeholder="e.g. 500" className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">Updated expected harvest date</label>
+              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.updated_expected_harvest", {}, "Updated expected harvest date")}</label>
               <input type="date" value={plantedForm.updatedHarvestDate} onChange={(e) => setPlantedForm((f) => ({ ...f, updatedHarvestDate: e.target.value }))} className={inputCls} />
             </div>
           </div>
@@ -387,19 +416,19 @@ const RecommendationResult = ({ data, onEdit }) => {
             disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Sprout className="w-4 h-4" />{saving ? "Saving..." : "Confirm — I planted this"}
+            <Sprout className="w-4 h-4" />{saving ? t("farmer.common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
           </button>
       </div>;
   }
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
-        <Breadcrumb items={[{ label: "Crop Assessment" }, { label: "Result" }]} />
+        <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
 
         <button
           onClick={onEdit}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" />Edit information
+          <ChevronLeft className="w-4 h-4" />{t("farmer.common.edit", {}, "Edit information")}
         </button>
 
         {/* 1. Advisory card */}
@@ -428,36 +457,35 @@ const RecommendationResult = ({ data, onEdit }) => {
               {/* Explanation */}
               <div>
                 <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-                  {t(advisoryCfg.summaryKey, { crop_name: displayName })}
-                </p>
-                <p className={`text-[13px] font-medium mt-1 ${advisoryCfg.color}`}>
-                  {t(advisoryCfg.supportKey)}
+                  {summaryText}
                 </p>
                 <button
         onClick={() => {
           const pageState = {
-            title: `${displayName} — Detailed Factors`,
-            subtitle: `Assessment result · ${advisoryLabel}`,
+            title: `${displayName} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`,
+            subtitle: `${t("farmer.advisory.assessment_result_title", {}, "Assessment result")} · ${advisoryLabel}`,
             breadcrumbs: [
-              { label: "Crop Assessment", path: "/assess" },
-              { label: "Result" },
-              { label: "Detailed Factors" }
+              { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/assess" },
+              { label: t("farmer.assess.result", {}, "Result") },
+              { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
             ],
             backPath: "/assess",
-            backLabel: "Assessment Result",
+            backLabel: t("farmer.assess.result", {}, "Assessment Result"),
             price: priceTabData,
             arrival: arrivalTabData,
             production: productionTabData,
             weather: weatherTabData,
             profitability: profitabilityData,
             commodityId: data.commodity,
-            commodityName
+            commodityName,
+            cropStage,
+            moduleResults,
           };
           navigate("/farmer/assess/factors", { state: pageState });
         }}
         className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
       >
-                  View basis →
+                  {t("farmer.advisory.view_basis", {}, "View basis →")}
                 </button>
               </div>
             </>
@@ -466,11 +494,11 @@ const RecommendationResult = ({ data, onEdit }) => {
           {/* Date chips */}
           {(data.plantingDate || data.harvestDate) && <div className="grid grid-cols-2 gap-2 text-[13px]">
               {data.plantingDate && <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-[var(--hw-neutral-900)] text-[12px]">Planting date</p>
+                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.calendar.labels.planting_date", {}, "Planting date")}</p>
                   <p className="font-medium text-[var(--hw-neutral-900)]">{data.plantingDate}</p>
                 </div>}
               {data.harvestDate && <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-[var(--hw-neutral-900)] text-[12px]">Expected harvest</p>
+                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.calendar.labels.expected_harvest", {}, "Expected harvest")}</p>
                   <p className="font-medium text-[var(--hw-neutral-900)]">{data.harvestDate}</p>
                 </div>}
             </div>}
@@ -483,17 +511,19 @@ const RecommendationResult = ({ data, onEdit }) => {
         {/* 2. Why this recommendation? Factors card */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
           <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-            {t("farmer.advisory.why_recommendation_title")}
+            {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
           </p>
           <div className="space-y-2.5">
-            {whyFactors.map((f) => {
-              const Icon = f.Icon || TrendingUp;
+            {composedReasons.map((r, idx) => {
+              const text = renderComposedMessage(r, langCode);
               return (
-                <div key={f.label} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
-                  <Icon className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-neutral-900)]" />
+                <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
+                  <TrendingUp className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-neutral-900)]" />
                   <div>
-                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{f.label}</p>
-                    <p className="text-[12px] text-[var(--hw-neutral-700)]">{f.value || "Not available"}</p>
+                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                      {t("farmer.advisory.reason_title", {}, "Reason")} {idx + 1}
+                    </p>
+                    <p className="text-[12px] text-[var(--hw-neutral-700)]">{text}</p>
                   </div>
                 </div>
               );
@@ -501,11 +531,11 @@ const RecommendationResult = ({ data, onEdit }) => {
           </div>
         </div>
 
-        {
-    /* 3. Estimated Profit card — Always retained with empty states when data is null */
-  }
+        {/* 3. Estimated Profit card */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Estimated Profit</p>
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.factors.profitability.title", {}, "Estimated Profit")}
+          </p>
 
           <p className={`text-[20px] font-bold leading-none ${hasProfit ? "text-emerald-700" : "text-[var(--hw-neutral-700)]"}`}>
             {hasProfit
@@ -519,7 +549,7 @@ const RecommendationResult = ({ data, onEdit }) => {
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
             <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
             {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)]">
-                Price may still change before harvest. Update this as harvest gets closer.
+                {t("farmer.factors.profitability.price_change_notice", {}, "Price may still change before harvest. Update this as harvest gets closer.")}
               </p>}
           </div>
 
@@ -533,84 +563,94 @@ const RecommendationResult = ({ data, onEdit }) => {
             hasFarmgate={hasFarmgate}
           />
 
-          {
-    /* Supporting values */
-  }
+          {/* Supporting values */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
             <div>
-              <p className="text-[var(--hw-neutral-900)]">Estimated cost</p>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost")}</p>
               <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : "-"}</p>
             </div>
             <div>
-              <p className="text-[var(--hw-neutral-900)]">Expected harvest</p>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest")}</p>
               <p className="font-medium text-[var(--hw-neutral-900)]">{qty ? `${qty} kg` : "- kg"}</p>
             </div>
             <div>
-              <p className="text-[var(--hw-neutral-900)]">Price basis</p>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.price_basis", {}, "Price basis")}</p>
               <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis != null ? `₱${sellingBasis}/kg` : "-/kg"}</p>
             </div>
             <div>
-              <p className="text-[var(--hw-neutral-900)]">Cost to recover</p>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>
               <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover != null ? `₱${costToRecover}/kg` : "-/kg"}</p>
             </div>
             <div className="col-span-2">
-              <p className="text-[var(--hw-neutral-900)]">Estimated farmgate price</p>
-              {hasFarmgate ? <p className="font-medium text-[var(--hw-neutral-900)]">₱{data.farmgatePrice}/kg</p> : <p className="text-[var(--hw-neutral-900)] italic">Not set — using market price as reference.</p>}
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")}</p>
+              {hasFarmgate ? <p className="font-medium text-[var(--hw-neutral-900)]">₱{data.farmgatePrice}/kg</p> : <p className="text-[var(--hw-neutral-900)] italic">{t("farmer.factors.profitability.not_set_reference", {}, "Not set — using market price as reference.")}</p>}
             </div>
           </div>
 
-          <p className="text-[12px] text-[var(--hw-neutral-900)]">Estimate only. Actual income may change.</p>
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may change.")}</p>
         </div>
 
-        {
-    /* 3. What to do next */
-  }
+        {/* 4. What to do next */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">What to do next</p>
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.actions.monitoring.next_steps_title", {}, "What to do next")}</p>
           <div className="space-y-2.5">
-            {[
-    "Save to My Crops to start tracking your plan and monitoring conditions.",
-    hasFarmgate ? "Confirm your farmgate price with your buyer before harvest." : "Update your farmgate price later when a buyer gives you an offer.",
-    "Check prices again closer to harvest before deciding when to sell."
-  ].map((text, i) => <div key={i} className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">{i + 1}</p>
-                </div>
-                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{text}</p>
-              </div>)}
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">1</p>
+              </div>
+              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
+                {renderComposedMessage(composedAction, langCode, t("farmer.actions.monitoring.save_plan_instruction", {}, "Save to My Crops to start tracking your plan and monitoring conditions."))}
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">2</p>
+              </div>
+              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
+                {hasFarmgate
+                  ? t("farmer.actions.monitoring.confirm_farmgate", {}, "Confirm your farmgate price with your buyer before harvest.")
+                  : t("farmer.actions.monitoring.update_farmgate", {}, "Update your farmgate price later when a buyer gives you an offer.")}
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">3</p>
+              </div>
+              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
+                {t("farmer.actions.monitoring.check_prices_near_harvest", {}, "Check prices again closer to harvest before deciding when to sell.")}
+              </p>
+            </div>
           </div>
         </div>
 
-        {
-    /* 5. Actions */
-  }
+        {/* 5. Actions */}
         <div className="space-y-3 pt-1">
           {saveError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{saveError}</p>}
           <button
-    onClick={handleSavePlan}
-    disabled={saving}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-            <Save className="w-4 h-4" />{saving ? "Saving..." : "Save to My Crops"}
+            onClick={handleSavePlan}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save className="w-4 h-4" />{saving ? t("farmer.common.saving", {}, "Saving...") : t("farmer.crops.save_to_crops", {}, "Save to My Crops")}
           </button>
           <button
-    onClick={() => setShowPlantedForm(true)}
-    disabled={saving}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-            <Sprout className="w-4 h-4" />I already planted this
+            onClick={() => setShowPlantedForm(true)}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Sprout className="w-4 h-4" />{t("farmer.crops.already_planted", {}, "I already planted this")}
           </button>
           <button
-    onClick={() => navigate("/farmer/assess")}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-neutral-900)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-            <RefreshCw className="w-4 h-4" />Compare another crop
+            onClick={() => navigate("/farmer/assess")}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-neutral-900)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />{t("farmer.crops.compare_another", {}, "Compare another crop")}
           </button>
         </div>
 
         <div className="flex items-start gap-2 text-[var(--hw-neutral-900)]">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <p className="text-[13px]">Results are estimates and do not guarantee income.</p>
+          <p className="text-[13px]">{t("farmer.common.disclaimer", {}, "Results are estimates and do not guarantee income.")}</p>
         </div>
 
     </div>;

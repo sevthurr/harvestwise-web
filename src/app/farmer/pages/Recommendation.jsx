@@ -20,13 +20,6 @@ import {
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
-import {
-  FactorDetailTabs,
-  buildPricePoints,
-  getArrivalData,
-  getProductionData,
-  getWeatherData
-} from "../components/shared/FactorDetailTabs";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
@@ -177,7 +170,15 @@ function buildRecommendations(pricesData) {
   });
   return crops.slice(0, 3);
 }
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_LABELS = [
+  { key: "farmer.calendar.days.sun", fallback: "Sun" },
+  { key: "farmer.calendar.days.mon", fallback: "Mon" },
+  { key: "farmer.calendar.days.tue", fallback: "Tue" },
+  { key: "farmer.calendar.days.wed", fallback: "Wed" },
+  { key: "farmer.calendar.days.thu", fallback: "Thu" },
+  { key: "farmer.calendar.days.fri", fallback: "Fri" },
+  { key: "farmer.calendar.days.sat", fallback: "Sat" }
+];
 const MONTH_NAMES = [
   "January",
   "February",
@@ -236,6 +237,7 @@ const _weatherNote = (type, info, t) => {
   return t("farmer.calendar.weather_note_fair", { temps });
 };
 const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) => {
+  const { t } = useLanguage();
   const today = /* @__PURE__ */ new Date();
   const isNow = today.getFullYear() === year && today.getMonth() + 1 === month;
   const todayDay = isNow ? today.getDate() : -1;
@@ -249,7 +251,7 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
   while (cells.length % 7 !== 0) cells.push(null);
   return <>
       <div className="grid grid-cols-7 mb-1">
-        {DAY_LABELS.map((d) => <div key={d} className="text-center text-[12px] font-semibold text-[var(--hw-neutral-700)] py-1">{d}</div>)}
+        {DAY_LABELS.map((d) => <div key={d.key} className="text-center text-[12px] font-semibold text-[var(--hw-neutral-700)] py-1">{t(d.key, {}, d.fallback)}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-y-1">
         {cells.map((day, i) => {
@@ -404,158 +406,63 @@ const CropCard = ({ crop, onViewDetail }) => {
         </div>}
     </div>;
 };
-function extractPrice(text) {
-  if (!text) return 0;
-  const m = text.match(/₱(\d+(?:\.\d+)?)/);
-  return m ? parseFloat(m[1]) : 0;
-}
-function priceTrend(text) {
-  if (!text) return "none";
-  const lower = text.toLowerCase();
-  if (lower.includes("up") || lower.includes("rising")) return "rising";
-  if (lower.includes("falling") || lower.includes("down")) return "falling";
-  if (lower.includes("stable")) return "stable";
-  return "none";
-}
-function makeSparkline(basePrice, trend) {
-  const points = [];
-  let current = basePrice;
-  const slope = trend === "rising" ? -0.6 : trend === "falling" ? 0.6 : 0;
-  for (let i = 6; i >= 0; i--) {
-    const variance = (Math.random() - 0.5) * 4;
-    current = basePrice + slope * i + variance;
-    points.unshift({ day: 7 - i, price: Math.max(1, Math.round(current)) });
-  }
-  points[6].price = basePrice;
-  return points;
-}
-function extractSupplyVolumes(text) {
-  if (!text) return { thisWeek: 0, lastWeek: 0 };
-  const nums = [...text.matchAll(/(\d+(?:\.\d+)?)\s*ton/gi)].map((m) => parseFloat(m[1]));
-  if (nums.length >= 2) return { thisWeek: nums[0], lastWeek: nums[1] };
-  if (nums.length === 1) return { thisWeek: nums[0], lastWeek: nums[0] };
-  return { thisWeek: 0, lastWeek: 0 };
-}
-function productionLevel(text) {
-  if (!text) return "none";
-  const lower = text.toLowerCase();
-  if (lower.includes("peak") || lower.includes("high")) return "high";
-  if (lower.includes("moderate") || lower.includes("usual")) return "moderate";
-  if (lower.includes("low")) return "low";
-  return "none";
-}
-function weatherRisk(text) {
-  if (!text) return "none";
-  const lower = text.toLowerCase();
-  if (lower.includes("no heavy") || lower.includes("dry") || lower.includes("suitable")) return "low";
-  if (lower.includes("heavy") || lower.includes("storm")) return "high";
-  if (lower.includes("caution") || lower.includes("moderate")) return "moderate";
-  return "none";
-}
 const CropDetailView = ({ crop, onBack }) => {
   const navigate = useNavigate();
-  const priceReason = crop.reasons.find((r) => r.label === "Price");
-  const supplyReason = crop.reasons.find((r) => r.label === "Supply");
-  const productionReason = crop.reasons.find((r) => r.label === "Production");
-  const weatherReason = crop.reasons.find((r) => r.label === "Weather");
-  const basePrice = extractPrice(priceReason?.text ?? "");
-  const trend = priceTrend(priceReason?.text ?? "");
-  const actualPoints = makeSparkline(basePrice, trend).map((p, i) => ({
-    label: i === 0 ? "7d ago" : i === 6 ? "Today" : `Day ${i + 1}`,
-    price: p.price
-  }));
-  const pricePoints = buildPricePoints(
-    actualPoints.map((p) => ({ label: p.label, price: p.price })),
-    basePrice,
-    trend,
-    Math.round(basePrice * 0.96),
-    Math.round(basePrice * 1.08),
-    7
-  );
-  const priceTabData = {
-    currentPrice: basePrice,
-    previousPrice: actualPoints[0].price,
-    market: "DFTC",
-    direction: trend,
-    directionLabel: trend === "rising" ? "Price may rise" : trend === "falling" ? "Price may fall" : "Price likely stable",
-    forecastRange: `\u20B1${Math.round(basePrice * 0.96)}\u2013\u20B1${Math.round(basePrice * 1.08)}/kg`,
-    points: pricePoints,
-    summary: priceReason?.text ?? ""
-  };
-  const { thisWeek, lastWeek } = extractSupplyVolumes(supplyReason?.text ?? "");
-  const arrivalTabData = getArrivalData(crop.id, supplyReason?.text);
-  Object.assign(arrivalTabData, {
-    thisWeek,
-    lastWeek,
-    trend: thisWeek < lastWeek ? "lower" : thisWeek > lastWeek ? "higher" : "same"
-  });
-  const prodLevel = productionLevel(productionReason?.text ?? "");
-  const prodTabData = getProductionData(crop.id);
-  Object.assign(prodTabData, { level: prodLevel, summary: productionReason?.text ?? prodTabData.summary });
-  const wRisk = weatherRisk(weatherReason?.text ?? "");
-  const weatherTabData = getWeatherData(wRisk, crop.name);
-  if (weatherReason?.text) weatherTabData.summary = weatherReason.text;
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-        {/* Breadcrumb */}
-        <Breadcrumb
-    items={[
-      { label: "Crop Calendar", onClick: onBack },
-      { label: "Good Crops to Plant", onClick: onBack },
-      { label: crop.name }
-    ]}
-  />
+  const { t } = useLanguage();
 
-        {
-    /* Crop header */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-          <div className="flex items-start gap-4">
-            <CommodityIllustration commodityId={crop.id} className="w-16 h-16 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{crop.name}</h1>
-              <p className="text-[14px] text-[var(--hw-neutral-900)] mt-0.5">{crop.summary}</p>
-              <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2">
-                <div>
-                  <span className="text-[12px] text-[var(--hw-neutral-900)] font-medium">Plant window</span>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{crop.plantWindow}</p>
-                </div>
-                <div>
-                  <span className="text-[12px] text-[var(--hw-neutral-900)] font-medium">Harvest window</span>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{crop.harvestWindow}</p>
-                </div>
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      {/* Breadcrumb */}
+      <Breadcrumb
+        items={[
+          { label: t("farmer.calendar.title", {}, "Crop Calendar"), onClick: onBack },
+          { label: crop.name }
+        ]}
+      />
+
+      {/* Crop header */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
+        <div className="flex items-start gap-4">
+          <CommodityIllustration commodityId={crop.id} className="w-16 h-16 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{crop.name}</h1>
+            <p className="text-[14px] text-[var(--hw-neutral-700)] mt-0.5">{crop.summary}</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2">
+              <div>
+                <span className="text-[12px] text-[var(--hw-neutral-700)] font-medium">Plant window</span>
+                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{crop.plantWindow}</p>
+              </div>
+              <div>
+                <span className="text-[12px] text-[var(--hw-neutral-700)] font-medium">Harvest window</span>
+                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{crop.harvestWindow}</p>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {
-    /* Detailed factor tabs — inline, no Profitability (no crop plan in this context) */
-  }
-        <div>
-          <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)] mb-3">Detailed Factors</h2>
-          <FactorDetailTabs
-    price={priceTabData}
-    arrival={arrivalTabData}
-    production={prodTabData}
-    weather={weatherTabData}
-    defaultTab="price"
-    commodityId={crop.id}
-    commodityName={crop.name}
-  />
+      {/* Future Context Informational Card — Deferred Analytics Notice */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
+        <div className="flex items-center gap-2 text-[var(--hw-green-800)] font-semibold text-base">
+          <Sprout className="w-5 h-5 text-[var(--hw-green-700)]" />
+          <span>{t("farmer.calendar.labels.reassess_control", {}, "Assess Again Closer to Planting")}</span>
         </div>
-
-        {
-    /* CTA */
-  }
+        <p className="text-sm text-[var(--hw-neutral-700)] leading-relaxed">
+          {t("farmer.calendar.fallbacks.calendar_unavailable_generic", {}, "Calendar information is not available right now.")}
+        </p>
+        <p className="text-xs text-[var(--hw-neutral-600)]">
+          {t("farmer.factors.production.assess_callout_desc", {}, "Review the full planting assessment for this commodity")}
+        </p>
         <button
-    onClick={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
-    className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-          Assess this crop
+          onClick={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
+        >
+          {t("farmer.factors.production.assess_now_btn", {}, "Assess now")}
           <ArrowRight className="w-4 h-4" />
         </button>
-
-    </div>;
+      </div>
+    </div>
+  );
 };
 function RecommendationPage() {
   const navigate = useNavigate();
@@ -631,11 +538,13 @@ function RecommendationPage() {
     [rawMarketEvents, cropPlansData, weatherForecastList, viewYear, viewMonth]
   );
 
+  const { t } = useLanguage();
   const crops = useMemo(() => buildRecommendations(pricesListData), [pricesListData]);
   
   const key = monthKey(viewYear, viewMonth);
   const dayMarkers = calendarData[key] ?? {};
-  const monthName = MONTH_NAMES[viewMonth - 1];
+  const rawMonthName = MONTH_NAMES[viewMonth - 1];
+  const monthName = t(`farmer.calendar.months.${rawMonthName.toLowerCase()}`, {}, rawMonthName);
   const selMarkers = selectedDay !== null ? dayMarkers[selectedDay] ?? null : null;
   const showDetail = selMarkers !== null && hasAnyMarker(selMarkers);
   const prevMonth = () => {
@@ -714,10 +623,10 @@ function RecommendationPage() {
         {/* ── Header ── */}
         <div>
           <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-            Crop Calendar
+            {t("farmer.calendar.page_title", {}, "Crop Calendar")}
           </h1>
           <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-            Track crop schedules and harvest timing.
+            {t("farmer.calendar.page_subtitle", {}, "Track crop schedules and harvest timing.")}
           </p>
         </div>
 

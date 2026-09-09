@@ -245,24 +245,30 @@ const ARRIVAL_BANNER_CFG = {
     color: "text-emerald-700",
     bg: "bg-emerald-50",
     border: "border-emerald-200",
+    labelKey: "farmer.factors.arrival.level_low",
+    descKey: "farmer.factors.arrival.meaning_low",
     label: "Low Arrival Pressure",
-    desc: "Supply is decreasing \u2014 lower market volume can support higher prices."
+    desc: "Supply is decreasing — lower market volume can support higher prices."
   },
   same: {
     Icon: Minus,
     color: "text-amber-700",
     bg: "bg-amber-50",
     border: "border-amber-200",
+    labelKey: "farmer.factors.arrival.level_moderate",
+    descKey: "farmer.factors.arrival.meaning_moderate",
     label: "Moderate Arrival Pressure",
-    desc: "Arrival volume is stable \u2014 balanced supply and price conditions."
+    desc: "Arrival volume is stable — balanced supply and price conditions."
   },
   higher: {
     Icon: TrendingUp,
     color: "text-red-700",
     bg: "bg-red-50",
     border: "border-red-200",
+    labelKey: "farmer.factors.arrival.level_high",
+    descKey: "farmer.factors.arrival.meaning_high",
     label: "High Arrival Pressure",
-    desc: "Supply is increasing \u2014 higher volume may push prices down."
+    desc: "Supply is increasing — higher volume may push prices down."
   }
 };
 function getProfitBanner(profitPerKg) {
@@ -271,6 +277,8 @@ function getProfitBanner(profitPerKg) {
     color: "text-emerald-700",
     bg: "bg-emerald-50",
     border: "border-emerald-200",
+    labelKey: "farmer.factors.profitability.favorable_label",
+    descKey: "farmer.factors.profitability.favorable_desc",
     label: "Profitable",
     desc: "Current prices offer a good margin above your break-even cost."
   };
@@ -279,14 +287,18 @@ function getProfitBanner(profitPerKg) {
     color: "text-amber-700",
     bg: "bg-amber-50",
     border: "border-amber-200",
+    labelKey: "farmer.factors.profitability.marginal_label",
+    descKey: "farmer.factors.profitability.marginal_desc",
     label: "Marginal",
-    desc: "Current prices are close to your break-even \u2014 low profit margin."
+    desc: "Current prices are close to your break-even — low profit margin."
   };
   return {
     Icon: AlertOctagon,
     color: "text-red-700",
     bg: "bg-red-50",
     border: "border-red-200",
+    labelKey: "farmer.factors.profitability.unfavorable_label",
+    descKey: "farmer.factors.profitability.unfavorable_desc",
     label: "Not Favorable",
     desc: "Prices are below your cost to recover. Selling now would result in a loss."
   };
@@ -459,7 +471,7 @@ const ArrivalTab = ({ data, commodityId }) => {
       {/* Arrival Volume Sources Breakdown */}
       <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
         <div>
-          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Arrival Volume by Source</p>
+          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.arrival.source_breakdown_title")}</p>
           <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.arrival.source_breakdown_subtitle")}</p>
         </div>
         <ArrivalSourcePieChart data={data?.sources} height={190} />
@@ -467,7 +479,7 @@ const ArrivalTab = ({ data, commodityId }) => {
 
       {/* What this means */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means")}</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{data.summary}</p>
       </div>
     </div>;
@@ -550,7 +562,7 @@ const ProductionTab = ({ data }) => {
 
       {/* Summary */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means")}</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
           {hasData ? data.summary : t("farmer.empty.no_production_data")}
         </p>
@@ -691,7 +703,7 @@ const WeatherTab = ({ data, commodityName }) => {
 
       {/* Recommended actions */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Recommended Actions</p>
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t("farmer.factors.weather.recommended_actions_title")}</p>
         {actions.length > 0 ? <div className="space-y-1.5">
             {actions.map((action, i) => <div key={i} className="flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
@@ -703,7 +715,7 @@ const WeatherTab = ({ data, commodityName }) => {
 
       {/* What this means */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means")}</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{summary}</p>
         <p className="text-[11px] text-[var(--hw-neutral-900)] italic mt-1">Source: Open-Meteo · Forecast is a guide only.</p>
       </div>
@@ -796,8 +808,8 @@ const ProfitabilityTab = ({ data }) => {
       {data.expenses && data.expenses.length > 0 && (
         <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
           <div>
-            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">Detailed Cost Breakdown</p>
-            <p className="text-[11px] text-[var(--hw-neutral-600)]">Itemized expenses entered for this planting cycle.</p>
+            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.detailed_cost_breakdown_title")}</p>
+            <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.profitability.detailed_cost_breakdown_subtitle")}</p>
           </div>
           <CostBreakdownPieChart expenses={data.expenses} height={200} />
         </div>
@@ -807,18 +819,18 @@ const ProfitabilityTab = ({ data }) => {
     /* Summary */
   }
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">What this means</p>
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means")}</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{data.summary}</p>
         <p className="text-[11px] text-[var(--hw-neutral-900)] italic mt-1">Estimate only. Actual income may vary.</p>
       </div>
     </div>;
 };
 const TAB_CONFIG = [
-  { id: "price", label: "Price", Icon: TrendingUp },
-  { id: "arrival", label: "Arrival", Icon: Package },
-  { id: "production", label: "Production", Icon: Leaf },
-  { id: "weather", label: "Weather", Icon: Cloud },
-  { id: "profitability", label: "Profitability", Icon: PhilippinePeso }
+  { id: "price", labelKey: "farmer.factors.price.factor_title", fallback: "Price", Icon: TrendingUp },
+  { id: "arrival", labelKey: "farmer.factors.arrival.factor_title", fallback: "Arrival", Icon: Package },
+  { id: "production", labelKey: "farmer.factors.production.factor_title", fallback: "Production", Icon: Leaf },
+  { id: "weather", labelKey: "farmer.factors.weather.factor_title", fallback: "Weather", Icon: Cloud },
+  { id: "profitability", labelKey: "farmer.factors.profitability.factor_title", fallback: "Profitability", Icon: PhilippinePeso }
 ];
 const FactorDetailTabs = ({
   price,
@@ -830,15 +842,14 @@ const FactorDetailTabs = ({
   commodityId,
   commodityName
 }) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState(defaultTab);
   const visibleTabs = TAB_CONFIG.filter(
     (t) => t.id !== "profitability" || profitability != null
   );
   const safeTab = visibleTabs.some((t) => t.id === activeTab) ? activeTab : visibleTabs[0].id;
   return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-      {
-    /* Tab bar */
-  }
+      {/* Tab bar */}
       <div className="flex overflow-x-auto border-b border-[var(--hw-neutral-200)]" style={{ scrollbarWidth: "none" }}>
         {visibleTabs.map((tab) => {
     const Icon = tab.Icon;
@@ -849,7 +860,7 @@ const FactorDetailTabs = ({
       className={`flex items-center gap-1.5 px-4 py-3 text-[13px] font-medium border-b-2 flex-shrink-0 transition-colors ${isActive ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] bg-[var(--hw-green-50)]" : "border-transparent text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
     >
               <Icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
+              <span>{t(tab.labelKey, {}, tab.fallback)}</span>
             </button>;
   })}
       </div>

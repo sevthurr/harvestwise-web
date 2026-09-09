@@ -1,3 +1,17 @@
+import { farmer as modularFarmer } from './en/farmer/index.js';
+
+function deepMerge(target, source) {
+  const result = { ...target };
+  for (const key of Object.keys(source || {})) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      result[key] = deepMerge(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+
 export const en = {
   common: {
     app_name: "HarvestWise",
@@ -89,7 +103,7 @@ export const en = {
     barangay: "Barangay",
     farm_size: "Farm Size"
   },
-  farmer: {
+  farmer: deepMerge({
     dashboard_title: "Farmer Dashboard",
     welcome_back: "Welcome back, {name}",
     today_price_trends: "Today's Price Trends",
@@ -217,6 +231,14 @@ export const en = {
 
       profitability: {
         cost_to_recover_label: "Break-even cost (to recover)",
+        cost_to_recover_short_label: "Cost to recover",
+        expected_harvest_volume_label: "Expected harvest volume",
+        total_estimated_cost_label: "Total estimated cost",
+        price_basis_used_label: "Price basis used",
+        price_basis_per_kg_label: "Price basis (per kg)",
+        estimated_profit_per_kg_label: "Estimated profit per kg",
+        detailed_cost_breakdown_title: "Detailed Cost Breakdown",
+        detailed_cost_breakdown_subtitle: "Itemized expenses entered for this planting cycle.",
         summary_positive: "At ₱{selling_price}/kg, you may earn around ₱{margin}/kg above your cost to recover. Total estimated profit: ₱{total_profit}.",
         summary_negative: "Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.",
         forecast_reference_notice: "Using forecasted price as reference. Actual buyer price may be different.",
@@ -246,6 +268,7 @@ export const en = {
         insight_severe: "Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting for {crop_name} should be delayed until conditions improve.",
         insight_caution: "Mixed conditions are expected over the next 14 days — some rainy days and some dry windows. Plan farming activities for {crop_name} around the calmer days mid-forecast.",
         insight_suitable: "Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions — good for {crop_name}.",
+        recommended_actions_title: "Recommended Actions",
         actions: {
           clear_drainage: "Clear drainage before planting",
           avoid_heavy_rain: "Avoid planting during strong rain",
@@ -254,6 +277,7 @@ export const en = {
       },
 
       arrival: {
+        source_breakdown_title: "Arrival Volume by Source",
         source_breakdown_subtitle: "DFTC registered farms vs other supplying sources.",
         chart_subtitle_combined: "Combined Total by variety · Last 7 months · kg",
         driver_overview: "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases.",
@@ -358,6 +382,7 @@ export const en = {
     },
 
     empty: {
+      no_crops: "No tracked crops yet.",
       no_production_data: "Production data not available",
       no_weather_data: "No weather data available.",
       no_weather_advisory: "No crop-specific weather advisory available.",
@@ -376,7 +401,11 @@ export const en = {
 
     common: {
       crop_plan_saved_toast: "{displayName} has been {action_status}.",
-      crop_plan_saved_desc: "You can monitor and update it anytime in My Crops."
+      crop_plan_saved_desc: "You can monitor and update it anytime in My Crops.",
+      analyzing_plan: "Analyzing crop plan...",
+      see_advisory: "See advisory",
+      save_draft: "Save draft",
+      what_this_means: "What this means"
     },
 
     errors: {
@@ -385,5 +414,5 @@ export const en = {
       fetch_production_failed: "Failed to fetch seasonal production data",
       fetch_planting_guide_failed: "Failed to fetch planting guide recommendations"
     }
-  }
+  }, modularFarmer)
 };

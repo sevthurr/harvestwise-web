@@ -1,3 +1,17 @@
+import { farmer as modularFarmer } from './ceb/farmer/index.js';
+
+function deepMerge(target, source) {
+  const result = { ...target };
+  for (const key of Object.keys(source || {})) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      result[key] = deepMerge(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+
 export const ceb = {
   common: {
     app_name: "HarvestWise",
@@ -89,7 +103,7 @@ export const ceb = {
     barangay: "Barangay",
     farm_size: "Gidak-on sa Uma"
   },
-  farmer: {
+  farmer: deepMerge({
     dashboard_title: "Dashboard sa Mag-uuma",
     welcome_back: "Maayong pagbalik, {name}",
     today_price_trends: "Dagan sa Presyo Karong Adlawa",
@@ -135,6 +149,228 @@ export const ceb = {
       cycle_avoid_support: "Ikonsiderar ang paghulat sa dili pa mopadayon sa dugang pagtanom.",
       not_available: "Wala pa ang resulta sa assessment.",
       why_recommendation_title: "Ngano kini nga tambag?"
+    },
+
+    phases: {
+      planning: "Pagplano",
+      on_hold: "Gipugngan",
+      planted: "Gitanom",
+      growing: "Nagtubo",
+      pre_harvest: "Hapit Na Anihon",
+      harvesting: "Naga-ani",
+      harvested: "Naani Na",
+      completed: "Nahuman Na"
+    },
+
+    cropCard: {
+      harvest_label: "Pag-ani",
+      current_price_label: "Karon nga presyo",
+      sold_at_label: "Gibaligya sa",
+      estimated_profit_label: "Gibanabana nga Ginansya",
+      view_crop_btn: "Tan-awa ang tanom",
+      resume_when_improved: "Ipadayon kung moarang-arang ang merkado",
+      cycle_completed: "Nahuman na ang siklo sa tanom",
+      price_label: "Presyo",
+      weather_label: "Panahon",
+      market_label: "Merkado",
+      duration_label: "Gidugayon",
+      view_details_btn: "Tan-awa ang mga detalye",
+      view_guide_btn: "Tan-awa ang giya",
+      monitor_btn: "Bantayi",
+      assess_btn: "Susiha",
+      saved_label: "Naka-save",
+      last_updated_label: "Katapusang gibag-o",
+      recommended_reason: "Paborable ang merkado ug kahimtang sa panahon.",
+      caution_reason: "Mag-amping ug bantayan ang pagbag-o sa presyo.",
+      avoid_reason: "Daghan ang suplay sa merkado o taas ang risgo sa panahon.",
+      harvest_in_days: "Anihon sa sulod sa {days} ka adlaw",
+      harvest_today: "Anihon karong adlawa",
+      harvest_overdue: "Ang ani gilauman {days} ka adlaw ang milabay",
+      estimated_profit_value: "Gibanabana nga kita: ₱{amount}",
+      price_per_kg: "₱{price}/kg",
+      updated_at: "Gibag-o {date}"
+    },
+
+    monitoring: {
+      action_planning_1: "Susiha ang panahon sa dili pa magtanom.",
+      action_planning_2: "Subaya ang gitagnang presyo ug imong gibanabanang kita.",
+      action_planning_3: "Andama ang kanal, trabahante, ug abono daan.",
+      action_growing_1: "Susiha ang kanal ug kahimtang sa tanom.",
+      action_growing_2: "I-update ang dugang gasto kung adunay bag-ong gipalit.",
+      action_growing_3: "Bantayi ang panahon ug mga pagbag-o sa presyo.",
+      action_pre_harvest_1: "Susiha ang karon nga presyo ug ang 7 ka adlaw nga tagna.",
+      action_pre_harvest_2: "I-update ang presyo sa umahan kung naay tanyag ang komprador.",
+      action_pre_harvest_3: "Andama ang mga mang-ani ug transportasyon.",
+      action_harvested_1: "Itandi ang presyo sa merkado ug presyo sa komprador.",
+      action_harvested_2: "Panalipdi ang naani gikan sa ulan ug kaumog.",
+      action_harvested_3: "Irekord ang tinuod nga gidaghanon sa ani ug presyo sa pagbaligya.",
+      action_completed_1: "Irekord ang katapusang gidaghanon sa ani ug presyo sa pagbaligya.",
+      action_completed_2: "Subaya ang imong ginansya o alkanse niini nga siklo.",
+      action_completed_3: "I-save ang mga nota alang sa sunod nimong pagtanom.",
+      action_on_hold_1: "Susiha pag-usab ang kahimtang sa merkado sa dili pa ipadayon.",
+      action_on_hold_2: "Susiha kung mitaas ba ang presyo karon.",
+      action_on_hold_3: "I-update ang imong gilaumang gasto kung nausab ang presyo sa mga gamit."
+    },
+
+    factors: {
+      price: {
+        trend_label_rising: "Posibleng mosaka ang presyo",
+        trend_label_falling: "Posibleng mous-os ang presyo",
+        trend_label_stable: "Lagmit lig-on ang presyo",
+        recent_avg_label: "Bag-ong kasagaran",
+        forecast_label: "Tagna",
+        range_label: "Gidak-on sa presyo",
+        forecast_reference_range: "Giya sa gitagnang presyo: ₱{forecast_lo}–₱{forecast_hi}/kg",
+        dual_stronger_bangkerohan: "Ang duha ka merkado {direction}. Mas kusog ang gilaumang lihok sa Bangkerohan.",
+        dual_stronger_dftc: "Ang duha ka merkado {direction}. Mas kusog ang gilaumang lihok sa DFTC.",
+        dual_similar: "Ang duha ka merkado {direction}. Susama ang gilaumang lihok.",
+        dual_divergent: "Ang presyo sa Bangkerohan kay {b_trend}, samtang sa DFTC kay {d_trend}.",
+        driver_overview: "Kadaghanan sa mga presyo nagpabiling lig-on. Ang Sibuyas, Luya, ug Okra nagsaka. Ang Repolyo, Bawang, ug Pechay nag-us-os."
+      },
+
+      profitability: {
+        cost_to_recover_label: "Gasto aron makabawi (break-even)",
+        cost_to_recover_short_label: "Gasto aron makabawi",
+        expected_harvest_volume_label: "Gilaom nga gidaghanon sa ani",
+        total_estimated_cost_label: "Gibanabanang kinatibuk-ang gasto",
+        price_basis_used_label: "Gigamit nga basehan sa presyo",
+        price_basis_per_kg_label: "Basehan sa presyo (kada kg)",
+        estimated_profit_per_kg_label: "Tantiya sa kita kada kg",
+        detailed_cost_breakdown_title: "Detalyadong Pagkabahin sa Gasto",
+        detailed_cost_breakdown_subtitle: "Mga detalyadong gasto nga gisulod para niining pagtanom.",
+        summary_positive: "Sa ₱{selling_price}/kg, mahimong mokita ka og mga ₱{margin}/kg labaw sa gasto aron makabawi. Kinatibuk-ang gibanabanang kita: ₱{total_profit}.",
+        summary_negative: "Ang kasamtangang presyo lagmit dili makatabon sa imong gasto aron makabawi. Hunahunaa ang pagbag-o sa gasto o paghulat sa mas maayong presyo.",
+        forecast_reference_notice: "Gigamit ang gitagnang presyo isip giya. Ang tinuod nga presyo sa komprador mahimong lahi.",
+        calc_accordion_title: "Giunsa kini pagkalkula?"
+      },
+
+      weather: {
+        page_subtitle: "Tan-awa kon sa unsang paagi makaapekto ang panahon sa imong gitanom.",
+        page_title: "Panahon",
+        summary_headline: "7-adlaw nga kaangayan sa panahon: {risk_level}",
+        source_open_meteo_notice: "Gikan sa: Open-Meteo · Ang tagna giya lamang.",
+        crop_advisories_title: "Mga pahimangno sa panahon alang sa tanom",
+        forecast_title: "Tagna sa panahon",
+        forecast_14day_title: "14-Adlaw nga Tagna",
+        suitability_label: "Kaangayan",
+        suitability_suitable: "Angay",
+        suitability_caution: "Pag-amping",
+        suitability_severe: "Peligroso",
+        rain_chance_note: "· % = kahigayonan sa ulan",
+        risk_level_label: "Ang-ang sa risgo",
+        forecast_fallback_davao: "7-adlaw nga tagna sa panahon alang sa Davao City",
+        fallback_location: "Davao City",
+        insight_label: "Huna-huna sa Panahon · {location}",
+        unknown_time: "Wala mahibal-i",
+        today_day_label: "Karon",
+        day_offset_label: "+{days}d",
+        insight_severe: "Kusog nga ulan ug posibleng unos ang gitagna sa umaabot nga mga adlaw. Ang trabaho sa uma ug pagtanom sa {crop_name} angay i-oktaba hangtod moarang-arang ang kahimtang.",
+        insight_caution: "Nagkadaiyang kahimtang ang gilauman sa sunod 14 ka adlaw — dunay mga adlaw nga ting-ulan ug dunay mga adlaw nga uga. Planoha ang buluhaton sa uma alang sa {crop_name} sa mas kalmadong mga adlaw.",
+        insight_suitable: "Kasagaran paborable ang panahon sa sunod 14 ka adlaw. Kasagaran uga nga may panalagsang dag-om — maayo alang sa {crop_name}.",
+        recommended_actions_title: "Girekomendar nga mga Aksyon",
+        actions: {
+          clear_drainage: "Hawanig tarong ang kanal sa dili pa magtanom",
+          avoid_heavy_rain: "Likayi ang pagtanom panahon sa kusog nga ulan",
+          protect_harvest: "Panalipdi ang naani gikan sa kaumog"
+        }
+      },
+
+      arrival: {
+        source_breakdown_title: "Gidaghanon sa Pag-abot Base sa Tinubdan",
+        source_breakdown_subtitle: "DFTC rehistradong umahan batok sa ubang tinubdan.",
+        chart_subtitle_combined: "Tibuok gidaghanon kada klase · Miaging 7 ka bulan · kg",
+        driver_overview: "Ang mga pag-abot sa DFTC mas taas kaysa bag-o nilang lebel sa kadaghanang pananom. Ang Repolyo ug Bawang ang nagpakita sa kinadak-ang pagsaka.",
+        bangkerohan_unverified_notice: "Walay napamatud-ang datos sa gidaghanon sa pag-abot sa Bangkerohan."
+      },
+
+      production: {
+        driver_overview: "Daghan pang umahan sa Rehiyon sa Davao ang posibleng magsugod sa pag-ani sa umaabot nga mga semana, nga makadugang sa suplay sa merkado.",
+        page_title: "Pana-panahong Produksiyon",
+        page_subtitle: "Tan-awa ang nangaging sumbanan sa pana-panahong produksiyon nga gigamit isip rehiyonal nga konteksto.",
+        pressure_label: "Presyur sa Produksiyon: {level}",
+        what_this_means_title: "Unsa ang buot ipasabot niini",
+        suggested_action_title: "Gisugyot nga lakang",
+        insight_headline_high: "Ang nangaging produksiyon sa {name} sa {quarter_label} ({quarter_range}) nag-average og {avg} ka tonelada sa {location}.",
+        meaning_high: "Mas daghang {name} ang kasagarang maprodyus niini nga kwarter, nga posibleng makapadaghan sa suplay duol sa ting-ani.",
+        action_high: "Base sa nangaging produksiyon, kon ang imong ani mahulog sa {quarter}, hunahunaa ang pagsusi sa luna o eskedyul sa pagtanom. Subaya ang tibuok pagtimbang-timbang alang sa kompleto nga hulagway.",
+        insight_headline_low: "Ang nangaging produksiyon sa {name} sa {quarter_label} ({quarter_range}) ubos sa naandan niini nga lebel sa {location}.",
+        meaning_low: "Ang pana-panahong presyur sa suplay gikan sa produksiyon mahimong mas ubos niini nga kwarter.",
+        action_low: "Base sa nangaging produksiyon, mas ubos tingali ang presyur sa suplay. Kumpirmaha ang presyo ug panlantaw sa ginansya sa dili pa magtanom.",
+        insight_headline_normal: "Ang nangaging produksiyon sa {name} sa {quarter_label} ({quarter_range}) duol sa naandan niini nga lebel sa {location}.",
+        meaning_normal: "Walay timailhan sa kusog nga pana-panahong presyur sa produksiyon alang niini nga kwarter.",
+        action_normal: "Base sa nangaging produksiyon, walay kusog nga pana-panahong pasidaan. Subaya ang mga presyo, pag-abot, panahon, ug gasto sa dili pa magtanom.",
+        quarter_label: "Kwarter",
+        quarter_by_year_title: "{quarter} nga produksiyon kada tuig",
+        historical_from_location: "Nangaging produksiyon gikan sa {location}.",
+        chart_footnote_quarterly: "Bili sa tonelada · Mas itom nga bar = labing bag-ong tuig",
+        summary_selected_quarter: "Gipili nga kwarter",
+        summary_source_location: "Lokasyon sa gigikanan",
+        summary_10yr_avg: "10-ka-tuig nga average",
+        summary_highest: "Pinakataas nga narekord",
+        summary_lowest: "Pinakaubos nga narekord",
+        summary_pressure: "Presyur sa Produksiyon",
+        source_dist_title: "Distribusyon sa Tinubdan sa Produksiyon",
+        source_dist_subtitle: "Amot sa rehiyonal nga produksiyon (Davao City, Davao Del Sur, Bukidnon).",
+        quarterly_records_title: "Kwarterly nga talaan sa produksiyon",
+        badge_latest: "Pinakabag-o",
+        annual_pattern_title: "Tinuig nga sumbanan sa produksiyon",
+        annual_insight: "Ang produksiyon sa {name} pinakataas niadtong {year} sa {total} ka tonelada, diin ang {quarter} maoy may pinakadakong bahin sa {location}.",
+        annual_action: "Base sa nangaging produksiyon, subaya ang tibuok pagtimbang-timbang sa pagtanom aron makita kon giunsa pagdugtong ang produksiyon sa presyo sa merkado ug ubang mga hinungdan.",
+        annual_by_quarter_title: "Tinuig nga produksiyon kada kwarter",
+        chart_footnote_annual: "Bili sa tonelada · {location}",
+        annual_records_title: "Tinuig nga mga talaan sa produksiyon",
+        disclaimer_context: "Ang nangaging produksiyon naghatag lamang og pana-panahong konteksto ug dili kini nagtagna sa eksaktong gidaghanon nga maprodyus karong tuiga.",
+        source_psa: "Tinubdan: PSA OpenStat",
+        source_locations_note: "Default nga lokasyon: Davao City · Ubang magamit nga lokasyon: Davao del Sur ug Bukidnon",
+        coverage_note: "Kasangkaran: Kwarterly nga talaan sa produksiyon · Magamit nga mga tuig: 2016–kasamtangan",
+        last_updated_note: "Katapusang gibag-o: Hun 24, 2026",
+        assess_callout_title: "Susiha ang pagtimbang-timbang sa pagtanom",
+        assess_callout_desc: "Subaya ang tibuok pagtimbang-timbang sa pagtanom alang niini nga pananom",
+        assess_now_btn: "Timbang-timbanga karon"
+      }
+    },
+
+    calendar: {
+      driver_payday_detail: "Ang umaabot nga ting-sweldo makatabang sa pagpalit sa mga merkado karong semanaha.",
+      opportunity_payday_detail: "Ang mga panahon sa ting-sweldo kasagarang makatabang sa mas taas nga presyo sa tingi.",
+      weather_note_storm: "Kusog nga ulan nga may panugdog ug kilat ang gilauman{rain_mm}. Likayi ang pagtanom ug panalipdi ang naani.",
+      weather_note_heat: "Talagsaong init nga mga adlaw. Bisbisi ang mga tanom sayo sa buntag ug bantayi ang kaumog sa yuta.",
+      weather_note_rain: "Gilauman ang ulan{rain_mm}{rain_chance}. Hawani ang kanal sa dili pa magtanom.",
+      weather_note_fair: "Maayong kahimtang{temps}. Ang panahon angay alang sa mga buluhaton sa uma."
+    },
+
+    empty: {
+      no_crops: "Wala pa kay tanom nga nasubay.",
+      no_production_data: "Dili magamit ang datos sa produksiyon",
+      no_weather_data: "Walay datos sa panahon nga magamit.",
+      no_weather_advisory: "Walay pahimangno sa panahon alang niini nga tanom.",
+      no_planting_guide: "Walay giya sa pagtanom nga magamit.",
+      crop_not_found: "Wala makit-i ang tanom.",
+      commodity_not_found: "Wala makit-i ang pananom.",
+      profit_unavailable: "Dili pa magamit ang detalye sa ginansya.",
+      no_active_crop_plan: "Wala pa'y aktibong plano sa tanom karon."
+    },
+
+    dataNotes: {
+      market_data_as_of: "Base sa anaa nga datos sa merkado · {date}",
+      reliability_bangkerohan_moderate: "Kasarangang kasaligan base sa labing bag-ong talaan sa presyo sa Bangkerohan.",
+      reliability_pechay_low: "Ubos ang kasaligan. Walay datos sa DFTC Pag-abot; nagsalig lamang sa dagan sa presyo sa Bangkerohan."
+    },
+
+    common: {
+      crop_plan_saved_toast: "Ang {displayName} kay malampusong {action_status}.",
+      crop_plan_saved_desc: "Mahimo nimo kining bantayan ug bag-ohon bisan kanus-a sa Akong Tanom.",
+      analyzing_plan: "Gisusi ang plano sa tanom...",
+      see_advisory: "Tan-awa ang advisory",
+      save_draft: "I-save ang draft",
+      what_this_means: "Unsa ang buot ipasabot niini"
+    },
+
+    errors: {
+      save_plan_failed: "Napakyas sa pag-save sa plano sa tanom. Palihog sulayi pag-usab.",
+      fetch_weather_failed: "Napakyas sa pagkuha sa tagna sa panahon.",
+      fetch_production_failed: "Napakyas sa pagkuha sa datos sa produksiyon.",
+      fetch_planting_guide_failed: "Napakyas sa pagkuha sa mga rekomendasyon sa giya sa pagtanom."
     }
-  }
+  }, modularFarmer)
 };

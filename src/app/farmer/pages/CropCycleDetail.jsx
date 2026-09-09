@@ -20,6 +20,7 @@ import {
   Scale,
   PhilippinePeso
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useCrops } from "../components/crops/CropsContext";
 import { PhasePill } from "../components/crops/CropCard";
@@ -27,39 +28,28 @@ import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
+import { apiPost, parseResponse } from "../../global/api";
 import {
   ADVISORY_CODES,
   PHASE_CODES,
   normalizeAdvisoryCode,
   normalizePhaseCode,
 } from "../utils/farmerCodes";
+import {
+  composeAdvisorySummary,
+  composeAdvisoryBadge,
+  composeAdvisoryAction,
+  renderComposedMessage,
+  normalizeLifecycleStage,
+} from "../utils/advisoryMessageComposer";
 
 const ADVISORY_CFG = {
-  [ADVISORY_CODES.RECOMMENDED]: { Icon: CheckCircle2, color: "text-emerald-700", border: "border-[var(--hw-neutral-200)]", label: "Recommended" },
-  [ADVISORY_CODES.PROCEED_WITH_CAUTION]: { Icon: AlertTriangle, color: "text-amber-700", border: "border-[var(--hw-neutral-200)]", label: "Proceed with Caution" },
-  [ADVISORY_CODES.AVOID_FOR_NOW]: { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]", label: "Avoid for Now" }
-};
-
-function getAdvisory(phase, currentPrice, costToRecover) {
-  const phaseCode = normalizePhaseCode(phase);
-  if (phaseCode === PHASE_CODES.COMPLETED) return ADVISORY_CODES.RECOMMENDED;
-  if (currentPrice == null || costToRecover == null) return null;
-  const margin = currentPrice - costToRecover;
-  if (margin >= 20) return ADVISORY_CODES.RECOMMENDED;
-  if (margin >= 5) return ADVISORY_CODES.PROCEED_WITH_CAUTION;
-  return ADVISORY_CODES.AVOID_FOR_NOW;
-}
-
-const ADVISORY_SUMMARY = {
-  [ADVISORY_CODES.RECOMMENDED]: (name, t) => t ? t("farmer.advisory.cycle_recommended_summary", { crop_name: name }) : `Current conditions support your ${name} plan.`,
-  [ADVISORY_CODES.PROCEED_WITH_CAUTION]: (name, t) => t ? t("farmer.advisory.cycle_caution_summary", { crop_name: name }) : `Your ${name} plan is possible, but monitor conditions and price changes.`,
-  [ADVISORY_CODES.AVOID_FOR_NOW]: (name, t) => t ? t("farmer.advisory.cycle_avoid_summary", { crop_name: name }) : `Market price is below your cost to recover for ${name}.`
-};
-
-const ADVISORY_SUPPORT = {
-  [ADVISORY_CODES.RECOMMENDED]: (t) => t ? t("farmer.advisory.cycle_recommended_support") : "Prices are fair and weather is manageable this week.",
-  [ADVISORY_CODES.PROCEED_WITH_CAUTION]: (t) => t ? t("farmer.advisory.cycle_caution_support") : "Proceed with caution and monitor conditions closely.",
-  [ADVISORY_CODES.AVOID_FOR_NOW]: (t) => t ? t("farmer.advisory.cycle_avoid_support") : "Consider waiting before committing to further planting."
+  recommended: { Icon: CheckCircle2, color: "text-emerald-700", border: "border-[var(--hw-neutral-200)]" },
+  proceed_with_caution: { Icon: AlertTriangle, color: "text-amber-700", border: "border-[var(--hw-neutral-200)]" },
+  caution: { Icon: AlertTriangle, color: "text-amber-700", border: "border-[var(--hw-neutral-200)]" },
+  avoid_for_now: { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]" },
+  avoid: { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]" },
+  high_risk: { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]" },
 };
 
 const WEEKLY_ACTIONS = {
@@ -131,7 +121,7 @@ const ProfitCalcAccordion = ({
 function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, langCode } = useLanguage();
   const { crops, updateCrop, updateCropStatusApi, addCostApi, logHarvestApi } = useCrops();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addCostOpen, setAddCostOpen] = useState(false);
@@ -145,7 +135,7 @@ function CropCycleDetailPage() {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">{t ? t("farmer.empty.crop_not_found") : "Crop not found."}</p>
         <button onClick={() => navigate("/farmer/crops")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
-          Go to My Crops
+          {t("farmer.crops.title", {}, "Go to My Crops")}
         </button>
       </div>;
   }
@@ -221,10 +211,49 @@ function CropCycleDetailPage() {
   const margin = sellingBasis != null && costToRecover > 0 ? sellingBasis - costToRecover : null;
   const profitLo = margin != null ? Math.max(0, Math.floor(margin * qty * 0.85 / 1e3) * 1e3) : 0;
   const profitHi = margin != null ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
-  const advisoryCode = normalizeAdvisoryCode(crop.advisoryCategory) || getAdvisory(phaseCode, sellingBasis, costToRecover);
-  const advisoryCfg = advisoryCode ? ADVISORY_CFG[advisoryCode] : null;
+
+  // Real backend advisory query from existing POST /api/v1/advisory/plan
+  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
+  const { data: planAdvisoryData } = useQuery({
+    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty],
+    queryFn: async () => {
+      try {
+        const pDate = new Date(crop.plantingDate);
+        const hDate = new Date(crop.harvestDate);
+        const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
+        const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
+        const payload = {
+          crop_name: crop.commodityName,
+          planting_date: pDateStr,
+          expected_harvest_date: hDateStr,
+          total_production_cost: updatedTotalCost,
+          expected_yield_kg: qty,
+        };
+        const res = await apiPost("/advisory/plan", payload);
+        if (!res.ok) return null;
+        return await parseResponse(res);
+      } catch {
+        return null;
+      }
+    },
+    enabled: canQueryPlan,
+    staleTime: 1000 * 60 * 15,
+  });
+
+  const currentCropStage = planAdvisoryData?.crop_stage || crop.phase || "growing";
+  const rawAdvisory = planAdvisoryData?.advisory?.advisory || crop.advisoryCategory;
+  const advisoryCode = normalizeAdvisoryCode(rawAdvisory) || ADVISORY_CODES.RECOMMENDED;
+  const badge = composeAdvisoryBadge(advisoryCode, currentCropStage);
+  const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
   const AdvisoryIcon = advisoryCfg?.Icon;
-  const advisoryLabel = advisoryCode ? t(`farmer.advisory.labels.${advisoryCode}`) : t("farmer.advisory.not_available");
+  const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");
+
+  const cropDisplayName = crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName;
+  const composedSummary = composeAdvisorySummary(advisoryCode, currentCropStage, cropDisplayName);
+  const summaryText = renderComposedMessage(composedSummary, langCode);
+  const composedAction = composeAdvisoryAction(advisoryCode, currentCropStage, planAdvisoryData?.module_results, cropDisplayName);
+  const actionText = renderComposedMessage(composedAction, langCode);
+
   const weeklyActions = crop.isOnHold ? WEEKLY_ACTIONS[PHASE_CODES.ON_HOLD] ?? [] : WEEKLY_ACTIONS[phaseCode] ?? [];
   const isCompleted = phaseCode === PHASE_CODES.COMPLETED;
   const isActive = !isCompleted;
@@ -241,22 +270,15 @@ function CropCycleDetailPage() {
 
         {actionError && <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[13px] text-red-700">{actionError}</div>}
 
-        {
-    /* Breadcrumb */
-  }
-        {(() => {
-    const cropDisplayName = crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName;
-    return <Breadcrumb
-      items={[
-        { label: "My Crops", onClick: () => navigate("/farmer/crops") },
-        { label: cropDisplayName }
-      ]}
-    />;
-  })()}
+        {/* Breadcrumb */}
+        <Breadcrumb
+          items={[
+            { label: t("farmer.crops.title", {}, "My Crops"), onClick: () => navigate("/farmer/crops") },
+            { label: cropDisplayName }
+          ]}
+        />
 
-        {
-    /* ── 1. Crop summary ── */
-  }
+        {/* ── 1. Crop summary ── */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
           <div className="flex items-start gap-4">
             <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-14 h-14 flex-shrink-0" />
@@ -272,15 +294,15 @@ function CropCycleDetailPage() {
     onClick={() => setDrawerOpen(true)}
     className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--hw-green-50)]"
   >
-                  <Pencil className="w-3.5 h-3.5" />Update phase
+                  <Pencil className="w-3.5 h-3.5" />{t("farmer.crops.update_phase", {}, "Update phase")}
                 </button>
               </div>
               <div className="mt-2 space-y-0.5 text-xs text-[var(--hw-neutral-900)]">
-                {phaseCode === PHASE_CODES.PLANNING ? <p>Planned planting: {crop.plantingDate || "-"}</p> : <p>Planted: {crop.plantingDate || "-"}</p>}
-                <p>Est. harvest: {crop.harvestDate || "-"}</p>
-                <p>Farm area: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
+                {phaseCode === PHASE_CODES.PLANNING ? <p>{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: {crop.plantingDate || "-"}</p> : <p>{t("farmer.calendar.labels.planted", {}, "Planted")}: {crop.plantingDate || "-"}</p>}
+                <p>{t("farmer.calendar.labels.expected_harvest", {}, "Est. harvest")}: {crop.harvestDate || "-"}</p>
+                <p>{t("farmer.crops.farm_area_label", {}, "Farm area")}: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
               </div>
-              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">Last updated {crop.lastUpdated || "-"}</p>
+              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">{t("farmer.crops.last_updated", {}, "Last updated")} {crop.lastUpdated || "-"}</p>
             </div>
           </div>
         </div>
@@ -289,9 +311,9 @@ function CropCycleDetailPage() {
         {crop.isOnHold && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex items-start gap-3">
             <PauseCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-[13px] font-semibold text-amber-700">On hold</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">Reason for putting this crop on hold: {crop.holdReason || "-"}</p>
-              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-900)]">Put on hold: {crop.holdDate}</p>}
+              <p className="text-[13px] font-semibold text-amber-700">{t("farmer.crops.on_hold", {}, "On hold")}</p>
+              <p className="text-[13px] text-[var(--hw-neutral-900)]">{t("farmer.crops.hold_reason_label", {}, "Reason for putting this crop on hold")}: {crop.holdReason || "-"}</p>
+              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.crops.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
             </div>
           </div>}
 
@@ -303,23 +325,27 @@ function CropCycleDetailPage() {
               <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
             </div>
             <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-              {advisoryCode && ADVISORY_SUMMARY[advisoryCode] ? ADVISORY_SUMMARY[advisoryCode](crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName, t) : t("farmer.advisory.not_available")}
+              {summaryText}
             </p>
-            <p className={`text-[13px] font-medium mt-1 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
-              {advisoryCode && ADVISORY_SUPPORT[advisoryCode] ? ADVISORY_SUPPORT[advisoryCode](t) : t("farmer.advisory.not_available")}
-            </p>
+            {actionText && (
+              <p className={`text-[13px] font-medium mt-1.5 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+                {actionText}
+              </p>
+            )}
             <button
               onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
               className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
             >
-              View basis →
+              {t("farmer.advisory.view_basis", {}, "View basis →")}
             </button>
           </div>
         )}
 
         {/* ── 3. Estimated Profit ── */}
         {isActive && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Estimated Profit</p>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+              {t("farmer.factors.profitability.title", {}, "Estimated Profit")}
+            </p>
 
             <p className="text-[20px] font-bold text-emerald-700 leading-none">
               {margin > 0 ? `₱${profitLo.toLocaleString("en-PH")} – ₱${profitHi.toLocaleString("en-PH")}` : "-"}
@@ -346,33 +372,33 @@ function CropCycleDetailPage() {
             {/* Supporting values below the accordion */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
               <div>
-                <p className="text-[var(--hw-neutral-900)]">Estimated cost</p>
+                <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost")}</p>
                 <p className="font-medium text-[var(--hw-neutral-900)]">{updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : "-"}</p>
               </div>
               <div>
-                <p className="text-[var(--hw-neutral-900)]">Expected harvest</p>
+                <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest")}</p>
                 <p className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestQuantity ? `${crop.harvestQuantity} kg` : "- kg"}</p>
               </div>
               <div>
-                <p className="text-[var(--hw-neutral-900)]">Price basis</p>
+                <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.price_basis", {}, "Price basis")}</p>
                 <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis ? `₱${sellingBasis}/kg` : "-/kg"}</p>
               </div>
               <div>
-                <p className="text-[var(--hw-neutral-900)]">Cost to recover</p>
+                <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>
                 <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover ? `₱${costToRecover}/kg` : "-/kg"}</p>
               </div>
             </div>
 
             <p className="text-[12px] text-[var(--hw-neutral-900)]">
-              Estimate only. Actual income may change.
+              {t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may change.")}
             </p>
           </div>}
 
-        {
-    /* ── 4. What to do this week ── */
-  }
+        {/* ── 4. What to do this week ── */}
         {weeklyActions.length > 0 && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">What to do this week</p>
+            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+              {t("farmer.actions.monitoring.weekly_actions_title", {}, "What to do this week")}
+            </p>
             <div className="space-y-2">
               {weeklyActions.map((action, i) => {
     const Icon = action.Icon;
@@ -387,39 +413,41 @@ function CropCycleDetailPage() {
           </div>}
 
 
-        {
-    /* ── 5. Price and weather summary ── */
-  }
+        {/* ── 5. Price and weather summary ── */}
         {isActive && <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Price</p>
+                <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+                  {t("farmer.factors.price.factor_title", {}, "Price")}
+                </p>
               </div>
               <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{currentPrice != null ? `\u20B1${currentPrice}/kg` : "-/kg"}</p>
               <p className="text-[12px] text-[var(--hw-neutral-900)]">
-                Forecast: {forecastLo != null && forecastHi != null ? `\u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : "-/kg"}
+                {t("farmer.factors.price.forecast_prefix", {}, "Forecast:")} {forecastLo != null && forecastHi != null ? `\u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : "-/kg"}
               </p>
               <button
     onClick={() => navigate(`/farmer/prices/${crop.commodity}`)}
     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
-                View prices <ExternalLink className="w-3 h-3" />
+                {t("farmer.factors.price.view_prices", {}, "View prices")} <ExternalLink className="w-3 h-3" />
               </button>
             </div>
 
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <CloudRain className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Weather</p>
+                <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+                  {t("farmer.factors.weather.factor_title", {}, "Weather")}
+                </p>
               </div>
-              <p className="text-[13px] font-semibold text-blue-700 leading-snug">{crop.weatherCondition || "Not available"}</p>
+              <p className="text-[13px] font-semibold text-blue-700 leading-snug">{crop.weatherCondition || t("farmer.factors.weather.unavailable", {}, "Not available")}</p>
               <p className="text-[12px] text-[var(--hw-neutral-900)]">{crop.weatherAction || "-"}</p>
               <button
     onClick={() => navigate("/farmer/market/weather")}
     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
   >
-                View weather <ExternalLink className="w-3 h-3" />
+                {t("farmer.factors.weather.view_weather", {}, "View weather")} <ExternalLink className="w-3 h-3" />
               </button>
             </div>
           </div>}
