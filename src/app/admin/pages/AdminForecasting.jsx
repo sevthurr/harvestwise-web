@@ -176,6 +176,20 @@ function buildChartData(historical, forecastPoint) {
     if (!Number.isFinite(numeric)) continue;
     byDate.set(date, { d: date, actual: numeric });
   }
+  const apiPoints = Array.isArray(forecastPoint?.points) ? forecastPoint.points : [];
+  if (apiPoints.length > 0) {
+    for (const point of apiPoints) {
+      const forecastDate = isoDate(point?.forecast_date);
+      const midpoint = point?.forecast_midpoint;
+      if (!forecastDate || midpoint == null || midpoint === "") continue;
+      const numeric = Number(midpoint);
+      if (!Number.isFinite(numeric)) continue;
+      const existing = byDate.get(forecastDate) || { d: forecastDate };
+      existing.predicted = numeric;
+      byDate.set(forecastDate, existing);
+    }
+    return [...byDate.values()].sort((a, b) => String(a.d).localeCompare(String(b.d)));
+  }
   const forecastDate = isoDate(forecastPoint?.forecast_date);
   const midpoint = forecastPoint?.forecast_midpoint;
   if (forecastDate && midpoint != null && midpoint !== "") {
