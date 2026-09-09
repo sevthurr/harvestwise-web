@@ -131,11 +131,6 @@ export const en = {
     offline_available: "Offline data available",
 
     advisory: {
-      labels: {
-        recommended: "Recommended",
-        proceed_with_caution: "Proceed with Caution",
-        avoid_for_now: "Avoid for Now"
-      },
       recommended_summary: "Current conditions support your {crop_name} plan.",
       recommended_support: "Prices are fair and weather is manageable this week.",
       caution_summary: "{crop_name} may still proceed, but monitor conditions and risks closely.",

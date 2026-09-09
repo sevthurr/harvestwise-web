@@ -130,11 +130,6 @@ export const ceb = {
     syncing: "Nag-update sa bag-ong data...",
     offline_available: "Andam ang data nga offline",
     advisory: {
-      labels: {
-        recommended: "Girekomendar",
-        proceed_with_caution: "Padayon uban ang Pag-amping",
-        avoid_for_now: "Likayi Una"
-      },
       recommended_summary: "Suportahan sa karon nga kahimtang ang imong plano alang sa {crop_name}.",
       recommended_support: "Maayo ang presyo ug kontrolado ang panahon karong semanaha.",
       caution_summary: "Mahimo pa ring itanom ang {crop_name}, apan bantayan pag-ayo ang mga kondisyon ug risgo.",

@@ -130,11 +130,6 @@ export const tl = {
     syncing: "Nag-u-update ng bagong data...",
     offline_available: "Handa ang offline data",
     advisory: {
-      labels: {
-        recommended: "Inirerekomenda",
-        proceed_with_caution: "Magpatuloy nang may Pag-iingat",
-        avoid_for_now: "Iwasan Muna"
-      },
       recommended_summary: "Sinusuportahan ng kasalukuyang kondisyon ang iyong plano para sa {crop_name}.",
       recommended_support: "Maayos ang presyo at kontrolado ang panahon ngayong linggo.",
       caution_summary: "Maaari pa ring magpatuloy ang {crop_name}, ngunit bantayan ang mga kondisyon at panganib.",
