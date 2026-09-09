@@ -8,7 +8,8 @@ import {
   parseResponse,
   storeTokens,
 } from '../api';
-import { get, set } from 'idb-keyval';
+import { get, set, del } from 'idb-keyval';
+import { clearQueryPersistedCache } from '../lib/queryClient';
 
 const AuthContext = createContext(null);
 
@@ -78,15 +79,18 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const handle = () => {
       setUser(null);
+      clearQueryPersistedCache();
+      try { del(USER_CACHE_KEY); } catch {}
     };
     window.addEventListener('hw:auth:expired', handle);
     return () => window.removeEventListener('hw:auth:expired', handle);
   }, []);
 
   // ------------------------------------------------------------------
-  // Login: store tokens, then fetch /me to populate user object
+  // Login: clear prior cache, store tokens, then fetch /me
   // ------------------------------------------------------------------
   const login = async (tokens) => {
+    await clearQueryPersistedCache();
     storeTokens(tokens);
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
     setUser(me);
@@ -106,6 +110,8 @@ export function AuthProvider({ children }) {
     } finally {
       clearTokens();
       setUser(null);
+      await clearQueryPersistedCache();
+      try { await del(USER_CACHE_KEY); } catch {}
     }
   };
 

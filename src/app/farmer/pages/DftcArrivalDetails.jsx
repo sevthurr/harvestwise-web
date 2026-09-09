@@ -72,6 +72,8 @@ const pressureCfg = {
   Normal: { color: "text-blue-600", borderColor: "border-l-blue-500", Icon: Minus },
   High: { color: "text-amber-700", borderColor: "border-l-amber-500", Icon: TrendingUp }
 };
+import { useLanguage } from "../../global/contexts/LanguageContext";
+
 function countAboveBelow(weeks) {
   const mean = weeks.reduce((s, w) => s + w.tons, 0) / weeks.length;
   const threshold = mean * 0.05;
@@ -80,32 +82,33 @@ function countAboveBelow(weeks) {
     below: weeks.filter((w) => w.tons < mean - threshold).length
   };
 }
-function buildInsight(name, classification, weeks) {
+function buildInsight(name, classification, weeks, t) {
   const latest = weeks[weeks.length - 1];
   const { above, below } = countAboveBelow(weeks);
   if (classification === "High") {
     return {
       headline: `${name} arrivals were above the usual level in ${above} of the last 4 weeks, reaching ${latest.tons.toFixed(1)} tons on ${latest.week}.`,
-      meaning: `More ${name} is entering DFTC, which may place pressure on market prices.`,
-      action: `Based on recent DFTC arrivals, consider comparing current prices and reviewing your selling schedule.`
+      meaning: t ? t("farmer.factors.arrival.arrival_meaning_high", { crop_name: name }) : `More ${name} is entering DFTC, which may place pressure on market prices.`,
+      action: t ? t("farmer.factors.arrival.arrival_action_high") : `Based on recent DFTC arrivals, consider comparing current prices and reviewing your selling schedule.`
     };
   }
   if (classification === "Low") {
     return {
       headline: `${name} arrivals were below the usual level in ${below} of the last 4 weeks.`,
-      meaning: `Fewer ${name} deliveries reaching DFTC may reduce supply pressure in the near term.`,
-      action: `Based on recent DFTC arrivals, lower volumes may support prices. Confirm the current market price before selling.`
+      meaning: t ? t("farmer.factors.arrival.arrival_meaning_low", { crop_name: name }) : `Fewer ${name} deliveries reaching DFTC may reduce supply pressure in the near term.`,
+      action: t ? t("farmer.factors.arrival.arrival_action_low") : `Based on recent DFTC arrivals, lower volumes may support prices. Confirm the current market price before selling.`
     };
   }
   return {
     headline: `${name} arrivals stayed within the usual range during the last 4 weeks.`,
-    meaning: `Arrival volumes at DFTC are consistent with recent seasonal patterns.`,
-    action: `Based on recent DFTC arrivals, no strong arrival warning is present. Continue checking current prices before harvesting or selling.`
+    meaning: t ? t("farmer.factors.arrival.arrival_meaning_normal", { crop_name: name }) : `Arrival volumes at DFTC are consistent with recent seasonal patterns.`,
+    action: t ? t("farmer.factors.arrival.arrival_action_normal") : `Based on recent DFTC arrivals, no strong arrival warning is present. Continue checking current prices before harvesting or selling.`
   };
 }
 const chipBtn = (active) => `flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[13px] font-medium transition-colors whitespace-nowrap ${active ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`;
 const tooltipStyle = { backgroundColor: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 11 };
 function DftcArrivalDetailsPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const defaultId = searchParams.get("commodity") ?? "kamatis";
@@ -120,7 +123,7 @@ function DftcArrivalDetailsPage() {
   const previous = data.weeks[2];
   const change = Math.round((latest.tons - previous.tons) * 10) / 10;
   const changeStr = change === 0 ? "\u2014" : change > 0 ? `+${change.toFixed(1)} tons` : `${change.toFixed(1)} tons`;
-  const insight = buildInsight(commodity.name, data.classification, data.weeks);
+  const insight = buildInsight(commodity.name, data.classification, data.weeks, t);
   const chartData = data.weeks.map((w, i) => ({
     week: w.week,
     tons: w.tons,
@@ -128,13 +131,11 @@ function DftcArrivalDetailsPage() {
   }));
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
-        {
-    /* Page header */
-  }
+        {/* Page header */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-              DFTC Arrival Details
+              {t("farmer.factors.arrival.page_title", {}, "DFTC Arrival Details")}
             </h1>
             <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0">
               <RefreshCw className="w-3.5 h-3.5" />

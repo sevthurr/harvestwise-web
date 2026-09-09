@@ -24,10 +24,10 @@ import { apiGet, apiPut, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 
 const TABS = [
-  { id: "account", label: "Account" },
-  { id: "farm", label: "Farm Profile" },
-  { id: "preferences", label: "Preferences" },
-  { id: "notifications", label: "Notifications" }
+  { id: "account", label: "Account", key: "farmer.settings.tab_account" },
+  { id: "farm", label: "Farm Profile", key: "farmer.settings.tab_farm" },
+  { id: "preferences", label: "Preferences", key: "farmer.settings.tab_preferences" },
+  { id: "notifications", label: "Notifications", key: "farmer.settings.tab_notifications" }
 ];
 
 const DEFAULT_SELLING_OPTIONS = [
@@ -38,9 +38,9 @@ const DEFAULT_SELLING_OPTIONS = [
 ];
 
 const LANGUAGE_OPTIONS = [
-  { value: "cebuano", label: "Cebuano / Bisaya" },
-  { value: "english", label: "English" },
-  { value: "tagalog", label: "Tagalog" }
+  { value: "ceb", label: "Bisaya" },
+  { value: "en", label: "English" },
+  { value: "tl", label: "Filipino" }
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -48,6 +48,7 @@ const LANGUAGE_OPTIONS = [
 /* -------------------------------------------------------------------------- */
 const AccountTab = ({ showToast, onDeleteAccount }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -140,7 +141,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     }
     setPwError("");
     setPw({ current: "", newPw: "", confirm: "" });
-    showToast("Password updated successfully.");
+    showToast(t("farmer.settings.toast_pw_success", {}, "Password updated successfully."));
   };
 
   const handlePasswordCancel = () => {
@@ -184,39 +185,39 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   return (
     <div className="space-y-4">
       <Card>
-        <SectionLabel>Personal Information</SectionLabel>
+        <SectionLabel>{t("farmer.settings.personal_info", {}, "Personal Information")}</SectionLabel>
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <FieldLabel htmlFor="a-fn">First Name</FieldLabel>
+              <FieldLabel htmlFor="a-fn">{t("farmer.settings.first_name", {}, "First Name")}</FieldLabel>
               <input
                 id="a-fn"
                 type="text"
                 value={form.firstName}
                 onChange={set("firstName")}
-                placeholder="First Name"
+                placeholder={t("farmer.settings.first_name", {}, "First Name")}
                 className={inputCls}
               />
             </div>
             <div>
-              <FieldLabel htmlFor="a-ln">Last Name</FieldLabel>
+              <FieldLabel htmlFor="a-ln">{t("farmer.settings.last_name", {}, "Last Name")}</FieldLabel>
               <input
                 id="a-ln"
                 type="text"
                 value={form.lastName}
                 onChange={set("lastName")}
-                placeholder="Last Name"
+                placeholder={t("farmer.settings.last_name", {}, "Last Name")}
                 className={inputCls}
               />
             </div>
             <div>
-              <FieldLabel htmlFor="a-mn" optional>Middle Name</FieldLabel>
+              <FieldLabel htmlFor="a-mn" optional>{t("farmer.settings.middle_name", {}, "Middle Name")}</FieldLabel>
               <input
                 id="a-mn"
                 type="text"
                 value={form.middleName}
                 onChange={set("middleName")}
-                placeholder="Middle Name"
+                placeholder={t("farmer.settings.middle_name", {}, "Middle Name")}
                 className={inputCls}
               />
             </div>
@@ -240,7 +241,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             </div>
           </div>
           <div>
-            <FieldLabel htmlFor="a-ph">Phone Number</FieldLabel>
+            <FieldLabel htmlFor="a-ph">{t("farmer.settings.phone_number", {}, "Phone Number")}</FieldLabel>
             <input
               id="a-ph"
               type="tel"
@@ -252,7 +253,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             />
           </div>
           <div>
-            <FieldLabel htmlFor="a-em">Email</FieldLabel>
+            <FieldLabel htmlFor="a-em">{t("farmer.settings.email_address", {}, "Email")}</FieldLabel>
             <input
               id="a-em"
               type="email"
@@ -263,16 +264,16 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             />
           </div>
           <GreenBtn onClick={() => setShowSaveModal(true)} disabled={saving} className="w-full sm:w-auto">
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? t("common.saving", {}, "Saving…") : t("farmer.settings.save_changes", {}, "Save changes")}
           </GreenBtn>
         </div>
       </Card>
 
       <Card>
-        <SectionLabel>Change Password</SectionLabel>
+        <SectionLabel>{t("farmer.settings.change_password", {}, "Change Password")}</SectionLabel>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-cur">Current password</FieldLabel>
+            <FieldLabel htmlFor="f-cpw-cur">{t("farmer.settings.current_password", {}, "Current password")}</FieldLabel>
             <div className="relative">
               <input
                 id="f-cpw-cur"
@@ -292,7 +293,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             </div>
           </div>
           <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-new">New password</FieldLabel>
+            <FieldLabel htmlFor="f-cpw-new">{t("farmer.settings.new_password", {}, "New password")}</FieldLabel>
             <div className="relative">
               <input
                 id="f-cpw-new"
@@ -327,7 +328,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             )}
           </div>
           <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-cfm">Confirm new password</FieldLabel>
+            <FieldLabel htmlFor="f-cpw-cfm">{t("farmer.settings.confirm_new_password", {}, "Confirm new password")}</FieldLabel>
             <div className="relative">
               <input
                 id="f-cpw-cfm"
@@ -348,8 +349,8 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
           </div>
           {pwError && <p className="text-[13px] text-red-600">{pwError}</p>}
           <div className="flex gap-2 pt-1">
-            <GhostBtn onClick={handlePasswordCancel}>Cancel</GhostBtn>
-            <GreenBtn onClick={handlePasswordSave}>Update password</GreenBtn>
+            <GhostBtn onClick={handlePasswordCancel}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
+            <GreenBtn onClick={handlePasswordSave}>{t("farmer.settings.update_password", {}, "Update password")}</GreenBtn>
           </div>
         </div>
       </Card>
@@ -382,39 +383,39 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">Danger Zone</p>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[14px] font-semibold text-black">Delete account</p>
-            <p className="text-[13px] text-black">Permanently remove your account and all data.</p>
+            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.delete_account", {}, "Delete account")}</p>
+            <p className="text-[13px] text-black">{t("farmer.settings.delete_warning", {}, "Permanently remove your account and all data.")}</p>
           </div>
           <button
             type="button"
             onClick={() => setShowDeleteModal(true)}
             className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
           >
-            Delete
+            {t("common.delete", {}, "Delete")}
           </button>
         </div>
       </Card>
 
       {showSaveModal && (
-        <Modal title="Save account changes?" onClose={() => setShowSaveModal(false)}>
+        <Modal title={t("farmer.settings.save_changes", {}, "Save changes")} onClose={() => setShowSaveModal(false)}>
           <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your HarvestWise profile.</p>
           <div className="flex gap-2 justify-end">
-            <GhostBtn onClick={() => setShowSaveModal(false)}>Cancel</GhostBtn>
-            <GreenBtn onClick={handleSave}>Save changes</GreenBtn>
+            <GhostBtn onClick={() => setShowSaveModal(false)}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
+            <GreenBtn onClick={handleSave}>{t("farmer.settings.save_changes", {}, "Save changes")}</GreenBtn>
           </div>
         </Modal>
       )}
 
       {showDeleteModal && (
         <Modal
-          title="Delete account?"
+          title={t("farmer.settings.delete_account", {}, "Delete account")}
           onClose={() => {
             setShowDeleteModal(false);
             setDeleteConfirm("");
           }}
         >
           <p className="text-[14px] text-black mb-4">
-            This will permanently delete your HarvestWise account, saved farm profile, crop preferences, and crop plans. This action cannot be undone.
+            {t("farmer.settings.delete_warning", {}, "This will permanently delete your HarvestWise account, saved farm profile, crop preferences, and crop plans. This action cannot be undone.")}
           </p>
           <div className="space-y-1.5 mb-5">
             <label className="block text-[14px] font-semibold text-black">
@@ -435,7 +436,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
                 setDeleteConfirm("");
               }}
             >
-              Cancel
+              {t("common.cancel", {}, "Cancel")}
             </GhostBtn>
             <button
               type="button"
@@ -443,7 +444,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               disabled={deleteConfirm !== "DELETE"}
               className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 disabled:opacity-40 transition-colors"
             >
-              Delete account
+              {t("farmer.settings.delete_account", {}, "Delete account")}
             </button>
           </div>
         </Modal>
@@ -456,6 +457,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 /* 2. Farm Profile Tab                                                        */
 /* -------------------------------------------------------------------------- */
 const FarmTab = ({ showToast }) => {
+  const { t } = useLanguage();
   const [loc, setLoc] = useState({ city: "", district: "", barangay: "", farmSize: "" });
   const [crops, setCrops] = useState({});
   const [selling, setSelling] = useState({ method: "", area: "" });
@@ -624,28 +626,28 @@ const FarmTab = ({ showToast }) => {
   return (
     <div className="space-y-4">
       <Card>
-        <SectionLabel>Farm Location</SectionLabel>
+        <SectionLabel>{t("farmer.settings.farm_location", {}, "Farm Location")}</SectionLabel>
         <div className="flex gap-2 mb-4 flex-wrap">
           <button
             type="button"
             onClick={() => setShowLocModal(true)}
             className="h-10 px-4 flex items-center gap-2 border border-[var(--hw-green-700)] text-[var(--hw-green-700)] text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-50)] transition-colors"
           >
-            <Navigation className="w-4 h-4" />Use my location
+            <Navigation className="w-4 h-4" />{t("onboarding.use_my_location", {}, "Use my location")}
           </button>
           <button
             type="button"
             onClick={() => document.getElementById("f-city")?.focus()}
             className="h-10 px-4 flex items-center border border-[var(--hw-neutral-200)] text-black text-[13px] font-medium rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
           >
-            Enter manually
+            {t("onboarding.enter_manually", {}, "Enter manually")}
           </button>
         </div>
         <div className="space-y-3">
           {[
-            { id: "f-city", key: "city", label: "City", placeholder: "e.g. Davao City" },
-            { id: "f-dis", key: "district", label: "District", placeholder: "e.g. Marilog" },
-            { id: "f-bar", key: "barangay", label: "Barangay", placeholder: "e.g. Buda" }
+            { id: "f-city", key: "city", label: t("onboarding.city", {}, "City"), placeholder: "e.g. Davao City" },
+            { id: "f-dis", key: "district", label: t("onboarding.district", {}, "District"), placeholder: "e.g. Marilog" },
+            { id: "f-bar", key: "barangay", label: t("onboarding.barangay", {}, "Barangay"), placeholder: "e.g. Buda" }
           ].map((f) => (
             <div key={f.id}>
               <FieldLabel htmlFor={f.id}>{f.label}</FieldLabel>
@@ -660,7 +662,7 @@ const FarmTab = ({ showToast }) => {
             </div>
           ))}
           <div>
-            <FieldLabel htmlFor="f-size" optional>Farm Size</FieldLabel>
+            <FieldLabel htmlFor="f-size" optional>{t("onboarding.farm_size", {}, "Farm Size")}</FieldLabel>
             <input
               id="f-size"
               type="text"
@@ -674,7 +676,7 @@ const FarmTab = ({ showToast }) => {
       </Card>
 
       <Card>
-        <SectionLabel>Preferred Crops</SectionLabel>
+        <SectionLabel>{t("farmer.settings.preferred_crops", {}, "Preferred Crops")}</SectionLabel>
         <div className="grid grid-cols-2 gap-2 mb-3">
           {availableCrops.map((crop) => {
             const sel = crop.name in crops;
@@ -734,7 +736,7 @@ const FarmTab = ({ showToast }) => {
       </Card>
 
       <Card>
-        <SectionLabel>Selling Preference</SectionLabel>
+        <SectionLabel>{t("farmer.settings.selling_method", {}, "Selling Method")}</SectionLabel>
         <div className="space-y-2 mb-3">
           {sellingOptions.map((opt) => {
             const isSelected = selling.method === opt;
@@ -760,7 +762,7 @@ const FarmTab = ({ showToast }) => {
           })}
         </div>
         <div>
-          <FieldLabel htmlFor="f-area" optional>Usual selling area or buyer type</FieldLabel>
+          <FieldLabel htmlFor="f-area" optional>{t("farmer.settings.selling_buyer", {}, "Usual selling area or buyer")}</FieldLabel>
           <input
             id="f-area"
             type="text"
@@ -773,17 +775,17 @@ const FarmTab = ({ showToast }) => {
       </Card>
 
       <GreenBtn onClick={() => setShowSaveModal(true)} disabled={saving} className="w-full">
-        {saving ? "Saving…" : "Save farm profile"}
+        {saving ? t("common.saving", {}, "Saving…") : t("farmer.settings.save_changes", {}, "Save changes")}
       </GreenBtn>
 
       {showLocModal && (
-        <Modal title="Turn on location?" onClose={() => setShowLocModal(false)}>
-          <p className="text-[14px] text-black mb-5">HarvestWise will use your device location to help fill your farm location details. You can still edit the fields manually.</p>
+        <Modal title={t("onboarding.modal_location_title", {}, "Allow location access")} onClose={() => setShowLocModal(false)}>
+          <p className="text-[14px] text-black mb-5">{t("onboarding.modal_location_desc", {}, "Turn on location to detect your farm area faster. Your location is only used to fill in the fields below.")}</p>
           <div className="space-y-2">
             <GreenBtn onClick={handleDetect} disabled={detecting} className="w-full gap-2">
-              {detecting ? <><Loader2 className="w-4 h-4 animate-spin" />Detecting location…</> : <><Navigation className="w-4 h-4" />Use location</>}
+              {detecting ? <><Loader2 className="w-4 h-4 animate-spin" />{t("onboarding.detecting_location", {}, "Detecting location…")}</> : <><Navigation className="w-4 h-4" />{t("onboarding.modal_allow", {}, "Allow location")}</>}
             </GreenBtn>
-            <GhostBtn onClick={() => setShowLocModal(false)} className="w-full">Cancel</GhostBtn>
+            <GhostBtn onClick={() => setShowLocModal(false)} className="w-full">{t("onboarding.modal_cancel", {}, "Cancel")}</GhostBtn>
           </div>
         </Modal>
       )}
@@ -805,19 +807,23 @@ const FarmTab = ({ showToast }) => {
 /* 3. Preferences Tab                                                         */
 /* -------------------------------------------------------------------------- */
 const PreferencesTab = ({ showToast }) => {
-  const { effectiveLanguage: language, setLanguage } = useLanguage();
+  const { effectiveLanguage: language, setLanguage, t } = useLanguage();
+  const { refreshUser } = useAuth();
   const [syncing, setSyncing] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem("hw_last_synced") || null);
   const [hasOfflineCache, setHasOfflineCache] = useState(() => Boolean(localStorage.getItem("hw_last_synced")));
   const [syncStatus, setSyncStatus] = useState(() => (localStorage.getItem("hw_last_synced") ? "ok" : "needs_sync"));
 
   const handleLanguage = async (lang) => {
     setLanguage(lang);
-    showToast("Language preference updated.");
+    setSaveError(null);
     try {
       await apiPut("/farmer/profile", { preferred_language: lang });
+      await refreshUser?.();
+      showToast(t("farmer.settings.toast_lang_success", {}, "Language preference updated."));
     } catch {
-      // Ignored if offline
+      setSaveError(t("farmer.settings.toast_lang_error", {}, "Could not save language preference to your account. Please check your connection and try again."));
     }
   };
 
@@ -830,14 +836,26 @@ const PreferencesTab = ({ showToast }) => {
       setHasOfflineCache(true);
       setSyncStatus("ok");
       setSyncing(false);
-      showToast("Offline data updated successfully.");
+      showToast(t("farmer.settings.toast_offline_success", {}, "Offline data updated successfully."));
     }, 1800);
   };
 
   return (
     <div className="space-y-4">
+      {saveError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl flex items-center justify-between">
+          <span>{saveError}</span>
+          <button
+            type="button"
+            onClick={() => handleLanguage(language)}
+            className="font-semibold underline ml-2 hover:text-red-800"
+          >
+            {t("farmer.settings.btn_retry", {}, "Retry")}
+          </button>
+        </div>
+      )}
       <Card>
-        <SectionLabel>Language</SectionLabel>
+        <SectionLabel>{t("farmer.settings.section_language", {}, "Language")}</SectionLabel>
         <div className="space-y-2">
           {LANGUAGE_OPTIONS.map((lang) => (
             <button
@@ -863,16 +881,16 @@ const PreferencesTab = ({ showToast }) => {
 
       <TextSizeSlider
         showToast={showToast}
-        description="Adjusts text size across Profile, Settings, and app pages."
+        description={t("farmer.settings.text_size_desc", {}, "Adjusts text size across Profile, Settings, and app pages.")}
       />
 
       <Card>
-        <SectionLabel>Offline Data</SectionLabel>
+        <SectionLabel>{t("farmer.settings.section_offline_data", {}, "Offline Data")}</SectionLabel>
         <div className="space-y-2.5 mb-4">
           {[
-            { label: "Last updated", value: lastSynced ? lastSynced : "Never" },
-            { label: "Offline data", value: hasOfflineCache ? "Available" : "Unavailable" },
-            { label: "Status", value: syncStatus === "ok" ? "Up to date" : "Needs sync" }
+            { label: t("farmer.settings.offline_last_updated", {}, "Last updated"), value: lastSynced ? lastSynced : t("farmer.settings.offline_never", {}, "Never") },
+            { label: t("farmer.settings.offline_data_label", {}, "Offline data"), value: hasOfflineCache ? t("farmer.settings.offline_available", {}, "Available") : t("farmer.settings.offline_unavailable", {}, "Unavailable") },
+            { label: t("farmer.settings.offline_status_label", {}, "Status"), value: syncStatus === "ok" ? t("farmer.settings.offline_status_ok", {}, "Up to date") : t("farmer.settings.offline_status_needs_sync", {}, "Needs sync") }
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between">
               <span className="text-[14px] text-black">{row.label}</span>
@@ -888,7 +906,7 @@ const PreferencesTab = ({ showToast }) => {
           disabled={syncing}
           className="h-10 px-4 flex items-center gap-2 border border-[var(--hw-neutral-200)] text-[14px] font-medium text-black rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
         >
-          {syncing ? <><Loader2 className="w-4 h-4 animate-spin" />Syncing latest data…</> : <><RefreshCw className="w-4 h-4" />Sync now</>}
+          {syncing ? <><Loader2 className="w-4 h-4 animate-spin" />{t("farmer.syncing", {}, "Updating latest data...")}</> : <><RefreshCw className="w-4 h-4" />{t("farmer.settings.btn_sync_now", {}, "Sync now")}</>}
         </button>
       </Card>
     </div>
@@ -899,14 +917,15 @@ const PreferencesTab = ({ showToast }) => {
 /* 4. Notifications Tab                                                       */
 /* -------------------------------------------------------------------------- */
 const NOTIF_ITEMS = [
-  { id: "weather_risk", label: "Weather reminders", desc: "Get notified when weather may affect your saved crops." },
-  { id: "harvest_reminder", label: "Harvest reminders", desc: "Get reminded before your expected harvest date." },
-  { id: "schedule_reminder", label: "Planting schedule reminders", desc: "Get reminders for planned crop activities." },
-  { id: "price_movement", label: "Price movement alerts", desc: "Get notified when selected crop prices move significantly." },
-  { id: "sync_required", label: "Offline sync reminders", desc: "Get reminded when your saved data needs updating." }
+  { id: "weather_risk", labelKey: "farmer.settings.weather_reminders", label: "Weather reminders", descKey: "farmer.settings.weather_reminders_desc", desc: "Get notified when weather may affect your saved crops." },
+  { id: "harvest_reminder", labelKey: "farmer.settings.harvest_reminders", label: "Harvest reminders", descKey: "farmer.settings.harvest_reminders_desc", desc: "Get reminded before your expected harvest date." },
+  { id: "schedule_reminder", labelKey: "farmer.settings.schedule_reminders", label: "Planting schedule reminders", descKey: "farmer.settings.schedule_reminders_desc", desc: "Get reminders for planned crop activities." },
+  { id: "price_movement", labelKey: "farmer.settings.price_alerts", label: "Price movement alerts", descKey: "farmer.settings.price_alerts_desc", desc: "Get notified when selected crop prices move significantly." },
+  { id: "sync_required", labelKey: "farmer.settings.offline_sync_alerts", label: "Offline sync reminders", descKey: "farmer.settings.offline_sync_alerts_desc", desc: "Get reminded when your saved data needs updating." }
 ];
 
 const NotificationsTab = ({ showToast }) => {
+  const { t } = useLanguage();
   // Default all to true per database schema / mapping specification
   const [prefs, setPrefs] = useState(() => {
     try {
@@ -939,13 +958,13 @@ const NotificationsTab = ({ showToast }) => {
 
   return (
     <Card>
-      <SectionLabel>Notification Preferences</SectionLabel>
+      <SectionLabel>{t("farmer.settings.notif_prefs_title", {}, "Notification Preferences")}</SectionLabel>
       <div className="divide-y divide-[var(--hw-neutral-100)]">
         {NOTIF_ITEMS.map((item) => (
           <div key={item.id} className="flex items-start justify-between gap-4 py-4">
             <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-black">{item.label}</p>
-              <p className="text-[13px] text-black mt-0.5 leading-relaxed">{item.desc}</p>
+              <p className="text-[15px] font-semibold text-black">{t(item.labelKey, {}, item.label)}</p>
+              <p className="text-[13px] text-black mt-0.5 leading-relaxed">{t(item.descKey, {}, item.desc)}</p>
             </div>
             <Toggle on={prefs[item.id] ?? true} onChange={() => toggle(item.id)} />
           </div>
@@ -961,6 +980,7 @@ const NotificationsTab = ({ showToast }) => {
 function FarmerSettings() {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { t } = useLanguage();
   const [params] = useSearchParams();
   const tabFromUrl = params.get("tab") || "account";
   const [activeTab, setActiveTab] = useState(tabFromUrl);
@@ -992,8 +1012,8 @@ function FarmerSettings() {
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
       <PageHeader
-        title="Settings"
-        description="Manage your account, farm profile, and app preferences."
+        title={t("farmer.settings.title", {}, "Settings")}
+        description={t("farmer.settings.desc", {}, "Manage your account, farm profile, and app preferences.")}
       />
 
       <div
@@ -1013,7 +1033,7 @@ function FarmerSettings() {
                 : "border-transparent text-black hover:text-[var(--hw-green-700)]"
             }`}
           >
-            {tab.label}
+            {t(tab.key, {}, tab.label)}
           </button>
         ))}
       </div>

@@ -10,14 +10,16 @@ import {
   X
 } from "lucide-react";
 import { Card } from "../../global/components/ui/hw-ui";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 
 const URGENCY_CONFIG = {
-  urgent: { label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
-  attention: { label: "Attention", Icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
-  information: { label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" }
+  urgent: { labelKey: "farmer.notifications.tag_urgent", label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
+  attention: { labelKey: "farmer.notifications.tag_attention", label: "Attention", Icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
+  information: { labelKey: "farmer.notifications.tag_info", label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" }
 };
 
 const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
+  const { t } = useLanguage();
   if (!alert) return null;
   const urgency = URGENCY_CONFIG[alert.urgency] || URGENCY_CONFIG.information;
   const UrgencyIcon = urgency.Icon;
@@ -30,7 +32,7 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${urgency.bg} ${urgency.color}`}>
               <UrgencyIcon className="w-3.5 h-3.5" />
-              {urgency.label}
+              {t(urgency.labelKey, {}, urgency.label)}
             </span>
             <span className="text-[12px] text-[var(--hw-neutral-500)]">{alert.timestamp}</span>
           </div>
@@ -45,14 +47,18 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
 
           {alert.relatedTo && (
             <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)]">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)] mb-0.5">Related to</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)] mb-0.5">
+                {t("farmer.notifications.related_to", {}, "Related to")}
+              </p>
               <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{alert.relatedTo}</p>
             </div>
           )}
 
           {alert.reason && (
             <div className="space-y-1">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Why you received this</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">
+                {t("farmer.notifications.why_received", {}, "Why you received this")}
+              </p>
               <p className="text-[13px] text-[var(--hw-neutral-600)] leading-relaxed">{alert.reason}</p>
             </div>
           )}
@@ -67,7 +73,7 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
               }}
               className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
             >
-              Mark as read
+              {t("farmer.notifications.mark_as_read", {}, "Mark as read")}
             </button>
           )}
           {alert.action && alert.action.route && (
@@ -89,6 +95,7 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
 
 function NotificationsPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [notifications, setNotifications] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -108,9 +115,9 @@ function NotificationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[22px] font-bold text-black">Notifications</h1>
+          <h1 className="text-[22px] font-bold text-black">{t("farmer.notifications.title", {}, "Notifications")}</h1>
           <p className="text-[14px] text-[var(--hw-neutral-600)] mt-0.5">
-            Stay updated on crop alerts, weather updates, and market movements.
+            {t("farmer.notifications.subtitle", {}, "Stay updated on crop alerts, weather updates, and market movements.")}
           </p>
         </div>
         {unreadCount > 0 && (
@@ -120,7 +127,7 @@ function NotificationsPage() {
             className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] flex-shrink-0"
           >
             <CheckCheck className="w-4 h-4" />
-            Mark all read
+            {t("farmer.notifications.mark_all_read", {}, "Mark all read")}
           </button>
         )}
       </div>
@@ -151,10 +158,10 @@ function NotificationsPage() {
               <Bell className="w-8 h-8 text-[var(--hw-neutral-400)]" />
             </div>
             <p className="text-[16px] font-semibold text-[var(--hw-neutral-900)] mb-1">
-              No notifications yet
+              {t("farmer.notifications.all_caught_up", {}, "You're all caught up")}
             </p>
             <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm">
-              You are all caught up. Reminders for your crops, weather risks, and price movement alerts will appear here.
+              {t("farmer.notifications.no_notifications", {}, "No notifications at this time.")}
             </p>
           </div>
         </Card>

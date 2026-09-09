@@ -248,7 +248,7 @@ function MenuPage() {
         <section>
           <SectionLabel>Language</SectionLabel>
           <Card>
-            {[["english", "English", "Default interface language"], ["cebuano", "Cebuano / Bisaya", "Farmer default language"], ["tagalog", "Tagalog", "Filipino language option"]].map(([id, label, sub], i, arr) => <React.Fragment key={id}>
+            {[["en", "English", "Default interface language"], ["ceb", "Bisaya", "Farmer default language"], ["tl", "Filipino", "Filipino language option"]].map(([id, label, sub], i, arr) => <React.Fragment key={id}>
                 <button
     onClick={() => setLanguage(id)}
     className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"

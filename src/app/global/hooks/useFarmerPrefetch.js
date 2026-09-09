@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, parseResponse } from "../api";
 import { toCamelCase } from "../utils/apiTransforms";
+import { normalizeCropPlan } from "../../farmer/components/crops/CropsContext";
 
 export function useFarmerPrefetch() {
   const queryClient = useQueryClient();
@@ -72,7 +73,8 @@ export function useFarmerPrefetch() {
         const res = await apiGet("/crop-plans");
         if (!res.ok) return [];
         const data = await parseResponse(res);
-        return data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
+        const rawItems = data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
+        return rawItems.map(normalizeCropPlan).filter(Boolean);
       },
       staleTime: STALE_TIME,
     });

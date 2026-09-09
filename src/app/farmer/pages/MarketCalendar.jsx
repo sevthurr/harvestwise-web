@@ -11,6 +11,7 @@ import { apiGet, parseResponse } from "../../global/api";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
+import { useCrops } from "../components/crops/CropsContext";
 
 const CAT_CFG = {
   "national-holiday-regular": { label: "National Holiday — Regular", dotColor: "bg-red-500", textColor: "text-red-700" },
@@ -121,17 +122,8 @@ function MarketCalendarPage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  // Fetch farmer crop plans
-  const { data: cropPlansData } = useQuery({
-    queryKey: ["farmer", "crops"],
-    queryFn: async () => {
-      const cropRes = await apiGet('/crop-plans');
-      if (!cropRes.ok) return [];
-      const cropData = await parseResponse(cropRes);
-      return cropData?.crop_plans || cropData?.items || [];
-    },
-    staleTime: 1000 * 60 * 30,
-  });
+  // Use normalized farmer crop plans
+  const { crops: cropPlansData = [] } = useCrops();
 
   // Process all events once, then filter by view month
   const allEvents = useMemo(() => {
@@ -186,12 +178,11 @@ function MarketCalendarPage() {
 
     const cropEvents = [];
     (cropPlansData || []).forEach(c => {
-      const camelC = toCamelCase(c);
-      const name = camelC.commodityName || 'Crop';
-      if (camelC.plannedPlantingDate || camelC.actualPlantingDate) {
-        const pDate = camelC.actualPlantingDate || camelC.plannedPlantingDate;
+      const name = c.commodityName && c.commodityName !== "\u2013" ? c.commodityName : 'Crop';
+      const pDate = c.rawPlantingDate || c.plantingDate;
+      if (pDate) {
         cropEvents.push({
-          id: `crop-plant-${camelC.id}`,
+          id: `crop-plant-${c.id}`,
           date: pDate,
           category: "crop-planting",
           title: `Planting: ${name}`,
@@ -200,10 +191,11 @@ function MarketCalendarPage() {
           source: "My Crops"
         });
       }
-      if (camelC.expectedHarvestDate) {
+      const hDate = c.rawHarvestDate || c.harvestDate;
+      if (hDate) {
         cropEvents.push({
-          id: `crop-harvest-${camelC.id}`,
-          date: camelC.expectedHarvestDate,
+          id: `crop-harvest-${c.id}`,
+          date: hDate,
           category: "crop-harvest",
           title: `Expected Harvest: ${name}`,
           description: `Expected harvest window for ${name}`,
