@@ -12,29 +12,24 @@ import {
   SlidersHorizontal,
   Check
 } from "lucide-react";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
 
-const OUTLOOK_TEXT = {
-  Rising: "Price may rise next week",
-  Falling: "Price may fall next week",
-  Stable: "Price may stay stable",
-  default: "No trend data"
-};
-
 const DIR_CFG = {
-  Rising: { color: "text-emerald-600", Icon: TrendingUp, label: "Rising" },
-  Falling: { color: "text-red-500", Icon: TrendingDown, label: "Falling" },
-  Stable: { color: "text-blue-500", Icon: Minus, label: "Stable" },
-  default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, label: "No trend data" }
+  Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
+  Falling: { color: "text-red-500", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
+  Stable: { color: "text-blue-500", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
 const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All", unit: "All" };
 
 const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units }) => {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState(filter);
   React.useEffect(() => {
     if (open) setDraft(filter);
@@ -48,12 +43,27 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
         : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
     }`;
 
+  const sortOptions = [
+    ["name", t("farmer.prices.sort_name", {}, "Commodity name (A–Z)")],
+    ["rising-first", t("farmer.prices.sort_rising_first", {}, "Price rising first")],
+    ["falling-first", t("farmer.prices.sort_falling_first", {}, "Price falling first")],
+    ["price-low", t("farmer.prices.sort_price_low", {}, "Lowest price first")],
+    ["price-high", t("farmer.prices.sort_price_high", {}, "Highest price first")]
+  ];
+
+  const directionOptions = [
+    ["All", "All"],
+    ["Rising", t("farmer.prices.trend_rising", {}, "Rising")],
+    ["Stable", t("farmer.prices.trend_stable", {}, "Stable")],
+    ["Falling", t("farmer.prices.trend_falling", {}, "Falling")]
+  ];
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-80 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Filter & Sort</p>
+          <p className="font-semibold text-[var(--hw-neutral-900)]">{t("farmer.prices.filter_and_sort", {}, "Filter & Sort")}</p>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]">
             <X className="w-5 h-5" />
           </button>
@@ -63,15 +73,9 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
 
           {/* Sort by */}
           <div>
-            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Sort by</p>
+            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.sort_by", {}, "Sort by")}</p>
             <div className="flex flex-col gap-2">
-              {[
-                ["name", "Commodity name (A–Z)"],
-                ["rising-first", "Price rising first"],
-                ["falling-first", "Price falling first"],
-                ["price-low", "Lowest price first"],
-                ["price-high", "Highest price first"]
-              ].map(([v, label]) => (
+              {sortOptions.map(([v, label]) => (
                 <button key={v} onClick={() => setDraft((d) => ({ ...d, sortBy: v }))} className={chip(draft.sortBy === v)}>
                   {label}
                 </button>
@@ -81,11 +85,11 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
 
           {/* Price direction */}
           <div>
-            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Price direction</p>
+            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.direction_label", {}, "Price direction")}</p>
             <div className="flex flex-wrap gap-2">
-              {["All", "Rising", "Stable", "Falling"].map((v) => (
+              {directionOptions.map(([v, label]) => (
                 <button key={v} onClick={() => setDraft((d) => ({ ...d, direction: v }))} className={chip(draft.direction === v)}>
-                  {v}
+                  {label}
                 </button>
               ))}
             </div>
@@ -94,7 +98,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
           {/* Category */}
           {categories.length > 0 && (
             <div>
-              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Category</p>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.category_label", {}, "Category")}</p>
               <div className="flex flex-wrap gap-2">
                 {["All", ...categories].map((v) => (
                   <button key={v} onClick={() => setDraft((d) => ({ ...d, category: v }))} className={chip(draft.category === v)}>
@@ -108,7 +112,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
           {/* Unit */}
           {units.length > 0 && (
             <div>
-              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Unit</p>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.unit_label", {}, "Unit")}</p>
               <div className="flex flex-wrap gap-2">
                 {["All", ...units].map((v) => (
                   <button key={v} onClick={() => setDraft((d) => ({ ...d, unit: v }))} className={chip(draft.unit === v)}>
@@ -125,13 +129,13 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
             onClick={() => setDraft(DEFAULT_FILTER)}
             className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
           >
-            Clear
+            {t("farmer.prices.clear", {}, "Clear")}
           </button>
           <button
             onClick={() => onApply(draft)}
             className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5"
           >
-            <Check className="w-4 h-4" />Apply
+            <Check className="w-4 h-4" />{t("farmer.prices.apply", {}, "Apply")}
           </button>
         </div>
       </div>
@@ -140,12 +144,15 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
 };
 
 const CropPriceCard = ({ commodity, data, onViewDetails }) => {
+  const { t } = useLanguage();
   const unit = commodity.unitOfMeasure || 'kg';
   
   const hasForecast = data.range && data.range !== `-/${unit}` && data.range !== `-\u2009/\u2009${unit}`;
   const cfg = hasForecast ? (DIR_CFG[data.direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
-  const outlook = hasForecast ? (OUTLOOK_TEXT[data.direction] || OUTLOOK_TEXT.default) : "No trend data";
+  const outlook = hasForecast
+    ? (data.direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : data.direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))
+    : t("farmer.prices.trend_no_data", {}, "No trend data");
 
   const formatPriceValue = (value) => {
     if (value === null || value === undefined || value === '') return `-/${unit}`;
@@ -168,7 +175,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
         </div>
         <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
           {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-          <span className="text-[13px] font-medium">{hasForecast ? cfg.label : 'No trend data'}</span>
+          <span className="text-[13px] font-medium">{hasForecast ? t(cfg.key, {}, cfg.label) : t("farmer.prices.trend_no_data", {}, "No trend data")}</span>
         </div>
       </div>
 
@@ -212,7 +219,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
       <div className="rounded-xl bg-[var(--hw-neutral-50)] px-3.5 py-3 space-y-0.5">
         <p className={`text-[13px] font-medium ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>{outlook}</p>
         <p className="text-[12px] text-[var(--hw-neutral-900)]">
-          Expected next {data.horizonDays || 7} days:{" "}
+          {t("farmer.prices.expected_horizon", { days: data.horizonDays || 7 }, `Expected next ${data.horizonDays || 7} days:`)}{" "}
           <span className="font-semibold text-[var(--hw-neutral-900)]">{hasForecast ? data.range : `-/${unit}`}</span>
         </p>
       </div>
@@ -220,13 +227,13 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
       {/* Action footer */}
       <div className="flex items-center justify-between gap-3 pt-0.5">
         <p className="text-[12px] text-[var(--hw-neutral-500)] truncate">
-          {data.advisoryText || (data.direction === 'Rising' ? 'Price may improve soon.' : data.direction === 'Falling' ? 'Price may drop soon.' : 'Price is steady.')}
+          {data.advisoryText || (data.direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : data.direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))}
         </p>
         <button
           onClick={() => onViewDetails(commodity.id)}
           className="flex-shrink-0 inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
         >
-          View details
+          {t("common.see_details", {}, "View details")}
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -235,6 +242,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
 };
 
 function PricesPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState(DEFAULT_FILTER);
@@ -423,14 +431,12 @@ function PricesPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">Prices</h1>
+            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+              {t("nav.prices", {}, "Prices")}
+            </h1>
             <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-              Check today's price and likely price movement.
+              {t("farmer.prices.subtitle", {}, "Check today's price and likely price movement.")}
             </p>
-          </div>
-          <div className="flex items-center gap-1.5 text-[13px] text-[var(--hw-neutral-600)] flex-shrink-0 mt-1">
-            <RefreshCw className="w-3.5 h-3.5 text-[var(--hw-neutral-500)]" />
-            <span>Updated today at 7:30 AM</span>
           </div>
         </div>
 
@@ -443,7 +449,7 @@ function PricesPage() {
               value={searchQuery}
               disabled={loading}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search commodity…"
+              placeholder={t("farmer.prices.search_placeholder", {}, "Search commodity…")}
               className="w-full pl-9 pr-9 py-2.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
             />
             {searchQuery && (
@@ -460,7 +466,7 @@ function PricesPage() {
             className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)] transition-colors text-[14px] font-medium shadow-[var(--shadow-xs)] flex-shrink-0"
           >
             <SlidersHorizontal className="w-4 h-4" />
-            Filter
+            {t("common.filter", {}, "Filter")}
             {activeCount > 0 && (
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--hw-green-700)] text-white text-[10px] font-bold">
                 {activeCount}
@@ -480,8 +486,12 @@ function PricesPage() {
               <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
                 <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
               </div>
-              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">No price data available</p>
-              <p className="text-sm text-[var(--hw-neutral-700)]">Price data for top 10 commodities will appear here</p>
+              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
+                {t("farmer.emptyStates.no_prices_title", {}, "No price data available")}
+              </p>
+              <p className="text-sm text-[var(--hw-neutral-700)]">
+                {t("farmer.emptyStates.no_prices_desc", {}, "Price data for top 10 commodities will appear here")}
+              </p>
             </div>
           )
         ) : (

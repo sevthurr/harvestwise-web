@@ -1,3 +1,17 @@
+import { farmer as modularFarmer } from './en/farmer/index.js';
+
+function deepMerge(target, source) {
+  const result = { ...target };
+  for (const key of Object.keys(source || {})) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      result[key] = deepMerge(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+
 export const en = {
   common: {
     app_name: "HarvestWise",
@@ -26,7 +40,14 @@ export const en = {
     actions: "Actions",
     currency_symbol: "₱",
     per_kg: "/ kg",
-    per_sack: "/ sack"
+    per_sack: "/ sack",
+    step_indicator: "Step {current} of {total}",
+    skip_for_now: "Skip for now",
+    variety_one: "1 variety",
+    varieties_count: "{count} varieties",
+    lang_en: "English",
+    lang_ceb: "Bisaya",
+    lang_tl: "Filipino"
   },
   nav: {
     home: "Home",
@@ -39,7 +60,7 @@ export const en = {
     messages: "Messages",
     profile: "Profile",
     settings: "Settings",
-    about: "About",
+    about: "About HarvestWise",
     menu: "Menu",
     forecast: "Forecast",
     weather: "Weather",
@@ -70,26 +91,84 @@ export const en = {
     role_admin: "Administrator"
   },
   onboarding: {
-    step1_title: "Choose Your Preferred Language",
-    step1_desc: "Select the language you want HarvestWise to use across all screens.",
+    step1_title: "Choose your preferred language",
+    step1_desc: "You can change this later in Settings.",
     step2_title: "Where is your farm located?",
-    step2_desc: "We use location to show accurate local market prices and weather updates.",
-    step3_title: "What crops do you grow or plan to plant?",
-    step3_desc: "Select your main crops so we can tailor price forecasts and planting advice.",
-    step4_title: "How do you usually sell your produce?",
-    step4_desc: "This helps us show relevant trading hubs and buyer connections.",
-    step5_title: "You're All Set!",
-    step5_desc: "Your profile has been saved. HarvestWise is ready to guide your harvest.",
+    step2_desc: "This helps HarvestWise show weather and crop advice for your area.",
+    step3_title: "What crops do you grow or plan to grow?",
+    step3_desc: "Choose crops so HarvestWise can tailor forecasts and advice.",
+    step4_title: "How do you usually sell your harvest?",
+    step4_desc: "This helps improve possible profit estimates later.",
+    step5_title: "You're all set!",
+    step5_desc: "Your setup is saved. You can update this anytime in Settings.",
+    finish_setup: "Finish setup",
     go_to_home: "Go To Home",
     use_location: "Use my location",
-    detecting_location: "Detecting location...",
+    detecting_location: "Detecting location…",
     enter_manually: "Enter manually",
+    location_detected: "Location detected automatically",
     city: "City",
     district: "District",
     barangay: "Barangay",
-    farm_size: "Farm Size"
+    farm_size: "Farm Size",
+    city_placeholder: "Davao City",
+    district_placeholder: "e.g. Marilog",
+    barangay_placeholder: "e.g. Buda",
+    farm_size_placeholder: "e.g. 1,500 sq m or 0.5 hectare",
+    optional: "(optional)",
+    modal_location_title: "Allow location access",
+    modal_location_desc: "Turn on location to detect your farm area faster. Your location is only used to fill in the fields below.",
+    modal_allow: "Allow location",
+    modal_cancel: "Cancel",
+    preferred_variety: "Preferred variety (optional)",
+    variety_default: "Default",
+    selling_buyer_label: "Usual selling area or buyer type",
+    selling_buyer_placeholder: "e.g. Bangkerohan market, direct buyer",
+    selling_farmgate: "To a buyer using farmgate price",
+    selling_market: "Directly in the market",
+    selling_trader: "Through a trader",
+    selling_unsure: "Not sure yet",
+    selling_label_farmgate: "To a buyer (farmgate)",
+    selling_label_market: "Directly in the market",
+    selling_label_trader: "Through a trader",
+    selling_label_unsure: "Not sure yet",
+    summary_language: "Language",
+    summary_location: "Farm location",
+    summary_crops: "Selected crops",
+    summary_selling: "Selling method",
+    summary_not_set: "Not set",
+    save_error: "Failed to save. Please try again."
   },
-  farmer: {
+  farmer: deepMerge({
+    settings: {
+      title: "Settings",
+      desc: "Manage your account, farm profile, and app preferences.",
+      tab_account: "Account",
+      tab_farm: "Farm Profile",
+      tab_preferences: "Preferences",
+      tab_notifications: "Notifications",
+      section_language: "Language",
+      section_text_size: "Text Size",
+      text_size_desc: "Adjusts text size across Profile, Settings, and app pages.",
+      text_size_small: "Small",
+      text_size_medium: "Medium",
+      text_size_large: "Large",
+      toast_text_size_updated: "Text size updated.",
+      section_offline_data: "Offline Data",
+      offline_last_updated: "Last updated",
+      offline_data_label: "Offline data",
+      offline_status_label: "Status",
+      offline_status_ok: "Up to date",
+      offline_status_needs_sync: "Needs sync",
+      offline_available: "Available",
+      offline_unavailable: "Unavailable",
+      offline_never: "Never",
+      btn_sync_now: "Sync now",
+      btn_retry: "Retry",
+      toast_lang_success: "Language preference updated.",
+      toast_lang_error: "Could not save language preference to your account. Please check your connection and try again.",
+      toast_offline_success: "Offline data updated successfully."
+    },
     dashboard_title: "Farmer Dashboard",
     welcome_back: "Welcome back, {name}",
     today_price_trends: "Today's Price Trends",
@@ -117,11 +196,6 @@ export const en = {
     offline_available: "Offline data available",
 
     advisory: {
-      labels: {
-        recommended: "Recommended",
-        proceed_with_caution: "Proceed with Caution",
-        avoid_for_now: "Avoid for Now"
-      },
       recommended_summary: "Current conditions support your {crop_name} plan.",
       recommended_support: "Prices are fair and weather is manageable this week.",
       caution_summary: "{crop_name} may still proceed, but monitor conditions and risks closely.",
@@ -201,6 +275,7 @@ export const en = {
 
     factors: {
       price: {
+        factor_title: "Price",
         trend_label_rising: "Price may rise",
         trend_label_falling: "Price may fall",
         trend_label_stable: "Price likely stable",
@@ -212,18 +287,97 @@ export const en = {
         dual_stronger_dftc: "Both markets are {direction}. DFTC shows the stronger expected movement.",
         dual_similar: "Both markets are {direction}. Expected movements are similar.",
         dual_divergent: "Bangkerohan retail prices are {b_trend}, while DFTC retail prices are {d_trend}.",
-        driver_overview: "Prices have remained mostly stable. Sibuyas, Luya, and Okra are rising. Repolyo, Bawang, and Pechay are falling."
+        driver_overview: "Prices have remained mostly stable. Sibuyas, Luya, and Okra are rising. Repolyo, Bawang, and Pechay are falling.",
+        filter_market: "Market",
+        filter_price_type: "Price Type",
+        filter_forecast_horizon: "Forecast Horizon",
+        filter_variety: "Variety",
+        retail: "Retail",
+        wholesale: "Wholesale",
+        bangkerohan_market: "Bangkerohan Market",
+        default_variety: "Default",
+        current_price_trend_title: "Current Price Trend",
+        current_price_label: "Current Price",
+        previous_recorded_label: "Previous Recorded",
+        price_change_label: "Price Change",
+        last_record_sub: "Last record",
+        per_kg: "per kg",
+        trend_rising_sub: "Rising trend",
+        trend_stable_sub: "Stable trend",
+        trend_falling_sub: "Falling trend",
+        trend_none_sub: "No trend",
+        no_trend_data: "No trend data available.",
+        no_trend_data_desc: "No trend data available for this crop.",
+        forecasted_price_trend_title: "Forecasted Price Trend",
+        next_days_sub: "· next {days} days",
+        expected_price_label: "Expected Price",
+        forecast_range_label: "Forecast Range",
+        lower_bound_label: "Lower Bound",
+        upper_bound_label: "Upper Bound",
+        forecast_midpoint_sub: "Forecast midpoint",
+        over_days_sub: "Over {days} days",
+        conservative_sub: "Conservative estimate",
+        optimistic_sub: "Optimistic estimate",
+        forecast_unavailable_period: "Forecast unavailable for this period.",
+        wholesale_notice: "Wholesale prices are typically 15–20% lower than retail. ",
+        forecast_disclaimer: "Forecast is based on recent trends and is not guaranteed.",
+        favorable_banner_title: "Favorable Price",
+        favorable_banner_desc: "Prices are trending upward — a good signal for upcoming sales.",
+        watch_banner_title: "Watch",
+        watch_banner_desc: "Prices are stable — monitor for changes before deciding to sell.",
+        unfavorable_banner_title: "Unfavorable Price",
+        unfavorable_banner_desc: "Prices are trending downward — consider timing your sale carefully."
       },
 
       profitability: {
+        title: "Estimated Profit",
+        factor_title: "Profitability",
+        based_on_forecast_market: "Based on forecasted market price",
+        based_on_farmgate: "Based on estimated farmgate price",
+        forecast_price_reference: "Forecasted price reference",
+        price_change_notice: "Price may still change before harvest. Update this as harvest gets closer.",
+        estimated_cost: "Estimated cost",
+        expected_harvest: "Expected harvest",
+        price_basis: "Price basis",
+        cost_to_recover: "Cost to recover",
+        estimated_farmgate: "Estimated farmgate price",
+        farmgate_price_label: "Estimated farmgate price",
+        not_set_reference: "Not set — using market price as reference.",
+        estimate_disclaimer: "Estimate only. Actual income may vary.",
         cost_to_recover_label: "Break-even cost (to recover)",
+        cost_to_recover_short_label: "Break-even",
+        expected_harvest_volume_label: "Expected harvest volume",
+        total_estimated_cost_label: "Total estimated cost",
+        price_basis_used_label: "Price basis used",
+        price_basis_per_kg_label: "Price basis (per kg)",
+        estimated_profit_per_kg_label: "Profit",
+        estimated_loss_per_kg_label: "Loss",
+        detailed_cost_breakdown_title: "Detailed Cost Breakdown",
+        detailed_cost_breakdown_subtitle: "Itemized expenses entered for this planting cycle.",
         summary_positive: "At ₱{selling_price}/kg, you may earn around ₱{margin}/kg above your cost to recover. Total estimated profit: ₱{total_profit}.",
         summary_negative: "Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.",
         forecast_reference_notice: "Using forecasted price as reference. Actual buyer price may be different.",
-        calc_accordion_title: "How was this calculated?"
+        calc_accordion_title: "How was this calculated?",
+        favorable_label: "Favorable",
+        favorable_desc: "Current prices offer a good margin above your break-even cost.",
+        marginal_label: "Close to Break-Even",
+        marginal_desc: "Current prices are close to your break-even — low profit margin.",
+        unfavorable_label: "Unfavorable",
+        unfavorable_desc: "Prices are below your cost to recover. Selling now would result in a loss.",
+        selling_price_label: "Selling Price",
+        profit_label: "Profit",
+        loss_label: "Loss",
+        cost_vs_selling_title: "Cost vs. Selling Price (per kg)",
+        estimated_selling_price_label: "Estimated selling price",
+        total_estimated_revenue_label: "Total estimated revenue",
+        total_estimated_profit_label: "Total estimated profit",
+        total_estimated_loss_label: "Estimated loss",
+        unavailable_inputs: "Production cost and expected yield inputs are required to calculate profitability.",
+        per_kg: "per kg"
       },
 
       weather: {
+        factor_title: "Weather",
         page_subtitle: "See how weather may affect your planted crops.",
         page_title: "Weather",
         summary_headline: "7-day weather suitability forecast: {risk_level}",
@@ -231,40 +385,73 @@ export const en = {
         crop_advisories_title: "Crop weather advisories",
         forecast_title: "Weather forecast",
         forecast_14day_title: "14-Day Forecast",
+        empty_forecast: "No weather details available right now.",
         suitability_label: "Suitability",
         suitability_suitable: "Suitable",
         suitability_caution: "Caution",
         suitability_severe: "Severe",
+        suitability_combined_severe: "Severe — Combined Risk",
         rain_chance_note: "· % = rain chance",
         risk_level_label: "Risk level",
         forecast_fallback_davao: "7-day weather forecast for Davao City",
         fallback_location: "Davao City",
         insight_label: "Weather Insight · {location}",
+        insight_crop_title: "Weather Insight · {crop_name}",
         unknown_time: "Unknown",
         today_day_label: "Today",
         day_offset_label: "+{days}d",
         insight_severe: "Heavy rain and possible storm conditions are forecast in the coming days. Field work and planting for {crop_name} should be delayed until conditions improve.",
         insight_caution: "Mixed conditions are expected over the next 14 days — some rainy days and some dry windows. Plan farming activities for {crop_name} around the calmer days mid-forecast.",
         insight_suitable: "Generally favorable weather for the next 14 days. Mostly dry with partly cloudy conditions — good for {crop_name}.",
+        recommended_actions_title: "Recommended Actions",
         actions: {
           clear_drainage: "Clear drainage before planting",
           avoid_heavy_rain: "Avoid planting during strong rain",
           protect_harvest: "Protect harvested crops from moisture"
-        }
+        },
+        planting_window_prefix: "Planting window: ",
+        planting_window_good: "Good window to plant",
+        planting_window_manageable: "Manageable with precautions",
+        planting_window_not_ideal: "Not ideal — delay if possible",
+        no_weather_guidance: "No weather guidance available.",
+        no_forecast_data: "Weather forecast is not available right now."
       },
 
       arrival: {
+        factor_title: "Arrival",
+        source_breakdown_title: "Arrival Volume by Source",
         source_breakdown_subtitle: "DFTC registered farms vs other supplying sources.",
         chart_subtitle_combined: "Combined Total by variety · Last 7 months · kg",
         driver_overview: "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases.",
-        bangkerohan_unverified_notice: "Bangkerohan does not have verified arrival volume data."
+        bangkerohan_unverified_notice: "Bangkerohan does not have verified arrival volume data.",
+        arrival_volume_trend_title: "Arrival Volume Trend",
+        weekly_arrivals_tons: "Weekly arrivals · tons",
+        last_week_label: "Last Week",
+        this_week_label: "This Week",
+        change_label: "Change",
+        tons_unit: "tons",
+        level_low_banner: "Low Arrival Pressure",
+        level_lower_middle_banner: "Moderately Low Arrival Pressure",
+        level_upper_middle_banner: "Moderately High Arrival Pressure",
+        level_high_banner: "High Arrival Pressure",
+        meaning_low: "Supply is decreasing — lower market volume can support higher prices.",
+        meaning_moderate: "Arrival volume is stable — balanced supply and price conditions.",
+        meaning_high: "Supply is increasing — higher volume may push prices down."
       },
 
       production: {
+        factor_title: "Production",
         driver_overview: "More farms in the Davao Region may begin harvesting in the coming weeks, which could increase market supply.",
         page_title: "Seasonal Production",
         page_subtitle: "View historical seasonal production patterns used as regional context.",
         pressure_label: "Production Pressure: {level}",
+        level_low_banner: "Low Production Season",
+        level_lower_middle_banner: "Moderately Low Production Season",
+        level_upper_middle_banner: "Moderately High Production Season",
+        level_high_banner: "High Production Season",
+        typical_quarterly_title: "Typical Quarterly Production Volume (PSA Data · Q1–Q4)",
+        major_sources_title: "Major Production Sources",
+        major_sources_subtitle: "Production volume distribution across Davao City, Davao Del Sur, and Bukidnon.",
         what_this_means_title: "What this means",
         suggested_action_title: "Suggested action",
         insight_headline_high: "Historical {name} production in {quarter_label} ({quarter_range}) averaged {avg} tons in {location}.",
@@ -358,6 +545,9 @@ export const en = {
     },
 
     empty: {
+      no_crops: "No tracked crops yet.",
+      no_price_data: "Price information is not available right now.",
+      no_arrival_data: "DFTC arrival information is not available right now.",
       no_production_data: "Production data not available",
       no_weather_data: "No weather data available.",
       no_weather_advisory: "No crop-specific weather advisory available.",
@@ -376,7 +566,11 @@ export const en = {
 
     common: {
       crop_plan_saved_toast: "{displayName} has been {action_status}.",
-      crop_plan_saved_desc: "You can monitor and update it anytime in My Crops."
+      crop_plan_saved_desc: "You can monitor and update it anytime in My Crops.",
+      analyzing_plan: "Analyzing crop plan...",
+      see_advisory: "See advisory",
+      save_draft: "Save draft",
+      what_this_means: "What this means"
     },
 
     errors: {
@@ -385,5 +579,5 @@ export const en = {
       fetch_production_failed: "Failed to fetch seasonal production data",
       fetch_planting_guide_failed: "Failed to fetch planting guide recommendations"
     }
-  }
+  }, modularFarmer)
 };

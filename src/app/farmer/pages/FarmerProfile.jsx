@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { MapPin, Phone, Mail, Navigation, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
@@ -13,6 +14,7 @@ import { Skeleton, SkeletonFormCard } from "../components/shared/FarmerSkeletons
 function FarmerProfile() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +47,7 @@ function FarmerProfile() {
   const suffix = profile?.suffix || user?.suffix || "";
 
   const nameParts = [firstName, middleName, lastName, suffix].filter(Boolean);
-  const fullName = nameParts.length > 0 ? nameParts.join(" ") : user?.name || "Farmer";
+  const fullName = nameParts.length > 0 ? nameParts.join(" ") : user?.name || t("farmer.navigation.farmer_role", {}, "Farmer");
 
   const initials = fullName
     .trim()
@@ -94,8 +96,8 @@ function FarmerProfile() {
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
       <PageHeader
-        title="Profile"
-        description="Your personal and farm information."
+        title={t("farmer.profile.title", {}, "Profile")}
+        description={t("farmer.profile.subtitle", {}, "Your personal and farm information.")}
       />
 
       {/* ── Section 1: Profile Header ── */}
@@ -105,7 +107,7 @@ function FarmerProfile() {
 
           <div className="flex-1 min-w-0 pt-0.5">
             <p className="text-[20px] font-bold text-black leading-snug">{fullName}</p>
-            <p className="text-[14px] text-[var(--hw-neutral-600)]">Farmer</p>
+            <p className="text-[14px] text-[var(--hw-neutral-600)]">{t("farmer.navigation.farmer_role", {}, "Farmer")}</p>
             <div className="flex items-center gap-1 mt-1.5">
               <MapPin className="w-3.5 h-3.5 text-black flex-shrink-0" />
               <span className="text-[13px] text-black truncate">{locationDisplay}</span>
@@ -117,7 +119,7 @@ function FarmerProfile() {
             onClick={() => navigate("/farmer/settings?tab=account")}
             className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline flex-shrink-0"
           >
-            Edit Profile
+            {t("farmer.profile.edit_in_settings", {}, "Edit Profile")}
           </button>
         </div>
       </Card>
@@ -125,23 +127,23 @@ function FarmerProfile() {
       {/* ── Section 2: Personal Information ── */}
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Personal Information</SectionTitle>
+          <SectionTitle>{t("farmer.settings.personal_info", {}, "Personal Information")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=account")}
             className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
           >
-            Edit
+            {t("common.edit", {}, "Edit")}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <Field label="First Name" value={firstName || "—"} />
-          <Field label="Last Name" value={lastName || "—"} />
-          <Field label="Middle Name" value={middleName || "—"} />
+          <Field label={t("farmer.settings.first_name", {}, "First Name")} value={firstName || "—"} />
+          <Field label={t("farmer.settings.last_name", {}, "Last Name")} value={lastName || "—"} />
+          <Field label={t("farmer.settings.middle_name", {}, "Middle Name")} value={middleName || "—"} />
           <Field label="Suffix" value={suffix || "—"} />
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Phone Number</p>
+            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">{t("farmer.settings.phone_number", {}, "Phone Number")}</p>
             <div className="flex items-center gap-2">
               <Phone className="w-3.5 h-3.5 text-black" />
               <span className="text-[15px] text-black">{phone}</span>
@@ -149,7 +151,7 @@ function FarmerProfile() {
           </div>
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Email</p>
+            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">{t("farmer.settings.email_address", {}, "Email")}</p>
             <div className="flex items-center gap-2">
               <Mail className="w-3.5 h-3.5 text-black" />
               <span className="text-[15px] text-black truncate">{email}</span>
@@ -161,20 +163,20 @@ function FarmerProfile() {
       {/* ── Section 3: Farm Profile ── */}
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Farm Profile</SectionTitle>
+          <SectionTitle>{t("farmer.settings.farm_location", {}, "Farm Location")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=farm")}
             className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
           >
-            Update
+            {t("common.edit", {}, "Edit")}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <Field label="City" value={city || "—"} />
-          <Field label="District" value={district || "—"} />
-          <Field label="Barangay" value={barangay || "—"} />
-          <Field label="Farm Size" value={farmSize} />
+          <Field label={t("onboarding.city", {}, "City")} value={city || "—"} />
+          <Field label={t("onboarding.district", {}, "District")} value={district || "—"} />
+          <Field label={t("onboarding.barangay", {}, "Barangay")} value={barangay || "—"} />
+          <Field label={t("onboarding.farm_size", {}, "Farm Size")} value={farmSize} />
         </div>
         <div className="mt-4">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium ${
@@ -191,13 +193,13 @@ function FarmerProfile() {
       {/* ── Section 4: Crop Preferences ── */}
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Crop Preferences</SectionTitle>
+          <SectionTitle>{t("farmer.settings.preferred_crops", {}, "Preferred Crops")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=farm")}
             className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
           >
-            Edit
+            {t("common.edit", {}, "Edit")}
           </button>
         </div>
         {preferredCrops.length === 0 ? (
@@ -225,18 +227,18 @@ function FarmerProfile() {
       {/* ── Section 5: Selling Preference ── */}
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Selling Preference</SectionTitle>
+          <SectionTitle>{t("farmer.settings.selling_method", {}, "Selling Method")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=farm")}
             className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
           >
-            Edit
+            {t("common.edit", {}, "Edit")}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <Field label="Selling Method" value={primarySellingMethod} />
-          <Field label="Usual Selling Area / Buyer" value={usualSellingArea} />
+          <Field label={t("farmer.settings.selling_method", {}, "Selling Method")} value={primarySellingMethod} />
+          <Field label={t("farmer.settings.selling_buyer", {}, "Usual Selling Area / Buyer")} value={usualSellingArea} />
         </div>
       </Card>
     </div>

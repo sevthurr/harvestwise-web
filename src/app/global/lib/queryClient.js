@@ -32,3 +32,13 @@ persistQueryClient({
   persister: indexedDBPersister,
   maxAge: SEVEN_DAYS,                     // retain cached data for 7 days
 });
+
+export async function clearQueryPersistedCache() {
+  queryClient.clear();
+  try {
+    await del("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
+  } catch {
+    // ignore
+  }
+}
+

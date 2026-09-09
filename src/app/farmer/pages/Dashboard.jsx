@@ -12,34 +12,38 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton, SkeletonListRow } from "../components/shared/FarmerSkeletons";
+import { useCrops } from "../components/crops/CropsContext";
+import { useAuth } from "../../global/contexts/AuthContext";
 
 const DIR_CFG = {
-  Rising: { color: "text-emerald-600", Icon: TrendingUp, label: "Rising" },
-  Falling: { color: "text-red-500", Icon: TrendingDown, label: "Falling" },
-  Stable: { color: "text-blue-500", Icon: Minus, label: "Stable" },
-  default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, label: "No trend data" }
+  Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
+  Falling: { color: "text-red-500", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
+  Stable: { color: "text-blue-500", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
-function getGreeting() {
+function getGreeting(t) {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return t("farmer.dashboard.greeting_morning", {}, "Good morning");
+  if (hour < 18) return t("farmer.dashboard.greeting_afternoon", {}, "Good afternoon");
+  return t("farmer.dashboard.greeting_evening", {}, "Good evening");
 }
 
 function ProfitCard({ cropPlans, loading }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   
   if (loading) {
     return (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Estimated Profit</h2>
+          <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.estimated_profit", {}, "Estimated Profit")}</h2>
         </div>
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3 animate-pulse">
           <div className="flex items-center gap-3">
@@ -62,19 +66,19 @@ function ProfitCard({ cropPlans, loading }) {
     return (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Estimated Profit</h2>
+          <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.estimated_profit", {}, "Estimated Profit")}</h2>
         </div>
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">No active crop plan yet.</p>
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.no_active_plan", {}, "No active crop plan yet.")}</p>
           <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-            Add a crop plan to see how much you might earn.
+            {t("farmer.dashboard.add_crop_plan_desc", {}, "Add a crop plan to see how much you might earn.")}
           </p>
           <button
             onClick={() => navigate("/farmer/assess")}
             className="inline-flex items-center gap-2 text-sm font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
           >
             <Plus className="w-4 h-4" />
-            Add crop plan
+            {t("farmer.dashboard.add_crop_plan_btn", {}, "Add crop plan")}
           </button>
         </div>
       </section>
@@ -90,19 +94,19 @@ function ProfitCard({ cropPlans, loading }) {
     return (
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Estimated Profit</h2>
+          <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.estimated_profit", {}, "Estimated Profit")}</h2>
         </div>
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">No active crop plan yet.</p>
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.no_active_plan", {}, "No active crop plan yet.")}</p>
           <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-            Add a crop plan to see how much you might earn.
+            {t("farmer.dashboard.add_crop_plan_desc", {}, "Add a crop plan to see how much you might earn.")}
           </p>
           <button
             onClick={() => navigate("/farmer/assess")}
             className="inline-flex items-center gap-2 text-sm font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
           >
             <Plus className="w-4 h-4" />
-            Add crop plan
+            {t("farmer.dashboard.add_crop_plan_btn", {}, "Add crop plan")}
           </button>
         </div>
       </section>
@@ -118,12 +122,12 @@ function ProfitCard({ cropPlans, loading }) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Estimated Profit</h2>
+        <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.estimated_profit", {}, "Estimated Profit")}</h2>
         <button
           onClick={() => navigate("/farmer/crops")}
           className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
         >
-          View all
+          {t("common.view_all", {}, "View all")}
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -137,7 +141,7 @@ function ProfitCard({ cropPlans, loading }) {
             </p>
             <div className="flex items-center gap-1.5 text-[var(--hw-neutral-900)]">
               <CalendarDays className="w-3 h-3 flex-shrink-0" />
-              <span className="text-[12px]">Harvest: {harvestDate}</span>
+              <span className="text-[12px]">{t("farmer.dashboard.harvest_label", {}, "Harvest: ")}{harvestDate}</span>
             </div>
           </div>
         </div>
@@ -145,18 +149,18 @@ function ProfitCard({ cropPlans, loading }) {
         <p className="text-[26px] font-bold text-[var(--hw-neutral-900)] leading-tight">
           {profitLow > 0 || profitHigh > 0 ? `₱${profitLow.toLocaleString()}–₱${profitHigh.toLocaleString()}` : '–'}
         </p>
-        <p className="text-[12px] font-medium text-[var(--hw-neutral-900)] mt-0.5">Estimated Profit</p>
-        <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">Nearest harvest among your crops.</p>
+        <p className="text-[12px] font-medium text-[var(--hw-neutral-900)] mt-0.5">{t("farmer.dashboard.estimated_profit", {}, "Estimated Profit")}</p>
+        <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{t("farmer.dashboard.nearest_harvest_caption", {}, "Nearest harvest among your crops.")}</p>
 
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--hw-neutral-100)]">
           <p className="text-[12px] text-[var(--hw-neutral-900)] leading-snug">
-            Estimate only. Actual income may change.
+            {t("farmer.dashboard.estimate_income_notice", {}, "Estimate only. Actual income may change.")}
           </p>
           <button
             onClick={() => navigate("/farmer/crops")}
             className="flex-shrink-0 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
           >
-            View details
+            {t("common.see_details", {}, "View details")}
           </button>
         </div>
       </div>
@@ -166,44 +170,21 @@ function ProfitCard({ cropPlans, loading }) {
 
 function DashboardPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const { user } = useAuth();
 
   const profileQuery = useQuery({
-    queryKey: ["dashboard", "profile"],
+    queryKey: ["dashboard", "profile", user?.id],
     queryFn: async () => {
       const res = await apiGet("/farmer/profile");
       if (res.ok) return parseResponse(res);
       return null;
     },
-    staleTime: 1000 * 60 * 30,
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60 * 5,
   });
 
-  const cropsQuery = useQuery({
-    queryKey: ["farmer", "crops"],
-    queryFn: async () => {
-      const res = await apiGet("/crop-plans");
-      if (!res.ok) return [];
-      const data = await parseResponse(res);
-      return data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
-    },
-    select: (rawItems) => {
-      return rawItems.map((crop) => {
-        const camelCrop = toCamelCase(crop);
-        return {
-          id: camelCrop.id,
-          commodityId: camelCrop.commodityId,
-          commodityName: camelCrop.commodityName || '\u2013',
-          variety: camelCrop.variety,
-          status: camelCrop.status,
-          expectedHarvestDate: camelCrop.expectedHarvestDate,
-          expectedHarvestQty: camelCrop.expectedHarvestQty,
-          profitLower: camelCrop.profitLower || 0,
-          profitUpper: camelCrop.profitUpper || 0,
-          notes: camelCrop.notes
-        };
-      });
-    },
-    staleTime: 1000 * 60 * 30,
-  });
+  const { crops: cropPlans = [], loading: cropsLoading } = useCrops();
 
   const pricesQuery = useQuery({
     queryKey: ["dashboard", "prices"],
@@ -260,16 +241,15 @@ function DashboardPage() {
   });
 
   const farmerProfile = profileQuery.data;
-  const cropPlans = cropsQuery.data ?? [];
   const prices = pricesQuery.data ?? [];
   const recommendations = recsQuery.data ?? [];
-  const isLoading = profileQuery.isLoading || cropsQuery.isLoading || pricesQuery.isLoading || recsQuery.isLoading;
+  const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading || recsQuery.isLoading;
 
-  const greeting = getGreeting();
-  const firstName = farmerProfile?.first_name;
-  const greetingText = firstName ? `${greeting}, ${firstName}!` : `${greeting}!`;
-  const city = farmerProfile?.city;
-  const subtitle = city ? `${city} Vegetable Farmer` : "Vegetable Farmer";
+  const greeting = getGreeting(t);
+  const firstName = farmerProfile?.first_name || user?.first_name;
+  const greetingText = firstName ? t("farmer.dashboard.greeting_name", { greeting, name: firstName }, `${greeting}, ${firstName}!`) : `${greeting}!`;
+  const city = farmerProfile?.city || user?.city;
+  const subtitle = city ? `${city} ${t("farmer.dashboard.vegetable_farmer", {}, "Vegetable Farmer")}` : t("farmer.dashboard.vegetable_farmer", {}, "Vegetable Farmer");
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5 md:space-y-6">
@@ -284,15 +264,15 @@ function DashboardPage() {
 
         {/* ── 2. Main action card ── */}
         <div className="bg-[var(--hw-green-700)] rounded-2xl p-5 text-white shadow-[var(--shadow-md)]">
-          <p className="font-semibold text-lg leading-snug">Need help choosing what to plant?</p>
+          <p className="font-semibold text-lg leading-snug">{t("farmer.dashboard.hero_title", {}, "Need help choosing what to plant?")}</p>
           <p className="mt-1.5 text-[15px] text-green-100 leading-relaxed">
-            Check prices, weather, and estimated profit before planting.
+            {t("farmer.dashboard.hero_desc", {}, "Check prices, weather, and estimated profit before planting.")}
           </p>
           <button
             onClick={() => navigate("/farmer/market")}
             className="mt-4 inline-flex items-center gap-2 bg-white text-[var(--hw-green-700)] px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-green-50 transition-colors"
           >
-            Check what to plant
+            {t("farmer.dashboard.hero_btn", {}, "Check what to plant")}
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -306,12 +286,12 @@ function DashboardPage() {
           {/* ── 4. Today's prices ── */}
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Today's prices</h2>
+              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.todays_prices", {}, "Today's prices")}</h2>
               <button
                 onClick={() => navigate("/farmer/prices")}
                 className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
               >
-                See all
+                {t("common.view_all", {}, "See all")}
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -324,7 +304,7 @@ function DashboardPage() {
                 </div>
               ) : prices.length === 0 ? (
                 <div className="p-4 text-center text-[13px] text-[var(--hw-neutral-700)]">
-                  No price data available
+                  {t("farmer.emptyStates.no_prices", {}, "No price data available")}
                 </div>
               ) : (
                 <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[260px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -350,13 +330,13 @@ function DashboardPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{item.name || '–'}</p>
                           <p className="text-[12px] font-semibold text-[var(--hw-green-700)]">
-                            {count} {count === 1 ? "variety" : "varieties"}
+                            {count === 1 ? t("common.variety_one", {}, "1 variety") : t("common.varieties_count", { count }, `${count} varieties`)}
                           </p>
                           <p className="text-[12px] text-[var(--hw-neutral-900)]">{formattedPrice}</p>
                         </div>
                         <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
                           {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-                          <span className="text-[13px] font-medium">{hasForecast ? cfg.label : 'No trend data'}</span>
+                          <span className="text-[13px] font-medium">{hasForecast ? t(cfg.key, {}, cfg.label) : t("farmer.prices.trend_no_data", {}, "No trend data")}</span>
                         </div>
                       </button>
                     );
@@ -369,7 +349,7 @@ function DashboardPage() {
           {/* ── 5. Good crops to plant ── */}
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Good crops to plant</h2>
+              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.good_crops_title", {}, "Good crops to plant")}</h2>
             </div>
 
             {isLoading ? (
@@ -397,15 +377,15 @@ function DashboardPage() {
               </div>
             ) : recommendations.length === 0 ? (
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
-                <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">No recommendations available for this month.</p>
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.plantingGuide.no_recommendations", {}, "No recommendations available for this month.")}</p>
                 <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-                  Open the Planting Guide to compare other crops.
+                  {t("farmer.plantingGuide.check_crop_card_desc", {}, "Open the Planting Guide to compare other crops.")}
                 </p>
                 <button
                   onClick={() => navigate("/farmer/market")}
                   className="inline-flex items-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
                 >
-                  Open Planting Guide
+                  {t("farmer.plantingGuide.view_guide_btn", {}, "Open Planting Guide")}
                 </button>
               </div>
             ) : (
@@ -422,14 +402,14 @@ function DashboardPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-0.5 text-[var(--hw-green-700)]">
                             <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="text-[12px] font-semibold">Good option</span>
+                            <span className="text-[12px] font-semibold">{t("farmer.dashboard.good_option_badge", {}, "Good option")}</span>
                           </div>
                           <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{crop.name || '–'}</p>
                           <p className="text-[12px] font-semibold text-[var(--hw-green-700)]">
-                            {count} {count === 1 ? "variety" : "varieties"}
+                            {count === 1 ? t("common.variety_one", {}, "1 variety") : t("common.varieties_count", { count }, `${count} varieties`)}
                           </p>
                           <p className="text-[12px] font-medium text-[var(--hw-green-700)]">
-                            Good variety: {crop.bestVariety || '–'}
+                            {t("farmer.dashboard.good_variety_prefix", { variety: crop.bestVariety || '–' }, `Good variety: ${crop.bestVariety || '–'}`)}
                           </p>
                           <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{crop.reason || '–'}</p>
                         </div>
@@ -437,7 +417,7 @@ function DashboardPage() {
                           onClick={() => navigate("/farmer/market")}
                           className="flex-shrink-0 text-[12px] font-medium text-[var(--hw-green-700)] hover:opacity-70 whitespace-nowrap"
                         >
-                          View guide
+                          {t("farmer.dashboard.view_guide", {}, "View guide")}
                         </button>
                       </div>
                     </div>
@@ -451,12 +431,12 @@ function DashboardPage() {
         {/* ── 6. My crop reminders ── */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">My crop reminders</h2>
+            <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.reminders_title", {}, "My crop reminders")}</h2>
             <button
               onClick={() => navigate("/farmer/crops")}
               className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
             >
-              View My Crops
+              {t("nav.my_crops", {}, "View My Crops")}
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -468,7 +448,7 @@ function DashboardPage() {
               </div>
             ) : cropPlans.length === 0 ? (
               <div className="p-4 text-center text-[13px] text-[var(--hw-neutral-700)]">
-                No crop reminders yet.
+                {t("farmer.dashboard.no_reminders", {}, "No crop reminders yet.")}
               </div>
             ) : (
               <div className="divide-y divide-[var(--hw-neutral-100)]">
@@ -483,7 +463,7 @@ function DashboardPage() {
                       <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
                         {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
                       </p>
-                      <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">Status: {item.status || '–'}</p>
+                      <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{t("common.status", {}, "Status")}: {item.status || '–'}</p>
                       {item.notes && <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug mt-0.5">{item.notes}</p>}
                     </div>
                   </button>

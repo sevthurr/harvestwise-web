@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2 } from "lucide-react";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
@@ -23,25 +24,11 @@ const MARKET_LABEL = {
   "dftc-wholesale": "DFTC Wholesale"
 };
 
-const OUTLOOK_TEXT = {
-  Rising: "Price may rise",
-  Falling: "Price may fall",
-  Stable: "Price may stay stable",
-  default: "Forecast unavailable"
-};
-
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp },
   Falling: { color: "text-red-500", Icon: TrendingDown },
   Stable: { color: "text-blue-500", Icon: Minus },
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus }
-};
-
-const PERIOD_LABEL = {
-  7: "7 days",
-  14: "14 days", 
-  21: "21 days",
-  28: "28 days"
 };
 
 const segCls = (active) =>
@@ -57,6 +44,7 @@ const periodChipCls = (active) =>
   }`;
 
 function CommodityDetailPage() {
+  const { t } = useLanguage();
   const { commodityId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -358,7 +346,7 @@ function CommodityDetailPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Breadcrumb
             items={[
-              { label: "Prices", onClick: () => navigate("/farmer/prices") },
+              { label: t("nav.prices", {}, "Prices"), onClick: () => navigate("/farmer/prices") },
               { label: commodity.baseName || commodity.name || '–' }
             ]}
           />
@@ -390,10 +378,10 @@ function CommodityDetailPage() {
             />
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.baseName || commodity.name || '–'}</h1>
-              <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">Price Details</p>
+              <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">{t("farmer.commodityDetail.price_details", {}, "Price Details")}</p>
               <div className="flex items-center gap-1.5 text-[12px] text-[var(--hw-neutral-500)] mt-1">
                 <RefreshCw className="w-3 h-3 text-[var(--hw-neutral-400)]" />
-                <span>Updated today at 7:30 AM</span>
+                <span>{t("farmer.prices.updated_today_time", { time: "7:30 AM" }, "Updated today at 7:30 AM")}</span>
               </div>
             </div>
           </div>
@@ -421,12 +409,12 @@ function CommodityDetailPage() {
         {/* Price Outlook — period selector */}
         <div className="space-y-2">
           <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-            PRICE OUTLOOK
+            {t("farmer.commodityDetail.price_outlook", {}, "PRICE OUTLOOK")}
           </p>
           <div className="flex gap-2">
             {[7, 14, 21, 28].map((p) => (
               <button key={p} onClick={() => setPeriod(p)} className={periodChipCls(period === p)}>
-                {PERIOD_LABEL[p]}
+                {t("farmer.forecast.days_count", { days: p }, `${p} days`)}
               </button>
             ))}
           </div>
@@ -438,7 +426,7 @@ function CommodityDetailPage() {
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col justify-between min-h-[160px]">
             <div>
               <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-3">
-                CURRENT PRICE
+                {t("farmer.commodityDetail.current_price", {}, "CURRENT PRICE")}
               </p>
               <div className="space-y-2.5">
                 {variantRows.map((row) => (
@@ -454,7 +442,7 @@ function CommodityDetailPage() {
               </div>
             </div>
             <p className="text-[12px] text-[var(--hw-neutral-500)] mt-4 pt-2 border-t border-[var(--hw-neutral-100)]">
-              Today · {MARKET_LABEL[market] || '–'}
+              {t("farmer.commodityDetail.today", {}, "Today")} · {MARKET_LABEL[market] || '–'}
             </p>
           </div>
 
@@ -462,7 +450,7 @@ function CommodityDetailPage() {
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col justify-between min-h-[160px]">
             <div>
               <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-3">
-                FORECASTED PRICE
+                {t("farmer.commodityDetail.forecasted_price", {}, "FORECASTED PRICE")}
               </p>
               <div className="space-y-2.5">
                 {variantRows.map((row) => (
@@ -479,11 +467,13 @@ function CommodityDetailPage() {
             </div>
             <div className="mt-4 pt-2 border-t border-[var(--hw-neutral-100)] space-y-1">
               <p className="text-[12px] text-[var(--hw-neutral-500)]">
-                Next {PERIOD_LABEL[period] || `${period} days`}
+                {t("farmer.commodityDetail.next_days", { count: period }, `Next ${period} days`)}
               </p>
               <div className={`flex items-center gap-1 ${cfg.color}`}>
                 <DirIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="text-[12px] font-medium">{forecast.advisoryText || OUTLOOK_TEXT[forecast.trend] || OUTLOOK_TEXT.default}</span>
+                <span className="text-[12px] font-medium">
+                  {forecast.advisoryText || (forecast.trend === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : forecast.trend === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : forecast.trend === 'Stable' ? t("farmer.prices.micro_steady", {}, "Price is steady.") : t("farmer.prices.trend_no_data", {}, "No trend data"))}
+                </span>
               </div>
             </div>
           </div>
@@ -499,8 +489,8 @@ function CommodityDetailPage() {
               <BarChart2 className="w-4 h-4 text-[var(--hw-neutral-900)]" />
             </div>
             <div>
-              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">View price trend details</p>
-              <p className="text-[12px] text-[var(--hw-neutral-900)]">Historical prices + forecast chart</p>
+              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.view_price_trend", {}, "View price trend details")}</p>
+              <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.hist_forecast_chart", {}, "Historical prices + forecast chart")}</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-900)] flex-shrink-0" />
@@ -509,7 +499,7 @@ function CommodityDetailPage() {
         {/* Recent price records */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Recent price records</p>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.recent_records", {}, "Recent price records")}</p>
             <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
               {MARKET_LABEL[market] || '–'} · {priceRecords[0]?.location || 'Davao City'}
             </p>
@@ -518,17 +508,17 @@ function CommodityDetailPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
-                <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Date</th>
-                <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Variety</th>
-                <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Price</th>
-                <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">Change</th>
+                <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">{t("common.date", {}, "Date")}</th>
+                <th className="text-left px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.variety", {}, "Variety")}</th>
+                <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.price", {}, "Price")}</th>
+                <th className="text-right px-4 py-2 font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.change", {}, "Change")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--hw-neutral-100)]">
               {displayRecords.length === 0 ? (
                 <tr>
                   <td colSpan="4" className="text-center py-6 text-[13px] text-[var(--hw-neutral-500)]">
-                    No recent price records available.
+                    {t("farmer.commodityDetail.no_records", {}, "No recent price records available.")}
                   </td>
                 </tr>
               ) : (
@@ -539,7 +529,7 @@ function CommodityDetailPage() {
                         month: 'short', 
                         day: 'numeric' 
                       }) : '–'}
-                      {row.isToday && <span className="ml-1.5 text-[10px] font-semibold text-[var(--hw-green-700)]">Today</span>}
+                      {row.isToday && <span className="ml-1.5 text-[10px] font-semibold text-[var(--hw-green-700)]">{t("farmer.commodityDetail.today", {}, "Today")}</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap italic text-[12px]">
                       {row.variety || commodity.variety || '–'}
@@ -568,29 +558,27 @@ function CommodityDetailPage() {
                 onClick={handleShowMore}
                 className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
               >
-                {showMore ? "Show fewer records" : "View more records"}
+                {showMore ? t("farmer.commodityDetail.show_fewer", {}, "Show fewer records") : t("farmer.commodityDetail.view_more", {}, "View more records")}
               </button>
             </div>
           )}
         </div>
 
-
-
         {/* Bottom action card */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
           <div>
             <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
-              Check if this crop is good to plant
+              {t("farmer.commodityDetail.check_crop_title", {}, "Check if this crop is good to plant")}
             </p>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-              See price, weather, and estimated profit before you plant.
+              {t("farmer.commodityDetail.check_crop_desc", {}, "See price, weather, and estimated profit before you plant.")}
             </p>
           </div>
           <button
             onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
             className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
           >
-            Check crop
+            {t("farmer.commodityDetail.btn_check_crop", {}, "Check crop")}
             <ChevronRight className="w-4 h-4" />
           </button>
           <div className="text-center">
@@ -598,7 +586,7 @@ function CommodityDetailPage() {
               onClick={() => navigate("/farmer/prices")}
               className="text-[13px] font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-700)] transition-colors"
             >
-              View another crop
+              {t("farmer.commodityDetail.btn_view_another", {}, "View another crop")}
             </button>
           </div>
         </div>

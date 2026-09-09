@@ -2,14 +2,16 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Sprout, ChevronRight } from "lucide-react";
 import { useCrops } from "../components/crops/CropsContext";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { PhasePill } from "../components/crops/CropCard";
+
 const STAGE_TABS = [
-  { id: "all", label: "All" },
-  { id: "planning", label: "Planning" },
-  { id: "planted", label: "Planted" },
-  { id: "harvesting", label: "Harvesting" },
-  { id: "completed", label: "Completed" }
+  { id: "all", key: "common.filter_all", label: "All" },
+  { id: "planning", key: "farmer.phases.planning", label: "Planning" },
+  { id: "planted", key: "farmer.phases.planted", label: "Planted" },
+  { id: "harvesting", key: "farmer.phases.harvesting", label: "Harvesting" },
+  { id: "completed", key: "farmer.phases.completed", label: "Completed" }
 ];
 function matchesStage(crop, tab) {
   if (tab === "all") return true;
@@ -47,6 +49,7 @@ function nextActionText(crop) {
   return map[crop.phase] ?? "";
 }
 const MyCropCard = ({ crop, onView }) => {
+  const { t } = useLanguage();
   const currentPrice = crop.currentPrice;
   const profit = profitRange(crop);
   const action = crop.isOnHold ? "Resume when market conditions improve" : crop.phase === "completed" ? "Crop cycle completed" : nextActionText(crop);
@@ -66,21 +69,21 @@ const MyCropCard = ({ crop, onView }) => {
       {/* Details */}
       <div className="px-4 pb-3 space-y-1.5">
         <div className="flex items-center justify-between text-[13px]">
-          <span className="text-[var(--hw-neutral-900)]">Harvest on</span>
+          <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.harvest_on", {}, "Harvest on")}</span>
           <span className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestDate || "-"}</span>
         </div>
         <div className="flex items-center justify-between text-[13px]">
-          <span className="text-[var(--hw-neutral-900)]">Current price</span>
+          <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.current_price", {}, "Current price")}</span>
           <span className="font-medium text-[var(--hw-neutral-900)]">{currentPrice != null ? `₱${currentPrice}/kg` : "-/kg"}</span>
         </div>
         {crop.phase === "completed" && crop.actualSellingPrice ? (
           <div className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--hw-neutral-900)]">Sold at</span>
+            <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.sold_at", {}, "Sold at")}</span>
             <span className="font-medium text-[var(--hw-neutral-900)]">₱{crop.actualSellingPrice}/kg</span>
           </div>
         ) : (
           <div className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--hw-neutral-900)]">Estimated Profit</span>
+            <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.estimated_profit", {}, "Estimated Profit")}</span>
             <span className="font-semibold text-emerald-700">{profit || "-"}</span>
           </div>
         )}
@@ -93,35 +96,29 @@ const MyCropCard = ({ crop, onView }) => {
           onClick={() => onView(crop.id)}
           className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
         >
-          View crop
+          {t("farmer.crops.view_crop", {}, "View crop")}
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>;
 };
 const MyCropsEmpty = ({ stage, onNew }) => {
-  const messages = {
-    all: { heading: "No crop plans yet.", sub: "Add a crop plan to start tracking your farm." },
-    planning: { heading: "No crops in planning", sub: "Save a planting assessment to create your first crop plan." },
-    planted: { heading: "No planted crops", sub: "Mark a plan as planted to track an active crop." },
-    harvesting: { heading: "No crops harvesting", sub: "Crops approaching harvest will appear here." },
-    completed: { heading: "No completed crops", sub: "Completed crops and their results will appear here." }
-  };
-  const { heading, sub } = messages[stage] || messages.all;
+  const { t } = useLanguage();
   return <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
       <Sprout className="w-10 h-10 text-[var(--hw-neutral-300)]" />
-      <p className="font-semibold text-[var(--hw-neutral-700)]">{heading}</p>
-      <p className="text-sm text-[var(--hw-neutral-900)] max-w-xs">{sub}</p>
+      <p className="font-semibold text-[var(--hw-neutral-700)]">{t("farmer.empty.no_crops", {}, "No crop plans yet.")}</p>
+      <p className="text-sm text-[var(--hw-neutral-900)] max-w-xs">{t("farmer.dashboard.add_crop_plan_desc", {}, "Add a crop plan to start tracking your farm.")}</p>
       <button
         onClick={onNew}
         className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
       >
         <Plus className="w-4 h-4" />
-        Add crop
+        {t("farmer.crops.add_crop_btn", {}, "Add crop")}
       </button>
     </div>;
 };
 function MyCropsPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { crops } = useCrops();
   const [stageFilter, setStageFilter] = useState("all");
@@ -135,9 +132,11 @@ function MyCropsPage() {
         {/* Page header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">My Crops</h1>
+            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+              {t("nav.my_crops", {}, "My Crops")}
+            </h1>
             <p className="text-[15px] text-[var(--hw-neutral-900)] mt-1">
-              Track your crop plans, planted crops, and harvest records.
+              {t("farmer.crops.subtitle", {}, "Track your crop plans, planted crops, and harvest records.")}
             </p>
           </div>
           <button
@@ -145,7 +144,7 @@ function MyCropsPage() {
             className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-[var(--shadow-xs)]"
           >
             <Plus className="w-4 h-4" />
-            <span>Add crop</span>
+            <span>{t("farmer.crops.add_crop_btn", {}, "Add crop")}</span>
           </button>
         </div>
 
@@ -159,7 +158,7 @@ function MyCropsPage() {
               onClick={() => setStageFilter(tab.id)}
               className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${isActive ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
             >
-              {tab.label}
+              {t(tab.key, {}, tab.label)}
               <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-green-600 text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]"}`}>
                 {count}
               </span>
@@ -167,9 +166,7 @@ function MyCropsPage() {
           })}
         </div>
 
-        {
-    /* Crop list */
-  }
+        {/* Crop list */}
         {visible.length === 0 ? <MyCropsEmpty stage={stageFilter} onNew={() => navigate("/farmer/assess")} /> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {visible.map((crop) => <MyCropCard key={crop.id} crop={crop} onView={(id) => navigate(`/farmer/crops/${id}`)} />)}
           </div>}

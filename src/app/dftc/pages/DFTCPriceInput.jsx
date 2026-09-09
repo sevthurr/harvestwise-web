@@ -22,7 +22,7 @@ import {
 } from "./dftc-add-data-data";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
-import { apiPost, parseResponse } from "../../global/api";
+import { apiGet, apiPost, parseResponse } from "../../global/api";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -30,6 +30,17 @@ function hwId(name) {
 function hasHWIcon(name) {
   const id = hwId(name);
   return id !== null && id in COMMODITY_REGISTRY;
+}
+
+// Display name -> canonical DB commodity name for composite/market-listed items.
+const COMMODITY_NAME_OVERRIDES = {
+  "Pak choi / Bok choy": "Pakchoy/Bukchoy",
+  "Kangkong / Tinangkong": "Kangkong",
+  "Kamote tops / Galay": "Kamote Tops"
+};
+
+function nameSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 const CATEGORY_OPTIONS = [
@@ -50,6 +61,14 @@ function emptyField(uom = "kg") {
 function formatDateLabel(iso) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function localToday() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function generateDataName(setup) {
@@ -316,6 +335,92 @@ function AddCommodityModal({ onClose, onAdd }) {
   );
 }
 
+// ─── Confirm Finalize modal ─────────────────────────────────────────────────
+function ConfirmFinalizeModal({ setup, newCount, updatedCount, removed, onClose, onConfirm }) {
+  const [verified, setVerified] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-[var(--shadow-lg)] w-full max-w-lg">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[var(--hw-neutral-100)]">
+          <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Confirm Finalize</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)]">
+            <X className="w-4 h-4 text-[var(--hw-neutral-600)]" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-[13px] text-[var(--hw-neutral-800)]">
+            <strong>{setup.market}</strong> · {setup.priceType} · {formatDateLabel(setup.date)}
+          </p>
+
+          <div className="space-y-2">
+            {newCount > 0 && (
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-[var(--hw-green-200)] bg-[var(--hw-green-50)]">
+                <span className="text-[13px] font-medium text-[var(--hw-green-800)]">New records</span>
+                <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{newCount}</span>
+              </div>
+            )}
+            {updatedCount > 0 && (
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
+                <span className="text-[13px] font-medium text-[var(--hw-neutral-800)]">Updated existing records</span>
+                <span className="text-[13px] font-bold text-[var(--hw-neutral-800)]">{updatedCount}</span>
+              </div>
+            )}
+            {removed.length > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-red-700">Records to remove</span>
+                  <span className="text-[13px] font-bold text-red-700">{removed.length}</span>
+                </div>
+                <div className="mt-1.5 text-[12px] text-red-700/80">
+                  {removed.map((r) => (
+                    <div key={r.name + r.id} className="truncate">– {r.name}{r.variety ? ` · ${r.variety}` : ""}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="text-[13px] text-[var(--hw-neutral-800)]">
+            Once finalized, this day's prices are saved and published. There is no edit-after-save — ask your teammate to verify these prices are ready before confirming.
+          </p>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={verified}
+              onChange={(e) => setVerified(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[var(--hw-green-700)]"
+            />
+            <span className="text-[13px] text-[var(--hw-neutral-900)]">
+              I confirm these prices have been checked with my teammate and are ready to finalize.
+            </span>
+          </label>
+        </div>
+
+        <div className="px-5 pb-5 flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors">
+            Back
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!verified}
+            className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Finalize & Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Info overlays ───────────────────────────────────────────────────────────
 function HWInfoOverlay({ onClose }) {
   return (
@@ -481,7 +586,7 @@ function DFTCPriceInput() {
     dataType: "Price Data",
     market: "Bangkerohan Public Market",
     priceType: "Retail",
-    date: "2026-08-02"
+    date: localToday()
   };
 
   const [setup, setSetup] = useState(defaultSetup);
@@ -507,6 +612,40 @@ function DFTCPriceInput() {
   const [reviewMode, setReviewMode] = useState(false);
   const [dataName, setDataName] = useState(() => generateDataName(defaultSetup));
   const [saved, setSaved] = useState(false);
+  const catalogRef = useRef(null);
+  const draftRef = useRef({});
+  draftRef.current = { setup, fields, customVariants, customCommodities };
+  const prefilledRef = useRef(new Map());
+  const [prefillCount, setPrefillCount] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await parseResponse(await apiGet("/dftc/commodities"));
+        if (cancelled) return;
+        const items = Array.isArray(data) ? data : data?.items ?? [];
+        const map = new Map();
+        for (const row of items) {
+          const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
+          map.set(nameSlug(baseName), row.id);
+          if (row.variety) {
+            map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
+          }
+        }
+        catalogRef.current = map;
+        const hasLocalDraft = (() => {
+          try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
+        })();
+        if (!hasLocalDraft) await loadDayPrefill(defaultSetup);
+      } catch {
+        if (!cancelled) catalogRef.current = null;
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -514,7 +653,10 @@ function DFTCPriceInput() {
     setSaveStatus("saving");
     saveTimer.current = setTimeout(() => {
       setSaveStatus("saved");
-      try { localStorage.setItem("dftc_price_draft", "true"); } catch { }
+      try {
+        localStorage.setItem("dftc_price_draft", "true");
+        localStorage.setItem("dftc_price_draft_data", JSON.stringify(draftRef.current));
+      } catch { }
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 30000);
     }, 1500);
   }, []);
@@ -523,6 +665,151 @@ function DFTCPriceInput() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
   }, []);
+
+  function readDraftData() {
+    try {
+      const raw = localStorage.getItem("dftc_price_draft_data");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function restoreDraft() {
+    const saved = readDraftData();
+    if (saved?.setup) {
+      setSetup(saved.setup);
+      setDataName(generateDataName(saved.setup));
+    }
+    if (saved?.fields) setFields(saved.fields);
+    if (saved?.customVariants) setCustomVariants(saved.customVariants);
+    if (saved?.customCommodities) setCustomCommodities(saved.customCommodities);
+    setDraftDismissed(true);
+  }
+
+  function discardDraft() {
+    setDraftDismissed(true);
+    setHasDraft(false);
+    try {
+      localStorage.removeItem("dftc_price_draft");
+      localStorage.removeItem("dftc_price_draft_data");
+    } catch { }
+    loadDayPrefill(setup);
+  }
+
+  function sourceIdFor(setup) {
+    const marketLower = (setup.market || "").toLowerCase();
+    const isDftc = marketLower.includes("dftc") || marketLower.includes("taboan");
+    return isDftc ? "dftc" : "bankerohan";
+  }
+
+  async function loadDayPrefill(setup) {
+    if (!setup?.market || !setup?.priceType || !setup?.date) return;
+    try {
+      const data = await parseResponse(await apiGet(
+        `/dftc/prices/by-day?source_id=${encodeURIComponent(sourceIdFor(setup))}&price_type=${encodeURIComponent(setup.priceType)}&reporting_date=${encodeURIComponent(setup.date)}`
+      ));
+      const items = Array.isArray(data) ? data : data?.items ?? [];
+      setPrefillCount(items.length);
+      if (items.length > 0) applyDayRecords(items);
+    } catch {
+      /* offline or no existing day — leave blank */
+    }
+  }
+
+  function applyDayRecords(records) {
+    const catByName = new Map(CATEGORY_OPTIONS.map((c) => [c.name, c.id]));
+    const prefillMap = new Map();
+    const addedCustom = {};
+    setFields((prev) => {
+      const next = { ...prev };
+      for (const rec of records) {
+        if (rec.price_avg === null || rec.price_avg === undefined) continue;
+        let hit = null;
+        for (const cat of PRICE_CATEGORIES) {
+          for (const com of cat.commodities) {
+            for (const v of com.variants) {
+              if (!hit && resolveCommodityId(com, v) === rec.commodity_id) {
+                hit = { cat, com, v };
+              }
+            }
+          }
+        }
+        const field = {
+          samples: [String(rec.price_avg), "", "", "", ""],
+          uom: rec.uom || "kg",
+          low: rec.price_min ?? null,
+          high: rec.price_max ?? null,
+          prevailing: rec.price_avg
+        };
+        if (hit) {
+          const existing = next[hit.v.id];
+          if (!existing || !hasValue(existing)) {
+            next[hit.v.id] = field;
+            prefillMap.set(hit.v.id, {
+              commodity_id: rec.commodity_id,
+              name: rec.commodity_name || hit.com.name,
+              variety: hit.v.name
+            });
+          }
+        } else {
+          const catId = catByName.get(rec.category) ?? "others";
+          const commodityId = `cc-${rec.commodity_id}`;
+          const variantId = `cc-v-${rec.commodity_id}`;
+          const existing = next[variantId];
+          if (!existing || !hasValue(existing)) {
+            next[variantId] = field;
+            prefillMap.set(variantId, {
+              commodity_id: rec.commodity_id,
+              name: rec.commodity_name,
+              variety: rec.variety || "Base"
+            });
+          }
+          const list = addedCustom[catId] ?? (addedCustom[catId] = []);
+          if (!list.some((c) => c.id === commodityId)) {
+            list.push({
+              id: commodityId,
+              name: rec.commodity_name,
+              isHW: false,
+              variants: [{ id: variantId, name: rec.variety || "Base" }]
+            });
+          }
+        }
+      }
+      return next;
+    });
+    prefilledRef.current = prefillMap;
+    setCustomCommodities((prev) => {
+      const next = { ...prev };
+      for (const [catId, list] of Object.entries(addedCustom)) {
+        const cur = next[catId] ?? [];
+        const merged = [...cur];
+        for (const c of list) {
+          if (!merged.some((m) => m.id === c.id)) merged.push(c);
+        }
+        next[catId] = merged;
+      }
+      return next;
+    });
+  }
+
+  function applySetup(next) {
+    setSetup(next);
+    setFields({});
+    setCustomVariants({});
+    setCustomCommodities({});
+    prefilledRef.current = new Map();
+    setPrefillCount(0);
+    setCollapsed(new Set());
+    setDataName(generateDataName(next));
+    setSetupModalOpen(false);
+    triggerAutosave();
+    loadDayPrefill(next);
+  }
+
+  async function registerCommodity(body) {
+    try {
+      return await parseResponse(await apiPost("/dftc/commodities", body));
+    } catch { return null; }
+  }
 
   function getField(variantId, defaultUom = "kg") {
     return fields[variantId] ?? emptyField(defaultUom);
@@ -634,33 +921,91 @@ function DFTCPriceInput() {
 
   const hwCount = reviewEntries.filter((e) => e.com.isHW).length;
   const otherCount = reviewEntries.filter((e) => !e.com.isHW).length;
-  const canReview = reviewEntries.length > 0;
+  const canReview = reviewEntries.length > 0
+    || Array.from(prefilledRef.current.keys()).some((vid) => !hasValue(getField(vid)));
+
+  function resolveCommodityId(com, v) {
+    const map = catalogRef.current;
+    if (!map) return com.id;
+    const baseName = COMMODITY_NAME_OVERRIDES[com.name] ?? com.name;
+    const baseKey = nameSlug(baseName);
+    const variantKey = v && v.name && v.name !== "Base"
+      ? `${baseKey}-${nameSlug(v.name)}`
+      : baseKey;
+    return map.get(variantKey) ?? map.get(baseKey) ?? null;
+  }
 
   async function handleSave() {
-    const marketLower = (setup.market || "").toLowerCase();
-    const isDftc = marketLower.includes("dftc") || marketLower.includes("taboan");
-    const sourceId = isDftc ? "dftc" : "bankerohan";
+    const sourceId = sourceIdFor(setup);
 
-    const records = reviewEntries.map(({ com, v, f }) => ({
-      commodity_id: com.id,
-      variety: v.name,
-      uom: f.uom,
-      sample_prices: parseValid(f.samples),
-      price_avg: f.prevailing,
-      observation_status: "Reported value"
-    }));
+    const removedCommodities = [];
+    for (const [variantId, info] of prefilledRef.current) {
+      if (!hasValue(getField(variantId))) {
+        if (!removedCommodities.some((r) => r.commodity_id === info.commodity_id)) {
+          removedCommodities.push({ ...info });
+        }
+      }
+    }
+
+    const records = [];
+    let dropped = 0;
+    for (const { cat, com, v, f } of reviewEntries) {
+      const commodity_id = resolveCommodityId(com, v);
+      const base = {
+        variety: v.name,
+        uom: f.uom,
+        sample_prices: parseValid(f.samples),
+        price_avg: f.prevailing,
+        observation_status: "Reported value"
+      };
+      if (commodity_id) {
+        records.push({ commodity_id, ...base });
+      } else {
+        const registered = await registerCommodity({
+          name: com.name,
+          category: cat.name,
+          variety: v.name,
+          unit_of_measure: f.uom
+        });
+        if (registered?.id) {
+          try { catalogRef.current?.set(nameSlug(com.name), registered.id); } catch { }
+          records.push({ commodity_id: registered.id, ...base });
+        } else {
+          dropped += 1;
+        }
+      }
+    }
 
     const payload = {
       data_type: "price",
       source_id: sourceId,
       price_type: setup.priceType,
       reporting_date: setup.date,
-      records
+      records,
+      remove_records: removedCommodities.map((r) => r.commodity_id)
     };
 
     try {
       await parseResponse(await apiPost("/dftc/submissions/manual", payload));
-      try { localStorage.removeItem("dftc_price_draft"); } catch { }
+      if (dropped > 0) {
+        try {
+          localStorage.setItem("dftc_price_draft", "true");
+          localStorage.setItem("dftc_price_draft_data", JSON.stringify(draftRef.current));
+        } catch { }
+        setTimeout(() => {
+          navigate("/dftc/input", {
+            state: { errorMsg: `${dataName} was saved, but ${dropped} record(s) could not be sent because their commodity could not be registered. Your draft was kept on this device.` }
+          });
+        }, 1100);
+        return;
+      }
+      try {
+        localStorage.removeItem("dftc_price_draft");
+        localStorage.removeItem("dftc_price_draft_data");
+      } catch { }
+      setHasDraft(false);
+      prefilledRef.current = new Map();
+      setPrefillCount(0);
       setSaved(true);
       setTimeout(() => {
         navigate("/dftc/input", {
@@ -669,7 +1014,10 @@ function DFTCPriceInput() {
       }, 1000);
     } catch {
       setSaveStatus("offline");
-      try { localStorage.setItem("dftc_price_draft", "true"); } catch { }
+      try {
+        localStorage.setItem("dftc_price_draft", "true");
+        localStorage.setItem("dftc_price_draft_data", JSON.stringify(draftRef.current));
+      } catch { }
       setTimeout(() => {
         navigate("/dftc/input", {
           state: { errorMsg: "Could not save to server. Your draft was kept on this device." }
@@ -692,6 +1040,12 @@ function DFTCPriceInput() {
 
   // ─── Review mode ────────────────────────────────────────────────────────────
   if (reviewMode) {
+    const prefilledNow = prefilledRef.current;
+    const updatedCount = Array.from(prefilledNow.keys()).filter((vid) => hasValue(getField(vid))).length;
+    const newCount = reviewEntries.filter(({ v }) => !prefilledNow.has(v.id)).length;
+    const removedCommodities = Array.from(prefilledNow.entries())
+      .filter(([vid]) => !hasValue(getField(vid)))
+      .map(([, info]) => info);
     const byCategory = PRICE_CATEGORIES.map((cat) => ({
       cat,
       entries: getAllCommodities(cat).flatMap((com) =>
@@ -891,12 +1245,23 @@ function DFTCPriceInput() {
             </div>
           ) : (
             <button
-              onClick={handleSave}
+              onClick={() => setConfirmOpen(true)}
               disabled={!canReview}
               className="w-full py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50"
             >
               Save {dataName}
             </button>
+          )}
+
+          {confirmOpen && (
+            <ConfirmFinalizeModal
+              setup={setup}
+              newCount={newCount}
+              updatedCount={updatedCount}
+              removed={removedCommodities}
+              onClose={() => setConfirmOpen(false)}
+              onConfirm={() => { setConfirmOpen(false); handleSave(); }}
+            />
           )}
         </div>
       </div>
@@ -915,17 +1280,30 @@ function DFTCPriceInput() {
           </div>
           <div className="flex gap-2 shrink-0">
             <button
-              onClick={() => { setDraftDismissed(true); setHasDraft(false); try { localStorage.removeItem("dftc_price_draft"); } catch { } }}
+              onClick={discardDraft}
               className="text-[12px] text-amber-700 underline"
             >
               Discard Draft
             </button>
             <button
-              onClick={() => setDraftDismissed(true)}
+              onClick={restoreDraft}
               className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[12px] font-medium hover:bg-amber-700 transition-colors"
             >
               Continue Draft
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Amend banner — existing records for this day were loaded */}
+      {prefillCount > 0 && (
+        <div className="mb-5 bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-[var(--hw-green-700)] shrink-0" />
+            <div>
+              <p className="text-[13px] font-medium text-[var(--hw-green-800)]">Amending existing entry</p>
+              <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5">{prefillCount} record(s) were loaded from the earlier check for this day. Adjust values you need to change, or clear a field to remove it on finalize.</p>
+            </div>
           </div>
         </div>
       )}
@@ -1215,7 +1593,7 @@ function DFTCPriceInput() {
         <SetupModal
           initial={setup}
           onClose={() => setSetupModalOpen(false)}
-          onApply={(s) => { setSetup(s); setDataName(generateDataName(s)); setSetupModalOpen(false); }}
+          onApply={applySetup}
         />
       )}
       {addCommodityOpen && <AddCommodityModal onClose={() => setAddCommodityOpen(false)} onAdd={handleAddCommodity} />}

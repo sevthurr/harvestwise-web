@@ -4,7 +4,9 @@ import { ChevronLeft, ChevronRight, Check, MapPin, Loader2 } from "lucide-react"
 import { HW_COMMODITY_ITEMS, getVariants } from "../global/data/commodities";
 import { CommodityIllustration } from "../global/components/shared/CommodityIllustrations";
 import { Footer } from "../global/components/Footer";
-import { apiGet, apiPost, parseResponse } from "../global/api";
+import { apiGet, apiPost, apiPut, parseResponse } from "../global/api";
+import { useLanguage } from "../global/contexts/LanguageContext";
+import { useAuth } from "../global/contexts/AuthContext";
 
 // ---------------------------------------------------------------------------
 // Selling methods are fetched from GET /farmer/selling-methods.
@@ -18,10 +20,10 @@ import { apiGet, apiPost, parseResponse } from "../global/api";
 const ONBOARDING_CROPS = HW_COMMODITY_ITEMS.map((c) => ({ id: c.id, name: c.name }));
 
 const SELLING_OPTIONS = [
-  { id: "farmgate",    label: "To a buyer using farmgate price",  backendLabel: "Direct to Consumers / Farm Gate" },
-  { id: "market",      label: "Directly in the market",           backendLabel: "Palengke / Retail (Local Market)" },
-  { id: "trader",      label: "Through a trader",                 backendLabel: "Trader / Viajero (Wholesale)" },
-  { id: "unsure",      label: "Not sure yet",                     backendLabel: null },
+  { id: "farmgate", labelKey: "onboarding.selling_farmgate", label: "To a buyer using farmgate price",  backendLabel: "Direct to Consumers / Farm Gate" },
+  { id: "market",   labelKey: "onboarding.selling_market",   label: "Directly in the market",           backendLabel: "Palengke / Retail (Local Market)" },
+  { id: "trader",   labelKey: "onboarding.selling_trader",   label: "Through a trader",                 backendLabel: "Trader / Viajero (Wholesale)" },
+  { id: "unsure",   labelKey: "onboarding.selling_unsure",   label: "Not sure yet",                     backendLabel: null },
 ];
 
 // ---------------------------------------------------------------------------
@@ -102,42 +104,47 @@ const CompleteSVG = () => (
 // ---------------------------------------------------------------------------
 // Shared components
 // ---------------------------------------------------------------------------
-const LocationModal = ({ onAllow, onCancel, detecting }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-    <div className="w-full max-w-xs bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.18)] p-6 space-y-4">
-      <div className="flex flex-col items-center text-center space-y-3">
-        <div className="w-14 h-14 rounded-full bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] flex items-center justify-center">
-          <MapPin className="w-6 h-6 text-[var(--hw-green-700)]" />
+const LocationModal = ({ onAllow, onCancel, detecting }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="w-full max-w-xs bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.18)] p-6 space-y-4">
+        <div className="flex flex-col items-center text-center space-y-3">
+          <div className="w-14 h-14 rounded-full bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] flex items-center justify-center">
+            <MapPin className="w-6 h-6 text-[var(--hw-green-700)]" />
+          </div>
+          <div>
+            <p className="text-[16px] font-bold text-[var(--hw-neutral-900)]">
+              {t("onboarding.modal_location_title", {}, "Allow location access")}
+            </p>
+            <p className="mt-1.5 text-[14px] text-[var(--hw-neutral-500)] leading-relaxed">
+              {t("onboarding.modal_location_desc", {}, "Turn on location to detect your farm area faster. Your location is only used to fill in the fields below.")}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Allow location access</p>
-          <p className="mt-1.5 text-[14px] text-[var(--hw-neutral-500)] leading-relaxed">
-            Turn on location to detect your farm area faster. Your location is only used to fill in the fields below.
-          </p>
+        <div className="space-y-2 pt-1">
+          <button
+            type="button"
+            onClick={onAllow}
+            disabled={detecting}
+            className="w-full h-11 flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
+          >
+            {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+            {detecting ? t("onboarding.detecting_location", {}, "Detecting location…") : t("onboarding.modal_allow", {}, "Allow location")}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={detecting}
+            className="w-full h-11 text-[14px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors"
+          >
+            {t("onboarding.modal_cancel", {}, "Cancel")}
+          </button>
         </div>
-      </div>
-      <div className="space-y-2 pt-1">
-        <button
-          type="button"
-          onClick={onAllow}
-          disabled={detecting}
-          className="w-full h-11 flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
-        >
-          {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-          {detecting ? "Detecting location…" : "Allow location"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={detecting}
-          className="w-full h-11 text-[14px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors"
-        >
-          Cancel
-        </button>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const StepCard = ({ children }) => (
   <div className="w-full max-w-lg bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_2px_16px_0_rgba(0,0,0,0.07)] p-8">
@@ -167,74 +174,93 @@ const OptionChip = ({ label, selected, onClick, icon }) => (
   </button>
 );
 
-const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel = "Continue", disabled = false }) => (
-  <div className="space-y-2 pt-2">
-    <div className="flex gap-2">
-      {step > 1 && onBack && (
+const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, disabled = false }) => {
+  const { t } = useLanguage();
+  const label = continueLabel ?? t("common.continue", {}, "Continue");
+  return (
+    <div className="space-y-2 pt-2">
+      <div className="flex gap-2">
+        {step > 1 && onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={disabled}
+            className="flex items-center justify-center gap-1 px-5 h-12 border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            {t("common.back", {}, "Back")}
+          </button>
+        )}
         <button
           type="button"
-          onClick={onBack}
+          onClick={onContinue}
           disabled={disabled}
-          className="flex items-center justify-center gap-1 px-5 h-12 border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
+          className="flex-1 h-12 flex items-center justify-center gap-1.5 bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" />
-          Back
+          {disabled && <Loader2 className="w-4 h-4 animate-spin" />}
+          {label}
+          {!disabled && <ChevronRight className="w-4 h-4" />}
         </button>
-      )}
+      </div>
       <button
         type="button"
-        onClick={onContinue}
+        onClick={onSkip}
         disabled={disabled}
-        className="flex-1 h-12 flex items-center justify-center gap-1.5 bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
+        className="w-full text-center text-[14px] text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] disabled:opacity-40 transition-colors py-1"
       >
-        {disabled && <Loader2 className="w-4 h-4 animate-spin" />}
-        {continueLabel}
-        {!disabled && <ChevronRight className="w-4 h-4" />}
+        {t("common.skip_for_now", {}, "Skip for now")}
       </button>
     </div>
-    <button
-      type="button"
-      onClick={onSkip}
-      disabled={disabled}
-      className="w-full text-center text-[14px] text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] disabled:opacity-40 transition-colors py-1"
-    >
-      Skip for now
-    </button>
-  </div>
-);
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Step components
 // ---------------------------------------------------------------------------
 const TOTAL = 4;
 
-const Step1 = ({ data, onChange, onContinue, onSkip }) => (
-  <StepCard>
-    <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">Step 1 of {TOTAL}</p>
-    <LanguageSVG />
-    <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">Choose your preferred language</h2>
-    <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">You can change this later in Settings.</p>
-    <div className="mt-6 space-y-3">
-      {[
-        { id: "english", label: "English" },
-        { id: "cebuano", label: "Cebuano / Bisaya" },
-        { id: "tagalog", label: "Tagalog" },
-      ].map((opt) => (
-        <OptionChip
-          key={opt.id}
-          label={opt.label}
-          selected={data.language === opt.id}
-          onClick={() => onChange({ language: opt.id })}
-        />
-      ))}
-    </div>
-    <div className="mt-6">
-      <NavButtons step={1} onContinue={onContinue} onSkip={onSkip} />
-    </div>
-  </StepCard>
-);
+const Step1 = ({ data, onLanguageSelect, onContinue, onSkip, langError }) => {
+  const { t } = useLanguage();
+  return (
+    <StepCard>
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+        {t("common.step_indicator", { current: 1, total: TOTAL }, `Step 1 of ${TOTAL}`)}
+      </p>
+      <LanguageSVG />
+      <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
+        {t("onboarding.step1_title", {}, "Choose your preferred language")}
+      </h2>
+      <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">
+        {t("onboarding.step1_desc", {}, "You can change this later in Settings.")}
+      </p>
+      {langError && (
+        <p role="alert" className="mt-3 text-[13px] text-red-600 font-medium">
+          {langError}
+        </p>
+      )}
+      <div className="mt-6 space-y-3">
+        {[
+          { id: "ceb", label: "Bisaya" },
+          { id: "en", label: "English" },
+          { id: "tl", label: "Filipino" },
+        ].map((opt) => (
+          <OptionChip
+            key={opt.id}
+            label={opt.label}
+            selected={data.language === opt.id}
+            onClick={() => onLanguageSelect(opt.id)}
+          />
+        ))}
+      </div>
+      <div className="mt-6">
+        <NavButtons step={1} onContinue={onContinue} onSkip={onSkip} />
+      </div>
+    </StepCard>
+  );
+};
 
 const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
+  const { t } = useLanguage();
   const [showModal, setShowModal] = useState(false);
   const [detecting, setDetecting] = useState(false);
 
@@ -286,10 +312,16 @@ const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
         />
       )}
       <StepCard>
-        <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">Step 2 of {TOTAL}</p>
+        <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+          {t("common.step_indicator", { current: 2, total: TOTAL }, `Step 2 of ${TOTAL}`)}
+        </p>
         <LocationSVG />
-        <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">Where is your farm located?</h2>
-        <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">This helps HarvestWise show weather and crop advice for your area.</p>
+        <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
+          {t("onboarding.step2_title", {}, "Where is your farm located?")}
+        </h2>
+        <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">
+          {t("onboarding.step2_desc", {}, "This helps HarvestWise show weather and crop advice for your area.")}
+        </p>
 
         {data.locationMode === null && (
           <div className="mt-6 flex gap-3">
@@ -299,14 +331,14 @@ const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
               className="flex-1 h-12 flex items-center justify-center gap-2 border border-[var(--hw-green-700)] text-[var(--hw-green-700)] text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-50)] transition-colors"
             >
               <MapPin className="w-4 h-4" />
-              Use my location
+              {t("onboarding.use_location", {}, "Use my location")}
             </button>
             <button
               type="button"
               onClick={() => onChange({ locationMode: "manual" })}
               className="flex-1 h-12 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
             >
-              Enter manually
+              {t("onboarding.enter_manually", {}, "Enter manually")}
             </button>
           </div>
         )}
@@ -315,14 +347,16 @@ const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
           <div className="mt-5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="text-[14px] text-emerald-700 font-medium">Location detected automatically</span>
+              <span className="text-[14px] text-emerald-700 font-medium">
+                {t("onboarding.location_detected", {}, "Location detected automatically")}
+              </span>
             </div>
             <button
               type="button"
               onClick={() => onChange({ locationMode: "manual" })}
               className="text-[13px] text-[var(--hw-green-700)] font-semibold hover:underline flex-shrink-0"
             >
-              Edit
+              {t("common.edit", {}, "Edit")}
             </button>
           </div>
         )}
@@ -330,23 +364,23 @@ const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
         {(data.locationMode === "manual" || data.locationMode === "auto") && (
           <div className="mt-5 space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="city" className={labelCls}>City</label>
-              <input id="city" type="text" value={data.city} onChange={(e) => onChange({ city: e.target.value })} placeholder="Davao City" className={fieldCls} />
+              <label htmlFor="city" className={labelCls}>{t("onboarding.city", {}, "City")}</label>
+              <input id="city" type="text" value={data.city} onChange={(e) => onChange({ city: e.target.value })} placeholder={t("onboarding.city_placeholder", {}, "Davao City")} className={fieldCls} />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="district" className={labelCls}>District</label>
-              <input id="district" type="text" value={data.district} onChange={(e) => onChange({ district: e.target.value })} placeholder="e.g. Marilog" className={fieldCls} />
+              <label htmlFor="district" className={labelCls}>{t("onboarding.district", {}, "District")}</label>
+              <input id="district" type="text" value={data.district} onChange={(e) => onChange({ district: e.target.value })} placeholder={t("onboarding.district_placeholder", {}, "e.g. Marilog")} className={fieldCls} />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="barangay" className={labelCls}>Barangay</label>
-              <input id="barangay" type="text" value={data.barangay} onChange={(e) => onChange({ barangay: e.target.value })} placeholder="e.g. Buda" className={fieldCls} />
+              <label htmlFor="barangay" className={labelCls}>{t("onboarding.barangay", {}, "Barangay")}</label>
+              <input id="barangay" type="text" value={data.barangay} onChange={(e) => onChange({ barangay: e.target.value })} placeholder={t("onboarding.barangay_placeholder", {}, "e.g. Buda")} className={fieldCls} />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="farmSize" className={`${labelCls} flex items-center gap-1.5`}>
-                Farm Size
-                <span className="text-[12px] text-[var(--hw-neutral-400)] font-normal">(optional)</span>
+                {t("onboarding.farm_size", {}, "Farm Size")}
+                <span className="text-[12px] text-[var(--hw-neutral-400)] font-normal">{t("onboarding.optional", {}, "(optional)")}</span>
               </label>
-              <input id="farmSize" type="text" value={data.farmSize} onChange={(e) => onChange({ farmSize: e.target.value })} placeholder="e.g. 1,500 sq m or 0.5 hectare" className={fieldCls} />
+              <input id="farmSize" type="text" value={data.farmSize} onChange={(e) => onChange({ farmSize: e.target.value })} placeholder={t("onboarding.farm_size_placeholder", {}, "e.g. 1,500 sq m or 0.5 hectare")} className={fieldCls} />
             </div>
           </div>
         )}
@@ -360,6 +394,7 @@ const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
 };
 
 const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities }) => {
+  const { t } = useLanguage();
   // Use fetched commodities (real DB IDs) when available; fall back to static slugs
   const cropList = fetchedCommodities.length > 0
     ? fetchedCommodities
@@ -375,10 +410,16 @@ const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities 
 
   return (
     <StepCard>
-      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">Step 3 of {TOTAL}</p>
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+        {t("common.step_indicator", { current: 3, total: TOTAL }, `Step 3 of ${TOTAL}`)}
+      </p>
       <CropsSVG />
-      <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">What vegetables do you grow or plan to grow?</h2>
-      <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">Choose crops so HarvestWise can personalize your dashboard.</p>
+      <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
+        {t("onboarding.step3_title", {}, "What crops do you grow or plan to grow?")}
+      </h2>
+      <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">
+        {t("onboarding.step3_desc", {}, "Choose crops so HarvestWise can tailor forecasts and advice.")}
+      </p>
 
       <div className="mt-6 grid grid-cols-2 gap-2.5">
         {cropList.map((crop) => {
@@ -404,7 +445,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities 
       {Object.keys(data.crops).length > 0 && (
         <div className="mt-5 space-y-3 pt-4 border-t border-[var(--hw-neutral-100)]">
           <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide">
-            Preferred variety (optional)
+            {t("onboarding.preferred_variety", {}, "Preferred variety (optional)")}
           </p>
           {Object.keys(data.crops).map((cropName) => {
             const variants = getVariants(cropName);
@@ -418,7 +459,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities 
                     onChange={(e) => setVariety(cropName, e.target.value)}
                     className="h-9 pl-3 pr-8 text-[13px] font-medium text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] appearance-none"
                   >
-                    <option value="">Default</option>
+                    <option value="">{t("onboarding.variety_default", {}, "Default")}</option>
                     {variants.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                   <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--hw-neutral-400)] pointer-events-none" fill="none" viewBox="0 0 10 6">
@@ -438,78 +479,95 @@ const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities 
   );
 };
 
-const Step4 = ({ data, onChange, onContinue, onBack, onSkip, submitting, submitError }) => (
-  <StepCard>
-    <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">Step 4 of {TOTAL}</p>
-    <SellingSVG />
-    <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">How do you usually sell your harvest?</h2>
-    <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">This helps improve possible profit estimates later.</p>
-    <div className="mt-6 space-y-3">
-      {SELLING_OPTIONS.map((opt) => (
-        <OptionChip
-          key={opt.id}
-          label={opt.label}
-          selected={data.sellingMethod === opt.id}
-          onClick={() => onChange({ sellingMethod: opt.id })}
+const Step4 = ({ data, onChange, onContinue, onBack, onSkip, submitting, submitError }) => {
+  const { t } = useLanguage();
+  return (
+    <StepCard>
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+        {t("common.step_indicator", { current: 4, total: TOTAL }, `Step 4 of ${TOTAL}`)}
+      </p>
+      <SellingSVG />
+      <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
+        {t("onboarding.step4_title", {}, "How do you usually sell your harvest?")}
+      </h2>
+      <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">
+        {t("onboarding.step4_desc", {}, "This helps improve possible profit estimates later.")}
+      </p>
+      <div className="mt-6 space-y-3">
+        {SELLING_OPTIONS.map((opt) => (
+          <OptionChip
+            key={opt.id}
+            label={t(opt.labelKey, {}, opt.label)}
+            selected={data.sellingMethod === opt.id}
+            onClick={() => onChange({ sellingMethod: opt.id })}
+          />
+        ))}
+      </div>
+      <div className="mt-5 space-y-1.5">
+        <label htmlFor="sellingArea" className="flex items-center gap-1.5 text-[14px] font-semibold text-[var(--hw-neutral-700)]">
+          {t("onboarding.selling_buyer_label", {}, "Usual selling area or buyer type")}
+          <span className="text-[12px] text-[var(--hw-neutral-400)] font-normal">{t("onboarding.optional", {}, "(optional)")}</span>
+        </label>
+        <input
+          id="sellingArea"
+          type="text"
+          value={data.sellingArea}
+          onChange={(e) => onChange({ sellingArea: e.target.value })}
+          placeholder={t("onboarding.selling_buyer_placeholder", {}, "e.g. Bangkerohan market, direct buyer")}
+          className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
         />
-      ))}
-    </div>
-    <div className="mt-5 space-y-1.5">
-      <label htmlFor="sellingArea" className="flex items-center gap-1.5 text-[14px] font-semibold text-[var(--hw-neutral-700)]">
-        Usual selling area or buyer type
-        <span className="text-[12px] text-[var(--hw-neutral-400)] font-normal">(optional)</span>
-      </label>
-      <input
-        id="sellingArea"
-        type="text"
-        value={data.sellingArea}
-        onChange={(e) => onChange({ sellingArea: e.target.value })}
-        placeholder="e.g. Bangkerohan market, direct buyer"
-        className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
-      />
-    </div>
-    {submitError && (
-      <p role="alert" className="mt-3 text-[13px] text-red-600 font-medium">{submitError}</p>
-    )}
-    <div className="mt-6">
-      <NavButtons
-        step={4}
-        onBack={onBack}
-        onContinue={onContinue}
-        onSkip={onSkip}
-        continueLabel="Finish setup"
-        disabled={submitting}
-      />
-    </div>
-  </StepCard>
-);
-
-const LANGUAGE_LABEL = { english: "English", cebuano: "Cebuano / Bisaya", tagalog: "Tagalog" };
-const SELLING_LABEL  = {
-  farmgate: "To a buyer (farmgate)",
-  market:   "Directly in the market",
-  trader:   "Through a trader",
-  unsure:   "Not sure yet",
+      </div>
+      {submitError && (
+        <p role="alert" className="mt-3 text-[13px] text-red-600 font-medium">{submitError}</p>
+      )}
+      <div className="mt-6">
+        <NavButtons
+          step={4}
+          onBack={onBack}
+          onContinue={onContinue}
+          onSkip={onSkip}
+          continueLabel={t("onboarding.finish_setup", {}, "Finish setup")}
+          disabled={submitting}
+        />
+      </div>
+    </StepCard>
+  );
 };
 
 const SetupComplete = ({ data, onDone }) => {
+  const { t } = useLanguage();
   const selectedCropNames = Object.keys(data.crops);
-  const locationLine = [data.city, data.district, data.barangay].filter(Boolean).join(", ") || "Not set";
+  const locationLine = [data.city, data.district, data.barangay].filter(Boolean).join(", ") || t("onboarding.summary_not_set", {}, "Not set");
+
+  const getLangLabel = (code) => {
+    if (code === "ceb" || code === "cebuano") return t("common.lang_ceb", {}, "Bisaya");
+    if (code === "tl" || code === "tagalog") return t("common.lang_tl", {}, "Filipino");
+    return t("common.lang_en", {}, "English");
+  };
+
+  const getSellingLabel = (method) => {
+    if (method === "farmgate") return t("onboarding.selling_label_farmgate", {}, "To a buyer (farmgate)");
+    if (method === "market") return t("onboarding.selling_label_market", {}, "Directly in the market");
+    if (method === "trader") return t("onboarding.selling_label_trader", {}, "Through a trader");
+    if (method === "unsure") return t("onboarding.selling_label_unsure", {}, "Not sure yet");
+    return t("onboarding.summary_not_set", {}, "Not set");
+  };
+
   return (
     <StepCard>
       <CompleteSVG />
       <h2 className="mt-5 text-[22px] font-bold text-[var(--hw-neutral-900)] text-center">
-        You&apos;re ready to use HarvestWise
+        {t("onboarding.step5_title", {}, "You're all set!")}
       </h2>
       <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)] text-center">
-        Your setup is saved. You can update this anytime in Settings.
+        {t("onboarding.step5_desc", {}, "Your setup is saved. You can update this anytime in Settings.")}
       </p>
       <div className="mt-6 space-y-0 divide-y divide-[var(--hw-neutral-100)]">
         {[
-          { label: "Language",       value: LANGUAGE_LABEL[data.language] ?? data.language },
-          { label: "Farm location",  value: locationLine },
-          { label: "Selected crops", value: selectedCropNames.length ? selectedCropNames.join(", ") : "Not set" },
-          { label: "Selling method", value: data.sellingMethod ? SELLING_LABEL[data.sellingMethod] : "Not set" },
+          { label: t("onboarding.summary_language", {}, "Language"),       value: getLangLabel(data.language) },
+          { label: t("onboarding.summary_location", {}, "Farm location"),  value: locationLine },
+          { label: t("onboarding.summary_crops", {}, "Selected crops"), value: selectedCropNames.length ? selectedCropNames.join(", ") : t("onboarding.summary_not_set", {}, "Not set") },
+          { label: t("onboarding.summary_selling", {}, "Selling method"), value: data.sellingMethod ? getSellingLabel(data.sellingMethod) : t("onboarding.summary_not_set", {}, "Not set") },
         ].map((row) => (
           <div key={row.label} className="flex justify-between gap-3 text-[14px] py-2.5">
             <span className="text-[var(--hw-neutral-500)] flex-shrink-0">{row.label}</span>
@@ -519,10 +577,11 @@ const SetupComplete = ({ data, onDone }) => {
       </div>
       <div className="mt-6">
         <button
+          type="button"
           onClick={onDone}
           className="w-full h-12 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
         >
-          Go To Home
+          {t("onboarding.go_to_home", {}, "Go To Home")}
         </button>
       </div>
     </StepCard>
@@ -533,7 +592,7 @@ const SetupComplete = ({ data, onDone }) => {
 // Page
 // ---------------------------------------------------------------------------
 const INITIAL = {
-  language: "cebuano",
+  language: "ceb",
   locationMode: null,
   city: "Davao City",
   district: "",
@@ -548,14 +607,25 @@ const INITIAL = {
 
 function OnboardingPage() {
   const navigate = useNavigate();
+  const { setLanguage, t } = useLanguage();
+  const { refreshUser } = useAuth();
   const [step, setStep] = useState(1);
   const [data, setData] = useState(INITIAL);
+  const [langError, setLangError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   // Selling methods fetched from backend: [{id, label}]
   const [sellingMethods, setSellingMethods] = useState([]);
   // Commodities fetched from backend: [{id, name}] — real DB PKs for crop submission
   const [fetchedCommodities, setFetchedCommodities] = useState([]);
+
+  // Ensure new farmer defaults to ceb and persists to account on mount
+  useEffect(() => {
+    setLanguage("ceb");
+    apiPut("/farmer/profile", { preferred_language: "ceb" })
+      .then(() => refreshUser?.())
+      .catch((err) => console.warn("Could not persist default onboarding language:", err));
+  }, []);
 
   // Fetch lookup data on mount
   useEffect(() => {
@@ -573,6 +643,18 @@ function OnboardingPage() {
   const patch = (d) => setData((prev) => ({ ...prev, ...d }));
   const next  = () => setStep((s) => (s < 5 ? s + 1 : 5));
   const prev  = () => setStep((s) => (s > 1 ? s - 1 : 1));
+
+  const handleLanguageSelect = async (langId) => {
+    setLanguage(langId);
+    patch({ language: langId });
+    setLangError("");
+    try {
+      await apiPut("/farmer/profile", { preferred_language: langId });
+      await refreshUser?.();
+    } catch {
+      setLangError(t("farmer.settings.toast_lang_error", {}, "Could not save language preference to your account. Please check your connection and try again."));
+    }
+  };
 
   // Skip without saving — go straight to farmer home
   const skip = () => navigate("/farmer", { replace: true });
@@ -610,9 +692,10 @@ function OnboardingPage() {
       };
 
       await apiPost("/api/v1/farmer/onboarding", payload).then(parseResponse);
+      await refreshUser?.();
       setStep(5);
     } catch (err) {
-      setSubmitError(err.message || "Failed to save. Please try again.");
+      setSubmitError(err.message || t("onboarding.save_error", {}, "Failed to save. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -639,7 +722,7 @@ function OnboardingPage() {
         </div>
       )}
 
-      {step === 1 && <Step1 data={data} onChange={patch} onContinue={next} onSkip={skip} />}
+      {step === 1 && <Step1 data={data} onLanguageSelect={handleLanguageSelect} onContinue={next} onSkip={skip} langError={langError} />}
       {step === 2 && <Step2 data={data} onChange={patch} onContinue={next} onBack={prev} onSkip={skip} />}
       {step === 3 && <Step3 data={data} onChange={patch} onContinue={next} onBack={prev} onSkip={skip} fetchedCommodities={fetchedCommodities} />}
       {step === 4 && (

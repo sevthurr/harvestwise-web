@@ -16,55 +16,83 @@ const STATUS_TO_PHASE = {
   Cancelled: "completed",
 };
 
+export function normalizeCropPlan(raw) {
+  if (!raw) return null;
+  const item = toCamelCase(raw);
+  const rawStatus = item.status || "Planning";
+  const phase = STATUS_TO_PHASE[rawStatus] || "planning";
+  const commodity = item.commodity || {};
+  const commodityName = commodity.name || item.commodityName || item.cropName || "";
+  const variant = commodity.variety || item.variety || item.variant || null;
+  const commodityId = item.commodityId || commodity.id || (typeof item.commodity === "string" ? item.commodity : "") || "";
+
+  const productionCosts = Array.isArray(item.productionCosts) ? item.productionCosts : [];
+  const totalCost = productionCosts.length > 0
+    ? productionCosts.reduce((sum, c) => sum + Number(c.amount || 0), 0)
+    : Number(item.productionCost || item.totalCost || 0);
+
+  const qty = item.expectedHarvestQty != null ? Number(item.expectedHarvestQty) : (item.harvestQuantity != null ? Number(item.harvestQuantity) : null);
+  const breakEven = (qty && qty > 0 && totalCost > 0)
+    ? Math.ceil(totalCost / qty)
+    : (item.breakevenPricePerKg != null ? Number(item.breakevenPricePerKg) : (item.breakEvenPrice != null ? Number(item.breakEvenPrice) : null));
+
+  return {
+    id: item.id,
+    commodity: commodityId,
+    commodityId,
+    commodityName: commodityName || "\u2013",
+    variant,
+    variety: variant,
+    phase: rawStatus === "On Hold" ? "planning" : phase,
+    status: rawStatus,
+    isOnHold: rawStatus === "On Hold",
+    holdReason: item.holdReason || null,
+    holdDate: item.updatedAt
+      ? new Date(item.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : null,
+    plantingDate: item.actualPlantingDate
+      ? new Date(item.actualPlantingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : item.plannedPlantingDate
+        ? new Date(item.plannedPlantingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        : null,
+    harvestDate: item.expectedHarvestDate
+      ? new Date(item.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : null,
+    rawPlantingDate: item.actualPlantingDate || item.plannedPlantingDate || null,
+    rawHarvestDate: item.expectedHarvestDate || null,
+    farmArea: item.farmArea || null,
+    farmAreaUnit: "sqm",
+    harvestQuantity: qty,
+    expectedHarvestQty: qty,
+    totalCost,
+    productionCost: totalCost,
+    breakEvenPrice: breakEven,
+    breakevenPricePerKg: breakEven,
+    currentPrice: item.currentPrice || null,
+    forecastLower: item.forecastLower || null,
+    forecastUpper: item.forecastUpper || null,
+    profitLower: item.profitLower || 0,
+    profitUpper: item.profitUpper || 0,
+    nextMilestone:
+      rawStatus === "Completed"
+        ? "Crop cycle completed"
+        : rawStatus === "On Hold"
+          ? "Resume when market conditions improve"
+          : item.nextMilestone || null,
+    lastUpdated: item.updatedAt
+      ? new Date(item.updatedAt).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+        })
+      : null,
+  };
+}
+
 function transformCropItems(rawItems) {
-  return rawItems.map((c) => {
-    const item = toCamelCase(c);
-    const rawStatus = item.status || "Planning";
-    const phase = STATUS_TO_PHASE[rawStatus] || "planning";
-    const commodity = item.commodity || {};
-    return {
-      id: item.id,
-      commodity: item.commodityId || commodity.id || "",
-      commodityName: commodity.name || item.commodityName || "\u2013",
-      variant: commodity.variety || item.variety || null,
-      phase: rawStatus === "On Hold" ? "planning" : phase,
-      status: rawStatus,
-      isOnHold: rawStatus === "On Hold",
-      holdReason: item.holdReason || null,
-      holdDate: item.updatedAt
-        ? new Date(item.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : null,
-      plantingDate: item.actualPlantingDate
-        ? new Date(item.actualPlantingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : item.plannedPlantingDate
-          ? new Date(item.plannedPlantingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-          : null,
-      harvestDate: item.expectedHarvestDate
-        ? new Date(item.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : null,
-      farmArea: item.farmArea || null,
-      farmAreaUnit: "sqm",
-      harvestQuantity: item.expectedHarvestQty || null,
-      totalCost: item.productionCost || item.totalCost || 0,
-      breakEvenPrice: item.breakevenPricePerKg || item.breakevenPrice || null,
-      currentPrice: item.currentPrice || null,
-      nextMilestone:
-        rawStatus === "Completed"
-          ? "Crop cycle completed"
-          : rawStatus === "On Hold"
-            ? "Resume when market conditions improve"
-            : item.nextMilestone || null,
-      lastUpdated: item.updatedAt
-        ? new Date(item.updatedAt).toLocaleString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-            hour: "numeric",
-            minute: "numeric",
-          })
-        : null,
-    };
-  });
+  return rawItems.map(normalizeCropPlan).filter(Boolean);
 }
 
 const CropsProvider = ({ children }) => {

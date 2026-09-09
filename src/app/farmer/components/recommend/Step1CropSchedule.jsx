@@ -7,6 +7,7 @@ import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../../global/api";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../global/components/ui/select";
+import { useLanguage } from "../../../global/contexts/LanguageContext";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -16,6 +17,7 @@ function formatDate(iso) {
 const PAGE_SIZE = 4;
 
 const Step1CropSchedule = ({ data, onChange, errors }) => {
+  const { t } = useLanguage();
   const [commodityOptions, setCommodityOptions] = useState([]);
   const [loadingCommodities, setLoadingCommodities] = useState(true);
 
@@ -41,23 +43,32 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
 
             let baseName = camelItem.baseName || nameStr.split('-')[0].trim();
             let variety = camelItem.variety || (nameStr.includes('-') ? nameStr.split('-').slice(1).join('-').trim() : '');
+            const rawId = camelItem.commodityId || item.id || camelItem.id;
 
             if (!baseMap[key]) {
               baseMap[key] = {
                 id: key,
                 name: baseName,
-                varieties: new Set()
+                varieties: new Set(),
+                varietyMap: {},
+                defaultCommodityId: rawId,
               };
             }
             if (variety) {
               baseMap[key].varieties.add(variety);
+              baseMap[key].varietyMap[variety.toLowerCase()] = rawId;
+              if (variety.toLowerCase() === 'medium') {
+                baseMap[key].defaultCommodityId = rawId;
+              }
             }
           });
 
           const top10 = Object.values(baseMap).map(c => ({
             id: c.id,
             name: c.name,
-            varieties: Array.from(c.varieties)
+            varieties: Array.from(c.varieties),
+            varietyMap: c.varietyMap,
+            defaultCommodityId: c.defaultCommodityId,
           }));
 
           setCommodityOptions(top10);
@@ -125,14 +136,16 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   }
       <div>
         <label className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-3">
-          Vegetable
+          {t("farmer.prices.category_vegetables", {}, "Vegetable")}
         </label>
         {
     /* Carousel */
   }
         <div>
           {commodityOptions.length === 0 ? (
-            <p className="text-sm text-[var(--hw-neutral-500)] italic py-4">No top 10 vegetables available in database.</p>
+            <p className="text-sm text-[var(--hw-neutral-500)] italic py-4">
+              {t("farmer.assess.no_vegetables_available", {}, "No top 10 vegetables available in database.")}
+            </p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {COMMODITY_PAGES[page]?.map((c) => {
@@ -140,7 +153,10 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
                 return <button
                   key={c.id}
                   type="button"
-                  onClick={() => onChange({ commodity: c.id, variant: "" })}
+                  onClick={() => {
+                    const defId = c.varietyMap?.['medium'] || c.defaultCommodityId || c.id;
+                    onChange({ commodity: c.id, variant: "", commodityId: defId });
+                  }}
                   className={`
                     flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all
                     ${selected ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)]" : "border-[var(--hw-neutral-200)] bg-white hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-neutral-50)]"}
@@ -160,9 +176,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
             </div>
           )}
 
-          {
-    /* Page navigation */
-  }
+          {/* Page navigation */}
           {COMMODITY_PAGES.length > 1 && (
             <div className="flex items-center justify-between mt-3">
               <button
@@ -204,19 +218,15 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
 
         {errors.commodity && <p className="mt-2 text-sm text-red-600">{errors.commodity}</p>}
 
-        {
-    /* Typical duration chip */
-  }
+        {/* Typical duration chip */}
         {duration && <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
             <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
             <span className="text-[13px] text-[var(--hw-neutral-900)]">
-              Typical duration: <strong>{duration.label}</strong>
+              {t("farmer.assess.typical_duration", { label: t(`farmer.assess.duration_${data.commodity}`, {}, duration.label) }, `Typical duration: ${duration.label}`)}
             </span>
           </div>}
 
-        {
-    /* Variant picker — dropdown, shown only when commodity has 2+ varieties */
-  }
+        {/* Variant picker — dropdown, shown only when commodity has 2+ varieties */}
         {data.commodity && (() => {
           const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
           const baseName = selectedCommodity?.name || HW_ID_TO_NAME[data.commodity] || "";
@@ -228,11 +238,14 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
           return (
             <div className="mt-4">
               <label className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5">
-                Variety
+                {t("farmer.commodityDetail.variety", {}, "Variety")}
               </label>
-              <Select value={data.variant || undefined} onValueChange={(v) => onChange({ variant: v })}>
+              <Select value={data.variant || undefined} onValueChange={(v) => {
+                const varId = selectedCommodity?.varietyMap?.[v.toLowerCase()] || selectedCommodity?.defaultCommodityId || data.commodityId;
+                onChange({ variant: v, commodityId: varId });
+              }}>
                 <SelectTrigger className="w-full h-10 text-[14px] font-medium text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] hover:border-[var(--hw-neutral-400)] transition-colors">
-                  <SelectValue placeholder="Select a variety" />
+                  <SelectValue placeholder={t("farmer.commodityDetail.select_variety", {}, "Select a variety")} />
                 </SelectTrigger>
                 <SelectContent position="popper" sideOffset={4} className="rounded-xl border border-[var(--hw-neutral-200)] shadow-lg">
                   {allVariants.map((v) => (
@@ -247,76 +260,67 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
         })()}
       </div>
 
-      {
-    /* Planting date */
-  }
+      {/* Planting date */}
       <div>
         <label
-    htmlFor="planting-date"
-    className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
-  >
-          Target planting date
+          htmlFor="planting-date"
+          className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
+        >
+          {t("farmer.assess.target_planting_date", {}, "Target planting date")}
         </label>
         <input
-    id="planting-date"
-    type="date"
-    value={data.plantingDate}
-    onChange={(e) => onChange({ plantingDate: e.target.value })}
-    className={`
+          id="planting-date"
+          type="date"
+          value={data.plantingDate}
+          onChange={(e) => onChange({ plantingDate: e.target.value })}
+          className={`
             w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition
             focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]
             ${errors.plantingDate ? "border-red-400 bg-red-50" : "border-[var(--hw-neutral-200)] bg-white"}
           `}
-  />
+        />
         {errors.plantingDate && <p className="mt-1.5 text-sm text-red-600">{errors.plantingDate}</p>}
       </div>
 
-      {
-    /* Harvest date with suggestion */
-  }
+      {/* Harvest date with suggestion */}
       <div>
         <label
-    htmlFor="harvest-date"
-    className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
-  >
-          Expected harvest date
+          htmlFor="harvest-date"
+          className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
+        >
+          {t("farmer.assess.expected_harvest_date", {}, "Expected harvest date")}
         </label>
         <input
-    id="harvest-date"
-    type="date"
-    value={data.harvestDate}
-    onChange={(e) => onChange({ harvestDate: e.target.value })}
-    className={`
+          id="harvest-date"
+          type="date"
+          value={data.harvestDate}
+          onChange={(e) => onChange({ harvestDate: e.target.value })}
+          className={`
             w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition
             focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]
             ${errors.harvestDate ? "border-red-400 bg-red-50" : "border-[var(--hw-neutral-200)] bg-white"}
           `}
-  />
+        />
         {errors.harvestDate && <p className="mt-1.5 text-sm text-red-600">{errors.harvestDate}</p>}
 
-        {
-    /* Harvest suggestion */
-  }
+        {/* Harvest suggestion */}
         {suggestionLabel && data.plantingDate && <div className="mt-2 space-y-1.5">
             <p className="text-[13px] text-[var(--hw-neutral-900)]">
-              Suggested harvest window based on typical duration:
+              {t("farmer.assess.suggested_window_note", {}, "Suggested harvest window based on typical duration:")}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[13px] font-medium text-[var(--hw-green-800)] bg-[var(--hw-green-50)] px-2.5 py-1 rounded-lg border border-[var(--hw-green-200)]">
                 {suggestionLabel}
               </span>
               {data.harvestDate !== suggestion?.minDate && <button
-    type="button"
-    onClick={applySuggestion}
-    className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-  >
-                  Use this date
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>}
+                type="button"
+                onClick={applySuggestion}
+                className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+              >
+                {t("farmer.assess.use_this_date", {}, "Use this date")}
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>}
             </div>
-            <p className="text-[12px] text-[var(--hw-neutral-700)] italic">
-              Prototype reference only. Actual harvest timing may vary.
-            </p>
           </div>}
       </div>
       {

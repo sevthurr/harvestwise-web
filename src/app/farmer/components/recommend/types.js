@@ -43,18 +43,19 @@ function getHarvestHorizon(harvestDate) {
   const daysUntil = Math.ceil((harvest.getTime() - today.getTime()) / 864e5);
   return { daysUntil, isWithin28d: daysUntil <= 28 };
 }
-const DEFAULT_EXPENSE_NAMES = [
-  "Seeds or planting materials",
-  "Fertilizer",
-  "Crop protection",
-  "Labor",
-  "Irrigation",
-  "Transportation",
-  "Other expenses"
+const DEFAULT_EXPENSES_DEF = [
+  { key: "expense_seeds", name: "Seeds or planting materials" },
+  { key: "expense_fertilizer", name: "Fertilizer" },
+  { key: "expense_protection", name: "Crop protection" },
+  { key: "expense_labor", name: "Labor" },
+  { key: "expense_irrigation", name: "Irrigation" },
+  { key: "expense_transport", name: "Transportation" }
 ];
-const makeDefaultExpenses = () => DEFAULT_EXPENSE_NAMES.map((name, i) => ({
+const DEFAULT_EXPENSE_NAMES = DEFAULT_EXPENSES_DEF.map((e) => e.name);
+const makeDefaultExpenses = () => DEFAULT_EXPENSES_DEF.map((exp, i) => ({
   id: String(i + 1),
-  name,
+  key: exp.key,
+  name: exp.name,
   amount: "",
   isCustom: false
 }));
