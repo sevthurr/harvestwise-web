@@ -1,10 +1,55 @@
 export const calendar = {
+  page_title: "Crop Calendar",
+  page_subtitle: "Track crop schedules and harvest timing.",
+  days: {
+    sun: "Sun",
+    mon: "Mon",
+    tue: "Tue",
+    wed: "Wed",
+    thu: "Thu",
+    fri: "Fri",
+    sat: "Sat"
+  },
+  months: {
+    january: "January",
+    february: "February",
+    march: "March",
+    april: "April",
+    may: "May",
+    june: "June",
+    july: "July",
+    august: "August",
+    september: "September",
+    october: "October",
+    november: "November",
+    december: "December"
+  },
+  legend: {
+    light_rain: "Light rain",
+    heavy_rain: "Heavy rain",
+    hot_days: "Hot days",
+    events: "Events"
+  },
+  selected_date: {
+    weather_note: "Weather note",
+    market_note: "Market note",
+    expected_harvest: "Expected harvest",
+    expected_harvest_date: "Expected harvest date",
+    check_crop: "Check this crop"
+  },
+  recommendations_title: "Crop recommendations",
+  empty_recommendations_title: "No crop recommendations available yet.",
+  empty_recommendations_helper: "There is not enough data yet to provide a recommendation for this month.",
+  check_a_crop: "Check a crop",
+  empty_weather_note: "No weather note available right now.",
   "labels": {
     "label_recommended": "Recommended for this Month",
     "label_proceed_with_caution": "Consider with Caution",
     "label_avoid_for_now": "Better to Wait",
     "month_heading": "Plan for {planting_month}",
     "harvest_label": "Expected Harvest",
+    "planting_date": "Planting date",
+    "expected_harvest": "Expected harvest",
     "reason_heading": "Why this plan?",
     "action_heading": "What should I consider?",
     "historical_price": "Past Average Price",

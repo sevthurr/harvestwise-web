@@ -37,5 +37,10 @@ export const monitoringActions = {
   "action_harvest_price": "Ihambing ang presyo ng mga mamimili bago magbenta. Itala ang aktuwal na presyong natanggap mo.",
   "action_harvest_severe_weather": "Protektahan ang naaning produkto at ihinto muna ang delikadong trabaho sa bukid hanggang mas ligtas ang kondisyon.",
   "action_harvest_profit_price": "Ihambing nang mabuti ang presyo ng mga mamimili. Kung magbebenta, itala ang aktuwal na presyo para maihambing sa iyong gastos.",
-  "action_harvest_supply_price": "Kailangang bantayan ang mataas na suplay at hindi magandang presyo. Ihambing ang mga mamimili at pagpipilian sa pagbebenta bago ibenta ang natitirang ani."
+  "action_harvest_supply_price": "Kailangang bantayan ang mataas na suplay at hindi magandang presyo. Ihambing ang mga mamimili at pagpipilian sa pagbebenta bago ibenta ang natitirang ani.",
+  next_steps_title: "Ano ang dapat kong gawin sunod?",
+  save_plan_instruction: "I-save sa Aking mga Pananim upang masimulan ang pagsubaybay sa iyong plano at mga kondisyon.",
+  update_farmgate: "I-update ang presyong farmgate mamaya kapag may alok na ang mamimili sa iyo.",
+  confirm_farmgate: "Kumpirmahin ang iyong presyong farmgate sa mamimili bago ang pag-aani.",
+  check_prices_near_harvest: "Tingnan muli ang presyo kapag malapit na ang ani bago magdesisyon kung kailan magbebenta."
 };

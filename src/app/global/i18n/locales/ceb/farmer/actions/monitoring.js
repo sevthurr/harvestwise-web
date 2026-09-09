@@ -37,5 +37,10 @@ export const monitoringActions = {
   "action_harvest_price": "Ikumpara ang presyo sa mga mamalit bago magbaligya. Itala ang aktuwal nga presyo nga imong nadawat.",
   "action_harvest_severe_weather": "Protektahi ang na-ani nga produkto ug hunongi sa una ang delikadong trabaho sa uma hangtod mas luwas ang kondisyon.",
   "action_harvest_profit_price": "Ikumpara pag-ayo ang presyo sa mga mamalit. Kung magbaligya, itala ang aktuwal nga presyo aron maikumpara sa imong gasto.",
-  "action_harvest_supply_price": "Kinahanglan bantayan ang taas nga suplay ug dili maayong presyo. Ikumpara ang mga mamalit ug mga kapilian sa pagbaligya bago ibaligya ang nahibiling ani."
+  "action_harvest_supply_price": "Kinahanglan bantayan ang taas nga suplay ug dili maayong presyo. Ikumpara ang mga mamalit ug mga kapilian sa pagbaligya bago ibaligya ang nahibiling ani.",
+  next_steps_title: "Unsa akong buhaton sunod?",
+  save_plan_instruction: "I-save sa Akong mga Tanom aron masugdan ang pagsubay sa imong plano ug pagmonitor sa kondisyon.",
+  update_farmgate: "I-update ang presyong farmgate kung naa na kay offer gikan sa mamalitay.",
+  confirm_farmgate: "Kumpirmaha ang imong presyong farmgate sa imong mamalitay sa dili pa ang ani.",
+  check_prices_near_harvest: "Tan-awa pag-usab ang presyo kung hapit na ang ani bago ka magdesisyon kanus-a ibaligya."
 };

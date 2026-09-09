@@ -79,5 +79,8 @@ export const advisory = {
   "advisory_preharvest_generic": "Review current market and weather conditions as harvest approaches.",
   "advisory_harvest_generic": "Review current market and weather conditions while harvesting or selling.",
   "advisory_reasons_unavailable": "Detailed reasons are not available right now.",
-  "advisory_result_unavailable": "Current assessment is not available right now."
+  "advisory_result_unavailable": "Current assessment is not available right now.",
+  "detailed_factors_title": "Detailed Factors",
+  "market_analysis_crop_plan": "Market analysis for your crop plan",
+  "assess_crop_again": "Assess this crop again"
 };

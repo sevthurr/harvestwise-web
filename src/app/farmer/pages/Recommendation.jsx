@@ -2,56 +2,36 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   ArrowRight,
   CloudRain,
   Sun,
   CalendarClock,
-  ChevronDown,
-  ChevronUp,
-  Sprout,
-  PhilippinePeso,
-  Package,
-  Leaf,
-  Cloud,
-  TrendingUp
+  Sprout
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
-import { Breadcrumb } from "../components/shared/Breadcrumb";
-import { getVariants } from "../../global/data/commodities";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
-const TwoToneStormIcon = ({ className }) => <svg
-  viewBox="0 0 24 24"
-  fill="none"
-  strokeWidth={2}
-  strokeLinecap="round"
-  strokeLinejoin="round"
-  className={className}
->
+import { useCrops } from "../components/crops/CropsContext";
+
+const TwoToneStormIcon = ({ className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
     <path stroke="#3b82f6" d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973" />
     <path stroke="#f59e0b" d="m13 12-3 5h4l-3 5" />
-  </svg>;
-const FACTOR_ICONS = {
-  Price: PhilippinePeso,
-  Supply: Package,
-  Production: Leaf,
-  Weather: Cloud,
-  Profit: TrendingUp
-};
-const FACTOR_COLORS = {
-  Price: "text-emerald-600",
-  Supply: "text-blue-500",
-  Production: "text-green-600",
-  Weather: "text-sky-500",
-  Profit: "text-amber-600"
-};
-// Build calendar markers from market events, crop plans, and the weather
-// forecast for the grid
+  </svg>
+);
+
+// Build calendar markers from market events, crop plans, and the weather forecast for the grid
 function forecastMarkerType(f) {
   const condition = String(f.suitability || f.weather_condition || "").toLowerCase();
   if (condition.includes("severe")) return "storm";
@@ -65,7 +45,6 @@ function forecastMarkerType(f) {
 
 function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, month) {
   const markers = {};
-  const mk = `${year}-${month}`;
 
   (marketEvents || []).forEach((item) => {
     const camel = toCamelCase(item);
@@ -82,8 +61,9 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
   });
 
   (cropPlans || []).forEach((c) => {
-    const camel = toCamelCase(c);
-    const pDate = camel.actualPlantingDate || camel.plannedPlantingDate;
+    const pDate = c.rawPlantingDate || c.actualPlantingDate || c.plannedPlantingDate || c.plantingDate;
+    const name = c.commodityName && c.commodityName !== "\u2013" ? c.commodityName : "Crop";
+    const variant = c.variant || c.variety || null;
     if (pDate) {
       const ds = String(pDate);
       const parts = ds.split("-");
@@ -91,17 +71,15 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
         const d = parseInt(parts[2], 10);
         if (!markers[d]) markers[d] = {};
         markers[d].crop = {
-          id: camel.commodityId || "crop",
-          name: camel.commodityName || "Crop",
-          variant: camel.variety || null,
+          id: c.commodityId || c.commodity || "crop",
+          name,
+          variant,
           type: "plant",
-          harvestStr: camel.expectedHarvestDate
-            ? new Date(camel.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-            : null,
+          harvestStr: c.harvestDate || (c.expectedHarvestDate ? new Date(c.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null),
         };
       }
     }
-    const hDate = camel.expectedHarvestDate;
+    const hDate = c.rawHarvestDate || c.expectedHarvestDate || c.harvestDate;
     if (hDate) {
       const ds = String(hDate);
       const parts = ds.split("-");
@@ -109,9 +87,9 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
         const d = parseInt(parts[2], 10);
         if (!markers[d]) markers[d] = {};
         markers[d].crop = {
-          id: camel.commodityId || "crop",
-          name: camel.commodityName || "Crop",
-          variant: camel.variety || null,
+          id: c.commodityId || c.commodity || "crop",
+          name,
+          variant,
           type: "harvest",
         };
       }
@@ -140,36 +118,6 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
   return markers;
 }
 
-// Transform price data into crop recommendation cards
-function buildRecommendations(pricesData) {
-  const rawItems = pricesData?.items || (Array.isArray(pricesData) ? pricesData : []);
-  const seen = new Set();
-  const crops = [];
-  rawItems.forEach((item) => {
-    const camel = toCamelCase(item);
-    const isTop = camel.isTop10 === true || item.is_top10 === true;
-    const id = camel.commodityId || camel.id || item.commodity_id;
-    const name = camel.name || camel.commodityName || item.name;
-    if (!isTop || !id || !name || seen.has(id)) return;
-    seen.add(id);
-    crops.push({
-      id,
-      name,
-      summary: camel.priceAvg ? `Good option this month` : "Good option this month",
-      plantWindow: "Next 2 weeks",
-      harvestWindow: "60-90 days",
-      bestVariety: camel.variety || "–",
-      reasons: [
-        { label: "Price", text: camel.priceAvg ? `₱${camel.priceAvg}/kg today` : "Price data not available" },
-        { label: "Supply", text: camel.volumeTotal ? `${camel.volumeTotal} kg traded this week` : "Supply information available" },
-        { label: "Production", text: "Production data available" },
-        { label: "Weather", text: "Weather conditions are suitable" },
-        { label: "Profit", text: camel.priceAvg ? `Good profit potential at ₱${camel.priceAvg}/kg` : "Good profit potential" }
-      ]
-    });
-  });
-  return crops.slice(0, 3);
-}
 const DAY_LABELS = [
   { key: "farmer.calendar.days.sun", fallback: "Sun" },
   { key: "farmer.calendar.days.mon", fallback: "Mon" },
@@ -179,6 +127,7 @@ const DAY_LABELS = [
   { key: "farmer.calendar.days.fri", fallback: "Fri" },
   { key: "farmer.calendar.days.sat", fallback: "Sat" }
 ];
+
 const MONTH_NAMES = [
   "January",
   "February",
@@ -193,36 +142,36 @@ const MONTH_NAMES = [
   "November",
   "December"
 ];
+
 function monthKey(year, month) {
   return `${year}-${month}`;
 }
+
 function daysInMonth(year, month) {
   return new Date(year, month, 0).getDate();
 }
+
 function firstWeekday(year, month) {
   return new Date(year, month - 1, 1).getDay();
 }
-function longDate(year, month, day) {
-  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric"
-  });
-}
+
 function hasAnyMarker(m) {
   return !!(m.crop || m.weather || m.event);
 }
+
 const WIcon = ({ type, cls }) => {
   if (type === "rain") return <CloudRain className={cls} />;
   if (type === "storm") return <TwoToneStormIcon className={cls} />;
   return <Sun className={cls} />;
 };
+
 const weatherColor = (type, selected = false) => {
   if (selected) return "text-white/80";
   if (type === "heat") return "text-orange-500";
   if (type === "storm") return "text-blue-600";
   return "text-blue-500";
 };
+
 const _weatherNote = (type, info, t) => {
   const hasInfo = !!(info && (info.rainProb != null || info.rainfall != null || info.tempMax != null));
   const rainProb = hasInfo && info.rainProb != null ? ` (${Math.round(info.rainProb)}% chance)` : "";
@@ -236,9 +185,10 @@ const _weatherNote = (type, info, t) => {
   if (type === "rain") return t("farmer.calendar.weather_note_rain", { rain_mm: rainMm, rain_chance: rainProb });
   return t("farmer.calendar.weather_note_fair", { temps });
 };
+
 const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) => {
   const { t } = useLanguage();
-  const today = /* @__PURE__ */ new Date();
+  const today = new Date();
   const isNow = today.getFullYear() === year && today.getMonth() + 1 === month;
   const todayDay = isNow ? today.getDate() : -1;
   const total = daysInMonth(year, month);
@@ -249,228 +199,152 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
     ...Array.from({ length: total }, (_, i) => i + 1)
   ];
   while (cells.length % 7 !== 0) cells.push(null);
-  return <>
+
+  return (
+    <>
       <div className="grid grid-cols-7 mb-1">
-        {DAY_LABELS.map((d) => <div key={d.key} className="text-center text-[12px] font-semibold text-[var(--hw-neutral-700)] py-1">{t(d.key, {}, d.fallback)}</div>)}
+        {DAY_LABELS.map((d) => (
+          <div key={d.key} className="text-center text-[12px] font-semibold text-[var(--hw-neutral-700)] py-1">
+            {t(d.key, {}, d.fallback)}
+          </div>
+        ))}
       </div>
       <div className="grid grid-cols-7 gap-y-1">
         {cells.map((day, i) => {
-    if (day === null) return <div key={`e${i}`} />;
-    const m = data[day] ?? {};
-    const marked = hasAnyMarker(m);
-    const isToday = day === todayDay;
-    const isSelected = day === selectedDay;
-    return <button
-      key={day}
-      onClick={() => onSelectDay(day)}
-      className={`flex flex-col items-center justify-start pt-1.5 pb-1 min-h-[52px] rounded-xl text-[13px] font-medium transition-colors
+          if (day === null) return <div key={`e${i}`} />;
+          const m = data[day] ?? {};
+          const marked = hasAnyMarker(m);
+          const isToday = day === todayDay;
+          const isSelected = day === selectedDay;
+          return (
+            <button
+              key={day}
+              onClick={() => onSelectDay(day)}
+              className={`flex flex-col items-center justify-start pt-1.5 pb-1 min-h-[52px] rounded-xl text-[13px] font-medium transition-colors
                 ${isSelected ? "bg-[var(--hw-green-700)] text-white" : isToday ? "ring-2 ring-[var(--hw-green-700)] text-[var(--hw-neutral-900)]" : marked ? "text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-100)]" : "text-[var(--hw-neutral-400)] hover:bg-[var(--hw-neutral-50)]"}
               `}
-    >
+            >
               <span>{day}</span>
-              {marked && <div className="flex items-center justify-center gap-0.5 mt-0.5 px-0.5">
-                  {m.crop && <CommodityIllustration
-      commodityId={m.crop.id}
-      className={`w-4 h-4 flex-shrink-0 ${isSelected ? "opacity-80" : ""}`}
-    />}
-                  {m.weather && <WIcon
-      type={m.weather}
-      cls={`w-3.5 h-3.5 flex-shrink-0 ${weatherColor(m.weather, isSelected)}`}
-    />}
-                  {m.event && <CalendarClock className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? "text-white/80" : "text-emerald-600"}`} />}
-                </div>}
-            </button>;
-  })}
+              {marked && (
+                <div className="flex items-center justify-center gap-0.5 mt-0.5 px-0.5">
+                  {m.crop && (
+                    <CommodityIllustration
+                      commodityId={m.crop.id}
+                      className={`w-4 h-4 flex-shrink-0 ${isSelected ? "opacity-80" : ""}`}
+                    />
+                  )}
+                  {m.weather && (
+                    <WIcon
+                      type={m.weather}
+                      cls={`w-3.5 h-3.5 flex-shrink-0 ${weatherColor(m.weather, isSelected)}`}
+                    />
+                  )}
+                  {m.event && (
+                    <CalendarClock
+                      className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? "text-white/80" : "text-emerald-600"}`}
+                    />
+                  )}
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
-    </>;
+    </>
+  );
 };
+
 const SelectedDateCard = ({ year, month, day, markers }) => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-      <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">{longDate(year, month, day)}</p>
+  const rawMonthName = MONTH_NAMES[month - 1];
+  const localizedMonth = t(`farmer.calendar.months.${rawMonthName.toLowerCase()}`, {}, rawMonthName);
 
-      {markers.crop && <div className="flex items-start gap-2.5">
+  return (
+    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+      <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
+        {localizedMonth} {day}, {year}
+      </p>
+
+      {markers.crop && (
+        <div className="flex items-start gap-2.5">
           <CommodityIllustration commodityId={markers.crop.id} className="w-8 h-8 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
               {markers.crop.variant ? `${markers.crop.name} (${markers.crop.variant})` : markers.crop.name}
             </p>
-            {markers.crop.type === "plant" && markers.crop.harvestStr && <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-                Expected harvest: {markers.crop.harvestStr}
-              </p>}
-            {markers.crop.type === "harvest" && <p className="text-[13px] text-emerald-600 font-medium mt-0.5">Expected harvest date</p>}
+            {markers.crop.type === "plant" && markers.crop.harvestStr && (
+              <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
+                {t("farmer.calendar.selected_date.expected_harvest", {}, "Expected harvest")}: {markers.crop.harvestStr}
+              </p>
+            )}
+            {markers.crop.type === "harvest" && (
+              <p className="text-[13px] text-emerald-600 font-medium mt-0.5">
+                {t("farmer.calendar.selected_date.expected_harvest_date", {}, "Expected harvest date")}
+              </p>
+            )}
           </div>
-        </div>}
+        </div>
+      )}
 
-      {markers.weather && <div className="flex items-start gap-2">
+      {markers.weather ? (
+        <div className="flex items-start gap-2">
           <WIcon
-    type={markers.weather}
-    cls={`w-4 h-4 flex-shrink-0 mt-0.5 ${weatherColor(markers.weather)}`}
-  />
+            type={markers.weather}
+            cls={`w-4 h-4 flex-shrink-0 mt-0.5 ${weatherColor(markers.weather)}`}
+          />
           <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">Weather note</p>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
+              {t("farmer.calendar.selected_date.weather_note", {}, "Weather note")}
+            </p>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
               {_weatherNote(markers.weather, markers.weatherInfo || null, t)}
             </p>
           </div>
-        </div>}
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <CloudRain className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
+              {t("farmer.calendar.selected_date.weather_note", {}, "Weather note")}
+            </p>
+            <p className="text-[13px] text-[var(--hw-neutral-500)] mt-0.5 leading-snug">
+              {t("farmer.calendar.empty_weather_note", {}, "No weather note available right now.")}
+            </p>
+          </div>
+        </div>
+      )}
 
-      {markers.event && <div className="flex items-start gap-2">
+      {markers.event && (
+        <div className="flex items-start gap-2">
           <CalendarClock className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">Market note</p>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
+              {t("farmer.calendar.selected_date.market_note", {}, "Market note")}
+            </p>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{markers.event}</p>
           </div>
-        </div>}
+        </div>
+      )}
 
       <button
-    onClick={() => navigate("/farmer/assess")}
-    className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-        Check this crop
+        onClick={() => navigate("/farmer/assess")}
+        className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
+      >
+        {t("farmer.calendar.selected_date.check_crop", {}, "Check this crop")}
         <ArrowRight className="w-4 h-4" />
       </button>
-    </div>;
-};
-const CropCard = ({ crop, onViewDetail }) => {
-  const [open, setOpen] = useState(false);
-  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-      {
-    /* Summary row */
-  }
-      <div className="flex items-start gap-3 p-4">
-        <CommodityIllustration commodityId={crop.id} className="w-10 h-10 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{crop.name}</p>
-            {(() => {
-    const vs = getVariants(crop.name);
-    if (vs.length === 0) return null;
-    return <span className="text-[12px] font-semibold text-[var(--hw-green-700)] whitespace-nowrap">
-                  {vs.length} {vs.length === 1 ? "variety" : "varieties"}
-                </span>;
-  })()}
-          </div>
-          <p className="text-[13px] text-[var(--hw-neutral-900)]">{crop.summary}</p>
-          {crop.bestVariety && <p className="text-[12px] font-medium text-[var(--hw-green-700)]">
-              Good variety: {crop.bestVariety}
-            </p>}
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            <p className="text-[12px] text-[var(--hw-neutral-900)]">
-              Plant: <span className="font-medium text-[var(--hw-neutral-700)]">{crop.plantWindow}</span>
-            </p>
-            <p className="text-[12px] text-[var(--hw-neutral-900)]">
-              Harvest: <span className="font-medium text-[var(--hw-neutral-700)]">{crop.harvestWindow}</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {
-    /* Accordion toggle */
-  }
-      <button
-    onClick={() => setOpen((v) => !v)}
-    className="w-full flex items-center justify-between px-4 py-2.5 border-t border-[var(--hw-neutral-100)] text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-        <span>Why this is a good crop this month</span>
-        {open ? <ChevronUp className="w-4 h-4 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 flex-shrink-0" />}
-      </button>
-
-      {open && <div className="px-4 pt-3 pb-4 bg-[var(--hw-neutral-50)] space-y-2.5">
-          {crop.reasons.map((r) => {
-    const Icon = FACTOR_ICONS[r.label];
-    const color = FACTOR_COLORS[r.label] ?? "text-[var(--hw-neutral-900)]";
-    return <div key={r.label} className="flex items-start gap-2">
-                {Icon && <Icon className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${color}`} />}
-                <div className="flex-1 min-w-0">
-                  <span className={`text-[12px] font-semibold ${color}`}>{r.label}</span>
-                  <span className="text-[13px] text-[var(--hw-neutral-400)]"> · </span>
-                  <span className="text-[13px] text-[var(--hw-neutral-900)]">{r.text}</span>
-                </div>
-              </div>;
-  })}
-          {
-    /* View detailed factors button */
-  }
-          <div className="pt-1">
-            <button
-    onClick={() => onViewDetail(crop)}
-    className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-  >
-              View detailed factors
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>}
-    </div>;
-};
-const CropDetailView = ({ crop, onBack }) => {
-  const navigate = useNavigate();
-  const { t } = useLanguage();
-
-  return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-      {/* Breadcrumb */}
-      <Breadcrumb
-        items={[
-          { label: t("farmer.calendar.title", {}, "Crop Calendar"), onClick: onBack },
-          { label: crop.name }
-        ]}
-      />
-
-      {/* Crop header */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-        <div className="flex items-start gap-4">
-          <CommodityIllustration commodityId={crop.id} className="w-16 h-16 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{crop.name}</h1>
-            <p className="text-[14px] text-[var(--hw-neutral-700)] mt-0.5">{crop.summary}</p>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2">
-              <div>
-                <span className="text-[12px] text-[var(--hw-neutral-700)] font-medium">Plant window</span>
-                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{crop.plantWindow}</p>
-              </div>
-              <div>
-                <span className="text-[12px] text-[var(--hw-neutral-700)] font-medium">Harvest window</span>
-                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{crop.harvestWindow}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Future Context Informational Card — Deferred Analytics Notice */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
-        <div className="flex items-center gap-2 text-[var(--hw-green-800)] font-semibold text-base">
-          <Sprout className="w-5 h-5 text-[var(--hw-green-700)]" />
-          <span>{t("farmer.calendar.labels.reassess_control", {}, "Assess Again Closer to Planting")}</span>
-        </div>
-        <p className="text-sm text-[var(--hw-neutral-700)] leading-relaxed">
-          {t("farmer.calendar.fallbacks.calendar_unavailable_generic", {}, "Calendar information is not available right now.")}
-        </p>
-        <p className="text-xs text-[var(--hw-neutral-600)]">
-          {t("farmer.factors.production.assess_callout_desc", {}, "Review the full planting assessment for this commodity")}
-        </p>
-        <button
-          onClick={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
-        >
-          {t("farmer.factors.production.assess_now_btn", {}, "Assess now")}
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
     </div>
   );
 };
+
 function RecommendationPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { t } = useLanguage();
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [detailCrop, setDetailCrop] = useState(null);
 
   // Farmer profile coordinates reused by the weather advisory query
   const DEFAULT_WEATHER_LAT = 7.0722;
@@ -480,7 +354,7 @@ function RecommendationPage() {
   const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
 
   // Reuse prefetched market calendar
-  const { data: rawMarketEvents = [] } = useQuery({
+  const { data: rawMarketEvents = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["marketCalendar"],
     queryFn: async () => {
       const res = await apiGet("/market/calendar");
@@ -491,17 +365,8 @@ function RecommendationPage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  // Reuse prefetched crop plans
-  const { data: cropPlansData = [] } = useQuery({
-    queryKey: ["farmer", "crops"],
-    queryFn: async () => {
-      const res = await apiGet("/crop-plans");
-      if (!res.ok) return [];
-      const data = await parseResponse(res);
-      return data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
-    },
-    staleTime: 1000 * 60 * 30,
-  });
+  // Use normalized farmer crop plans
+  const { crops: cropPlansData = [], loading: plansLoading } = useCrops();
 
   // Weather forecast — fills the calendar's daily weather note + icons
   const { data: weatherForecasts = [] } = useQuery({
@@ -521,32 +386,19 @@ function RecommendationPage() {
     [weatherForecasts]
   );
 
-  // Reuse prefetched prices list for recommendations
-  const { data: pricesListData, isLoading: loading } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: async () => {
-      const res = await apiGet("/prices?is_top10=true&page_size=50");
-      if (!res.ok) return { items: [] };
-      return parseResponse(res);
-    },
-    staleTime: 1000 * 60 * 30,
-  });
-
-  // Build calendar data and recommendations from cached data
+  // Build calendar data from cached data
   const calendarData = useMemo(
     () => ({ [monthKey(viewYear, viewMonth)]: buildCalendarMarkers(rawMarketEvents, cropPlansData, weatherForecastList, viewYear, viewMonth) }),
     [rawMarketEvents, cropPlansData, weatherForecastList, viewYear, viewMonth]
   );
 
-  const { t } = useLanguage();
-  const crops = useMemo(() => buildRecommendations(pricesListData), [pricesListData]);
-  
   const key = monthKey(viewYear, viewMonth);
   const dayMarkers = calendarData[key] ?? {};
   const rawMonthName = MONTH_NAMES[viewMonth - 1];
   const monthName = t(`farmer.calendar.months.${rawMonthName.toLowerCase()}`, {}, rawMonthName);
   const selMarkers = selectedDay !== null ? dayMarkers[selectedDay] ?? null : null;
   const showDetail = selMarkers !== null && hasAnyMarker(selMarkers);
+
   const prevMonth = () => {
     if (viewMonth === 1) {
       setViewYear((y) => y - 1);
@@ -554,6 +406,7 @@ function RecommendationPage() {
     } else setViewMonth((m) => m - 1);
     setSelectedDay(null);
   };
+
   const nextMonth = () => {
     if (viewMonth === 12) {
       setViewYear((y) => y + 1);
@@ -561,14 +414,11 @@ function RecommendationPage() {
     } else setViewMonth((m) => m + 1);
     setSelectedDay(null);
   };
-  const handleSelectDay = (day) => setSelectedDay((d) => d === day ? null : day);
-  if (detailCrop !== null) {
-    return <CropDetailView
-      crop={detailCrop}
-      onBack={() => setDetailCrop(null)}
-    />;
-  }
-  
+
+  const handleSelectDay = (day) => setSelectedDay((d) => (d === day ? null : day));
+
+  const loading = eventsLoading && plansLoading;
+
   if (loading) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
@@ -588,236 +438,126 @@ function RecommendationPage() {
             ))}
           </div>
         </div>
-        {/* Recommended Crops Cards Skeleton */}
-        <div className="space-y-3">
-          <Skeleton className="h-5 w-44 rounded" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-                <div className="space-y-1.5 flex-1">
-                  <Skeleton className="h-4 w-28 rounded" />
-                  <Skeleton className="h-3 w-16 rounded" />
-                </div>
-              </div>
-              <Skeleton className="h-16 w-full rounded-xl" />
-            </div>
-            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-                <div className="space-y-1.5 flex-1">
-                  <Skeleton className="h-4 w-28 rounded" />
-                  <Skeleton className="h-3 w-16 rounded" />
-                </div>
-              </div>
-              <Skeleton className="h-16 w-full rounded-xl" />
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
-  
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
-        {/* ── Header ── */}
-        <div>
-          <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-            {t("farmer.calendar.page_title", {}, "Crop Calendar")}
-          </h1>
-          <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-            {t("farmer.calendar.page_subtitle", {}, "Track crop schedules and harvest timing.")}
-          </p>
-        </div>
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+          {t("farmer.calendar.page_title", {}, "Crop Calendar")}
+        </h1>
+        <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
+          {t("farmer.calendar.page_subtitle", {}, "Track crop schedules and harvest timing.")}
+        </p>
+      </div>
 
-        {
-    /* ── Crop Calendar ── */
-  }
-        <section>
-          <div className={`md:grid md:gap-5 md:items-start ${crops.length > 0 && showDetail ? "md:grid-cols-[1fr_288px]" : ""}`}>
-
-            {
-    /* Calendar card */
-  }
-            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-              {
-    /* Month navigator */
-  }
-              <div className="flex items-center justify-between mb-3">
-                <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors">
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <p className="font-semibold text-[var(--hw-neutral-900)]">
-                  {MONTH_NAMES[viewMonth - 1]} {viewYear}
-                </p>
-                <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors">
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <CalendarGrid
-    year={viewYear}
-    month={viewMonth}
-    selectedDay={selectedDay}
-    onSelectDay={handleSelectDay}
-    calendarData={calendarData}
-  />
-
-              {
-    /* Legend */
-  }
-              <div className="flex items-center gap-x-3 mt-4 pt-3 border-t border-[var(--hw-neutral-100)]">
-                <div className="flex items-center gap-1">
-                  <CloudRain className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                  <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">Light rain</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <TwoToneStormIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">Heavy rain</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Sun className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                  <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">Hot days</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <CalendarClock className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">Events</span>
-                </div>
-              </div>
-            </div>
-
-            {
-    /* Selected date card — only when a marked day is tapped */
-  }
-            {showDetail && selectedDay !== null && selMarkers !== null && <div className="mt-4 md:mt-0">
-                <SelectedDateCard year={viewYear} month={viewMonth} day={selectedDay} markers={selMarkers} />
-              </div>}
-          </div>
-        </section>
-
-        {
-    /* ── Good crops to plant in [Month] ── Always show section */
-  }
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">
-              Good crops to plant in {monthName}
-            </h2>
-            <button
-    onClick={() => navigate("/farmer/assess")}
-    className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity flex-shrink-0 ml-3"
-  >
-              View all crops
-            </button>
-          </div>
-          
-          {crops.length > 0 ? (
-            <div className="space-y-3">
-              {crops.slice(0, 3).map((crop) => <CropCard key={crop.id} crop={crop} onViewDetail={setDetailCrop} />)}
-            </div>
-          ) : (
-            // Show empty crop card with proper template structure - clickable to see detailed factors
-            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-              <div className="flex items-start gap-3 p-4">
-                <div className="w-10 h-10 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Sprout className="w-6 h-6 text-[var(--hw-neutral-400)]" />
-                </div>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-400)]">–</p>
-                    <span className="text-[12px] font-semibold text-[var(--hw-neutral-300)]">– varieties</span>
-                  </div>
-                  <p className="text-[13px] text-[var(--hw-neutral-400)]">No recommendations available for this month yet</p>
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-300)]">Good variety: –</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                    <p className="text-[12px] text-[var(--hw-neutral-400)]">
-                      Plant: <span className="font-medium text-[var(--hw-neutral-400)]">–</span>
-                    </p>
-                    <p className="text-[12px] text-[var(--hw-neutral-400)]">
-                      Harvest: <span className="font-medium text-[var(--hw-neutral-400)]">–</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
+      {/* ── Crop Calendar ── */}
+      <section>
+        <div className={`md:grid md:gap-5 md:items-start ${showDetail ? "md:grid-cols-[1fr_320px]" : ""}`}>
+          {/* Calendar card */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
+            {/* Month navigator */}
+            <div className="flex items-center justify-between mb-3">
               <button
-    onClick={() => {
-                  // Create empty crop with proper template fields per Frontend-Backend Mapping
-                  const emptyCrop = {
-                    id: '–',
-                    name: '–',
-                    summary: 'No recommendation data available',
-                    plantWindow: '–',
-                    harvestWindow: '–',
-                    bestVariety: '–',
-                    reasons: [
-                      { label: "Price", text: "₱–/kg today" },
-                      { label: "Supply", text: "Arrival data not available" },
-                      { label: "Production", text: "Production data not available" },
-                      { label: "Weather", text: "Weather data not available" },
-                      { label: "Profit", text: "Profit estimate: ₱–/kg" }
-                    ]
-                  };
-                  setDetailCrop(emptyCrop);
-                }}
-    className="w-full flex items-center justify-between px-4 py-2.5 border-t border-[var(--hw-neutral-100)] text-[13px] font-medium text-[var(--hw-neutral-400)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-                <span>View detailed factors</span>
-                <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                type="button"
+                onClick={prevMonth}
+                className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors"
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <p className="font-semibold text-[var(--hw-neutral-900)]">
+                {monthName} {viewYear}
+              </p>
+              <button
+                type="button"
+                onClick={nextMonth}
+                className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors"
+                aria-label="Next month"
+              >
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-          )}
-        </section>
 
-        {
-    /* ── Weather note ── */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-          <div className="flex items-start gap-3">
-            <div className="p-1.5 bg-blue-50 rounded-lg flex-shrink-0 mt-0.5">
-              <CloudRain className="w-4 h-4 text-blue-600" />
+            <CalendarGrid
+              year={viewYear}
+              month={viewMonth}
+              selectedDay={selectedDay}
+              onSelectDay={handleSelectDay}
+              calendarData={calendarData}
+            />
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-[var(--hw-neutral-100)]">
+              <div className="flex items-center gap-1">
+                <CloudRain className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
+                  {t("farmer.calendar.legend.light_rain", {}, "Light rain")}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <TwoToneStormIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
+                  {t("farmer.calendar.legend.heavy_rain", {}, "Heavy rain")}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Sun className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
+                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
+                  {t("farmer.calendar.legend.hot_days", {}, "Hot days")}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <CalendarClock className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
+                  {t("farmer.calendar.legend.events", {}, "Events")}
+                </span>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">Weather note</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-                Rain is expected this week. Clear drainage before planting.
-              </p>
+          </div>
+
+          {/* Selected date card — only when a marked day is tapped */}
+          {showDetail && selectedDay !== null && selMarkers !== null && (
+            <div className="mt-4 md:mt-0">
+              <SelectedDateCard year={viewYear} month={viewMonth} day={selectedDay} markers={selMarkers} />
             </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Crop recommendations ── */}
+      <section className="space-y-3">
+        <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+          {t("farmer.calendar.recommendations_title", {}, "Crop recommendations")}
+        </h2>
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center space-y-3">
+          <div className="w-12 h-12 mx-auto rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] flex items-center justify-center">
+            <Sprout className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <p className="font-semibold text-[var(--hw-neutral-900)] text-[15px]">
+              {t("farmer.calendar.empty_recommendations_title", {}, "No crop recommendations available yet.")}
+            </p>
+            <p className="text-sm text-[var(--hw-neutral-600)] max-w-md mx-auto">
+              {t("farmer.calendar.empty_recommendations_helper", {}, "There is not enough data yet to provide a recommendation for this month.")}
+            </p>
+          </div>
+          <div className="pt-1">
             <button
-    onClick={() => navigate("/farmer/market/weather")}
-    className="flex-shrink-0 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity whitespace-nowrap"
-  >
-              View weather
+              onClick={() => navigate("/farmer/assess")}
+              className="inline-flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
+            >
+              {t("farmer.calendar.check_a_crop", {}, "Check a crop")}
+              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
-
-        {
-    /* ── Check crop CTA ── */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-[var(--hw-green-50)] rounded-xl flex-shrink-0">
-              <Sprout className="w-4 h-4 text-[var(--hw-green-700)]" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Check a crop before planting</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-                Enter your crop, farm size, cost, and expected harvest to get a recommendation.
-              </p>
-            </div>
-          </div>
-          <button
-    onClick={() => navigate("/farmer/assess")}
-    className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-            Start check
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
-      </div>;
+      </section>
+    </div>
+  );
 }
-export {
-  RecommendationPage as default
-};
+
+export { RecommendationPage as default };

@@ -105,15 +105,15 @@ const TopBar = ({
             onClick={handleResync}
             disabled={isSyncing}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
-            title={isSyncing ? "Syncing data..." : "Click to resync data"}
+            title={isSyncing ? t("farmer.navigation.resync_tooltip_syncing", {}, "Syncing data...") : t("farmer.navigation.resync_tooltip", {}, "Click to resync data")}
             aria-label="Resync data"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline whitespace-nowrap">
-              {isSyncing ? "Syncing..." : `Resync (${lastSyncedTime})`}
+              {isSyncing ? t("farmer.navigation.syncing", {}, "Syncing...") : `${t("farmer.navigation.resync", {}, "Resync")} (${lastSyncedTime})`}
             </span>
             <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
-              {isSyncing ? "Syncing" : "Resync"}
+              {isSyncing ? t("farmer.navigation.syncing", {}, "Syncing") : t("farmer.navigation.resync", {}, "Resync")}
             </span>
           </button>
 
@@ -179,7 +179,7 @@ const TopBar = ({
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] disabled:opacity-40 disabled:cursor-not-allowed disabled:text-[var(--hw-neutral-500)] transition-colors text-left"
                   >
                     <Download className="w-4 h-4 flex-shrink-0" />
-                    {isInstalled ? "App Installed" : installing ? "Installing..." : "Get the App"}
+                    {isInstalled ? t("farmer.navigation.installed", {}, "App Installed") : installing ? t("farmer.navigation.installing", {}, "Installing...") : t("farmer.navigation.get_app", {}, "Get the App")}
                   </button>
                 </div>
 
@@ -205,14 +205,14 @@ const TopBar = ({
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
-                    Switch to Admin View
+                    {t("farmer.navigation.switch_admin", {}, "Switch to Admin View")}
                   </button>
                   <button
                     onClick={() => go("/dftc")}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
                   >
                     <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
-                    Switch to DFTC View
+                    {t("farmer.navigation.switch_dftc", {}, "Switch to DFTC View")}
                   </button>
                 </div>
               </div>

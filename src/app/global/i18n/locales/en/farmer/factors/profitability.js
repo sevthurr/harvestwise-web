@@ -20,5 +20,18 @@ export const profitability = {
   "profitability_values_no_classification": "Price needed to cover your costs: ₱{break_even_price}/kg. Estimated selling price: ₱{lower_forecast}–₱{upper_forecast}/kg.",
   "profitability_break_even_only": "You need at least ₱{break_even_price}/kg to cover your {crop_name} costs. Estimated selling prices are not available for comparison.",
   "profitability_unavailable_crop": "Profitability information for {crop_name} is not available right now.",
-  "profitability_unavailable_generic": "Profitability information is not available right now."
+  "profitability_unavailable_generic": "Profitability information is not available right now.",
+  title: "Estimated Profit",
+  based_on_forecast_market: "Based on forecasted market price",
+  based_on_farmgate: "Based on estimated farmgate price",
+  forecast_price_reference: "Forecasted price reference",
+  price_change_notice: "Price may still change before harvest. Update this as harvest gets closer.",
+  estimated_cost: "Estimated cost",
+  expected_harvest: "Expected harvest",
+  price_basis: "Price basis",
+  cost_to_recover: "Cost to recover",
+  estimated_farmgate: "Estimated farmgate price",
+  farmgate_price_label: "Estimated farmgate price",
+  not_set_reference: "Not set — using market price as reference.",
+  estimate_disclaimer: "Estimate only. Actual income may change."
 };

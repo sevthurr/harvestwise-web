@@ -21,22 +21,22 @@ import { apiGet, apiPost, parseResponse } from "../../global/api";
 
 import { useLanguage } from "../../global/contexts/LanguageContext";
 
-function validateStep(step, data) {
+function validateStep(step, data, t) {
   const errors = {};
   if (step === 1) {
-    if (!data.commodity) errors.commodity = "Select a vegetable before continuing.";
-    if (!data.plantingDate) errors.plantingDate = "Enter your target planting date.";
-    if (!data.harvestDate) errors.harvestDate = "Enter your expected harvest date.";
+    if (!data.commodity) errors.commodity = t ? t("farmer.assess.validation_crop", {}, "Select a vegetable before continuing.") : "Select a vegetable before continuing.";
+    if (!data.plantingDate) errors.plantingDate = t ? t("farmer.assess.validation_planting_date", {}, "Enter your target planting date.") : "Enter your target planting date.";
+    if (!data.harvestDate) errors.harvestDate = t ? t("farmer.assess.validation_harvest_date", {}, "Enter your expected harvest date.") : "Enter your expected harvest date.";
   }
   if (step === 2) {
-    if (data.farmArea === "" || Number(data.farmArea) <= 0) errors.farmArea = "Enter your farm area.";
+    if (data.farmArea === "" || Number(data.farmArea) <= 0) errors.farmArea = t ? t("farmer.assess.validation_area", {}, "Enter your farm area.") : "Enter your farm area.";
     if (data.harvestQuantity === "" || Number(data.harvestQuantity) <= 0)
-      errors.harvestQuantity = "Expected harvest must be greater than zero.";
+      errors.harvestQuantity = t ? t("farmer.assess.validation_harvest_qty", {}, "Expected harvest must be greater than zero.") : "Expected harvest must be greater than zero.";
   }
   if (step === 3) {
-    if (getTotalCost(data) <= 0) errors.totalCost = "Enter your estimated total cost.";
+    if (getTotalCost(data) <= 0) errors.totalCost = t ? t("farmer.assess.validation_total_cost", {}, "Enter your estimated total cost.") : "Enter your estimated total cost.";
     if (data.useFarmgate && (data.farmgatePrice === "" || Number(data.farmgatePrice) <= 0)) {
-      errors.farmgatePrice = "Enter your estimated farmgate price, or uncheck the option above.";
+      errors.farmgatePrice = t ? t("farmer.assess.validation_farmgate_price", {}, "Enter your estimated farmgate price, or uncheck the option above.") : "Enter your estimated farmgate price, or uncheck the option above.";
     }
   }
   return errors;
@@ -215,7 +215,7 @@ function AssessPage() {
   const handleSaveDraft = () => setDraft({ ...data });
 
   const handleContinue = () => {
-    const errs = validateStep(step, data);
+    const errs = validateStep(step, data, t);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
@@ -236,7 +236,7 @@ function AssessPage() {
   };
 
   const handleGenerateAdvisory = async () => {
-    const errs = validateStep(step, data);
+    const errs = validateStep(step, data, t);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
@@ -246,7 +246,8 @@ function AssessPage() {
     setAdvisoryResponse(null);
     try {
       const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
-      const cropName = selectedCommodity?.name || data.commodity;
+      const baseCropName = selectedCommodity?.name || data.commodity;
+      const cropName = data.variant ? `${baseCropName} ${data.variant}` : baseCropName;
       const totalCost = getTotalCost(data);
       const yieldKg = Number(data.harvestQuantity) || 1;
 
@@ -260,18 +261,19 @@ function AssessPage() {
 
       const res = await apiPost("/advisory/plan", payload);
       if (!res.ok) {
-        let errMsg = "Failed to generate advisory from server.";
-        try {
-          const errBody = await res.json();
-          errMsg = errBody.detail || errMsg;
-        } catch (_) {}
-        throw new Error(errMsg);
+        throw new Error("Failed to generate advisory");
       }
       const parsed = await parseResponse(res);
       setAdvisoryResponse(parsed);
       setShowResult(true);
-    } catch (err) {
-      setAdvisoryError(err.message || "Failed to generate advisory. Please check your inputs and try again.");
+    } catch (_err) {
+      setAdvisoryError(
+        t(
+          "farmer.errors.crop_not_checked",
+          {},
+          "We could not check this crop right now. Please try again or choose the crop again."
+        )
+      );
     } finally {
       setLoadingAdvisory(false);
     }
@@ -296,36 +298,49 @@ function AssessPage() {
   }
   const SidePanel = () => <div className="hidden md:flex flex-col gap-3 sticky top-24">
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Running summary</p>
+        <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
+          {t("farmer.assess.running_summary", {}, "Running summary")}
+        </p>
         {data.commodity && <div>
-            <p className="text-xs text-[var(--hw-neutral-700)]">Vegetable</p>
+            <p className="text-xs text-[var(--hw-neutral-700)]">
+              {t("farmer.prices.category_vegetables", {}, "Vegetable")}
+            </p>
             <p className="text-sm font-medium text-[var(--hw-neutral-900)]">
-              {commodityOptions.find((c) => c.id === data.commodity)?.name}
+              {(() => {
+                const n = commodityOptions.find((c) => c.id === data.commodity)?.name || "";
+                return data.variant ? `${n} (${data.variant})` : n;
+              })()}
             </p>
           </div>}
         {data.harvestQuantity !== "" && <div>
-            <p className="text-xs text-[var(--hw-neutral-700)]">Expected harvest</p>
+            <p className="text-xs text-[var(--hw-neutral-700)]">
+              {t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}
+            </p>
             <p className="text-sm font-medium text-[var(--hw-neutral-900)]">{data.harvestQuantity} kg</p>
           </div>}
         <div>
-          <p className="text-xs text-[var(--hw-neutral-700)]">Total production cost</p>
-          <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">{total > 0 ? formatPeso(total) : "\u2014"}</p>
+          <p className="text-xs text-[var(--hw-neutral-700)]">
+            {t("farmer.factors.profitability.total_estimated_cost_label", {}, "Total production cost")}
+          </p>
+          <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">{total > 0 ? formatPeso(total) : "—"}</p>
         </div>
         {breakEven && <div className="pt-2 border-t border-[var(--hw-neutral-100)]">
-            <p className="text-xs text-[var(--hw-neutral-700)]">Break-even price</p>
+            <p className="text-xs text-[var(--hw-neutral-700)]">
+              {t("farmer.factors.profitability.cost_to_recover_short_label", {}, "Break-even price")}
+            </p>
             <p className="text-sm font-bold text-[var(--hw-green-700)]">{formatPeso(breakEven)}/kg</p>
           </div>}
       </div>
       <button
-    type="button"
-    onClick={() => {
-      setView("entry");
-      setErrors({});
-    }}
-    className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-white text-[var(--hw-neutral-900)] text-sm font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
+        type="button"
+        onClick={() => {
+          setView("entry");
+          setErrors({});
+        }}
+        className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-white text-[var(--hw-neutral-900)] text-sm font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+      >
         <RotateCcw className="w-4 h-4" />
-        Start again
+        {t("farmer.assess.start_again", {}, "Start again")}
       </button>
     </div>;
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
@@ -333,7 +348,9 @@ function AssessPage() {
           <div className="space-y-6">
             <StepProgress currentStep={step} />
             <div>
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{STEP_LABELS[step]}</h1>
+              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
+                {t(`farmer.assess.step${step}_title`, {}, STEP_LABELS[step])}
+              </h1>
             </div>
             {step === 1 && <Step1CropSchedule data={data} onChange={patch} errors={errors} />}
             {step === 2 && <Step2FarmHarvest data={data} onChange={patch} errors={errors} />}
@@ -352,15 +369,15 @@ function AssessPage() {
               t={t}
             />
             <button
-    type="button"
-    onClick={() => {
-      setView("entry");
-      setErrors({});
-    }}
-    className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-sm text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
-  >
+              type="button"
+              onClick={() => {
+                setView("entry");
+                setErrors({});
+              }}
+              className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-sm text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
+            >
               <RotateCcw className="w-3.5 h-3.5" />
-              Start again
+              {t("farmer.assess.start_again", {}, "Start again")}
             </button>
           </div>
           {showSidePanel && <SidePanel />}

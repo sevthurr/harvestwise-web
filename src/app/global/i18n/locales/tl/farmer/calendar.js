@@ -1,10 +1,55 @@
 export const calendar = {
+  page_title: "Kalendaryo ng Pananim",
+  page_subtitle: "Subaybayan ang iskedyul ng pananim at panahon ng pag-aani.",
+  days: {
+    sun: "Lin",
+    mon: "Lun",
+    tue: "Mar",
+    wed: "Miy",
+    thu: "Huw",
+    fri: "Biy",
+    sat: "Sab"
+  },
+  months: {
+    january: "Enero",
+    february: "Pebrero",
+    march: "Marso",
+    april: "Abril",
+    may: "Mayo",
+    june: "Hunyo",
+    july: "Hulyo",
+    august: "Agosto",
+    september: "Setyembre",
+    october: "Oktubre",
+    november: "Nobyembre",
+    december: "Disyembre"
+  },
+  legend: {
+    light_rain: "Bahagyang ulan",
+    heavy_rain: "Malakas na ulan",
+    hot_days: "Mainit na mga araw",
+    events: "Mga Kaganapan"
+  },
+  selected_date: {
+    weather_note: "Paalala sa panahon",
+    market_note: "Paalala sa merkado",
+    expected_harvest: "Inaasahang ani",
+    expected_harvest_date: "Inaasahang petsa ng pag-ani",
+    check_crop: "Suriin ang pananim na ito"
+  },
+  recommendations_title: "Mga Rekomendasyon sa Pananim",
+  empty_recommendations_title: "Wala pang available na rekomendasyon sa pananim.",
+  empty_recommendations_helper: "Wala pang sapat na datos para makapagbigay ng rekomendasyon para sa buwang ito.",
+  check_a_crop: "Suriin ang isang pananim",
+  empty_weather_note: "Wala pang available na paalala sa panahon ngayon.",
   "labels": {
     "label_recommended": "Maganda para sa Buwang Ito",
     "label_proceed_with_caution": "Maaaring Isaalang-alang, Pero Mag-ingat",
     "label_avoid_for_now": "Mas Mabuting Maghintay",
     "month_heading": "Plano para sa {planting_month}",
     "harvest_label": "Inaasahang Ani",
+    "planting_date": "Petsa ng pagtatanim",
+    "expected_harvest": "Inaasahang ani",
     "reason_heading": "Bakit ito ang plano?",
     "action_heading": "Ano ang dapat kong isaalang-alang?",
     "historical_price": "Karaniwang Presyo sa Nakaraang Datos",

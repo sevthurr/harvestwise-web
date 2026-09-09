@@ -79,5 +79,8 @@ export const advisory = {
   "advisory_preharvest_generic": "Tingnan ang kasalukuyang kondisyon sa merkado at panahon habang papalapit ang ani.",
   "advisory_harvest_generic": "Tingnan ang kasalukuyang kondisyon sa merkado at panahon habang nag-aani o nagbebenta.",
   "advisory_reasons_unavailable": "Walang kumpletong detalye ng mga dahilan ngayon.",
-  "advisory_result_unavailable": "Walang resulta ng pagsusuri ngayon."
+  "advisory_result_unavailable": "Walang resulta ng pagsusuri ngayon.",
+  "detailed_factors_title": "Detalyadong mga Salik",
+  "market_analysis_crop_plan": "Pagsusuri sa merkado para sa plano ng iyong pananim",
+  "assess_crop_again": "Suriin muli ang pananim na ito"
 };

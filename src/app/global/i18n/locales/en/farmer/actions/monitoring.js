@@ -37,5 +37,10 @@ export const monitoringActions = {
   "action_harvest_price": "Compare available buyer prices before selling. Record the actual price you receive.",
   "action_harvest_severe_weather": "Protect harvested produce and pause unsafe field activities until conditions are safer.",
   "action_harvest_profit_price": "Compare buyer prices carefully. If you sell, record the actual price so you can compare the final result with your costs.",
-  "action_harvest_supply_price": "High supply and unfavorable prices need attention. Compare buyers and selling options before releasing the remaining harvest."
+  "action_harvest_supply_price": "High supply and unfavorable prices need attention. Compare buyers and selling options before releasing the remaining harvest.",
+  next_steps_title: "What to do next",
+  save_plan_instruction: "Save to My Crops to start tracking your plan and monitoring conditions.",
+  update_farmgate: "Update your farmgate price later when a buyer gives you an offer.",
+  confirm_farmgate: "Confirm your farmgate price with your buyer before harvest.",
+  check_prices_near_harvest: "Check prices again closer to harvest before deciding when to sell."
 };

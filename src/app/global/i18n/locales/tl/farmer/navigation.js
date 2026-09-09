@@ -1,0 +1,22 @@
+export const navigation = {
+  home: "Home",
+  prices: "Mga Presyo",
+  crop_calendar: "Kalendaryo ng Pananim",
+  my_crops: "Aking mga Pananim",
+  settings: "Settings",
+  about: "Tungkol sa HarvestWise",
+  profile: "Profile",
+  notifications: "Mga Notipikasyon",
+  farmer_role: "Magsasaka",
+  sync: "I-sync",
+  resync: "I-sync muli",
+  syncing: "Sine-sync...",
+  get_app: "I-install ang App",
+  installed: "Naka-install na",
+  installing: "Inii-install...",
+  logout: "Mag-log out",
+  switch_admin: "Lumipat sa Admin View",
+  switch_dftc: "Lumipat sa DFTC View",
+  resync_tooltip: "I-click upang i-sync muli ang datos",
+  resync_tooltip_syncing: "Sine-sync ang datos..."
+};

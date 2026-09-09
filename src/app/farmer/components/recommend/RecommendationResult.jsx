@@ -19,8 +19,8 @@ import {
   Check
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { COMMODITY_OPTIONS, getTotalCost, formatPeso } from "./types";
-import { useCrops } from "../crops/CropsContext";
+import { getTotalCost, formatPeso } from "./types";
+import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import {
   ADVISORY_CODES,
@@ -113,22 +113,31 @@ const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, pric
     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left bg-[var(--hw-neutral-50)]"
   >
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">
-          {t("farmer.factors.profitability.calc_accordion_title")}
+          {t("farmer.factors.profitability.calc_accordion_title", {}, "How was this calculated?")}
         </p>
         {open ? <ChevronUp className="w-3.5 h-3.5 text-[var(--hw-neutral-400)] flex-shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-[var(--hw-neutral-400)] flex-shrink-0" />}
       </button>
-      {open && <div className="px-3 py-3 space-y-1.5 border-t border-[var(--hw-neutral-200)] bg-white">
-          {[
-            { label: t("farmer.factors.profitability.expected_harvest_volume_label"), value: `${qty} kg` },
-            { label: t("farmer.factors.profitability.total_estimated_cost_label"), value: formatPeso(totalCost) },
-            { label: t("farmer.factors.profitability.price_basis_used_label"), value: priceBasisShort },
-            { label: t("farmer.factors.profitability.price_basis_per_kg_label"), value: `\u20B1${sellingBasis}/kg` },
-            { label: t("farmer.factors.profitability.cost_to_recover_short_label"), value: `\u20B1${costToRecover}/kg` },
-            { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label")} (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
-          ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
-              <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
-              <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
-            </div>)}
+      {open && <div className="px-3 py-3 space-y-2 border-t border-[var(--hw-neutral-200)] bg-white">
+          <p className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed pb-1.5 border-b border-[var(--hw-neutral-100)]">
+            {t("farmer.assess.how_calculated_desc", {
+              cost: formatPeso(totalCost),
+              harvest: qty,
+              qty: qty
+            })}
+          </p>
+          <div className="space-y-1.5">
+            {[
+              { label: t("farmer.factors.profitability.expected_harvest_volume_label"), value: `${qty} kg` },
+              { label: t("farmer.factors.profitability.total_estimated_cost_label"), value: formatPeso(totalCost) },
+              { label: t("farmer.factors.profitability.price_basis_used_label"), value: priceBasisShort },
+              { label: t("farmer.factors.profitability.price_basis_per_kg_label"), value: `\u20B1${sellingBasis}/kg` },
+              { label: t("farmer.factors.profitability.cost_to_recover_short_label"), value: `\u20B1${costToRecover}/kg` },
+              { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label")} (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
+            ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
+                <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
+                <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
+              </div>)}
+          </div>
           {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-1 border-t border-[var(--hw-neutral-100)]">
               {t("farmer.factors.profitability.forecast_reference_notice")}
             </p>}
@@ -154,7 +163,7 @@ function buildCropPlanPayload(data, status = "Draft") {
       : [];
 
   return {
-    commodity_id: data.commodity,
+    commodity_id: data.commodityId || data.commodity,
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
     farm_area: typeof data.farmArea === "number" && data.farmArea > 0 ? data.farmArea : null,
@@ -191,52 +200,7 @@ function buildCropRecord(data, phase, overrides = {}) {
   };
 }
 
-const STATUS_TO_PHASE = {
-  Draft: "planning",
-  Planning: "planning",
-  Planted: "growing",
-  "Pre-Harvest": "pre-harvest",
-  Harvesting: "harvested",
-  "On Hold": "planning",
-  Completed: "completed",
-  Cancelled: "completed",
-};
-
-function transformSavedPlan(plan) {
-  const rawStatus = plan.status || "Planning";
-  const phase = STATUS_TO_PHASE[rawStatus] || "planning";
-  const commodity = plan.commodity || {};
-  const totalCost = (plan.production_costs || []).reduce(
-    (sum, c) => sum + Number(c.amount || 0), 0
-  );
-  const qty = Number(plan.expected_harvest_qty) || 1;
-  return {
-    id: plan.id,
-    commodity: plan.commodity_id,
-    commodityName: commodity.name || "\u2013",
-    variant: commodity.variety || null,
-    phase,
-    status: rawStatus,
-    isOnHold: rawStatus === "On Hold",
-    holdReason: plan.hold_reason || null,
-    plantingDate: plan.actual_planting_date
-      ? new Date(plan.actual_planting_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : plan.planned_planting_date
-        ? new Date(plan.planned_planting_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : null,
-    harvestDate: plan.expected_harvest_date
-      ? new Date(plan.expected_harvest_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : null,
-    farmArea: plan.farm_area || null,
-    farmAreaUnit: "sqm",
-    harvestQuantity: plan.expected_harvest_qty || null,
-    totalCost,
-    breakEvenPrice: qty > 0 ? Math.ceil(totalCost / qty) : 0,
-    nextMilestone: null,
-    lastUpdated: "Just now",
-  };
-}
-const RecommendationResult = ({ data, onEdit }) => {
+const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) => {
   const { t, langCode } = useLanguage();
   const navigate = useNavigate();
   const { addCrop } = useCrops();
@@ -256,7 +220,7 @@ const RecommendationResult = ({ data, onEdit }) => {
   const costToRecover = qty ? Math.ceil(totalCost / qty) : null;
 
   // Real backend advisory & module results from POST /api/v1/advisory/plan
-  const advisoryResponse = data.advisoryResponse;
+  const advisoryResponse = propAdvisory || data.advisoryResponse;
   const cropStage = advisoryResponse?.crop_stage || "before_planting";
   const moduleResults = advisoryResponse?.module_results || {};
   const rawAdvisory = advisoryResponse?.advisory?.advisory || data.advisoryCategory;
@@ -277,13 +241,17 @@ const RecommendationResult = ({ data, onEdit }) => {
   const forecastHi = data.forecastUpper || null;
   const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : currentPx;
   const sellingBasis = hasFarmgate ? data.farmgatePrice : forecastMid;
-  const priceBasisLabel = hasFarmgate ? "Based on estimated farmgate price" : "Based on forecasted market price";
-  const priceBasisShort = hasFarmgate ? "Estimated farmgate price" : "Forecasted market price";
+  const priceBasisLabel = hasFarmgate
+    ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price")
+    : t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price");
+  const priceBasisShort = hasFarmgate
+    ? t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")
+    : t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference");
   const priceBasisDetail = hasFarmgate
-    ? `Farmgate price: \u20B1${data.farmgatePrice}/kg`
+    ? `${t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated Farmgate Price")}: \u20B1${data.farmgatePrice}/kg`
     : (forecastLo != null && forecastHi != null
         ? t("farmer.factors.price.forecast_reference_range", { forecast_lo: forecastLo, forecast_hi: forecastHi })
-        : `Forecasted price reference: -/kg`);
+        : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: -/kg`);
   const margin = costToRecover !== null && sellingBasis != null ? sellingBasis - costToRecover : null;
   const hasProfit = margin !== null && qty !== null && margin > 0;
   const profitLo = hasProfit ? Math.floor(margin * qty * 0.85 / 1e3) * 1e3 : 0;
@@ -312,7 +280,7 @@ const RecommendationResult = ({ data, onEdit }) => {
   };
   const arrivalTabData = data.arrivalData || null;
   const productionTabData = data.productionData || null;
-  const weatherTabData = data.weatherData || null;
+  const weatherTabData = data.weatherData ? { ...data.weatherData, cropName: commodityName } : null;
   const weatherRisk = advisoryCode === ADVISORY_CODES.RECOMMENDED ? "low" : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION ? "moderate" : "high";
   const profitabilityData = costToRecover !== null && qty !== null ? {
     costPerKg: costToRecover,
@@ -336,10 +304,11 @@ const RecommendationResult = ({ data, onEdit }) => {
       const payload = buildCropPlanPayload(data, "Planning");
       const res = await apiPost("/crop-plans", payload);
       const savedPlan = await parseResponse(res);
-      addCrop(transformSavedPlan(savedPlan));
+      addCrop(normalizeCropPlan(savedPlan));
       setSaved("plan");
     } catch (err) {
-      setSaveError(err.message || t("farmer.errors.save_plan_failed"));
+      console.error("Failed to save crop plan:", err);
+      setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -352,11 +321,12 @@ const RecommendationResult = ({ data, onEdit }) => {
       payload.actual_planting_date = plantedForm.actualPlantingDate || data.plantingDate || null;
       const res = await apiPost("/crop-plans", payload);
       const savedPlan = await parseResponse(res);
-      addCrop(transformSavedPlan(savedPlan));
+      addCrop(normalizeCropPlan(savedPlan));
       setSaved("planted");
       setShowPlantedForm(false);
     } catch (err) {
-      setSaveError(err.message || t("farmer.errors.save_plan_failed"));
+      console.error("Failed to save crop plan as planted:", err);
+      setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -428,7 +398,7 @@ const RecommendationResult = ({ data, onEdit }) => {
           onClick={onEdit}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" />{t("farmer.common.edit", {}, "Edit information")}
+          <ChevronLeft className="w-4 h-4" />{t("farmer.assess.edit_information", {}, "Edit information")}
         </button>
 
         {/* 1. Advisory card */}
@@ -494,11 +464,11 @@ const RecommendationResult = ({ data, onEdit }) => {
           {/* Date chips */}
           {(data.plantingDate || data.harvestDate) && <div className="grid grid-cols-2 gap-2 text-[13px]">
               {data.plantingDate && <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.calendar.labels.planting_date", {}, "Planting date")}</p>
+                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.assess.planting_date", {}, "Planting date")}</p>
                   <p className="font-medium text-[var(--hw-neutral-900)]">{data.plantingDate}</p>
                 </div>}
               {data.harvestDate && <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.calendar.labels.expected_harvest", {}, "Expected harvest")}</p>
+                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.assess.expected_harvest", {}, "Expected harvest")}</p>
                   <p className="font-medium text-[var(--hw-neutral-900)]">{data.harvestDate}</p>
                 </div>}
             </div>}
@@ -592,7 +562,7 @@ const RecommendationResult = ({ data, onEdit }) => {
 
         {/* 4. What to do next */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.actions.monitoring.next_steps_title", {}, "What to do next")}</p>
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.advisory.advisory_action_title", {}, "What should I do next?")}</p>
           <div className="space-y-2.5">
             <div className="flex items-start gap-3">
               <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -650,7 +620,7 @@ const RecommendationResult = ({ data, onEdit }) => {
 
         <div className="flex items-start gap-2 text-[var(--hw-neutral-900)]">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <p className="text-[13px]">{t("farmer.common.disclaimer", {}, "Results are estimates and do not guarantee income.")}</p>
+          <p className="text-[13px]">{t("farmer.assess.results_disclaimer", {}, "Results are estimates and do not guarantee income.")}</p>
         </div>
 
     </div>;

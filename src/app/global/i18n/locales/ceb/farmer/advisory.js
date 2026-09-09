@@ -79,5 +79,8 @@ export const advisory = {
   "advisory_preharvest_generic": "Tan-awa ang kasamtangang kondisyon sa merkado ug panahon samtang nagaduol ang ani.",
   "advisory_harvest_generic": "Tan-awa ang kasamtangang kondisyon sa merkado ug panahon samtang naga-ani o nagabaligya.",
   "advisory_reasons_unavailable": "Walay kompleto nga detalye sa mga rason karon.",
-  "advisory_result_unavailable": "Walay resulta sa pagsusi karon."
+  "advisory_result_unavailable": "Walay resulta sa pagsusi karon.",
+  "detailed_factors_title": "Detalyadong mga Salik",
+  "market_analysis_crop_plan": "Pagsusi sa merkado para sa plano sa imong tanom",
+  "assess_crop_again": "Susiha kini nga tanom pag-usab"
 };

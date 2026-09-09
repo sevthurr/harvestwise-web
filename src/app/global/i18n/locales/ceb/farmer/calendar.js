@@ -1,10 +1,55 @@
 export const calendar = {
+  page_title: "Kalendaryo sa Tanom",
+  page_subtitle: "Subaya ang iskedyul sa tanom ug panahon sa pag-ani.",
+  days: {
+    sun: "Dom",
+    mon: "Lun",
+    tue: "Mar",
+    wed: "Miy",
+    thu: "Huw",
+    fri: "Biy",
+    sat: "Sab"
+  },
+  months: {
+    january: "Enero",
+    february: "Pebrero",
+    march: "Marso",
+    april: "Abril",
+    may: "Mayo",
+    june: "Hunyo",
+    july: "Hulyo",
+    august: "Agosto",
+    september: "Setyembre",
+    october: "Oktubre",
+    november: "Nobyembre",
+    december: "Disyembre"
+  },
+  legend: {
+    light_rain: "Gamay nga ulan",
+    heavy_rain: "Kusog nga ulan",
+    hot_days: "Init nga mga adlaw",
+    events: "Mga Hitabo"
+  },
+  selected_date: {
+    weather_note: "Pahinumdom sa panahon",
+    market_note: "Pahinumdom sa merkado",
+    expected_harvest: "Gilaom nga ani",
+    expected_harvest_date: "Gilaom nga petsa sa ani",
+    check_crop: "Susiha kining tanoma"
+  },
+  recommendations_title: "Mga Rekomendasyon sa Tanom",
+  empty_recommendations_title: "Wala pay available nga rekomendasyon sa tanom.",
+  empty_recommendations_helper: "Wala pay igo nga datos para makahatag og rekomendasyon para niining bulana.",
+  check_a_crop: "Susiha ang usa ka tanom",
+  empty_weather_note: "Wala pay available nga pahibalo sa panahon karon.",
   "labels": {
     "label_recommended": "Maayo para Niining Bulana",
     "label_proceed_with_caution": "Pwede Ikonsidera, Pero Bantayi",
     "label_avoid_for_now": "Mas Maayo nga Maghulat",
     "month_heading": "Plano para sa {planting_month}",
     "harvest_label": "Gilaom nga Ani",
+    "planting_date": "Petsa sa pagtanom",
+    "expected_harvest": "Gilaom nga ani",
     "reason_heading": "Ngano mao ni ang plano?",
     "action_heading": "Unsa akong angay ikonsidera?",
     "historical_price": "Kasagarang Presyo sa Miaging Datos",

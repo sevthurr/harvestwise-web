@@ -20,5 +20,18 @@ export const profitability = {
   "profitability_values_no_classification": "Presyong kailangan para mabawi ang iyong gastos: ₱{break_even_price}/kg. Tinatayang presyo ng bentahan: mula ₱{lower_forecast} hanggang ₱{upper_forecast}/kg.",
   "profitability_break_even_only": "Kailangan ng hindi bababa sa ₱{break_even_price}/kg para mabawi ang gastos sa {crop_name}. Walang tinatayang presyo ng bentahan na magagamit para ihambing.",
   "profitability_unavailable_crop": "Walang datos ng kita sa {crop_name} ngayon.",
-  "profitability_unavailable_generic": "Walang datos ng kita ngayon."
+  "profitability_unavailable_generic": "Walang datos ng kita ngayon.",
+  title: "Tinatayang Kita",
+  based_on_forecast_market: "Base sa tinatayang presyo sa merkado",
+  based_on_farmgate: "Base sa tinatayang presyong farmgate",
+  forecast_price_reference: "Batayan ng tinatayang presyo",
+  price_change_notice: "Maaari pang magbago ang presyo bago ang ani. I-update ito kapag malapit na ang ani.",
+  estimated_cost: "Tinatayang Gastos",
+  expected_harvest: "Inaasahang Ani",
+  price_basis: "Batayan ng Presyo",
+  cost_to_recover: "Gastos para makabawi",
+  estimated_farmgate: "Tinatayang Presyong Farmgate",
+  farmgate_price_label: "Tinatayang Presyong Farmgate",
+  not_set_reference: "Hindi nakatakda — presyo sa merkado ang gagamiting batayan.",
+  estimate_disclaimer: "Tantiya lamang ito. Maaaring magbago ang aktwal na kita."
 };

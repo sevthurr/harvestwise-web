@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router";
 import { TrendingUp, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { PriceDetailView } from "../components/shared/PriceDetailView";
 import { toCamelCase } from "../../global/utils/apiTransforms";
@@ -8,6 +9,7 @@ import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 function PriceTrendDetailPage() {
+  const { t } = useLanguage();
   const { commodityId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -98,12 +100,12 @@ function PriceTrendDetailPage() {
   if (error || !commodity || !priceData) {
     return (
       <div className="px-4 py-8 text-center space-y-3">
-        <p className="text-[var(--hw-neutral-900)]">Price details not available.</p>
+        <p className="text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.not_available", {}, "Price details not available.")}</p>
         <button
           onClick={() => navigate("/farmer/prices")}
           className="text-sm font-medium text-[var(--hw-green-700)]"
         >
-          Back to Prices
+          {t("farmer.commodityDetail.back_to_prices", {}, "Back to Prices")}
         </button>
       </div>
     );
@@ -116,7 +118,7 @@ function PriceTrendDetailPage() {
   const baseForecastHigh = priceData.upperForecast != null ? priceData.upperForecast : baseCurrentPrice;
   const dirLower = (priceData.direction || 'stable').toLowerCase();
   const baseActualPts = [
-    { label: 'Today', price: baseCurrentPrice }
+    { label: t("farmer.commodityDetail.today", {}, "Today"), price: baseCurrentPrice }
   ];
 
   return (
@@ -125,9 +127,9 @@ function PriceTrendDetailPage() {
         {/* Breadcrumb */}
         <Breadcrumb
           items={[
-            { label: "Prices", onClick: () => navigate("/farmer/prices") },
+            { label: t("nav.prices", {}, "Prices"), onClick: () => navigate("/farmer/prices") },
             { label: commodity.name, onClick: () => navigate(`/farmer/prices/${commodity.id}`) },
-            { label: "Price Trend Details" }
+            { label: t("farmer.commodityDetail.price_trend_details", {}, "Price Trend Details") }
           ]}
         />
 
@@ -149,7 +151,7 @@ function PriceTrendDetailPage() {
           onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
           className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
         >
-          Assess this crop
+          {t("farmer.commodityDetail.assess_crop_btn", {}, "Assess this crop")}
           <TrendingUp className="w-4 h-4" />
         </button>
 

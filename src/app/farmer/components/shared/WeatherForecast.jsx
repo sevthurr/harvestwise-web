@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
+import { useLanguage } from "../../../global/contexts/LanguageContext";
 
 const RISK_CFG = {
   Suitable: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
@@ -44,40 +45,24 @@ function WeatherIconEl({ icon, cls = "w-6 h-6" }) {
  * 
  * Displays a 14-day weather forecast carousel with suitability indicators.
  * Used in both the Weather page and the Weather tab in Detailed Factors.
- * 
- * @param {Array} forecast14d - Array of 14 daily forecast objects with structure:
- *   - date: ISO date string
- *   - day_label: "Today", "Mon", "Tue", etc.
- *   - temp_min: number (Celsius)
- *   - temp_max: number (Celsius)
- *   - weather_condition: string
- *   - rain_probability_pct: number
- *   - suitability: "Suitable" | "Caution" | "Severe"
- * @param {boolean} compact - If true, uses smaller card size for detailed factors tab
  */
 export function WeatherForecastCarousel({ forecast14d = [], compact = false }) {
+  const { t } = useLanguage();
   const carouselRef = useRef(null);
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ 
     left: dir * (compact ? 75 : 90), 
     behavior: "smooth" 
   });
 
-  // Show empty state if no forecast data
-  if (forecast14d.length === 0) {
-    const today = new Date();
-    forecast14d = Array.from({ length: 14 }).map((_, i) => {
-      const futureDate = new Date(today);
-      futureDate.setDate(today.getDate() + i);
-      return {
-        date: futureDate.toISOString().split('T')[0],
-        day_label: i === 0 ? "Today" : futureDate.toLocaleDateString('en-US', { weekday: 'short' }),
-        temp_min: null,
-        temp_max: null,
-        weather_condition: null,
-        rain_probability_pct: null,
-        suitability: "Suitable"
-      };
-    });
+  // Show proper localized empty state if no forecast data
+  if (!forecast14d || forecast14d.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-6 bg-white rounded-2xl border border-[var(--hw-neutral-200)] text-center w-full">
+        <p className="text-[13px] text-[var(--hw-neutral-600)]">
+          {t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.")}
+        </p>
+      </div>
+    );
   }
 
   const cardSize = compact ? "min-w-[68px] px-2.5 py-2.5" : "min-w-[72px] px-2.5 py-3";
@@ -116,9 +101,11 @@ export function WeatherForecastCarousel({ forecast14d = [], compact = false }) {
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {forecast14d.map((day, i) => {
-          const rc = RISK_CFG[day.suitability] || RISK_CFG["Suitable"];
+          const hasSuitability = Boolean(day.suitability);
+          const rc = hasSuitability ? (RISK_CFG[day.suitability] || RISK_CFG["Suitable"]) : null;
           const icon = _mapWeatherConditionToIcon(day.weather_condition);
           const isEmpty = !day.temp_max && !day.temp_min && !day.rain_probability_pct;
+          const suitKey = day.suitability ? `farmer.factors.weather.suitability_${String(day.suitability).toLowerCase()}` : null;
           
           return (
             <div
@@ -129,7 +116,7 @@ export function WeatherForecastCarousel({ forecast14d = [], compact = false }) {
                 {day.day_label}
               </p>
               <p className={`${dateSize} ${isEmpty ? 'text-[var(--hw-neutral-400)]' : 'text-[var(--hw-neutral-700)]'}`}>
-                {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {day.date ? new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
               </p>
               <WeatherIconEl icon={icon} cls={`${iconSize} mt-0.5 ${isEmpty ? 'text-[var(--hw-neutral-300)]' : ''}`} />
               <div className="text-center mt-0.5">
@@ -143,12 +130,14 @@ export function WeatherForecastCarousel({ forecast14d = [], compact = false }) {
               <p className={`${rainSize} font-medium ${isEmpty ? 'text-[var(--hw-neutral-400)]' : 'text-blue-600'}`}>
                 {day.rain_probability_pct ?? '–'}%
               </p>
-              {isEmpty ? (
+              {isEmpty || !hasSuitability || !rc ? (
                 <div className="text-[var(--hw-neutral-400)] text-[12px]">–</div>
               ) : (
                 <div className={`flex items-center gap-1 ${rc.color}`}>
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${rc.dot}`} />
-                  <span className={`${suitabilitySize} font-semibold`}>{rc.label}</span>
+                  <span className={`${suitabilitySize} font-semibold`}>
+                    {suitKey ? t(suitKey, {}, rc.label) : rc.label}
+                  </span>
                 </div>
               )}
             </div>
@@ -161,17 +150,17 @@ export function WeatherForecastCarousel({ forecast14d = [], compact = false }) {
         <div className="flex items-center gap-3 mt-2 text-[11px] text-[var(--hw-neutral-900)] justify-center">
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-            <span>Suitable</span>
+            <span>{t("farmer.factors.weather.suitability_suitable", {}, "Suitable")}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-            <span>Caution</span>
+            <span>{t("farmer.factors.weather.suitability_caution", {}, "Caution")}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-            <span>Severe</span>
+            <span>{t("farmer.factors.weather.suitability_severe", {}, "Severe")}</span>
           </div>
-          <span>· % = rain chance</span>
+          <span>{t("farmer.factors.weather.rain_chance_note", {}, "· % = rain chance")}</span>
         </div>
       )}
     </div>
