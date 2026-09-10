@@ -187,16 +187,19 @@ describe("Public Auth - Translations & Style Standards", () => {
     // EN
     expect(t("auth.middle_name", {}, "en")).toBe("Middle Name");
     expect(t("auth.suffix", {}, "en")).toBe("Suffix");
+    expect(t("auth.suffix_placeholder", {}, "en")).toBe("Ex. Jr.");
     expect(t("auth.optional_label", {}, "en")).toBe("(optional)");
 
     // CEB
     expect(t("auth.middle_name", {}, "ceb")).toBe("Middle Name");
     expect(t("auth.suffix", {}, "ceb")).toBe("Suffix");
+    expect(t("auth.suffix_placeholder", {}, "ceb")).toBe("Ex. Jr.");
     expect(t("auth.optional_label", {}, "ceb")).toBe("(opsyonal)");
 
     // TL
     expect(t("auth.middle_name", {}, "tl")).toBe("Gitnang Pangalan");
     expect(t("auth.suffix", {}, "tl")).toBe("Suffix");
+    expect(t("auth.suffix_placeholder", {}, "tl")).toBe("Ex. Jr.");
     expect(t("auth.optional_label", {}, "tl")).toBe("(opsyonal)");
   });
 

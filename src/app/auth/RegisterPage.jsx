@@ -272,11 +272,17 @@ function RegisterPage() {
                 id="suffix"
                 value={form.suffix}
                 onChange={set("suffix")}
-                className={`${inputCls} appearance-none pr-9`}
+                style={{ color: form.suffix === "None" ? "var(--hw-neutral-400, #9ca3af)" : "var(--hw-neutral-900, #111827)" }}
+                className={`w-full h-11 px-3.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow appearance-none pr-9 ${
+                  form.suffix === "None" ? "text-[var(--hw-neutral-400)] text-gray-400" : "text-[var(--hw-neutral-900)]"
+                }`}
               >
-                {SUFFIX_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s === "None" ? t("common.none", {}, "None") : s}
+                <option value="None" hidden disabled>
+                  {t("auth.suffix_placeholder", {}, "Ex. Jr.")}
+                </option>
+                {SUFFIX_OPTIONS.filter((s) => s !== "None").map((s) => (
+                  <option key={s} value={s} style={{ color: "#111827" }}>
+                    {s}
                   </option>
                 ))}
               </select>
