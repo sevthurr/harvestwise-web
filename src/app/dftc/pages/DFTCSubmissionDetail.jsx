@@ -223,7 +223,7 @@ function DFTCSubmissionDetail() {
       savedBy: submitterFullName,
       savedDateTime: formatDateTime(apiSubmission.saved_at || apiSubmission.created_at),
       savedIso: apiSubmission.saved_at ? apiSubmission.saved_at.slice(0, 10) : "",
-      totalRecords: apiSubmission.total_records ?? 0,
+      totalRecords: apiSubmission.record_count ?? 0,
       analyticsSupported: apiSubmission.analytics_supported_count ?? 0,
       otherCommodities: apiSubmission.other_commodity_count ?? 0,
       needsCorrection: apiSubmission.needs_correction_count ?? 0,

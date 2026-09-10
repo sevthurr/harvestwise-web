@@ -182,7 +182,7 @@ function DFTCNotifications() {
           id: `sub-saved-${sub.id}`,
           title: "Submission Accepted",
           summary: `${subType} dataset ${sub.id} has been validated and accepted for processing.`,
-          detail: `Dataset ${sub.id} containing ${sub.total_records ?? 0} records was accepted and saved into HarvestWise records on ${timeStr}.`,
+          detail: `Dataset ${sub.id} containing ${sub.record_count ?? 0} records was accepted and saved into HarvestWise records on ${timeStr}.`,
           timestamp: timeStr,
           urgency: "success",
           relatedTo: sub.id,

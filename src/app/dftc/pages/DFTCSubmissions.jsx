@@ -298,7 +298,7 @@ function DFTCHistory() {
           savedBy: submitterFullName,
           savedDateTime: formatDateTime(item.saved_at || item.created_at),
           savedIso,
-          totalRecords: item.total_records ?? 0,
+          totalRecords: item.record_count ?? 0,
           analyticsSupported: item.analytics_supported_count ?? 0,
           otherCommodities: item.other_commodity_count ?? 0,
           needsCorrection: item.needs_correction_count ?? 0,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   X,
@@ -14,10 +15,47 @@ import {
   UOM_OPTIONS,
   OBS_STATUS_LABELS
 } from "./dftc-add-data-data";
-import { apiPost, parseResponse } from "../../global/api";
+import { apiGet, apiPost, parseResponse } from "../../global/api";
+const ARRIVAL_CATEGORY_ORDER = [
+  "Lowland Vegetables",
+  "Highland Vegetables",
+  "Spices",
+  "Rootcrops",
+  "Fruits",
+  "Others"
+];
+function buildArrivalCommodities(items) {
+  const groups = new Map();
+  for (const row of items) {
+    let com = groups.get(row.name);
+    if (!com) {
+      com = { id: row.id, name: row.name, category: row.category, variants: [] };
+      groups.set(row.name, com);
+    }
+    com.variants.push({
+      id: row.id,
+      name: row.variety || "Base",
+      uom: row.unit_of_measure || "kg"
+    });
+  }
+  return [...groups.values()].sort((a, b) => {
+    const ai = ARRIVAL_CATEGORY_ORDER.indexOf(a.category ?? "");
+    const bi = ARRIVAL_CATEGORY_ORDER.indexOf(b.category ?? "");
+    const ci = (ai < 0 ? ARRIVAL_CATEGORY_ORDER.length : ai) - (bi < 0 ? ARRIVAL_CATEGORY_ORDER.length : bi);
+    if (ci !== 0) return ci;
+    return a.name.localeCompare(b.name);
+  });
+}
 function formatDateLabel(iso) {
   const d = /* @__PURE__ */ new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+}
+function localToday() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 function combinedTotal(f) {
   const farm = parseFloat(f.farmSource);
@@ -108,7 +146,7 @@ function DFTCArrivalInput() {
   const navigate = useNavigate();
   const location = useLocation();
   const navState = location.state;
-  const defaultDate = navState?.date ?? "2026-08-02";
+  const defaultDate = navState?.date ?? localToday();
   const [fields, setFields] = useState({});
   const [customVariants, setCustomVariants] = useState({});
   const [addingVariant, setAddingVariant] = useState(null);
@@ -129,6 +167,17 @@ function DFTCArrivalInput() {
   const [reviewMode, setReviewMode] = useState(false);
   const [dataName, setDataName] = useState(generateArrivalName(defaultDate));
   const [saved, setSaved] = useState(false);
+  const [commodityList, setCommodityList] = useState(ARRIVAL_COMMODITIES);
+  const { data: catalogData } = useQuery({
+    queryKey: ["dftc", "commodities"],
+    queryFn: async () => parseResponse(await apiGet("/dftc/commodities"))
+  });
+  useEffect(() => {
+    if (!Array.isArray(catalogData?.items) || catalogData.items.length === 0) return;
+    const built = buildArrivalCommodities(catalogData.items);
+    if (built.length === 0) return;
+    setCommodityList(built);
+  }, [catalogData]);
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
@@ -146,6 +195,10 @@ function DFTCArrivalInput() {
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 3e4);
     }, 1500);
   }, []);
+  const variantUom = {};
+  for (const com of commodityList) {
+    for (const v of com.variants) variantUom[v.id] = v.uom;
+  }
   function updateField(variantId, patch) {
     setFields((prev) => ({
       ...prev,
@@ -154,7 +207,7 @@ function DFTCArrivalInput() {
         farmObs: null,
         otherSource: "",
         otherObs: null,
-        uom: "kg",
+        uom: variantUom[variantId] ?? "kg",
         ...prev[variantId],
         ...patch
       }
@@ -190,29 +243,49 @@ function DFTCArrivalInput() {
     const q = searchQuery.toLowerCase();
     return com.name.toLowerCase().includes(q) || v.name.toLowerCase().includes(q);
   }
-  const allEntries = ARRIVAL_COMMODITIES.flatMap(
-    (com) => getVariants(com).map((v) => ({ com, v, f: fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: "kg" } })).filter(({ f }) => hasArrivalValue(f))
+  const allEntries = commodityList.flatMap(
+    (com) => getVariants(com).map((v) => ({ com, v, f: fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: variantUom[v.id] ?? "kg" } })).filter(({ f }) => hasArrivalValue(f))
   );
-  const hwCount = allEntries.filter((e) => e.com.isHW).length;
-  const tempCount = allEntries.filter((e) => !e.com.isHW).length;
   const enteredCount = allEntries.length;
   const canReview = enteredCount > 0;
+  async function registerCommodity(body) {
+    try {
+      return await parseResponse(await apiPost("/dftc/commodities", body));
+    } catch {
+      return null;
+    }
+  }
   async function handleSave() {
-    const records = allEntries.map(({ com, v, f }) => {
+    const records = [];
+    for (const { com, v, f } of allEntries) {
       const farm = f.farmSource === "" ? null : parseFloat(f.farmSource);
       const other = f.otherSource === "" ? null : parseFloat(f.otherSource);
       const hasVolume = farm != null || other != null;
       const combined = (farm ?? 0) + (other ?? 0);
-      const commodityId = (com.id || "").replace(/^a-/, "");
-      return {
-        commodity_id: commodityId,
+      const base = {
         variety: v.name,
         farm_source_volume_kg: farm,
         other_source_volume_kg: other,
         reported_combined_volume_kg: hasVolume ? Number(combined.toFixed(2)) : null,
         observation_status: "Reported value"
       };
-    });
+      const isCustomVariant = (v.id || "").startsWith("custom-");
+      const resolvedId = isCustomVariant ? com.id : v.id;
+      const isCatalogId = resolvedId && !resolvedId.startsWith("a-") && !resolvedId.startsWith("custom-");
+      if (isCatalogId) {
+        records.push({ commodity_id: resolvedId, ...base });
+        continue;
+      }
+      const registered = await registerCommodity({
+        name: com.name,
+        category: com.category,
+        variety: v.name === "Base" ? null : v.name,
+        unit_of_measure: f.uom
+      });
+      if (registered?.id) {
+        records.push({ commodity_id: registered.id, ...base });
+      }
+    }
 
     const payload = {
       data_type: "arrival_volume",
@@ -278,8 +351,6 @@ function DFTCArrivalInput() {
         <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3 mb-5">
           <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-[12px]">
             <span className="text-[var(--hw-neutral-800)]"><strong className="font-semibold">{enteredCount}</strong> Total Records</span>
-            <span className="text-[var(--hw-neutral-800)]"><strong className="font-semibold text-[var(--hw-green-700)]">{hwCount}</strong> HarvestWise Commodity Records</span>
-            <span className="text-[var(--hw-neutral-800)]"><strong className="font-semibold text-amber-700">{tempCount}</strong> Temporary Commodity Records</span>
           </div>
         </div>
 
@@ -303,7 +374,6 @@ function DFTCArrivalInput() {
                   <div>
                     <span className="text-[12px] font-medium text-[var(--hw-neutral-800)]">{com.name}</span>
                     <span className="text-[12px] text-[var(--hw-neutral-900)] ml-1.5">{v.name}</span>
-                    {!com.isHW && <span className="ml-2 text-[10px] text-amber-700 font-medium">Temporary</span>}
                   </div>
                   <select
         value={f.uom}
@@ -324,7 +394,6 @@ function DFTCArrivalInput() {
                 <div className="block md:hidden px-4 py-3 border-b border-[var(--hw-neutral-100)] last:border-0">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{com.name} — {v.name}</span>
-                    {!com.isHW && <span className="text-[10px] text-amber-700 font-medium">Temporary</span>}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -374,11 +443,11 @@ function DFTCArrivalInput() {
         </div>
       </div>;
   }
-  const displayedCommodities = ARRIVAL_COMMODITIES.filter((com) => {
+  const displayedCommodities = commodityList.filter((com) => {
     const variants = getVariants(com);
     if (!matchesCommodity(com, variants)) return false;
     if (showMode === "entered") {
-      return variants.some((v) => hasArrivalValue(fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: "kg" }));
+      return variants.some((v) => hasArrivalValue(fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: variantUom[v.id] ?? "kg" }));
     }
     return true;
   });
@@ -479,12 +548,12 @@ function DFTCArrivalInput() {
       {
     /* Table */
   }
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden mb-5">
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] mb-5">
 
         {
     /* Desktop sticky header */
   }
-        <div className="hidden md:grid grid-cols-[1fr_80px_1fr_1fr_110px] gap-3 px-4 py-2.5 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)] sticky top-13 z-10">
+        <div className="hidden md:grid grid-cols-[1fr_80px_1fr_1fr_110px] gap-3 px-4 py-2.5 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)] rounded-t-2xl sticky top-13 z-10">
           {["Commodity Name", "Unit", "Farm Source", "Other Source", "Combined Total"].map((h) => <div key={h} className="text-[11px] font-semibold text-[var(--hw-neutral-700)]">{h}</div>)}
         </div>
 
@@ -493,7 +562,7 @@ function DFTCArrivalInput() {
           </div> : displayedCommodities.map((com) => {
     const variants = getVariants(com).filter((v) => {
       if (!matchesVariant(com, v)) return false;
-      if (showMode === "entered") return hasArrivalValue(fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: "kg" });
+      if (showMode === "entered") return hasArrivalValue(fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: variantUom[v.id] ?? "kg" });
       return true;
     });
     return <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
@@ -502,15 +571,13 @@ function DFTCArrivalInput() {
     }
                 <div className="px-4 py-2 bg-white border-b border-[var(--hw-neutral-50)] flex items-center gap-2">
                   <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{com.name}</span>
-                  {!com.isHW && <span className="text-[10px] text-amber-700 font-medium border border-amber-200 rounded px-1.5 py-0.5 leading-none">Temporary</span>}
-                  {com.isHW && <span className="text-[10px] text-[var(--hw-green-700)] font-medium">Arrival Pressure</span>}
                 </div>
 
                 {
       /* Variant rows */
     }
                 {variants.map((v) => {
-      const f = fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: "kg" };
+      const f = fields[v.id] ?? { farmSource: "", farmObs: null, otherSource: "", otherObs: null, uom: variantUom[v.id] ?? "kg" };
       const hasVal = hasArrivalValue(f);
       const total = combinedTotal(f);
       return <div key={v.id}>

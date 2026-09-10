@@ -313,7 +313,7 @@ function DFTCInput() {
 
   // Format submissions per mapping document lines 42-50
   const savedDataList = rawSubmissions.map((sub) => {
-    const market = formatMarketName(sub.source_id);
+    const market = formatMarketName(sub.source_name || sub.source_id);
     const isArrival = sub.data_type === "arrival_volume" || sub.data_type === "arrival";
     const priceTypeCapitalized = sub.price_type
       ? sub.price_type.charAt(0).toUpperCase() + sub.price_type.slice(1).toLowerCase()
@@ -335,7 +335,7 @@ function DFTCInput() {
       market,
       entryMethod,
       savedDate,
-      records: sub.total_records ?? 0,
+      records: sub.record_count ?? 0,
       isNew
     };
   });
@@ -379,7 +379,7 @@ function DFTCInput() {
         const commodityName = itemData.commodity_name || itemData.name;
         if (!commodityName) return;
         const category = itemData.commodity_category || "Vegetables";
-        const lastUpdated = itemData.last_updated ? formatSavedDate(itemData.last_updated) : null;
+        const lastUpdated = itemData.updated_at ? formatSavedDate(itemData.updated_at) : null;
 
         // Only include if actual price records exist in source
         if (itemData.prices?.bangkerohan_retail !== null && itemData.prices?.bangkerohan_retail !== undefined) {
@@ -435,7 +435,7 @@ function DFTCInput() {
         const commodityName = itemData.commodity_name || itemData.name;
         if (!commodityName) return;
         const category = itemData.commodity_category || "Other";
-        const lastUpdated = itemData.last_updated ? formatSavedDate(itemData.last_updated) : null;
+        const lastUpdated = itemData.updated_at ? formatSavedDate(itemData.updated_at) : null;
 
         if (itemData.prices?.bangkerohan_retail !== null && itemData.prices?.bangkerohan_retail !== undefined) {
           rows.push({
