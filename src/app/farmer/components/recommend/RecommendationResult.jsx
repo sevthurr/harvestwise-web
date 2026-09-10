@@ -19,7 +19,7 @@ import {
   Check
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { getTotalCost, formatPeso } from "./types";
+import { getTotalCost, formatPeso, COMMODITY_OPTIONS } from "./types";
 import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import {
