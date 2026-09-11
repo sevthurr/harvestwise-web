@@ -6,6 +6,14 @@ import { useAuth } from "../global/contexts/AuthContext";
 import { Footer } from "../global/components/Footer";
 import { apiPost, parseResponse } from "../global/api";
 import { usePWAInstall } from "../global/hooks/usePWAInstall";
+import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
+import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
+import { ContactInput } from "./components/ContactInput";
+import {
+  validateContact,
+  PASSWORD_REQUIREMENTS,
+  validatePasswordStrength,
+} from "./authValidation";
 
 const SCALE = 0.85;
 const LOGO_W = Math.round(494 * SCALE);
@@ -21,21 +29,19 @@ function LogoMark() {
   );
 }
 
-const REQUIREMENTS = [
-  { label: "At least 8 characters",         test: (p) => p.length >= 8 },
-  { label: "At least 1 uppercase letter",   test: (p) => /[A-Z]/.test(p) },
-  { label: "At least 1 number",             test: (p) => /[0-9]/.test(p) },
-  { label: "At least 1 special character",  test: (p) => /[^A-Za-z0-9]/.test(p) },
-];
-
 const SUFFIX_OPTIONS = ["None", "Jr.", "Sr.", "II", "III", "IV"];
 
-const Field = ({ id, label, optional, children }) => (
+const Field = ({ id, label, required = false, optional = false, optionalText = "", children }) => (
   <div className="space-y-1.5">
     <label htmlFor={id} className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">
       {label}
+      {required && (
+        <span className="text-red-500 ml-1 font-semibold" aria-hidden="true">*</span>
+      )}
       {optional && (
-        <span className="ml-1 text-[13px] text-[var(--hw-neutral-400)] font-normal">(optional)</span>
+        <span className="ml-1 text-[13px] text-[var(--hw-neutral-400)] font-normal">
+          {optionalText}
+        </span>
       )}
     </label>
     {children}
@@ -48,59 +54,91 @@ const inputCls =
 function RegisterPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { authLang, t } = usePublicAuthLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
   const [installing, setInstalling] = useState(false);
 
   const [form, setForm] = useState({
-    firstName: "", lastName: "", middleName: "",
-    suffix: "None", phone: "", email: "",
-    password: "", confirmPassword: "",
+    firstName: "",
+    lastName: "",
+    middleName: "",
+    suffix: "None",
+    contact: "",
+    password: "",
+    confirmPassword: "",
   });
-  const [showPw, setShowPw]   = useState(false);
+
+  const [showPw, setShowPw] = useState(false);
   const [showCfm, setShowCfm] = useState(false);
-  const [errors, setErrors]   = useState({});
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const capitalizeWords = (v) => v.replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const set     = (key) => (e) => { setForm((f) => ({ ...f, [key]: e.target.value })); setErrors((err) => ({ ...err, [key]: "" })); };
-  const setName = (key) => (e) => { setForm((f) => ({ ...f, [key]: capitalizeWords(e.target.value) })); setErrors((err) => ({ ...err, [key]: "" })); };
+  const set = (key) => (e) => {
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+    setErrors((err) => ({ ...err, [key]: "" }));
+  };
 
-  const setPhone = (e) => {
-    const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
-    setForm((f) => ({ ...f, phone: digits }));
-    setErrors((err) => ({ ...err, contact: "" }));
+  const setName = (key) => (e) => {
+    setForm((f) => ({ ...f, [key]: capitalizeWords(e.target.value) }));
+    setErrors((err) => ({ ...err, [key]: "" }));
   };
 
   const validate = () => {
     const e = {};
-    if (!form.firstName.trim())  e.firstName = "First name is required.";
-    if (!form.lastName.trim())   e.lastName  = "Last name is required.";
-    if (!form.phone.trim() && !form.email.trim())
-      e.contact = "Enter at least one contact method: phone number or email.";
-    if (!form.password)
-      e.password = "Password is required.";
-    else if (!REQUIREMENTS.every((r) => r.test(form.password)))
-      e.password = "Password does not meet all requirements.";
-    if (form.password !== form.confirmPassword)
-      e.confirmPassword = "Passwords do not match.";
+    if (!form.firstName.trim()) {
+      e.firstName = t("auth.errors.first_name_required", {}, "Enter your first name.");
+    }
+    if (!form.lastName.trim()) {
+      e.lastName = t("auth.errors.last_name_required", {}, "Enter your last name.");
+    }
+
+    const trimmedContact = form.contact.trim();
+    if (!trimmedContact) {
+      e.contact = t("auth.errors.identifier_required", {}, "Enter your email or mobile number.");
+    } else {
+      const contactCheck = validateContact(trimmedContact);
+      if (!contactCheck.isValid) {
+        if (contactCheck.errorKey === "phone_invalid") {
+          e.contact = t("auth.errors.phone_invalid", {}, "Enter a valid Philippine mobile number.");
+        } else {
+          e.contact = t("auth.errors.email_invalid", {}, "Enter a valid email address.");
+        }
+      }
+    }
+
+    if (!form.password) {
+      e.password = t("auth.errors.password_required", {}, "Enter your password.");
+    } else if (!validatePasswordStrength(form.password)) {
+      e.password = t("auth.errors.password_requirements", {}, "Password does not meet all requirements.");
+    }
+
+    if (form.password !== form.confirmPassword) {
+      e.confirmPassword = t("auth.errors.password_mismatch", {}, "Passwords do not match.");
+    }
+
     return e;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
 
     setLoading(true);
     try {
+      const contactCheck = validateContact(form.contact.trim());
       const payload = {
-        first_name:  form.firstName.trim(),
-        last_name:   form.lastName.trim(),
+        first_name: form.firstName.trim(),
+        last_name: form.lastName.trim(),
         ...(form.middleName.trim() && { middle_name: form.middleName.trim() }),
-        ...(form.suffix !== "None"  && { suffix: form.suffix }),
-        ...(form.email.trim()       && { email: form.email.trim() }),
-        ...(form.phone.trim()       && { phone: form.phone.trim() }),
+        ...(form.suffix !== "None" && { suffix: form.suffix }),
+        ...(contactCheck.type === "phone" && { phone: contactCheck.normalized }),
+        ...(contactCheck.type === "email" && { email: contactCheck.normalized }),
         password: form.password,
       };
 
@@ -111,17 +149,17 @@ function RegisterPage() {
     } catch (err) {
       const msg = err.message ?? "";
       if (err.status === 409) {
-        if (msg.toLowerCase().includes("email"))
-          setErrors({ email: "This email is already registered." });
-        else if (msg.toLowerCase().includes("phone"))
-          setErrors({ contact: "This phone number is already registered." });
-        else
+        if (msg.toLowerCase().includes("email")) {
+          setErrors({ contact: t("auth.errors.email_registered", {}, "This email is already registered.") });
+        } else if (msg.toLowerCase().includes("phone")) {
+          setErrors({ contact: t("auth.errors.phone_registered", {}, "This phone number is already registered.") });
+        } else {
           setErrors({ general: msg });
+        }
       } else if (err.status === 422) {
-        // Validation error from backend — show generic message
-        setErrors({ general: "Please check your details and try again." });
+        setErrors({ general: t("auth.errors.general", {}, "Something went wrong. Please try again.") });
       } else {
-        setErrors({ general: msg || "Registration failed. Please try again." });
+        setErrors({ general: msg || t("auth.errors.general", {}, "Something went wrong. Please try again.") });
       }
     } finally {
       setLoading(false);
@@ -135,111 +173,239 @@ function RegisterPage() {
 
   const handleInstall = async () => {
     setInstalling(true);
-    try { await promptInstall(); } finally { setInstalling(false); }
+    try {
+      await promptInstall();
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const reqLabels = {
+    min_chars: t("auth.requirements.min_chars", {}, "At least 8 characters"),
+    uppercase: t("auth.requirements.uppercase", {}, "At least 1 uppercase letter"),
+    number: t("auth.requirements.number", {}, "At least 1 number"),
+    special_char: t("auth.requirements.special_char", {}, "At least 1 special character"),
   };
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
-
-      {/* Logo + header */}
-      <div className="flex flex-col items-center mb-8">
+      {/* Logo + header + Language Switcher */}
+      <div className="w-full max-w-xl relative flex flex-col items-center mb-6">
+        <div className="absolute right-0 top-1 z-10">
+          <AuthLanguageSwitcher />
+        </div>
         <LogoMark />
         <h1 className="-mt-15 text-[26px] font-bold text-[var(--hw-neutral-900)] leading-tight text-center">
-          Create your HarvestWise account
+          {t("auth.register_title", {}, "Create your farmer account")}
         </h1>
       </div>
 
       {/* Form card */}
       <div className="w-full max-w-xl bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_2px_16px_0_rgba(0,0,0,0.07)] p-8 space-y-4">
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {/* General error */}
           {errors.general && (
-            <p role="alert" className="text-[13px] text-red-600 font-medium">{errors.general}</p>
+            <p role="alert" className="text-[13px] text-red-600 font-medium">
+              {errors.general}
+            </p>
           )}
 
           {/* First Name */}
-          <Field id="firstName" label="First Name">
-            <input id="firstName" type="text" value={form.firstName} onChange={setName("firstName")} autoCapitalize="words" placeholder="Juan" className={inputCls} />
-            {errors.firstName && <p className="text-[12px] text-red-600 mt-1">{errors.firstName}</p>}
+          <Field id="firstName" label={t("auth.first_name", {}, "First Name")} required>
+            <input
+              id="firstName"
+              type="text"
+              required
+              aria-required="true"
+              value={form.firstName}
+              onChange={setName("firstName")}
+              autoCapitalize="words"
+              placeholder="Juan"
+              className={inputCls}
+            />
+            {errors.firstName && <p role="alert" className="text-[12px] text-red-600 mt-1">{errors.firstName}</p>}
           </Field>
 
           {/* Last Name */}
-          <Field id="lastName" label="Last Name">
-            <input id="lastName" type="text" value={form.lastName} onChange={setName("lastName")} autoCapitalize="words" placeholder="Dela Cruz" className={inputCls} />
-            {errors.lastName && <p className="text-[12px] text-red-600 mt-1">{errors.lastName}</p>}
+          <Field id="lastName" label={t("auth.last_name", {}, "Last Name")} required>
+            <input
+              id="lastName"
+              type="text"
+              required
+              aria-required="true"
+              value={form.lastName}
+              onChange={setName("lastName")}
+              autoCapitalize="words"
+              placeholder="Dela Cruz"
+              className={inputCls}
+            />
+            {errors.lastName && <p role="alert" className="text-[12px] text-red-600 mt-1">{errors.lastName}</p>}
           </Field>
 
           {/* Middle Name */}
-          <Field id="middleName" label="Middle Name" optional>
-            <input id="middleName" type="text" value={form.middleName} onChange={setName("middleName")} autoCapitalize="words" placeholder="Santos" className={inputCls} />
+          <Field
+            id="middleName"
+            label={t("auth.middle_name", {}, "Middle Name")}
+            optional
+            optionalText={t("auth.optional_label", {}, "(optional)")}
+          >
+            <input
+              id="middleName"
+              type="text"
+              value={form.middleName}
+              onChange={setName("middleName")}
+              autoCapitalize="words"
+              placeholder="Santos"
+              className={inputCls}
+            />
           </Field>
 
           {/* Suffix */}
-          <Field id="suffix" label="Suffix" optional>
+          <Field
+            id="suffix"
+            label={t("auth.suffix", {}, "Suffix")}
+            optional
+            optionalText={t("auth.optional_label", {}, "(optional)")}
+          >
             <div className="relative">
-              <select id="suffix" value={form.suffix} onChange={set("suffix")} className={`${inputCls} appearance-none pr-9`}>
-                {SUFFIX_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              <select
+                id="suffix"
+                value={form.suffix}
+                onChange={set("suffix")}
+                style={{ color: form.suffix === "None" ? "var(--hw-neutral-400, #9ca3af)" : "var(--hw-neutral-900, #111827)" }}
+                className={`w-full h-11 px-3.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow appearance-none pr-9 ${
+                  form.suffix === "None" ? "text-[var(--hw-neutral-400)] text-gray-400" : "text-[var(--hw-neutral-900)]"
+                }`}
+              >
+                <option value="None" hidden disabled>
+                  {t("auth.suffix_placeholder", {}, "Ex. Jr.")}
+                </option>
+                {SUFFIX_OPTIONS.filter((s) => s !== "None").map((s) => (
+                  <option key={s} value={s} style={{ color: "#111827" }}>
+                    {s}
+                  </option>
+                ))}
               </select>
-              <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)] pointer-events-none" fill="none" viewBox="0 0 10 6">
-                <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)] pointer-events-none"
+                fill="none"
+                viewBox="0 0 10 6"
+                aria-hidden="true"
+              >
+                <path
+                  d="M1 1l4 4 4-4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
           </Field>
 
-          {/* Contact info */}
-          <div className="space-y-3">
-            <p className="text-[13px] text-[var(--hw-neutral-500)]">
-              Enter at least one contact method: phone number or email.
-            </p>
-            <Field id="phone" label="Phone Number">
-              <input id="phone" type="tel" inputMode="numeric" value={form.phone} onChange={setPhone} maxLength={11} placeholder="09XX XXX XXXX" className={inputCls} />
-            </Field>
-            <Field id="email" label="Email">
-              <input id="email" type="email" value={form.email} onChange={set("email")} placeholder="you@example.com" className={inputCls} />
-              {errors.email && <p className="text-[12px] text-red-600 mt-1">{errors.email}</p>}
-            </Field>
-            {errors.contact && <p className="text-[12px] text-red-600">{errors.contact}</p>}
-          </div>
+          {/* Combined Email or mobile number */}
+          <Field id="contact" label={t("auth.email_or_mobile", {}, "Email or mobile number")} required>
+            <ContactInput
+              id="contact"
+              value={form.contact}
+              onChange={(val) => {
+                setForm((f) => ({ ...f, contact: val }));
+                setErrors((err) => ({ ...err, contact: "" }));
+              }}
+              placeholder={t("auth.contact_placeholder", {}, "name@example.com or 09XXXXXXXXX")}
+              required
+              className={inputCls}
+              error={!!errors.contact}
+            />
+            {errors.contact && <p role="alert" className="text-[12px] text-red-600 mt-1">{errors.contact}</p>}
+          </Field>
 
           {/* Password */}
           <div className="space-y-1.5">
-            <label htmlFor="password" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">Password</label>
+            <label htmlFor="password" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">
+              {t("auth.password_label", {}, "Password")}
+              <span className="text-red-500 ml-1 font-semibold" aria-hidden="true">*</span>
+            </label>
             <div className="relative">
-              <input id="password" type={showPw ? "text" : "password"} value={form.password} onChange={set("password")} placeholder="Create a password" className={`${inputCls} pr-11`} />
-              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)]" aria-label={showPw ? "Hide password" : "Show password"}>
+              <input
+                id="password"
+                type={showPw ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                aria-required="true"
+                value={form.password}
+                onChange={set("password")}
+                placeholder={t("auth.password_placeholder", {}, "Enter your password")}
+                className={`${inputCls} pr-11`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1"
+                aria-label={showPw ? "Hide password" : "Show password"}
+              >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             {form.password && (
               <ul className="mt-2 space-y-1">
-                {REQUIREMENTS.map((req) => {
+                {PASSWORD_REQUIREMENTS.map((req) => {
                   const ok = req.test(form.password);
                   return (
-                    <li key={req.label} className={`flex items-center gap-1.5 text-[12px] transition-colors ${ok ? "text-emerald-600" : "text-[var(--hw-neutral-400)]"}`}>
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border ${ok ? "bg-emerald-500 border-emerald-500" : "border-[var(--hw-neutral-300)]"}`}>
+                    <li
+                      key={req.key}
+                      className={`flex items-center gap-1.5 text-[12px] transition-colors ${
+                        ok ? "text-emerald-600" : "text-[var(--hw-neutral-400)]"
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border ${
+                          ok
+                            ? "bg-emerald-500 border-emerald-500"
+                            : "border-[var(--hw-neutral-300)]"
+                        }`}
+                      >
                         {ok && <Check className="w-2.5 h-2.5 text-white" />}
                       </div>
-                      {req.label}
+                      {reqLabels[req.key]}
                     </li>
                   );
                 })}
               </ul>
             )}
-            {errors.password && <p className="text-[12px] text-red-600">{errors.password}</p>}
+            {errors.password && <p role="alert" className="text-[12px] text-red-600 mt-1">{errors.password}</p>}
           </div>
 
           {/* Confirm password */}
           <div className="space-y-1.5">
-            <label htmlFor="confirmPassword" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">Confirm Password</label>
+            <label htmlFor="confirmPassword" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">
+              {t("auth.confirm_password_label", {}, "Confirm Password")}
+              <span className="text-red-500 ml-1 font-semibold" aria-hidden="true">*</span>
+            </label>
             <div className="relative">
-              <input id="confirmPassword" type={showCfm ? "text" : "password"} value={form.confirmPassword} onChange={set("confirmPassword")} placeholder="Repeat your password" className={`${inputCls} pr-11`} />
-              <button type="button" onClick={() => setShowCfm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)]" aria-label={showCfm ? "Hide password" : "Show password"}>
+              <input
+                id="confirmPassword"
+                type={showCfm ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                aria-required="true"
+                value={form.confirmPassword}
+                onChange={set("confirmPassword")}
+                placeholder={t("auth.confirm_password_placeholder", {}, "Repeat your password")}
+                className={`${inputCls} pr-11`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCfm((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1"
+                aria-label={showCfm ? "Hide password" : "Show password"}
+              >
                 {showCfm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {errors.confirmPassword && <p className="text-[12px] text-red-600">{errors.confirmPassword}</p>}
+            {errors.confirmPassword && (
+              <p role="alert" className="text-[12px] text-red-600 mt-1">{errors.confirmPassword}</p>
+            )}
           </div>
 
           {/* Submit */}
@@ -248,14 +414,18 @@ function RegisterPage() {
             disabled={loading}
             className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
           >
-            {loading ? "Creating account…" : "Create account"}
+            {loading
+              ? t("auth.sign_up_loading", {}, "Creating account…")
+              : t("auth.sign_up", {}, "Create account")}
           </button>
         </form>
 
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
-          <span className="text-[12px] text-[var(--hw-neutral-400)] font-medium">or</span>
+          <span className="text-[12px] text-[var(--hw-neutral-400)] font-medium">
+            {t("auth.or", {}, "or")}
+          </span>
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
         </div>
 
@@ -268,14 +438,16 @@ function RegisterPage() {
           className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-400)] rounded-xl cursor-not-allowed opacity-50"
           aria-disabled="true"
         >
-          <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
+          <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          Sign up with Google
-          <span className="text-[11px] ml-1 text-[var(--hw-neutral-400)]">(unavailable)</span>
+          {t("auth.google_sign_up", {}, "Sign up with Google")}
+          <span className="text-[11px] ml-1 text-[var(--hw-neutral-400)]">
+            {t("auth.google_unavailable_parentheses", {}, "(unavailable)")}
+          </span>
         </button>
 
         {/* PWA install prompt — shown only when browser supports it and not yet installed */}
@@ -286,22 +458,28 @@ function RegisterPage() {
             disabled={installing}
             className="w-full h-11 flex items-center justify-center gap-2.5 bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] text-[15px] font-medium text-[var(--hw-green-800)] rounded-xl hover:bg-[var(--hw-green-100)] disabled:opacity-60 transition-colors"
           >
-            <Download className="w-4.5 h-4.5" />
-            {installing ? "Installing…" : "Install HarvestWise app"}
+            <Download className="w-4.5 h-4.5" aria-hidden="true" />
+            {installing
+              ? t("auth.installing_pwa", {}, "Installing…")
+              : t("auth.install_pwa", {}, "Install HarvestWise app")}
           </button>
         )}
 
         <p className="text-center text-[14px] text-[var(--hw-neutral-600)]">
-          Already have an account?{" "}
-          <Link to="/login" className="font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors">
-            Sign in
+          {t("auth.already_have_farmer_account", {}, "Already have an account?")}{" "}
+          <Link
+            to="/login"
+            className="font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+          >
+            {t("auth.sign_in_link", {}, "Sign in")}
           </Link>
         </p>
       </div>
 
-      <Footer className="mt-2" />
+      <Footer lang={authLang} className="mt-2" />
     </div>
   );
 }
 
 export { RegisterPage as default };
+

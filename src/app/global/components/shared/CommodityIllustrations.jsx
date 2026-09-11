@@ -131,11 +131,11 @@ function getCommodityIconKey(commodityId, baseName, commodityName) {
   if (combined.includes('kalabasa') || combined.includes('squash')) return 'kalabasa';
   if (combined.includes('pipino') || combined.includes('cucumber')) return 'pipino';
   if (combined.includes('ampalaya') || combined.includes('bitter')) return 'ampalaya';
-  if (combined.includes('pechay') || combined.includes('wongbok') || combined.includes('cabbage chinese')) return 'pechay';
+  if (combined.includes('pechay') || combined.includes('wongbok') || combined.includes('cabbage chinese') || combined.includes('chinese-pechay')) return 'pechay';
   if (combined.includes('lettuce')) return 'lettuce';
   if (combined.includes('repolyo') || combined.includes('cabbage')) return 'repolyo';
   if (combined.includes('carrot')) return 'carrots';
-  if (combined.includes('atsal') || combined.includes('bell pepper')) return 'atsal';
+  if (combined.includes('atsal') || combined.includes('bell pepper') || combined.includes('bell-pepper') || combined.includes('pepper')) return 'atsal';
 
   for (const key of Object.keys(COMMODITY_REGISTRY)) {
     if (combined.includes(key)) {

@@ -369,18 +369,11 @@ const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
             </div>
             <div className="space-y-1.5">
               <label htmlFor="district" className={labelCls}>{t("onboarding.district", {}, "District")}</label>
-              <input id="district" type="text" value={data.district} onChange={(e) => onChange({ district: e.target.value })} placeholder={t("onboarding.district_placeholder", {}, "e.g. Marilog")} className={fieldCls} />
+              <input id="district" type="text" value={data.district} onChange={(e) => onChange({ district: e.target.value })} placeholder={t("onboarding.district_placeholder", {}, "Ex. Marilog")} className={fieldCls} />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="barangay" className={labelCls}>{t("onboarding.barangay", {}, "Barangay")}</label>
-              <input id="barangay" type="text" value={data.barangay} onChange={(e) => onChange({ barangay: e.target.value })} placeholder={t("onboarding.barangay_placeholder", {}, "e.g. Buda")} className={fieldCls} />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="farmSize" className={`${labelCls} flex items-center gap-1.5`}>
-                {t("onboarding.farm_size", {}, "Farm Size")}
-                <span className="text-[12px] text-[var(--hw-neutral-400)] font-normal">{t("onboarding.optional", {}, "(optional)")}</span>
-              </label>
-              <input id="farmSize" type="text" value={data.farmSize} onChange={(e) => onChange({ farmSize: e.target.value })} placeholder={t("onboarding.farm_size_placeholder", {}, "e.g. 1,500 sq m or 0.5 hectare")} className={fieldCls} />
+              <input id="barangay" type="text" value={data.barangay} onChange={(e) => onChange({ barangay: e.target.value })} placeholder={t("onboarding.barangay_placeholder", {}, "Ex. Buda")} className={fieldCls} />
             </div>
           </div>
         )}
@@ -435,7 +428,12 @@ const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities 
                   : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
               }`}
             >
-              <CommodityIllustration commodityId={crop.id} className="w-7 h-7 flex-shrink-0" />
+              <CommodityIllustration
+                commodityId={crop.id}
+                commodityName={crop.name}
+                baseName={crop.name}
+                className="w-7 h-7 flex-shrink-0"
+              />
               <span className="truncate">{crop.name}</span>
             </button>
           );
@@ -513,7 +511,7 @@ const Step4 = ({ data, onChange, onContinue, onBack, onSkip, submitting, submitE
           type="text"
           value={data.sellingArea}
           onChange={(e) => onChange({ sellingArea: e.target.value })}
-          placeholder={t("onboarding.selling_buyer_placeholder", {}, "e.g. Bangkerohan market, direct buyer")}
+          placeholder={t("onboarding.selling_buyer_placeholder", {}, "Ex. Bangkerohan market, direct buyer")}
           className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
         />
       </div>
