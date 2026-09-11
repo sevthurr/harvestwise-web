@@ -1,5 +1,4 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-﻿import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, PieChart as PieChartIcon } from "lucide-react";
 import { COMMODITY_CATEGORIES, getCategoryFor, isHWCommodity } from "../../global/data/commodities";
@@ -748,156 +747,6 @@ function DFTCTrends() {
     setAShowAll(false);
   }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo]);
 
-  // Live Price Queries
-  const pCommodityId = useMemo(() => getCommoditySlug(pCommodity), [pCommodity]);
-  const pPriceTypeKey = useMemo(() => getPriceTypeKey(pMarket, pPriceType), [pMarket, pPriceType]);
-
-  const { data: priceDetailData, isLoading: isPriceDetailLoading } = useQuery({
-    queryKey: ["dftc-trends-price-detail", pCommodityId, pPriceTypeKey, fHorizon],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/prices/${pCommodityId}?price_type=${pPriceTypeKey}&horizon=${fHorizon}`);
-        return parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
-    staleTime: 60 * 1000
-  });
-
-  const { data: priceRecordsData, isLoading: isPriceRecordsLoading } = useQuery({
-    queryKey: ["dftc-trends-price-records", pCommodityId, pPriceTypeKey],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/prices/${pCommodityId}/records?price_type=${pPriceTypeKey}&limit=100`);
-        return parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
-    staleTime: 60 * 1000
-  });
-
-  const isPricesLoading = isPriceDetailLoading || isPriceRecordsLoading;
-
-  // Live Arrival Volume Query
-  const aCommodityId = useMemo(() => getCommoditySlug(aCommodity), [aCommodity]);
-  const { data: arrivalQueryData, isLoading: isArrivalLoading } = useQuery({
-    queryKey: ["dftc-trends-arrivals", aCommodityId],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/market/factors/arrival/${aCommodityId}?days=180`);
-        return parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
-    staleTime: 60 * 1000
-  });
-
-  // 1. Process Price Trends Data from Database Response Only
-  const rawPriceRecords = useMemo(() => {
-    if (Array.isArray(priceRecordsData)) return priceRecordsData;
-    if (Array.isArray(priceRecordsData?.items)) return priceRecordsData.items;
-    if (Array.isArray(priceDetailData?.recent_records)) return priceDetailData.recent_records;
-    return [];
-  }, [priceRecordsData, priceDetailData]);
-
-  const filteredPriceRecords = useMemo(() => {
-    if (!rawPriceRecords.length) return [];
-    let recs = [...rawPriceRecords].sort((a, b) => new Date(b.price_date || b.date) - new Date(a.price_date || a.date));
-    const limit = pDatePreset === "7d" ? 7 : pDatePreset === "14d" ? 14 : pDatePreset === "21d" ? 21 : pDatePreset === "28d" ? 28 : null;
-    if (limit) {
-      recs = recs.slice(0, limit);
-    } else if (pDatePreset === "custom" && pCustomFrom && pCustomTo) {
-      recs = recs.filter((r) => {
-        const d = r.price_date || r.date;
-        return d >= pCustomFrom && d <= pCustomTo;
-      });
-    }
-    return recs;
-  }, [rawPriceRecords, pDatePreset, pCustomFrom, pCustomTo]);
-
-  const forecastObj = priceDetailData?.forecast;
-
-  const varieties = useMemo(() => [{ variety: pCommodity }], [pCommodity]);
-  const varietyColors = useMemo(() => [HW_GREEN_SHADES[0]], []);
-
-  // 5-Metric Price Summary Strip
-  const pVarietySummaries = useMemo(() => {
-    if (!filteredPriceRecords.length && !forecastObj) return [];
-    const validPrices = filteredPriceRecords.map((r) => r.price_avg ?? r.price).filter((p) => p != null);
-    const recentAvg = validPrices.length
-      ? validPrices.reduce((a, b) => a + b, 0) / validPrices.length
-      : (forecastObj?.current_price ?? null);
-    const lo = forecastObj?.lower_forecast ?? null;
-    const avgMid = forecastObj?.forecast_midpoint ?? (lo != null && forecastObj?.upper_forecast != null ? (lo + forecastObj.upper_forecast) / 2 : null);
-    const hi = forecastObj?.upper_forecast ?? null;
-    const change = recentAvg != null && avgMid != null && recentAvg > 0 ? ((avgMid - recentAvg) / recentAvg) * 100 : null;
-
-    return [{
-      variety: pCommodity,
-      recentAvg,
-      lo,
-      avgMid,
-      hi,
-      change,
-      records: filteredPriceRecords.length
-    }];
-  }, [filteredPriceRecords, forecastObj, pCommodity]);
-
-  // Price Trend Chart Data
-  const pChartData = useMemo(() => {
-    if (!filteredPriceRecords.length && !forecastObj) return [];
-    const pts = [];
-    const sorted = [...filteredPriceRecords].sort((a, b) => new Date(a.price_date || a.date) - new Date(b.price_date || b.date));
-
-    sorted.forEach((r) => {
-      const dStr = r.price_date || r.date;
-      const dObj = new Date(dStr);
-      const label = isNaN(dObj.getTime()) ? dStr : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      pts.push({
-        date: label,
-        [pCommodity]: r.price_avg ?? r.price
-      });
-    });
-
-    if (forecastObj && (forecastObj.lower_forecast != null || forecastObj.forecast_midpoint != null)) {
-      const baseDate = sorted.length ? new Date(sorted[sorted.length - 1].price_date || sorted[sorted.length - 1].date) : new Date();
-      const mid = forecastObj.forecast_midpoint ?? ((forecastObj.lower_forecast + forecastObj.upper_forecast) / 2);
-      const lo = forecastObj.lower_forecast ?? mid;
-      const hi = forecastObj.upper_forecast ?? mid;
-      const horizonDays = parseInt(fHorizon, 10) || 7;
-
-      for (let i = 1; i <= horizonDays; i++) {
-        const nextD = new Date(baseDate);
-        nextD.setDate(nextD.getDate() + i);
-        const fLabel = nextD.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        pts.push({
-          date: fLabel,
-          [pCommodity]: mid,
-          [`${pCommodity}__lo`]: lo,
-          [`${pCommodity}__hi`]: hi
-        });
-      }
-    }
-
-    return pts;
-  }, [filteredPriceRecords, forecastObj, pCommodity, fHorizon]);
-
-  // Recent Price Records Table Rows
-  const pTableRows = useMemo(() => {
-    return filteredPriceRecords.map((r) => ({
-      date: r.price_date || r.date,
-      commodity: pCommodity,
-      variety: r.variety || "—",
-      category: getCommodityCategory(pCommodity),
-      market: pMarket,
-      price_type: pPriceType,
-      uom: r.uom || "kg",
-      price: r.price_avg ?? r.price
-    }));
-  }, [filteredPriceRecords, pCommodity, pMarket, pPriceType]);
   // Live Price Queries — catalog commodity_id + persisted forecast.points
   const isInvalidCombo = pMarket === "DFTC Taboan" && pPriceType === "Landing";
   const apiBacked = useMemo(() => isApiBackedPriceSeries(pMarket, pPriceType), [pMarket, pPriceType]);
@@ -1121,8 +970,6 @@ function DFTCTrends() {
 
   const aTotalPages = Math.max(1, Math.ceil(aTableRows.length / PAGE_SIZE));
   const aPageRows = aTableRows.slice((aPage - 1) * PAGE_SIZE, aPage * PAGE_SIZE);
-
-  const isInvalidCombo = pMarket === "DFTC Taboan" && pPriceType === "Landing";
 
   function priceSummaryRows(items, renderValue, showAll, setShowAll) {
     if (!items || items.length === 0) {

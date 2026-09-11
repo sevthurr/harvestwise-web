@@ -164,7 +164,6 @@ describe('forecast graph mapping helpers', () => {
     expect(data.some((point) => point.d === '2026-08-01')).toBe(false);
   });
 
-  it('attaches lower/upper interval fields for the forecast range band', () => {
   it('plots daily forecast.points when the prices API returns them', () => {
     const data = buildChartData(
       [{ price_date: '2026-07-31', price_avg: 70 }],

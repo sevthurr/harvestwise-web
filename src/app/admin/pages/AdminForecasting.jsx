@@ -206,6 +206,8 @@ function buildChartData(historical, forecastPoint, forecastPoints = []) {
         if (Number.isFinite(upper)) anchor.upper = upper;
         byDate.set(anchorDate, anchor);
       }
+    }
+  }
 
   const dailyPoints = Array.isArray(forecastPoints) ? forecastPoints : [];
   if (dailyPoints.length > 0) {
