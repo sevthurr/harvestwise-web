@@ -165,6 +165,23 @@ describe('forecast graph mapping helpers', () => {
   });
 
   it('attaches lower/upper interval fields for the forecast range band', () => {
+  it('plots daily forecast.points when the prices API returns them', () => {
+    const data = buildChartData(
+      [{ price_date: '2026-07-31', price_avg: 70 }],
+      { forecast_date: '2026-08-14', forecast_midpoint: 81.25 },
+      [
+        { forecast_date: '2026-08-01', forecast_midpoint: 71 },
+        { forecast_date: '2026-08-02', forecast_midpoint: 72 },
+      ]
+    );
+    expect(data).toEqual([
+      { d: '2026-07-31', actual: 70 },
+      { d: '2026-08-01', predicted: 71 },
+      { d: '2026-08-02', predicted: 72 },
+    ]);
+  });
+
+  it('does not attach lower/upper interval fields the existing chart does not render', () => {
     const [point] = buildChartData(
       [],
       { forecast_date: '2026-08-14', forecast_midpoint: 81.25, lower_forecast: 71.25, upper_forecast: 91.25 }

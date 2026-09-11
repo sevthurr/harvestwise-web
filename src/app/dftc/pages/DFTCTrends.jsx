@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+﻿import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, PieChart as PieChartIcon } from "lucide-react";
 import { COMMODITY_CATEGORIES, getCategoryFor, isHWCommodity } from "../../global/data/commodities";
@@ -8,6 +9,18 @@ import { ForecastPriceTrendChart } from "../../global/components/shared/Forecast
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { apiGet, parseResponse } from "../../global/api";
+import * as pricesApi from "../../../services/api/pricesApi";
+import {
+  buildForecastChartData,
+  buildForecastSummaries,
+  buildHistoricalChartData,
+  buildTableRows,
+  catalogPairsForCommodity,
+  catalogPairsFromPriceList,
+  isApiBackedPriceSeries,
+  toPriceTypeKey,
+  varietyDisplayKey,
+} from "./dftcTrendsPriceData";
 
 const HW_GREEN_SHADES = [
   "#15803D",
@@ -885,9 +898,139 @@ function DFTCTrends() {
       price: r.price_avg ?? r.price
     }));
   }, [filteredPriceRecords, pCommodity, pMarket, pPriceType]);
+  // Live Price Queries — catalog commodity_id + persisted forecast.points
+  const isInvalidCombo = pMarket === "DFTC Taboan" && pPriceType === "Landing";
+  const apiBacked = useMemo(() => isApiBackedPriceSeries(pMarket, pPriceType), [pMarket, pPriceType]);
+  const pPriceTypeKey = useMemo(() => toPriceTypeKey(pMarket, pPriceType), [pMarket, pPriceType]);
+
+  const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
+    queryKey: ["dftc-trends-price-catalog"],
+    queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 100 }),
+    staleTime: 60 * 1000,
+  });
+
+  const catalogPairs = useMemo(
+    () => catalogPairsFromPriceList(catalogData?.items),
+    [catalogData]
+  );
+
+  const selectedCatalogPair = useMemo(() => {
+    const matches = catalogPairsForCommodity(catalogPairs, pCommodity);
+    return matches[0] || null;
+  }, [catalogPairs, pCommodity]);
+
+  const pCommodityId = selectedCatalogPair?.commodity_id || null;
+  const seriesKey = pCommodity;
+  const catalogVarietyLabel = selectedCatalogPair
+    ? varietyDisplayKey(pCommodity, selectedCatalogPair.variety)
+    : pCommodity;
+
+  const { data: priceDetailData, isLoading: isPriceDetailLoading } = useQuery({
+    queryKey: ["dftc-trends-price-detail", pCommodityId, pPriceTypeKey, fHorizon],
+    queryFn: () =>
+      pricesApi.getPriceDetail(pCommodityId, {
+        price_type: pPriceTypeKey,
+        horizon: fHorizon,
+        records_limit: 100,
+      }),
+    enabled: Boolean(pCommodityId) && apiBacked && !isInvalidCombo,
+    staleTime: 60 * 1000,
+  });
+
+  const isPricesLoading =
+    isCatalogLoading ||
+    (Boolean(pCommodityId) && apiBacked && !isInvalidCombo && isPriceDetailLoading);
+
+  const varietyDetails = useMemo(() => {
+    if (!priceDetailData) return [];
+    return [{ varietyKey: seriesKey, detail: priceDetailData }];
+  }, [priceDetailData, seriesKey]);
+
+  const varieties = useMemo(() => [{ variety: seriesKey }], [seriesKey]);
+  const varietyColors = useMemo(() => [HW_GREEN_SHADES[0]], []);
+
+  const pVarietySummaries = useMemo(() => {
+    const rows = buildForecastSummaries(varietyDetails);
+    return rows.map((row) => ({
+      ...row,
+      variety: catalogVarietyLabel,
+      records: (priceDetailData?.recent_records || []).length,
+    }));
+  }, [varietyDetails, catalogVarietyLabel, priceDetailData]);
+
+  const formatChartDate = (iso) => {
+    if (!iso) return "";
+    const dObj = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+    return Number.isNaN(dObj.getTime())
+      ? String(iso)
+      : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const pChartData = useMemo(() => {
+    const historical = buildHistoricalChartData(
+      varietyDetails,
+      pDatePreset,
+      pCustomFrom,
+      pCustomTo
+    ).map((pt) => ({ ...pt, date: formatChartDate(pt.date) }));
+    const forecast = buildForecastChartData(varietyDetails).map((pt) => ({
+      ...pt,
+      date: formatChartDate(pt.date),
+    }));
+    return [...historical, ...forecast];
+  }, [varietyDetails, pDatePreset, pCustomFrom, pCustomTo]);
+
+  const pTableRows = useMemo(() => {
+    const rows = buildTableRows(
+      varietyDetails,
+      pCommodity,
+      pDatePreset,
+      pCustomFrom,
+      pCustomTo
+    );
+    const varietyLabel =
+      priceDetailData?.variety ||
+      selectedCatalogPair?.variety ||
+      "—";
+    return rows.map((row) => ({
+      date: row.date,
+      commodity: pCommodity,
+      variety: varietyLabel,
+      category: getCommodityCategory(pCommodity),
+      market: pMarket,
+      price_type: pPriceType,
+      uom: priceDetailData?.unit_of_measure || "kg",
+      price: row.price,
+    }));
+  }, [
+    varietyDetails,
+    pCommodity,
+    pDatePreset,
+    pCustomFrom,
+    pCustomTo,
+    priceDetailData,
+    selectedCatalogPair,
+    pMarket,
+    pPriceType,
+  ]);
 
   const pTotalPages = Math.max(1, Math.ceil(pTableRows.length / PAGE_SIZE));
   const pPageRows = pTableRows.slice((pPage - 1) * PAGE_SIZE, pPage * PAGE_SIZE);
+
+  // Live Arrival Volume Query
+  const aCommodityId = useMemo(() => getCommoditySlug(aCommodity), [aCommodity]);
+  const { data: arrivalQueryData, isLoading: isArrivalLoading } = useQuery({
+    queryKey: ["dftc-trends-arrivals", aCommodityId],
+    queryFn: async () => {
+      try {
+        const res = await apiGet(`/market/factors/arrival/${aCommodityId}?days=180`);
+        return parseResponse(res);
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 60 * 1000,
+  });
 
   // 2. Process Arrival Volume Data from Database Response Only
   const rawArrivalRecords = useMemo(() => {

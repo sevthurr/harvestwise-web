@@ -174,7 +174,7 @@ function findCommodityId(pairs, commodity, variety) {
   return match?.commodity_id || null;
 }
 
-function buildChartData(historical, forecastPoint) {
+function buildChartData(historical, forecastPoint, forecastPoints = []) {
   const byDate = new Map();
   for (const row of historical || []) {
     const date = isoDate(row?.price_date || row?.date);
@@ -205,6 +205,29 @@ function buildChartData(historical, forecastPoint) {
         if (Number.isFinite(lower)) anchor.lower = lower;
         if (Number.isFinite(upper)) anchor.upper = upper;
         byDate.set(anchorDate, anchor);
+      }
+
+  const dailyPoints = Array.isArray(forecastPoints) ? forecastPoints : [];
+  if (dailyPoints.length > 0) {
+    for (const point of dailyPoints) {
+      const forecastDate = isoDate(point?.forecast_date);
+      const midpoint = point?.forecast_midpoint;
+      if (!forecastDate || midpoint == null || midpoint === "") continue;
+      const numeric = Number(midpoint);
+      if (!Number.isFinite(numeric)) continue;
+      const existing = byDate.get(forecastDate) || { d: forecastDate };
+      existing.predicted = numeric;
+      byDate.set(forecastDate, existing);
+    }
+  } else {
+    const forecastDate = isoDate(forecastPoint?.forecast_date);
+    const midpoint = forecastPoint?.forecast_midpoint;
+    if (forecastDate && midpoint != null && midpoint !== "") {
+      const numeric = Number(midpoint);
+      if (Number.isFinite(numeric)) {
+        const existing = byDate.get(forecastDate) || { d: forecastDate };
+        existing.predicted = numeric;
+        byDate.set(forecastDate, existing);
       }
     }
   }
@@ -660,7 +683,11 @@ function AdminForecasting() {
   );
 
   const chartData = useMemo(
-    () => buildChartData(chartPayload?.recent_records, selectedForecast),
+    () => buildChartData(
+      chartPayload?.recent_records,
+      selectedForecast,
+      selectedForecast?.points || []
+    ),
     [chartPayload, selectedForecast]
   );
 
