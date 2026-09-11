@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
-import { ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Loader2 } from "lucide-react";
 import { STATUS_CFG, STEP_STATUS_CFG } from "../components/analytics/adminHistoryMockData";
 import { ingestionApi } from "../../../services/api";
 
@@ -55,6 +55,8 @@ function AdminHistoryDetail() {
   const [recordsPage, setRecordsPage] = useState(1);
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [recordsData, setRecordsData] = useState({ columns: [], rows: [], total: 0, total_pages: 0 });
+  const [recordsLoading, setRecordsLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +75,24 @@ function AdminHistoryDetail() {
     })();
     return () => { active = false; };
   }, [historyId]);
+
+  useEffect(() => {
+    let active = true;
+    setRecordsLoading(true);
+    (async () => {
+      try {
+        const data = await ingestionApi.getHistoryRecords(historyId, { page: recordsPage, page_size: PAGE_SIZE });
+        if (!active) return;
+        setRecordsData(data || { columns: [], rows: [], total: 0, total_pages: 0 });
+      } catch (err) {
+        console.warn("Failed to fetch records for history entry:", err);
+        if (active) setRecordsData({ columns: [], rows: [], total: 0, total_pages: 0 });
+      } finally {
+        if (active) setRecordsLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [historyId, recordsPage]);
 
   if (loading) {
     return (
@@ -101,10 +121,10 @@ function AdminHistoryDetail() {
   }
 
   const statusCfg = STATUS_CFG[record.status] || { color: "text-[var(--hw-neutral-700)]", dot: "bg-[var(--hw-neutral-400)]" };
-  const columns = [];
-  const rows = [];
-  const totalPages = 0;
-  const pageRows = [];
+  const columns = recordsData.columns || [];
+  const pageRows = recordsData.rows || [];
+  const totalRecords = recordsData.total || 0;
+  const totalPages = recordsData.total_pages || (totalRecords > 0 ? Math.ceil(totalRecords / PAGE_SIZE) : 0);
 
   const hasSteps = false;
   const supportsProcessedRecords = true;
@@ -227,15 +247,21 @@ function AdminHistoryDetail() {
           <div className="px-6 py-3.5 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
             <div>
               <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Processed Records</p>
-              {rows.length > 0 && (
+              {totalRecords > 0 && (
                 <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
-                  {rows.length} records processed in this activity
+                  {totalRecords.toLocaleString()} records processed in this activity
                 </p>
               )}
             </div>
+            {recordsLoading && (
+              <div className="flex items-center gap-1.5 text-[11px] text-[var(--hw-neutral-500)]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--hw-green-700)]" />
+                <span>Loading…</span>
+              </div>
+            )}
           </div>
 
-          {columns.length > 0 && rows.length > 0 ? (
+          {columns.length > 0 && pageRows.length > 0 ? (
             <>
               <div className="overflow-x-auto max-h-[500px]">
                 <table className="w-full text-[12px]">
@@ -248,11 +274,52 @@ function AdminHistoryDetail() {
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                  <tbody className={`divide-y divide-[var(--hw-neutral-100)] ${recordsLoading ? "opacity-60" : ""}`}>
                     {pageRows.map((row, rIdx) => (
                       <tr key={rIdx} className="hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
                         {columns.map((col) => {
                           const val = row[col];
+                          if (col === "Outcome") {
+                            const lower = (val || "").toLowerCase();
+                            let outcomeColor = "text-[var(--hw-neutral-700)] font-semibold";
+                            if (lower === "inserted") outcomeColor = "text-emerald-700 font-semibold";
+                            else if (lower === "updated") outcomeColor = "text-amber-700 font-semibold";
+                            else if (lower === "skipped") outcomeColor = "text-amber-600 font-semibold";
+                            else if (lower === "rejected") outcomeColor = "text-red-600 font-semibold";
+                            return (
+                              <td key={col} className={`px-4 py-2.5 whitespace-nowrap ${outcomeColor}`}>
+                                {val || "—"}
+                              </td>
+                            );
+                          }
+                          if (col === "Uploaded Price") {
+                            return (
+                              <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-900)] font-semibold whitespace-nowrap">
+                                {val || "—"}
+                              </td>
+                            );
+                          }
+                          if (col === "Stored Price") {
+                            return (
+                              <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-600)] whitespace-nowrap">
+                                {val || "—"}
+                              </td>
+                            );
+                          }
+                          if (col === "Source Trace") {
+                            return (
+                              <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-500)] font-mono text-[11px] whitespace-nowrap">
+                                {val || "—"}
+                              </td>
+                            );
+                          }
+                          if (col === "Reason") {
+                            return (
+                              <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-500)] text-[11px] whitespace-nowrap">
+                                {val || "—"}
+                              </td>
+                            );
+                          }
                           return (
                             <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">
                               {val || "-"}
@@ -269,11 +336,11 @@ function AdminHistoryDetail() {
               {totalPages > 1 && (
                 <div className="px-6 py-3.5 border-t border-[var(--hw-neutral-100)] flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)]">
                   <span>
-                    Showing {(recordsPage - 1) * PAGE_SIZE + 1}–{Math.min(recordsPage * PAGE_SIZE, rows.length)} of {rows.length}
+                    Showing {(recordsPage - 1) * PAGE_SIZE + 1}–{Math.min(recordsPage * PAGE_SIZE, totalRecords)} of {totalRecords.toLocaleString()}
                   </span>
                   <div className="flex items-center gap-1">
                     <button
-                      disabled={recordsPage === 1}
+                      disabled={recordsPage === 1 || recordsLoading}
                       onClick={() => setRecordsPage((p) => Math.max(1, p - 1))}
                       className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
                     >
@@ -283,7 +350,7 @@ function AdminHistoryDetail() {
                       {recordsPage} / {totalPages}
                     </span>
                     <button
-                      disabled={recordsPage === totalPages}
+                      disabled={recordsPage === totalPages || recordsLoading}
                       onClick={() => setRecordsPage((p) => Math.min(totalPages, p + 1))}
                       className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
                     >
@@ -293,6 +360,13 @@ function AdminHistoryDetail() {
                 </div>
               )}
             </>
+          ) : recordsLoading ? (
+            <div className="p-12 text-center">
+              <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
+                <Loader2 className="w-6 h-6 animate-spin text-[var(--hw-green-700)]" />
+                <p className="text-[13px] font-medium text-[var(--hw-neutral-700)]">Loading processed records…</p>
+              </div>
+            </div>
           ) : (
             <div className="p-12 text-center">
               <div className="flex flex-col items-center justify-center space-y-1.5 max-w-sm mx-auto">

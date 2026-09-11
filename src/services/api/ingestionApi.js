@@ -15,6 +15,21 @@ export async function uploadFile(file, dataType, overwrite = false) {
   );
 }
 
+export async function validateFile(file, dataType, overwrite = false) {
+  const form = new FormData();
+  form.append("file", file);
+  if (dataType) {
+    form.append("data_type", dataType);
+  }
+  form.append("overwrite", String(overwrite));
+  return parseResponse(
+    await apiFetch("/admin/ingestion/validate", {
+      method: "POST",
+      body: form,
+    })
+  );
+}
+
 export async function getHistory(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return parseResponse(await apiGet(`/admin/ingestion/history${qs ? `?${qs}` : ""}`));
@@ -22,6 +37,11 @@ export async function getHistory(params = {}) {
 
 export async function getHistoryDetail(importId) {
   return parseResponse(await apiGet(`/admin/ingestion/history/${importId}`));
+}
+
+export async function getHistoryRecords(importId, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return parseResponse(await apiGet(`/admin/ingestion/history/${importId}/records${qs ? `?${qs}` : ""}`));
 }
 
 export async function retryImport(payload) {

@@ -20,7 +20,7 @@ function formatHistoryDT(v) {
 }
 
 function mapHistory(rec) {
-  const source = rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
+  const sourceModule = rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
   const result = rec.error_message
     ? rec.error_message
     : rec.records_imported != null
@@ -30,12 +30,19 @@ function mapHistory(rec) {
   let status = "Completed";
   if (rec.status === "failed") status = "Failed";
 
+  let activity = "Data Import";
+  if (rec.original_file_name || (rec.file_format && rec.file_format.startsWith('.'))) {
+    activity = "File Upload";
+  } else if (rec.file_format && !rec.file_format.startsWith('.')) {
+    activity = "API Sync";
+  }
+
   return {
     id: rec.id,
     datetime: formatHistoryDT(rec.started_at),
     rawDate: rec.started_at,
-    activity: rec.source_name || "Data Import",
-    source,
+    activity,
+    sourceModule,
     submittedBy: rec.uploaded_by_name || rec.uploaded_by_user_id || "Admin",
     recordsCount: rec.records_imported != null ? String(rec.records_imported) : "—",
     result,
@@ -62,7 +69,8 @@ function AdminHistory() {
   const { data: historyRes, isLoading: loading } = useQuery({
     queryKey: ["adminHistory", page],
     queryFn: () => ingestionApi.getHistory({ page, page_size: PAGE_SIZE }),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   const history = useMemo(() => (historyRes?.items || []).map(mapHistory), [historyRes]);
