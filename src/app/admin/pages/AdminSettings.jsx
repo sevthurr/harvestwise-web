@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { authApi } from "../../../services/api";
+import { parseResponse } from "../../global/api";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
@@ -236,9 +237,19 @@ const AccountTab = ({ showToast }) => {
 };
 
 const SecurityTab = ({ showToast }) => {
-  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
+  const { user, refreshUser } = useAuth();
+  const isSuperAdmin = (user?.role?.role_name ?? "").toLowerCase() === "superadmin";
+  const [twoFAEnabled, setTwoFAEnabled] = useState(Boolean(user?.is_totp_enabled));
   const [twoFAAccordionOpen, setTwoFAAccordionOpen] = useState(false);
   const [verifyCode, setVerifyCode] = useState("");
+  const [setupData, setSetupData] = useState(null); // { secret, qr_code } from POST /totp/setup
+  const [setupCode, setSetupCode] = useState("");
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [disablePw, setDisablePw] = useState("");
+  const [disableCode, setDisableCode] = useState("");
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [newRecoveryCodes, setNewRecoveryCodes] = useState([]);
+  const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
@@ -278,11 +289,75 @@ const SecurityTab = ({ showToast }) => {
     setPwError("");
   };
 
-  const handleTwoFAConfirm = () => {
-    setTwoFAEnabled(true);
-    setTwoFAAccordionOpen(false);
+  const handleTwoFAStart = async () => {
+    setSetupData(null);
+    setSetupCode("");
     setVerifyCode("");
-    showToast("Two-Factor Authentication enabled.");
+    try {
+      setSetupLoading(true);
+      const res = await authApi.setupTotp();
+      const data = await parseResponse(res);
+      setSetupData(data);
+    } catch (err) {
+      showToast(
+        err.status === 403
+          ? "TOTP setup is restricted to SuperAdmin accounts."
+          : (err.message || "Could not start 2FA setup.")
+      );
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleTwoFAConfirm = async () => {
+    if (!setupCode || setupCode.length !== 6) return;
+    try {
+      setSetupLoading(true);
+      const res = await authApi.enableTotp(setupCode);
+      const data = await parseResponse(res);
+      setTwoFAEnabled(true);
+      setSetupData(null);
+      setSetupCode("");
+      setNewRecoveryCodes(data.recovery_codes || []);
+      setShowRecoverModal(true);
+      showToast("Two-Factor Authentication enabled.");
+      try { await refreshUser(); } catch {}
+    } catch (err) {
+      const msg = (err.status === 429 ? "Too many attempts. " : "") + (err.message || "Invalid code.");
+      showToast(msg);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleTwoFADisable = async () => {
+    if (!disablePw || !disableCode || disableCode.length !== 6) return;
+    try {
+      const res = await authApi.disableTotp(disablePw, disableCode);
+      await parseResponse(res);
+      setTwoFAEnabled(false);
+      setDisablePw("");
+      setDisableCode("");
+      setShowDisableModal(false);
+      showToast("Two-Factor Authentication disabled.");
+      try { await refreshUser(); } catch {}
+    } catch (err) {
+      showToast(err.message || "Could not disable 2FA.");
+    }
+  };
+
+  const handleRegenerateCodes = async () => {
+    if (!verifyCode || verifyCode.length !== 6) return;
+    try {
+      const res = await authApi.regenerateRecoveryCodes(verifyCode);
+      const data = await parseResponse(res);
+      setVerifyCode("");
+      setNewRecoveryCodes(data.recovery_codes || []);
+      setShowRecoverModal(true);
+      showToast("Recovery codes regenerated.");
+    } catch (err) {
+      showToast(err.message || "Could not regenerate recovery codes.");
+    }
   };
 
   const handleGoogleConnect = () => {
@@ -322,35 +397,103 @@ const SecurityTab = ({ showToast }) => {
             )}
           </div>
 
+          {!isSuperAdmin && (
+            <p className="text-[12px] text-[var(--hw-neutral-500)]">
+              Two-Factor Authentication is available for SuperAdmin accounts only.
+            </p>
+          )}
+
           {!twoFAEnabled && twoFAAccordionOpen && (
             <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-3">
-              <p className="text-[14px] text-black">
-                Enter the verification code sent to your registered phone number or email to complete setup.
-              </p>
+              {!setupData && (
+                <button
+                  type="button"
+                  onClick={handleTwoFAStart}
+                  disabled={setupLoading}
+                  className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  {setupLoading ? "Generating…" : "Generate QR code"}
+                </button>
+              )}
+
+              {setupData && (
+                <>
+                  <div className="flex flex-col items-center gap-3">
+                    {/* QR code returned as base64 PNG by the backend */}
+                    <img
+                      src={setupData.qr_code}
+                      alt="Scan this QR code with Google Authenticator"
+                      className="w-48 h-48 object-contain border border-[var(--hw-neutral-200)] rounded-xl"
+                    />
+                    <p className="text-[13px] text-black text-center">
+                      Scan this QR code with your authenticator app. If you cannot scan it,
+                      enter this secret manually:
+                    </p>
+                    <code className="text-[13px] font-mono bg-[var(--hw-neutral-100)] px-3 py-1.5 rounded-lg select-all">
+                      {setupData.secret}
+                    </code>
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="twofa-setup-code">Verification Code</FieldLabel>
+                    <input
+                      id="twofa-setup-code"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={setupCode}
+                      onChange={(e) => setSetupCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Enter 6-digit code"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <GhostBtn
+                      onClick={() => {
+                        setSetupData(null);
+                        setSetupCode("");
+                        setTwoFAAccordionOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </GhostBtn>
+                    <GreenBtn
+                      onClick={handleTwoFAConfirm}
+                      disabled={setupLoading || setupCode.length !== 6}
+                    >
+                      Confirm &amp; Enable
+                    </GreenBtn>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {twoFAEnabled && twoFAAccordionOpen && (
+            <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-4">
               <div>
-                <FieldLabel htmlFor="twofa-code">Verification Code</FieldLabel>
+                <FieldLabel htmlFor="twofa-regen-code">Current Authenticator Code</FieldLabel>
                 <input
-                  id="twofa-code"
+                  id="twofa-regen-code"
                   type="text"
                   inputMode="numeric"
+                  maxLength={6}
                   value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value)}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
                   placeholder="Enter 6-digit code"
                   className={inputCls}
                 />
               </div>
-              <div className="flex gap-2">
-                <GhostBtn
-                  onClick={() => {
-                    setTwoFAAccordionOpen(false);
-                    setVerifyCode("");
-                  }}
-                >
-                  Cancel
+              <div className="flex flex-col sm:flex-row gap-2">
+                <GhostBtn onClick={handleRegenerateCodes} disabled={verifyCode.length !== 6}>
+                  Regenerate Recovery Codes
                 </GhostBtn>
-                <GreenBtn onClick={handleTwoFAConfirm} disabled={!verifyCode.trim()}>
-                  Confirm setup
-                </GreenBtn>
+                <button
+                  type="button"
+                  onClick={() => setShowDisableModal(true)}
+                  className="h-10 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer flex-shrink-0"
+                >
+                  Disable Two-Factor Authentication
+                </button>
               </div>
             </div>
           )}
@@ -495,6 +638,80 @@ const SecurityTab = ({ showToast }) => {
             >
               Disconnect
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {showDisableModal && (
+        <Modal title="Disable Two-Factor Authentication?" onClose={() => setShowDisableModal(false)}>
+          <p className="text-[13px] text-black mb-4">
+            Enter your current password and an authenticator code to disable 2FA.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="adm-2fa-pw">Password</FieldLabel>
+              <input
+                id="adm-2fa-pw"
+                type="password"
+                value={disablePw}
+                onChange={(e) => setDisablePw(e.target.value)}
+                placeholder="••••••••"
+                className={inputCls}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="adm-2fa-code">Authenticator Code</FieldLabel>
+              <input
+                id="adm-2fa-code"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={disableCode}
+                onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="Enter 6-digit code"
+                className={inputCls}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end mt-5">
+            <GhostBtn onClick={() => setShowDisableModal(false)}>Cancel</GhostBtn>
+            <button
+              type="button"
+              onClick={handleTwoFADisable}
+              disabled={!disablePw || disableCode.length !== 6}
+              className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              Disable 2FA
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showRecoverModal && (
+        <Modal title="Save your recovery codes" onClose={() => setShowRecoverModal(false)}>
+          <p className="text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+            These codes are shown only once. Save them in a secure location. Each code can be used a
+            single time to recover your account if you lose your authenticator device.
+          </p>
+          <div className="grid grid-cols-1 gap-2 mb-5">
+            {(newRecoveryCodes || []).map((code) => (
+              <div
+                key={code}
+                className="flex items-center justify-between bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg px-3 py-2"
+              >
+                <code className="text-[13px] font-mono select-all">{code}</code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(code)}
+                  className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)]"
+                >
+                  Copy
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 justify-end">
+            <GreenBtn onClick={() => setShowRecoverModal(false)}>Done</GreenBtn>
           </div>
         </Modal>
       )}

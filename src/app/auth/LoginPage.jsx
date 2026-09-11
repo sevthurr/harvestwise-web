@@ -5,6 +5,12 @@ import VerticalLogo from "../../imports/logo";
 import { useAuth, roleHome } from "../global/contexts/AuthContext";
 import { Footer } from "../global/components/Footer";
 import { apiPost, parseResponse } from "../global/api";
+import { authApi } from "../../services/api";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "../global/components/ui/input-otp";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
 import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
 import { ContactInput } from "./components/ContactInput";
@@ -34,6 +40,15 @@ function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // MFA challenge state
+  const [mfaToken, setMfaToken] = useState(null);
+  const [showMfa, setShowMfa] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaError, setMfaError] = useState("");
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
 
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -66,8 +81,16 @@ function LoginPage() {
         identifier: contactCheck.normalized,
         password,
       });
-      const tokens = await parseResponse(res);
-      const me = await login(tokens);
+      const data = await parseResponse(res);
+
+      // 2FA required — hold the short-lived mfa_token in state only
+      if (data.mfa_required) {
+        setMfaToken(data.mfa_token);
+        setShowMfa(true);
+        return;
+      }
+
+      const me = await login(data);
       navigate(roleHome(me.role.role_name), { replace: true });
     } catch (err) {
       const msg = err.message ?? "";
@@ -80,6 +103,56 @@ function LoginPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyMfa = async (eventCode) => {
+    const code = eventCode ?? mfaCode;
+    if (!mfaToken || code.length !== 6) return;
+    setMfaError("");
+    setMfaLoading(true);
+    try {
+      const res = await authApi.verifyTotpLogin(mfaToken, code);
+      const tokens = await parseResponse(res);
+      const me = await login(tokens);
+      navigate(roleHome(me.role.role_name), { replace: true });
+    } catch (err) {
+      setMfaCode("");
+      setMfaError(
+        err.status === 429
+          ? (err.message ?? "Too many failed attempts. Try again later.")
+          : (err.message ?? "Invalid code. Try again.")
+      );
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleRecovery = async (e) => {
+    e.preventDefault();
+    if (!recoveryCode.trim()) return;
+    setMfaError("");
+    setMfaLoading(true);
+    try {
+      const res = await authApi.recoverTotp(identifier.trim(), password, recoveryCode.trim());
+      await parseResponse(res);
+      // TOTP is now disabled — log in normally with the same credentials
+      const loginRes = await apiPost("/api/v1/auth/login", {
+        identifier: identifier.trim(),
+        password,
+      });
+      const tokens = await parseResponse(loginRes);
+      const me = await login(tokens);
+      navigate(roleHome(me.role.role_name), { replace: true });
+    } catch (err) {
+      setMfaCode("");
+      setMfaError(
+        err.status === 429
+          ? (err.message ?? "Too many failed attempts. Try again later.")
+          : (err.message ?? "Invalid recovery code.")
+      );
+    } finally {
+      setMfaLoading(false);
     }
   };
 
@@ -106,6 +179,115 @@ function LoginPage() {
 
       {/* Form card */}
       <div className="w-full max-w-sm bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_2px_16px_0_rgba(0,0,0,0.07)] p-7 space-y-4">
+        {showMfa ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
+              <span className="text-[15px] text-[var(--hw-neutral-600)] font-medium">
+                {t("auth.two_factor_title", {}, "Two-Factor Authentication")}
+              </span>
+              <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
+            </div>
+            <p className="text-[14px] text-[var(--hw-neutral-600)] text-center">
+              {t("auth.enter_authenticator_code", {}, "Enter the 6-digit code from your authenticator app.")}
+            </p>
+            <div className="flex justify-center pt-1">
+              <InputOTP
+                maxLength={6}
+                value={mfaCode}
+                onChange={(v) => {
+                  setMfaCode(v);
+                  setMfaError("");
+                }}
+                onComplete={handleVerifyMfa}
+              >
+                <InputOTPGroup>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <InputOTPSlot key={i} index={i} />
+                  ))}
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+            {mfaError && (
+              <p role="alert" className="text-[13px] text-red-600 font-medium text-center">
+                {mfaError}
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={mfaLoading || mfaCode.length !== 6}
+              onClick={() => handleVerifyMfa()}
+              className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
+            >
+              {mfaLoading
+                ? t("auth.verifying", {}, "Verifying…")
+                : t("auth.verify_code", {}, "Verify")}
+            </button>
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecovery((v) => !v);
+                  setMfaError("");
+                  setRecoveryCode("");
+                }}
+                className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+              >
+                {t("auth.use_recovery_code", {}, "Use a recovery code")}
+              </button>
+            </div>
+            {showRecovery && (
+              <form onSubmit={handleRecovery} className="space-y-3 border-t border-[var(--hw-neutral-100)] pt-3">
+                <p className="text-[13px] text-[var(--hw-neutral-600)]">
+                  {t("auth.recovery_code_hint", {}, "Using a recovery code will disable 2FA so you can set up a new device.")}
+                </p>
+                <div className="space-y-1.5">
+                  <label htmlFor="recovery-code" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">
+                    {t("auth.recovery_code_label", {}, "Recovery code")}
+                  </label>
+                  <input
+                    id="recovery-code"
+                    type="text"
+                    autoComplete="off"
+                    value={recoveryCode}
+                    onChange={(e) => {
+                      setRecoveryCode(e.target.value);
+                      setMfaError("");
+                    }}
+                    placeholder="XXXXX-XXXXX"
+                    className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent placeholder:text-[var(--hw-neutral-400)]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={mfaLoading || !recoveryCode.trim()}
+                  className="w-full h-11 flex items-center justify-center bg-white border border-[var(--hw-neutral-300)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
+                >
+                  {mfaLoading
+                    ? t("auth.recovering", {}, "Recovering…")
+                    : t("auth.recover_access", {}, "Recover access")}
+                </button>
+              </form>
+            )}
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMfa(false);
+                  setMfaToken(null);
+                  setMfaCode("");
+                  setMfaError("");
+                  setShowRecovery(false);
+                  setRecoveryCode("");
+                }}
+                className="text-[13px] font-medium text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-700)] transition-colors"
+              >
+                {t("auth.back_to_sign_in", {}, "Back to sign in")}
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <form onSubmit={handleSignIn} className="space-y-4" noValidate>
           {/* Email / phone */}
           <div className="space-y-1.5">
@@ -224,6 +406,8 @@ function LoginPage() {
             {t("auth.create_one", {}, "Create one")}
           </Link>
         </p>
+        </>
+        )}
       </div>
 
       <Footer lang={authLang} className="mt-4" />

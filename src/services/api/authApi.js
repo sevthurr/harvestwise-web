@@ -28,3 +28,40 @@ export function uploadProfilePicture(file) {
     body: form,
   });
 }
+
+// ---------------------------------------------------------------------------
+// TOTP 2FA (Google Authenticator)
+// ---------------------------------------------------------------------------
+export function setupTotp() {
+  return apiPost("/auth/totp/setup");
+}
+
+export function enableTotp(code) {
+  return apiPost("/auth/totp/enable", { code });
+}
+
+export function verifyTotpLogin(mfaToken, code) {
+  return apiPost("/auth/totp/verify-login", {
+    mfa_token: mfaToken,
+    code,
+  });
+}
+
+export function disableTotp(password, code) {
+  return apiPost("/auth/totp/disable", {
+    password,
+    code,
+  });
+}
+
+export function recoverTotp(identifier, password, recoveryCode) {
+  return apiPost("/auth/totp/recover", {
+    identifier,
+    password,
+    recovery_code: recoveryCode,
+  });
+}
+
+export function regenerateRecoveryCodes(code) {
+  return apiPost("/auth/totp/recovery-codes/regenerate", { code });
+}
