@@ -107,6 +107,28 @@ describe('ingestionApi', () => {
     expect(res.status).toBe('processing');
   });
 
+  it('validateFile POSTs /admin/ingestion/validate with FormData', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: { summary: { total_rows: 10, valid_rows: 8, rejected_rows: 2 }, rows: [] },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const file = new File(['a,b'], 'data.csv', { type: 'text/csv' });
+    const res = await ingestionApi.validateFile(file, 'bankerohan_daily_retail', true);
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/admin/ingestion/validate`);
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeInstanceOf(FormData);
+    const entries = Object.fromEntries(opts.body.entries());
+    expect(entries.file).toBe(file);
+    expect(entries.data_type).toBe('bankerohan_daily_retail');
+    expect(entries.overwrite).toBe('true');
+    expect(res.summary.valid_rows).toBe(8);
+  });
+
   it('getHistory GETs /admin/ingestion/history', async () => {
     const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0 } });
     vi.stubGlobal('fetch', fetchFn);
@@ -124,6 +146,16 @@ describe('ingestionApi', () => {
     const [url] = fetchFn.lastArgs();
     expect(url).toContain(`${PREFIX}/admin/ingestion/history/H-1`);
     expect(res.id).toBe('H-1');
+  });
+
+  it('getHistoryRecords GETs /admin/ingestion/history/{id}/records with pagination query params', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { columns: ['Date', 'Commodity'], rows: [], total: 0 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await ingestionApi.getHistoryRecords('IMP-100', { page: 2, page_size: 20 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/ingestion/history/IMP-100/records?page=2&page_size=20`);
+    expect(res.columns).toEqual(['Date', 'Commodity']);
   });
 });
 

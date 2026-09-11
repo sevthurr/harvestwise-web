@@ -7,8 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import React from 'react';
 import { MemoryRouter } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../app/global/contexts/AuthContext';
 import AdminDashboard from '../app/admin/pages/AdminDashboard';
 
@@ -40,14 +40,20 @@ function mockFetchByUrl(handlers) {
   });
 }
 
-const renderDashboard = () =>
-  render(
-    <MemoryRouter initialEntries={['/admin']}>
-      <AuthProvider>
-        <AdminDashboard />
-      </AuthProvider>
-    </MemoryRouter>
+const renderDashboard = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/admin']}>
+        <AuthProvider>
+          <AdminDashboard />
+        </AuthProvider>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
+};
 
 beforeEach(() => {
   localStorage.clear();
