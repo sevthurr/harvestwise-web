@@ -7,6 +7,7 @@ import {
 import {
   ResponsiveContainer,
   ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
@@ -77,6 +78,14 @@ function formatAxisDate(iso) {
 function formatSummaryPrice(value) {
   if (value == null || value === "") return "-/kg";
   return `${formatPrice(value)}/kg`;
+}
+
+function formatSummaryPriceRange(lower, upper) {
+  const lo = numericPrice(lower);
+  const hi = numericPrice(upper);
+  if (lo == null && hi == null) return "-/kg";
+  const parts = [lo != null ? formatPrice(lo) : "-", hi != null ? formatPrice(hi) : "-"];
+  return `${parts.join(" – ")}/kg`;
 }
 
 function formatChange(percent) {
@@ -178,12 +187,25 @@ function buildChartData(historical, forecastPoint) {
   }
   const forecastDate = isoDate(forecastPoint?.forecast_date);
   const midpoint = forecastPoint?.forecast_midpoint;
-  if (forecastDate && midpoint != null && midpoint !== "") {
+  const lower = Number(forecastPoint?.lower_forecast);
+  const upper = Number(forecastPoint?.upper_forecast);
+  const hasRange = Number.isFinite(lower) || Number.isFinite(upper);
+  if (forecastDate && (midpoint != null && midpoint !== "" || hasRange)) {
+    const existing = byDate.get(forecastDate) || { d: forecastDate };
     const numeric = Number(midpoint);
-    if (Number.isFinite(numeric)) {
-      const existing = byDate.get(forecastDate) || { d: forecastDate };
-      existing.predicted = numeric;
-      byDate.set(forecastDate, existing);
+    if (Number.isFinite(numeric)) existing.predicted = numeric;
+    if (Number.isFinite(lower)) existing.lower = lower;
+    if (Number.isFinite(upper)) existing.upper = upper;
+    byDate.set(forecastDate, existing);
+
+    if (hasRange) {
+      const anchorDate = [...byDate.keys()].filter((d) => d !== forecastDate).sort().at(-1);
+      if (anchorDate) {
+        const anchor = byDate.get(anchorDate) || { d: anchorDate };
+        if (Number.isFinite(lower)) anchor.lower = lower;
+        if (Number.isFinite(upper)) anchor.upper = upper;
+        byDate.set(anchorDate, anchor);
+      }
     }
   }
   return [...byDate.values()].sort((a, b) => String(a.d).localeCompare(String(b.d)));
@@ -191,7 +213,7 @@ function buildChartData(historical, forecastPoint) {
 
 function yDomain(data) {
   const values = (data || [])
-    .flatMap((point) => [point.actual, point.predicted, point.naive])
+    .flatMap((point) => [point.actual, point.predicted, point.lower, point.upper])
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
   if (values.length === 0) return ["auto", "auto"];
@@ -382,7 +404,7 @@ const ForecastChart = ({
             {commodity ? `${commodity}${varietyLabel} · ${market || "-"} · ${priceType || "-"} · ${horizonDays}-Day Forecast` : "Forecast Chart"}
           </p>
           <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-            Historical actual prices vs forecast and Naive baseline · ₱/kg
+            Historical actual prices vs forecast midpoint and forecast range · ₱/kg
           </p>
         </div>
       </div>
@@ -430,17 +452,47 @@ const ForecastChart = ({
                   strokeWidth={2.5}
                   dot={{ r: 5, fill: "white", stroke: "#2563eb", strokeWidth: 2 }}
                   connectNulls={false}
-                  name="Forecast"
+                  name="Forecast Midpoint"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="upper"
+                  stroke="none"
+                  fill="#2563eb"
+                  fillOpacity={0.12}
+                  legendType="none"
+                  tooltipType="none"
+                  connectNulls={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="lower"
+                  stroke="none"
+                  fill="white"
+                  fillOpacity={1}
+                  legendType="none"
+                  tooltipType="none"
+                  connectNulls={false}
                 />
                 <Line
                   type="monotone"
-                  dataKey="naive"
-                  stroke="#60a5fa"
+                  dataKey="upper"
+                  stroke="#93c5fd"
                   strokeDasharray="4 4"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: "white", stroke: "#60a5fa", strokeWidth: 2 }}
+                  strokeWidth={1.5}
+                  dot={false}
                   connectNulls={false}
-                  name="Naive Baseline"
+                  name="Forecast Range"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="lower"
+                  stroke="#93c5fd"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  dot={false}
+                  connectNulls={false}
+                  name="Forecast Range"
                 />
                 <Brush
                   dataKey="d"
@@ -471,11 +523,11 @@ const ForecastChart = ({
         </div>
         <div className="flex items-center gap-2">
           <div className="w-5 border-t-2 border-[#2563eb]" />
-          <span>Forecast</span>
+          <span>Forecast Midpoint</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-5 border-t-2 border-dashed border-[#60a5fa]" />
-          <span>Naive Baseline</span>
+          <div className="w-5 h-2 bg-[#2563eb]/20 border border-dashed border-[#93c5fd]" />
+          <span>Forecast Range</span>
         </div>
       </div>
     </div>
@@ -700,15 +752,15 @@ function AdminForecasting() {
             </span>
           </div>
           <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Forecasted Price:</span>{" "}
+            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Midpoint:</span>{" "}
             <span className="font-semibold text-[var(--hw-neutral-800)]">
               {formatSummaryPrice(selectedForecast?.forecast_midpoint ?? selectedForecast?.predicted_price)}
             </span>
           </div>
           <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Naive:</span>{" "}
+            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Range:</span>{" "}
             <span className="font-semibold text-[var(--hw-neutral-800)]">
-              {formatSummaryPrice(selectedForecast?.naive_price)}
+              {formatSummaryPriceRange(lowerForecast, upperForecast)}
             </span>
           </div>
         </div>

@@ -20,6 +20,7 @@ import {
   Modal
 } from "../../global/components/ui/hw-ui";
 import { TextSizeSlider } from "../../global/components/settings/TextSizeSlider";
+import { EmailOtp2FACard } from "../components/settings/EmailOtp2FACard";
 const TABS = [
   { id: "account", label: "Account" },
   { id: "submissions", label: "Submissions" },
@@ -282,6 +283,8 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
           </div>
         </div>
       </Card>
+
+      <EmailOtp2FACard showToast={showToast} />
 
       <Card>
         <SectionLabel>Google Sign-In</SectionLabel>

@@ -65,3 +65,14 @@ export function recoverTotp(identifier, password, recoveryCode) {
 export function regenerateRecoveryCodes(code) {
   return apiPost("/auth/totp/recovery-codes/regenerate", { code });
 }
+
+// ---------------------------------------------------------------------------
+// Gmail OTP (DFTC email-based 2FA)
+// ---------------------------------------------------------------------------
+export function requestEmailOtp(mfaToken) {
+  return apiPost("/auth/otp/request", { mfa_token: mfaToken });
+}
+
+export function verifyEmailOtp(mfaToken, code) {
+  return apiPost("/auth/otp/verify", { mfa_token: mfaToken, code });
+}

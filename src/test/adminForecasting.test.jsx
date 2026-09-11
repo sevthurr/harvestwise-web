@@ -164,14 +164,30 @@ describe('forecast graph mapping helpers', () => {
     expect(data.some((point) => point.d === '2026-08-01')).toBe(false);
   });
 
-  it('does not attach lower/upper interval fields the existing chart does not render', () => {
+  it('attaches lower/upper interval fields for the forecast range band', () => {
     const [point] = buildChartData(
       [],
       { forecast_date: '2026-08-14', forecast_midpoint: 81.25, lower_forecast: 71.25, upper_forecast: 91.25 }
     );
     expect(point.predicted).toBe(81.25);
-    expect(point.lower).toBeUndefined();
-    expect(point.upper).toBeUndefined();
+    expect(point.lower).toBe(71.25);
+    expect(point.upper).toBe(91.25);
+  });
+
+  it('anchors forecast range bounds to the last observed date so the range renders as two lines', () => {
+    const data = buildChartData(
+      [
+        { price_date: '2026-07-30', price_avg: 68 },
+        { price_date: '2026-07-31', price_avg: 70 },
+      ],
+      { forecast_date: '2026-08-14', forecast_midpoint: 81.25, lower_forecast: 71.25, upper_forecast: 91.25 }
+    );
+    const anchor = data.find((point) => point.d === '2026-07-31');
+    const forecast = data.find((point) => point.d === '2026-08-14');
+    expect(anchor.lower).toBe(71.25);
+    expect(anchor.upper).toBe(91.25);
+    expect(forecast.lower).toBe(71.25);
+    expect(forecast.upper).toBe(91.25);
   });
 
   it('averages the most recent observed prices for Recent Average', () => {
@@ -360,7 +376,7 @@ describe('AdminForecasting graph', () => {
   it('fills Forecast Summary from recent records and persisted interval bounds', async () => {
     mountWithApi();
     await waitFor(() => {
-      expect(screen.getByText('Forecast Midpoint').parentElement).toHaveTextContent('₱84/kg');
+      expect(screen.getByText('Forecast Midpoint', { selector: 'p' }).parentElement).toHaveTextContent('₱84/kg');
     });
     expect(screen.getByText('Recent Average').parentElement).toHaveTextContent('₱70/kg');
     expect(screen.getByText('Lower Forecast').parentElement).toHaveTextContent('₱71.25/kg');

@@ -43,6 +43,7 @@ function LoginPage() {
 
   // MFA challenge state
   const [mfaToken, setMfaToken] = useState(null);
+  const [mfaFactor, setMfaFactor] = useState("totp");
   const [showMfa, setShowMfa] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaError, setMfaError] = useState("");
@@ -86,6 +87,7 @@ function LoginPage() {
       // 2FA required — hold the short-lived mfa_token in state only
       if (data.mfa_required) {
         setMfaToken(data.mfa_token);
+        setMfaFactor(data.factor || "totp");
         setShowMfa(true);
         return;
       }
@@ -112,7 +114,10 @@ function LoginPage() {
     setMfaError("");
     setMfaLoading(true);
     try {
-      const res = await authApi.verifyTotpLogin(mfaToken, code);
+      const res =
+        mfaFactor === "email_otp"
+          ? await authApi.verifyEmailOtp(mfaToken, code)
+          : await authApi.verifyTotpLogin(mfaToken, code);
       const tokens = await parseResponse(res);
       const me = await login(tokens);
       navigate(roleHome(me.role.role_name), { replace: true });
@@ -123,6 +128,21 @@ function LoginPage() {
           ? (err.message ?? "Too many failed attempts. Try again later.")
           : (err.message ?? "Invalid code. Try again.")
       );
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!mfaToken) return;
+    setMfaError("");
+    setMfaLoading(true);
+    try {
+      const res = await authApi.requestEmailOtp(mfaToken);
+      await parseResponse(res);
+      setMfaError("A new code was sent to your email.");
+    } catch (err) {
+      setMfaError(err.message ?? "Could not resend the code. Try again.");
     } finally {
       setMfaLoading(false);
     }
@@ -189,7 +209,9 @@ function LoginPage() {
               <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
             </div>
             <p className="text-[14px] text-[var(--hw-neutral-600)] text-center">
-              {t("auth.enter_authenticator_code", {}, "Enter the 6-digit code from your authenticator app.")}
+              {mfaFactor === "email_otp"
+                ? t("auth.enter_email_code", {}, "Enter the 6-digit code sent to your email.")
+                : t("auth.enter_authenticator_code", {}, "Enter the 6-digit code from your authenticator app.")}
             </p>
             <div className="flex justify-center pt-1">
               <InputOTP
@@ -223,18 +245,30 @@ function LoginPage() {
                 ? t("auth.verifying", {}, "Verifying…")
                 : t("auth.verify_code", {}, "Verify")}
             </button>
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRecovery((v) => !v);
-                  setMfaError("");
-                  setRecoveryCode("");
-                }}
-                className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-              >
-                {t("auth.use_recovery_code", {}, "Use a recovery code")}
-              </button>
+            <div className="flex items-center justify-center gap-4">
+              {mfaFactor === "email_otp" && (
+                <button
+                  type="button"
+                  disabled={mfaLoading}
+                  onClick={handleResendOtp}
+                  className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
+                >
+                  {t("auth.resend_code", {}, "Resend code")}
+                </button>
+              )}
+              {mfaFactor === "totp" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRecovery((v) => !v);
+                    setMfaError("");
+                    setRecoveryCode("");
+                  }}
+                  className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+                >
+                  {t("auth.use_recovery_code", {}, "Use a recovery code")}
+                </button>
+              )}
             </div>
             {showRecovery && (
               <form onSubmit={handleRecovery} className="space-y-3 border-t border-[var(--hw-neutral-100)] pt-3">
