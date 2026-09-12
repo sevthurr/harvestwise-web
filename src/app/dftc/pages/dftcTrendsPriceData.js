@@ -147,6 +147,16 @@ function buildHistoricalChartData(varietyDetails, preset, customFrom, customTo) 
 }
 
 function buildForecastChartData(varietyDetails) {
+  // Collect all actual price dates so we can exclude forecast points that are
+  // already covered by an observed price.
+  const actualDates = new Set();
+  for (const entry of varietyDetails || []) {
+    for (const row of entry.detail?.recent_records || []) {
+      const d = isoDate(row.price_date || row.date);
+      if (d) actualDates.add(d);
+    }
+  }
+
   const dateSet = new Set();
   const byVariety = new Map();
 
@@ -158,6 +168,8 @@ function buildForecastChartData(varietyDetails) {
       const date = isoDate(point.forecast_date);
       const mid = numericPrice(point.forecast_midpoint);
       if (!date || mid == null) continue;
+      // Skip forecast points that are on or before an observed actual price date.
+      if (actualDates.has(date)) continue;
       byDate.set(date, {
         mid,
         lo: numericPrice(point.lower_forecast),

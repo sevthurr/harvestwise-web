@@ -1,5 +1,5 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { ChevronDown, Info, X, Edit2, Sliders } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
@@ -7,13 +7,30 @@ import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
 import {
-  RESULTS,
   MODULES,
   CLASSIFICATIONS,
   CLASSIFICATION_COLORS
 } from "../components/analytics/adminAnalyticsMockData";
 
 const DEFAULT_ROWS = 8;
+const RELIABILITY_TONES = {
+  High: "text-[var(--hw-success)] bg-[var(--hw-success)]/10",
+  Moderate: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
+  Limited: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
+  Low: "text-[var(--hw-error)] bg-[var(--hw-error)]/10"
+};
+const MODULE_CARD_DATA = {
+  "price-outlook": { label: "days", required: 14, key: "days_available" },
+  "arrival-pressure": { label: "records", required: 4, key: "records_available" },
+  "historical-production": { label: "quarters", required: 4, key: "quarters_available" },
+  "weather-risk": { label: "days", required: 7, key: "days_available" }
+};
+const MODULE_ROW_FIELDS = [
+  { key: "price-outlook", module: "Price Outlook", field: "price_outlook" },
+  { key: "arrival-pressure", module: "Arrival Pressure", field: "arrival_pressure" },
+  { key: "historical-production", module: "Historical Seasonal Production Level", field: "historical_seasonal_production_level" },
+  { key: "weather-risk", module: "Weather Risk", field: "weather_risk_level" }
+];
 const WEIGHT_MODULES = [
   "Price Outlook",
   "Arrival Pressure",
@@ -21,6 +38,21 @@ const WEIGHT_MODULES = [
   "Weather Risk",
   "Profitability"
 ];
+const PRICE_OUTLOOK_MODULE = "Price Outlook";
+
+const WEATHER_METRICS = [
+  { key: "temp_range", label: "Temperature range", unit: "°C" },
+  { key: "temp_min", label: "Temperature min", unit: "°C" },
+  { key: "temp_max", label: "Temperature max", unit: "°C" },
+  { key: "max_rh", label: "Max relative humidity", unit: "%" },
+  { key: "hours_rh_above_85", label: "Hours RH above 85%", unit: "h" },
+  { key: "consecutive_rh_hours_above_90", label: "Consecutive hours RH above 90%", unit: "h" },
+  { key: "consecutive_rh_hours_above_95", label: "Consecutive hours RH above 95%", unit: "h" },
+  { key: "wind_speed_max", label: "Max wind speed", unit: "km/h" },
+  { key: "rain_daily_sum", label: "Daily rainfall", unit: "mm" }
+];
+const WEATHER_OPERATORS = ["between", ">", ">=", "<", "<="];
+const WEATHER_RISK_LEVELS = ["suitable", "caution", "severe"];
 
 // Edit Adaptive Weights Modal
 const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
@@ -176,45 +208,109 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
   );
 };
 
-// Edit Weather Risk Modal (Commodity + Variety scoped)
-const EditWeatherModal = ({ commodity, variety, currentRules, onClose, onSave }) => {
-  const [suitRainMax, setSuitRainMax] = useState(currentRules?.suitRainMax !== undefined ? String(currentRules.suitRainMax) : "");
-  const [cautRainMin, setCautRainMin] = useState(currentRules?.cautRainMin !== undefined ? String(currentRules.cautRainMin) : "");
-  const [sevRainMin, setSevRainMin] = useState(currentRules?.sevRainMin !== undefined ? String(currentRules.sevRainMin) : "");
-  const [suitTempMin, setSuitTempMin] = useState(currentRules?.suitTempMin !== undefined ? String(currentRules.suitTempMin) : "");
-  const [suitTempMax, setSuitTempMax] = useState(currentRules?.suitTempMax !== undefined ? String(currentRules.suitTempMax) : "");
-  const [cautTempMin, setCautTempMin] = useState(currentRules?.cautTempMin !== undefined ? String(currentRules.cautTempMin) : "");
-  const [cautTempMax, setCautTempMax] = useState(currentRules?.cautTempMax !== undefined ? String(currentRules.cautTempMax) : "");
-  const [sevTempThresh, setSevTempThresh] = useState(currentRules?.sevTempThresh !== undefined ? String(currentRules.sevTempThresh) : "");
-  const [humidityThresh, setHumidityThresh] = useState(currentRules?.humidityThresh !== undefined ? String(currentRules.humidityThresh) : "");
-  const [windThresh, setWindThresh] = useState(currentRules?.windThresh !== undefined ? String(currentRules.windThresh) : "");
+// Edit Weather Risk Modal (metric-based crop_weather_rules, persisted via API)
+const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved }) => {
+  const [rules, setRules] = useState(null);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setError("");
+      try {
+        const data = await analyticsApi.listWeatherRules(commodityId);
+        if (!active) return;
+        const initial = (data?.items || []).map((r) => ({
+          id: r.id,
+          commodity_id: r.commodity_id,
+          metric_key: r.metric_key,
+          operator: r.operator,
+          threshold_min: r.threshold_min !== null && r.threshold_min !== undefined ? String(r.threshold_min) : "",
+          threshold_max: r.threshold_max !== null && r.threshold_max !== undefined ? String(r.threshold_max) : "",
+          risk_level: r.risk_level,
+          unit: r.unit || "",
+          advisory_template: r.advisory_template || ""
+        }));
+        if (active) setRules(initial);
+      } catch (err) {
+        if (active) setError(err.message || "Failed to load weather rules.");
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [commodityId]);
 
-  const handleSave = () => {
-    onSave({
-      commodity,
-      variety,
-      suitRainMax: suitRainMax ? parseFloat(suitRainMax) : null,
-      cautRainMin: cautRainMin ? parseFloat(cautRainMin) : null,
-      sevRainMin: sevRainMin ? parseFloat(sevRainMin) : null,
-      suitTempMin: suitTempMin ? parseFloat(suitTempMin) : null,
-      suitTempMax: suitTempMax ? parseFloat(suitTempMax) : null,
-      cautTempMin: cautTempMin ? parseFloat(cautTempMin) : null,
-      cautTempMax: cautTempMax ? parseFloat(cautTempMax) : null,
-      sevTempThresh: sevTempThresh ? parseFloat(sevTempThresh) : null,
-      humidityThresh: humidityThresh ? parseFloat(humidityThresh) : null,
-      windThresh: windThresh ? parseFloat(windThresh) : null
-    });
-    setSaved(true);
-    setTimeout(onClose, 600);
+  const updateRule = (idx, patch) =>
+    setRules((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
+  const addRule = () => {
+    const metric = WEATHER_METRICS[0];
+    setRules((prev) => [
+      ...(prev || []),
+      {
+        id: null,
+        commodity_id: commodityId,
+        metric_key: metric.key,
+        operator: ">",
+        threshold_min: "",
+        threshold_max: "",
+        risk_level: "caution",
+        unit: metric.unit,
+        advisory_template: ""
+      }
+    ]);
   };
+
+  const removeRule = (idx) =>
+    setRules((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleSave = async () => {
+    if (!rules || rules.length === 0) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await Promise.all(
+        rules.map(async (r) => {
+          const payload = {
+            metric_key: r.metric_key,
+            operator: r.operator,
+            threshold_min: r.threshold_min !== "" ? Number(r.threshold_min) : null,
+            threshold_max: r.threshold_max !== "" ? Number(r.threshold_max) : null,
+            risk_level: r.risk_level,
+            unit: r.unit || WEATHER_METRICS.find((m) => m.key === r.metric_key)?.unit,
+            advisory_template:
+              r.advisory_template ||
+              `Crop weather rule for ${r.metric_key} (${r.risk_level}).`
+          };
+          if (r.id) {
+            await analyticsApi.updateWeatherRule(r.id, payload);
+          } else {
+            await analyticsApi.createWeatherRule({ commodity_id: commodityId, ...payload });
+          }
+        })
+      );
+      setSaved(true);
+      onSaved?.();
+      setTimeout(onClose, 600);
+    } catch (err) {
+      setError(err.message || "Failed to save weather rules.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
+  const selectCls = "w-full px-2 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
           <div>
             <p className="font-semibold text-[var(--hw-neutral-900)]">Edit Weather Thresholds</p>
@@ -224,67 +320,115 @@ const EditWeatherModal = ({ commodity, variety, currentRules, onClose, onSave })
             <X className="w-4 h-4" />
           </button>
         </div>
+
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          <div>
-            <h4 className="text-[13px] font-semibold text-[var(--hw-neutral-800)] mb-2">Rainfall Thresholds (mm/day)</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Suitable max</label>
-                <input type="number" placeholder="e.g. 15" value={suitRainMax} onChange={(e) => setSuitRainMax(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Caution min</label>
-                <input type="number" placeholder="e.g. 15" value={cautRainMin} onChange={(e) => setCautRainMin(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Severe min</label>
-                <input type="number" placeholder="e.g. 30" value={sevRainMin} onChange={(e) => setSevRainMin(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-          </div>
+          {error && <p className="text-[12px] text-red-600">{error}</p>}
+          <p className="text-[12px] text-[var(--hw-neutral-600)]">
+            One row per metric threshold stored in <span className="font-mono">crop_weather_rules</span>.
+            These rules drive the Weather Risk and HSRA module classifications.
+          </p>
 
-          <div>
-            <h4 className="text-[13px] font-semibold text-[var(--hw-neutral-800)] mb-2">Temperature Thresholds (°C)</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Suitable range</label>
-                <div className="flex items-center gap-1">
-                  <input type="number" placeholder="Min" value={suitTempMin} onChange={(e) => setSuitTempMin(e.target.value)} className={inputCls} />
-                  <span>–</span>
-                  <input type="number" placeholder="Max" value={suitTempMax} onChange={(e) => setSuitTempMax(e.target.value)} className={inputCls} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Caution range</label>
-                <div className="flex items-center gap-1">
-                  <input type="number" placeholder="Min" value={cautTempMin} onChange={(e) => setCautTempMin(e.target.value)} className={inputCls} />
-                  <span>–</span>
-                  <input type="number" placeholder="Max" value={cautTempMax} onChange={(e) => setCautTempMax(e.target.value)} className={inputCls} />
-                </div>
-              </div>
-            </div>
-          </div>
+          {!rules && !error && <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading weather rules…</p>}
+          {rules && rules.length === 0 && (
+            <p className="text-[13px] text-[var(--hw-neutral-500)]">
+              No weather rules configured for this commodity and variety. Add one below.
+            </p>
+          )}
 
-          <div>
-            <h4 className="text-[13px] font-semibold text-[var(--hw-neutral-800)] mb-2">Additional Environmental Thresholds (Optional)</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Humidity max (%)</label>
-                <input type="number" placeholder="e.g. 90" value={humidityThresh} onChange={(e) => setHumidityThresh(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-[11px] text-[var(--hw-neutral-600)] mb-1">Wind max (km/h)</label>
-                <input type="number" placeholder="e.g. 60" value={windThresh} onChange={(e) => setWindThresh(e.target.value)} className={inputCls} />
-              </div>
+          {rules && (
+            <div className="space-y-2">
+              {rules.map((r, i) => (
+                <div key={r.id || `new-${i}`} className="grid grid-cols-12 gap-2 items-center border border-[var(--hw-neutral-200)] rounded-xl p-2.5 bg-[var(--hw-neutral-50)]/50">
+                  <div className="col-span-3">
+                    <select
+                      value={r.metric_key}
+                      onChange={(e) => {
+                        const metric = WEATHER_METRICS.find((m) => m.key === e.target.value);
+                        updateRule(i, { metric_key: e.target.value, unit: metric?.unit || r.unit });
+                      }}
+                      className={selectCls}
+                    >
+                      {WEATHER_METRICS.map((m) => (
+                        <option key={m.key} value={m.key}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <select
+                      value={r.operator}
+                      onChange={(e) => updateRule(i, { operator: e.target.value })}
+                      className={selectCls}
+                    >
+                      {WEATHER_OPERATORS.map((op) => (
+                        <option key={op} value={op}>{op}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="Min"
+                      value={r.threshold_min}
+                      onChange={(e) => updateRule(i, { threshold_min: e.target.value })}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="Max"
+                      value={r.threshold_max}
+                      onChange={(e) => updateRule(i, { threshold_max: e.target.value })}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <select
+                      value={r.risk_level}
+                      onChange={(e) => updateRule(i, { risk_level: e.target.value })}
+                      className={selectCls}
+                    >
+                      {WEATHER_RISK_LEVELS.map((lvl) => (
+                        <option key={lvl} value={lvl}>{lvl}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    {!r.id && (
+                      <button
+                        onClick={() => removeRule(i)}
+                        className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                        title="Remove rule"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
+
+          <button
+            onClick={addRule}
+            className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
+          >
+            + Add rule
+          </button>
         </div>
+
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
           <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
             Cancel
           </button>
-          <button onClick={handleSave} className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors">
-            {saved ? "Saved!" : "Save Changes"}
+          <button
+            disabled={saving}
+            onClick={handleSave}
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -373,13 +517,22 @@ function AdminAnalytics() {
   // Weights & Thresholds state (empty handling support)
   const [phaseWeights, setPhaseWeights] = useState({});
   const [priceOutlookRules, setPriceOutlookRules] = useState(null);
-  const [weatherRulesByCrop, setWeatherRulesByCrop] = useState({});
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [weightsError, setWeightsError] = useState("");
   const [weightIds, setWeightIds] = useState({});
   const [thresholdsLoading, setThresholdsLoading] = useState(false);
   const [thresholdsError, setThresholdsError] = useState("");
   const [priceOutlookRuleIds, setPriceOutlookRuleIds] = useState({ fav: null, unfav: null });
+
+  // Module outputs state (computed + persisted via /admin/analytics/outputs)
+  const [moduleOutputs, setModuleOutputs] = useState(null);
+  const [commodityId, setCommodityId] = useState("");
+  const [processedResults, setProcessedResults] = useState([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+
+  // Weather rules per commodity (loaded from API for the summary card)
+  const [weatherRulesByCommodity, setWeatherRulesByCommodity] = useState({});
 
   // Modals state
   const [editingPhase, setEditingPhase] = useState(null);
@@ -459,39 +612,40 @@ function AdminAnalytics() {
   }, []);
 
   // Load the Price Outlook threshold rules from the admin thresholds API
+  const refreshPriceOutlook = useCallback(async () => {
+    try {
+      setThresholdsError("");
+      const data = await analyticsApi.listThresholds();
+      const poModule = (data?.items || []).find((m) => m.module_name === PRICE_OUTLOOK_MODULE);
+      if (!poModule) return;
+      const rules =
+        poModule.rules && poModule.rules.length > 0
+          ? poModule.rules
+          : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
+      const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
+      const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
+      if (fav && unfav) {
+        setPriceOutlookRules({
+          favMin: Math.round(Number(fav.threshold_value) * 100),
+          unfavMax: Math.round(Number(unfav.threshold_value) * 100)
+        });
+        setPriceOutlookRuleIds({ fav, unfav });
+      }
+    } catch (err) {
+      setThresholdsError(err.message || "Failed to load threshold rules.");
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
-    async function loadThresholds() {
-      try {
-        setThresholdsLoading(true);
-        const data = await analyticsApi.listThresholds();
-        if (!active) return;
-        const poModule = (data?.items || []).find((m) => m.module_name === "Price Outlook");
-        if (!poModule) return;
-        const rules =
-          poModule.rules && poModule.rules.length > 0
-            ? poModule.rules
-            : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
-        const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
-        const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
-        if (fav && unfav) {
-          setPriceOutlookRules({
-            favMin: Math.round(Number(fav.threshold_value) * 100),
-            unfavMax: Math.round(Number(unfav.threshold_value) * 100)
-          });
-          setPriceOutlookRuleIds({ fav, unfav });
-        }
-      } catch (err) {
-        if (active) setThresholdsError(err.message || "Failed to load threshold rules.");
-      } finally {
-        if (active) setThresholdsLoading(false);
-      }
-    }
-    loadThresholds();
+    setThresholdsLoading(true);
+    refreshPriceOutlook().finally(() => {
+      if (active) setThresholdsLoading(false);
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshPriceOutlook]);
 
   // Scoped varieties
   const scopedVariants = useMemo(() => {
@@ -507,6 +661,80 @@ function AdminAnalytics() {
     }
   }, [scopedCommodity, scopedVariants]);
 
+  // Compute + persist module outputs and load the Processed Results history
+  // whenever the scoped commodity/variety changes.
+  const reloadAnalytics = useCallback(async () => {
+    if (!scopedCommodity || !scopedVariety) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    try {
+      const variety =
+        scopedVariety === "Standard" || scopedVariety === "All Varieties"
+          ? undefined
+          : scopedVariety;
+      const outputs = await analyticsApi.computeModuleOutputs({
+        crop_name: scopedCommodity,
+        variety
+      });
+      setModuleOutputs(outputs);
+      setCommodityId(outputs.commodity_id || "");
+    } catch (err) {
+      setAnalyticsError(err.message || "Failed to compute module outputs.");
+      setModuleOutputs(null);
+    }
+
+    try {
+      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
+      const rows = (data?.items || []).flatMap((r) =>
+        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
+          id: r.id,
+          basisId: key,
+          module,
+          commodity: r.commodity_name,
+          variant: r.variety || "Standard",
+          classification: r[field] || "Not available",
+          inputPeriod: r.reference_month,
+          processedAt: r.generated_at
+        }))
+      );
+      setProcessedResults(rows);
+    } catch {
+      setProcessedResults([]);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [scopedCommodity, scopedVariety]);
+
+  useEffect(() => {
+    reloadAnalytics();
+  }, [reloadAnalytics]);
+
+  // Load persisted weather rules for the current commodity to render the summary card.
+  useEffect(() => {
+    if (!commodityId) return;
+    let active = true;
+    analyticsApi
+      .listWeatherRules(commodityId)
+      .then((data) => {
+        if (active) setWeatherRulesByCommodity((prev) => ({ ...prev, [commodityId]: data?.items || [] }));
+      })
+      .catch(() => {
+        if (active) setWeatherRulesByCommodity((prev) => ({ ...prev, [commodityId]: [] }));
+      });
+    return () => { active = false; };
+  }, [commodityId]);
+
+  const currentWeatherRules = commodityId ? weatherRulesByCommodity[commodityId] || [] : [];
+  const weatherMetricLabel = (k) => WEATHER_METRICS.find((m) => m.key === k)?.label || k;
+  const weatherRuleSummary = (r) => {
+    const unit = r.unit || WEATHER_METRICS.find((m) => m.key === r.metric_key)?.unit || "";
+    const lo = r.threshold_min != null && r.threshold_min !== "" ? `${r.threshold_min}${unit}` : "";
+    const hi = r.threshold_max != null && r.threshold_max !== "" ? `${r.threshold_max}${unit}` : "";
+    if (r.operator === "between") return lo && hi ? `${lo} – ${hi}` : lo || hi || "Set";
+    const val = lo || hi;
+    return val ? `${r.operator} ${val}` : "Set";
+  };
+
   useEffect(() => {
     if (!showTooltip) return;
     const h = (e) => {
@@ -519,9 +747,11 @@ function AdminAnalytics() {
   const selectCls = "px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
 
   // Filter processed results using the top scope (scopedCommodity + scopedVariety) + module & classification
-  const filteredResults = RESULTS.filter((r) => {
+  const filteredResults = processedResults.filter((r) => {
     const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
-    const matchVar = !scopedVariety || r.variant === scopedVariety || (!r.variant && scopedVariety === "Standard");
+    const matchVar =
+      !scopedVariety ||
+      (r.variety || "") === (scopedVariety === "Standard" ? "" : scopedVariety);
     const matchMod = fModule === "All" || r.module === fModule;
     const matchClass = fClassification === "All" || r.classification === fClassification;
     return matchComm && matchVar && matchMod && matchClass;
@@ -529,24 +759,89 @@ function AdminAnalytics() {
 
   const visibleResults = showAll ? filteredResults : filteredResults.slice(0, DEFAULT_ROWS);
 
-  // 4 Module definitions for current variety outputs (all clickable)
+  // 4 Module cards built from the latest computed outputs for the current scope.
+  const withCardData = (key, moduleOutput) => {
+    const base = {
+      classification: "Not processed",
+      source: "-",
+      processed: "-",
+      reliability: "—",
+      dataAvailable: null,
+      dataRequired: null,
+      dataLabel: "—"
+    };
+    if (!moduleOutput) return base;
+    const cfg = MODULE_CARD_DATA[key];
+    const basis = moduleOutput.basis_inputs || {};
+    const available = cfg ? basis[cfg.key] ?? 0 : null;
+    return {
+      classification: moduleOutput.classification || base.classification,
+      source: moduleOutput.source_label || "-",
+      processed: moduleOutput.input_period || "-",
+      reliability: moduleOutput.reliability_status || "—",
+      dataAvailable: available,
+      dataRequired: cfg ? cfg.required : null,
+      dataLabel: cfg ? `${available}/${cfg.required} ${cfg.label}` : "—"
+    };
+  };
+
+  const moduleOutputsByCard = moduleOutputs
+    ? {
+        "price-outlook": withCardData("price-outlook", moduleOutputs.price_outlook),
+        "arrival-pressure": withCardData("arrival-pressure", moduleOutputs.arrival_pressure),
+        "historical-production": withCardData(
+          "historical-production",
+          moduleOutputs.historical_seasonal_production_level
+        ),
+        "weather-risk": withCardData("weather-risk", moduleOutputs.weather_risk)
+      }
+    : {};
+
   const moduleCards = [
-    { module: "Price Outlook", moduleKey: "price-outlook", classification: "Not processed", source: "-", processed: "-" },
-    { module: "Arrival Pressure", moduleKey: "arrival-pressure", classification: "Not processed", source: "-", processed: "-" },
-    { module: "Historical Seasonal Production Level", moduleKey: "historical-production", classification: "Not processed", source: "-", processed: "-" },
-    { module: "Weather Risk", moduleKey: "weather-risk", classification: "Not processed", source: "-", processed: "-" }
+    {
+      module: "Price Outlook",
+      moduleKey: "price-outlook",
+      ...(moduleOutputsByCard["price-outlook"] || { classification: "Not processed", source: "-", processed: "-" })
+    },
+    {
+      module: "Arrival Pressure",
+      moduleKey: "arrival-pressure",
+      ...(moduleOutputsByCard["arrival-pressure"] || { classification: "Not processed", source: "-", processed: "-" })
+    },
+    {
+      module: "Historical Seasonal Production Level",
+      moduleKey: "historical-production",
+      ...(moduleOutputsByCard["historical-production"] || { classification: "Not processed", source: "-", processed: "-" })
+    },
+    {
+      module: "Weather Risk",
+      moduleKey: "weather-risk",
+      ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" })
+    }
   ];
 
   const handleCardClick = (card) => {
     const targetId = card.basisId || card.moduleKey;
+    const match = processedResults.find(
+      (r) =>
+        r.basisId === targetId &&
+        r.commodity === scopedCommodity &&
+        (r.variant || "Standard") === (scopedVariety || "Standard")
+    );
     const params = new URLSearchParams();
     if (scopedCommodity) params.set("commodity", scopedCommodity);
     if (scopedVariety) params.set("variety", scopedVariety);
+    if (match?.id) params.set("output", match.id);
     navigate(`/admin/modules/basis/${targetId}?${params.toString()}`);
   };
 
-  const currentCropWeatherKey = `${scopedCommodity}_${scopedVariety || "Standard"}`;
-  const currentWeatherConfig = weatherRulesByCrop[currentCropWeatherKey];
+  const handleRowClick = (row) => {
+    const params = new URLSearchParams();
+    params.set("commodity", row.commodity || scopedCommodity);
+    params.set("variety", row.variant || scopedVariety);
+    if (row.id) params.set("output", row.id);
+    navigate(`/admin/modules/basis/${row.basisId || row.moduleKey}?${params.toString()}`);
+  };
 
   const handleWeightSave = async (phase, updated) => {
     try {
@@ -569,20 +864,54 @@ function AdminAnalytics() {
   const handlePriceOutlookSave = async (updated) => {
     try {
       setThresholdsError("");
+      const favPct = Number(updated.favMin);
+      const unfavPct = Number(updated.unfavMax);
+      const favVal = Math.round(favPct * 100) / 10000;
+      const unfavVal = Math.round(unfavPct * 100) / 10000;
+
+      let data = await analyticsApi.listThresholds();
+      let poModule = (data?.items || []).find((m) => m.module_name === PRICE_OUTLOOK_MODULE);
+      if (!poModule) {
+        poModule = await analyticsApi.createThreshold({
+          module_name: PRICE_OUTLOOK_MODULE,
+          source_label: "Forecasting Output (Bangkerohan Retail)"
+        });
+      }
+
+      const ensureRule = async (rule, classification, operator, value, display) => {
+        if (rule) {
+          await analyticsApi.updateThresholdRule(rule.id, {
+            threshold_value: value,
+            display_text: display
+          });
+        } else {
+          const rules =
+            poModule.rules && poModule.rules.length > 0
+              ? poModule.rules
+              : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
+          const existing = rules.find((r) => (r.classification || "").toLowerCase() === classification.toLowerCase());
+          if (existing) {
+            await analyticsApi.updateThresholdRule(existing.id, {
+              threshold_value: value,
+              display_text: display
+            });
+          } else {
+            await analyticsApi.createThresholdRule(poModule.id, {
+              rule_key: classification.toLowerCase(),
+              classification,
+              operator,
+              threshold_value: value,
+              display_text: display
+            });
+          }
+        }
+      };
+
       const { fav, unfav } = priceOutlookRuleIds;
-      const calls = [];
-      if (fav) {
-        calls.push(analyticsApi.updateThresholdRule(fav.id, {
-          threshold_value: Math.round(Number(updated.favMin) * 100) / 10000
-        }));
-      }
-      if (unfav) {
-        calls.push(analyticsApi.updateThresholdRule(unfav.id, {
-          threshold_value: Math.round(Number(updated.unfavMax) * 100) / 10000
-        }));
-      }
-      await Promise.all(calls);
-      setPriceOutlookRules({ favMin: Number(updated.favMin), unfavMax: Number(updated.unfavMax) });
+      await ensureRule(fav, "Favorable", ">", favVal, `> +${favPct}%`);
+      await ensureRule(unfav, "Unfavorable", "<", unfavVal, `< ${unfavPct}%`);
+
+      await refreshPriceOutlook();
     } catch (err) {
       setThresholdsError(err.message || "Failed to save threshold rules.");
     }
@@ -609,13 +938,10 @@ function AdminAnalytics() {
         <EditWeatherModal
           commodity={scopedCommodity}
           variety={scopedVariety}
-          currentRules={currentWeatherConfig}
+          commodityId={commodityId}
           onClose={() => setEditingWeather(false)}
-          onSave={(updated) => {
-            setWeatherRulesByCrop((prev) => ({
-              ...prev,
-              [`${updated.commodity}_${updated.variety || "Standard"}`]: updated
-            }));
+          onSaved={() => {
+            reloadAnalytics();
           }}
         />
       )}
@@ -698,11 +1024,16 @@ function AdminAnalytics() {
             </div>
 
             {/* 4 Module Output Cards (Clickable & Empty State) */}
+            {analyticsError && (
+              <div className="bg-[var(--hw-red-50)] border border-[var(--hw-red-200)] text-[var(--hw-red-800)] text-[12px] rounded-xl px-4 py-3">
+                {analyticsError}
+              </div>
+            )}
             <div>
               <h2 className="text-[14px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide mb-3">
                 Current Analytics Outputs
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${analyticsLoading ? "opacity-60 pointer-events-none" : ""}`}>
                 {moduleCards.map((card) => {
                   const cc = CLASSIFICATION_COLORS[card.classification] ?? "text-[var(--hw-neutral-500)]";
                   return (
@@ -727,11 +1058,44 @@ function AdminAnalytics() {
                           <span className="text-[12px] text-[var(--hw-neutral-700)]">Processed</span>
                           <span className="text-[12px] text-[var(--hw-neutral-800)]">{card.processed}</span>
                         </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Reliability</span>
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${RELIABILITY_TONES[card.reliability] ?? "text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)]"}`}>
+                            {card.reliability}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Data</span>
+                          <span
+                            className={`text-[12px] font-medium ${
+                              card.dataAvailable !== null &&
+                              card.dataAvailable < card.dataRequired
+                                ? "text-[var(--hw-error)]"
+                                : "text-[var(--hw-neutral-800)]"
+                            }`}
+                          >
+                            {card.dataLabel}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+              {(moduleOutputs?.warnings?.length || 0) > 0 && (
+                <div className="mt-3 rounded-lg border border-[var(--hw-warning)]/30 bg-[var(--hw-warning)]/5 p-3 flex flex-col gap-1">
+                  <p className="text-[12px] font-semibold text-[var(--hw-warning)] flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5" /> Data reliability warnings
+                  </p>
+                  <ul className="space-y-0.5">
+                    {moduleOutputs.warnings.map((w, i) => (
+                      <li key={i} className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             {/* Processed Results History Table */}
@@ -836,7 +1200,7 @@ function AdminAnalytics() {
                           return (
                             <tr
                               key={r.id}
-                              onClick={() => navigate(`/admin/modules/basis/${r.id}`)}
+                              onClick={() => handleRowClick(r)}
                               className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                             >
                               <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">{r.module}</td>
@@ -1100,26 +1464,26 @@ function AdminAnalytics() {
                       </button>
                     </div>
 
-                    {!currentWeatherConfig ? (
+                    {currentWeatherRules.length === 0 ? (
                       <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
                         Weather thresholds not configured for {scopedCommodity || "crop"} — {scopedVariety || "Standard"}.
                       </div>
                     ) : (
                       <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
-                        <div className="py-2 flex items-center justify-between">
-                          <span className="text-[var(--hw-neutral-600)]">Suitable Rainfall</span>
-                          <span className="font-medium text-[var(--hw-neutral-900)]">
-                            {currentWeatherConfig.suitRainMax ? `< ${currentWeatherConfig.suitRainMax} mm/day` : "Not configured"}
-                          </span>
-                        </div>
-                        <div className="py-2 flex items-center justify-between">
-                          <span className="text-[var(--hw-neutral-600)]">Suitable Temperature</span>
-                          <span className="font-medium text-[var(--hw-neutral-900)]">
-                            {currentWeatherConfig.suitTempMin && currentWeatherConfig.suitTempMax
-                              ? `${currentWeatherConfig.suitTempMin}–${currentWeatherConfig.suitTempMax}°C`
-                              : "Not configured"}
-                          </span>
-                        </div>
+                        {currentWeatherRules.slice(0, 3).map((r) => (
+                          <div key={r.id || r.metric_key} className="py-2 flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[var(--hw-neutral-600)]">{weatherMetricLabel(r.metric_key)}</span>
+                              <span className="font-medium text-[var(--hw-neutral-900)] capitalize">{r.risk_level}</span>
+                            </div>
+                            <span className="text-[11px] text-[var(--hw-neutral-500)]">{weatherRuleSummary(r)}</span>
+                          </div>
+                        ))}
+                        {currentWeatherRules.length > 3 && (
+                          <div className="py-2 text-center text-[var(--hw-neutral-400)] text-[11px]">
+                            +{currentWeatherRules.length - 3} more rule{currentWeatherRules.length - 3 > 1 ? "s" : ""} configured
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

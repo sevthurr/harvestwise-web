@@ -83,3 +83,35 @@ export async function runRecommendation(payload) {
 export async function listCommodities() {
   return parseResponse(await apiGet("/farmer/commodities"));
 }
+
+// ── Module outputs (compute + persist) ─────────────────────────────────────
+export async function computeModuleOutputs(payload) {
+  return parseResponse(await apiPost("/admin/analytics/outputs/compute", payload));
+}
+
+export async function listModuleOutputs(params = {}) {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, v);
+  });
+  const query = qs.toString();
+  return parseResponse(await apiGet(`/admin/analytics/outputs${query ? `?${query}` : ""}`));
+}
+
+export async function getModuleOutputDetail(recId) {
+  return parseResponse(await apiGet(`/admin/analytics/outputs/${recId}`));
+}
+
+// ── Crop weather rules (per-crop weather requirements) ─────────────────────
+export async function listWeatherRules(commodityId) {
+  const qs = commodityId ? `?commodity_id=${encodeURIComponent(commodityId)}` : "";
+  return parseResponse(await apiGet(`/admin/crop-weather-rules${qs}`));
+}
+
+export async function createWeatherRule(payload) {
+  return parseResponse(await apiPost("/admin/crop-weather-rules", payload));
+}
+
+export async function updateWeatherRule(ruleId, payload) {
+  return parseResponse(await apiPut(`/admin/crop-weather-rules/${ruleId}`, payload));
+}

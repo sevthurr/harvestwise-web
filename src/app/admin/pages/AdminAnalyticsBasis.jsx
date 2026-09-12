@@ -16,10 +16,7 @@ import { getVariants } from "../../global/data/commodities";
 import { useParams, useNavigate, useSearchParams } from "react-router";
 import { ChevronLeft, ChevronDown, AlertTriangle, Info } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
-import {
-  RESULTS,
-  CLASSIFICATION_COLORS
-} from "../components/analytics/adminAnalyticsMockData";
+import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMockData";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { analyticsApi } from "../../../services/api";
@@ -365,15 +362,109 @@ const DatasetsUsed = ({ module, records = [] }) => {
   );
 };
 
+const DETAIL_MODULE_KEYS = {
+  "price-outlook": "price_outlook",
+  "arrival-pressure": "arrival_pressure",
+  "historical-production": "historical_seasonal_production_level",
+  "weather-risk": "weather_risk"
+};
+
+const DETAIL_CLASSIFICATION_FIELDS = {
+  "price-outlook": "price_outlook",
+  "arrival-pressure": "arrival_pressure",
+  "historical-production": "historical_seasonal_production_level",
+  "weather-risk": "weather_risk_level"
+};
+
+const DETAIL_MODULE_SOURCES = {
+  "price-outlook": "Forecasting Output (Bangkerohan Retail)",
+  "arrival-pressure": "DFTC Arrival Volume",
+  "historical-production": "PSA OpenStat Production",
+  "weather-risk": "Open-Meteo 14-day Forecast"
+};
+
+const DETAIL_MODULE_PERIODS = {
+  "price-outlook": "14 days",
+  "arrival-pressure": "90 days",
+  "historical-production": "Current quarter",
+  "weather-risk": "14 days"
+};
+
+function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
+  const raw = detail?.basis_inputs?.[DETAIL_MODULE_KEYS[resultId]] || {};
+  const classification = detail?.[DETAIL_CLASSIFICATION_FIELDS[resultId]] || "Not processed";
+  const processedAt = detail?.generated_at
+    ? new Date(detail.generated_at).toLocaleString("en-US", { dateStyle: "medium" })
+    : "-";
+
+  let basisInputs;
+  if (resultId === "price-outlook") {
+    basisInputs = {
+      "Recent average price": raw.recent_average_price != null ? `${raw.recent_average_price}/kg` : "-/kg",
+      "Lower forecast": raw.lower_forecast != null ? `${raw.lower_forecast}/kg` : "-/kg",
+      "Forecast midpoint": raw.forecast_midpoint != null ? `${raw.forecast_midpoint}/kg` : "-/kg",
+      "Upper forecast": raw.upper_forecast != null ? `${raw.upper_forecast}/kg` : "-/kg",
+      "Forecast price change": raw.forecast_price_change_pct != null ? `${raw.forecast_price_change_pct}%` : "-"
+    };
+  } else if (resultId === "arrival-pressure") {
+    basisInputs = {
+      "Current DFTC arrival volume": raw.current_arrival_kg != null ? `${raw.current_arrival_kg} kg` : "-",
+      "Q1 threshold": raw.q1_kg != null ? `${raw.q1_kg} kg` : "-",
+      "Q2 threshold": raw.q2_kg != null ? `${raw.q2_kg} kg` : "-",
+      "Q3 threshold": raw.q3_kg != null ? `${raw.q3_kg} kg` : "-"
+    };
+  } else if (resultId === "historical-production") {
+    basisInputs = {
+      "Average quarterly production": raw.average_quarterly_production_mt != null ? `${raw.average_quarterly_production_mt} MT` : "-",
+      "Current quarter estimate": raw.current_quarter_estimate_mt != null ? `${raw.current_quarter_estimate_mt} MT` : "-",
+      "Seasonal production ratio": raw.seasonal_production_ratio != null ? `${raw.seasonal_production_ratio}` : "-",
+      "Q1 ratio": raw.q1_ratio != null ? `${raw.q1_ratio}` : "-",
+      "Q2 ratio": raw.q2_ratio != null ? `${raw.q2_ratio}` : "-",
+      "Q3 ratio": raw.q3_ratio != null ? `${raw.q3_ratio}` : "-"
+    };
+  } else {
+    basisInputs = {
+      "Forecast days available": raw.days_available != null ? `${raw.days_available} days` : "-"
+    };
+  }
+
+  const warnings = detail?.basis_inputs?.warnings || [];
+  const warningPrefixes = {
+    price_outlook: ["Price:"],
+    arrival_pressure: ["Arrivals:"],
+    historical_seasonal_production_level: ["Production:"],
+    weather_risk: ["Weather:"]
+  };
+  const moduleWarnings = warnings.filter((w) =>
+    (warningPrefixes[DETAIL_MODULE_KEYS[resultId]] || []).some((p) => w.startsWith(p))
+  );
+
+  return {
+    id: resultId,
+    outputId: detail?.id || "-",
+    commodity: detail?.commodity_name,
+    variant: detail?.variety || "All Varieties",
+    module: defaultTemplate.module,
+    basisSource: DETAIL_MODULE_SOURCES[resultId],
+    inputPeriod: DETAIL_MODULE_PERIODS[resultId],
+    processedAt,
+    classification,
+    basisInputs,
+    reliability: raw.reliability_status || null,
+    moduleWarnings,
+    thresholds: defaultTemplate.thresholds,
+    resultExplanation: detail?.explanation || defaultTemplate.resultExplanation
+  };
+}
+
 function AdminAnalyticsBasis() {
   const { resultId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const foundResult = RESULTS.find((r) => r.id === resultId);
   const defaultTemplate = DEFAULT_BASIS_TEMPLATES[resultId];
 
-  if (!foundResult && !defaultTemplate) {
+  if (!defaultTemplate) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-16 text-center space-y-3 max-w-[1440px] mx-auto">
         <p className="text-[var(--hw-neutral-500)] text-[14px]">Result not found.</p>
@@ -389,8 +480,24 @@ function AdminAnalyticsBasis() {
 
   const commodityParam = searchParams.get("commodity");
   const varietyParam = searchParams.get("variety");
+  const outputParam = searchParams.get("output");
 
-  const result = foundResult || {
+  const [detail, setDetail] = useState(null);
+
+  useEffect(() => {
+    if (!outputParam) {
+      setDetail(null);
+      return;
+    }
+    let active = true;
+    analyticsApi
+      .getModuleOutputDetail(outputParam)
+      .then((d) => active && setDetail(d))
+      .catch(() => active && setDetail(null));
+    return () => { active = false; };
+  }, [outputParam]);
+
+  const result = detail ? buildBasisResultFromDetail(detail, resultId, defaultTemplate) : {
     id: resultId,
     outputId: "-",
     commodity: commodityParam || "Ampalaya",
@@ -569,7 +676,38 @@ function AdminAnalyticsBasis() {
         </div>
       )}
 
-      {/* 3. Visualizations (Single Column, Full Width, Visible Line & Bar Frames with Zero/Empty State) */}
+      {/* 3. Data Reliability (module-specific data sufficiency + warnings) */}
+      {(result.reliability || (result.moduleWarnings || []).length > 0) && (
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Data Reliability</p>
+          </div>
+          <div className="divide-y divide-[var(--hw-neutral-100)]">
+            <div className="flex justify-between items-center gap-4 px-6 py-3.5">
+              <span className="text-[13px] text-[var(--hw-neutral-700)]">Reliability</span>
+              <span
+                className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                  result.reliability === "High"
+                    ? "text-[var(--hw-success)] bg-[var(--hw-success)]/10"
+                    : result.reliability === "Moderate" || result.reliability === "Limited"
+                      ? "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10"
+                      : "text-[var(--hw-error)] bg-[var(--hw-error)]/10"
+                }`}
+              >
+                {result.reliability || "-"}
+              </span>
+            </div>
+            {result.moduleWarnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-2.5 px-6 py-3.5">
+                <AlertTriangle className="w-4 h-4 text-[var(--hw-warning)] flex-shrink-0 mt-0.5" />
+                <span className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">{w}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Visualizations (Single Column, Full Width, Visible Line & Bar Frames with Zero/Empty State) */}
       <div className="space-y-6">
         {/* Forecast Price Trend Chart (Price Outlook) */}
         {(result.module === "Price Outlook" || resultId === "price-outlook") && (

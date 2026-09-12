@@ -286,8 +286,14 @@ function DFTCInput() {
 
   // Search, Filter, and Pagination for Commodity Records
   const [searchQuery, setSearchQuery] = useState("");
-  const [marketFilter, setMarketFilter] = useState("all");
-  const [dataTypeFilter, setDataTypeFilter] = useState("all");
+  const [marketFilter, setMarketFilter] = useState(() => {
+    const s = location.state;
+    return s?.restoreMarketFilter ?? "all";
+  });
+  const [dataTypeFilter, setDataTypeFilter] = useState(() => {
+    const s = location.state;
+    return s?.restoreDataTypeFilter ?? "all";
+  });
   const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch real submissions
@@ -359,10 +365,36 @@ function DFTCInput() {
     setCurrentPage(1);
   }, [commodityTab, searchQuery, marketFilter, dataTypeFilter]);
 
+  function setupToFilters(setup) {
+    const marketLower = (setup.market || "").toLowerCase();
+    const market = marketLower.includes("dftc") || marketLower.includes("taboan")
+      ? "DFTC Taboan"
+      : marketLower.includes("bangkerohan") || marketLower.includes("bankerohan")
+        ? "Bangkerohan Public Market"
+        : "all";
+
+    let dataType = "all";
+    if (setup.dataType === "Arrival Volume") {
+      dataType = "DFTC Arrival Volume";
+    } else if (setup.priceType) {
+      const pt = setup.priceType.toLowerCase();
+      if (pt === "retail") dataType = "Daily Retail Prices";
+      else if (pt === "wholesale") dataType = "Daily Wholesale Prices";
+      else if (pt === "landing") dataType = "Daily Landing Prices";
+    }
+
+    return { market, dataType };
+  }
+
   function handleSetupContinue(setup) {
+    // Pre-filter commodity records to match the chosen market + price type
+    const { market, dataType } = setupToFilters(setup);
+    setMarketFilter(market);
+    setDataTypeFilter(dataType);
     setSetupOpen(false);
-    if (setup.dataType === "Arrival Volume") navigate("/dftc/arrival-input", { state: setup });
-    else navigate("/dftc/price-input", { state: setup });
+    const returnFilters = { restoreMarketFilter: market, restoreDataTypeFilter: dataType };
+    if (setup.dataType === "Arrival Volume") navigate("/dftc/arrival-input", { state: { ...setup, ...returnFilters } });
+    else navigate("/dftc/price-input", { state: { ...setup, ...returnFilters } });
   }
 
   const displayedSavedData = showAllSaved ? savedDataList : savedDataList.slice(0, 10);
@@ -370,6 +402,25 @@ function DFTCInput() {
   // Generate combination rows from live commodities API response
   // Only include rows where actual records exist
   const rawCommodityItems = commoditiesData?.items || [];
+
+  // Build a set of (market, dataType) pairs that have at least one actual submission.
+  // This prevents historically-ingested bulk data from polluting the commodity records view.
+  const submittedCombinations = useMemo(() => {
+    const set = new Set();
+    rawSubmissions.forEach((sub) => {
+      const market = formatMarketName(sub.source_name || sub.source_id);
+      const isArrival = sub.data_type === "arrival_volume" || sub.data_type === "arrival";
+      if (isArrival) {
+        set.add(`${market}||DFTC Arrival Volume`);
+      } else if (sub.price_type) {
+        const pt = sub.price_type.toLowerCase();
+        if (pt === "retail") set.add(`${market}||Daily Retail Prices`);
+        else if (pt === "wholesale") set.add(`${market}||Daily Wholesale Prices`);
+        else if (pt === "landing") set.add(`${market}||Daily Landing Prices`);
+      }
+    });
+    return set;
+  }, [rawSubmissions]);
 
   const rawCommodityCombinations = useMemo(() => {
     const rows = [];
@@ -381,8 +432,12 @@ function DFTCInput() {
         const category = itemData.commodity_category || "Vegetables";
         const lastUpdated = itemData.updated_at ? formatSavedDate(itemData.updated_at) : null;
 
-        // Only include if actual price records exist in source
-        if (itemData.prices?.bangkerohan_retail !== null && itemData.prices?.bangkerohan_retail !== undefined) {
+        // Only include if actual price records exist in source AND a matching submission exists
+        if (
+          itemData.prices?.bangkerohan_retail !== null &&
+          itemData.prices?.bangkerohan_retail !== undefined &&
+          submittedCombinations.has("Bangkerohan Public Market||Daily Retail Prices")
+        ) {
           rows.push({
             commodity: commodityName,
             category,
@@ -394,7 +449,11 @@ function DFTCInput() {
           });
         }
 
-        if (itemData.prices?.bangkerohan_wholesale !== null && itemData.prices?.bangkerohan_wholesale !== undefined) {
+        if (
+          itemData.prices?.bangkerohan_wholesale !== null &&
+          itemData.prices?.bangkerohan_wholesale !== undefined &&
+          submittedCombinations.has("Bangkerohan Public Market||Daily Wholesale Prices")
+        ) {
           rows.push({
             commodity: commodityName,
             category,
@@ -406,11 +465,15 @@ function DFTCInput() {
           });
         }
 
-        if (itemData.prices?.dftc_retail !== null && itemData.prices?.dftc_retail !== undefined) {
+        if (
+          itemData.prices?.dftc_retail !== null &&
+          itemData.prices?.dftc_retail !== undefined &&
+          submittedCombinations.has("DFTC Taboan||Daily Retail Prices")
+        ) {
           rows.push({
             commodity: commodityName,
             category,
-            dataType: "Daily Landing Prices",
+            dataType: "Daily Retail Prices",
             market: "DFTC Taboan",
             latestDate: lastUpdated || "—",
             recordCount: 1,
@@ -418,7 +481,11 @@ function DFTCInput() {
           });
         }
 
-        if (itemData.prices?.dftc_wholesale !== null && itemData.prices?.dftc_wholesale !== undefined) {
+        if (
+          itemData.prices?.dftc_wholesale !== null &&
+          itemData.prices?.dftc_wholesale !== undefined &&
+          submittedCombinations.has("DFTC Taboan||Daily Wholesale Prices")
+        ) {
           rows.push({
             commodity: commodityName,
             category,
@@ -437,7 +504,11 @@ function DFTCInput() {
         const category = itemData.commodity_category || "Other";
         const lastUpdated = itemData.updated_at ? formatSavedDate(itemData.updated_at) : null;
 
-        if (itemData.prices?.bangkerohan_retail !== null && itemData.prices?.bangkerohan_retail !== undefined) {
+        if (
+          itemData.prices?.bangkerohan_retail !== null &&
+          itemData.prices?.bangkerohan_retail !== undefined &&
+          submittedCombinations.has("Bangkerohan Public Market||Daily Retail Prices")
+        ) {
           rows.push({
             commodity: commodityName,
             category,
@@ -452,7 +523,7 @@ function DFTCInput() {
     }
 
     return rows;
-  }, [commodityTab, rawCommodityItems]);
+  }, [commodityTab, rawCommodityItems, submittedCombinations]);
 
   // Filter Commodity Records (Search + Dropdown Filters)
   const filteredRecords = useMemo(() => {
@@ -736,7 +807,7 @@ function DFTCInput() {
         </div>
 
         {/* Loading Skeleton */}
-        {loadingCommodities ? (
+        {(loadingCommodities || loadingSubmissions) ? (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3 animate-pulse">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">

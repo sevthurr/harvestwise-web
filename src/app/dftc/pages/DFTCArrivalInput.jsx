@@ -303,7 +303,7 @@ function DFTCArrivalInput() {
       setSaved(true);
       setTimeout(() => {
         navigate("/dftc/input", {
-          state: { successMsg: `${dataName} saved successfully.` }
+          state: { successMsg: `${dataName} saved successfully.`, restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter }
         });
       }, 1e3);
     } catch {
@@ -314,7 +314,7 @@ function DFTCArrivalInput() {
       }
       setTimeout(() => {
         navigate("/dftc/input", {
-          state: { errorMsg: "Could not save to server. Your draft was kept on this device." }
+          state: { errorMsg: "Could not save to server. Your draft was kept on this device.", restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter }
         });
       }, 1200);
     }
@@ -489,7 +489,7 @@ function DFTCArrivalInput() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/dftc/input")}
+              onClick={() => navigate("/dftc/input", { state: { restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter } })}
               className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors"
               title="Back to Submit Data"
             >

@@ -278,8 +278,11 @@ function DFTCHistory() {
           : pTypeRaw.includes("landing")
           ? "Landing"
           : "Retail";
+        const isManual = (item.submission_method || "").toLowerCase().includes("manual");
         const dType = isArrival
           ? "DFTC Arrival Volume"
+          : isManual
+          ? `Manual Input · ${pTypeDisplay} Prices`
           : `Daily ${pTypeDisplay} Prices`;
 
         const savedIso = item.saved_at ? item.saved_at.slice(0, 10) : item.created_at ? item.created_at.slice(0, 10) : "";
@@ -364,6 +367,9 @@ function DFTCHistory() {
                 <option>Daily Retail Prices</option>
                 <option>Daily Wholesale Prices</option>
                 <option>Daily Landing Prices</option>
+                <option>Manual Input · Retail Prices</option>
+                <option>Manual Input · Wholesale Prices</option>
+                <option>Manual Input · Landing Prices</option>
                 <option>DFTC Arrival Volume</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />

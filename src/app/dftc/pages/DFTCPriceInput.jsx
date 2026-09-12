@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -581,6 +582,7 @@ function MobileVariantRow({ v, f, onUpdateSample, onUpdateUom }) {
 function DFTCPriceInput() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const navState = location.state;
   const defaultSetup = navState ?? {
     dataType: "Price Data",
@@ -994,7 +996,7 @@ function DFTCPriceInput() {
         } catch { }
         setTimeout(() => {
           navigate("/dftc/input", {
-            state: { errorMsg: `${dataName} was saved, but ${dropped} record(s) could not be sent because their commodity could not be registered. Your draft was kept on this device.` }
+            state: { errorMsg: `${dataName} was saved, but ${dropped} record(s) could not be sent because their commodity could not be registered. Your draft was kept on this device.`, restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter }
           });
         }, 1100);
         return;
@@ -1007,9 +1009,11 @@ function DFTCPriceInput() {
       prefilledRef.current = new Map();
       setPrefillCount(0);
       setSaved(true);
+      queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-trends-price-detail"] });
       setTimeout(() => {
         navigate("/dftc/input", {
-          state: { successMsg: `${dataName} saved successfully.` }
+          state: { successMsg: `${dataName} saved successfully.`, restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter }
         });
       }, 1000);
     } catch {
@@ -1020,7 +1024,7 @@ function DFTCPriceInput() {
       } catch { }
       setTimeout(() => {
         navigate("/dftc/input", {
-          state: { errorMsg: "Could not save to server. Your draft was kept on this device." }
+          state: { errorMsg: "Could not save to server. Your draft was kept on this device.", restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter }
         });
       }, 1200);
     }
@@ -1313,7 +1317,7 @@ function DFTCPriceInput() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate("/dftc/input")}
+              onClick={() => navigate("/dftc/input", { state: { restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter } })}
               className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors"
               title="Back to Submit Data"
             >
