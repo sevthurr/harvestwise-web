@@ -36,7 +36,7 @@ const HistoricalPriceTable = ({
             : new Date(record.price_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           market: market,
           priceType: priceType,
-          price: record.price_avg || 0,
+          price: record.prevail_price || 0,
           change: record.change || 0
         }));
         

@@ -534,7 +534,7 @@ function DFTCSubmissionDetail() {
                             <td className={tdCls}>{r.variety || "—"}</td>
                             <td className={tdCls}>{r.price_date || r.date || "—"}</td>
                             <td className={tdCls}>{r.uom || "kg"}</td>
-                            <td className={tdBold}>{r.price_avg != null ? `₱${Number(r.price_avg).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                            <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -609,7 +609,7 @@ function DFTCSubmissionDetail() {
                             <td className={tdCls}>{r.variety || "—"}</td>
                             <td className={tdCls}>{r.price_date || r.date || "—"}</td>
                             <td className={tdCls}>{r.uom || "kg"}</td>
-                            <td className={tdBold}>{r.price_avg != null ? `₱${Number(r.price_avg).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                            <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
                           </tr>
                         ))}
                       </tbody>

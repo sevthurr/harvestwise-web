@@ -51,7 +51,7 @@ function detailBody({
   horizon = 14,
   midpoint = 81.25,
   forecastDate = '2026-08-14',
-  records = [{ record_id: 'PRC-1', price_date: '2026-07-31', price_avg: 70, data_source: 'bankerohan_daily_retail', price_type: 'retail' }],
+  records = [{ record_id: 'PRC-1', price_date: '2026-07-31', prevail_price: 70, data_source: 'bankerohan_daily_retail', price_type: 'retail' }],
   forecast = undefined,
 } = {}) {
   const resolvedForecast = forecast === undefined
@@ -150,8 +150,8 @@ describe('forecast graph mapping helpers', () => {
   it('plots forecast_midpoint on forecast_date and does not invent daily points', () => {
     const data = buildChartData(
       [
-        { price_date: '2026-07-30', price_avg: 68 },
-        { price_date: '2026-07-31', price_avg: 70 },
+        { price_date: '2026-07-30', prevail_price: 68 },
+        { price_date: '2026-07-31', prevail_price: 70 },
       ],
       { forecast_date: '2026-08-14', forecast_midpoint: 81.25 }
     );
@@ -166,7 +166,7 @@ describe('forecast graph mapping helpers', () => {
 
   it('plots daily forecast.points when the prices API returns them', () => {
     const data = buildChartData(
-      [{ price_date: '2026-07-31', price_avg: 70 }],
+      [{ price_date: '2026-07-31', prevail_price: 70 }],
       { forecast_date: '2026-08-14', forecast_midpoint: 81.25 },
       [
         { forecast_date: '2026-08-01', forecast_midpoint: 71 },
@@ -193,8 +193,8 @@ describe('forecast graph mapping helpers', () => {
   it('anchors forecast range bounds to the last observed date so the range renders as two lines', () => {
     const data = buildChartData(
       [
-        { price_date: '2026-07-30', price_avg: 68 },
-        { price_date: '2026-07-31', price_avg: 70 },
+        { price_date: '2026-07-30', prevail_price: 68 },
+        { price_date: '2026-07-31', prevail_price: 70 },
       ],
       { forecast_date: '2026-08-14', forecast_midpoint: 81.25, lower_forecast: 71.25, upper_forecast: 91.25 }
     );
@@ -209,9 +209,9 @@ describe('forecast graph mapping helpers', () => {
   it('averages the most recent observed prices for Recent Average', () => {
     expect(
       recentAveragePrice([
-        { price_date: '2026-07-31', price_avg: 86 },
-        { price_date: '2026-07-30', price_avg: 82 },
-        { price_date: '2026-07-29', price_avg: 80 },
+        { price_date: '2026-07-31', prevail_price: 86 },
+        { price_date: '2026-07-30', prevail_price: 82 },
+        { price_date: '2026-07-29', prevail_price: 80 },
       ])
     ).toBeCloseTo(82.666, 2);
   });
@@ -403,7 +403,7 @@ describe('AdminForecasting graph', () => {
 
   it('still plots historical recent_records from the prices detail payload', async () => {
     const data = buildChartData(
-      [{ price_date: '2026-07-31', price_avg: 70 }],
+      [{ price_date: '2026-07-31', prevail_price: 70 }],
       { forecast_date: '2026-08-14', forecast_midpoint: 81.25 }
     );
     expect(data.find((point) => point.d === '2026-07-31')?.actual).toBe(70);

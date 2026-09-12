@@ -722,7 +722,7 @@ function DFTCPriceInput() {
     setFields((prev) => {
       const next = { ...prev };
       for (const rec of records) {
-        if (rec.price_avg === null || rec.price_avg === undefined) continue;
+        if (rec.prevail_price === null || rec.prevail_price === undefined) continue;
         let hit = null;
         for (const cat of PRICE_CATEGORIES) {
           for (const com of cat.commodities) {
@@ -734,11 +734,11 @@ function DFTCPriceInput() {
           }
         }
         const field = {
-          samples: [String(rec.price_avg), "", "", "", ""],
+          samples: [String(rec.prevail_price), "", "", "", ""],
           uom: rec.uom || "kg",
           low: rec.price_min ?? null,
           high: rec.price_max ?? null,
-          prevailing: rec.price_avg
+          prevailing: rec.prevail_price
         };
         if (hit) {
           const existing = next[hit.v.id];
@@ -955,7 +955,7 @@ function DFTCPriceInput() {
         variety: v.name,
         uom: f.uom,
         sample_prices: parseValid(f.samples),
-        price_avg: f.prevailing,
+        prevail_price: f.prevailing,
         observation_status: "Reported value"
       };
       if (commodity_id) {

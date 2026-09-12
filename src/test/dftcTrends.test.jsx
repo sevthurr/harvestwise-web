@@ -105,7 +105,7 @@ function detailBody({
             {
               record_id: "PRC-2",
               price_date: "2026-07-31",
-              price_avg: 72,
+              prevail_price: 72,
               price_min: null,
               price_max: null,
               change_pct: 2.8,
@@ -115,7 +115,7 @@ function detailBody({
             {
               record_id: "PRC-1",
               price_date: "2026-07-30",
-              price_avg: 70,
+              prevail_price: 70,
               price_min: null,
               price_max: null,
               change_pct: null,
@@ -168,9 +168,9 @@ describe("dftcTrendsPriceData helpers", () => {
 
   it("keeps period filtering on historical records only", () => {
     const records = [
-      { price_date: "2026-07-31", price_avg: 72 },
-      { price_date: "2026-07-30", price_avg: 71 },
-      { price_date: "2026-07-20", price_avg: 68 },
+      { price_date: "2026-07-31", prevail_price: 72 },
+      { price_date: "2026-07-30", prevail_price: 71 },
+      { price_date: "2026-07-20", prevail_price: 68 },
     ];
     const filtered = filterRecordsByPeriod(records, "7d");
     expect(filtered.map((row) => row.price_date)).toEqual(["2026-07-31", "2026-07-30"]);

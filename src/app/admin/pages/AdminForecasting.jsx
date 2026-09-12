@@ -112,7 +112,7 @@ function numericPrice(value) {
 
 function recentAveragePrice(records, window = RECENT_AVERAGE_WINDOW) {
   const prices = (records || [])
-    .map((row) => numericPrice(row?.price_avg ?? row?.price))
+    .map((row) => numericPrice(row?.prevail_price ?? row?.price))
     .filter((value) => value != null);
   const recent = prices.slice(0, window);
   if (recent.length === 0) return null;
@@ -179,7 +179,7 @@ function buildChartData(historical, forecastPoint, forecastPoints = []) {
   for (const row of historical || []) {
     const date = isoDate(row?.price_date || row?.date);
     if (!date) continue;
-    const price = row.price_avg ?? row.price;
+    const price = row.prevail_price ?? row.price;
     if (price == null || price === "") continue;
     const numeric = Number(price);
     if (!Number.isFinite(numeric)) continue;

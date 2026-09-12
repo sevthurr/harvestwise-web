@@ -128,7 +128,7 @@ function buildHistoricalChartData(varietyDetails, preset, customFrom, customTo) 
     );
     const pricesByDate = new Map();
     for (const row of filtered) {
-      const price = numericPrice(row.price_avg ?? row.price);
+      const price = numericPrice(row.prevail_price ?? row.price);
       if (price == null) continue;
       pricesByDate.set(row.price_date, price);
       dateSet.add(row.price_date);
@@ -196,8 +196,8 @@ function buildHistoricalSummaries(varietyDetails, preset, customFrom, customTo) 
     const ordered = [...filtered].sort((a, b) =>
       isoDate(b.price_date).localeCompare(isoDate(a.price_date))
     );
-    const latest = ordered[0] ? numericPrice(ordered[0].price_avg) : null;
-    const prev = ordered[1] ? numericPrice(ordered[1].price_avg) : null;
+    const latest = ordered[0] ? numericPrice(ordered[0].prevail_price) : null;
+    const prev = ordered[1] ? numericPrice(ordered[1].prevail_price) : null;
     const change =
       latest != null && prev != null && prev > 0 ? ((latest - prev) / prev) * 100 : null;
     return {
@@ -251,7 +251,7 @@ function buildTableRows(varietyDetails, commodity, preset, customFrom, customTo)
       customTo
     );
     for (const row of filtered) {
-      const price = numericPrice(row.price_avg);
+      const price = numericPrice(row.prevail_price);
       if (price == null) continue;
       rows.push({
         date: isoDate(row.price_date),
