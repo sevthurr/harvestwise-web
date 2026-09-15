@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useGoogleLink } from "../../auth/useGoogleLink";
 import { authApi } from "../../../services/api";
 import { parseResponse } from "../../global/api";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -238,6 +240,7 @@ const AccountTab = ({ showToast }) => {
 
 const SecurityTab = ({ showToast }) => {
   const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
   const isSuperAdmin = (user?.role?.role_name ?? "").toLowerCase() === "superadmin";
   const [twoFAEnabled, setTwoFAEnabled] = useState(Boolean(user?.is_totp_enabled));
   const [twoFAAccordionOpen, setTwoFAAccordionOpen] = useState(false);
@@ -250,8 +253,11 @@ const SecurityTab = ({ showToast }) => {
   const [showDisableModal, setShowDisableModal] = useState(false);
   const [newRecoveryCodes, setNewRecoveryCodes] = useState([]);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
-  const [googleConnected, setGoogleConnected] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/admin/settings`,
+    onResult: () => showToast(t("admin.settings.toast_google_connected", {}, "Google account connected.")),
+  });
   const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
   const [showCur, setShowCur] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -361,14 +367,13 @@ const SecurityTab = ({ showToast }) => {
   };
 
   const handleGoogleConnect = () => {
-    setGoogleConnected(true);
-    showToast("Google sign-in updated.");
+    googleLink.handleConnect();
   };
 
   const handleGoogleDisconnect = () => {
     setShowDisconnectModal(false);
-    setGoogleConnected(false);
-    showToast("Google sign-in updated.");
+    googleLink.handleDisconnect();
+    showToast(t("admin.settings.toast_google_disconnected", {}, "Google account disconnected."));
   };
 
   return (
@@ -598,27 +603,29 @@ const SecurityTab = ({ showToast }) => {
 
       {/* Card 3: Google Sign-In */}
       <Card>
-        <SectionLabel>Google Sign-In</SectionLabel>
+        <SectionLabel>{t("admin.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[14px] font-semibold text-black">Google sign-in</p>
-            <p className="text-[13px] text-black mt-0.5">{googleConnected ? "Connected" : "Not connected"}</p>
+            <p className="text-[14px] font-semibold text-black">{t("admin.settings.google_card_title", {}, "Google Sign-In")}</p>
+            <p className="text-[13px] text-black mt-0.5">{googleLink.googleConnected ? t("admin.settings.google_connected", {}, "Connected") : t("admin.settings.google_not_connected", {}, "Not connected")}</p>
           </div>
-          {googleConnected ? (
+          {googleLink.googleConnected ? (
             <button
               type="button"
               onClick={() => setShowDisconnectModal(true)}
+              disabled={googleLink.loading}
               className="h-9 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0 cursor-pointer"
             >
-              Disconnect Google account
+              {t("admin.settings.google_disconnect", {}, "Disconnect")}
             </button>
           ) : (
             <button
               type="button"
               onClick={handleGoogleConnect}
+              disabled={googleLink.loading}
               className="h-9 px-4 text-[13px] font-medium text-[var(--hw-green-700)] border border-[var(--hw-green-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors flex-shrink-0 cursor-pointer"
             >
-              Connect Google account
+              {t("admin.settings.google_connect", {}, "Connect")}
             </button>
           )}
         </div>

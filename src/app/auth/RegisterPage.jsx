@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff, Check, Download } from "lucide-react";
 import VerticalLogo from "../../imports/logo";
-import { useAuth } from "../global/contexts/AuthContext";
+import { useAuth, roleHome } from "../global/contexts/AuthContext";
 import { Footer } from "../global/components/Footer";
 import { apiPost, parseResponse } from "../global/api";
 import { usePWAInstall } from "../global/hooks/usePWAInstall";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
+import { useGoogleAuth } from "./useGoogleAuth";
 import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
 import { ContactInput } from "./components/ContactInput";
 import {
@@ -166,10 +167,26 @@ function RegisterPage() {
     }
   };
 
-  // Google sign-up: backend OAuth endpoint not yet implemented — kept for future use
-  const handleGoogle = async () => {
-    // No-op until backend Google OAuth is available
-  };
+  // Google sign-up via Supabase OAuth (PKCE) → backend /auth/google
+  const { handleGoogle, loading: googleLoading, error: googleError } = useGoogleAuth({
+    redirectTo: `${window.location.origin}/register`,
+    onResult: async (data) => {
+      // Farmers never carry 2FA, but an existing 2FA-enabled account (DFTC/
+      // SuperAdmin) trying to sign up must complete the factor from /login.
+      if (data.mfa_required) {
+        setErrors({
+          general: t(
+            "auth.errors.need_login_for_2fa",
+            {},
+            "Your account requires two-factor authentication. Please sign in from the login page."
+          ),
+        });
+        return;
+      }
+      const me = await login(data);
+      navigate(roleHome(me.role.role_name), { replace: true });
+    },
+  });
 
   const handleInstall = async () => {
     setInstalling(true);
@@ -429,14 +446,12 @@ function RegisterPage() {
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
         </div>
 
-        {/* Google — disabled: no backend OAuth endpoint */}
+        {/* Google */}
         <button
           type="button"
           onClick={handleGoogle}
-          disabled={loading}
-          title="Google sign-up is not available yet"
-          className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-400)] rounded-xl cursor-not-allowed opacity-50"
-          aria-disabled="true"
+          disabled={loading || googleLoading}
+          className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -445,10 +460,12 @@ function RegisterPage() {
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
           {t("auth.google_sign_up", {}, "Sign up with Google")}
-          <span className="text-[11px] ml-1 text-[var(--hw-neutral-400)]">
-            {t("auth.google_unavailable_parentheses", {}, "(unavailable)")}
-          </span>
         </button>
+        {googleError && (
+          <p role="alert" className="text-[13px] text-red-600 font-medium text-center">
+            {googleError}
+          </p>
+        )}
 
         {/* PWA install prompt — shown only when browser supports it and not yet installed */}
         {isInstallable && !isInstalled && (

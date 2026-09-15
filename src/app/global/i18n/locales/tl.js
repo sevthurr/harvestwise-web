@@ -1,4 +1,6 @@
 import { farmer as modularFarmer } from './tl/farmer/index.js';
+import { settings as dftcSettings } from './tl/dftc/settings.js';
+import { settings as adminSettings } from './tl/admin/settings.js';
 
 function deepMerge(target, source) {
   const result = { ...target };
@@ -138,6 +140,7 @@ export const tl = {
       general: "May nangyaring mali. Subukang muli.",
       email_registered: "Ang email na ito ay nakarehistro na.",
       phone_registered: "Ang numerong ito ay nakarehistro na.",
+      need_login_for_2fa: "Ang iyong account ay nangangailangan ng two-factor authentication. Mangyaring mag-sign in mula sa login page.",
     },
     requirements: {
       min_chars: "Hindi bababa sa 8 character",
@@ -593,5 +596,11 @@ export const tl = {
       fetch_production_failed: "Nabigong kunin ang datos sa produksyon.",
       fetch_planting_guide_failed: "Nabigong kunin ang mga rekomendasyon sa gabay sa pagtatanim."
     }
-  }, modularFarmer)
+  }, modularFarmer),
+  dftc: {
+    settings: dftcSettings
+  },
+  admin: {
+    settings: adminSettings
+  }
 };

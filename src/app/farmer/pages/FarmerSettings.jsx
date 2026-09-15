@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useGoogleLink } from "../../auth/useGoogleLink";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
@@ -62,12 +63,15 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [googleConnected, setGoogleConnected] = useState(false);
   const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
   const [showCur, setShowCur] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showCfm, setShowCfm] = useState(false);
   const [pwError, setPwError] = useState("");
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/farmer/settings`,
+    onResult: () => showToast(t("farmer.settings.toast_google_connected", {}, "Google account connected.")),
+  });
 
   // Load account and profile data from DB
   useEffect(() => {
@@ -88,7 +92,6 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               phone: camel.phone || user?.phone || "",
               email: camel.email || user?.email || ""
             });
-            setGoogleConnected(Boolean(camel.googleConnected || user?.googleConnected));
           }
         } else {
           // Fallback to auth user state without mock names
@@ -101,7 +104,6 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               phone: user?.phone || "",
               email: user?.email || ""
             });
-            setGoogleConnected(Boolean(user?.googleConnected));
           }
         }
       } catch {
@@ -114,7 +116,6 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             phone: user?.phone || "",
             email: user?.email || ""
           });
-          setGoogleConnected(Boolean(user?.googleConnected));
         }
       } finally {
         if (active) setLoading(false);
@@ -364,25 +365,30 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
       </Card>
 
       <Card>
-        <SectionLabel>Google Sign-In</SectionLabel>
+        <SectionLabel>{t("farmer.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
         <div className="flex items-center justify-between py-1">
           <div>
-            <p className="text-[14px] font-semibold text-black">Google sign-in</p>
-            <p className="text-[13px] text-black">{googleConnected ? "Connected" : "Not connected"}</p>
+            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.google_card_title", {}, "Google Sign-In")}</p>
+            <p className="text-[13px] text-black">{googleLink.googleConnected ? t("farmer.settings.google_connected", {}, "Connected") : t("farmer.settings.google_not_connected", {}, "Not connected")}</p>
           </div>
           <button
             type="button"
             onClick={() => {
-              setGoogleConnected((v) => !v);
-              showToast(googleConnected ? "Google account disconnected." : "Google account connected.");
+              if (googleLink.googleConnected) {
+                googleLink.handleDisconnect();
+                showToast(t("farmer.settings.toast_google_disconnected", {}, "Google account disconnected."));
+              } else {
+                googleLink.handleConnect();
+              }
             }}
+            disabled={googleLink.loading}
             className={`h-8 px-3 text-[13px] font-medium rounded-lg border transition-colors ${
-              googleConnected
+              googleLink.googleConnected
                 ? "border-red-200 text-red-600 hover:bg-red-50"
                 : "border-[var(--hw-green-700)] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)]"
             }`}
           >
-            {googleConnected ? "Disconnect" : "Connect"}
+            {googleLink.googleConnected ? t("farmer.settings.google_disconnect", {}, "Disconnect") : t("farmer.settings.google_connect", {}, "Connect")}
           </button>
         </div>
       </Card>

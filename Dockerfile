@@ -24,6 +24,12 @@ ARG VITE_API_URL=http://localhost:8080
 ENV VITE_API_URL=$VITE_API_URL
 ARG VITE_API_BASE_URL=http://localhost:8080/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Google OAuth broker (Supabase) — build-time inlined into the SPA bundle.
+# Local dev: `supabase start` exposes Kong on :54321; the anon key is public.
+ARG VITE_SUPABASE_URL=http://localhost:54321
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-sb_publishable_placeholder}
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
 RUN npm run build
 
