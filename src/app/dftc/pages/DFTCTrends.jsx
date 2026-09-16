@@ -7,8 +7,10 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
+import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { apiGet, parseResponse } from "../../global/api";
 import * as pricesApi from "../../../services/api/pricesApi";
+
 import {
   buildForecastChartData,
   buildForecastSummaries,
@@ -19,6 +21,9 @@ import {
   isApiBackedPriceSeries,
   toPriceTypeKey,
   varietyDisplayKey,
+  getAvailableVarietiesForCommodity,
+  pickDefaultVariety,
+  buildUnifiedPriceTrendData,
 } from "./dftcTrendsPriceData";
 
 const HW_GREEN_SHADES = [
@@ -497,6 +502,60 @@ function PeriodSelect({ preset, customFrom, customTo, onChange }) {
   );
 }
 
+function HistoricalRangeSelect({ preset, customFrom, customTo, onChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const options = [
+    { key: "7d", label: "Last 7 days" },
+    { key: "14d", label: "Last 14 days" },
+    { key: "21d", label: "Last 21 days" },
+    { key: "28d", label: "Last 28 days" }
+  ];
+
+  useEffect(() => {
+    function h(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const selected = options.find((o) => o.key === preset);
+  const displayLabel = selected?.label || getDateLabel(preset, customFrom, customTo);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white text-[var(--hw-neutral-800)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+      >
+        <span className="font-medium">{displayLabel}</span>
+        <ChevronDown size={12} className={`text-[var(--hw-neutral-500)] transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 mt-1.5 z-50 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => {
+                onChange(opt.key);
+                setOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2 text-[12px] transition-colors cursor-pointer ${
+                preset === opt.key ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ForecastHorizonSelect({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -718,12 +777,13 @@ function DFTCTrends() {
 
   // Price Trend state
   const [pCommodity, setPCommodity] = useState("Kamatis");
+  const [pVariety, setPVariety] = useState(null);
   const [pMarket, setPMarket] = useState("Bankerohan Public Market");
   const [pPriceType, setPPriceType] = useState("Retail");
-  const [pDatePreset, setPDatePreset] = useState("14d");
+  const [pDatePreset, setPDatePreset] = useState("7d");
   const [pCustomFrom, setPCustomFrom] = useState("");
   const [pCustomTo, setPCustomTo] = useState("");
-  const [fHorizon, setFHorizon] = useState(14);
+  const [fHorizon, setFHorizon] = useState(7);
   const [pPage, setPPage] = useState(1);
   const [pShowAll, setPShowAll] = useState(false);
 
@@ -740,7 +800,7 @@ function DFTCTrends() {
   useEffect(() => {
     setPPage(1);
     setPShowAll(false);
-  }, [pCommodity, pMarket, pPriceType, pDatePreset, pCustomFrom, pCustomTo]);
+  }, [pCommodity, pVariety, pMarket, pPriceType, pDatePreset, pCustomFrom, pCustomTo]);
 
   useEffect(() => {
     setAPage(1);
@@ -763,15 +823,40 @@ function DFTCTrends() {
     [catalogData]
   );
 
+  const pAvailableVarieties = useMemo(
+    () => getAvailableVarietiesForCommodity(catalogPairs, pCommodity, pMarket, pPriceType),
+    [catalogPairs, pCommodity, pMarket, pPriceType]
+  );
+
+  const selectedVarietyValue = useMemo(
+    () => pickDefaultVariety(pAvailableVarieties, pVariety),
+    [pAvailableVarieties, pVariety]
+  );
+
   const selectedCatalogPair = useMemo(() => {
-    const matches = catalogPairsForCommodity(catalogPairs, pCommodity);
-    return matches[0] || null;
-  }, [catalogPairs, pCommodity]);
+    if (!pAvailableVarieties.length) {
+      const matches = catalogPairsForCommodity(catalogPairs, pCommodity);
+      return matches[0] || null;
+    }
+    const matched = pAvailableVarieties.find((c) =>
+      selectedVarietyValue === null ? c.isNoVariety : c.value === selectedVarietyValue
+    );
+    if (matched) {
+      return (
+        catalogPairs.find((p) => p.commodity_id === matched.commodity_id) || {
+          commodity: pCommodity,
+          variety: matched.value,
+          commodity_id: matched.commodity_id,
+        }
+      );
+    }
+    return catalogPairsForCommodity(catalogPairs, pCommodity)[0] || null;
+  }, [pAvailableVarieties, selectedVarietyValue, catalogPairs, pCommodity]);
 
   const pCommodityId = selectedCatalogPair?.commodity_id || null;
   const seriesKey = pCommodity;
-  const catalogVarietyLabel = selectedCatalogPair
-    ? varietyDisplayKey(pCommodity, selectedCatalogPair.variety)
+  const catalogVarietyLabel = selectedVarietyValue
+    ? `${pCommodity} (${selectedVarietyValue})`
     : pCommodity;
 
   const { data: priceDetailData, isLoading: isPriceDetailLoading } = useQuery({
@@ -826,8 +911,11 @@ function DFTCTrends() {
       ...pt,
       date: formatChartDate(pt.date),
     }));
-    return [...historical, ...forecast];
-  }, [varietyDetails, pDatePreset, pCustomFrom, pCustomTo]);
+    return buildUnifiedPriceTrendData(historical, forecast, {
+      connectTransition: true,
+      varietyKeys: [seriesKey],
+    });
+  }, [varietyDetails, pDatePreset, pCustomFrom, pCustomTo, seriesKey]);
 
   const pTableRows = useMemo(() => {
     const rows = buildTableRows(
@@ -838,6 +926,7 @@ function DFTCTrends() {
       pCustomTo
     );
     const varietyLabel =
+      selectedVarietyValue ||
       priceDetailData?.variety ||
       selectedCatalogPair?.variety ||
       "—";
@@ -1008,7 +1097,35 @@ function DFTCTrends() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className={labelCls}>Commodity</label>
-            <SearchableCombobox categories={PRICE_CATEGORIES} value={pCommodity} onChange={setPCommodity} />
+            <SearchableCombobox
+              categories={PRICE_CATEGORIES}
+              value={pCommodity}
+              onChange={(c) => {
+                setPCommodity(c);
+                setPVariety(null);
+              }}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Variety</label>
+            <div className="relative">
+              <select
+                value={selectedVarietyValue === null ? "__NO_VARIETY__" : (selectedVarietyValue || "")}
+                onChange={(e) => setPVariety(e.target.value === "__NO_VARIETY__" ? null : e.target.value)}
+                className={selectCls + " appearance-none pr-9 cursor-pointer"}
+                disabled={pAvailableVarieties.length === 0}
+              >
+                {pAvailableVarieties.map((choice) => (
+                  <option
+                    key={choice.isNoVariety ? "__NO_VARIETY__" : choice.value}
+                    value={choice.isNoVariety ? "__NO_VARIETY__" : choice.value}
+                  >
+                    {choice.isNoVariety ? "No variety" : choice.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+            </div>
           </div>
           <div>
             <label className={labelCls}>Market</label>
@@ -1030,19 +1147,6 @@ function DFTCTrends() {
               </select>
               <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
-          </div>
-          <div>
-            <label className={labelCls}>Period</label>
-            <DateSelect
-              preset={pDatePreset}
-              customFrom={pCustomFrom}
-              customTo={pCustomTo}
-              onChange={(p, from, to) => {
-                setPDatePreset(p);
-                if (from !== undefined) setPCustomFrom(from);
-                if (to !== undefined) setPCustomTo(to);
-              }}
-            />
           </div>
         </div>
         {isInvalidCombo && (
@@ -1122,29 +1226,49 @@ function DFTCTrends() {
 
       {/* 3. Single Unified Price Trend Chart Card */}
       {isPricesLoading ? (
-        <ChartCardSkeleton height={320} />
+        <ChartCardSkeleton height={380} />
       ) : (
         <div className={`${cardCls} p-6 md:p-8 space-y-4`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[var(--hw-neutral-100)]">
             <div>
               <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Price Trend</h3>
               <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-                {pMarket} · {pPriceType} · Next {fHorizon} days price outlook for {pCommodity} · ₱/kg
+                {pMarket} · {pPriceType} · {catalogVarietyLabel} · Next {fHorizon} days price outlook · ₱/kg
               </p>
             </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Forecast Horizon</span>
-              <ForecastHorizonSelect value={fHorizon} onChange={setFHorizon} />
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Historical Range</span>
+                <HistoricalRangeSelect
+                  preset={pDatePreset}
+                  customFrom={pCustomFrom}
+                  customTo={pCustomTo}
+                  onChange={(p, from, to) => {
+                    setPDatePreset(p);
+                    if (from !== undefined) setPCustomFrom(from);
+                    if (to !== undefined) setPCustomTo(to);
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Forecast Horizon</span>
+                <ForecastHorizonSelect value={fHorizon} onChange={setFHorizon} />
+              </div>
             </div>
           </div>
 
           {pChartData.length > 0 ? (
             <ForecastPriceTrendChart
               commodity={pCommodity}
+              variety={selectedVarietyValue}
               chartData={pChartData}
               varieties={varieties}
               colors={varietyColors}
-              height={320}
+              height={380}
+              actualLabel="Actual price"
+              forecastLabel="Forecast"
+              forecastRangeLabel="Forecast range"
+              forecastBoundaryLabel="Forecast starts"
             />
           ) : (
             <div className="py-16 text-center flex flex-col items-center justify-center">
@@ -1160,7 +1284,18 @@ function DFTCTrends() {
         </div>
       )}
 
+      {/* Historical Average Price Section — Informational context only */}
+      <HistoricalAveragePriceSection
+        commodityId={pCommodityId}
+        commodityName={pCommodity}
+        variety={selectedVarietyValue}
+        market={pMarket}
+        priceType={pPriceType}
+        priceTypeKey={pPriceTypeKey}
+      />
+
       {/* 4. Recent Price Records Table */}
+
       <div className="space-y-3">
         <h3 className="text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Price Records</h3>
         {isPricesLoading ? (

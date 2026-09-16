@@ -310,52 +310,30 @@ const PriceTab = ({
   commodityId,
   commodityName
 }) => {
-  const { t } = useLanguage();
-  const hasData = data && data.currentPrice > 0;
   const match = data?.forecastRange?.match(/₱(\d+)–₱(\d+)/);
-  const baseFLo = match ? parseInt(match[1], 10) : (hasData ? Math.round(data.currentPrice * 0.95) : 0);
-  const baseFHi = match ? parseInt(match[2], 10) : (hasData ? Math.round(data.currentPrice * 1.07) : 0);
+  const hasCurrentPrice = data && data.currentPrice > 0;
+  const baseFLo = match ? parseInt(match[1], 10) : (hasCurrentPrice ? Math.round(data.currentPrice * 0.95) : 0);
+  const baseFHi = match ? parseInt(match[2], 10) : (hasCurrentPrice ? Math.round(data.currentPrice * 1.07) : 0);
   const actualPoints = (data?.points || []).filter((p) => p.actual !== void 0).map((p) => ({ label: p.label, price: p.actual }));
-  const trendCode = hasData ? normalizePriceTrendCode(data.direction) : null;
-  const banner = trendCode ? PRICE_BANNER_CFG[trendCode] : null;
-  const BannerIcon = banner?.Icon;
 
+  // PriceDetailView owns the Favorable / Neutral / Unfavorable classification banner.
+  // It derives the banner classification from its own live API query (priceOutlookModel),
+  // so we do NOT duplicate the banner here regardless of whether data.currentPrice is available.
   return (
-    <div className="space-y-4">
-      {hasData && banner ? (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
-          <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
-          <div>
-            <p className={`text-[15px] font-bold ${banner.color}`}>
-              {t(banner.titleKey, {}, banner.fallbackTitle)}
-            </p>
-            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
-              {t(banner.descKey, {}, banner.fallbackDesc)}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
-          <p className="text-[13px] font-medium">
-            {t("farmer.empty.no_price_data", {}, "Price information is not available right now.")}
-          </p>
-        </div>
-      )}
-
-      <PriceDetailView
-        commodityId={commodityId}
-        commodityName={commodityName ?? "this crop"}
-        baseCurrentPrice={hasData ? data.currentPrice : 0}
-        basePreviousPrice={hasData ? data.previousPrice : 0}
-        direction={hasData ? data.direction : "none"}
-        baseForecastLow={baseFLo}
-        baseForecastHigh={baseFHi}
-        baseActualPoints={actualPoints}
-        showHeading={false}
-      />
-    </div>
+    <PriceDetailView
+      commodityId={commodityId}
+      commodityName={commodityName ?? "this crop"}
+      baseCurrentPrice={hasCurrentPrice ? data.currentPrice : 0}
+      basePreviousPrice={hasCurrentPrice ? data.previousPrice : 0}
+      direction={data?.direction ?? "none"}
+      baseForecastLow={baseFLo}
+      baseForecastHigh={baseFHi}
+      baseActualPoints={actualPoints}
+      showHeading={false}
+    />
   );
 };
+
 
 const ArrivalTab = ({ data, commodityId }) => {
   const { t } = useLanguage();

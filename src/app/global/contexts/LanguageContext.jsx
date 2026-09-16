@@ -5,7 +5,29 @@ import { t as translate, formatCurrency as fmtCurrency, formatDate as fmtDate, f
 const LANGUAGE_STORAGE_KEY = 'hw_language_preference';
 const SUPPORTED_LANGUAGES = ['ceb', 'en', 'tl'];
 
-const LanguageContext = createContext(null);
+const defaultLanguageContext = {
+  activeRole: 'farmer',
+  effectiveLanguage: 'ceb',
+  selectedLanguage: 'ceb',
+  sessionLanguage: null,
+  accountLanguage: null,
+  setLanguage: () => {},
+  clearLanguagePreference: () => {},
+  supportedLanguages: SUPPORTED_LANGUAGES,
+  t: (key, params, fallback) => {
+    const res = translate(key, params, 'ceb');
+    if (res === key && fallback) return fallback;
+    return res;
+  },
+  formatCurrency: (val) => fmtCurrency(val, 'ceb'),
+  formatDate: (val, opt) => fmtDate(val, opt, 'ceb'),
+  formatNumber: (val, opt) => fmtNumber(val, opt, 'ceb'),
+  langCode: 'ceb',
+};
+
+const LanguageContext =
+  globalThis.__HW_LANGUAGE_CONTEXT__ ||
+  (globalThis.__HW_LANGUAGE_CONTEXT__ = createContext(defaultLanguageContext));
 
 function roleDefaultLanguage(role) {
   return role === 'farmer' ? 'ceb' : 'en';
@@ -144,6 +166,5 @@ export function LanguageProvider({ children }) {
 
 export function useLanguage() {
   const ctx = useContext(LanguageContext);
-  if (!ctx) throw new Error('useLanguage must be used within LanguageProvider');
-  return ctx;
+  return ctx || defaultLanguageContext;
 }

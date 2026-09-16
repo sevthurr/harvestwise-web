@@ -18,3 +18,14 @@ export async function getPriceDetail(commodityId, params = {}) {
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return parseResponse(await apiGet(`/prices/${commodityId}${suffix}`));
 }
+
+export async function getHistoricalAveragePrices(commodityId, params = {}) {
+  const qs = new URLSearchParams();
+  if (params.price_type) qs.set("price_type", params.price_type);
+  if (params.frequency) qs.set("frequency", params.frequency);
+  if (params.variety) qs.set("variety", params.variety);
+  if (params.start_offset_days != null) qs.set("start_offset_days", String(params.start_offset_days));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return parseResponse(await apiGet(`/prices/${commodityId}/historical-averages${suffix}`));
+}
+
