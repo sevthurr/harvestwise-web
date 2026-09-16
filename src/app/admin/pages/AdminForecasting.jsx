@@ -16,7 +16,9 @@ import {
   Brush
 } from "recharts";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
+import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { formatDate, formatPrice } from "../../global/utils/apiTransforms";
+import { filterRecordsByPeriod } from "../../global/utils/priceChartTransforms";
 import { pricesApi } from "../../../services/api";
 
 const FALLBACK_MARKETS = ["Bankerohan", "DFTC"];
@@ -185,29 +187,6 @@ function buildChartData(historical, forecastPoint, forecastPoints = []) {
     if (!Number.isFinite(numeric)) continue;
     byDate.set(date, { d: date, actual: numeric });
   }
-  const forecastDate = isoDate(forecastPoint?.forecast_date);
-  const midpoint = forecastPoint?.forecast_midpoint;
-  const lower = Number(forecastPoint?.lower_forecast);
-  const upper = Number(forecastPoint?.upper_forecast);
-  const hasRange = Number.isFinite(lower) || Number.isFinite(upper);
-  if (forecastDate && (midpoint != null && midpoint !== "" || hasRange)) {
-    const existing = byDate.get(forecastDate) || { d: forecastDate };
-    const numeric = Number(midpoint);
-    if (Number.isFinite(numeric)) existing.predicted = numeric;
-    if (Number.isFinite(lower)) existing.lower = lower;
-    if (Number.isFinite(upper)) existing.upper = upper;
-    byDate.set(forecastDate, existing);
-
-    if (hasRange) {
-      const anchorDate = [...byDate.keys()].filter((d) => d !== forecastDate).sort().at(-1);
-      if (anchorDate) {
-        const anchor = byDate.get(anchorDate) || { d: anchorDate };
-        if (Number.isFinite(lower)) anchor.lower = lower;
-        if (Number.isFinite(upper)) anchor.upper = upper;
-        byDate.set(anchorDate, anchor);
-      }
-    }
-  }
 
   const dailyPoints = Array.isArray(forecastPoints) ? forecastPoints : [];
   if (dailyPoints.length > 0) {
@@ -219,6 +198,8 @@ function buildChartData(historical, forecastPoint, forecastPoints = []) {
       if (!Number.isFinite(numeric)) continue;
       const existing = byDate.get(forecastDate) || { d: forecastDate };
       existing.predicted = numeric;
+      if (point.lower_forecast != null) existing.lower = Number(point.lower_forecast);
+      if (point.upper_forecast != null) existing.upper = Number(point.upper_forecast);
       byDate.set(forecastDate, existing);
     }
   } else {
@@ -229,10 +210,32 @@ function buildChartData(historical, forecastPoint, forecastPoints = []) {
       if (Number.isFinite(numeric)) {
         const existing = byDate.get(forecastDate) || { d: forecastDate };
         existing.predicted = numeric;
+        if (forecastPoint?.lower_forecast != null) existing.lower = Number(forecastPoint.lower_forecast);
+        if (forecastPoint?.upper_forecast != null) existing.upper = Number(forecastPoint.upper_forecast);
         byDate.set(forecastDate, existing);
       }
     }
   }
+
+  const forecastDate = isoDate(forecastPoint?.forecast_date);
+  const lower = Number(forecastPoint?.lower_forecast);
+  const upper = Number(forecastPoint?.upper_forecast);
+  const hasRange = Number.isFinite(lower) || Number.isFinite(upper);
+  if (forecastDate && hasRange) {
+    const existing = byDate.get(forecastDate) || { d: forecastDate };
+    if (Number.isFinite(lower)) existing.lower = lower;
+    if (Number.isFinite(upper)) existing.upper = upper;
+    byDate.set(forecastDate, existing);
+
+    const anchorDate = [...byDate.keys()].filter((d) => d !== forecastDate).sort().at(-1);
+    if (anchorDate) {
+      const anchor = byDate.get(anchorDate) || { d: anchorDate };
+      if (Number.isFinite(lower)) anchor.lower = lower;
+      if (Number.isFinite(upper)) anchor.upper = upper;
+      byDate.set(anchorDate, anchor);
+    }
+  }
+
   return [...byDate.values()].sort((a, b) => String(a.d).localeCompare(String(b.d)));
 }
 
@@ -413,17 +416,21 @@ const ForecastChart = ({
   market,
   priceType,
   horizonDays,
+  historicalRange,
+  onHistoricalRangeChange,
+  horizon,
+  horizonOptions,
+  onHorizonChange,
   data,
   loading,
   empty,
 }) => {
   const varietyLabel = variety ? ` (${variety})` : "";
-  const domain = useMemo(() => yDomain(data), [data]);
   const hasData = (data || []).length > 0;
 
   return (
     <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 md:p-8 space-y-4 min-h-[520px] flex flex-col justify-between">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[var(--hw-neutral-100)]">
         <div>
           <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
             {commodity ? `${commodity}${varietyLabel} · ${market || "-"} · ${priceType || "-"} · ${horizonDays}-Day Forecast` : "Forecast Chart"}
@@ -432,128 +439,54 @@ const ForecastChart = ({
             Historical actual prices vs forecast midpoint and forecast range · ₱/kg
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Historical Range</label>
+            <div className="w-32">
+              <CustomSimpleDropdown
+                value={historicalRange}
+                options={["7 days", "14 days", "21 days", "28 days"]}
+                onChange={onHistoricalRangeChange}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Forecast Horizon</label>
+            <div className="w-32">
+              <CustomSimpleDropdown
+                value={horizon}
+                options={horizonOptions}
+                onChange={onHorizonChange}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="w-full flex-1 flex flex-col justify-center my-2 relative">
-        <div className="h-[380px] w-full">
-          {hasData && (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 12, right: 20, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis
-                  dataKey="d"
-                  tick={{ fill: "#6b7280", fontSize: 11, fontWeight: 500 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={formatAxisDate}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={domain}
-                  tick={{ fill: "#6b7280", fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => formatPrice(v)}
-                  width={58}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  labelFormatter={(label) => formatDate(label) || label}
-                  formatter={(value, name) => [formatPrice(value), name]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="actual"
-                  stroke="#16a34a"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "white", stroke: "#16a34a", strokeWidth: 2 }}
-                  connectNulls={false}
-                  name="Actual"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="predicted"
-                  stroke="#2563eb"
-                  strokeWidth={2.5}
-                  dot={{ r: 5, fill: "white", stroke: "#2563eb", strokeWidth: 2 }}
-                  connectNulls={false}
-                  name="Forecast Midpoint"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="upper"
-                  stroke="none"
-                  fill="#2563eb"
-                  fillOpacity={0.12}
-                  legendType="none"
-                  tooltipType="none"
-                  connectNulls={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="lower"
-                  stroke="none"
-                  fill="white"
-                  fillOpacity={1}
-                  legendType="none"
-                  tooltipType="none"
-                  connectNulls={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="upper"
-                  stroke="#93c5fd"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  dot={false}
-                  connectNulls={false}
-                  name="Forecast Range"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="lower"
-                  stroke="#93c5fd"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  dot={false}
-                  connectNulls={false}
-                  name="Forecast Range"
-                />
-                <Brush
-                  dataKey="d"
-                  height={24}
-                  stroke="#cbd5e1"
-                  fill="#f8fafc"
-                  startIndex={0}
-                  endIndex={Math.max((data || []).length - 1, 0)}
-                  tickFormatter={formatAxisDate}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-        {(loading || empty || !hasData) && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-              {loading ? "Loading forecast..." : "No forecast records available"}
-            </span>
+        {loading ? (
+          <div className="h-[380px] w-full flex items-center justify-center bg-[var(--hw-neutral-50)] rounded-xl animate-pulse">
+            <span className="text-[13px] text-[var(--hw-neutral-500)] font-medium">Loading forecast...</span>
+          </div>
+        ) : hasData ? (
+          <ForecastPriceTrendChart
+            commodity={commodity}
+            variety={variety}
+            chartData={data}
+            height={380}
+            actualLabel="Actual"
+            forecastLabel="Forecast Midpoint"
+            forecastRangeLabel="Forecast Range"
+            forecastBoundaryLabel="Forecast starts"
+          />
+        ) : (
+          <div className="h-[380px] flex flex-col items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] text-center space-y-1">
+            <p className="font-medium text-[var(--hw-neutral-700)]">No forecast records available</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)]">
+              No price data or forecast available for {commodity}{varietyLabel} in {market}.
+            </p>
           </div>
         )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-6 pt-3 border-t border-[var(--hw-neutral-100)] text-[12px] text-[var(--hw-neutral-700)]">
-        <div className="flex items-center gap-2">
-          <div className="w-5 border-t-2 border-[#16a34a]" />
-          <span>Actual</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-5 border-t-2 border-[#2563eb]" />
-          <span>Forecast Midpoint</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-2 bg-[#2563eb]/20 border border-dashed border-[#93c5fd]" />
-          <span>Forecast Range</span>
-        </div>
       </div>
     </div>
   );
@@ -569,7 +502,8 @@ function AdminForecasting() {
   const [variety, setVariety] = useState("Galaxy");
   const [market, setMarket] = useState("Bankerohan");
   const [priceType, setPriceType] = useState("Retail");
-  const [horizon, setHorizon] = useState("14 days");
+  const [historicalRange, setHistoricalRange] = useState("7 days");
+  const [horizon, setHorizon] = useState("7 days");
 
   const [chartPayload, setChartPayload] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -647,7 +581,7 @@ function AdminForecasting() {
         const payload = await pricesApi.getPriceDetail(commodityId, {
           price_type: toPriceTypeKey(market, priceType),
           horizon: horizonDays,
-          records_limit: 20,
+          records_limit: 30,
         });
         if (!active) return;
         setChartPayload(payload);
@@ -684,13 +618,18 @@ function AdminForecasting() {
     [changePercent]
   );
 
+  const historicalDays = parseInt(historicalRange, 10) || 7;
+  const filteredHistorical = useMemo(() => {
+    return filterRecordsByPeriod(chartPayload?.recent_records, `${historicalDays}d`);
+  }, [chartPayload, historicalDays]);
+
   const chartData = useMemo(
     () => buildChartData(
-      chartPayload?.recent_records,
+      filteredHistorical,
       selectedForecast,
       selectedForecast?.points || []
     ),
-    [chartPayload, selectedForecast]
+    [filteredHistorical, selectedForecast]
   );
 
   const seriesId = [market, priceType, commodity, apiVariety || "No Variety"].filter(Boolean).join(" / ");
@@ -719,7 +658,7 @@ function AdminForecasting() {
       {/* 1. Filter Card */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
         {/* Dropdowns row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
           <div>
             <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Commodity</label>
             <CustomCommodityDropdown
@@ -750,14 +689,6 @@ function AdminForecasting() {
               value={priceType}
               options={priceTypes}
               onChange={setPriceType}
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Forecast Horizon</label>
-            <CustomSimpleDropdown
-              value={horizon}
-              options={horizonOptions}
-              onChange={setHorizon}
             />
           </div>
         </div>
@@ -847,6 +778,11 @@ function AdminForecasting() {
         market={market}
         priceType={priceType}
         horizonDays={horizonDays}
+        historicalRange={historicalRange}
+        onHistoricalRangeChange={setHistoricalRange}
+        horizon={horizon}
+        horizonOptions={horizonOptions}
+        onHorizonChange={setHorizon}
         data={chartData}
         loading={loading}
         empty={empty}

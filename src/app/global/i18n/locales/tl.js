@@ -66,7 +66,7 @@ export const tl = {
     forecast: "Pagtataya ng Presyo",
     weather: "Panahon",
     calendar: "Kalendaryo",
-    dftc_arrival: "DFTC Pagdating",
+    dftc_arrival: "DFTC Arrival",
     dftc_wholesale: "DFTC Wholesale"
   },
   auth: {
@@ -235,7 +235,7 @@ export const tl = {
     my_saved_crops: "Mga Naka-save na Tanim",
     view_price_forecasts: "Tingnan ang Hula sa Presyo",
     planting_calendar: "Kalendaryo ng Pagtatanim",
-    dftc_arrivals_today: "Pagdating sa DFTC Ngayon",
+    dftc_arrivals_today: "DFTC Arrivals Ngayon",
     high_demand_crops: "Mga Tanim na Mataas ang Demand",
     price_up: "Tumaas ang Presyo",
     price_down: "Bumaba ang Presyo",
@@ -264,7 +264,8 @@ export const tl = {
       cycle_caution_support: "Magpatuloy nang may pag-iingat at bantayang mabuti ang kondisyon.",
       cycle_avoid_support: "Isaalang-alang ang paghihintay bago magpatuloy sa karagdagang pagtatanim.",
       not_available: "Wala pang available na resulta ng assessment.",
-      why_recommendation_title: "Bakit itong rekomendasyon?"
+      why_recommendation_title: "Bakit itong rekomendasyon?",
+      assessment_result_title: "Resulta ng Pagsusuri"
     },
 
     phases: {
@@ -349,8 +350,8 @@ export const tl = {
         filter_variety: "Uri",
         retail: "Tingi",
         wholesale: "Pakapalan",
-        bangkerohan_market: "Pamilihan ng Bangkerohan",
-        default_variety: "Karaniwan",
+        bangkerohan_market: "Bankerohan Public Market",
+        default_variety: "Walang barayti",
         current_price_trend_title: "Kasalukuyang Takbo ng Presyo",
         current_price_label: "Kasalukuyang Presyo",
         previous_recorded_label: "Nakaraang Naitala",
@@ -381,7 +382,31 @@ export const tl = {
         watch_banner_title: "Bantayan",
         watch_banner_desc: "Matatag ang presyo — bantayan ang mga pagbabago bago magdesisyong magbenta.",
         unfavorable_banner_title: "Hindi Magandang Presyo",
-        unfavorable_banner_desc: "Bumababa ang presyo — pag-isipang mabuti ang oras ng pagbebenta."
+        unfavorable_banner_desc: "Bumababa ang presyo — pag-isipang mabuti ang oras ng pagbebenta.",
+        unified_chart_title: "Galaw at tantiya ng presyo",
+        unified_chart_subtitle: "Kasalukuyang galaw ng presyo at saklaw ng tantiya sa isang tingin.",
+        actual_price_label: "Tunay na presyo",
+        forecast_price_label: "Tinatayang presyo",
+        chart_help_text: "I-drag ang chart upang suriin ang kamakailang presyo at takbo ng tantiya.",
+        recent_average_price_label: "Karaniwang Presyo sa Nakaraang Panahon",
+        estimated_price_label: "Tinatayang Presyo",
+        expected_price_change_label: "Inaasahang Pagbabago sa Presyo",
+        past_days_average_sub: "Karaniwang presyo sa nakaraang {days} araw",
+        possible_price_range_sub: "Posibleng saklaw ng presyo",
+        compared_with_recent_avg_sub: "Kung ihahambing sa karaniwang presyo sa nakaraang {days} araw",
+        next_days_sub_simple: "Susunod na {days} araw",
+        about_the_same: "Halos pareho",
+        higher_word: "mas mataas",
+        lower_word: "mas mababa",
+        interpretation_higher: "Ang tinatayang presyo sa susunod na {days} araw ay ₱{estimated}/kg, humigit-kumulang ₱{diff} na mas mataas kaysa karaniwang presyo sa nakaraang {days} araw.",
+        interpretation_lower: "Ang tinatayang presyo sa susunod na {days} araw ay ₱{estimated}/kg, humigit-kumulang ₱{diff} na mas mababa kaysa karaniwang presyo sa nakaraang {days} araw.",
+        interpretation_same: "Ang tinatayang presyo sa susunod na {days} araw ay ₱{estimated}/kg, halos pareho sa karaniwang presyo sa nakaraang {days} araw.",
+        chart_context_sub: "Kamakailang presyo at susunod na {days} araw",
+        horizon_days_option: "{days} araw",
+        historical_range_label: "Nakaraang Panahon",
+        last_days_option: "Nakaraang {days} araw",
+        next_days_option: "Susunod na {days} araw",
+        forecast_starts: "Simula ng tantiya"
       },
 
       profitability: {
@@ -473,24 +498,24 @@ export const tl = {
       },
 
       arrival: {
-        factor_title: "Pagdating",
-        source_breakdown_title: "Dami ng Pagdating Batay sa Pinagmulan",
+        factor_title: "Arrival",
+        source_breakdown_title: "Dami ng Arrival Batay sa Pinagmulan",
         source_breakdown_subtitle: "Mga rehistradong sakahan sa DFTC laban sa ibang pinagmumulan.",
         chart_subtitle_combined: "Kabuuang dami ayon sa uri · Nakaraang 7 buwan · kg",
-        driver_overview: "Ang mga pagdating sa DFTC ay mas mataas kaysa sa kanilang kamakailang antas para sa karamihan ng mga pananim. Ang Repolyo at Bawang ang nagpakita ng pinakamataas na pagtaas.",
-        bangkerohan_unverified_notice: "Walang beripikadong datos ng dami ng pagdating sa Bangkerohan.",
-        arrival_volume_trend_title: "Takbo ng Dami ng Pagdating",
-        weekly_arrivals_tons: "Lingguhang pagdating · tonelada",
+        driver_overview: "Ang mga arrival sa DFTC ay mas mataas kaysa sa kanilang kamakailang antas para sa karamihan ng mga pananim. Ang Repolyo at Bawang ang nagpakita ng pinakamataas na pagtaas.",
+        bangkerohan_unverified_notice: "Walang beripikadong datos ng dami ng arrival sa Bangkerohan.",
+        arrival_volume_trend_title: "Takbo ng Dami ng Arrival",
+        weekly_arrivals_tons: "Lingguhang arrival · tonelada",
         last_week_label: "Nakaraang Linggo",
         this_week_label: "Ngayong Linggo",
         change_label: "Pagbabago",
         tons_unit: "tonelada",
-        level_low_banner: "Mababang Presyur sa Pagdating",
-        level_lower_middle_banner: "Katamtamang Mababang Presyur sa Pagdating",
-        level_upper_middle_banner: "Katamtamang Mataas na Presyur sa Pagdating",
-        level_high_banner: "Mataas na Presyur sa Pagdating",
+        level_low_banner: "Mababang Presyur sa Arrival",
+        level_lower_middle_banner: "Katamtamang Mababang Presyur sa Arrival",
+        level_upper_middle_banner: "Katamtamang Mataas na Presyur sa Arrival",
+        level_high_banner: "Mataas na Presyur sa Arrival",
         meaning_low: "Bumababa ang suplay — ang mas kaunting dami sa pamilihan ay makakatulong sa mas mataas na presyo.",
-        meaning_moderate: "Matatag ang dami ng pagdating — balanseng suplay at kalagayan ng presyo.",
+        meaning_moderate: "Matatag ang dami ng arrival — balanseng suplay at kalagayan ng presyo.",
         meaning_high: "Tumataas ang suplay — ang mas maraming dami ay maaaring magpababa ng presyo."
       },
 
@@ -575,7 +600,7 @@ export const tl = {
     dataNotes: {
       market_data_as_of: "Batay sa available na datos sa merkado · {date}",
       reliability_bangkerohan_moderate: "Katamtamang pagiging maaasahan batay sa kamakailang tala ng presyo sa Bangkerohan.",
-      reliability_pechay_low: "Mababang pagiging maaasahan. Walay datos ng DFTC Arrival Volume; umaasa lamang sa kilos ng presyo sa Bangkerohan."
+      reliability_pechay_low: "Mababang pagiging maaasahan. Walang datos ng DFTC Arrival; umaasa lamang sa kilos ng presyo sa Bangkerohan."
     },
 
     common: {

@@ -265,7 +265,8 @@ export const en = {
       cycle_caution_support: "Proceed with caution and monitor conditions closely.",
       cycle_avoid_support: "Consider waiting before committing to further planting.",
       not_available: "Assessment result not available yet.",
-      why_recommendation_title: "Why this recommendation?"
+      why_recommendation_title: "Why this recommendation?",
+      assessment_result_title: "Assessment Result"
     },
 
     phases: {
@@ -350,8 +351,8 @@ export const en = {
         filter_variety: "Variety",
         retail: "Retail",
         wholesale: "Wholesale",
-        bangkerohan_market: "Bangkerohan Market",
-        default_variety: "Default",
+        bangkerohan_market: "Bankerohan Public Market",
+        default_variety: "No variety",
         current_price_trend_title: "Current Price Trend",
         current_price_label: "Current Price",
         previous_recorded_label: "Previous Recorded",
@@ -382,7 +383,31 @@ export const en = {
         watch_banner_title: "Watch",
         watch_banner_desc: "Prices are stable — monitor for changes before deciding to sell.",
         unfavorable_banner_title: "Unfavorable Price",
-        unfavorable_banner_desc: "Prices are trending downward — consider timing your sale carefully."
+        unfavorable_banner_desc: "Prices are trending downward — consider timing your sale carefully.",
+        unified_chart_title: "Price trend and forecast",
+        unified_chart_subtitle: "Recent price movement and forecasted price range in one view.",
+        actual_price_label: "Actual price",
+        forecast_price_label: "Forecast price",
+        chart_help_text: "Drag the chart range to review recent prices and forecast movement.",
+        recent_average_price_label: "Recent Average Price",
+        estimated_price_label: "Estimated Price",
+        expected_price_change_label: "Expected Price Change",
+        past_days_average_sub: "Past {days}-day average",
+        possible_price_range_sub: "Possible price range",
+        compared_with_recent_avg_sub: "Compared with the recent {days}-day average",
+        next_days_sub_simple: "Next {days} days",
+        about_the_same: "About the same",
+        higher_word: "higher",
+        lower_word: "lower",
+        interpretation_higher: "The estimated price for the next {days} days is ₱{estimated}/kg, about ₱{diff} higher than the recent {days}-day average.",
+        interpretation_lower: "The estimated price for the next {days} days is ₱{estimated}/kg, about ₱{diff} lower than the recent {days}-day average.",
+        interpretation_same: "The estimated price for the next {days} days is ₱{estimated}/kg, about the same as the recent {days}-day average.",
+        chart_context_sub: "Recent prices and next {days} days",
+        horizon_days_option: "{days} days",
+        historical_range_label: "Historical Range",
+        last_days_option: "Last {days} days",
+        next_days_option: "Next {days} days",
+        forecast_starts: "Forecast starts"
       },
 
       profitability: {

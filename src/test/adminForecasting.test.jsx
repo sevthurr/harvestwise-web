@@ -290,21 +290,19 @@ describe('AdminForecasting graph', () => {
     return fetchFn;
   }
 
-  it('loads the 7-day selector as horizon=7', async () => {
-    const user = userEvent.setup();
+  it('loads the 7-day selector as horizon=7 by default', async () => {
     const fetchFn = mountWithApi();
-
-    await waitFor(() => expect(detailUrls(fetchFn).length).toBeGreaterThan(0));
-    await user.click(dropdownButton('Forecast Horizon'));
-    await user.click(screen.getByText('7 days'));
-
     await waitFor(() => {
       expect(detailUrls(fetchFn).some((url) => url.includes('horizon=7'))).toBe(true);
     });
   });
 
   it('loads the 14-day selector as horizon=14', async () => {
+    const user = userEvent.setup();
     const fetchFn = mountWithApi();
+    await waitFor(() => expect(detailUrls(fetchFn).length).toBeGreaterThan(0));
+    await user.click(dropdownButton('Forecast Horizon'));
+    await user.click(screen.getByText('14 days'));
     await waitFor(() => {
       expect(detailUrls(fetchFn).some((url) => url.includes('horizon=14'))).toBe(true);
     });
@@ -335,9 +333,9 @@ describe('AdminForecasting graph', () => {
   it('uses forecast_midpoint and forecast_date from the prices detail payload', async () => {
     mountWithApi();
     await waitFor(() => {
-      expect(screen.getByText(/Aug 14, 2026/)).toBeInTheDocument();
+      expect(screen.getByText(/Aug 7, 2026/)).toBeInTheDocument();
     });
-    expect(screen.getAllByText(/₱84\/kg/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/₱77\/kg/).length).toBeGreaterThan(0);
   });
 
   it('does not request Bankerohan Retail when DFTC Retail is selected', async () => {
@@ -390,7 +388,11 @@ describe('AdminForecasting graph', () => {
   });
 
   it('fills Forecast Summary from recent records and persisted interval bounds', async () => {
+    const user = userEvent.setup();
     mountWithApi();
+    await waitFor(() => expect(screen.getByText('Forecasting')).toBeInTheDocument());
+    await user.click(dropdownButton('Forecast Horizon'));
+    await user.click(screen.getByText('14 days'));
     await waitFor(() => {
       expect(screen.getByText('Forecast Midpoint', { selector: 'p' }).parentElement).toHaveTextContent('₱84/kg');
     });

@@ -38,6 +38,7 @@ vi.mock("recharts", () => {
     CartesianGrid: () => null,
     Tooltip: () => null,
     Brush: () => null,
+    ReferenceLine: () => null,
   };
 });
 
@@ -270,13 +271,25 @@ describe("DFTC Trends page prices API integration", () => {
       expect(detailCalls.some((call) => call.commodityId === "COM-KAM-DIAM")).toBe(true);
     });
     expect(detailCalls[0].price_type).toBe("bangkerohan_retail");
-    expect(detailCalls[0].horizon).toBe(14);
+    expect(detailCalls[0].horizon).toBe(7);
     expect(detailCalls[0].records_limit).toBe(100);
     await waitFor(() => {
       expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument();
       expect(screen.getByText("Lower Forecast")).toBeInTheDocument();
       expect(screen.getByText("Upper Forecast")).toBeInTheDocument();
     });
+  });
+
+  it("renders Variety selector and defaults to data-driven variety without fake no-variety", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Diamante Big")).toBeInTheDocument();
+    });
+    // Confirm no generic "No variety" option when commodity only has Diamante Big
+    const varietySelect = screen.getByDisplayValue("Diamante Big");
+    expect(varietySelect).toBeInTheDocument();
+    expect(screen.queryByText("Walay barayti")).not.toBeInTheDocument();
   });
 
   it("loads DFTC Retail and Wholesale with isolated price_type keys", async () => {

@@ -450,6 +450,8 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             commodityName,
             cropStage,
             moduleResults,
+            advisoryCode,
+            advisoryLabel,
           };
           navigate("/farmer/assess/factors", { state: pageState });
         }}
