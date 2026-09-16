@@ -7,8 +7,10 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
+import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { apiGet, parseResponse } from "../../global/api";
 import * as pricesApi from "../../../services/api/pricesApi";
+
 import {
   buildForecastChartData,
   buildForecastSummaries,
@@ -1282,7 +1284,18 @@ function DFTCTrends() {
         </div>
       )}
 
+      {/* Historical Average Price Section — Informational context only */}
+      <HistoricalAveragePriceSection
+        commodityId={pCommodityId}
+        commodityName={pCommodity}
+        variety={selectedVarietyValue}
+        market={pMarket}
+        priceType={pPriceType}
+        priceTypeKey={pPriceTypeKey}
+      />
+
       {/* 4. Recent Price Records Table */}
+
       <div className="space-y-3">
         <h3 className="text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Price Records</h3>
         {isPricesLoading ? (

@@ -215,7 +215,35 @@ describe('pricesApi', () => {
     expect(url).toContain('horizon=21');
     expect(url).toContain('records_limit=20');
   });
+
+  it('getHistoricalAveragePrices GETs /prices/{id}/historical-averages with frequency, price_type, variety', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: {
+        frequency: 'weekly',
+        commodity_id: 'COM-1',
+        records: [
+          { period_start: '2026-07-06', period_end: '2026-07-12', average_price: 67.86, observation_count: 6 },
+        ],
+      },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await pricesApi.getHistoricalAveragePrices('COM-1', {
+      price_type: 'bangkerohan_retail',
+      frequency: 'weekly',
+      variety: 'Galaxy',
+    });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/prices/COM-1/historical-averages`);
+    expect(url).toContain('price_type=bangkerohan_retail');
+    expect(url).toContain('frequency=weekly');
+    expect(url).toContain('variety=Galaxy');
+    expect(res.records[0].average_price).toBe(67.86);
+  });
 });
+
 
 describe('error propagation', () => {
   it('throws the backend detail message on a non-2xx response', async () => {

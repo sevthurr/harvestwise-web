@@ -404,10 +404,21 @@ export const tl = {
         chart_context_sub: "Kamakailang presyo at susunod na {days} araw",
         horizon_days_option: "{days} araw",
         historical_range_label: "Nakaraang Panahon",
-        last_days_option: "Nakaraang {days} araw",
-        next_days_option: "Susunod na {days} araw",
-        forecast_starts: "Simula ng tantiya"
+        forecast_starts: "Simula ng tantiya",
+        historical_avg_title: "Karaniwang Presyo sa mga Nakaraang Panahon",
+        historical_avg_subtitle: "Karaniwang naitalang presyo bawat linggo o buwan · ₱/kg",
+        historical_avg_frequency: "Dalas",
+        historical_avg_weekly: "Lingguhan",
+        historical_avg_monthly: "Buwanan",
+        historical_avg_explanation: "Ipinapakita ng chart na ito ang karaniwang naitalang presyo bawat linggo o buwan. Karagdagang impormasyon lamang ito at hindi kasama sa pagkalkula ng rekomendasyon sa pagtatanim.",
+        historical_avg_dynamic: "Ang karaniwang naitalang presyo noong {period} ay ₱{price}/kg.",
+        historical_avg_empty: "Walang available na datos ng karaniwang presyo sa mga nakaraang panahon para sa pagpiling ito.",
+        historical_avg_error: "Hindi ma-load ang datos ng karaniwang presyo sa mga nakaraang panahon. Subukan muli.",
+        historical_avg_limited: "Limitado pa ang available na historical na datos para sa pagpiling ito.",
+        historical_avg_tooltip_price: "Karaniwang presyo",
+        historical_avg_tooltip_observations: "Mga naitalang obserbasyon"
       },
+
 
       profitability: {
         title: "Tinatayang Kita",

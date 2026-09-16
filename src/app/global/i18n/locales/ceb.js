@@ -404,10 +404,21 @@ export const ceb = {
         chart_context_sub: "Bag-ong presyo ug sunod {days} ka adlaw",
         horizon_days_option: "{days} ka adlaw",
         historical_range_label: "Miaging Panahon",
-        last_days_option: "Miaging {days} ka adlaw",
-        next_days_option: "Sunod {days} ka adlaw",
-        forecast_starts: "Sugod sa tantiya"
+        forecast_starts: "Sugod sa tantiya",
+        historical_avg_title: "Kasagarang Presyo sa Miaging mga Panahon",
+        historical_avg_subtitle: "Kasagarang na-record nga presyo kada semana o kada bulan · ₱/kg",
+        historical_avg_frequency: "Kadugayon",
+        historical_avg_weekly: "Kada Semana",
+        historical_avg_monthly: "Kada Bulan",
+        historical_avg_explanation: "Gipakita niini nga tsart ang kasagarang na-record nga presyo kada semana o kada bulan. Dugang nga impormasyon lang kini ug dili kini apil sa pagkwenta sa rekomendasyon sa pagtanom.",
+        historical_avg_dynamic: "Ang kasagarang na-record nga presyo sa {period} kay ₱{price}/kg.",
+        historical_avg_empty: "Walay available nga datos sa kasagarang presyo sa miaging mga panahon para niini nga pagpili.",
+        historical_avg_error: "Dili ma-load ang datos sa kasagarang presyo sa miaging mga panahon. Sulayi pag-usab.",
+        historical_avg_limited: "Limitado pa ang available nga historical nga datos para niini nga pagpili.",
+        historical_avg_tooltip_price: "Kasagarang presyo",
+        historical_avg_tooltip_observations: "Mga na-record nga obserbasyon"
       },
+
 
       profitability: {
         title: "Tantiya sa Kita",

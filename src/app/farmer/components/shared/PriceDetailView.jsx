@@ -26,8 +26,10 @@ import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { composePriceOutlook, renderComposedMessage } from "../../utils/advisoryMessageComposer";
 import * as pricesApi from "../../../../services/api/pricesApi";
 import { Skeleton } from "./FarmerSkeletons";
+import { HistoricalAveragePriceSection } from "../../../global/components/shared/HistoricalAveragePriceSection";
 
 const MARKETS = ["Bankerohan Public Market", "DFTC"];
+
 const PTYPES = ["Retail", "Wholesale"];
 const HORIZONS = ["7d", "14d", "21d", "28d"];
 const HDAYS = { "7d": 7, "14d": 14, "21d": 21, "28d": 28 };
@@ -327,19 +329,6 @@ function PriceDetailView({
     return t("farmer.factors.price.horizon_days_option", { days: d }, `${d} days`);
   };
 
-  // Completely empty state (no data and no active load)
-  const isCompletelyEmpty =
-    !isDataLoading &&
-    (!priceDetailData || (historicalData.length === 0 && forecastData.length === 0)) &&
-    (!baseCurrentPrice || baseCurrentPrice <= 0);
-
-  if (isCompletelyEmpty) {
-    return (
-      <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium text-center">
-        {t("farmer.empty.no_price_data", {}, "Price information is not available right now.")}
-      </div>
-    );
-  }
 
   // Expected price change formatted string & styling
   let changeDisplay = "—";
@@ -623,9 +612,20 @@ function PriceDetailView({
           </div>
         )}
       </section>
+
+      {/* Historical Average Price Section — Informational context only */}
+      <HistoricalAveragePriceSection
+        commodityId={resolvedCommodityId}
+        commodityName={displayCropName}
+        variety={activeVariety}
+        market={market}
+        priceType={priceType}
+        priceTypeKey={pPriceTypeKey}
+      />
     </div>
   );
 }
+
 
 export {
   PriceDetailView

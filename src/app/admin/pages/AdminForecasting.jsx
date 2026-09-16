@@ -19,9 +19,11 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { formatDate, formatPrice } from "../../global/utils/apiTransforms";
 import { filterRecordsByPeriod } from "../../global/utils/priceChartTransforms";
+import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { pricesApi } from "../../../services/api";
 
 const FALLBACK_MARKETS = ["Bankerohan", "DFTC"];
+
 const FALLBACK_PRICE_TYPES = ["Retail", "Wholesale"];
 const HORIZON_LABELS = ["7 days", "14 days", "21 days", "28 days"];
 
@@ -513,6 +515,11 @@ function AdminForecasting() {
   const variants = useMemo(() => officialVarieties(pairs, commodity), [pairs, commodity]);
   const horizonDays = parseHorizonDays(horizon);
   const apiVariety = variants.length === 0 ? null : variety;
+  const selectedCommodityId = useMemo(
+    () => findCommodityId(pairs, commodity, apiVariety),
+    [pairs, commodity, apiVariety]
+  );
+
 
   useEffect(() => {
     let active = true;
@@ -829,9 +836,20 @@ function AdminForecasting() {
           </div>
         </div>
       </div>
+
+      {/* 5. Historical Average Price Section — Informational context only */}
+      <HistoricalAveragePriceSection
+        commodityId={selectedCommodityId || chartPayload?.commodity_id}
+        commodityName={commodity}
+        variety={apiVariety}
+        market={market}
+        priceType={priceType}
+        priceTypeKey={toPriceTypeKey(market, priceType)}
+      />
     </div>
   );
 }
+
 
 export {
   buildChartData,
