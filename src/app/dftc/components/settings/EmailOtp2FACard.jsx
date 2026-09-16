@@ -11,6 +11,7 @@ import {
 } from "../../../global/components/ui/hw-ui";
 
 export function EmailOtp2FACard({ showToast }) {
+  const OTP_LENGTH = 8;
   const [otpEnabled, setOtpEnabled] = useState(false);
   const [otpLoaded, setOtpLoaded] = useState(false);
   const [otpStep, setOtpStep] = useState("idle");
@@ -128,20 +129,20 @@ export function EmailOtp2FACard({ showToast }) {
         </div>
         {otpStep === "enter_code" && (
           <div className="mt-3 space-y-2 border-t border-[var(--hw-neutral-100)] pt-3">
-            <FieldLabel htmlFor="otp-code">Enter the 6-digit code from your email</FieldLabel>
+            <FieldLabel htmlFor="otp-code">Enter the code from your email</FieldLabel>
             <input
               id="otp-code"
               type="text"
               inputMode="numeric"
-              maxLength={6}
+              maxLength={OTP_LENGTH}
               value={otpCode}
               onChange={(e) => { setOtpCode(e.target.value.replace(/[^0-9]/g, "")); setOtpErr(""); }}
-              placeholder="123456"
+              placeholder="12345678"
               className={`${inputCls} max-w-[180px]`}
             />
             <div className="flex gap-2">
               <GhostBtn onClick={() => { setOtpStep("idle"); setOtpCode(""); }}>Cancel</GhostBtn>
-              <GreenBtn onClick={handleEnableConfirm} disabled={otpBusy || otpCode.length !== 6}>
+              <GreenBtn onClick={handleEnableConfirm} disabled={otpBusy || otpCode.length !== OTP_LENGTH}>
                 Verify & enable
               </GreenBtn>
             </div>

@@ -20,6 +20,7 @@ import { validateContact } from "./authValidation";
 const SCALE = 0.85;
 const LOGO_W = Math.round(494 * SCALE);
 const LOGO_H = Math.round(361 * SCALE);
+const OTP_LENGTH = 8;
 
 function LogoMark() {
   return (
@@ -111,7 +112,7 @@ function LoginPage() {
 
   const handleVerifyMfa = async (eventCode) => {
     const code = eventCode ?? mfaCode;
-    if (!mfaToken || code.length !== 6) return;
+    if (!mfaToken || code.length !== OTP_LENGTH) return;
     setMfaError("");
     setMfaLoading(true);
     try {
@@ -222,12 +223,12 @@ function LoginPage() {
             </div>
             <p className="text-[14px] text-[var(--hw-neutral-600)] text-center">
               {mfaFactor === "email_otp"
-                ? t("auth.enter_email_code", {}, "Enter the 6-digit code sent to your email.")
-                : t("auth.enter_authenticator_code", {}, "Enter the 6-digit code from your authenticator app.")}
+                ? t("auth.enter_email_code", {}, "Enter the code sent to your email.")
+                : t("auth.enter_authenticator_code", {}, "Enter the code from your authenticator app.")}
             </p>
             <div className="flex justify-center pt-1">
               <InputOTP
-                maxLength={6}
+                maxLength={OTP_LENGTH}
                 value={mfaCode}
                 onChange={(v) => {
                   setMfaCode(v);
@@ -236,7 +237,7 @@ function LoginPage() {
                 onComplete={handleVerifyMfa}
               >
                 <InputOTPGroup>
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                  {Array.from({ length: OTP_LENGTH }, (_, i) => (
                     <InputOTPSlot key={i} index={i} />
                   ))}
                 </InputOTPGroup>
@@ -249,7 +250,7 @@ function LoginPage() {
             )}
             <button
               type="button"
-              disabled={mfaLoading || mfaCode.length !== 6}
+              disabled={mfaLoading || mfaCode.length !== OTP_LENGTH}
               onClick={() => handleVerifyMfa()}
               className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
             >
