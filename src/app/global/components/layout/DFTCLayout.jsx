@@ -9,13 +9,12 @@ import {
   Bell,
   ChevronDown,
   LogOut,
-  ArrowLeftRight,
-  RefreshCw,
   Settings,
   Info,
   User
 } from "lucide-react";
 import { Footer } from "../Footer";
+import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -140,21 +139,7 @@ function DFTCLayoutInner() {
           <div className="flex-1" />
 
           {/* Resync */}
-          <button
-            onClick={handleResync}
-            disabled={isSyncing}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
-            title={isSyncing ? "Syncing data..." : "Click to resync data"}
-            aria-label="Resync data"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline whitespace-nowrap">
-              {isSyncing ? "Syncing..." : `Resync (${lastSyncedTime})`}
-            </span>
-            <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
-              {isSyncing ? "Syncing" : "Resync"}
-            </span>
-          </button>
+          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
 
 
@@ -224,25 +209,6 @@ function DFTCLayoutInner() {
                     Log out
                   </button>
                 </div>
-
-                <div className="border-t border-[var(--hw-neutral-100)]" />
-
-                <div className="py-1">
-                  <button
-    onClick={() => go("/farmer")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
-                    Switch to Farmer View
-                  </button>
-                  <button
-    onClick={() => go("/admin")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
-                    Switch to Admin View
-                  </button>
-                </div>
               </div>}
           </div>
         </div>
@@ -273,13 +239,6 @@ function DFTCLayoutInner() {
   >
             <User className="w-4 h-4 flex-shrink-0" />
             <span className="text-[13px] font-medium">Profile</span>
-          </button>
-          <button
-    onClick={() => navigate("/farmer")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">Farmer View</span>
           </button>
           <div className="flex items-center gap-2.5 px-3 py-2.5">
             <div className="w-6 h-6 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">

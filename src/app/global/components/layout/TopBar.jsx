@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, Menu, RefreshCw, Settings, LogOut, ChevronDown, ArrowLeftRight, Info, Download } from "lucide-react";
+import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
+import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 
 const TopBar = ({
   logo,
@@ -101,21 +102,7 @@ const TopBar = ({
 
         {/* Right: sync · bell · avatar */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            onClick={handleResync}
-            disabled={isSyncing}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
-            title={isSyncing ? t("farmer.navigation.resync_tooltip_syncing", {}, "Syncing data...") : t("farmer.navigation.resync_tooltip", {}, "Click to resync data")}
-            aria-label="Resync data"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline whitespace-nowrap">
-              {isSyncing ? t("farmer.navigation.syncing", {}, "Syncing...") : `${t("farmer.navigation.resync", {}, "Resync")} (${lastSyncedTime})`}
-            </span>
-            <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
-              {isSyncing ? t("farmer.navigation.syncing", {}, "Syncing") : t("farmer.navigation.resync", {}, "Resync")}
-            </span>
-          </button>
+          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
           <button
             onClick={onNotificationClick}
@@ -198,24 +185,7 @@ const TopBar = ({
                   </button>
                 </div>
 
-                {/* Switch views */}
-                <div className="py-1 border-t border-[var(--hw-neutral-100)]">
-                  <button
-                    onClick={() => go("/admin")}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
-                    {t("farmer.navigation.switch_admin", {}, "Switch to Admin View")}
-                  </button>
-                  <button
-                    onClick={() => go("/dftc")}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
-                    {t("farmer.navigation.switch_dftc", {}, "Switch to DFTC View")}
-                  </button>
                 </div>
-              </div>
             )}
           </div>
         </div>

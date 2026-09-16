@@ -38,6 +38,7 @@ export const ceb = {
     default: "Default",
     status: "Status",
     updated: "Gipabag-o",
+    last_updated: "Katapusang na-update",
     date: "Petsa",
     time: "Oras",
     actions: "Mga Aksyon",

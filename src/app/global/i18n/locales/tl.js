@@ -38,6 +38,7 @@ export const tl = {
     default: "Default",
     status: "Katayuan",
     updated: "Nabagong muli",
+    last_updated: "Huling na-update",
     date: "Petsa",
     time: "Oras",
     actions: "Mga Aksyon",

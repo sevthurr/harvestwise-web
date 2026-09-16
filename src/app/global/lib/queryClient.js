@@ -1,6 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { get, set, del } from "idb-keyval";
 
 // 7-day cache for offline-first farming use
@@ -18,19 +17,13 @@ export const queryClient = new QueryClient({
   },
 });
 
-const indexedDBPersister = createAsyncStoragePersister({
+export const persister = createAsyncStoragePersister({
   storage: {
     getItem: async (key) => await get(key),
     setItem: async (key, value) => await set(key, value),
     removeItem: async (key) => await del(key),
   },
   key: "HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1",
-});
-
-persistQueryClient({
-  queryClient,
-  persister: indexedDBPersister,
-  maxAge: SEVEN_DAYS,                     // retain cached data for 7 days
 });
 
 export async function clearQueryPersistedCache() {

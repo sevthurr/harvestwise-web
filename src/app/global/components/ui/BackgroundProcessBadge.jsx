@@ -2,6 +2,7 @@ import React from "react";
 import { Clock, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useIsFetching } from "@tanstack/react-query";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 /**
  * BackgroundProcessBadge:
@@ -59,6 +60,7 @@ export const BackgroundProcessBadge = () => {
  * Functional button used for manually syncing data, labeled "Last updated <time>".
  */
 export const LastUpdatedButton = ({ onClick, isSyncing = false, lastUpdatedTime }) => {
+  const { t } = useLanguage();
   const isFetching = useIsFetching();
   const activeSync = isSyncing || isFetching > 0;
   const timeDisplay = lastUpdatedTime || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -73,7 +75,7 @@ export const LastUpdatedButton = ({ onClick, isSyncing = false, lastUpdatedTime 
     >
       <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${activeSync ? "animate-spin" : ""}`} />
       <span className="hidden sm:inline whitespace-nowrap">
-        {activeSync ? "Syncing..." : `Last updated ${timeDisplay}`}
+        {activeSync ? "Syncing..." : `${t("common.last_updated", {}, "Last updated")} ${timeDisplay}`}
       </span>
       <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
         {activeSync ? "Syncing" : timeDisplay}

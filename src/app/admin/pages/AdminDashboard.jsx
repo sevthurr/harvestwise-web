@@ -68,7 +68,7 @@ function AdminDashboard() {
   const todayActivities = (data?.recent_audit_logs || []).map((log) => ({
     time: log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
     activity: log.action || "Activity recorded",
-    performedBy: log.user_id || "—",
+    performedBy: log.actor_name || log.user_id || "—",
     status: "Completed"
   }));
 

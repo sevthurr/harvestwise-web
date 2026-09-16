@@ -11,11 +11,11 @@ import {
   ChevronDown,
   Settings,
   LogOut,
-  ArrowLeftRight,
   RefreshCw,
   Info,
   Shield,
-  Layers
+  Layers,
+  ClipboardList
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
@@ -30,7 +30,8 @@ const ADMIN_NAV = [
   { id: "modules", label: "Analytical Modules", path: "/admin/modules", Icon: Layers },
   { id: "forecasting", label: "Forecasting", path: "/admin/forecasting", Icon: TrendingUp },
   { id: "data", label: "Data Sources", path: "/admin/data-sources", Icon: Database },
-  { id: "history", label: "History", path: "/admin/history", Icon: History }
+  { id: "history", label: "History", path: "/admin/history", Icon: History },
+  { id: "audit", label: "Audit Logs", path: "/admin/audit-logs", Icon: ClipboardList }
 ];
 function getActive(pathname) {
   if (pathname === "/admin") return "dashboard";
@@ -38,6 +39,7 @@ function getActive(pathname) {
   if (pathname.startsWith("/admin/forecasting")) return "forecasting";
   if (pathname.startsWith("/admin/modules") || pathname.startsWith("/admin/analytics")) return "modules";
   if (pathname.startsWith("/admin/history")) return "history";
+  if (pathname.startsWith("/admin/audit-logs")) return "audit";
   return "";
 }
 const AdminMain = ({ children }) => {
@@ -242,26 +244,6 @@ const AdminLayoutInner = () => {
                     Log out
                   </button>
                 </div>
-
-                {
-    /* Switch views */
-  }
-                <div className="py-1 border-t border-[var(--hw-neutral-100)]">
-                  <button
-    onClick={() => go("/farmer")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-                    Switch to Farmer View
-                  </button>
-                  <button
-    onClick={() => go("/dftc")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-                    Switch to DFTC View
-                  </button>
-                </div>
               </div>}
           </div>
         </div>
@@ -286,23 +268,9 @@ const AdminLayoutInner = () => {
         </nav>
 
         {
-    /* Bottom: switch views + profile */
+    /* Bottom: profile */
   }
         <div className="p-2 border-t border-[var(--hw-neutral-200)] space-y-0.5">
-          <button
-    onClick={() => navigate("/farmer")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">Farmer View</span>
-          </button>
-          <button
-    onClick={() => navigate("/dftc")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">DFTC View</span>
-          </button>
           <button
     onClick={() => navigate("/admin/profile")}
     className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors text-left"
@@ -327,7 +295,7 @@ const AdminLayoutInner = () => {
       </AdminMain>
 
       {
-    /* ── Mobile bottom nav — exactly 5 items ── */
+    /* ── Mobile bottom nav — mirrors ADMIN_NAV ── */
   }
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[var(--hw-neutral-200)] md:hidden">
         <div className="flex items-stretch">

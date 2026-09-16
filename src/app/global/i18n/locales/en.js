@@ -38,6 +38,7 @@ export const en = {
     default: "Default",
     status: "Status",
     updated: "Updated",
+    last_updated: "Last updated",
     date: "Date",
     time: "Time",
     actions: "Actions",

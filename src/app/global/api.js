@@ -10,6 +10,11 @@
 
 const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ?? 'http://localhost:8080';
 
+// Hard cap so a flaky/offline connection can never leave the app stuck in the
+// loading state. Requests that time out reject (caught by query error handling)
+// instead of hanging forever.
+const FETCH_TIMEOUT_MS = 15000;
+
 const STORAGE = {
   ACCESS:  'hw_access_token',
   REFRESH: 'hw_refresh_token',
@@ -48,6 +53,25 @@ function buildUrl(url) {
   return `${API_BASE}/api/v1${path}`;
 }
 
+// fetch() with a hard timeout. Combines any caller-supplied signal with an
+// internal abort timer so a hung request always settles.
+function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new DOMException('Request timed out', 'TimeoutError'));
+  }, FETCH_TIMEOUT_MS);
+
+  const external = options.signal;
+  if (external) {
+    if (external.aborted) controller.abort(external.reason);
+    else external.addEventListener('abort', () => controller.abort(external.reason), { once: true });
+  }
+
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
 async function _fetch(url, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
@@ -59,7 +83,7 @@ async function _fetch(url, options = {}) {
     delete headers['Content-Type'];
     delete headers['content-type'];
   }
-  return fetch(buildUrl(url), { ...options, headers });
+  return fetchWithTimeout(buildUrl(url), { ...options, headers });
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +104,7 @@ async function _refreshAndRetry(url, options) {
   const refreshToken = getRefreshToken();
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+    const res = await fetchWithTimeout(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),

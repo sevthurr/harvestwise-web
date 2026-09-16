@@ -8,15 +8,8 @@ export const navigation = {
   profile: "Profile",
   notifications: "Mga Pahibalo",
   farmer_role: "Mag-uuma",
-  sync: "I-sync",
-  resync: "I-sync pag-usab",
-  syncing: "Gina-sync...",
   get_app: "I-install ang App",
   installed: "Naka-install na",
   installing: "Gina-install...",
   logout: "Mag-log out",
-  switch_admin: "Balhin sa Admin View",
-  switch_dftc: "Balhin sa DFTC View",
-  resync_tooltip: "I-click para i-sync pag-usab ang datos",
-  resync_tooltip_syncing: "Gina-sync ang datos..."
 };
