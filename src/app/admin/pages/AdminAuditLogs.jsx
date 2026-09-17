@@ -139,7 +139,9 @@ function AdminAuditLogs() {
   const [actionPrefix, setPrefix]   = useState("");   // resource prefix filter
   const [dateFrom, setDateFrom]     = useState("");   // ISO date string
   const [dateTo, setDateTo]         = useState("");   // ISO date string
-  const { data: logsRes, isLoading: loading } = useQuery({
+  const [page, setPage]             = useState(1);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
     queryKey: ["adminAuditLogs", actionPrefix, search, dateFrom, dateTo, page],
     queryFn: () => {
       const params = { page, page_size: PAGE_SIZE };
@@ -152,9 +154,14 @@ function AdminAuditLogs() {
       return adminApi.getAuditLogs(params);
     },
     staleTime: 1000 * 60 * 5,
+    refetchOnMount: true,
   });
 
+  const error = queryErr ? (queryErr.message || "Failed to load audit logs") : null;
+
   const data = logsRes || { items: [], total: 0, page, page_size: PAGE_SIZE };
+
+  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
   const hasFilters = search.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
 

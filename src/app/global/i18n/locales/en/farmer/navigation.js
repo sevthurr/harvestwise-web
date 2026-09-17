@@ -8,15 +8,8 @@ export const navigation = {
   profile: "Profile",
   notifications: "Notifications",
   farmer_role: "Farmer",
-  sync: "Sync",
-  resync: "Resync",
-  syncing: "Syncing...",
   get_app: "Get the App",
   installed: "Installed",
   installing: "Installing...",
   logout: "Sign Out",
-  switch_admin: "Switch to Admin View",
-  switch_dftc: "Switch to DFTC View",
-  resync_tooltip: "Click to resync data",
-  resync_tooltip_syncing: "Syncing data..."
 };

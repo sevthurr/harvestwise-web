@@ -1,4 +1,4 @@
-import { apiPost, apiFetch, apiPut, parseResponse } from "../../app/global/api";
+import { apiPost, apiFetch, apiGet, apiPut, apiDelete, parseResponse } from "../../app/global/api";
 
 export function login(payload) {
   return apiPost("/auth/login", payload);
@@ -18,6 +18,27 @@ export function updateProfile(payload) {
 
 export function changePassword(payload) {
   return apiPost("/auth/change-password", payload);
+}
+
+// ---------------------------------------------------------------------------
+// Google OAuth (Supabase-brokered)
+// `idToken` is the Supabase-issued JWT (`session.access_token`) — verified by
+// the backend against the Supabase JWKS, mapped to a local account.
+// ---------------------------------------------------------------------------
+export function googleSignIn(idToken) {
+  return apiPost("/auth/google", { id_token: idToken });
+}
+
+export function googleConnect(idToken) {
+  return apiPost("/auth/google/connect", { id_token: idToken });
+}
+
+export async function listAuthLinks() {
+  return parseResponse(await apiGet("/auth-links"));
+}
+
+export function unlinkAuthLink(accountId) {
+  return apiDelete(`/auth-links/${accountId}`);
 }
 
 export function uploadProfilePicture(file) {

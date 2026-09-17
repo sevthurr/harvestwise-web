@@ -47,8 +47,9 @@ function formatPesoRange(lo, hi) {
 const CropCard = ({ crop, onView }) => {
   const { t } = useLanguage();
   const price = crop.currentPrice ?? 0;
-  const loProfit = Math.round((crop.harvestQuantity * price * 0.9 - crop.totalCost) / 1e3) * 1e3;
-  const hiProfit = Math.floor((crop.harvestQuantity * price * 1.1 - crop.totalCost) / 1e3) * 1e3;
+  const profitPrice = crop.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : price;
+  const loProfit = Math.round((crop.harvestQuantity * profitPrice * 0.9 - crop.totalCost) / 1e3) * 1e3;
+  const hiProfit = Math.floor((crop.harvestQuantity * profitPrice * 1.1 - crop.totalCost) / 1e3) * 1e3;
   const phaseCode = normalizePhaseCode(crop.phase);
   const isCompleted = phaseCode === PHASE_CODES.COMPLETED;
   const bottomText = crop.isOnHold

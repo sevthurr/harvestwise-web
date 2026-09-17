@@ -1,4 +1,6 @@
 import { farmer as modularFarmer } from './en/farmer/index.js';
+import { settings as dftcSettings } from './en/dftc/settings.js';
+import { settings as adminSettings } from './en/admin/settings.js';
 
 function deepMerge(target, source) {
   const result = { ...target };
@@ -36,6 +38,7 @@ export const en = {
     default: "Default",
     status: "Status",
     updated: "Updated",
+    last_updated: "Last updated",
     date: "Date",
     time: "Time",
     actions: "Actions",
@@ -138,6 +141,7 @@ export const en = {
       general: "Something went wrong. Please try again.",
       email_registered: "This email is already registered.",
       phone_registered: "This phone number is already registered.",
+      need_login_for_2fa: "Your account requires two-factor authentication. Please sign in from the login page.",
     },
     requirements: {
       min_chars: "At least 8 characters",
@@ -671,5 +675,11 @@ export const en = {
       fetch_production_failed: "Failed to fetch seasonal production data",
       fetch_planting_guide_failed: "Failed to fetch planting guide recommendations"
     }
-  }, modularFarmer)
+  }, modularFarmer),
+  dftc: {
+    settings: dftcSettings
+  },
+  admin: {
+    settings: adminSettings
+  }
 };

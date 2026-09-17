@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   Pencil,
@@ -28,7 +28,7 @@ import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
-import { apiPost, parseResponse } from "../../global/api";
+import { apiPost, apiPut, parseResponse } from "../../global/api";
 import {
   ADVISORY_CODES,
   PHASE_CODES,
@@ -126,15 +126,22 @@ function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
   const { t, langCode } = useLanguage();
-  const { crops, updateCrop, updateCropStatusApi, addCostApi, logHarvestApi } = useCrops();
+  const { crops, updateCrop, updateCropStatusApi, addCostApi, logHarvestApi, refreshCrops } = useCrops();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addCostOpen, setAddCostOpen] = useState(false);
   const [additionalCost, setAdditionalCost] = useState("");
-  const [farmgatePrice, setFarmgatePrice] = useState("");
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
   const crop = crops.find((c) => c.id === cropId);
+  const [farmgatePrice, setFarmgatePrice] = useState(() =>
+    crop?.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : ""
+  );
+  useEffect(() => {
+    if (crop?.farmgatePrice != null && crop.farmgatePrice > 0 && farmgatePrice === "") {
+      setFarmgatePrice(crop.farmgatePrice);
+    }
+  }, [crop?.id, crop?.farmgatePrice]);
   if (!crop) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">{t ? t("farmer.empty.crop_not_found") : "Crop not found."}</p>
@@ -584,15 +591,36 @@ function CropCycleDetailPage() {
                   {t("farmer.cropCycle.estimated_farmgate_price", {}, "Estimated farmgate price")}
                 </p>
                 {!editFarmgate && (
-                  <button
-                    onClick={() => {
-                      setEditFarmgate(true);
-                      setFarmgateDraft(hasFarmgate ? String(farmgatePrice) : "");
-                    }}
-                    className="text-[12px] font-medium text-[var(--hw-green-700)] hover:opacity-70"
-                  >
-                    {hasFarmgate ? t("common.edit", {}, "Edit") : t("farmer.cropCycle.add_cost", {}, "Add")}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {hasFarmgate && (
+                      <button
+                        onClick={async () => {
+                          setActionError(null);
+                          try {
+                            const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: null });
+                            if (!res.ok) throw new Error("Failed to remove farmgate price.");
+                            setFarmgatePrice("");
+                            updateCrop(crop.id, { farmgatePrice: null });
+                            await refreshCrops();
+                          } catch (err) {
+                            setActionError(err.message || "Failed to remove farmgate price. Please try again.");
+                          }
+                        }}
+                        className="text-[12px] font-medium text-red-600 hover:opacity-70"
+                      >
+                        {t("farmer.cropCycle.remove_farmgate", {}, "Remove")}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setEditFarmgate(true);
+                        setFarmgateDraft(hasFarmgate ? String(farmgatePrice) : "");
+                      }}
+                      className="text-[12px] font-medium text-[var(--hw-green-700)] hover:opacity-70"
+                    >
+                      {hasFarmgate ? t("common.edit", {}, "Edit") : t("farmer.cropCycle.add_cost", {}, "Add")}
+                    </button>
+                  </div>
                 )}
               </div>
               {editFarmgate ? (
@@ -606,10 +634,20 @@ function CropCycleDetailPage() {
                     className="flex-1 px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
                   />
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const v = Number(farmgateDraft);
-                      if (v > 0) setFarmgatePrice(v);
-                      setEditFarmgate(false);
+                      if (!(v > 0)) return;
+                      setActionError(null);
+                      try {
+                        const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: v });
+                        if (!res.ok) throw new Error("Failed to save farmgate price.");
+                        setFarmgatePrice(v);
+                        updateCrop(crop.id, { farmgatePrice: v });
+                        await refreshCrops();
+                        setEditFarmgate(false);
+                      } catch (err) {
+                        setActionError(err.message || "Failed to save farmgate price. Please try again.");
+                      }
                     }}
                     className="px-3 py-2 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
                   >

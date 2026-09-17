@@ -1,14 +1,72 @@
 import { useNavigate, useLocation } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
-import { CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { apiGet, parseResponse } from "../../global/api";
+import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
+
+const DEFAULT_WEATHER_LAT = 7.0722;
+const DEFAULT_WEATHER_LON = 125.6131;
 
 function FactorDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
   const state = location.state;
+
+  const commodityId = state?.commodityId || null;
+  const commodityName = state?.commodityName || null;
+  const moduleResults = state?.moduleResults || {};
+
+  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+
+  const { data: productionFactorData } = useQuery({
+    queryKey: ["factors", "production", commodityId],
+    queryFn: async () => {
+      try {
+        const res = await apiGet(`/market/factors/production/${commodityId}`);
+        if (!res.ok) return null;
+        return await parseResponse(res);
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(commodityId),
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const { data: arrivalFactorData } = useQuery({
+    queryKey: ["factors", "arrival", commodityId],
+    queryFn: async () => {
+      try {
+        const res = await apiGet(`/market/factors/arrival/${commodityId}?days=180`);
+        if (!res.ok) return null;
+        return await parseResponse(res);
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(commodityId),
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const { data: weatherAdvisoryData } = useQuery({
+    queryKey: ["weather", "advisory", weatherLat, weatherLon],
+    queryFn: async () => {
+      try {
+        const res = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
+        if (!res.ok) return null;
+        return await parseResponse(res);
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
   if (!state) {
     return (
@@ -28,11 +86,47 @@ function FactorDetailPage() {
     production,
     weather,
     profitability,
-    commodityId,
-    commodityName,
     advisoryCode,
     advisoryLabel,
   } = state;
+
+  const cropWeatherAdv = (weatherAdvisoryData?.advisories || []).find(
+    (a) => a.commodity_name?.toLowerCase() === commodityName?.toLowerCase() || a.commodity_id === commodityId
+  );
+
+  const productionTab = {
+    productionLevel:
+      moduleResults.historical_seasonal_production_level ||
+      production?.productionLevel ||
+      production?.level ||
+      null,
+    records: production?.records?.length ? production.records : (productionFactorData?.records || []),
+    commodityId,
+    commodityName,
+  };
+
+  const arrivalTab = {
+    arrivalPressure: moduleResults.arrival_pressure || arrival?.arrivalPressure || arrival?.trend || null,
+    currentVolumeKg: moduleResults.current_arrival_kg ?? arrival?.currentVolumeKg ?? null,
+    commodityId,
+    commodityName,
+    volumesByDate: arrival?.volumesByDate?.length
+      ? arrival.volumesByDate
+      : (arrivalFactorData?.volumes_by_date || []),
+  };
+
+  const weatherTab = {
+    risk: moduleResults.weather_risk || weather?.risk || cropWeatherAdv?.suitability || null,
+    forecast_14d: weather?.forecast_14d?.length
+      ? weather.forecast_14d
+      : (weatherAdvisoryData?.daily_forecasts || weather?.forecast || []),
+    commodityName,
+    actions: cropWeatherAdv?.recommended_actions?.length
+      ? cropWeatherAdv.recommended_actions
+      : (weather?.actions || []),
+    why: cropWeatherAdv?.explanation || weather?.why || "",
+    summary: weather?.summary || cropWeatherAdv?.explanation || "",
+  };
 
   const breadcrumbItems = (breadcrumbs || []).map((bc) => ({
     label: bc.label,
@@ -45,6 +139,21 @@ function FactorDetailPage() {
   const isAvoid = advCode.includes("avoid") || advCode.includes("risk") || (advisoryText && /ayaw|dili|avoid|panganib/i.test(advisoryText));
   const isCaution = advCode.includes("caution") || (advisoryText && /caution|bantayan|puwede/i.test(advisoryText));
   const isRecommended = advCode.includes("recommend") || (advisoryText && /itanom|rekomenda|recommend/i.test(advisoryText));
+
+  const backPath = state?.backPath || null;
+  const backLabel = state?.backLabel || null;
+  const canResume = Boolean(state?.resultData || state?.advisoryPayload);
+  const handleBack = () => {
+    if (canResume && backPath) {
+      navigate(backPath, {
+        state: { resumeRecommendation: { data: state.resultData, advisoryResponse: state.advisoryPayload } },
+      });
+    } else if (backPath) {
+      navigate(backPath);
+    } else {
+      navigate(-1);
+    }
+  };
 
   let badgeTheme = {
     badge: "bg-red-50 text-red-700 border-red-200",
@@ -65,6 +174,15 @@ function FactorDetailPage() {
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      {/* Back to decision */}
+      <button
+        onClick={handleBack}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        {backLabel || t("farmer.common.back", {}, "Back")}
+      </button>
+
       {/* Breadcrumb */}
       <Breadcrumb items={breadcrumbItems} />
 
@@ -92,9 +210,9 @@ function FactorDetailPage() {
       {/* Factor tabs */}
       <FactorDetailTabs
         price={price}
-        arrival={arrival}
-        production={production}
-        weather={weather}
+        arrival={arrivalTab}
+        production={productionTab}
+        weather={weatherTab}
         profitability={profitability}
         defaultTab="price"
         commodityId={commodityId}

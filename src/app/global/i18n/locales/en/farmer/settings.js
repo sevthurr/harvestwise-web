@@ -45,5 +45,12 @@ export const settings = {
   current_password: "Current password",
   new_password: "New password",
   confirm_new_password: "Confirm new password",
-  update_password: "Update password"
+  update_password: "Update password",
+  google_card_title: "Google Sign-In",
+  google_connected: "Connected",
+  google_not_connected: "Not connected",
+  google_connect: "Connect",
+  google_disconnect: "Disconnect",
+  toast_google_connected: "Google account connected.",
+  toast_google_disconnected: "Google account disconnected."
 };

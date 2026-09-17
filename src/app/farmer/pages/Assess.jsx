@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router";
+import { useSearchParams, useNavigate, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Save, RotateCcw, AlertCircle, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, RotateCcw, AlertCircle, RefreshCw, Check } from "lucide-react";
 import { RecommendationResult } from "../components/recommend/RecommendationResult";
 import {
   DEFAULT_ASSESSMENT,
   STEP_LABELS,
   TOTAL_STEPS,
-  getTotalCost
+  getTotalCost,
+  makeDefaultExpenses
 } from "../components/recommend/types";
 import { RecommendEntry } from "../components/recommend/RecommendEntry";
 import { StepProgress } from "../components/recommend/StepProgress";
@@ -18,6 +19,7 @@ import { Step4ReviewBreakEven } from "../components/recommend/Step4ReviewBreakEv
 import { formatPeso } from "../components/recommend/types";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
+import { useCrops } from "../components/crops/CropsContext";
 
 import { useLanguage } from "../../global/contexts/LanguageContext";
 
@@ -42,6 +44,32 @@ function validateStep(step, data, t) {
   return errors;
 }
 
+function buildDraftPayload(data) {
+  const totalCost = getTotalCost(data);
+  const productionCosts = data.costMethod === "detailed"
+    ? (data.expenses || [])
+        .filter((e) => typeof e.amount === "number" && e.amount > 0)
+        .map((e) => ({
+          category: e.name || "Additional",
+          amount: e.amount,
+          cost_type: "initial",
+        }))
+    : totalCost > 0
+      ? [{ category: "Total Cost", amount: totalCost, cost_type: "initial" }]
+      : [];
+
+  return {
+    commodity_id: data.commodityId || data.commodity,
+    planned_planting_date: data.plantingDate || null,
+    expected_harvest_date: data.harvestDate || null,
+    farm_area: typeof data.farmArea === "number" && data.farmArea > 0 ? data.farmArea : null,
+    expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
+    expected_farmgate_price: data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
+    cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
+    production_costs: productionCosts,
+  };
+}
+
 const StepActions = ({
   step,
   onBack,
@@ -50,6 +78,8 @@ const StepActions = ({
   isLastStep,
   onGenerate,
   loading = false,
+  savingDraft = false,
+  draftStatus = null,
   error = null,
   onRetry = null,
   t = null,
@@ -70,6 +100,12 @@ const StepActions = ({
             </button>
           )}
         </div>
+      </div>
+    )}
+    {draftStatus && (
+      <div className={`rounded-xl px-3 py-2 flex items-start gap-2 text-[12px] ${draftStatus.type === "success" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+        {draftStatus.type === "success" ? <Check className="w-4 h-4 flex-shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+        <span>{draftStatus.message}</span>
       </div>
     )}
     {isLastStep ? (
@@ -116,11 +152,13 @@ const StepActions = ({
       <button
         type="button"
         onClick={onSaveDraft}
-        disabled={loading}
+        disabled={loading || savingDraft}
         className="flex items-center justify-center gap-1.5 flex-1 py-2.5 px-4 bg-white text-[var(--hw-neutral-700)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors text-sm disabled:opacity-50"
       >
-        <Save className="w-4 h-4" />
-        {t ? t("farmer.common.save_draft", {}, "Save draft") : "Save draft"}
+        {savingDraft ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        {savingDraft
+          ? (t ? t("farmer.common.saving_draft", {}, "Saving draft...") : "Saving draft...")
+          : (t ? t("farmer.common.save_draft", {}, "Save draft") : "Save draft")}
       </button>
     </div>
   </div>
@@ -129,6 +167,7 @@ const StepActions = ({
 function AssessPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { t } = useLanguage();
   const [view, setView] = useState("entry");
   const [step, setStep] = useState(1);
@@ -136,12 +175,19 @@ function AssessPage() {
     const pre = searchParams.get("commodity");
     return pre ? { ...DEFAULT_ASSESSMENT, commodity: pre } : DEFAULT_ASSESSMENT;
   });
-  const [draft, setDraft] = useState(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftStatus, setDraftStatus] = useState(null);
   const [errors, setErrors] = useState({});
   const [showResult, setShowResult] = useState(false);
   const [loadingAdvisory, setLoadingAdvisory] = useState(false);
   const [advisoryError, setAdvisoryError] = useState(null);
   const [advisoryResponse, setAdvisoryResponse] = useState(null);
+
+  const { crops, refreshCrops } = useCrops();
+  const draftCrop = useMemo(
+    () => (Array.isArray(crops) ? crops.find((c) => c.status === "Draft") || null : null),
+    [crops]
+  );
 
   // Reuse prefetched prices list for top10 commodities
   const { data: pricesListData, isLoading: loadingCommodities } = useQuery({
@@ -172,6 +218,15 @@ function AssessPage() {
   }, [pricesListData]);
 
   useEffect(() => {
+    const resume = location.state?.resumeRecommendation;
+    if (resume?.data) {
+      setData(resume.data);
+      if (resume.advisoryResponse) {
+        setAdvisoryResponse(resume.advisoryResponse);
+      }
+      setShowResult(true);
+      return;
+    }
     const pre = searchParams.get("commodity");
     if (pre) {
       setData((d) => ({ ...d, commodity: pre }));
@@ -201,18 +256,63 @@ function AssessPage() {
   };
 
   const handleContinueDraft = () => {
-    if (draft) {
-      setData(draft);
-      setStep(1);
-      setView("assessment");
-      setErrors({});
-      setShowResult(false);
-      setAdvisoryError(null);
-      setAdvisoryResponse(null);
-    }
+    if (!draftCrop) return;
+    const expenses =
+      draftCrop.costMethod === "detailed" && Array.isArray(draftCrop.expenses) && draftCrop.expenses.length > 0
+        ? draftCrop.expenses
+        : makeDefaultExpenses();
+    setData({
+      ...DEFAULT_ASSESSMENT,
+      commodity: draftCrop.commodity || "",
+      variant: draftCrop.variant || "",
+      plantingDate: draftCrop.rawPlantingDate || "",
+      harvestDate: draftCrop.rawHarvestDate || "",
+      farmArea: draftCrop.farmArea ?? "",
+      harvestQuantity: draftCrop.harvestQuantity ?? "",
+      costMethod: draftCrop.costMethod || "simple",
+      simpleCost: draftCrop.costMethod !== "detailed" ? (draftCrop.totalCost || "") : "",
+      expenses,
+      useFarmgate: Boolean(draftCrop.farmgatePrice && draftCrop.farmgatePrice > 0),
+      farmgatePrice: draftCrop.farmgatePrice ?? "",
+    });
+    setDraftStatus(null);
+    setStep(1);
+    setView("assessment");
+    setErrors({});
+    setShowResult(false);
+    setAdvisoryError(null);
+    setAdvisoryResponse(null);
   };
 
-  const handleSaveDraft = () => setDraft({ ...data });
+  const handleSaveDraft = async () => {
+    if (!data.commodity) {
+      setDraftStatus({
+        type: "error",
+        message: t("farmer.assess.draft_require_crop", {}, "Select a crop first before saving a draft."),
+      });
+      return;
+    }
+    setSavingDraft(true);
+    setDraftStatus(null);
+    try {
+      const res = await apiPost("/crop-plans/draft", buildDraftPayload(data));
+      if (!res.ok) {
+        throw new Error("Failed to save draft");
+      }
+      setDraftStatus({
+        type: "success",
+        message: t("farmer.assess.draft_saved", {}, "Draft saved. Continue anytime from the crop assessment home."),
+      });
+      await refreshCrops();
+    } catch (_err) {
+      setDraftStatus({
+        type: "error",
+        message: t("farmer.assess.draft_save_failed", {}, "We couldn't save your draft right now. Please try again."),
+      });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const handleContinue = () => {
     const errs = validateStep(step, data, t);
@@ -294,7 +394,7 @@ function AssessPage() {
     );
   }
   if (view === "entry") {
-    return <RecommendEntry hasDraft={draft !== null} onStart={handleStart} onContinueDraft={handleContinueDraft} />;
+    return <RecommendEntry hasDraft={draftCrop !== null} onStart={handleStart} onContinueDraft={handleContinueDraft} />;
   }
   const SidePanel = () => <div className="hidden md:flex flex-col gap-3 sticky top-24">
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
@@ -364,6 +464,8 @@ function AssessPage() {
               isLastStep={step === TOTAL_STEPS}
               onGenerate={handleGenerateAdvisory}
               loading={loadingAdvisory}
+              savingDraft={savingDraft}
+              draftStatus={draftStatus}
               error={advisoryError}
               onRetry={handleGenerateAdvisory}
               t={t}

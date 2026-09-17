@@ -12,6 +12,7 @@ import {
   InputOTPSlot,
 } from "../global/components/ui/input-otp";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
+import { useGoogleAuth } from "./useGoogleAuth";
 import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
 import { ContactInput } from "./components/ContactInput";
 import { validateContact } from "./authValidation";
@@ -19,6 +20,7 @@ import { validateContact } from "./authValidation";
 const SCALE = 0.85;
 const LOGO_W = Math.round(494 * SCALE);
 const LOGO_H = Math.round(361 * SCALE);
+const OTP_LENGTH = 8;
 
 function LogoMark() {
   return (
@@ -110,7 +112,7 @@ function LoginPage() {
 
   const handleVerifyMfa = async (eventCode) => {
     const code = eventCode ?? mfaCode;
-    if (!mfaToken || code.length !== 6) return;
+    if (!mfaToken || code.length !== OTP_LENGTH) return;
     setMfaError("");
     setMfaLoading(true);
     try {
@@ -176,10 +178,21 @@ function LoginPage() {
     }
   };
 
-  // Google sign-in: backend OAuth endpoint not yet implemented — kept for future use
-  const handleGoogle = async () => {
-    // No-op until backend Google OAuth is available
-  };
+  // Google sign-in via Supabase OAuth (PKCE) → backend /auth/google
+  const { handleGoogle, loading: googleLoading, error: googleError } = useGoogleAuth({
+    redirectTo: `${window.location.origin}/login`,
+    onResult: async (data) => {
+      // 2FA required — hold the short-lived mfa_token in state only
+      if (data.mfa_required) {
+        setMfaToken(data.mfa_token);
+        setMfaFactor(data.factor || "totp");
+        setShowMfa(true);
+        return;
+      }
+      const me = await login(data);
+      navigate(roleHome(me.role.role_name), { replace: true });
+    },
+  });
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
@@ -210,12 +223,12 @@ function LoginPage() {
             </div>
             <p className="text-[14px] text-[var(--hw-neutral-600)] text-center">
               {mfaFactor === "email_otp"
-                ? t("auth.enter_email_code", {}, "Enter the 6-digit code sent to your email.")
-                : t("auth.enter_authenticator_code", {}, "Enter the 6-digit code from your authenticator app.")}
+                ? t("auth.enter_email_code", {}, "Enter the code sent to your email.")
+                : t("auth.enter_authenticator_code", {}, "Enter the code from your authenticator app.")}
             </p>
             <div className="flex justify-center pt-1">
               <InputOTP
-                maxLength={6}
+                maxLength={OTP_LENGTH}
                 value={mfaCode}
                 onChange={(v) => {
                   setMfaCode(v);
@@ -224,7 +237,7 @@ function LoginPage() {
                 onComplete={handleVerifyMfa}
               >
                 <InputOTPGroup>
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                  {Array.from({ length: OTP_LENGTH }, (_, i) => (
                     <InputOTPSlot key={i} index={i} />
                   ))}
                 </InputOTPGroup>
@@ -237,7 +250,7 @@ function LoginPage() {
             )}
             <button
               type="button"
-              disabled={mfaLoading || mfaCode.length !== 6}
+              disabled={mfaLoading || mfaCode.length !== OTP_LENGTH}
               onClick={() => handleVerifyMfa()}
               className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
             >
@@ -409,14 +422,12 @@ function LoginPage() {
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
         </div>
 
-        {/* Google — disabled: no backend OAuth endpoint */}
+        {/* Google */}
         <button
           type="button"
           onClick={handleGoogle}
-          disabled={loading}
-          title="Google sign-in is not available yet"
-          className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-400)] rounded-xl cursor-not-allowed opacity-50"
-          aria-disabled="true"
+          disabled={loading || googleLoading}
+          className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -425,10 +436,12 @@ function LoginPage() {
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
           {t("auth.google_sign_in", {}, "Sign in with Google")}
-          <span className="text-[11px] ml-1 text-[var(--hw-neutral-400)]">
-            {t("auth.google_unavailable_parentheses", {}, "(unavailable)")}
-          </span>
         </button>
+        {googleError && (
+          <p role="alert" className="text-[13px] text-red-600 font-medium text-center">
+            {googleError}
+          </p>
+        )}
 
         {/* Farmer Registration Prompt */}
         <p className="text-center text-[14px] text-[var(--hw-neutral-600)]">

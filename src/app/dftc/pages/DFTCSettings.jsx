@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
@@ -39,6 +40,7 @@ const NOTIF_ITEMS = [
 
 const AccountTab = ({ showToast, onRemovalRequest }) => {
   const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
   const staff = user?.staff_profile || user?.staffProfile || {};
   const firstName = staff.first_name || user?.first_name || (user?.name ? user.name.split(" ")[0] : "") || "";
@@ -74,8 +76,11 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
   const [removeReasonErr, setRemoveReasonErr] = useState("");
-  const [googleConnected, setGoogleConnected] = useState(false);
   const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/dftc/settings`,
+    onResult: () => showToast(t("dftc.settings.toast_google_connected", {}, "Google account connected.")),
+  });
   const [showCur, setShowCur] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showCfm, setShowCfm] = useState(false);
@@ -287,21 +292,26 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
       <EmailOtp2FACard showToast={showToast} />
 
       <Card>
-        <SectionLabel>Google Sign-In</SectionLabel>
+        <SectionLabel>{t("dftc.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
         <div className="flex items-center justify-between py-1">
           <div>
-            <p className="text-[14px] font-semibold text-black">Google sign-in</p>
-            <p className="text-[13px] text-black">{googleConnected ? "Connected" : "Not connected"}</p>
+            <p className="text-[14px] font-semibold text-black">{t("dftc.settings.google_card_title", {}, "Google Sign-In")}</p>
+            <p className="text-[13px] text-black">{googleLink.googleConnected ? t("dftc.settings.google_connected", {}, "Connected") : t("dftc.settings.google_not_connected", {}, "Not connected")}</p>
           </div>
           <button
     type="button"
     onClick={() => {
-      setGoogleConnected((v) => !v);
-      showToast(googleConnected ? "Google account disconnected." : "Google account connected.");
+      if (googleLink.googleConnected) {
+        googleLink.handleDisconnect();
+        showToast(t("dftc.settings.toast_google_disconnected", {}, "Google account disconnected."));
+      } else {
+        googleLink.handleConnect();
+      }
     }}
-    className={`h-8 px-3 text-[13px] font-medium rounded-lg border transition-colors ${googleConnected ? "border-red-200 text-red-600 hover:bg-red-50" : "border-[var(--hw-green-700)] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)]"}`}
+    disabled={googleLink.loading}
+    className={`h-8 px-3 text-[13px] font-medium rounded-lg border transition-colors ${googleLink.googleConnected ? "border-red-200 text-red-600 hover:bg-red-50" : "border-[var(--hw-green-700)] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)]"}`}
   >
-            {googleConnected ? "Disconnect" : "Connect"}
+            {googleLink.googleConnected ? t("dftc.settings.google_disconnect", {}, "Disconnect") : t("dftc.settings.google_connect", {}, "Connect")}
           </button>
         </div>
       </Card>

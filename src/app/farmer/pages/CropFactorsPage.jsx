@@ -101,7 +101,8 @@ function CropFactorsPage() {
   const useForecast = [PHASE_CODES.PLANNING, PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
   const basePrice = useForecast ? (forecastMid || currentPrice) : currentPrice;
   const costToRecover = qty > 0 && updatedTotalCost > 0 ? Math.ceil(updatedTotalCost / qty) : null;
-  const sellingBasis = basePrice;
+  const farmgatePrice = crop.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : null;
+  const sellingBasis = farmgatePrice ?? basePrice;
   const margin = sellingBasis != null && costToRecover != null ? sellingBasis - costToRecover : null;
   const priceDir = planAdvisoryData?.module_results?.price_outlook
     ? normalizePriceTrendCode(planAdvisoryData.module_results.price_outlook)
@@ -134,6 +135,12 @@ function CropFactorsPage() {
     records: productionFactorData?.records || [],
     commodityId: commodityIdentifier,
     commodityName: crop.commodityName,
+    dataSource: productionFactorData?.record_count > 0
+      ? {
+          name: productionFactorData.commodity_name,
+          variety: productionFactorData.variety || null,
+        }
+      : null,
   };
 
   const cropWeatherAdv = (weatherAdvisoryData?.advisories || []).find(
