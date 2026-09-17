@@ -31,6 +31,15 @@ export function normalizeCropPlan(raw) {
     ? productionCosts.reduce((sum, c) => sum + Number(c.amount || 0), 0)
     : Number(item.productionCost || item.totalCost || 0);
 
+  const costMethod = item.costEntryMode === "detailed" ? "detailed" : "simple";
+  const expenses = (productionCosts || []).map((c, i) => ({
+    id: String(i + 1),
+    name: c.category || "Additional",
+    amount: Number(c.amount || 0),
+    isCustom: true,
+  }));
+  const farmgatePrice = item.expectedFarmgatePrice != null ? Number(item.expectedFarmgatePrice) : null;
+
   const qty = item.expectedHarvestQty != null ? Number(item.expectedHarvestQty) : (item.harvestQuantity != null ? Number(item.harvestQuantity) : null);
   const breakEven = (qty && qty > 0 && totalCost > 0)
     ? Math.ceil(totalCost / qty)
@@ -64,6 +73,9 @@ export function normalizeCropPlan(raw) {
     farmAreaUnit: "sqm",
     harvestQuantity: qty,
     expectedHarvestQty: qty,
+    costMethod,
+    expenses,
+    farmgatePrice,
     totalCost,
     productionCost: totalCost,
     breakEvenPrice: breakEven,

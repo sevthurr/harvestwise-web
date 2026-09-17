@@ -335,7 +335,7 @@ const PriceTab = ({
 };
 
 
-const ArrivalTab = ({ data, commodityId }) => {
+const ArrivalTab = ({ data, commodityId, commodityName }) => {
   const { t } = useLanguage();
   const dftcName = commodityId ? HW_ID_TO_NAME[commodityId] : void 0;
   const dftcSeries = useMemo(() => (dftcName ? getArrivalSeries(dftcName) : null), [dftcName]);
@@ -347,11 +347,19 @@ const ArrivalTab = ({ data, commodityId }) => {
     () => (dftcSeries && dftcName ? buildArrivalChartData(dftcName, dftcSeries, ARRIVAL_ALL_MONTHS, "Combined Total") : null),
     [dftcSeries, dftcName]
   );
+  const realChartData = useMemo(() => {
+    if (!data?.volumesByDate || data.volumesByDate.length === 0) return null;
+    return data.volumesByDate.map((v) => ({
+      month: v.date,
+      Volume: v.volume_kg,
+    }));
+  }, [data?.volumesByDate]);
 
+  const showRealChart = Boolean(realChartData && realChartData.length > 0);
   const normPressure = normalizeArrivalPressure(data?.arrivalPressure || data?.trend);
   const banner = normPressure ? ARRIVAL_PRESSURE_CFG[normPressure] : null;
   const BannerIcon = banner?.Icon;
-  const hasData = Boolean(normPressure || (dftcChartData && dftcChartData.length > 0));
+  const hasData = Boolean(normPressure || showRealChart || (dftcChartData && dftcChartData.length > 0));
 
   if (!hasData) {
     return (
@@ -377,19 +385,21 @@ const ArrivalTab = ({ data, commodityId }) => {
         </div>
       )}
 
-      {dftcChartData && dftcChartData.length > 0 && (
+      {(showRealChart || (dftcChartData && dftcChartData.length > 0)) && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
           <div className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mb-0.5">
-            {dftcName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
+            {dftcName ?? commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
           </div>
           <div className="text-[12px] text-[var(--hw-neutral-800)] mb-4">
-            {t("farmer.factors.arrival.chart_subtitle_combined", {}, "Combined Total by variety · Last 7 months · kg")}
+            {showRealChart
+              ? t("farmer.factors.arrival.chart_subtitle_actual", {}, "Actual arrivals · Last 6 months · kg")
+              : t("farmer.factors.arrival.chart_subtitle_combined", {}, "Combined Total by variety · Last 7 months · kg")}
           </div>
           <ArrivalVolumeTrendChart
-            commodity={dftcName ?? ""}
-            chartData={dftcChartData}
-            varietyKeys={dftcVarietyKeys}
-            sourceType="Combined Total"
+            commodity={dftcName ?? commodityName ?? ""}
+            chartData={showRealChart ? realChartData : dftcChartData}
+            varietyKeys={showRealChart ? ["Volume"] : dftcVarietyKeys}
+            sourceType={showRealChart ? "Actual Arrivals" : "Combined Total"}
             height={260}
           />
         </div>
@@ -416,6 +426,32 @@ const ArrivalTab = ({ data, commodityId }) => {
 };
 
 const QUARTER_SHORT = ["Q1", "Q2", "Q3", "Q4"];
+const QUARTER_TO_IDX = {
+  Quarter1: 0, Q1: 0,
+  Quarter2: 1, Q2: 1,
+  Quarter3: 2, Q3: 2,
+  Quarter4: 3, Q4: 3,
+};
+
+function buildQuarterlyFromRecords(records) {
+  const byQ = [[], [], [], []];
+  for (const r of records || []) {
+    const idx = QUARTER_TO_IDX[r.reference_quarter];
+    if (idx === undefined || r.volume_produced == null || Number(r.volume_produced) <= 0) continue;
+    byQ[idx].push(Number(r.volume_produced));
+  }
+  if (!byQ.some((arr) => arr.length > 0)) return [];
+  const avgs = byQ.map((arr) =>
+    arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0
+  );
+  const positives = avgs.filter((v) => v > 0);
+  const min = Math.min(...positives);
+  const span = Math.max(...positives) - min || 1;
+  return avgs.map((avg, idx) => ({
+    quarter: QUARTER_SHORT[idx],
+    level: avg > 0 ? 1 + Math.round(((avg - min) / span) * 8) : 0,
+  }));
+}
 
 const ProductionTab = ({ data }) => {
   const { t } = useLanguage();
@@ -436,7 +472,7 @@ const ProductionTab = ({ data }) => {
         return { quarter: QUARTER_SHORT[qIdx], level: avgLevel };
       });
     }
-    return [];
+    return buildQuarterlyFromRecords(data?.records);
   }, [hasMonthly, data]);
 
   const hasData = Boolean(normLevel || hasChartData);
@@ -469,6 +505,12 @@ const ProductionTab = ({ data }) => {
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] mb-2">
           {t("farmer.factors.production.typical_quarterly_title", {}, "Typical Quarterly Production Volume (PSA Data · Q1–Q4)")}
         </p>
+        {data?.dataSource && (
+          <p className="text-[11px] text-[var(--hw-neutral-500)] mb-2">
+            {t("farmer.factors.production.source_variety_note", {}, "PSA reports production by crop name. Series shown for")}{" "}
+            {data.dataSource.name}{data.dataSource.variety ? ` (${data.dataSource.variety})` : ""}.
+          </p>
+        )}
         {quarterlyData.length > 0 ? (
           <>
             <ResponsiveContainer width="100%" height={175}>
@@ -726,7 +768,17 @@ const ProfitabilityTab = ({ data }) => {
   const isProfit = data.profitPerKg >= 0;
   const totalRevenue = data.sellingPricePerKg * data.harvestQty;
   const totalProfit = data.profitPerKg * data.harvestQty;
-  const banner = getProfitBanner(data.profitPerKg);
+
+  const levelCode = data.level ? String(data.level).toLowerCase().trim() : null;
+  const bannerFromLocal = getProfitBanner(data.profitPerKg);
+  const banner = bannerFromLocal;
+  if (levelCode) {
+    banner.fallbackTitle =
+      levelCode === "favorable" ? "Favorable"
+      : levelCode === "marginal" ? "Marginal"
+      : levelCode === "unfavorable" ? "Unfavorable"
+      : banner.fallbackTitle;
+  }
   const BannerIcon = banner.Icon;
 
   return (
@@ -884,7 +936,7 @@ const FactorDetailTabs = ({
       {/* Tab content */}
       <div className="p-4">
         {safeTab === "price" && <PriceTab data={price} commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
-        {safeTab === "arrival" && <ArrivalTab data={arrival} commodityId={commodityId} />}
+        {safeTab === "arrival" && <ArrivalTab data={arrival} commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "production" && <ProductionTab data={production} />}
         {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "profitability" && profitability && <ProfitabilityTab data={profitability} />}

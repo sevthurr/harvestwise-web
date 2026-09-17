@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   MinusCircle,
@@ -203,11 +203,12 @@ function buildCropRecord(data, phase, overrides = {}) {
 const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) => {
   const { t, langCode } = useLanguage();
   const navigate = useNavigate();
-  const { addCrop } = useCrops();
+  const { addCrop, refreshCrops, crops } = useCrops();
   const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [showPlantedForm, setShowPlantedForm] = useState(false);
+  const draftAutosavedRef = useRef(false);
   const [plantedForm, setPlantedForm] = useState({
     actualPlantingDate: data.plantingDate,
     actualArea: data.farmArea,
@@ -218,6 +219,25 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
   const totalCost = getTotalCost(data);
   const qty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
   const costToRecover = qty ? Math.ceil(totalCost / qty) : null;
+
+  useEffect(() => {
+    if (draftAutosavedRef.current) return;
+    const autosaveCommodityId = data.commodityId || data.commodity;
+    if (!autosaveCommodityId) return;
+    draftAutosavedRef.current = true;
+    const alreadyTracked = Array.isArray(crops) && crops.some((c) => c.commodity === autosaveCommodityId);
+    if (alreadyTracked) return;
+    const payload = buildCropPlanPayload(data);
+    delete payload.status;
+    (async () => {
+      try {
+        const res = await apiPost("/crop-plans/draft", payload);
+        if (res.ok) refreshCrops();
+      } catch {
+        // noop — never block viewing the advisory
+      }
+    })();
+  }, [data.commodityId, data.commodity, crops]);
 
   // Real backend advisory & module results from POST /api/v1/advisory/plan
   const advisoryResponse = propAdvisory || data.advisoryResponse;
@@ -289,6 +309,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
     totalCost,
     harvestQty: qty,
     expenses: data.costMethod === "detailed" ? data.expenses : null,
+    level: moduleResults.profitability || null,
     summary: hasProfit
       ? t("farmer.factors.profitability.summary_positive", {
           selling_price: sellingBasis,
@@ -435,11 +456,11 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             title: `${displayName} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`,
             subtitle: `${t("farmer.advisory.assessment_result_title", {}, "Assessment result")} · ${advisoryLabel}`,
             breadcrumbs: [
-              { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/assess" },
+              { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/farmer/assess" },
               { label: t("farmer.assess.result", {}, "Result") },
               { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
             ],
-            backPath: "/assess",
+            backPath: "/farmer/assess",
             backLabel: t("farmer.assess.result", {}, "Assessment Result"),
             price: priceTabData,
             arrival: arrivalTabData,
@@ -452,6 +473,8 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             moduleResults,
             advisoryCode,
             advisoryLabel,
+            resultData: data,
+            advisoryPayload: advisoryResponse,
           };
           navigate("/farmer/assess/factors", { state: pageState });
         }}
