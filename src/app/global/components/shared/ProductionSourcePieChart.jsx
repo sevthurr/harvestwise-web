@@ -63,12 +63,12 @@ export function ProductionSourcePieChart({ data, height = 380, showEmpty = false
 
       {/* Legend / Breakdown List */}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-800)]">
-        {DEFAULT_SOURCES.map((s) => {
+        {(isEmpty ? DEFAULT_SOURCES : chartData).map((s, index) => {
           const item = chartData.find((d) => d.name === s.name);
           const val = item ? item.value : 0;
           return (
             <div key={s.name} className="flex items-center gap-1.5 bg-[var(--hw-neutral-50)] px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-100)]">
-              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: s.color }} />
+              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: s.color || DEFAULT_SOURCES[index % DEFAULT_SOURCES.length].color }} />
               <span className="font-medium text-[var(--hw-neutral-700)]">{s.name}</span>
               <span className="font-bold text-[var(--hw-neutral-900)]">
                 {isEmpty ? "0%" : `${val}%`}

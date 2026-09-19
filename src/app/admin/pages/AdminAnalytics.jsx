@@ -506,6 +506,10 @@ function AdminAnalytics() {
   // Scoped commodity and variety selection
   const [scopedCommodity, setScopedCommodity] = useState("");
   const [scopedVariety, setScopedVariety] = useState("");
+  const [productionSummary, setProductionSummary] = useState(null);
+  const [productionLoading, setProductionLoading] = useState(false);
+  const [priceOutlookSummary, setPriceOutlookSummary] = useState(null);
+  const [productionError, setProductionError] = useState("");
 
   // History table filters (only Module and Classification since Commodity + Variety are scoped above)
   const [fModule, setFModule] = useState("All");
@@ -735,6 +739,59 @@ function AdminAnalytics() {
     return val ? `${r.operator} ${val}` : "Set";
   };
 
+  const scopedCommodityRecord = useMemo(
+    () => commodities.find((commodity) => commodity.name === scopedCommodity) || null,
+    [commodities, scopedCommodity]
+  );
+
+  // Historical seasonal production is calculated live from production_record.
+  // The selected variety can be represented by a crop-name aggregate on the
+  // backend, which is returned as source_commodity_id when that fallback is used.
+  useEffect(() => {
+    let active = true;
+    async function loadProductionSummary() {
+      if (!scopedCommodityRecord?.id) {
+        setProductionSummary(null);
+        return;
+      }
+      try {
+        setProductionLoading(true);
+        setProductionError("");
+        const data = await analyticsApi.getHistoricalSeasonalProduction(scopedCommodity, scopedVariety);
+        if (active) setProductionSummary(data);
+      } catch (err) {
+        if (active) {
+          setProductionSummary(null);
+          setProductionError(err.message || "Unable to load historical production.");
+        }
+      } finally {
+        if (active) setProductionLoading(false);
+      }
+    }
+    loadProductionSummary();
+    return () => {
+      active = false;
+    };
+  }, [scopedCommodity, scopedVariety, scopedCommodityRecord?.id]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadPriceOutlookSummary() {
+      if (!scopedCommodity || !scopedVariety) {
+        setPriceOutlookSummary(null);
+        return;
+      }
+      try {
+        const data = await analyticsApi.getPriceOutlook(`${scopedCommodity} ${scopedVariety}`, "bangkerohan_retail", 14);
+        if (active) setPriceOutlookSummary(data);
+      } catch {
+        if (active) setPriceOutlookSummary(null);
+      }
+    }
+    loadPriceOutlookSummary();
+    return () => { active = false; };
+  }, [scopedCommodity, scopedVariety]);
+
   useEffect(() => {
     if (!showTooltip) return;
     const h = (e) => {
@@ -818,6 +875,25 @@ function AdminAnalytics() {
       moduleKey: "weather-risk",
       ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" })
     }
+      classification: priceOutlookSummary?.status === "processed" ? priceOutlookSummary.classification : "Not processed",
+      source: priceOutlookSummary?.source || "-",
+      processed: priceOutlookSummary?.forecast_date || "-"
+    },
+    { module: "Arrival Pressure", moduleKey: "arrival-pressure", classification: "Not processed", source: "-", processed: "-" },
+    {
+      module: "Historical Seasonal Production Level",
+      moduleKey: "historical-production",
+      classification: productionLoading
+        ? "Loading..."
+        : productionSummary?.status === "processed"
+          ? productionSummary.classification
+          : "Not processed",
+      source: productionSummary?.source || "-",
+      processed: productionSummary?.processed_at
+        ? new Date(productionSummary.processed_at).toLocaleString()
+        : "-"
+    },
+    { module: "Weather Risk", moduleKey: "weather-risk", classification: "Not processed", source: "-", processed: "-" }
   ];
 
   const handleCardClick = (card) => {
@@ -1417,7 +1493,7 @@ function AdminAnalytics() {
                       <div>
                         <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Historical Seasonal Production Level</h3>
                         <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
-                          Source: PSA OpenStat Production API · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
+                          Source: {productionSummary?.source || "production_record"} · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
                         </p>
                       </div>
                     </div>
@@ -1426,20 +1502,63 @@ function AdminAnalytics() {
                       <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
                         <div>
                           <p className="text-[11px] text-[var(--hw-neutral-500)]">Q1 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">-</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q1.toFixed(2) : "-"}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[11px] text-[var(--hw-neutral-500)]">Q2 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">-</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q2.toFixed(2) : "-"}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[11px] text-[var(--hw-neutral-500)]">Q3 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">-</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q3.toFixed(2) : "-"}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
-                        Insufficient historical production data to calculate thresholds.
-                      </p>
+                      {productionLoading ? (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">Loading production history…</p>
+                      ) : productionError ? (
+                        <p className="text-[11px] text-red-600 text-center">{productionError}</p>
+                      ) : productionSummary?.status !== "processed" ? (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                          {productionSummary?.message || "Insufficient historical production data to calculate thresholds."}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 text-center">
+                            <div className="rounded-lg border border-[var(--hw-neutral-100)] p-2">
+                              <p className="text-[10px] text-[var(--hw-neutral-500)]">Latest observed season</p>
+                              <p className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">{productionSummary.season} {productionSummary.latest_year}</p>
+                            </div>
+                            <div className="rounded-lg border border-[var(--hw-neutral-100)] p-2">
+                              <p className="text-[10px] text-[var(--hw-neutral-500)]">Classification</p>
+                              <p className={`text-[12px] font-semibold ${CLASSIFICATION_COLORS[productionSummary.classification] || "text-[var(--hw-neutral-800)]"}`}>
+                                {productionSummary.classification}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto rounded-lg border border-[var(--hw-neutral-100)]">
+                            <table className="w-full text-[10px] text-left">
+                              <thead className="bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-500)]">
+                                <tr><th className="px-2 py-1.5">Season</th><th className="px-2 py-1.5 text-right">Total MT</th><th className="px-2 py-1.5 text-right">Years</th></tr>
+                              </thead>
+                              <tbody>
+                                {productionSummary.seasonal_totals.map((season) => (
+                                  <tr key={season.season} className="border-t border-[var(--hw-neutral-100)]">
+                                    <td className="px-2 py-1.5 text-[var(--hw-neutral-700)]">{season.season}</td>
+                                    <td className="px-2 py-1.5 text-right font-medium text-[var(--hw-neutral-800)]">{season.total_production_mt.toLocaleString()}</td>
+                                    <td className="px-2 py-1.5 text-right text-[var(--hw-neutral-700)]">{season.years_available}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

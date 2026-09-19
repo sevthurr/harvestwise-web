@@ -15,6 +15,7 @@ import * as adminApi from '../services/api/adminApi';
 import * as ingestionApi from '../services/api/ingestionApi';
 import * as calendarApi from '../services/api/calendarApi';
 import * as pricesApi from '../services/api/pricesApi';
+import * as analyticsApi from '../services/api/analyticsApi';
 
 const PREFIX = '/api/v1';
 
@@ -244,6 +245,24 @@ describe('pricesApi', () => {
   });
 });
 
+describe('analyticsApi', () => {
+  it('getPriceOutlook requests the selected series and horizon', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: { status: 'processed', classification: 'Favorable', forecast_horizon_days: 14 },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const result = await analyticsApi.getPriceOutlook('COM-0004', 'dftc_retail', 14);
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/analytics/outputs/price-outlook`);
+    expect(url).toContain('commodity_id=COM-0004');
+    expect(url).toContain('price_type_key=dftc_retail');
+    expect(url).toContain('horizon=14');
+    expect(result.classification).toBe('Favorable');
+  });
+});
 
 describe('error propagation', () => {
   it('throws the backend detail message on a non-2xx response', async () => {
