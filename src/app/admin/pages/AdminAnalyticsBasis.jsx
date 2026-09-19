@@ -404,8 +404,14 @@ function AdminAnalyticsBasis() {
   const availableVariants = useMemo(() => selectedCommodity !== "-" ? getVariants(selectedCommodity) : [], [selectedCommodity]);
 
   const [commodities, setCommodities] = useState(TOP_10_COMMODITIES);
+  const [commodityRecords, setCommodityRecords] = useState([]);
+  const [productionSummary, setProductionSummary] = useState(null);
+  const [productionError, setProductionError] = useState("");
+  const [productionLoading, setProductionLoading] = useState(false);
   const [thresholdRules, setThresholdRules] = useState([]);
   const [thresholdsError, setThresholdsError] = useState("");
+  const [priceOutlook, setPriceOutlook] = useState(null);
+  const [priceOutlookError, setPriceOutlookError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -414,6 +420,7 @@ function AdminAnalyticsBasis() {
         const data = await analyticsApi.listCommodities();
         if (!active) return;
         const raw = Array.isArray(data) ? data : data?.items || [];
+        setCommodityRecords(raw);
         const names = raw
           .filter((c) => (c.isTop10 ?? c.is_top10 ?? true) && (c.isActive ?? c.is_active ?? true))
           .map((c) => c.name || c.baseName || c.base_name)
@@ -426,6 +433,59 @@ function AdminAnalyticsBasis() {
     loadCommodities();
     return () => { active = false; };
   }, []);
+
+  const selectedCommodityRecord = useMemo(
+    () => commodityRecords.find((item) => item.name === selectedCommodity) || null,
+    [commodityRecords, selectedCommodity]
+  );
+
+  useEffect(() => {
+    let active = true;
+    async function loadHistoricalProduction() {
+      if (resultId !== "historical-production" || !selectedCommodityRecord?.id) {
+        setProductionSummary(null);
+        return;
+      }
+      try {
+        setProductionLoading(true);
+        setProductionError("");
+        const data = await analyticsApi.getHistoricalSeasonalProduction(selectedCommodity, selectedVariety);
+        if (active) setProductionSummary(data);
+      } catch (err) {
+        if (active) {
+          setProductionSummary(null);
+          setProductionError(err.message || "Unable to load production history.");
+        }
+      } finally {
+        if (active) setProductionLoading(false);
+      }
+    }
+    loadHistoricalProduction();
+    return () => { active = false; };
+  }, [resultId, selectedCommodity, selectedVariety, selectedCommodityRecord?.id]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadPriceOutlook() {
+      if (resultId !== "price-outlook" || !selectedCommodity || !selectedVariety) {
+        setPriceOutlook(null);
+        return;
+      }
+      try {
+        setPriceOutlookError("");
+        const scope = `${selectedCommodity} ${selectedVariety}`;
+        const data = await analyticsApi.getPriceOutlook(scope, "bangkerohan_retail", 14);
+        if (active) setPriceOutlook(data);
+      } catch (err) {
+        if (active) {
+          setPriceOutlook(null);
+          setPriceOutlookError(err.message || "Unable to load Price Outlook.");
+        }
+      }
+    }
+    loadPriceOutlook();
+    return () => { active = false; };
+  }, [resultId, selectedCommodity, selectedVariety]);
 
   // Load the threshold rules for the current module from the admin API
   useEffect(() => {
@@ -458,6 +518,89 @@ function AdminAnalyticsBasis() {
             (((r.operator || "") + " " + (r.threshold_value != null ? Math.round(Number(r.threshold_value) * 100) / 100 : "")).trim())
         }))
       : result.thresholds || [];
+
+  const historicalResult = useMemo(() => {
+    if (resultId !== "historical-production") return result;
+    const isProcessed = productionSummary?.status === "processed";
+    const quartiles = productionSummary?.quartiles;
+    const formatMt = (value) => value == null ? "- MT" : `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT`;
+    return {
+      ...result,
+      outputId: productionSummary?.source_commodity_id || "-",
+      basisSource: productionSummary?.source || "production_record",
+      inputPeriod: isProcessed ? `${productionSummary.record_count} valid quarterly records` : "Insufficient data",
+      classification: isProcessed ? productionSummary.classification : "Not processed",
+      basisInputs: {
+        "Expected harvest quarter": productionSummary?.season ? `${productionSummary.season} ${productionSummary.latest_year}` : "-",
+        "Average quarterly production": formatMt(productionSummary?.average_quarterly_production_mt),
+        "Current quarter estimate": isProcessed
+          ? formatMt(productionSummary.seasonal_production_ratio * productionSummary.average_quarterly_production_mt)
+          : "- MT",
+        "Seasonal production ratio": productionSummary?.seasonal_production_ratio?.toFixed(4) || "-",
+        "Source areas": productionSummary?.source_areas?.length
+          ? productionSummary.source_areas.map((area) => area.name).join(", ")
+          : "No geographic source rows available",
+        "Q1 ratio threshold": quartiles ? quartiles.q1.toFixed(4) : "-",
+        "Q2 ratio threshold": quartiles ? quartiles.q2.toFixed(4) : "-",
+        "Q3 ratio threshold": quartiles ? quartiles.q3.toFixed(4) : "-"
+      },
+      thresholds: quartiles ? [
+        { classification: "Low", rule: `Seasonal ratio < ${quartiles.q1.toFixed(4)}` },
+        { classification: "Lower Middle", rule: `Seasonal ratio ≥ ${quartiles.q1.toFixed(4)} and < ${quartiles.q2.toFixed(4)}` },
+        { classification: "Upper Middle", rule: `Seasonal ratio ≥ ${quartiles.q2.toFixed(4)} and < ${quartiles.q3.toFixed(4)}` },
+        { classification: "High", rule: `Seasonal ratio ≥ ${quartiles.q3.toFixed(4)}` }
+      ] : result.thresholds,
+      productionVolumes: productionSummary?.seasonal_totals || [],
+      productionSources: productionSummary?.source_areas || [],
+      records: (productionSummary?.records || []).map((record) => ({
+        Year: record.reference_year,
+        Quarter: record.reference_quarter,
+        Commodity: selectedCommodity,
+        Variety: selectedVariety,
+        "Source Areas": "Aggregate production_record",
+        "Production Volume": `${Number(record.volume_produced).toLocaleString()} MT`,
+        Unit: "MT"
+      })),
+      resultExplanation: isProcessed
+        ? `${productionSummary.season} ${productionSummary.latest_year} production is ${productionSummary.classification} (ratio ${productionSummary.seasonal_production_ratio.toFixed(4)}), compared with quartiles calculated from ${productionSummary.record_count} valid quarterly production_record rows.`
+        : (productionError || productionSummary?.message || (productionLoading ? "Loading historical production data…" : "No historical production data is available for this scope.")),
+      basisMissing: isProcessed ? null : (productionError || productionSummary?.message || null)
+    };
+  }, [result, resultId, productionSummary, productionError, productionLoading, selectedCommodity, selectedVariety]);
+  const priceResult = useMemo(() => {
+    if (resultId !== "price-outlook") return null;
+    const processed = priceOutlook?.status === "processed";
+    const money = (value) => value == null ? "-/kg" : `₱${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}/kg`;
+    return {
+      ...result,
+      basisSource: priceOutlook?.source || "-",
+      inputPeriod: priceOutlook?.forecast_horizon_days ? `${priceOutlook.forecast_horizon_days} days` : "-",
+      classification: processed ? priceOutlook.classification : "Not processed",
+      basisInputs: {
+        "Recent average price": money(priceOutlook?.recent_average_price),
+        "Lower forecast": money(priceOutlook?.lower_forecast),
+        "Forecast midpoint": money(priceOutlook?.forecast_midpoint),
+        "Upper forecast": money(priceOutlook?.upper_forecast),
+        "Forecast price change": priceOutlook?.forecast_price_change_pct == null ? "-" : `${priceOutlook.forecast_price_change_pct > 0 ? "+" : ""}${Number(priceOutlook.forecast_price_change_pct).toFixed(2)}%`
+      },
+      forecastPoints: processed
+        ? (priceOutlook.forecast_points || []).map((point) => ({
+            date: point.forecast_date,
+            [selectedVariety]: point.forecast_midpoint,
+            [`${selectedVariety}__lo`]: point.lower_forecast,
+            [`${selectedVariety}__hi`]: point.upper_forecast
+          }))
+        : [],
+      varieties: [{ variety: selectedVariety }],
+      resultExplanation: processed ? priceOutlook.explanation : (priceOutlookError || priceOutlook?.explanation || "Price Outlook could not be calculated for this forecast."),
+      basisMissing: processed ? null : (priceOutlookError || priceOutlook?.explanation || null),
+      records: []
+    };
+  }, [result, resultId, priceOutlook, priceOutlookError]);
+  const displayResult = resultId === "price-outlook" ? priceResult : historicalResult;
+  const displayThresholds = resultId === "historical-production"
+    ? displayResult.thresholds
+    : shownThresholds;
 
   const handleCommodityChange = (newCommodity) => {
     navigate(`/admin/modules/basis/${resultId}?commodity=${encodeURIComponent(newCommodity)}&variety=All%20Varieties`, { replace: true });
@@ -538,28 +681,28 @@ function AdminAnalyticsBasis() {
         {/* Compact Metadata Chips */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[11px]">
           <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">ID:</span> <span className="font-semibold text-[var(--hw-neutral-800)] font-mono">{result.outputId || "-"}</span>
+            <span className="text-[var(--hw-neutral-400)] font-medium">ID:</span> <span className="font-semibold text-[var(--hw-neutral-800)] font-mono">{displayResult.outputId || "-"}</span>
           </div>
           <div>
             <span className="text-[var(--hw-neutral-400)] font-medium">Module:</span> <span className="font-semibold text-[var(--hw-neutral-800)]">{result.module || "-"}</span>
           </div>
           <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Data Source:</span> <span className="font-semibold text-[var(--hw-neutral-800)]" title={result.basisSource}>{result.basisSource || "-"}</span>
+            <span className="text-[var(--hw-neutral-400)] font-medium">Data Source:</span> <span className="font-semibold text-[var(--hw-neutral-800)]" title={displayResult.basisSource}>{displayResult.basisSource || "-"}</span>
           </div>
           <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Input Period:</span> <span className="font-semibold text-[var(--hw-neutral-800)]">{result.inputPeriod || "-"}</span>
+            <span className="text-[var(--hw-neutral-400)] font-medium">Input Period:</span> <span className="font-semibold text-[var(--hw-neutral-800)]">{displayResult.inputPeriod || "-"}</span>
           </div>
         </div>
       </div>
 
       {/* 2. Input Values (Full Width) */}
-      {result.basisInputs && Object.keys(result.basisInputs).length > 0 && (
+      {displayResult.basisInputs && Object.keys(displayResult.basisInputs).length > 0 && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Input Values</p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {Object.entries(result.basisInputs).map(([key, val]) => (
+            {Object.entries(displayResult.basisInputs).map(([key, val]) => (
               <div key={key} className="flex justify-between items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
                 <span className="text-[13px] text-[var(--hw-neutral-700)]">{key}</span>
                 <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] text-right">{val || "-"}</span>
@@ -578,8 +721,8 @@ function AdminAnalyticsBasis() {
               <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Forecast Price Trend</p>
               <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">14-day price outlook for {selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.</p>
             </div>
-            {result.forecastPoints && result.forecastPoints.length > 0 ? (
-              <ForecastPriceTrendChart commodity={selectedCommodity} chartData={result.forecastPoints} varieties={result.varieties || []} height={360} />
+            {displayResult.forecastPoints && displayResult.forecastPoints.length > 0 ? (
+              <ForecastPriceTrendChart commodity={selectedCommodity} chartData={displayResult.forecastPoints} varieties={displayResult.varieties || []} height={360} />
             ) : (
               <div className="w-full flex-1 flex flex-col justify-center">
                 <ResponsiveContainer width="100%" height={340}>
@@ -648,18 +791,18 @@ function AdminAnalyticsBasis() {
               </div>
               <div className="w-full flex-1 flex flex-col justify-center">
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={quarterlyGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={72}>
+                  <BarChart data={displayResult.productionVolumes?.length ? displayResult.productionVolumes.map((row) => ({ quarter: row.season, volume: row.average_production_mt || 0 })) : quarterlyGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={72}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="quarter" tick={{ fontSize: 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
-                    <YAxis hide domain={[0, 10]} />
-                    <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    <YAxis hide domain={[0, "auto"]} />
+                    <Bar dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"} radius={[6, 6, 0, 0]} fill={displayResult.productionVolumes?.length ? "#2f7d32" : "#e2e8f0"} stroke="#cbd5e1" strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"} />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
+                {!displayResult.productionVolumes?.length && <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
                   <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
                     No production data available.
                   </span>
-                </div>
+                </div>}
               </div>
             </div>
 
@@ -669,7 +812,7 @@ function AdminAnalyticsBasis() {
                 <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Production Sources Distribution</p>
                 <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Historical production volume share across major supplying areas (Davao City, Davao Del Sur, Bukidnon).</p>
               </div>
-              <ProductionSourcePieChart showEmpty={!result.productionSources || result.productionSources.length === 0} data={result.productionSources} height={380} />
+              <ProductionSourcePieChart showEmpty={!displayResult.productionSources || displayResult.productionSources.length === 0} data={displayResult.productionSources} height={380} />
             </div>
           </>
         )}
@@ -725,8 +868,8 @@ function AdminAnalyticsBasis() {
 
       {/* 4. Datasets Used Table (Full Width) */}
       <DatasetsUsed
-        module={result.module}
-        records={result.records}
+        module={displayResult.module}
+        records={displayResult.records}
       />
 
       {/* 5. Threshold Applied & Result Explanation in 2 Columns with Equal Height */}
@@ -740,8 +883,8 @@ function AdminAnalyticsBasis() {
             <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
           )}
           <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
-            {shownThresholds && shownThresholds.length > 0 ? (
-              shownThresholds.map((t) => {
+            {displayThresholds && displayThresholds.length > 0 ? (
+              displayThresholds.map((t) => {
                 const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
                 return (
                   <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
@@ -764,9 +907,9 @@ function AdminAnalyticsBasis() {
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
           </div>
           <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
-            {result.resultExplanation && result.resultExplanation !== "No explanation available." ? (
+            {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
               <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
-                {result.resultExplanation}
+                {displayResult.resultExplanation}
               </p>
             ) : (
               <div className="py-4 space-y-1.5 max-w-sm mx-auto">
@@ -784,10 +927,10 @@ function AdminAnalyticsBasis() {
       </div>
 
       {/* Missing data warning */}
-      {result.basisMissing && (
+      {displayResult.basisMissing && (
         <div className="flex items-start gap-3 border border-amber-200 bg-amber-50/60 rounded-2xl px-5 py-4">
           <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-[13px] text-amber-800 leading-relaxed font-medium">{result.basisMissing}</p>
+          <p className="text-[13px] text-amber-800 leading-relaxed font-medium">{displayResult.basisMissing}</p>
         </div>
       )}
     </div>
