@@ -20,7 +20,7 @@ function FactorDetailPage() {
   const commodityName = state?.commodityName || null;
   const moduleResults = state?.moduleResults || {};
 
-  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
   const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
   const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
 

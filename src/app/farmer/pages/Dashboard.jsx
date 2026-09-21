@@ -174,7 +174,7 @@ function DashboardPage() {
   const { user } = useAuth();
 
   const profileQuery = useQuery({
-    queryKey: ["dashboard", "profile", user?.id],
+    queryKey: ["farmer", "profile"],
     queryFn: async () => {
       const res = await apiGet("/farmer/profile");
       if (res.ok) return parseResponse(res);

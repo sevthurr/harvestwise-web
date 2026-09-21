@@ -59,7 +59,7 @@ function CropFactorsPage() {
 
   const DEFAULT_WEATHER_LAT = 7.0722;
   const DEFAULT_WEATHER_LON = 125.6131;
-  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
   const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
   const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
 

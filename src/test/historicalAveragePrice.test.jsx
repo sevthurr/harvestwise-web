@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HistoricalAveragePriceSection } from "../app/global/components/shared/HistoricalAveragePriceSection";
 import * as pricesApi from "../services/api/pricesApi";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function renderWithQuery(ui) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 vi.mock("../app/global/contexts/LanguageContext", () => ({
   useLanguage: () => ({
@@ -42,6 +51,7 @@ vi.mock("recharts", async () => {
 describe("HistoricalAveragePriceSection component", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    queryClient.clear();
   });
 
   afterEach(() => {
@@ -56,7 +66,7 @@ describe("HistoricalAveragePriceSection component", () => {
       records: [],
     });
 
-    render(
+    renderWithQuery(
       <HistoricalAveragePriceSection
         commodityId="COM-1"
         commodityName="Ampalaya"
@@ -80,7 +90,7 @@ describe("HistoricalAveragePriceSection component", () => {
       records: [],
     });
 
-    render(
+    renderWithQuery(
       <HistoricalAveragePriceSection
         commodityId="COM-1"
         commodityName="Ampalaya"
@@ -112,7 +122,7 @@ describe("HistoricalAveragePriceSection component", () => {
       ],
     });
 
-    render(
+    renderWithQuery(
       <HistoricalAveragePriceSection
         commodityId="COM-1"
         commodityName="Ampalaya"
@@ -138,7 +148,7 @@ describe("HistoricalAveragePriceSection component", () => {
       ],
     });
 
-    render(
+    renderWithQuery(
       <HistoricalAveragePriceSection
         commodityId="COM-1"
         commodityName="Ampalaya"
@@ -161,7 +171,7 @@ describe("HistoricalAveragePriceSection component", () => {
       records: [],
     });
 
-    render(
+    renderWithQuery(
       <HistoricalAveragePriceSection
         commodityId="COM-1"
         commodityName="Ampalaya"
@@ -200,7 +210,7 @@ describe("HistoricalAveragePriceSection component", () => {
       new Error("Internal 500 database error: column 'foo' does not exist")
     );
 
-    render(
+    renderWithQuery(
       <HistoricalAveragePriceSection
         commodityId="COM-1"
         commodityName="Ampalaya"

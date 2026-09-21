@@ -20,6 +20,7 @@ import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMoc
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { analyticsApi } from "../../../services/api";
+import { useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 
 const TOP_10_COMMODITIES = [
   "Ampalaya",
@@ -512,13 +513,33 @@ function AdminAnalyticsBasis() {
 
   const [commodities, setCommodities] = useState(TOP_10_COMMODITIES);
   const [commodityRecords, setCommodityRecords] = useState([]);
-  const [productionSummary, setProductionSummary] = useState(null);
-  const [productionError, setProductionError] = useState("");
-  const [productionLoading, setProductionLoading] = useState(false);
   const [thresholdRules, setThresholdRules] = useState([]);
   const [thresholdsError, setThresholdsError] = useState("");
-  const [priceOutlook, setPriceOutlook] = useState(null);
-  const [priceOutlookError, setPriceOutlookError] = useState("");
+  const [forecast14d, setForecast14d] = useState([]);
+
+  // Fetch 14-day weather forecast when on the weather-risk module
+  useEffect(() => {
+    if (resultId !== "weather-risk") return;
+    let active = true;
+    analyticsApi
+      .getWeatherForecast(14)
+      .then((data) => {
+        if (!active) return;
+        const days = (data?.days || []).map((d) => ({
+          dayLabel: d.day_label,
+          date: d.date,
+          tempMax: d.temp_max,
+          tempMin: d.temp_min,
+          rainPct: d.rain_probability_pct ?? null,
+          rainfall_mm: d.rainfall_mm,
+          windSpeed: d.wind_speed_max_kmh,
+          condition: d.weather_condition,
+        }));
+        setForecast14d(days);
+      })
+      .catch(() => active && setForecast14d([]));
+    return () => { active = false; };
+  }, [resultId]);
 
   useEffect(() => {
     let active = true;
@@ -546,53 +567,17 @@ function AdminAnalyticsBasis() {
     [commodityRecords, selectedCommodity]
   );
 
-  useEffect(() => {
-    let active = true;
-    async function loadHistoricalProduction() {
-      if (resultId !== "historical-production" || !selectedCommodityRecord?.id) {
-        setProductionSummary(null);
-        return;
-      }
-      try {
-        setProductionLoading(true);
-        setProductionError("");
-        const data = await analyticsApi.getHistoricalSeasonalProduction(selectedCommodity, selectedVariety);
-        if (active) setProductionSummary(data);
-      } catch (err) {
-        if (active) {
-          setProductionSummary(null);
-          setProductionError(err.message || "Unable to load production history.");
-        }
-      } finally {
-        if (active) setProductionLoading(false);
-      }
-    }
-    loadHistoricalProduction();
-    return () => { active = false; };
-  }, [resultId, selectedCommodity, selectedVariety, selectedCommodityRecord?.id]);
+  const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
+    resultId === "historical-production" && !!selectedCommodityRecord?.id,
+    selectedCommodity,
+    selectedVariety
+  );
 
-  useEffect(() => {
-    let active = true;
-    async function loadPriceOutlook() {
-      if (resultId !== "price-outlook" || !selectedCommodity || !selectedVariety) {
-        setPriceOutlook(null);
-        return;
-      }
-      try {
-        setPriceOutlookError("");
-        const scope = `${selectedCommodity} ${selectedVariety}`;
-        const data = await analyticsApi.getPriceOutlook(scope, "bangkerohan_retail", 14);
-        if (active) setPriceOutlook(data);
-      } catch (err) {
-        if (active) {
-          setPriceOutlook(null);
-          setPriceOutlookError(err.message || "Unable to load Price Outlook.");
-        }
-      }
-    }
-    loadPriceOutlook();
-    return () => { active = false; };
-  }, [resultId, selectedCommodity, selectedVariety]);
+  const { data: priceOutlook, error: priceOutlookError } = usePriceOutlook(
+    resultId === "price-outlook" && !!selectedCommodity && !!selectedVariety,
+    selectedCommodity,
+    selectedVariety
+  );
 
   // Load the threshold rules for the current module from the admin API
   useEffect(() => {
@@ -704,7 +689,11 @@ function AdminAnalyticsBasis() {
       records: []
     };
   }, [result, resultId, priceOutlook, priceOutlookError]);
-  const displayResult = resultId === "price-outlook" ? priceResult : historicalResult;
+  const displayResult = resultId === "price-outlook"
+    ? priceResult
+    : resultId === "weather-risk"
+      ? { ...historicalResult, forecast_14d: forecast14d }
+      : historicalResult;
   const displayThresholds = resultId === "historical-production"
     ? displayResult.thresholds
     : shownThresholds;
@@ -962,9 +951,9 @@ function AdminAnalyticsBasis() {
               <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">14-Day Weather Forecast Outlook</p>
               <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Estimated weather parameters and risks for {selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.</p>
             </div>
-            {result.forecast_14d && result.forecast_14d.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                {result.forecast_14d.map((day, i) => (
+            {displayResult.forecast_14d && displayResult.forecast_14d.length > 0 ? (
+              <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "thin", scrollbarColor: "var(--hw-neutral-300) transparent" }}>
+                {displayResult.forecast_14d.map((day, i) => (
                   <div key={i} className="flex-shrink-0 flex flex-col items-center gap-2 bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] px-4 py-5 min-w-[90px] shadow-[var(--shadow-xs)]">
                     <p className="text-[13px] font-bold text-[var(--hw-neutral-800)]">{day.dayLabel}</p>
                     <p className="text-[11px] text-[var(--hw-neutral-500)] font-medium">{day.date}</p>
@@ -973,7 +962,7 @@ function AdminAnalyticsBasis() {
                       <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax != null ? `${day.tempMax}°` : "-°"}</p>
                       <p className="text-[12px] text-[var(--hw-neutral-500)] font-medium">{day.tempMin != null ? `${day.tempMin}°` : "-°"}</p>
                     </div>
-                    <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] mt-0.5">{day.rainPct != null ? `${day.rainPct}%` : "-%"}</p>
+                    <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] mt-0.5">{day.rainfall_mm != null ? `${day.rainfall_mm}mm` : (day.rainPct != null ? `${day.rainPct}%` : "-%")}</p>
                   </div>
                 ))}
               </div>

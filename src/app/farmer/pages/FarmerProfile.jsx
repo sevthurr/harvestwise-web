@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { MapPin, Phone, Mail, Navigation, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -7,38 +8,23 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
-import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton, SkeletonFormCard } from "../components/shared/FarmerSkeletons";
 
 function FarmerProfile() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-    async function loadProfile() {
-      try {
-        setLoading(true);
-        const res = await apiGet("/farmer/profile");
-        if (res.ok && active) {
-          const data = await parseResponse(res);
-          setProfile(toCamelCase(data));
-        }
-      } catch (err) {
-        console.warn("Failed to load farmer profile:", err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    loadProfile();
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Shared farmer profile query (persisted to IndexedDB by the offline layer)
+  const { data: rawProfile, isLoading: loading } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const profile = useMemo(() => (rawProfile ? toCamelCase(rawProfile) : null), [rawProfile]);
 
   // Compute display details from real profile / user data (no mock strings)
   const firstName = profile?.firstName || user?.firstName || "";

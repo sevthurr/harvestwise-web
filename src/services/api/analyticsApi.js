@@ -114,6 +114,9 @@ export async function createWeatherRule(payload) {
 
 export async function updateWeatherRule(ruleId, payload) {
   return parseResponse(await apiPut(`/admin/crop-weather-rules/${ruleId}`, payload));
+}
+
+// ── Live-computed analytics outputs ───────────────────────────────────────────
 export async function getHistoricalSeasonalProduction(commodityId, variety = "") {
   const scope = variety && !["All Varieties", "Standard"].includes(variety)
     ? `${commodityId} ${variety}`
@@ -126,5 +129,11 @@ export async function getHistoricalSeasonalProduction(commodityId, variety = "")
 export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_retail", horizon = 14) {
   return parseResponse(
     await apiGet(`/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${encodeURIComponent(horizon)}`)
+  );
+}
+
+export async function getWeatherForecast(days = 14) {
+  return parseResponse(
+    await apiGet(`/admin/analytics/outputs/weather-forecast?days=${days}`)
   );
 }

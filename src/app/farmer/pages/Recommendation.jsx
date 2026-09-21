@@ -349,7 +349,7 @@ function RecommendationPage() {
   // Farmer profile coordinates reused by the weather advisory query
   const DEFAULT_WEATHER_LAT = 7.0722;
   const DEFAULT_WEATHER_LON = 125.6131;
-  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
   const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
   const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
 
@@ -370,7 +370,7 @@ function RecommendationPage() {
 
   // Weather forecast — fills the calendar's daily weather note + icons
   const { data: weatherForecasts = [] } = useQuery({
-    queryKey: ["weather", "advisory"],
+    queryKey: ["weather", "advisory", weatherLat, weatherLon],
     queryFn: async () => {
       const res = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
       if (!res.ok) return [];

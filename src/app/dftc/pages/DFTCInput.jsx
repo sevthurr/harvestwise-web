@@ -19,6 +19,7 @@ import {
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
+import { DFTCFilePreview } from "../components/DFTCFilePreview";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -283,6 +284,7 @@ function DFTCInput() {
     return s?.restoreTab ?? "hw";
   });
   const [showAllSaved, setShowAllSaved] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   // Search, Filter, and Pagination for Commodity Records
   const [searchQuery, setSearchQuery] = useState("");
@@ -560,6 +562,14 @@ function DFTCInput() {
 
   const hasActiveFilters = searchQuery.trim() !== "" || marketFilter !== "all" || dataTypeFilter !== "all";
 
+  if (previewFile) {
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
+        <DFTCFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
       {successMessage && (
@@ -649,7 +659,7 @@ function DFTCInput() {
                   {displayedSavedData.map((file) => (
                     <tr
                       key={file.id}
-                      onClick={() => navigate(`/dftc/submissions/${file.id}`)}
+                      onClick={() => setPreviewFile({ reportId: file.id, dataName: file.dataName, dataType: file.dataType, market: file.market, entryMethod: file.entryMethod, reportingDate: file.savedDate, savedDate: file.savedDate, records: file.records })}
                       className="border-b border-[var(--hw-neutral-100)] last:border-0 hover:bg-[var(--hw-neutral-50)] cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3">
@@ -676,7 +686,7 @@ function DFTCInput() {
               {displayedSavedData.map((file) => (
                 <button
                   key={file.id}
-                  onClick={() => navigate(`/dftc/submissions/${file.id}`)}
+                  onClick={() => setPreviewFile({ reportId: file.id, dataName: file.dataName, dataType: file.dataType, market: file.market, entryMethod: file.entryMethod, reportingDate: file.savedDate, savedDate: file.savedDate, records: file.records })}
                   className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98]"
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">

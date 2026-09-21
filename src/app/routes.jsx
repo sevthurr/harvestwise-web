@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { Layout } from "./global/components/layout/Layout";
 import { AdminLayout } from "./global/components/layout/AdminLayout";
 import { ProtectedRoute } from "./global/components/ProtectedRoute";
+import { roleHome, useAuth } from "./global/contexts/AuthContext";
 import LoginPage from "./auth/LoginPage";
 import RegisterPage from "./auth/RegisterPage";
 import OnboardingPage from "./auth/OnboardingPage";
@@ -73,10 +74,20 @@ import AdminAuditLogs from "./admin/pages/AdminAuditLogs";
 import AdminNotifications from "./admin/pages/AdminNotifications";
 import AdminForecasting from "./admin/pages/AdminForecasting";
 
+export function SmartRedirect({ fallback }) {
+  const { user, isLoggedIn, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (isLoggedIn) return <Navigate to={roleHome(user?.role?.role_name)} replace />;
+
+  return fallback ?? <Navigate to="/login" replace />;
+}
+
 export const router = createBrowserRouter([
   // ── Auth pages (unprotected) ──────────────────────────────────────────────────
-  { path: "/", element: <Navigate to="/login" replace /> },
-  { path: "/login",      element: <LoginPage /> },
+  { path: "/", element: <SmartRedirect /> },
+  { path: "/login", element: <SmartRedirect fallback={<LoginPage />} /> },
   { path: "/register",   element: <RegisterPage /> },
   { path: "/onboarding", element: <OnboardingPage /> },
 

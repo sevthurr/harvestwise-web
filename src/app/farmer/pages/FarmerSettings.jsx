@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -23,6 +24,8 @@ import {
 import { TextSizeSlider } from "../../global/components/settings/TextSizeSlider";
 import { apiGet, apiPut, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
+import { queryClient } from "../../global/lib/queryClient";
+import { loadFarmerOfflineData, fetchFarmerProfile, fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
 
 const TABS = [
   { id: "account", label: "Account", key: "farmer.settings.tab_account" },
@@ -58,7 +61,6 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     phone: "",
     email: ""
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -73,59 +75,35 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     onResult: () => showToast(t("farmer.settings.toast_google_connected", {}, "Google account connected.")),
   });
 
-  // Load account and profile data from DB
+  // Load account and profile data from the shared cached profile
+  const { data: rawProfile, isLoading: loading } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 30,
+  });
+
   useEffect(() => {
-    let active = true;
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        const res = await apiGet("/farmer/profile");
-        if (res.ok) {
-          const data = await parseResponse(res);
-          if (active) {
-            const camel = toCamelCase(data);
-            setForm({
-              firstName: camel.firstName || "",
-              lastName: camel.lastName || "",
-              middleName: camel.middleName || "",
-              suffix: camel.suffix || "None",
-              phone: camel.phone || user?.phone || "",
-              email: camel.email || user?.email || ""
-            });
-          }
-        } else {
-          // Fallback to auth user state without mock names
-          if (active) {
-            setForm({
-              firstName: user?.firstName || "",
-              lastName: user?.lastName || "",
-              middleName: user?.middleName || "",
-              suffix: user?.suffix || "None",
-              phone: user?.phone || "",
-              email: user?.email || ""
-            });
-          }
-        }
-      } catch {
-        if (active) {
-          setForm({
-            firstName: user?.firstName || "",
-            lastName: user?.lastName || "",
-            middleName: user?.middleName || "",
-            suffix: user?.suffix || "None",
-            phone: user?.phone || "",
-            email: user?.email || ""
-          });
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    fetchProfile();
-    return () => {
-      active = false;
-    };
-  }, [user]);
+    const camel = rawProfile ? toCamelCase(rawProfile) : null;
+    if (camel) {
+      setForm({
+        firstName: camel.firstName || "",
+        lastName: camel.lastName || "",
+        middleName: camel.middleName || "",
+        suffix: camel.suffix || "None",
+        phone: camel.phone || user?.phone || "",
+        email: camel.email || user?.email || ""
+      });
+    } else {
+      setForm({
+        firstName: user?.firstName || "",
+        lastName: user?.lastName || "",
+        middleName: user?.middleName || "",
+        suffix: user?.suffix || "None",
+        phone: user?.phone || "",
+        email: user?.email || ""
+      });
+    }
+  }, [rawProfile, user]);
 
   const handlePasswordSave = () => {
     if (!pw.current || !pw.newPw || !pw.confirm) {
@@ -482,77 +460,76 @@ const FarmTab = ({ showToast }) => {
   const [showLocModal, setShowLocModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
-  // Load farm profile, available top 10 crops, and selling methods
+  // Shared farmer profile (persisted by the offline layer)
+  const { data: rawProfile } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Shared top-10 price list (drives the crop picker)
+  const { data: priceListData } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: fetchPricesList,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Seed form state from cached profile data.
+  useEffect(() => {
+    const camel = rawProfile ? toCamelCase(rawProfile) : null;
+    if (!camel) return;
+    setLoc({
+      city: camel.city || "",
+      district: camel.district || "",
+      barangay: camel.barangay || "",
+      farmSize: camel.farmSize != null ? `${camel.farmSize}` : ""
+    });
+
+    if (camel.preferredCrops && Array.isArray(camel.preferredCrops)) {
+      const cropMap = {};
+      camel.preferredCrops.forEach((cp) => {
+        const name = cp.commodityName || cp.name;
+        if (name) {
+          cropMap[name] = cp.varietyName || "";
+        }
+      });
+      setCrops(cropMap);
+    }
+
+    const primarySm = camel.sellingMethods?.[0]?.label;
+    setSelling({
+      method: primarySm || "",
+      area: camel.usualSellingAreaOrBuyer || ""
+    });
+  }, [rawProfile]);
+
+  // Derive available top-10 crops from the shared price list.
+  useEffect(() => {
+    const items = priceListData?.items || [];
+    const baseMap = new Map();
+    items.forEach((item) => {
+      const isTop = item.is_top10 === true || item.isTop10 === true;
+      if (!isTop) return;
+      const camel = toCamelCase(item);
+      const name = camel.name || "";
+      if (name && !baseMap.has(name)) {
+        baseMap.set(name, {
+          id: camel.commodityId || camel.id,
+          name: name,
+          baseName: camel.baseName
+        });
+      }
+    });
+    const topList = Array.from(baseMap.values());
+    if (topList.length > 0) {
+      setAvailableCrops(topList);
+    }
+  }, [priceListData]);
+
+  // Fetch selling methods separately (small admin-owned list).
   useEffect(() => {
     let active = true;
-
-    async function loadData() {
-      // 1. Fetch Profile
-      try {
-        const profileRes = await apiGet("/farmer/profile");
-        if (profileRes.ok && active) {
-          const pData = await parseResponse(profileRes);
-          const camel = toCamelCase(pData);
-          setLoc({
-            city: camel.city || "",
-            district: camel.district || "",
-            barangay: camel.barangay || "",
-            farmSize: camel.farmSize != null ? `${camel.farmSize}` : ""
-          });
-
-          // Preferred crops mapping
-          if (camel.preferredCrops && Array.isArray(camel.preferredCrops)) {
-            const cropMap = {};
-            camel.preferredCrops.forEach((cp) => {
-              const name = cp.commodityName || cp.name;
-              if (name) {
-                cropMap[name] = cp.varietyName || "";
-              }
-            });
-            setCrops(cropMap);
-          }
-
-          // Selling method
-          const primarySm = camel.sellingMethods?.[0]?.label;
-          setSelling({
-            method: primarySm || "",
-            area: camel.usualSellingAreaOrBuyer || ""
-          });
-        }
-      } catch (err) {
-        console.warn("Could not load farm profile:", err);
-      }
-
-      // 2. Fetch available Top 10 crops
-      try {
-        const cropsRes = await apiGet("/prices?is_top10=true&page_size=50");
-        if (cropsRes.ok && active) {
-          const cData = await parseResponse(cropsRes);
-          const items = cData?.items || [];
-          const baseMap = new Map();
-          items.forEach((item) => {
-            const isTop = item.is_top10 === true || item.isTop10 === true;
-            if (!isTop) return;
-            const camel = toCamelCase(item);
-            const name = camel.name || "";
-            if (name && !baseMap.has(name)) {
-              baseMap.set(name, {
-                id: camel.commodityId || camel.id,
-                name: name,
-                baseName: camel.baseName
-              });
-            }
-          });
-          const topList = Array.from(baseMap.values());
-          if (topList.length > 0) {
-            setAvailableCrops(topList);
-          }
-        }
-      } catch {
-        // Fallback to top 10 names
-      }
-
-      // 3. Fetch selling methods
+    async function loadSellingMethods() {
       try {
         const smRes = await apiGet("/farmer/selling-methods");
         if (smRes.ok && active) {
@@ -565,8 +542,7 @@ const FarmTab = ({ showToast }) => {
         // Use default selling options
       }
     }
-
-    loadData();
+    loadSellingMethods();
     return () => {
       active = false;
     };
@@ -841,17 +817,23 @@ const PreferencesTab = ({ showToast }) => {
     }
   };
 
-  const handleSync = () => {
+  const handleSync = async () => {
     setSyncing(true);
-    setTimeout(() => {
+    setSaveError(null);
+    try {
+      await loadFarmerOfflineData(queryClient);
       const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       localStorage.setItem("hw_last_synced", `Today, ${nowStr}`);
       setLastSynced(`Today, ${nowStr}`);
       setHasOfflineCache(true);
       setSyncStatus("ok");
-      setSyncing(false);
       showToast(t("farmer.settings.toast_offline_success", {}, "Offline data updated successfully."));
-    }, 1800);
+    } catch {
+      setSyncStatus("needs_sync");
+      showToast(t("farmer.settings.toast_offline_error", {}, "Could not update offline data. Check your connection and try again."));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (

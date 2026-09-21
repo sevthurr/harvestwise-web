@@ -1,11 +1,12 @@
 import { useParams, useNavigate, useLocation } from "react-router";
 import { TrendingUp, RefreshCw } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { PriceDetailView } from "../components/shared/PriceDetailView";
 import { toCamelCase } from "../../global/utils/apiTransforms";
-import { apiGet, parseResponse } from "../../global/api";
+import { fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 function PriceTrendDetailPage() {
@@ -14,66 +15,39 @@ function PriceTrendDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state;
-  
-  const [commodity, setCommodity] = useState(null);
-  const [priceData, setPriceData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchCommodityData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await apiGet('/prices?is_top10=true&page_size=50');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await parseResponse(response);
-        const items = data.items || [];
-        
-        // Find the commodity by ID - only allow top 10 commodities
-        const item = items.find(i => {
-          const camelItem = toCamelCase(i);
-          return camelItem.commodityId === commodityId && (camelItem.isTop10 === true || i.is_top10 === true);
-        });
-        
-        if (!item) {
-          throw new Error('Commodity not found');
-        }
-        
-        const camelItem = toCamelCase(item);
-        setCommodity({
-          id: camelItem.commodityId,
-          name: camelItem.name || '–',
-          baseName: camelItem.baseName,
-          variety: camelItem.variety,
-        });
-        
-        setPriceData({
-          bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
-          bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
-          dftcRetail: camelItem.prices?.dftcRetail ?? null,
-          dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
-          direction: camelItem.forecast?.trend || 'Stable',
-          lowerForecast: camelItem.forecast?.lowerForecast ?? null,
-          upperForecast: camelItem.forecast?.upperForecast ?? null,
-        });
-      } catch (err) {
-        console.error('Failed to fetch commodity data:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+  const { data: pricesData, isLoading: loading, isError } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: fetchPricesList,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const { commodity, priceData } = useMemo(() => {
+    const items = pricesData?.items || [];
+    const item = items.find(i => {
+      const camelItem = toCamelCase(i);
+      return camelItem.commodityId === commodityId && (camelItem.isTop10 === true || i.is_top10 === true);
+    });
+    if (!item) return { commodity: null, priceData: null };
+    const camelItem = toCamelCase(item);
+    return {
+      commodity: {
+        id: camelItem.commodityId,
+        name: camelItem.name || '–',
+        baseName: camelItem.baseName,
+        variety: camelItem.variety,
+      },
+      priceData: {
+        bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
+        bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
+        dftcRetail: camelItem.prices?.dftcRetail ?? null,
+        dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
+        direction: camelItem.forecast?.trend || 'Stable',
+        lowerForecast: camelItem.forecast?.lowerForecast ?? null,
+        upperForecast: camelItem.forecast?.upperForecast ?? null,
+      },
     };
-
-    if (commodityId) {
-      fetchCommodityData();
-    }
-  }, [commodityId]);
+  }, [pricesData, commodityId]);
 
   if (loading) {
     return (
@@ -97,7 +71,7 @@ function PriceTrendDetailPage() {
     );
   }
 
-  if (error || !commodity || !priceData) {
+  if (isError || !commodity || !priceData) {
     return (
       <div className="px-4 py-8 text-center space-y-3">
         <p className="text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.not_available", {}, "Price details not available.")}</p>

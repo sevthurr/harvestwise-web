@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import * as RechartsModule from "recharts";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronDown, Calendar, Info } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import * as pricesApi from "../../../../services/api/pricesApi";
@@ -142,51 +143,18 @@ export function HistoricalAveragePriceSection({
   const { t } = useLanguage();
   const [frequency, setFrequency] = useState("weekly");
 
-  const [apiResponse, setApiResponse] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    if (!commodityId || !priceTypeKey) {
-      setApiResponse(null);
-      setIsLoading(false);
-      setIsError(false);
-      return;
-    }
-
-    // Immediately clear stale data on new query parameters
-    setApiResponse(null);
-    setIsLoading(true);
-    setIsError(false);
-
-    async function fetchData() {
-      try {
-        const res = await pricesApi.getHistoricalAveragePrices(commodityId, {
-          price_type: priceTypeKey,
-          frequency,
-          variety: variety || undefined,
-          start_offset_days: 0,
-        });
-        if (!active) return;
-        setApiResponse(res);
-        setIsError(false);
-      } catch (err) {
-        if (!active) return;
-        setApiResponse(null);
-        setIsError(true);
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    fetchData();
-    return () => {
-      active = false;
-    };
-  }, [commodityId, priceTypeKey, frequency, variety]);
+  const { data: apiResponse, isLoading, isError } = useQuery({
+    queryKey: ["prices", "historicalAvg", commodityId, priceTypeKey, frequency, variety],
+    queryFn: () =>
+      pricesApi.getHistoricalAveragePrices(commodityId, {
+        price_type: priceTypeKey,
+        frequency,
+        variety: variety || undefined,
+        start_offset_days: 0,
+      }),
+    enabled: Boolean(commodityId && priceTypeKey),
+    staleTime: 1000 * 60 * 30,
+  });
 
   const isQueryBusy = isLoading;
 

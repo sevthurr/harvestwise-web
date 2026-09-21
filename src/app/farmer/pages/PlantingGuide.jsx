@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   CheckCircle2,
@@ -100,47 +101,33 @@ const CropAdvisoryCard = ({ crop, onViewGuide }) => {
 function PlantingGuidePage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const [advisories, setAdvisories] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  // Fetch monthly crop recommendations from API
-  useEffect(() => {
-    const fetchRecommendations = async () => {
-      try {
-        setLoading(true);
-        const response = await apiGet('/market/monthly-recommendations');
-        if (response.ok) {
-          const data = await parseResponse(response);
-          const rawItems = data?.items || data?.recommendations || (Array.isArray(data) ? data : []);
-          const transformedAdvisories = rawItems.map(rec => {
-            const camelRec = toCamelCase(rec);
-            const advisoryCode = normalizeAdvisoryCode(camelRec.advisoryCategory || camelRec.advisory) || ADVISORY_CODES.RECOMMENDED;
-            
-            return {
-              id: camelRec.commodityId,
-              name: camelRec.commodityName || "–",
-              advisory: advisoryCode,
-              profit: "–",
-              harvest: camelRec.harvestWindowStart ? new Date(camelRec.harvestWindowStart).toLocaleDateString('en-US', { month: 'short' }) : "–",
-              reason: camelRec.explanation || "–",
-              bestVariety: camelRec.bestVarietyName || null,
-              note: null
-            };
-          });
-          setAdvisories(transformedAdvisories);
-        } else {
-          setAdvisories([]);
-        }
-      } catch (error) {
-        console.error('Failed to fetch recommendations:', error);
-        setAdvisories([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch monthly crop recommendations from API (persisted to IndexedDB)
+  const { data: advisories = [], isLoading: loading } = useQuery({
+    queryKey: ["recommendations", "list"],
+    queryFn: async () => {
+      const response = await apiGet('/market/monthly-recommendations');
+      if (!response.ok) return [];
+      const data = await parseResponse(response);
+      const rawItems = data?.items || data?.recommendations || (Array.isArray(data) ? data : []);
+      return rawItems.map(rec => {
+        const camelRec = toCamelCase(rec);
+        const advisoryCode = normalizeAdvisoryCode(camelRec.advisoryCategory || camelRec.advisory) || ADVISORY_CODES.RECOMMENDED;
 
-    fetchRecommendations();
-  }, []);
+        return {
+          id: camelRec.commodityId,
+          name: camelRec.commodityName || "–",
+          advisory: advisoryCode,
+          profit: "–",
+          harvest: camelRec.harvestWindowStart ? new Date(camelRec.harvestWindowStart).toLocaleDateString('en-US', { month: 'short' }) : "–",
+          reason: camelRec.explanation || "–",
+          bestVariety: camelRec.bestVarietyName || null,
+          note: null
+        };
+      });
+    },
+    staleTime: 1000 * 60 * 30,
+  });
 
   const recommended = advisories.filter((a) => a.advisory === ADVISORY_CODES.RECOMMENDED);
   const conservative = advisories.filter((a) => a.advisory === ADVISORY_CODES.PROCEED_WITH_CAUTION);

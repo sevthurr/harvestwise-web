@@ -6,6 +6,7 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
+import { useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
 import {
   MODULES,
   CLASSIFICATIONS,
@@ -506,10 +507,6 @@ function AdminAnalytics() {
   // Scoped commodity and variety selection
   const [scopedCommodity, setScopedCommodity] = useState("");
   const [scopedVariety, setScopedVariety] = useState("");
-  const [productionSummary, setProductionSummary] = useState(null);
-  const [productionLoading, setProductionLoading] = useState(false);
-  const [priceOutlookSummary, setPriceOutlookSummary] = useState(null);
-  const [productionError, setProductionError] = useState("");
 
   // History table filters (only Module and Classification since Commodity + Variety are scoped above)
   const [fModule, setFModule] = useState("All");
@@ -744,53 +741,12 @@ function AdminAnalytics() {
     [commodities, scopedCommodity]
   );
 
-  // Historical seasonal production is calculated live from production_record.
-  // The selected variety can be represented by a crop-name aggregate on the
-  // backend, which is returned as source_commodity_id when that fallback is used.
-  useEffect(() => {
-    let active = true;
-    async function loadProductionSummary() {
-      if (!scopedCommodityRecord?.id) {
-        setProductionSummary(null);
-        return;
-      }
-      try {
-        setProductionLoading(true);
-        setProductionError("");
-        const data = await analyticsApi.getHistoricalSeasonalProduction(scopedCommodity, scopedVariety);
-        if (active) setProductionSummary(data);
-      } catch (err) {
-        if (active) {
-          setProductionSummary(null);
-          setProductionError(err.message || "Unable to load historical production.");
-        }
-      } finally {
-        if (active) setProductionLoading(false);
-      }
-    }
-    loadProductionSummary();
-    return () => {
-      active = false;
-    };
-  }, [scopedCommodity, scopedVariety, scopedCommodityRecord?.id]);
-
-  useEffect(() => {
-    let active = true;
-    async function loadPriceOutlookSummary() {
-      if (!scopedCommodity || !scopedVariety) {
-        setPriceOutlookSummary(null);
-        return;
-      }
-      try {
-        const data = await analyticsApi.getPriceOutlook(`${scopedCommodity} ${scopedVariety}`, "bangkerohan_retail", 14);
-        if (active) setPriceOutlookSummary(data);
-      } catch {
-        if (active) setPriceOutlookSummary(null);
-      }
-    }
-    loadPriceOutlookSummary();
-    return () => { active = false; };
-  }, [scopedCommodity, scopedVariety]);
+  // Historical seasonal production used in the Weights & Thresholds tab.
+  const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
+    !!scopedCommodityRecord?.id,
+    scopedCommodity,
+    scopedVariety
+  );
 
   useEffect(() => {
     if (!showTooltip) return;
@@ -875,25 +831,6 @@ function AdminAnalytics() {
       moduleKey: "weather-risk",
       ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" })
     }
-      classification: priceOutlookSummary?.status === "processed" ? priceOutlookSummary.classification : "Not processed",
-      source: priceOutlookSummary?.source || "-",
-      processed: priceOutlookSummary?.forecast_date || "-"
-    },
-    { module: "Arrival Pressure", moduleKey: "arrival-pressure", classification: "Not processed", source: "-", processed: "-" },
-    {
-      module: "Historical Seasonal Production Level",
-      moduleKey: "historical-production",
-      classification: productionLoading
-        ? "Loading..."
-        : productionSummary?.status === "processed"
-          ? productionSummary.classification
-          : "Not processed",
-      source: productionSummary?.source || "-",
-      processed: productionSummary?.processed_at
-        ? new Date(productionSummary.processed_at).toLocaleString()
-        : "-"
-    },
-    { module: "Weather Risk", moduleKey: "weather-risk", classification: "Not processed", source: "-", processed: "-" }
   ];
 
   const handleCardClick = (card) => {
