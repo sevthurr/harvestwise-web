@@ -7,6 +7,8 @@ import { Footer } from "../global/components/Footer";
 import { apiGet, apiPost, apiPut, parseResponse } from "../global/api";
 import { useLanguage } from "../global/contexts/LanguageContext";
 import { useAuth } from "../global/contexts/AuthContext";
+import { FarmLocationFields } from "../global/components/location/FarmLocationFields";
+import { useFarmLocation } from "../global/hooks/useFarmLocation";
 
 // ---------------------------------------------------------------------------
 // Selling methods are fetched from GET /farmer/selling-methods.
@@ -104,48 +106,6 @@ const CompleteSVG = () => (
 // ---------------------------------------------------------------------------
 // Shared components
 // ---------------------------------------------------------------------------
-const LocationModal = ({ onAllow, onCancel, detecting }) => {
-  const { t } = useLanguage();
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="w-full max-w-xs bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.18)] p-6 space-y-4">
-        <div className="flex flex-col items-center text-center space-y-3">
-          <div className="w-14 h-14 rounded-full bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] flex items-center justify-center">
-            <MapPin className="w-6 h-6 text-[var(--hw-green-700)]" />
-          </div>
-          <div>
-            <p className="text-[16px] font-bold text-[var(--hw-neutral-900)]">
-              {t("onboarding.modal_location_title", {}, "Allow location access")}
-            </p>
-            <p className="mt-1.5 text-[14px] text-[var(--hw-neutral-500)] leading-relaxed">
-              {t("onboarding.modal_location_desc", {}, "Turn on location to detect your farm area faster. Your location is only used to fill in the fields below.")}
-            </p>
-          </div>
-        </div>
-        <div className="space-y-2 pt-1">
-          <button
-            type="button"
-            onClick={onAllow}
-            disabled={detecting}
-            className="w-full h-11 flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
-          >
-            {detecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-            {detecting ? t("onboarding.detecting_location", {}, "Detecting location…") : t("onboarding.modal_allow", {}, "Allow location")}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={detecting}
-            className="w-full h-11 text-[14px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors"
-          >
-            {t("onboarding.modal_cancel", {}, "Cancel")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const StepCard = ({ children }) => (
   <div className="w-full max-w-lg bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_2px_16px_0_rgba(0,0,0,0.07)] p-8">
     {children}
@@ -174,7 +134,7 @@ const OptionChip = ({ label, selected, onClick, icon }) => (
   </button>
 );
 
-const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, disabled = false }) => {
+export const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, disabled = false, loading = false }) => {
   const { t } = useLanguage();
   const label = continueLabel ?? t("common.continue", {}, "Continue");
   return (
@@ -184,7 +144,7 @@ const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, disabled 
           <button
             type="button"
             onClick={onBack}
-            disabled={disabled}
+            disabled={disabled || loading}
             className="flex items-center justify-center gap-1 px-5 h-12 border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -194,18 +154,18 @@ const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, disabled 
         <button
           type="button"
           onClick={onContinue}
-          disabled={disabled}
+          disabled={disabled || loading}
           className="flex-1 h-12 flex items-center justify-center gap-1.5 bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
         >
-          {disabled && <Loader2 className="w-4 h-4 animate-spin" />}
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
           {label}
-          {!disabled && <ChevronRight className="w-4 h-4" />}
+          {!loading && <ChevronRight className="w-4 h-4" />}
         </button>
       </div>
       <button
         type="button"
         onClick={onSkip}
-        disabled={disabled}
+        disabled={disabled || loading}
         className="w-full text-center text-[14px] text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] disabled:opacity-40 transition-colors py-1"
       >
         {t("common.skip_for_now", {}, "Skip for now")}
@@ -259,130 +219,124 @@ const Step1 = ({ data, onLanguageSelect, onContinue, onSkip, langError }) => {
   );
 };
 
-const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
+export const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
   const { t } = useLanguage();
-  const [showModal, setShowModal] = useState(false);
-  const [detecting, setDetecting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleAllow = () => {
-    setDetecting(true);
-    // Use browser Geolocation API if available
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          onChange({
-            locationMode: "auto",
-            city: "Davao City",
-            district: "Marilog",
-            barangay: "Buda",
-            farmSize: "",
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          });
-          setDetecting(false);
-          setShowModal(false);
-        },
-        () => {
-          // Permission denied or error — fall back to defaults
-          onChange({ locationMode: "auto", city: "Davao City", district: "Marilog", barangay: "Buda", farmSize: "" });
-          setDetecting(false);
-          setShowModal(false);
-        },
-        { timeout: 8000 }
+  const locationState = useFarmLocation({
+    initialCity: data.city || "Davao City",
+    initialDistrict: data.district || "",
+    initialBarangay: data.barangay || "",
+    initialPurokSitio: data.purokSitio || "",
+    initialStreet: data.street || "",
+    initialSpecificAddress: data.locationName || "",
+    initialLatitude: data.latitude,
+    initialLongitude: data.longitude,
+    onLocationChange: (loc) => {
+      onChange({
+        city: loc.city,
+        district: loc.district || null,
+        barangay: loc.barangay,
+        purokSitio: loc.purokSitio || "",
+        street: loc.street || "",
+        locationName: loc.specificAddress || "",
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        locationMode: loc.locationMode,
+      });
+      if (loc.isComplete) {
+        setErrorMsg("");
+      }
+    },
+  });
+
+  const isManualEditing = locationState.locationMode === "manual" && !locationState.isSettled;
+
+  const continueLabel = isManualEditing
+    ? t("onboarding.check_entered", {}, "Check entered location")
+    : t("common.continue", {}, "Continue");
+
+  const handleContinue = async () => {
+    if (!data.barangay) {
+      setErrorMsg(
+        t(
+          "onboarding.location_required_error",
+          {},
+          "Please confirm your farm location, or choose 'Skip for now'."
+        )
       );
+      return;
+    }
+    if (data.latitude == null || data.longitude == null) {
+      const ok = await locationState.geocodeManualLocation();
+      if (!ok && (data.latitude == null || data.longitude == null)) {
+        setErrorMsg(
+          t(
+            "onboarding.location_required_error",
+            {},
+            "Please confirm your farm location, or choose 'Skip for now'."
+          )
+        );
+        return;
+      }
+    }
+    setErrorMsg("");
+
+    // If currently filling out the manual form, clicking "I-check ang gi-enter" proceeds to the preview
+    if (isManualEditing) {
+      locationState.setIsSettled(true);
+      return;
+    }
+
+    // When on the preview card (or GPS settled), clicking "Padayon" proceeds to Step 3
+    onContinue();
+  };
+
+  const handleBack = () => {
+    setErrorMsg("");
+    if (locationState.isSettled && locationState.locationMode === "manual") {
+      locationState.setIsSettled(false);
+    } else if (locationState.locationMode !== null) {
+      locationState.resetToChoice();
     } else {
-      setTimeout(() => {
-        onChange({ locationMode: "auto", city: "Davao City", district: "Marilog", barangay: "Buda", farmSize: "" });
-        setDetecting(false);
-        setShowModal(false);
-      }, 1800);
+      onBack();
     }
   };
 
-  const fieldCls = "w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]";
-  const labelCls = "text-[14px] font-semibold text-[var(--hw-neutral-700)]";
+  const isContinueDisabled = !data.barangay || locationState.resolving;
 
   return (
-    <>
-      {showModal && (
-        <LocationModal
-          onAllow={handleAllow}
-          onCancel={() => setShowModal(false)}
-          detecting={detecting}
-        />
+    <StepCard>
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+        {t("common.step_indicator", { current: 2, total: TOTAL }, `Step 2 of ${TOTAL}`)}
+      </p>
+      <LocationSVG />
+      <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
+        {t("onboarding.step2_title", {}, "Where is your farm located?")}
+      </h2>
+
+      {errorMsg && (
+        <p role="alert" className="mt-3 text-[13px] text-red-600 font-medium">
+          {errorMsg}
+        </p>
       )}
-      <StepCard>
-        <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
-          {t("common.step_indicator", { current: 2, total: TOTAL }, `Step 2 of ${TOTAL}`)}
-        </p>
-        <LocationSVG />
-        <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
-          {t("onboarding.step2_title", {}, "Where is your farm located?")}
-        </h2>
-        <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">
-          {t("onboarding.step2_desc", {}, "This helps HarvestWise show weather and crop advice for your area.")}
-        </p>
 
-        {data.locationMode === null && (
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className="flex-1 h-12 flex items-center justify-center gap-2 border border-[var(--hw-green-700)] text-[var(--hw-green-700)] text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-50)] transition-colors"
-            >
-              <MapPin className="w-4 h-4" />
-              {t("onboarding.use_location", {}, "Use my location")}
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange({ locationMode: "manual" })}
-              className="flex-1 h-12 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-            >
-              {t("onboarding.enter_manually", {}, "Enter manually")}
-            </button>
-          </div>
-        )}
+      <div className="mt-4">
+        <FarmLocationFields locationState={locationState} />
+      </div>
 
-        {data.locationMode === "auto" && (
-          <div className="mt-5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="text-[14px] text-emerald-700 font-medium">
-                {t("onboarding.location_detected", {}, "Location detected automatically")}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onChange({ locationMode: "manual" })}
-              className="text-[13px] text-[var(--hw-green-700)] font-semibold hover:underline flex-shrink-0"
-            >
-              {t("common.edit", {}, "Edit")}
-            </button>
-          </div>
-        )}
-
-        {(data.locationMode === "manual" || data.locationMode === "auto") && (
-          <div className="mt-5 space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="city" className={labelCls}>{t("onboarding.city", {}, "City")}</label>
-              <input id="city" type="text" value={data.city} onChange={(e) => onChange({ city: e.target.value })} placeholder={t("onboarding.city_placeholder", {}, "Davao City")} className={fieldCls} />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="district" className={labelCls}>{t("onboarding.district", {}, "District")}</label>
-              <input id="district" type="text" value={data.district} onChange={(e) => onChange({ district: e.target.value })} placeholder={t("onboarding.district_placeholder", {}, "Ex. Marilog")} className={fieldCls} />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="barangay" className={labelCls}>{t("onboarding.barangay", {}, "Barangay")}</label>
-              <input id="barangay" type="text" value={data.barangay} onChange={(e) => onChange({ barangay: e.target.value })} placeholder={t("onboarding.barangay_placeholder", {}, "Ex. Buda")} className={fieldCls} />
-            </div>
-          </div>
-        )}
-
-        <div className="mt-6">
-          <NavButtons step={2} onBack={onBack} onContinue={onContinue} onSkip={onSkip} />
-        </div>
-      </StepCard>
-    </>
+      <div className="mt-6">
+        <NavButtons
+          step={2}
+          onBack={handleBack}
+          onContinue={handleContinue}
+          onSkip={onSkip}
+          continueLabel={continueLabel}
+          disabled={isContinueDisabled}
+          loading={locationState.resolving}
+        />
+      </div>
+    </StepCard>
   );
 };
 
@@ -535,7 +489,7 @@ const Step4 = ({ data, onChange, onContinue, onBack, onSkip, submitting, submitE
 const SetupComplete = ({ data, onDone }) => {
   const { t } = useLanguage();
   const selectedCropNames = Object.keys(data.crops);
-  const locationLine = [data.city, data.district, data.barangay].filter(Boolean).join(", ") || t("onboarding.summary_not_set", {}, "Not set");
+  const locationLine = [data.city, data.barangay].filter(Boolean).join(", ") || t("onboarding.summary_not_set", {}, "Not set");
 
   const getLangLabel = (code) => {
     if (code === "ceb" || code === "cebuano") return t("common.lang_ceb", {}, "Bisaya");
@@ -593,8 +547,11 @@ const INITIAL = {
   language: "ceb",
   locationMode: null,
   city: "Davao City",
-  district: "",
+  district: null,
   barangay: "",
+  purokSitio: "",
+  street: "",
+  locationName: "",
   farmSize: "",
   latitude: null,
   longitude: null,
@@ -679,10 +636,13 @@ function OnboardingPage() {
       const payload = {
         ...(data.language    && { preferred_language: data.language }),
         ...(data.city        && { city: data.city }),
-        ...(data.district    && { district: data.district }),
+        district: data.district || null,
         ...(data.barangay    && { barangay: data.barangay }),
-        ...(data.latitude    && { latitude: data.latitude }),
-        ...(data.longitude   && { longitude: data.longitude }),
+        ...(data.purokSitio  && { purok_sitio: data.purokSitio }),
+        ...(data.street      && { street: data.street }),
+        ...(data.locationName && { location_name: data.locationName }),
+        ...(data.latitude != null && { latitude: data.latitude }),
+        ...(data.longitude != null && { longitude: data.longitude }),
         ...(data.farmSize    && { farm_size: parseFloat(data.farmSize) || undefined }),
         ...(data.sellingArea && { usual_selling_area_or_buyer: data.sellingArea }),
         preferred_crops: preferredCrops,

@@ -38,6 +38,7 @@ import {
   renderComposedMessage,
   normalizeLifecycleStage,
 } from "../../utils/advisoryMessageComposer";
+import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
 import { apiPost, parseResponse } from "../../../global/api";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
@@ -412,7 +413,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
       </div>;
   }
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
-
+        <WeatherLocationBanner />
         <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
 
         <button

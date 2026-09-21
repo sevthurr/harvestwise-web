@@ -47,7 +47,9 @@ const AboutContent = () => (
       {[
         ["Version", "1.0.0 (prototype)"],
         ["Region", "Davao City, Philippines"],
-        ["Data source", "Davao City Farmers Market Authority (DFTC)"]
+        ["Data source", "Davao City Farmers Market Authority (DFTC)"],
+        ["Location data", "OpenStreetMap contributors (ODbL)"],
+        ["Weather data", "Open-Meteo"]
       ].map(([label, val]) => (
         <div key={label} className="flex gap-2">
           <span className="text-[14px] font-semibold text-black min-w-[100px]">{label}:</span>

@@ -45,6 +45,7 @@ import {
   normalizeWeatherSuitability
 } from "../../utils/farmerCodes";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { WeatherLocationBanner } from "./WeatherLocationBanner";
 
 function buildPricePoints(actualData, currentPrice, direction, forecastLow, forecastHigh, days = 7) {
   const forecastMid = (forecastLow + forecastHigh) / 2;
@@ -588,14 +589,18 @@ const WeatherTab = ({ data, commodityName }) => {
 
   if (!hasData) {
     return (
-      <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
-        {t("farmer.empty.no_weather_data", {}, "No weather data available.")}
+      <div className="space-y-4">
+        <WeatherLocationBanner />
+        <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
+          {t("farmer.empty.no_weather_data", {}, "No weather data available.")}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <WeatherLocationBanner />
       {banner && (
         <div className={`rounded-xl border px-4 py-3 ${banner.bg} ${banner.border}`}>
           <div className={`flex items-start gap-2 ${banner.color}`}>

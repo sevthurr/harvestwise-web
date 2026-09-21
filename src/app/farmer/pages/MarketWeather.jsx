@@ -14,7 +14,8 @@ import {
   Sprout,
   ArrowRight,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MapPin
 } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
@@ -24,6 +25,8 @@ import {
   normalizeWeatherSuitability,
 } from "../utils/farmerCodes";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
+import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 
 const RISK_CFG = {
   [WEATHER_SUITABILITY_CODES.SUITABLE]: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
@@ -101,14 +104,13 @@ function MarketWeatherPage() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
 
-  const DEFAULT_WEATHER_LAT = 7.0722;
-  const DEFAULT_WEATHER_LON = 125.6131;
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
-  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
-  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
   const { data: weatherData, isLoading: loading, error } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
+    enabled: true,
     queryFn: async () => {
       const response = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
       if (!response.ok) throw new Error(t('farmer.errors.fetch_weather_failed'));
@@ -191,7 +193,8 @@ function MarketWeatherPage() {
   const weatherSummary = weatherData?.weather_summary ?? 'No weather data available';
   const updatedAt = weatherData?.updated_at ? new Date(weatherData.updated_at).toLocaleTimeString() : t('farmer.factors.weather.unknown_time');
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
         {/* ── Header ── */}
         <div>
@@ -203,24 +206,26 @@ function MarketWeatherPage() {
           </p>
         </div>
 
-        {/* ── Top Risk Banner ── */}
-        {weatherData?.risk_level ? (
-          <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-200">
-            <div className="flex items-start gap-2 text-emerald-700">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[14px] font-bold text-emerald-700">{weatherData.risk_level}</p>
-                <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{weatherSummary}</p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
-            <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
-          </div>
-        )}
+        <WeatherLocationBanner />
 
-        {/* ── 1. 14-day forecast carousel ── */}
+        {/* ── Top Risk Banner ── */}
+            {weatherData?.risk_level ? (
+              <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-200">
+                <div className="flex items-start gap-2 text-emerald-700">
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[14px] font-bold text-emerald-700">{weatherData.risk_level}</p>
+                    <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{weatherSummary}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
+                <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
+              </div>
+            )}
+
+            {/* ── 1. 14-day forecast carousel ── */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Forecast"}</p>
@@ -331,9 +336,9 @@ function MarketWeatherPage() {
             {t("farmer.factors.weather.source_open_meteo_notice")}
           </p>
         </div>
-
-    </div>;
-}
+      </div>
+    );
+  }
 export {
   MarketWeatherPage as default
 };
