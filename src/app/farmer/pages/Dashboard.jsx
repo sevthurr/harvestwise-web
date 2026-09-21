@@ -18,6 +18,7 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton, SkeletonListRow } from "../components/shared/FarmerSkeletons";
 import { useCrops } from "../components/crops/CropsContext";
 import { useAuth } from "../../global/contexts/AuthContext";
@@ -176,13 +177,10 @@ function DashboardPage() {
 
   const profileQuery = useQuery({
     queryKey: ["farmer", "profile"],
-    queryFn: async () => {
-      const res = await apiGet("/farmer/profile");
-      if (res.ok) return parseResponse(res);
-      return null;
-    },
+    queryFn: fetchFarmerProfile,
     enabled: Boolean(user?.id),
     staleTime: 1000 * 60 * 5,
+    refetchOnMount: "always",
   });
 
   const { crops: cropPlans = [], loading: cropsLoading } = useCrops();

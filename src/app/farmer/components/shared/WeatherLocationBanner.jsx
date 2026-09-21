@@ -17,8 +17,8 @@ export function WeatherLocationBanner({ className = "" }) {
     }
   });
 
-  const profile = queryClient.getQueryData(["dashboard", "profile"]);
-  const hasFarmLocation = Boolean(profile?.latitude != null && profile?.longitude != null && profile?.barangay);
+  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
+  const hasFarmLocation = Boolean(profile?.latitude != null && profile?.longitude != null && (profile?.barangay || profile?.location_name));
 
   if (dismissed || hasFarmLocation) {
     return null;

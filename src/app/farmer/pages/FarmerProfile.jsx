@@ -21,7 +21,8 @@ function FarmerProfile() {
   const { data: rawProfile, isLoading: loading } = useQuery({
     queryKey: ["farmer", "profile"],
     queryFn: fetchFarmerProfile,
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: "always",
   });
 
   const profile = useMemo(() => (rawProfile ? toCamelCase(rawProfile) : null), [rawProfile]);
