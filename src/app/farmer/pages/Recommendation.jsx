@@ -16,6 +16,8 @@ import { apiGet, parseResponse } from "../../global/api";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { useCrops } from "../components/crops/CropsContext";
+import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
+import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 
 const TwoToneStormIcon = ({ className }) => (
   <svg
@@ -346,12 +348,10 @@ function RecommendationPage() {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
 
-  // Farmer profile coordinates reused by the weather advisory query
-  const DEFAULT_WEATHER_LAT = 7.0722;
-  const DEFAULT_WEATHER_LON = 125.6131;
-  const profile = queryClient.getQueryData(["farmer", "profile"]);
-  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
-  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+  // Farmer profile coordinates reused by the weather advisory query (defaults to Davao City center)
+  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
+  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
   // Reuse prefetched market calendar
   const { data: rawMarketEvents = [], isLoading: eventsLoading } = useQuery({
@@ -377,6 +377,7 @@ function RecommendationPage() {
       const data = await parseResponse(res);
       return data.daily_forecasts || [];
     },
+    enabled: true,
     staleTime: 1000 * 60 * 30,
   });
 
@@ -453,6 +454,8 @@ function RecommendationPage() {
           {t("farmer.calendar.page_subtitle", {}, "Track crop schedules and harvest timing.")}
         </p>
       </div>
+
+      <WeatherLocationBanner />
 
       {/* ── Crop Calendar ── */}
       <section>

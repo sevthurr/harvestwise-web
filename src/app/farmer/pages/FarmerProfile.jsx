@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Phone, Mail, Navigation, Loader2 } from "lucide-react";
+import { MapPin, Phone, Mail, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -49,9 +49,10 @@ function FarmerProfile() {
   const city = profile?.city || "";
   const district = profile?.district || "";
   const barangay = profile?.barangay || "";
-  const farmSize = profile?.farmSize != null ? `${profile.farmSize} sq m` : "—";
+  const purokSitio = profile?.purokSitio || profile?.purok_sitio || "";
+  const street = profile?.street || "";
 
-  const locationParts = [barangay, district ? `${district} District` : "", city].filter(Boolean);
+  const locationParts = [street, purokSitio, barangay, district, city].filter(Boolean);
   const locationDisplay = locationParts.length > 0 ? locationParts.join(", ") : "—";
 
   const preferredCrops = profile?.preferredCrops || [];
@@ -159,20 +160,11 @@ function FarmerProfile() {
           </button>
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <Field label={t("onboarding.city", {}, "City")} value={city || "—"} />
-          <Field label={t("onboarding.district", {}, "District")} value={district || "—"} />
           <Field label={t("onboarding.barangay", {}, "Barangay")} value={barangay || "—"} />
-          <Field label={t("onboarding.farm_size", {}, "Farm Size")} value={farmSize} />
-        </div>
-        <div className="mt-4">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium ${
-            profile?.latitude && profile?.longitude
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-[var(--hw-neutral-100)] text-black"
-          }`}>
-            <Navigation className="w-3 h-3" />
-            {profile?.latitude && profile?.longitude ? "Location enabled" : "Manual location"}
-          </span>
+          <Field label={t("onboarding.district", {}, "District")} value={district || "—"} />
+          <Field label={t("onboarding.city", {}, "City")} value={city || "—"} />
+          {purokSitio ? <Field label={t("onboarding.purok_sitio", {}, "Purok / Sitio")} value={purokSitio} /> : null}
+          {street ? <Field label={t("onboarding.street", {}, "Street")} value={street} /> : null}
         </div>
       </Card>
 

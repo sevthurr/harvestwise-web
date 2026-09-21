@@ -4,10 +4,8 @@ import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { apiGet, parseResponse } from "../../global/api";
+import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
-
-const DEFAULT_WEATHER_LAT = 7.0722;
-const DEFAULT_WEATHER_LON = 125.6131;
 
 function FactorDetailPage() {
   const navigate = useNavigate();
@@ -20,9 +18,9 @@ function FactorDetailPage() {
   const commodityName = state?.commodityName || null;
   const moduleResults = state?.moduleResults || {};
 
-  const profile = queryClient.getQueryData(["farmer", "profile"]);
-  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
-  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
+  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
   const { data: productionFactorData } = useQuery({
     queryKey: ["factors", "production", commodityId],
@@ -56,6 +54,7 @@ function FactorDetailPage() {
 
   const { data: weatherAdvisoryData } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
+    enabled: true,
     queryFn: async () => {
       try {
         const res = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);

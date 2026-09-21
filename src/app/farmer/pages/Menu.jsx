@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import {
@@ -93,6 +94,7 @@ const LEGAL = {
     body: <div className="space-y-3 text-sm text-[var(--hw-neutral-900)]">
         <p>HarvestWise is a mobile-first Progressive Web Application designed to help vegetable farmers in Davao City make informed planting and selling decisions.</p>
         <p>HarvestWise uses market price data, supply information, weather forecasts, and calendar indicators to provide personalized planting recommendations and crop-cycle monitoring.</p>
+        <p className="text-xs text-[var(--hw-neutral-500)]">Geocoding and administrative location data powered by OpenStreetMap contributors under ODbL.</p>
         <div className="pt-2 border-t border-[var(--hw-neutral-100)] space-y-1 text-xs text-[var(--hw-neutral-900)]">
           <p>Version 1.0.0 — prototype build</p>
           <p>© 2026 HarvestWise. All rights reserved.</p>
@@ -142,6 +144,8 @@ const HelpAccordion = () => {
 };
 function MenuPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const profile = queryClient.getQueryData(["dashboard", "profile"]);
   const { logout } = useAuth();
   const { effectiveLanguage: language, setLanguage } = useLanguage();
   const [alertPrefs, setAlertPrefs] = useState({
@@ -221,19 +225,21 @@ function MenuPage() {
           <Card>
             <div className="px-4 py-3 divide-y divide-[var(--hw-neutral-100)]">
               {[
-    { label: "City", value: "Davao City" },
-    { label: "Barangay", value: "Barangay Buda, Marilog District" },
-    { label: "Farm size", value: "1,500 sq m" }
-  ].map((r) => <div key={r.label} className="flex items-center justify-between gap-4 py-2.5 flex-wrap">
+                { label: "City", value: profile?.city || "Davao City" },
+                { label: "Barangay", value: profile?.barangay ? `Barangay ${profile.barangay}` : "Not set" },
+                { label: "Farm size", value: profile?.farm_size != null ? `${profile.farm_size} ha` : "Not set" }
+              ].map((r) => (
+                <div key={r.label} className="flex items-center justify-between gap-4 py-2.5 flex-wrap">
                   <span className="text-xs text-[var(--hw-neutral-700)]">{r.label}</span>
                   <span className="text-xs font-medium text-[var(--hw-neutral-900)] text-right">{r.value}</span>
-                </div>)}
+                </div>
+              ))}
             </div>
             <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)]">
               <button
-    onClick={() => showToast("Farm location editing is coming soon.")}
-    className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-  >
+                onClick={() => navigate("/farmer/settings?tab=farm")}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+              >
                 <MapPin className="w-3.5 h-3.5" />
                 Edit location
                 <ChevronRight className="w-3.5 h-3.5" />

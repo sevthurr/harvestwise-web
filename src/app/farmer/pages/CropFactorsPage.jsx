@@ -7,6 +7,7 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { getPhaseConfig } from "../components/crops/types";
 import { normalizePhaseCode, PHASE_CODES, normalizePriceTrendCode } from "../utils/farmerCodes";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
+import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 
 function CropFactorsPage() {
   const { cropId } = useParams();
@@ -57,14 +58,13 @@ function CropFactorsPage() {
     staleTime: 1000 * 60 * 15,
   });
 
-  const DEFAULT_WEATHER_LAT = 7.0722;
-  const DEFAULT_WEATHER_LON = 125.6131;
-  const profile = queryClient.getQueryData(["farmer", "profile"]);
-  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
-  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
+  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
   const { data: weatherAdvisoryData } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
+    enabled: true,
     queryFn: async () => {
       try {
         const response = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);

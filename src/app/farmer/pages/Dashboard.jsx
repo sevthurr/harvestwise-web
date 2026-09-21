@@ -8,7 +8,8 @@ import {
   Minus,
   CalendarDays,
   Plus,
-  RefreshCw
+  RefreshCw,
+  MapPin
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -248,8 +249,25 @@ function DashboardPage() {
   const greeting = getGreeting(t);
   const firstName = farmerProfile?.first_name || user?.first_name;
   const greetingText = firstName ? t("farmer.dashboard.greeting_name", { greeting, name: firstName }, `${greeting}, ${firstName}!`) : `${greeting}!`;
-  const city = farmerProfile?.city || user?.city;
-  const subtitle = city ? `${city} ${t("farmer.dashboard.vegetable_farmer", {}, "Vegetable Farmer")}` : t("farmer.dashboard.vegetable_farmer", {}, "Vegetable Farmer");
+
+  // Format farmer's location: [purok_sitio, street, barangay, district, city]
+  const formatLocationSubtitle = () => {
+    const purok = farmerProfile?.purok_sitio || farmerProfile?.purokSitio || user?.purok_sitio || user?.purokSitio;
+    const street = farmerProfile?.street || user?.street;
+    const barangay = farmerProfile?.barangay || user?.barangay;
+    const district = farmerProfile?.district || user?.district;
+    const city = farmerProfile?.city || user?.city || "Davao City";
+
+    // If farmer has no location details entered, default to Davao City
+    if (!barangay && !district && !purok && !street) {
+      return "Davao City";
+    }
+
+    const parts = [purok, street, barangay, district, city].filter(Boolean);
+    return [...new Set(parts)].join(", ");
+  };
+
+  const subtitle = formatLocationSubtitle();
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5 md:space-y-6">
@@ -259,7 +277,10 @@ function DashboardPage() {
           <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
             {greetingText}
           </h1>
-          <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">{subtitle}</p>
+          <p className="text-[15px] text-[var(--hw-neutral-600)] mt-0.5 flex items-center gap-1.5">
+            <MapPin className="w-4 h-4 text-[var(--hw-green-700)] flex-shrink-0" />
+            <span>{subtitle}</span>
+          </p>
         </div>
 
         {/* ── 2. Main action card ── */}
