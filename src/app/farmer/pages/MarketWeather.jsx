@@ -104,17 +104,9 @@ function MarketWeatherPage() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
 
-<<<<<<< HEAD
-  const profile = queryClient.getQueryData(["dashboard", "profile"]);
+  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
-=======
-  const DEFAULT_WEATHER_LAT = 7.0722;
-  const DEFAULT_WEATHER_LON = 125.6131;
-  const profile = queryClient.getQueryData(["farmer", "profile"]);
-  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
-  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
->>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
   const { data: weatherData, isLoading: loading, error } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
@@ -219,16 +211,15 @@ function MarketWeatherPage() {
           </p>
         </div>
 
-<<<<<<< HEAD
         <WeatherLocationBanner />
-=======
+
         {/* ── Top Risk Banner ── */}
-        {transformedWeather?.risk_level ? (
+        {(transformedWeather?.risk_level || weatherData?.risk_level) ? (
           <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-200">
             <div className="flex items-start gap-2 text-emerald-700">
               <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-[14px] font-bold text-emerald-700">{transformedWeather.risk_level}</p>
+                <p className="text-[14px] font-bold text-emerald-700">{transformedWeather?.risk_level || weatherData?.risk_level}</p>
                 <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{weatherSummary}</p>
               </div>
             </div>
@@ -238,24 +229,6 @@ function MarketWeatherPage() {
             <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
           </div>
         )}
->>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
-
-        {/* ── Top Risk Banner ── */}
-            {weatherData?.risk_level ? (
-              <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-200">
-                <div className="flex items-start gap-2 text-emerald-700">
-                  <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[14px] font-bold text-emerald-700">{weatherData.risk_level}</p>
-                    <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{weatherSummary}</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
-                <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
-              </div>
-            )}
 
             {/* ── 1. 14-day forecast carousel ── */}
         <section className="space-y-3">

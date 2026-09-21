@@ -1,4 +1,5 @@
-import { ChevronDown, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronDown, X, CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react";
 const inputCls = "w-full h-11 px-3.5 text-[14px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]";
 const SUFFIX_OPTIONS = ["None", "Jr.", "Sr.", "II", "III", "IV"];
 const PW_REQS = [
@@ -49,9 +50,106 @@ const Toggle = ({ on, onChange }) => <button
 >
     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
   </button>;
-const Toast = ({ message }) => message ? <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-[var(--hw-neutral-900)] text-white text-[13px] font-medium rounded-2xl shadow-xl whitespace-nowrap">
-      {message}
-    </div> : null;
+const Toast = ({ message, type = "success", title, onClose, duration = 5000 }) => {
+  const [visible, setVisible] = useState(false);
+  const [activeToast, setActiveToast] = useState(null);
+
+  useEffect(() => {
+    if (!message) {
+      setVisible(false);
+      setActiveToast(null);
+      return;
+    }
+
+    const payload = typeof message === "object" ? message : { message, type, title };
+    setActiveToast(payload);
+    const animTimer = setTimeout(() => setVisible(true), 20);
+
+    const closeTimer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setActiveToast(null);
+        onClose?.();
+      }, 300);
+    }, duration);
+
+    return () => {
+      clearTimeout(animTimer);
+      clearTimeout(closeTimer);
+    };
+  }, [message, type, title, duration, onClose]);
+
+  if (!activeToast) return null;
+
+  const toastType = activeToast.type || type || "success";
+
+  const config = {
+    success: {
+      icon: <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />,
+      border: "border-emerald-200",
+      text: "text-emerald-800",
+      title: activeToast.title || "Success",
+    },
+    error: {
+      icon: <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />,
+      border: "border-red-200",
+      text: "text-red-800",
+      title: activeToast.title || "Error",
+    },
+    warning: {
+      icon: <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />,
+      border: "border-amber-200",
+      text: "text-amber-800",
+      title: activeToast.title || "Warning",
+    },
+    info: {
+      icon: <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />,
+      border: "border-blue-200",
+      text: "text-blue-800",
+      title: activeToast.title || "Information",
+    },
+  };
+
+  const cfg = config[toastType] || config.success;
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(() => {
+      setActiveToast(null);
+      onClose?.();
+    }, 300);
+  };
+
+  return (
+    <div className="fixed top-5 right-5 z-[500] max-w-sm w-full pointer-events-none px-3 md:px-0">
+      <div
+        className={`pointer-events-auto bg-white border ${cfg.border} rounded-2xl shadow-[0_10px_30px_-5px_rgba(0,0,0,0.12)] p-4 flex items-start gap-3 transition-all duration-300 ease-out transform ${
+          visible ? "translate-x-0 opacity-100" : "translate-x-12 opacity-0"
+        }`}
+      >
+        <div className="mt-0.5">{cfg.icon}</div>
+        <div className="flex-1 min-w-0">
+          {activeToast.title && (
+            <p className={`text-[13px] font-bold ${cfg.text} leading-snug mb-0.5`}>
+              {activeToast.title}
+            </p>
+          )}
+          <p className={`text-[13px] font-semibold ${cfg.text} leading-snug`}>
+            {activeToast.message}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors flex-shrink-0 -mr-1 -mt-1"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
 const Modal = ({ title, onClose, children }) => <div
   className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40"
   onClick={(e) => {

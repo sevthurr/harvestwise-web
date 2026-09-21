@@ -430,7 +430,9 @@ export function FarmLocationFields({ locationState, showCheckButton = false }) {
               className="w-full h-11 flex items-center justify-center gap-1.5 bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
             >
               {resolving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {t("onboarding.check_entered", {}, "Check entered location")}
+              {resolving
+                ? t("onboarding.checking_location", {}, "Checking location...")
+                : t("onboarding.check_entered", {}, "Check entered location")}
             </button>
           </div>
         )}
@@ -443,12 +445,12 @@ export function FarmLocationFields({ locationState, showCheckButton = false }) {
             disabled={gpsLoading || resolving}
             className="text-[13px] font-medium text-[var(--hw-green-700)] hover:underline inline-flex items-center gap-1.5"
           >
-            {gpsLoading || resolving ? (
+            {gpsLoading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <MapPin className="w-3.5 h-3.5" />
             )}
-            {gpsLoading || resolving
+            {gpsLoading
               ? t("onboarding.getting_location", {}, "Getting location...")
               : t("onboarding.use_location", {}, "Use my current location")}
           </button>
@@ -469,13 +471,13 @@ export function FarmLocationFields({ locationState, showCheckButton = false }) {
           disabled={gpsLoading || resolving}
           className="flex-1 h-12 flex items-center justify-center gap-1.5 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-60 px-2 text-center"
         >
-          {gpsLoading || resolving ? (
+          {gpsLoading ? (
             <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
           ) : (
             <MapPin className="w-4 h-4 flex-shrink-0" />
           )}
           <span className="leading-tight">
-            {gpsLoading || resolving
+            {gpsLoading
               ? t("onboarding.getting_location", {}, "Getting location...")
               : t("onboarding.use_location", {}, "Use my current location")}
           </span>

@@ -175,6 +175,7 @@ export const en = {
     getting_location: "Getting location...",
     enter_manually: "Enter manually",
     check_entered: "Check entered location",
+    checking_location: "Checking location...",
     davao_default_weather_banner: "Weather data is currently based on Davao City general weather. Enter your farm location to get localized weather advisories.",
     enter_farm_location: "Enter farm location",
     location_detected: "Location detected automatically",

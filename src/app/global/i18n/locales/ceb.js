@@ -175,6 +175,7 @@ export const ceb = {
     getting_location: "Gikuha ang lokasyon...",
     enter_manually: "I-mano-mano ug enter",
     check_entered: "I-check ang gi-enter",
+    checking_location: "Gisusi ang lokasyon...",
     davao_default_weather_banner: "Ang datos sa panahon gibase karon sa kinatibuk-ang panahon sa Davao City. Isulod ang lokasyon sa imong umahan aron makakuha og localized nga advisory sa panahon.",
     enter_farm_location: "Isulod ang lokasyon sa umahan",
     location_detected: "Awtomatikong nakit-an ang lokasyon",

@@ -1,11 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
-<<<<<<< HEAD
-import { MapPin, Phone, Mail, Loader2 } from "lucide-react";
-=======
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Phone, Mail, Navigation, Loader2 } from "lucide-react";
->>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
+import { MapPin, Phone, Mail, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";

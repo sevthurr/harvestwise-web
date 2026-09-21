@@ -255,14 +255,8 @@ export function useFarmLocation({
       if (geo.district && !district.trim()) {
         setDistrict(geo.district);
       }
-      if (geo.purok_sitio && !purokSitio.trim()) {
-        setPurokSitio(geo.purok_sitio);
-      }
-      if (geo.street && !street.trim()) {
-        setStreet(geo.street);
-      }
       setAccuracy(null);
-      const disp = geo.display_address || [street, purokSitio, barangay, district.trim(), "Davao City"].filter(Boolean).join(", ");
+      const disp = [street, purokSitio, barangay, district.trim() || geo.district, "Davao City"].filter(Boolean).join(", ");
       setDisplayAddress(disp);
       return true;
     } catch {
@@ -286,40 +280,6 @@ export function useFarmLocation({
       setResolving(false);
     }
   }, [barangay, street, purokSitio, specificAddress, district]);
-
-  // In manual mode, automatically geocode in the background as soon as a barangay is selected
-  useEffect(() => {
-    if (locationMode !== "manual" || !barangay) return;
-
-    let isMounted = true;
-    const timer = setTimeout(async () => {
-      try {
-        setResolving(true);
-        const specificComposite = [street, purokSitio, specificAddress].filter(Boolean).join(", ");
-        let geo;
-        try {
-          geo = await geocodeBarangay(barangay, specificComposite, district.trim(), purokSitio.trim(), street.trim());
-        } catch {
-          geo = await geocodeBarangay(barangay);
-        }
-        if (!isMounted) return;
-        setLatitude(geo.latitude);
-        setLongitude(geo.longitude);
-        setErrorType(null);
-        const disp = geo.display_address || [street, purokSitio, barangay, district.trim(), "Davao City"].filter(Boolean).join(", ");
-        setDisplayAddress(disp);
-      } catch {
-        if (!isMounted) return;
-      } finally {
-        if (isMounted) setResolving(false);
-      }
-    }, 300);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, [locationMode, barangay, district, purokSitio, street]);
 
   const switchMode = useCallback((mode) => {
     setLocationMode(mode);

@@ -1,10 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-<<<<<<< HEAD
-import { useQueryClient } from "@tanstack/react-query";
-=======
-import { useQuery } from "@tanstack/react-query";
->>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -28,14 +24,11 @@ import {
 import { TextSizeSlider } from "../../global/components/settings/TextSizeSlider";
 import { apiGet, apiPut, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
-<<<<<<< HEAD
 import { FarmLocationFields } from "../../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
-=======
 import { queryClient } from "../../global/lib/queryClient";
 import { loadFarmerOfflineData, fetchFarmerProfile, fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
->>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
 const TABS = [
   { id: "account", label: "Account", key: "farmer.settings.tab_account" },
@@ -458,7 +451,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 /* -------------------------------------------------------------------------- */
 /* 2. Farm Profile Tab                                                        */
 /* -------------------------------------------------------------------------- */
-const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops, sellingOptions, showToast }) => {
+const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops, sellingOptions, showToast, onSaved }) => {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [crops, setCrops] = useState(initialCrops || {});
@@ -466,7 +459,6 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
-<<<<<<< HEAD
   const locationState = useFarmLocation({
     initialCity: initialLoc.city || "Davao City",
     initialDistrict: initialLoc.district || "",
@@ -477,97 +469,6 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
     initialLatitude: initialLoc.latitude,
     initialLongitude: initialLoc.longitude,
   });
-=======
-  // Shared farmer profile (persisted by the offline layer)
-  const { data: rawProfile } = useQuery({
-    queryKey: ["farmer", "profile"],
-    queryFn: fetchFarmerProfile,
-    staleTime: 1000 * 60 * 30,
-  });
-
-  // Shared top-10 price list (drives the crop picker)
-  const { data: priceListData } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: fetchPricesList,
-    staleTime: 1000 * 60 * 30,
-  });
-
-  // Seed form state from cached profile data.
-  useEffect(() => {
-    const camel = rawProfile ? toCamelCase(rawProfile) : null;
-    if (!camel) return;
-    setLoc({
-      city: camel.city || "",
-      district: camel.district || "",
-      barangay: camel.barangay || "",
-      farmSize: camel.farmSize != null ? `${camel.farmSize}` : ""
-    });
-
-    if (camel.preferredCrops && Array.isArray(camel.preferredCrops)) {
-      const cropMap = {};
-      camel.preferredCrops.forEach((cp) => {
-        const name = cp.commodityName || cp.name;
-        if (name) {
-          cropMap[name] = cp.varietyName || "";
-        }
-      });
-      setCrops(cropMap);
-    }
-
-    const primarySm = camel.sellingMethods?.[0]?.label;
-    setSelling({
-      method: primarySm || "",
-      area: camel.usualSellingAreaOrBuyer || ""
-    });
-  }, [rawProfile]);
-
-  // Derive available top-10 crops from the shared price list.
-  useEffect(() => {
-    const items = priceListData?.items || [];
-    const baseMap = new Map();
-    items.forEach((item) => {
-      const isTop = item.is_top10 === true || item.isTop10 === true;
-      if (!isTop) return;
-      const camel = toCamelCase(item);
-      const name = camel.name || "";
-      if (name && !baseMap.has(name)) {
-        baseMap.set(name, {
-          id: camel.commodityId || camel.id,
-          name: name,
-          baseName: camel.baseName
-        });
-      }
-    });
-    const topList = Array.from(baseMap.values());
-    if (topList.length > 0) {
-      setAvailableCrops(topList);
-    }
-  }, [priceListData]);
-
-  // Fetch selling methods separately (small admin-owned list).
-  useEffect(() => {
-    let active = true;
-    async function loadSellingMethods() {
-      try {
-        const smRes = await apiGet("/farmer/selling-methods");
-        if (smRes.ok && active) {
-          const smData = await parseResponse(smRes);
-          if (Array.isArray(smData) && smData.length > 0) {
-            setSellingOptions(smData.map((sm) => sm.label));
-          }
-        }
-      } catch {
-        // Use default selling options
-      }
-    }
-    loadSellingMethods();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const setLocField = (k) => (e) => setLoc((l) => ({ ...l, [k]: e.target.value }));
->>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
   const toggleCrop = (name) => {
     setCrops((prev) => {
@@ -584,25 +485,27 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
       setSaving(true);
       const payload = {
         city: locationState.city || "Davao City",
-        district: locationState.district || null,
-        barangay: locationState.barangay || null,
-        purok_sitio: locationState.purokSitio || null,
-        street: locationState.street || null,
-        location_name: locationState.specificAddress || null,
+        district: locationState.district ? locationState.district.trim() : null,
+        barangay: locationState.barangay ? locationState.barangay.trim() : null,
+        purok_sitio: locationState.purokSitio ? locationState.purokSitio.trim() : null,
+        street: locationState.street ? locationState.street.trim() : null,
+        location_name: null,
         latitude: locationState.latitude != null ? locationState.latitude : null,
         longitude: locationState.longitude != null ? locationState.longitude : null,
-        usual_selling_area_or_buyer: selling.area || null,
+        usual_selling_area_or_buyer: selling.area ? selling.area.trim() : null,
       };
       const res = await apiPut("/farmer/profile", payload);
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["farmer"] });
       if (res.ok) {
-        showToast(t("farmer.settings.toast_saved", {}, "Farm profile updated successfully."));
+        const updated = await parseResponse(res);
+        onSaved?.(updated);
+        showToast(t("farmer.settings.toast_saved", {}, "Farm profile updated successfully."), "success");
       } else {
-        showToast(t("farmer.settings.toast_saved", {}, "Farm profile updated."));
+        showToast(t("farmer.settings.toast_save_error", {}, "Could not update farm profile. Please try again."), "error");
       }
     } catch {
-      showToast(t("farmer.settings.toast_saved", {}, "Farm profile updated."));
+      showToast(t("farmer.settings.toast_save_error", {}, "Could not update farm profile. Please try again."), "error");
     } finally {
       setSaving(false);
     }
@@ -831,6 +734,24 @@ const FarmTab = ({ showToast }) => {
     );
   }
 
+  const handleSaved = (updated) => {
+    if (!updated) return;
+    const camel = toCamelCase(updated);
+    setInitialData((prev) => ({
+      ...prev,
+      loc: {
+        city: camel.city || "Davao City",
+        district: camel.district || null,
+        barangay: camel.barangay || "",
+        purokSitio: camel.purokSitio || camel.purok_sitio || "",
+        street: camel.street || "",
+        locationName: camel.locationName || camel.location_name || "",
+        latitude: camel.latitude != null ? camel.latitude : null,
+        longitude: camel.longitude != null ? camel.longitude : null,
+      },
+    }));
+  };
+
   return (
     <FarmTabForm
       initialLoc={initialData.loc}
@@ -839,6 +760,7 @@ const FarmTab = ({ showToast }) => {
       availableCrops={availableCrops}
       sellingOptions={sellingOptions}
       showToast={showToast}
+      onSaved={handleSaved}
     />
   );
 };
@@ -1030,7 +952,7 @@ function FarmerSettings() {
   const [params] = useSearchParams();
   const tabFromUrl = params.get("tab") || "account";
   const [activeTab, setActiveTab] = useState(tabFromUrl);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(null);
   const tabBarRef = useRef(null);
 
   useEffect(() => {
@@ -1038,9 +960,12 @@ function FarmerSettings() {
     setActiveTab(t);
   }, [params]);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
+  const showToast = (msg, type = "success") => {
+    if (typeof msg === "object" && msg !== null) {
+      setToast(msg);
+    } else {
+      setToast({ message: msg, type });
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -1089,7 +1014,12 @@ function FarmerSettings() {
       {activeTab === "preferences" && <PreferencesTab showToast={showToast} />}
       {activeTab === "notifications" && <NotificationsTab showToast={showToast} />}
 
-      <Toast message={toast} />
+      <Toast
+        message={toast?.message}
+        type={toast?.type || "success"}
+        onClose={() => setToast(null)}
+        duration={5000}
+      />
     </div>
   );
 }

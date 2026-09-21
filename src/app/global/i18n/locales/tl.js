@@ -175,6 +175,7 @@ export const tl = {
     getting_location: "Kinukuha ang lokasyon...",
     enter_manually: "Manu-manong ilagay",
     check_entered: "I-check ang in-enter",
+    checking_location: "Sinisuri ang lokasyon...",
     davao_default_weather_banner: "Ang datos ng panahon ay kasalukuyang nakabatay sa pangkalahatang panahon sa Davao City. Ilagay ang lokasyon ng iyong sakahan upang makakuha ng localized na advisory sa panahon.",
     enter_farm_location: "Ilagay ang lokasyon ng sakahan",
     location_detected: "Awtomatikong natukoy ang lokasyon",
