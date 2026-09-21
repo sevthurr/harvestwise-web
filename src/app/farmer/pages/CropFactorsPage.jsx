@@ -58,9 +58,17 @@ function CropFactorsPage() {
     staleTime: 1000 * 60 * 15,
   });
 
+<<<<<<< HEAD
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
+=======
+  const DEFAULT_WEATHER_LAT = 7.0722;
+  const DEFAULT_WEATHER_LON = 125.6131;
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+>>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
   const { data: weatherAdvisoryData } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],

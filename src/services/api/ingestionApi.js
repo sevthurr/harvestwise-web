@@ -51,3 +51,11 @@ export async function retryImport(payload) {
 export async function syncNow() {
   return parseResponse(await apiPost("/admin/ingestion/sync", {}));
 }
+
+export async function triggerWeatherSync() {
+  return parseResponse(await apiPost("/weather/sync", {}));
+}
+
+export async function triggerPsaSync() {
+  return parseResponse(await apiPost("/admin/ingestion/psa/trigger/incremental", {}));
+}

@@ -9,7 +9,8 @@ import {
   storeTokens,
 } from '../api';
 import { get, set, del } from 'idb-keyval';
-import { clearQueryPersistedCache } from '../lib/queryClient';
+import { clearQueryPersistedCache, queryClient } from '../lib/queryClient';
+import { loadFarmerOfflineData } from '../hooks/useFarmerPrefetch';
 
 const AuthContext = createContext(null);
 
@@ -31,6 +32,13 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Seed the offline bundle after a successful farmer session restore.
+  const seedFarmerOffline = (me) => {
+    if (me && roleHome(me.role_name) === '/farmer') {
+      loadFarmerOfflineData(queryClient).catch(() => {});
+    }
+  };
+
   // ------------------------------------------------------------------
   // Restore session on mount
   // - If online: fetch /auth/me, cache user in IndexedDB
@@ -50,6 +58,7 @@ export function AuthProvider({ children }) {
         setUser(me);
         // Cache user profile for offline restoration
         await set(USER_CACHE_KEY, me);
+        seedFarmerOffline(me);
       } catch {
         // Network failure (not 401) — try to restore from IndexedDB cache
         try {
@@ -95,6 +104,7 @@ export function AuthProvider({ children }) {
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
     setUser(me);
     await set(USER_CACHE_KEY, me);
+    seedFarmerOffline(me);
     return me;
   };
 

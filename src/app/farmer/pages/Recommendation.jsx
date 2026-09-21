@@ -348,10 +348,19 @@ function RecommendationPage() {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
 
+<<<<<<< HEAD
   // Farmer profile coordinates reused by the weather advisory query (defaults to Davao City center)
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
+=======
+  // Farmer profile coordinates reused by the weather advisory query
+  const DEFAULT_WEATHER_LAT = 7.0722;
+  const DEFAULT_WEATHER_LON = 125.6131;
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+>>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
   // Reuse prefetched market calendar
   const { data: rawMarketEvents = [], isLoading: eventsLoading } = useQuery({

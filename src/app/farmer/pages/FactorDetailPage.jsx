@@ -18,9 +18,15 @@ function FactorDetailPage() {
   const commodityName = state?.commodityName || null;
   const moduleResults = state?.moduleResults || {};
 
+<<<<<<< HEAD
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
+=======
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+>>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
   const { data: productionFactorData } = useQuery({
     queryKey: ["factors", "production", commodityId],

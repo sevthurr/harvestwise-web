@@ -20,7 +20,8 @@ import { validateContact } from "./authValidation";
 const SCALE = 0.85;
 const LOGO_W = Math.round(494 * SCALE);
 const LOGO_H = Math.round(361 * SCALE);
-const OTP_LENGTH = 8;
+const OTP_LENGTH_BY_FACTOR = { email_otp: 8, totp: 6 };
+const getOtpLength = (factor) => OTP_LENGTH_BY_FACTOR[factor] ?? 6;
 
 function LogoMark() {
   return (
@@ -112,7 +113,8 @@ function LoginPage() {
 
   const handleVerifyMfa = async (eventCode) => {
     const code = eventCode ?? mfaCode;
-    if (!mfaToken || code.length !== OTP_LENGTH) return;
+    const otpLength = getOtpLength(mfaFactor);
+    if (!mfaToken || code.length !== otpLength) return;
     setMfaError("");
     setMfaLoading(true);
     try {
@@ -228,7 +230,7 @@ function LoginPage() {
             </p>
             <div className="flex justify-center pt-1">
               <InputOTP
-                maxLength={OTP_LENGTH}
+                maxLength={getOtpLength(mfaFactor)}
                 value={mfaCode}
                 onChange={(v) => {
                   setMfaCode(v);
@@ -237,7 +239,7 @@ function LoginPage() {
                 onComplete={handleVerifyMfa}
               >
                 <InputOTPGroup>
-                  {Array.from({ length: OTP_LENGTH }, (_, i) => (
+                  {Array.from({ length: getOtpLength(mfaFactor) }, (_, i) => (
                     <InputOTPSlot key={i} index={i} />
                   ))}
                 </InputOTPGroup>
@@ -250,7 +252,7 @@ function LoginPage() {
             )}
             <button
               type="button"
-              disabled={mfaLoading || mfaCode.length !== OTP_LENGTH}
+              disabled={mfaLoading || mfaCode.length !== getOtpLength(mfaFactor)}
               onClick={() => handleVerifyMfa()}
               className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
             >

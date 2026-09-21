@@ -56,6 +56,21 @@ const STATUS_TEXT = {
   "Not yet updated": "text-[var(--hw-neutral-500)]",
   "Not yet synced": "text-[var(--hw-neutral-500)]"
 };
+
+const SOURCE_DISPLAY_NAMES = {
+  consolidated_monthly_wholesale:  "Consolidated Monthly Wholesale",
+  consolidated_monthly_retail:     "Consolidated Monthly Retail",
+  consolidated_monthly_landing:    "Consolidated Monthly Landing",
+  bankerohan_daily_wholesale:      "Bankerohan Daily Wholesale",
+  bankerohan_daily_retail:         "Bankerohan Daily Retail",
+  bankerohan_daily_landing:        "Bankerohan Daily Landing",
+  dftc_volume:                     "DFTC Arrival Volume",
+  dftc_daily_wholesale:            "DFTC Daily Wholesale",
+  dftc_daily_retail:               "DFTC Daily Retail",
+  dftc_daily_landing:              "DFTC Daily Landing",
+  psa_openstat:                    "PSA OpenStat",
+  open_meteo:                      "Open-Meteo Weather API",
+};
 const BASE_EVENTS = [];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -128,7 +143,7 @@ function AdminDataSources() {
 
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
-
+  const [fetchingSource, setFetchingSource] = useState({});
 
   const handleSyncAll = async () => {
     setSyncing(true);
@@ -139,6 +154,29 @@ function AdminDataSources() {
       setSyncError(err.message || "Failed to start sync.");
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Identifies which sources have a manual fetch endpoint
+  const MANUAL_FETCH_LABEL = {
+    open_meteo: true,
+    psa_openstat: true,
+  };
+
+  const handleFetchNow = async (sourceId, sourceName) => {
+    if (fetchingSource[sourceId]) return;
+    setFetchingSource((f) => ({ ...f, [sourceId]: true }));
+    try {
+      if (sourceName === "open_meteo") {
+        await ingestionApi.triggerWeatherSync();
+      } else if (sourceName === "psa_openstat") {
+        await ingestionApi.triggerPsaSync();
+      }
+      queryClient.invalidateQueries({ queryKey: ["adminApiSyncSources"] });
+    } catch (_err) {
+      // failure is silent here; the status tile will reflect it on next load
+    } finally {
+      setFetchingSource((f) => ({ ...f, [sourceId]: false }));
     }
   };
 
@@ -171,7 +209,9 @@ function AdminDataSources() {
     return BASE_EVENTS;
   }, [eventsData]);
 
-  const dataSources = dataSourcesRes?.items || [];
+  const dataSources = (dataSourcesRes?.items || []).filter(
+    (s) => s.name !== "open_meteo" && s.name !== "psa_openstat"
+  );
   const apiSyncSources = apiSyncRes?.items || [];
   const dataSourcesError = dsErr ? (dsErr.message || "Failed to load data sources.") : null;
   const apiSyncError = syncErr ? (syncErr.message || "Failed to load API sync sources.") : null;
@@ -721,7 +761,7 @@ function AdminDataSources() {
                         className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                       >
                         <td className="px-4 py-3">
-                          <p className="font-medium text-[var(--hw-neutral-800)]">{s.name}</p>
+                          <p className="font-medium text-[var(--hw-neutral-800)]">{SOURCE_DISPLAY_NAMES[s.name] || s.name}</p>
                         </td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.type}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "-"}</td>
@@ -777,17 +817,32 @@ function AdminDataSources() {
               ) : (
                 apiSyncSources.map((s) => <div
                   key={s.id}
-                  onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-                  className="px-5 py-4 space-y-3 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                  className="px-5 py-4 space-y-3"
                 >
                   <div className="flex items-start gap-3 flex-wrap">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-[var(--hw-neutral-800)]">{s.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                          className="font-semibold text-[var(--hw-neutral-800)] hover:text-[var(--hw-green-700)] transition-colors text-left"
+                        >
+                          {SOURCE_DISPLAY_NAMES[s.name] || s.name}
+                        </button>
                         <span className={`text-[13px] font-medium ${STATUS_TEXT[s.status]}`}>{s.status}</span>
                       </div>
                       <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{s.apiSource}</p>
                     </div>
+                    {MANUAL_FETCH_LABEL[s.name] && (
+                      <button
+                        type="button"
+                        disabled={!!fetchingSource[s.id]}
+                        onClick={(e) => { e.stopPropagation(); handleFetchNow(s.id, s.name); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-[var(--hw-green-700)] border border-[var(--hw-green-300)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-50 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 flex-shrink-0 ${fetchingSource[s.id] ? "animate-spin" : ""}`} />
+                        {fetchingSource[s.id] ? "Fetching..." : "Fetch Now"}
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
                     {[

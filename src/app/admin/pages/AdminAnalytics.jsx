@@ -6,6 +6,7 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
+import { useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
 import {
   MODULES,
   CLASSIFICATIONS,
@@ -735,6 +736,18 @@ function AdminAnalytics() {
     return val ? `${r.operator} ${val}` : "Set";
   };
 
+  const scopedCommodityRecord = useMemo(
+    () => commodities.find((commodity) => commodity.name === scopedCommodity) || null,
+    [commodities, scopedCommodity]
+  );
+
+  // Historical seasonal production used in the Weights & Thresholds tab.
+  const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
+    !!scopedCommodityRecord?.id,
+    scopedCommodity,
+    scopedVariety
+  );
+
   useEffect(() => {
     if (!showTooltip) return;
     const h = (e) => {
@@ -1417,7 +1430,7 @@ function AdminAnalytics() {
                       <div>
                         <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Historical Seasonal Production Level</h3>
                         <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
-                          Source: PSA OpenStat Production API · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
+                          Source: {productionSummary?.source || "production_record"} · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
                         </p>
                       </div>
                     </div>
@@ -1426,20 +1439,63 @@ function AdminAnalytics() {
                       <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
                         <div>
                           <p className="text-[11px] text-[var(--hw-neutral-500)]">Q1 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">-</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q1.toFixed(2) : "-"}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[11px] text-[var(--hw-neutral-500)]">Q2 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">-</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q2.toFixed(2) : "-"}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[11px] text-[var(--hw-neutral-500)]">Q3 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">-</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q3.toFixed(2) : "-"}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
-                        Insufficient historical production data to calculate thresholds.
-                      </p>
+                      {productionLoading ? (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">Loading production history…</p>
+                      ) : productionError ? (
+                        <p className="text-[11px] text-red-600 text-center">{productionError}</p>
+                      ) : productionSummary?.status !== "processed" ? (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                          {productionSummary?.message || "Insufficient historical production data to calculate thresholds."}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 text-center">
+                            <div className="rounded-lg border border-[var(--hw-neutral-100)] p-2">
+                              <p className="text-[10px] text-[var(--hw-neutral-500)]">Latest observed season</p>
+                              <p className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">{productionSummary.season} {productionSummary.latest_year}</p>
+                            </div>
+                            <div className="rounded-lg border border-[var(--hw-neutral-100)] p-2">
+                              <p className="text-[10px] text-[var(--hw-neutral-500)]">Classification</p>
+                              <p className={`text-[12px] font-semibold ${CLASSIFICATION_COLORS[productionSummary.classification] || "text-[var(--hw-neutral-800)]"}`}>
+                                {productionSummary.classification}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto rounded-lg border border-[var(--hw-neutral-100)]">
+                            <table className="w-full text-[10px] text-left">
+                              <thead className="bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-500)]">
+                                <tr><th className="px-2 py-1.5">Season</th><th className="px-2 py-1.5 text-right">Total MT</th><th className="px-2 py-1.5 text-right">Years</th></tr>
+                              </thead>
+                              <tbody>
+                                {productionSummary.seasonal_totals.map((season) => (
+                                  <tr key={season.season} className="border-t border-[var(--hw-neutral-100)]">
+                                    <td className="px-2 py-1.5 text-[var(--hw-neutral-700)]">{season.season}</td>
+                                    <td className="px-2 py-1.5 text-right font-medium text-[var(--hw-neutral-800)]">{season.total_production_mt.toLocaleString()}</td>
+                                    <td className="px-2 py-1.5 text-right text-[var(--hw-neutral-700)]">{season.years_available}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

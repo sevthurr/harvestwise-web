@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -104,9 +104,17 @@ function MarketWeatherPage() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
 
+<<<<<<< HEAD
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
+=======
+  const DEFAULT_WEATHER_LAT = 7.0722;
+  const DEFAULT_WEATHER_LON = 125.6131;
+  const profile = queryClient.getQueryData(["farmer", "profile"]);
+  const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+  const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+>>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
   const { data: weatherData, isLoading: loading, error } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
@@ -114,38 +122,43 @@ function MarketWeatherPage() {
     queryFn: async () => {
       const response = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
       if (!response.ok) throw new Error(t('farmer.errors.fetch_weather_failed'));
-      const data = await parseResponse(response);
-      const daily = data.daily_forecasts || [];
-      const forecast14 = daily.map((d, i) => ({
-        dayLabel: d.day_label || (i === 0 ? 'Today' : `+${i}d`),
-        date: d.date ? new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-',
-        icon: _mapWeatherConditionToIcon(d.weather_condition),
-        tempMin: d.temperature_min != null ? Math.round(d.temperature_min) : null,
-        tempMax: d.temperature_max != null ? Math.round(d.temperature_max) : null,
-        rainPct: d.rain_probability_pct != null ? Math.round(d.rain_probability_pct) : 0,
-        risk: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE ? 'high' : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION ? 'moderate' : 'low'
-      }));
-
-      return {
-        updated_at: new Date().toISOString(),
-        location_name: data.location || t('farmer.factors.weather.fallback_location'),
-        forecast_14d: forecast14,
-        weather_summary: data.weather_risk_level ? t('farmer.factors.weather.summary_headline', { risk_level: data.weather_risk_level }) : t('farmer.factors.weather.forecast_fallback_davao'),
-        crop_advisories: (data.advisories || []).map((adv, idx) => ({
-          crop_id: adv.commodity_id || `crop-${idx}`,
-          crop_name: adv.commodity_name || 'Crop',
-          status: 'Monitoring',
-          risk_level: adv.suitability || null,
-          headline: adv.headline || (adv.suitability ? `${adv.suitability} weather conditions` : "Weather conditions"),
-          date_range: 'Next 7 Days',
-          recommended_actions: adv.recommended_actions || ['Monitor field drainage and moisture'],
-          crop_sensitivity: adv.explanation || null
-        })),
-        has_crops: (data.advisories || []).length > 0
-      };
+      return parseResponse(response);
     },
     staleTime: 1000 * 60 * 30,
   });
+
+  const transformedWeather = useMemo(() => {
+    if (!weatherData) return null;
+    const data = weatherData;
+    const daily = data.daily_forecasts || [];
+    const forecast14 = daily.map((d, i) => ({
+      dayLabel: d.day_label || (i === 0 ? 'Today' : `+${i}d`),
+      date: d.date ? new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-',
+      icon: _mapWeatherConditionToIcon(d.weather_condition),
+      tempMin: d.temperature_min != null ? Math.round(d.temperature_min) : null,
+      tempMax: d.temperature_max != null ? Math.round(d.temperature_max) : null,
+      rainPct: d.rain_probability_pct != null ? Math.round(d.rain_probability_pct) : 0,
+      risk: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE ? 'high' : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION ? 'moderate' : 'low'
+    }));
+
+    return {
+      updated_at: new Date().toISOString(),
+      location_name: data.location || t('farmer.factors.weather.fallback_location'),
+      forecast_14d: forecast14,
+      weather_summary: data.weather_risk_level ? t('farmer.factors.weather.summary_headline', { risk_level: data.weather_risk_level }) : t('farmer.factors.weather.forecast_fallback_davao'),
+      crop_advisories: (data.advisories || []).map((adv, idx) => ({
+        crop_id: adv.commodity_id || `crop-${idx}`,
+        crop_name: adv.commodity_name || 'Crop',
+        status: 'Monitoring',
+        risk_level: adv.suitability || null,
+        headline: adv.headline || (adv.suitability ? `${adv.suitability} weather conditions` : "Weather conditions"),
+        date_range: 'Next 7 Days',
+        recommended_actions: adv.recommended_actions || ['Monitor field drainage and moisture'],
+        crop_sensitivity: adv.explanation || null
+      })),
+      has_crops: (data.advisories || []).length > 0
+    };
+  }, [weatherData, t]);
 
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
 
@@ -186,12 +199,12 @@ function MarketWeatherPage() {
     );
   }
 
-  const hasCrops = weatherData?.has_crops ?? false;
-  const forecast14d = weatherData?.forecast_14d ?? [];
-  const cropAdvisories = weatherData?.crop_advisories ?? [];
-  const locationName = weatherData?.location_name ?? '-';
-  const weatherSummary = weatherData?.weather_summary ?? 'No weather data available';
-  const updatedAt = weatherData?.updated_at ? new Date(weatherData.updated_at).toLocaleTimeString() : t('farmer.factors.weather.unknown_time');
+  const hasCrops = transformedWeather?.has_crops ?? false;
+  const forecast14d = transformedWeather?.forecast_14d ?? [];
+  const cropAdvisories = transformedWeather?.crop_advisories ?? [];
+  const locationName = transformedWeather?.location_name ?? '-';
+  const weatherSummary = transformedWeather?.weather_summary ?? 'No weather data available';
+  const updatedAt = transformedWeather?.updated_at ? new Date(transformedWeather.updated_at).toLocaleTimeString() : t('farmer.factors.weather.unknown_time');
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
@@ -206,7 +219,26 @@ function MarketWeatherPage() {
           </p>
         </div>
 
+<<<<<<< HEAD
         <WeatherLocationBanner />
+=======
+        {/* ── Top Risk Banner ── */}
+        {transformedWeather?.risk_level ? (
+          <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-200">
+            <div className="flex items-start gap-2 text-emerald-700">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[14px] font-bold text-emerald-700">{transformedWeather.risk_level}</p>
+                <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{weatherSummary}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
+            <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
+          </div>
+        )}
+>>>>>>> ae9d4a264b1c6ef655a7e8b28207bf0a7e2b198b
 
         {/* ── Top Risk Banner ── */}
             {weatherData?.risk_level ? (

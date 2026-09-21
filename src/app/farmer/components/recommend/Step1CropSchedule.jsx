@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { CROP_DURATIONS, suggestHarvestDate } from "./types";
 import { CommodityIllustration, getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
-import { apiGet, parseResponse } from "../../../global/api";
+import { fetchPricesList } from "../../../global/hooks/useFarmerPrefetch";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../global/components/ui/select";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
@@ -18,71 +19,57 @@ const PAGE_SIZE = 4;
 
 const Step1CropSchedule = ({ data, onChange, errors }) => {
   const { t } = useLanguage();
-  const [commodityOptions, setCommodityOptions] = useState([]);
-  const [loadingCommodities, setLoadingCommodities] = useState(true);
 
-  // Fetch top10 commodities from API
-  useEffect(() => {
-    const fetchCommodities = async () => {
-      try {
-        setLoadingCommodities(true);
-        const response = await apiGet('/prices?is_top10=true&page_size=50');
-        if (response.ok) {
-          const resData = await parseResponse(response);
-          const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
-          const baseMap = {};
-          
-          rawItems.forEach(item => {
-            const camelItem = toCamelCase(item);
-            const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-            if (!isTop) return;
+  // Fetch top10 commodities from API (persisted to IndexedDB by the offline layer)
+  const { data: resData, isLoading: loadingCommodities } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: fetchPricesList,
+    staleTime: 1000 * 60 * 30,
+  });
 
-            const nameStr = camelItem.name || camelItem.commodityName || item.name || '';
-            const key = getCommodityIconKey(camelItem.commodityId, camelItem.baseName, nameStr);
-            if (!key) return;
+  const commodityOptions = (() => {
+    const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
+    const baseMap = {};
 
-            let baseName = camelItem.baseName || nameStr.split('-')[0].trim();
-            let variety = camelItem.variety || (nameStr.includes('-') ? nameStr.split('-').slice(1).join('-').trim() : '');
-            const rawId = camelItem.commodityId || item.id || camelItem.id;
+    rawItems.forEach(item => {
+      const camelItem = toCamelCase(item);
+      const isTop = camelItem.isTop10 === true || item.is_top10 === true;
+      if (!isTop) return;
 
-            if (!baseMap[key]) {
-              baseMap[key] = {
-                id: key,
-                name: baseName,
-                varieties: new Set(),
-                varietyMap: {},
-                defaultCommodityId: rawId,
-              };
-            }
-            if (variety) {
-              baseMap[key].varieties.add(variety);
-              baseMap[key].varietyMap[variety.toLowerCase()] = rawId;
-              if (variety.toLowerCase() === 'medium') {
-                baseMap[key].defaultCommodityId = rawId;
-              }
-            }
-          });
+      const nameStr = camelItem.name || camelItem.commodityName || item.name || '';
+      const key = getCommodityIconKey(camelItem.commodityId, camelItem.baseName, nameStr);
+      if (!key) return;
 
-          const top10 = Object.values(baseMap).map(c => ({
-            id: c.id,
-            name: c.name,
-            varieties: Array.from(c.varieties),
-            varietyMap: c.varietyMap,
-            defaultCommodityId: c.defaultCommodityId,
-          }));
+      let baseName = camelItem.baseName || nameStr.split('-')[0].trim();
+      let variety = camelItem.variety || (nameStr.includes('-') ? nameStr.split('-').slice(1).join('-').trim() : '');
+      const rawId = camelItem.commodityId || item.id || camelItem.id;
 
-          setCommodityOptions(top10);
-        }
-      } catch (error) {
-        console.error('Failed to fetch commodities:', error);
-        setCommodityOptions([]);
-      } finally {
-        setLoadingCommodities(false);
+      if (!baseMap[key]) {
+        baseMap[key] = {
+          id: key,
+          name: baseName,
+          varieties: new Set(),
+          varietyMap: {},
+          defaultCommodityId: rawId,
+        };
       }
-    };
+      if (variety) {
+        baseMap[key].varieties.add(variety);
+        baseMap[key].varietyMap[variety.toLowerCase()] = rawId;
+        if (variety.toLowerCase() === 'medium') {
+          baseMap[key].defaultCommodityId = rawId;
+        }
+      }
+    });
 
-    fetchCommodities();
-  }, []);
+    return Object.values(baseMap).map(c => ({
+      id: c.id,
+      name: c.name,
+      varieties: Array.from(c.varieties),
+      varietyMap: c.varietyMap,
+      defaultCommodityId: c.defaultCommodityId,
+    }));
+  })();
 
   const COMMODITY_PAGES = commodityOptions.reduce((acc, c, i) => {
     const page = Math.floor(i / PAGE_SIZE);

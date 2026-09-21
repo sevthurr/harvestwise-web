@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import AdminForecasting, {
   buildChartData,
@@ -119,6 +120,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+function renderWithQuery(ui) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 describe('forecast graph mapping helpers', () => {
   it('maps horizon selector labels to forecast_horizon_days', () => {
@@ -286,7 +292,7 @@ describe('AdminForecasting graph', () => {
       },
     ]);
     vi.stubGlobal('fetch', fetchFn);
-    render(<AdminForecasting />);
+    renderWithQuery(<AdminForecasting />);
     return fetchFn;
   }
 
@@ -414,7 +420,7 @@ describe('AdminForecasting graph', () => {
 
   it('keeps the existing loading overlay', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    render(<AdminForecasting />);
+    renderWithQuery(<AdminForecasting />);
     expect(screen.getByText('Loading forecast...')).toBeInTheDocument();
   });
 
@@ -433,7 +439,7 @@ describe('AdminForecasting graph', () => {
       },
     ]);
     vi.stubGlobal('fetch', fetchFn);
-    render(<AdminForecasting />);
+    renderWithQuery(<AdminForecasting />);
     await waitFor(() => {
       expect(screen.getByText('No forecast records available')).toBeInTheDocument();
     });
@@ -451,7 +457,7 @@ describe('AdminForecasting graph', () => {
       },
     ]);
     vi.stubGlobal('fetch', fetchFn);
-    render(<AdminForecasting />);
+    renderWithQuery(<AdminForecasting />);
     await waitFor(() => {
       expect(screen.getByText(/Unable to load forecast data: detail failed/)).toBeInTheDocument();
     });
