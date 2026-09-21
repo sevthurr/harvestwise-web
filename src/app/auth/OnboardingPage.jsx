@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Check, MapPin, Loader2 } from "lucide-react";
 import { HW_COMMODITY_ITEMS, getVariants } from "../global/data/commodities";
 import { CommodityIllustration } from "../global/components/shared/CommodityIllustrations";
@@ -9,6 +10,7 @@ import { useLanguage } from "../global/contexts/LanguageContext";
 import { useAuth } from "../global/contexts/AuthContext";
 import { FarmLocationFields } from "../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../global/hooks/useFarmLocation";
+import { FARMER_PROFILE_KEY, loadFarmerOfflineData } from "../global/hooks/useFarmerPrefetch";
 
 // ---------------------------------------------------------------------------
 // Selling methods are fetched from GET /farmer/selling-methods.
@@ -562,6 +564,7 @@ const INITIAL = {
 
 function OnboardingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { setLanguage, t } = useLanguage();
   const { refreshUser } = useAuth();
   const [step, setStep] = useState(1);
@@ -612,7 +615,11 @@ function OnboardingPage() {
   };
 
   // Skip without saving — go straight to farmer home
-  const skip = () => navigate("/farmer", { replace: true });
+  const skip = () => {
+    queryClient.invalidateQueries({ queryKey: ["farmer"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    navigate("/farmer", { replace: true });
+  };
 
   // Submit all onboarding data to backend
   const submitOnboarding = async () => {
@@ -649,8 +656,17 @@ function OnboardingPage() {
         selling_method_ids: selectedMethod ? [selectedMethod.id] : [],
       };
 
-      await apiPost("/api/v1/farmer/onboarding", payload).then(parseResponse);
+      const res = await apiPost("/api/v1/farmer/onboarding", payload);
+      const savedProfile = await parseResponse(res);
+      if (savedProfile) {
+        queryClient.setQueryData(FARMER_PROFILE_KEY, savedProfile);
+        queryClient.setQueryData(["dashboard", "profile"], savedProfile);
+      }
+      queryClient.invalidateQueries({ queryKey: ["farmer"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["weather"] });
       await refreshUser?.();
+      loadFarmerOfflineData(queryClient).catch(() => {});
       setStep(5);
     } catch (err) {
       setSubmitError(err.message || t("onboarding.save_error", {}, "Failed to save. Please try again."));
@@ -659,7 +675,11 @@ function OnboardingPage() {
     }
   };
 
-  const done = () => navigate("/farmer", { replace: true });
+  const done = () => {
+    queryClient.invalidateQueries({ queryKey: ["farmer"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    navigate("/farmer", { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
