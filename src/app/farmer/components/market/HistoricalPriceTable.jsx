@@ -97,7 +97,7 @@ const HistoricalPriceTable = ({
               rows.map((row, i) => {
     const isPos = row.change > 0;
     const isNeg = row.change < 0;
-    return <tr key={i} className={i === 0 ? "bg-[var(--hw-neutral-50)]" : "hover:bg-[var(--hw-neutral-50)]"}>
+    return <tr key={i} className={i === 0 ? "bg-[var(--hw-neutral-50)]" : ""}>
                   <td className="px-4 py-2.5 text-[var(--hw-neutral-700)] font-medium whitespace-nowrap">
                     {row.date}
                     {i === 0 && <span className="ml-1.5 text-[10px] font-semibold text-[var(--hw-green-700)]">Latest</span>}

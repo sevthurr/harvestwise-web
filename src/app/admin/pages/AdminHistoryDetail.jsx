@@ -276,7 +276,7 @@ function AdminHistoryDetail() {
                   </thead>
                   <tbody className={`divide-y divide-[var(--hw-neutral-100)] ${recordsLoading ? "opacity-60" : ""}`}>
                     {pageRows.map((row, rIdx) => (
-                      <tr key={rIdx} className="hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+                      <tr key={rIdx}>
                         {columns.map((col) => {
                           const val = row[col];
                           if (col === "Outcome") {

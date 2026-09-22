@@ -1351,7 +1351,7 @@ function DFTCTrends() {
                     </tr>
                   ) : (
                     pPageRows.map((row, i) => (
-                      <tr key={i} className="hover:bg-[var(--hw-neutral-50)]/70 transition-colors">
+                      <tr key={i}>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.date}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-900)] font-semibold">{pCommodity}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-700)]">{row.variety || "—"}</td>
@@ -1570,7 +1570,7 @@ function DFTCTrends() {
                     </tr>
                   ) : (
                     aPageRows.map((row, i) => (
-                      <tr key={i} className="hover:bg-[var(--hw-neutral-50)]/70 transition-colors">
+                      <tr key={i}>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.month}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-900)] font-semibold">{aCommodity}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-700)]">{row.variety || "—"}</td>

@@ -569,7 +569,7 @@ function DFTCCommodityRecords() {
                   </thead>
                   <tbody>
                     {pPageRows.map((r, i) => (
-                      <tr key={i} className="border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors">
+                      <tr key={i} className="border-b border-[var(--hw-neutral-100)]">
                         <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.date}</td>
                         <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)]">{r.variety || "—"}</td>
                         <td className="px-4 py-3 text-[13px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.category}</td>
@@ -686,7 +686,7 @@ function DFTCCommodityRecords() {
                   </thead>
                   <tbody>
                     {aPageRows.map((r, i) => (
-                      <tr key={i} className="border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors">
+                      <tr key={i} className="border-b border-[var(--hw-neutral-100)]">
                         <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.dateMonth}</td>
                         <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)]">{r.variety || "—"}</td>
                         <td className="px-4 py-3 text-[13px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.farmSource != null ? `${Number(r.farmSource).toLocaleString()} kg` : "—"}</td>

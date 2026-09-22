@@ -642,7 +642,7 @@ const HealthTab = ({ showToast }) => {
                 {services.map((s) => {
                   const style = getStatusStyle(s.status);
                   return (
-                    <tr key={s.id} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                    <tr key={s.id}>
                       <td className="py-3.5 text-[14px] font-medium text-black">{s.label}</td>
                       <td className="py-3.5 px-4">
                         <span className={`inline-flex items-center gap-2 text-[13px] ${style.text}`}>

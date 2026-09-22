@@ -38,42 +38,72 @@ import {
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { adminApi } from "../../../services/api";
 
-// ─── Action colour mapping ─────────────────────────────────────────────────
-// Actions follow dot-notation: "<resource>.<verb>"
-// Colours are keyed by the resource prefix (first segment).
-
-const RESOURCE_COLORS = {
-  user:       { bg: "bg-emerald-50",  text: "text-emerald-700",  border: "border-emerald-200" },
-  auth:       { bg: "bg-blue-50",     text: "text-blue-700",     border: "border-blue-200"    },
-  import:     { bg: "bg-indigo-50",   text: "text-indigo-700",   border: "border-indigo-200"  },
-  advisory:   { bg: "bg-purple-50",   text: "text-purple-700",   border: "border-purple-200"  },
-  config:     { bg: "bg-orange-50",   text: "text-orange-700",   border: "border-orange-200"  },
-  processing: { bg: "bg-cyan-50",     text: "text-cyan-700",     border: "border-cyan-200"    },
-  data:       { bg: "bg-teal-50",     text: "text-teal-700",     border: "border-teal-200"    },
-  system:     { bg: "bg-slate-50",    text: "text-slate-600",    border: "border-slate-200"   },
-};
-
-const FALLBACK_COLOR = {
-  bg: "bg-[var(--hw-neutral-50)]",
-  text: "text-[var(--hw-neutral-700)]",
-  border: "border-[var(--hw-neutral-200)]"
-};
-
-function getActionColor(action = "") {
-  const prefix = action.split(".")[0].toLowerCase();
-  return RESOURCE_COLORS[prefix] || FALLBACK_COLOR;
-}
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "../../global/components/ui/tooltip";
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
-function ActionBadge({ action }) {
-  const c = getActionColor(action);
+function ActionText({ action }) {
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border font-mono ${c.bg} ${c.text} ${c.border}`}
-    >
+    <span className="text-[13px] text-[var(--hw-neutral-800)] font-mono">
       {action}
     </span>
+  );
+}
+
+function DetailsCell({ details }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!details) {
+    return <span className="text-[var(--hw-neutral-400)] italic">No details</span>;
+  }
+
+  return (
+    <Tooltip open={isOpen ? true : undefined} onOpenChange={setIsOpen}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="text-left max-w-[300px] truncate block text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] cursor-default md:cursor-help focus:outline-none"
+          title={details}
+        >
+          {details}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        className="max-w-md bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed break-words z-50 pointer-events-auto"
+      >
+        <p>{details}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function MobileDetails({ details }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!details) return null;
+  const isLong = details.length > 70;
+
+  return (
+    <div
+      onClick={() => isLong && setExpanded((v) => !v)}
+      className={`text-[12px] text-[var(--hw-neutral-700)] ${isLong ? "cursor-pointer" : ""}`}
+    >
+      <p className={expanded ? "break-words" : "line-clamp-2"}>
+        {details}
+      </p>
+      {isLong && (
+        <span className="text-[11px] font-medium text-[var(--hw-green-700)] mt-0.5 inline-block">
+          {expanded ? "Show less" : "Tap to view full details"}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -335,7 +365,7 @@ function AdminAuditLogs() {
                 </tr>
               ) : (
                 data.items.map((row) => (
-                  <tr key={row.id} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                  <tr key={row.id}>
                     <td className="px-5 py-3 font-mono text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap">
                       {row.id}
                     </td>
@@ -347,10 +377,10 @@ function AdminAuditLogs() {
                       {row.actor_name || row.user_id || "—"}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">
-                      <ActionBadge action={row.action} />
+                      <ActionText action={row.action} />
                     </td>
-                    <td className="px-5 py-3 text-[var(--hw-neutral-700)] max-w-[300px] truncate">
-                      {row.details || <span className="text-[var(--hw-neutral-400)] italic">No details</span>}
+                    <td className="px-5 py-3 text-[var(--hw-neutral-700)] max-w-[300px]">
+                      <DetailsCell details={row.details} />
                     </td>
                     <td className="px-5 py-3 text-[var(--hw-neutral-600)] whitespace-nowrap font-mono text-[12px]">
                       {row.ip_address || "—"}
@@ -382,7 +412,7 @@ function AdminAuditLogs() {
               {data.items.map((row) => (
                 <div key={row.id} className="px-5 py-3.5 space-y-1.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <ActionBadge action={row.action} />
+                    <ActionText action={row.action} />
                     <span className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
                       {row.id}
                     </span>
@@ -394,7 +424,7 @@ function AdminAuditLogs() {
                     {row.actor_name || row.user_id || "—"}
                   </p>
                   {row.details && (
-                    <p className="text-[12px] text-[var(--hw-neutral-700)]">{row.details}</p>
+                    <MobileDetails details={row.details} />
                   )}
                   <p className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
                     {row.ip_address || "—"}

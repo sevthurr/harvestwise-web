@@ -464,7 +464,7 @@ function DFTCSubmissionDetail() {
                       </thead>
                       <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                         {ds.analyticsRecords.map((r, idx) => (
-                          <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
+                          <tr key={idx}>
                             <td className={tdCls}>{idx + 1}</td>
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.variety || "—"}</td>
@@ -488,7 +488,7 @@ function DFTCSubmissionDetail() {
                       </thead>
                       <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                         {ds.analyticsRecords.map((r, idx) => (
-                          <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
+                          <tr key={idx}>
                             <td className={tdCls}>{idx + 1}</td>
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.category || "—"}</td>
@@ -539,7 +539,7 @@ function DFTCSubmissionDetail() {
                       </thead>
                       <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                         {ds.otherRecords.map((r, idx) => (
-                          <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
+                          <tr key={idx}>
                             <td className={tdCls}>{idx + 1}</td>
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.variety || "—"}</td>
@@ -563,7 +563,7 @@ function DFTCSubmissionDetail() {
                       </thead>
                       <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                         {ds.otherRecords.map((r, idx) => (
-                          <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
+                          <tr key={idx}>
                             <td className={tdCls}>{idx + 1}</td>
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.category || "—"}</td>
@@ -607,7 +607,7 @@ function DFTCSubmissionDetail() {
                     </thead>
                     <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                       {ds.duplicateIssues.map((r, idx) => (
-                        <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
+                        <tr key={idx}>
                           <td className={tdCls}>{r.row_number || r.row || idx + 1}</td>
                           <td className={tdBold}>{r.commodity_name || r.commodity || "—"}</td>
                           <td className={tdCls}>{r.price_date || r.date || "—"}</td>

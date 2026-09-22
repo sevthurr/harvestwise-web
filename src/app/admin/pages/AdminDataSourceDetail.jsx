@@ -159,7 +159,7 @@ function AdminDataSourceDetail() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                      {rows.map((r, i) => <tr key={i} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                      {rows.map((r, i) => <tr key={i}>
                           {r.columns.map((c) => <td key={c} className="px-4 py-2.5 text-[var(--hw-neutral-700)] whitespace-nowrap">{r.row[c] ?? "—"}</td>)}
                         </tr>)}
                     </tbody>

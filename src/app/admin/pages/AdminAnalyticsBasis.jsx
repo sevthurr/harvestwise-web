@@ -311,7 +311,7 @@ const DatasetsUsed = ({ module, records = [] }) => {
                   </tr>
                 ) : (
                   pageRows.map((row, i) => (
-                    <tr key={i} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                    <tr key={i}>
                       {columns.map((c) => (
                         <td key={c} className="px-4 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">
                           {row[c] ?? "-"}

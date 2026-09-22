@@ -1036,7 +1036,7 @@ function AdminImport() {
                   </thead>
                   <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                     {parsedRows.slice(0, 5).map((r, i) => (
-                      <tr key={i} className="hover:bg-[var(--hw-neutral-50)]">
+                      <tr key={i}>
                         {parsedHeaders.map((h) => (
                           <td key={h} className="px-3 py-2 text-[var(--hw-neutral-800)] whitespace-nowrap">
                             {r[h] !== undefined && r[h] !== "" ? r[h] : <span className="text-gray-400 italic">—</span>}
@@ -1156,7 +1156,7 @@ function AdminImport() {
                         const sourceDisplay = r.source_label || (r.source_sheet ? `${r.source_sheet} · Row ${r.row_number}` : `Row ${r.row_number}`);
 
                         return (
-                          <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
+                          <tr key={idx}>
                             <td className="px-3 py-2 text-[var(--hw-neutral-700)] whitespace-nowrap font-medium">{sourceDisplay}</td>
                             <td className="px-3 py-2 font-medium text-[var(--hw-neutral-900)]">{r.record_label || "—"}</td>
                             <td className={`px-3 py-2 font-medium ${resultTextColor}`}>{resultLabel}</td>
