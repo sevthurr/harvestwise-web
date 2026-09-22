@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ChevronLeft, ChevronDown, Inbox } from "lucide-react";
+import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import {
   Card,
   SectionLabel,
@@ -88,7 +89,7 @@ const EditForm = ({ user, onSave, onCancel }) => {
 
         <div>
           <FieldLabel htmlFor="ud-ph">Phone Number</FieldLabel>
-          <input id="ud-ph" type="tel" value={form.phone} onChange={set("phone")} className={inputCls} />
+          <input id="ud-ph" type="tel" maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} className={inputCls} />
         </div>
 
         <div>

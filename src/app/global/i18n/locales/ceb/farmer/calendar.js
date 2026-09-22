@@ -35,7 +35,9 @@ export const calendar = {
     market_note: "Pahinumdom sa merkado",
     expected_harvest: "Gilaom nga ani",
     expected_harvest_date: "Gilaom nga petsa sa ani",
-    check_crop: "Susiha kining tanoma"
+    check_crop: "Susiha kining tanoma",
+    payday: "Panahon sa sweldo",
+    payday_note: "Panahon sa sweldo. Gilaom nga mas taas ang gastos sa mga konsumer ug ang panginahanglan sa merkado."
   },
   recommendations_title: "Mga Rekomendasyon sa Tanom",
   empty_recommendations_title: "Wala pay available nga rekomendasyon sa tanom.",

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
+import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import {
   Card,
   SectionLabel,
@@ -31,15 +32,14 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
     suffix: "None",
     phone: "",
     email: "",
-    role: "Farmer",
+    role: "DFTC",
     status: "Active",
-    position: "",
-    sendInvite: false
+    position: ""
   });
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const canSubmit = form.firstName.trim() && form.lastName.trim();
+  const canSubmit = form.firstName.trim() && form.lastName.trim() && form.email.trim();
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -54,8 +54,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
         email: form.email || null,
         role: form.role,
         is_active: form.status === "Active",
-        position: form.position || null,
-        sendInvite: form.sendInvite
+        position: form.position || null
       });
       onClose();
     } catch (err) {
@@ -130,9 +129,10 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               id="au-phone"
               type="tel"
               placeholder="09XX XXX XXXX"
+              maxLength={PHONE_MAX_LENGTH}
               className={inputCls}
               value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -140,6 +140,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
             <input
               id="au-email"
               type="email"
+              required
               placeholder="user@example.com"
               className={inputCls}
               value={form.email}
@@ -151,19 +152,14 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <FieldLabel htmlFor="au-role">Role</FieldLabel>
-            <div className="relative">
-              <select
-                id="au-role"
-                className={`${inputCls} appearance-none pr-9`}
-                value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-              >
-                {["Farmer", "DFTC"].map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
-            </div>
+            <input
+              id="au-role"
+              type="text"
+              value="DFTC"
+              disabled
+              readOnly
+              className={`${inputCls} bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-400)] cursor-not-allowed`}
+            />
           </div>
           <div>
             <FieldLabel htmlFor="au-status">Status</FieldLabel>
@@ -183,28 +179,18 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
           </div>
         </div>
 
-        {form.role === "DFTC" && (
-          <div>
-            <FieldLabel htmlFor="au-pos" optional>
-              Position
-            </FieldLabel>
-            <input
-              id="au-pos"
-              type="text"
-              placeholder="e.g. Market Monitoring Staff"
-              className={inputCls}
-              value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-            />
-          </div>
-        )}
-
-        <div className="flex items-center justify-between py-2 border-t border-[var(--hw-neutral-100)]">
-          <div>
-            <p className="text-[14px] font-semibold text-black">Send welcome email</p>
-            <p className="text-[12px] text-black">Send an invite with temporary credentials.</p>
-          </div>
-          <Toggle on={form.sendInvite} onChange={(v) => setForm((f) => ({ ...f, sendInvite: v }))} />
+        <div>
+          <FieldLabel htmlFor="au-pos" optional>
+            Position
+          </FieldLabel>
+          <input
+            id="au-pos"
+            type="text"
+            placeholder="e.g. Market Monitoring Staff"
+            className={inputCls}
+            value={form.position}
+            onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+          />
         </div>
 
         <div className="flex gap-2 justify-end pt-2">

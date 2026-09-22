@@ -8,7 +8,8 @@ import {
   CloudRain,
   Sun,
   CalendarClock,
-  Sprout
+  Sprout,
+  Banknote
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { toCamelCase } from "../../global/utils/apiTransforms";
@@ -53,12 +54,29 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
     const origDate = camel.calendarDate || camel.date;
     if (!origDate) return;
     const ds = String(origDate);
-    const d = parseInt(ds.split("-")[2], 10);
-    if (isNaN(d)) return;
+    const startParts = ds.split("-");
+    if (startParts.length < 3) return;
+    const startDay = parseInt(startParts[2], 10);
+    if (isNaN(startDay)) return;
+    if (startParts[0] !== String(year) || parseInt(startParts[1], 10) !== month) return;
 
-    if (camel.holidayName || camel.eventName) {
+    if (camel.isPayday) {
+      if (!markers[startDay]) markers[startDay] = {};
+      markers[startDay].payday = true;
+    }
+
+    const eName = camel.holidayName || camel.eventName;
+    if (!eName) return;
+
+    let endDay = startDay;
+    const endParts = (camel.endDate || "").split("-");
+    if (endParts.length === 3 && endParts[0] === String(year) && parseInt(endParts[1], 10) === month) {
+      endDay = Math.max(startDay, parseInt(endParts[2], 10) || startDay);
+    }
+
+    for (let d = startDay; d <= endDay; d += 1) {
       if (!markers[d]) markers[d] = {};
-      markers[d].event = camel.holidayName || camel.eventName;
+      markers[d].event = eName;
     }
   });
 
@@ -158,7 +176,7 @@ function firstWeekday(year, month) {
 }
 
 function hasAnyMarker(m) {
-  return !!(m.crop || m.weather || m.event);
+  return !!(m.crop || m.weather || m.event || m.payday);
 }
 
 const WIcon = ({ type, cls }) => {
@@ -246,6 +264,9 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
                       className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? "text-white/80" : "text-emerald-600"}`}
                     />
                   )}
+                  {m.payday && (
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isSelected ? "bg-white/80" : "bg-amber-500"}`} />
+                  )}
                 </div>
               )}
             </button>
@@ -326,6 +347,20 @@ const SelectedDateCard = ({ year, month, day, markers }) => {
               {t("farmer.calendar.selected_date.market_note", {}, "Market note")}
             </p>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{markers.event}</p>
+          </div>
+        </div>
+      )}
+
+      {markers.payday && (
+        <div className="flex items-start gap-2">
+          <Banknote className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
+              {t("farmer.calendar.selected_date.payday", {}, "Payday period")}
+            </p>
+            <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
+              {t("farmer.calendar.selected_date.payday_note", {}, "Payday period. Higher consumer spending and market demand expected.")}
+            </p>
           </div>
         </div>
       )}

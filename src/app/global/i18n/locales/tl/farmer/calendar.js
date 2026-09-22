@@ -35,7 +35,9 @@ export const calendar = {
     market_note: "Paalala sa merkado",
     expected_harvest: "Inaasahang ani",
     expected_harvest_date: "Inaasahang petsa ng pag-ani",
-    check_crop: "Suriin ang pananim na ito"
+    check_crop: "Suriin ang pananim na ito",
+    payday: "Panahon ng sahod",
+    payday_note: "Panahon ng sahod. Inaasahang mas malakas ang paggastos ng mga konsyumer at ang pangangailangan sa merkado."
   },
   recommendations_title: "Mga Rekomendasyon sa Pananim",
   empty_recommendations_title: "Wala pang available na rekomendasyon sa pananim.",

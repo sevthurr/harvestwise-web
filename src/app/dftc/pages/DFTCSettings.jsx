@@ -6,6 +6,7 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
+import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
@@ -183,7 +184,7 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
           </div>
           <div>
             <FieldLabel htmlFor="ac-ph">Phone Number</FieldLabel>
-            <input id="ac-ph" type="tel" inputMode="numeric" value={form.phone} onChange={set("phone")} className={inputCls} />
+            <input id="ac-ph" type="tel" inputMode="numeric" maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} className={inputCls} />
           </div>
           <div>
             <FieldLabel htmlFor="ac-em">Email</FieldLabel>

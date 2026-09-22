@@ -4,6 +4,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
@@ -236,8 +237,9 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               id="a-ph"
               type="tel"
               inputMode="numeric"
+              maxLength={PHONE_MAX_LENGTH}
               value={form.phone}
-              onChange={set("phone")}
+              onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))}
               placeholder="09XX XXX XXXX"
               className={inputCls}
             />

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
 
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -53,7 +54,8 @@ function DFTCMain({ children }) {
 function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
+  const [showChangePw, setShowChangePw] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
   const active = getActive(location.pathname);
@@ -116,6 +118,19 @@ function DFTCLayoutInner() {
     logout();
     navigate("/login", { replace: true });
   };
+
+  // Suggest a password change while the account is still on a temporary
+  // password (set by admin user creation). Dismissible — a suggestion, not a lock.
+  const pendingChangePassword = user?.must_change_password === true;
+  useEffect(() => {
+    setShowChangePw(pendingChangePassword);
+  }, [pendingChangePassword]);
+
+  const handlePasswordChanged = async () => {
+    await refreshUser();
+    setShowChangePw(false);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--hw-neutral-50)]">
       {/* ── Top bar ── */}
@@ -278,6 +293,13 @@ function DFTCLayoutInner() {
   })}
         </div>
       </nav>
+
+      {showChangePw && (
+        <ChangePasswordPrompt
+          onClose={() => setShowChangePw(false)}
+          onChanged={handlePasswordChanged}
+        />
+      )}
     </div>
   );
 }

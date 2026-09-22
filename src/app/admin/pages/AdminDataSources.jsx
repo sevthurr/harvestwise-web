@@ -41,7 +41,8 @@ function mapEvent(ev) {
     date: new Date(ev.start_date),
     from: fmtDate(ev.start_date),
     to: ev.end_date ? fmtDate(ev.end_date) : fmtDate(ev.start_date),
-    source: "Manual Entry",
+    source: ev.source || "Manual Entry",
+    category: ev.source === "Payday Period" ? "payday" : ev.source === "Google Calendar API" ? "holiday" : "manual",
     recurrence: ev.recurrence || "None",
     description: ev.description || undefined,
     status: ev.status === "active" ? "Active" : "Inactive",
@@ -150,6 +151,13 @@ function AdminDataSources() {
     setSyncError("");
     try {
       await ingestionApi.syncNow();
+      // Sync runs on the backend as a background task, so poll the source list
+      // briefly so last-sync / record counts refresh once it completes.
+      for (let i = 0; i < 6; i += 1) {
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["adminApiSyncSources"] });
+        }, i * 10000);
+      }
     } catch (err) {
       setSyncError(err.message || "Failed to start sync.");
     } finally {
@@ -549,8 +557,8 @@ function AdminDataSources() {
       >
                 <span>{day}</span>
                 {hasEvents && <div className="flex gap-0.5 mt-1 justify-center">
-                    {dayEvents.slice(0, 3).map((e, ei) => <span key={ei} className={`w-1.5 h-1.5 rounded-full flex-shrink-0
-                        ${e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}
+                    {dayEvents.slice(0, 3).map((e, ei) => <span key={ei} data-cat={e.category} className={`w-1.5 h-1.5 rounded-full flex-shrink-0
+                        ${e.category === "payday" ? "bg-amber-500" : e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}
                         ${isSelected ? "opacity-70" : ""}`} />)}
                   </div>}
               </button>;
@@ -574,7 +582,7 @@ function AdminDataSources() {
             </div>
             <div className="space-y-2">
               {selectedEvents.map((e) => <div key={e.id} className="flex items-start gap-2.5 px-3 py-2.5 bg-[var(--hw-neutral-50)] rounded-xl">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${e.category === "payday" ? "bg-amber-500" : e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">{e.name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -604,6 +612,10 @@ function AdminDataSources() {
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
             <span className="text-[12px] text-[var(--hw-neutral-800)]">API holiday</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+            <span className="text-[12px] text-[var(--hw-neutral-800)]">Payday period</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
