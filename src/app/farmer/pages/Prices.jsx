@@ -26,9 +26,9 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
-const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All", unit: "All" };
+const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
 
-const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units }) => {
+const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
   const { t } = useLanguage();
   const [draft, setDraft] = useState(filter);
   React.useEffect(() => {
@@ -109,19 +109,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories, units 
             </div>
           )}
 
-          {/* Unit */}
-          {units.length > 0 && (
-            <div>
-              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.unit_label", {}, "Unit")}</p>
-              <div className="flex flex-wrap gap-2">
-                {["All", ...units].map((v) => (
-                  <button key={v} onClick={() => setDraft((d) => ({ ...d, unit: v }))} className={chip(draft.unit === v)}>
-                    {v}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+
         </div>
 
         <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3">
@@ -360,18 +348,11 @@ function PricesPage() {
   
   const activeCount = (filter.direction !== "All" ? 1 : 0)
     + (filter.sortBy !== "name" ? 1 : 0)
-    + (filter.category !== "All" ? 1 : 0)
-    + (filter.unit !== "All" ? 1 : 0);
+    + (filter.category !== "All" ? 1 : 0);
 
   const categories = useMemo(() => {
     const set = new Set();
     commodities.forEach((c) => { if (c.category) set.add(c.category); });
-    return [...set].sort();
-  }, [commodities]);
-
-  const units = useMemo(() => {
-    const set = new Set();
-    commodities.forEach((c) => { if (c.unitOfMeasure) set.add(c.unitOfMeasure); });
     return [...set].sort();
   }, [commodities]);
   
@@ -403,10 +384,6 @@ function PricesPage() {
 
     if (filter.category !== "All") {
       list = list.filter((c) => c.category === filter.category);
-    }
-
-    if (filter.unit !== "All") {
-      list = list.filter((c) => c.unitOfMeasure === filter.unit);
     }
     
     list.sort((a, b) => {
@@ -515,7 +492,6 @@ function PricesPage() {
           setFilterOpen(false);
         }}
         categories={categories}
-        units={units}
       />
     </div>
   );

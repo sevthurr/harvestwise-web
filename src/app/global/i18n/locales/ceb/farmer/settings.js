@@ -2,6 +2,7 @@ export const settings = {
   title: "Settings",
   subtitle: "Dumala sa imong profile, detalye sa umahan, ug kagustuhan sa app.",
   tab_account: "Account",
+  tab_security: "Seguridad",
   tab_farm: "Profile sa Umahan",
   tab_preferences: "Mga Kagustuhan",
   tab_notifications: "Mga Pahibalo",

@@ -68,31 +68,11 @@ const Footer = ({ className = "", lang }) => {
     : t("farmer.about.terms_conditions", {}, "Terms & Conditions");
 
   const handlePrivacy = () => {
-    if (isAuth) {
-      setModal("privacy");
-      return;
-    }
-    if (isFarmer) {
-      navigate("/farmer/about?section=privacy");
-    } else if (isDFTC) {
-      navigate("/dftc/about?section=privacy");
-    } else {
-      navigate("/admin/about?section=privacy");
-    }
+    setModal("privacy");
   };
 
   const handleTerms = () => {
-    if (isAuth) {
-      setModal("terms");
-      return;
-    }
-    if (isFarmer) {
-      navigate("/farmer/about?section=terms");
-    } else if (isDFTC) {
-      navigate("/dftc/about?section=terms");
-    } else {
-      navigate("/admin/about?section=terms");
-    }
+    setModal("terms");
   };
 
   return (

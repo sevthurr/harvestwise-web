@@ -4,8 +4,6 @@ import { ChevronDown, Check, Send } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 const SECTIONS = [
   { id: "about", title: "About HarvestWise" },
-  { id: "privacy", title: "Privacy Policy" },
-  { id: "terms", title: "Terms & Conditions" },
   { id: "faqs", title: "Help / FAQs" },
   { id: "support", title: "Contact Support" }
 ];
@@ -38,12 +36,7 @@ const FAQS = [
 const AboutContent = () => <p className="text-[15px] text-black leading-relaxed">
     HarvestWise helps the Davao Food Terminal Complex (DFTC) organize price and commodity arrival records so they can support market monitoring, trends, and crop advisory processing for Davao City vegetable farmers.
   </p>;
-const PrivacyContent = () => <p className="text-[15px] text-black leading-relaxed">
-    HarvestWise protects the account and work-related information you provide, including your name, contact details, position, organization, submitted price records, arrival volume records, uploaded datasets, and submission activity. These details are used only for data submission, validation, monitoring, and HarvestWise system processing.
-  </p>;
-const TermsContent = () => <p className="text-[15px] text-black leading-relaxed">
-    HarvestWise provides data management and decision-support information only. Submitted price records, arrival volume records, trends, and system outputs should be reviewed carefully and should not be treated as guarantees of market prices, supply movement, or agricultural outcomes.
-  </p>;
+
 const FAQsContent = () => {
   const [openIdx, setOpenIdx] = useState(0);
   return <div className="space-y-2">
@@ -125,8 +118,6 @@ const SupportContent = () => {
 };
 const SECTION_CONTENT = {
   about: AboutContent,
-  privacy: PrivacyContent,
-  terms: TermsContent,
   faqs: FAQsContent,
   support: SupportContent
 };
@@ -154,10 +145,12 @@ const AccordionItem = ({ id, title, isOpen, onToggle, scrollRef }) => {
 function DFTCAbout() {
   const [params] = useSearchParams();
   const sectionParam = params.get("section");
-  const [openId, setOpenId] = useState(sectionParam || "about");
+  const validSections = ["about", "faqs", "support"];
+  const initialOpen = validSections.includes(sectionParam) ? sectionParam : "about";
+  const [openId, setOpenId] = useState(initialOpen);
   const scrollRef = useRef(null);
   useEffect(() => {
-    if (sectionParam) {
+    if (sectionParam && validSections.includes(sectionParam)) {
       setOpenId(sectionParam);
       setTimeout(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });

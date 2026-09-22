@@ -3,9 +3,7 @@ import {
   Pencil,
   ChevronDown,
   ChevronUp,
-  AlertCircle,
-  TrendingUp,
-  TrendingDown
+  AlertCircle
 } from "lucide-react";
 import { getTotalCost, formatPeso, COMMODITY_OPTIONS, CROP_DURATIONS } from "./types";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
@@ -38,9 +36,6 @@ const Step4ReviewBreakEven = ({
   const totalCost = getTotalCost(data);
   const harvestQty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
   const breakEven = harvestQty ? Math.ceil(totalCost / harvestQty) : null;
-  const sellingPrice = typeof data.sellingPrice === "number" && data.sellingPrice > 0 ? data.sellingPrice : null;
-  const revenue = sellingPrice && harvestQty ? sellingPrice * harvestQty : null;
-  const earnings = revenue !== null ? revenue - totalCost : null;
   const farmAreaText = data.farmArea !== "" ? `${data.farmArea} ${data.farmAreaUnit === "sqm" ? t("farmer.assess.sqm", {}, "sq m") : t("farmer.assess.hectares", {}, "ha")}` : "—";
   return <div className="space-y-5">
       {
@@ -92,49 +87,7 @@ const Step4ReviewBreakEven = ({
           </div>}
       </div>
 
-      {/* 2. Optional selling price */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
-          {t("farmer.assess.optional_selling_price", {}, "Optional: expected selling price")}
-        </p>
-        <p className="text-xs text-[var(--hw-neutral-700)] leading-relaxed">
-          {t("farmer.assess.optional_selling_price_hint", {}, "You may leave this blank. Your recommendation will use the forecasted market price as reference.")}
-        </p>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--hw-neutral-700)] flex-shrink-0">₱</span>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={data.sellingPrice}
-            onChange={(e) => onChange({ sellingPrice: e.target.value === "" ? "" : Number(e.target.value) })}
-            placeholder="e.g. 50"
-            className="flex-1 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition bg-white"
-          />
-          <span className="text-sm text-[var(--hw-neutral-700)] flex-shrink-0">/ kg</span>
-        </div>
-        {errors.sellingPrice && <p className="text-sm text-red-600">{errors.sellingPrice}</p>}
 
-        {/* Estimated results */}
-        {revenue !== null && earnings !== null && <div className="space-y-2 pt-2 border-t border-[var(--hw-neutral-100)]">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-[var(--hw-neutral-900)]">{t("farmer.assess.est_revenue", {}, "Estimated revenue")}</span>
-              <span className="text-sm font-semibold text-[var(--hw-neutral-900)]">
-                {formatPeso(revenue)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-[var(--hw-neutral-900)]">{t("farmer.assess.est_earnings", {}, "Estimated earnings / loss")}</span>
-              <div className={`flex items-center gap-1 text-sm font-semibold ${earnings >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                {earnings >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                {earnings >= 0 ? "+" : ""}{formatPeso(earnings)}
-              </div>
-            </div>
-            <p className="text-xs text-[var(--hw-neutral-700)]">
-              {t("farmer.assess.all_amounts_estimates", {}, "All amounts are estimates.")}
-            </p>
-          </div>}
-      </div>
 
       {/* 3. Review of inputs */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">

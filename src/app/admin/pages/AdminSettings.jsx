@@ -23,54 +23,10 @@ import {
 
 const TABS = [
   { id: "account", label: "Account" },
-  { id: "security", label: "Security" },
-  { id: "notifications", label: "Notifications" }
+  { id: "security", label: "Security" }
 ];
 
-const NOTIF_ITEMS = [
-  {
-    id: "dftc_submission",
-    label: "DFTC submission received",
-    desc: "Get notified when a DFTC user submits new price or arrival records.",
-    defaultOn: true
-  },
-  {
-    id: "upload_review",
-    label: "Upload requires review",
-    desc: "Get notified when an uploaded dataset needs admin review.",
-    defaultOn: true
-  },
-  {
-    id: "api_sync_failed",
-    label: "API sync failed",
-    desc: "Get notified when an API-based data source fails to sync.",
-    defaultOn: true
-  },
-  {
-    id: "forecast_failed",
-    label: "Forecast generation failed",
-    desc: "Get notified when an automated forecast run fails.",
-    defaultOn: true
-  },
-  {
-    id: "module_failed",
-    label: "Module output calculation failed",
-    desc: "Get notified when analytical module calculation does not complete successfully.",
-    defaultOn: true
-  },
-  {
-    id: "security_alert",
-    label: "System security alert",
-    desc: "Get notified about important security-related events.",
-    defaultOn: true
-  },
-  {
-    id: "health_alert",
-    label: "System health alert",
-    desc: "Get notified when system services or dependencies fail.",
-    defaultOn: true
-  }
-];
+
 
 const AccountTab = ({ showToast }) => {
   const { user, refreshUser } = useAuth();
@@ -255,7 +211,7 @@ const SecurityTab = ({ showToast }) => {
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const googleLink = useGoogleLink({
-    redirectTo: `${window.location.origin}/admin/settings`,
+    redirectTo: `${window.location.origin}/admin/settings?tab=security`,
     onResult: () => showToast(t("admin.settings.toast_google_connected", {}, "Google account connected.")),
   });
   const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
@@ -726,39 +682,7 @@ const SecurityTab = ({ showToast }) => {
   );
 };
 
-const NotificationsTab = ({ showToast }) => {
-  const [prefs, setPrefs] = useState(
-    Object.fromEntries(NOTIF_ITEMS.map((item) => [item.id, item.defaultOn]))
-  );
 
-  const toggle = (id) => {
-    setPrefs((p) => ({ ...p, [id]: !p[id] }));
-    showToast("Notification preference updated.");
-  };
-
-  return (
-    <Card>
-      <SectionLabel>Notification Preferences</SectionLabel>
-      {NOTIF_ITEMS.length > 0 ? (
-        <div className="divide-y divide-[var(--hw-neutral-100)]">
-          {NOTIF_ITEMS.map((item) => (
-            <div key={item.id} className="flex items-start justify-between gap-4 py-4">
-              <div className="min-w-0">
-                <p className="text-[15px] font-semibold text-black">{item.label}</p>
-                <p className="text-[13px] text-black mt-0.5 leading-relaxed">{item.desc}</p>
-              </div>
-              <Toggle on={prefs[item.id]} onChange={() => toggle(item.id)} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="py-12 text-center text-[14px] text-black">
-          No configurable notifications are available.
-        </div>
-      )}
-    </Card>
-  );
-};
 
 function AdminSettings() {
   const [params, setSearchParams] = useSearchParams();
@@ -792,7 +716,7 @@ function AdminSettings() {
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
       <PageHeader
         title="Settings"
-        description="Manage your admin account, security, and notifications."
+        description="Manage your admin account and security settings."
       />
 
       <div
@@ -822,7 +746,6 @@ function AdminSettings() {
 
       {activeTab === "account" && <AccountTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
-      {activeTab === "notifications" && <NotificationsTab showToast={showToast} />}
 
       {toast && <Toast msg={toast} onDismiss={() => setToast("")} />}
     </div>

@@ -509,10 +509,6 @@ const MarketLayout = () => {
         <div className="px-4 md:px-6 pt-4 pb-2 space-y-1">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">{meta.title}</h1>
-            <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at 7:30 AM</span>
-            </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)]">{meta.subtitle}</p>
         </div>

@@ -97,10 +97,6 @@ function DftcWholesaleDetailPage() {
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
               <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] mt-0.5">DFTC Wholesale Price</p>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[var(--hw-neutral-700)]">
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span className="text-xs">Updated today at 7:30 AM</span>
-              </div>
             </div>
           </div>
         </div>

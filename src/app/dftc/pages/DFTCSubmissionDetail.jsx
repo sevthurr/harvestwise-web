@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, AlertCircle, X, Download, Loader2, FileSpreadsheet } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
-import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import { apiGet, parseResponse } from "../../global/api";
 
 function formatDateTime(isoStr) {
@@ -30,7 +29,6 @@ function ValTabNav({ active, onChange, ds }) {
   const tabs = [
     { id: "analytics", label: `Analytics-Supported Records (${ds.analyticsSupported ?? 0})` },
     { id: "other", label: `Other Commodity Records (${ds.otherCommodities ?? 0})` },
-    { id: "correction", label: `Needs Correction (${ds.needsCorrection ?? 0})` },
     { id: "duplicate", label: `Duplicate Records (${ds.duplicate ?? 0})` }
   ];
   return (
@@ -358,44 +356,7 @@ function DFTCSubmissionDetail() {
         <p className="text-[14px] text-[var(--hw-neutral-800)]">Saved by {ds.savedBy}</p>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <DFTCKpiCard
-          label="Total Records"
-          value={ds.totalRecords ?? 0}
-          dotColor="bg-[var(--hw-neutral-400)]"
-          labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-        />
-        <DFTCKpiCard
-          label="Analytics-Supported"
-          value={ds.analyticsSupported ?? 0}
-          dotColor="bg-[var(--hw-neutral-400)]"
-          labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-        />
-        <DFTCKpiCard
-          label="Other Commodities"
-          value={ds.otherCommodities ?? 0}
-          dotColor="bg-[var(--hw-neutral-400)]"
-          labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-        />
-        <DFTCKpiCard
-          label="Needs Correction"
-          value={ds.needsCorrection ?? 0}
-          dotColor="bg-[var(--hw-neutral-400)]"
-          labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-        />
-        <DFTCKpiCard
-          label="Duplicate Records"
-          value={ds.duplicate ?? 0}
-          dotColor="bg-[var(--hw-neutral-400)]"
-          labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-        />
-      </div>
+
 
       {/* Dataset Information */}
       <div className={`${cardCls} overflow-hidden`}>
@@ -620,44 +581,7 @@ function DFTCSubmissionDetail() {
             </>
           )}
 
-          {/* Needs Correction */}
-          {valTab === "correction" && (
-            <>
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
-                <p className="text-[14px] text-[var(--hw-neutral-800)]">
-                  These records were not saved. Review the validation reasons and re-upload a corrected file if needed.
-                </p>
-              </div>
-              {ds.correctionIssues.length === 0 ? (
-                <div className="px-5 py-10 text-center text-[14px] text-[var(--hw-neutral-800)]">
-                  No records need correction.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                      <tr>
-                        {["Row", "Commodity", "Affected Field", "Uploaded Value", "Validation Reason"].map((h) => (
-                          <th key={h} className={thCls}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                      {ds.correctionIssues.map((r, idx) => (
-                        <tr key={idx} className="hover:bg-[var(--hw-neutral-50)]">
-                          <td className={tdCls}>{r.row_number || r.row || idx + 1}</td>
-                          <td className={tdBold}>{r.commodity_name || r.commodity || "(blank)"}</td>
-                          <td className={tdCls}>{r.affected_field || r.field || "—"}</td>
-                          <td className={`${tdCls} italic text-[var(--hw-neutral-800)]`}>{r.uploaded_value || r.uploaded || "(blank)"}</td>
-                          <td className={tdCls}>{r.reason || r.validation_reason || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
+
 
           {/* Duplicate Records */}
           {valTab === "duplicate" && (

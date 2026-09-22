@@ -20,11 +20,8 @@ import {
 import { Footer } from "../Footer";
 import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
-import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
-
-
 import { useAuth } from "../../contexts/AuthContext";
-const FONT_SIZE_MAP = { small: "13px", medium: "15px", large: "17px" };
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", path: "/admin", Icon: LayoutDashboard },
   { id: "modules", label: "Analytical Modules", path: "/admin/modules", Icon: Layers },
@@ -43,8 +40,7 @@ function getActive(pathname) {
   return "";
 }
 const AdminMain = ({ children }) => {
-  const { textSize } = useTextSize();
-  return <main className="pt-13 pb-16 md:pb-4 md:ml-[220px]" style={{ fontSize: FONT_SIZE_MAP[textSize] }}>
+  return <main className="pt-13 pb-16 md:pb-4 md:ml-[220px]">
       {children}
     </main>;
 };
@@ -266,24 +262,6 @@ const AdminLayoutInner = () => {
               </button>;
   })}
         </nav>
-
-        {
-    /* Bottom: profile */
-  }
-        <div className="p-2 border-t border-[var(--hw-neutral-200)] space-y-0.5">
-          <button
-    onClick={() => navigate("/admin/profile")}
-    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors text-left"
-  >
-            <div className="w-6 h-6 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-[10px] font-bold select-none">{initials}</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium text-black truncate">{displayName}</p>
-              <p className="text-[11px] text-black">Admin</p>
-            </div>
-          </button>
-        </div>
       </aside>
 
       {
@@ -316,10 +294,6 @@ const AdminLayoutInner = () => {
   );
 };
 
-const AdminLayout = () => (
-  <TextSizeProvider storageKey="hw_admin_text_size">
-    <AdminLayoutInner />
-  </TextSizeProvider>
-);
+const AdminLayout = () => <AdminLayoutInner />;
 
 export { AdminLayout };

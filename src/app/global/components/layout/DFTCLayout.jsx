@@ -19,12 +19,7 @@ import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
-import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
-const FONT_SIZE_MAP = {
-  small: "13px",
-  medium: "15px",
-  large: "17px"
-};
+
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
   { id: "input", label: "Submit Data", path: "/dftc/input", Icon: FileInput },
@@ -45,8 +40,7 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 function DFTCMain({ children }) {
-  const { textSize } = useTextSize();
-  return <main className="pt-13 pb-20 md:pb-4 md:ml-[220px]" style={{ fontSize: FONT_SIZE_MAP[textSize] }}>
+  return <main className="pt-13 pb-20 md:pb-4 md:ml-[220px]">
       {children}
     </main>;
 }
@@ -231,25 +225,6 @@ function DFTCLayoutInner() {
               </button>;
   })}
         </nav>
-
-        <div className="p-2 border-t border-[var(--hw-neutral-200)] space-y-0.5">
-          <button
-    onClick={() => navigate("/dftc/profile")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)] transition-colors text-left"
-  >
-            <User className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">Profile</span>
-          </button>
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            <div className="w-6 h-6 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">{name}</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)]">{roleName}</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {
@@ -281,9 +256,7 @@ function DFTCLayoutInner() {
     </div>
   );
 }
-const DFTCLayout = () => <TextSizeProvider storageKey="hw_dftc_text_size">
-    <DFTCLayoutInner />
-  </TextSizeProvider>;
+const DFTCLayout = () => <DFTCLayoutInner />;
 export {
   DFTCLayout
 };

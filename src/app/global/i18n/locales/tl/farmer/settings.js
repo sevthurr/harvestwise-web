@@ -2,6 +2,7 @@ export const settings = {
   title: "Mga Setting",
   subtitle: "Pamahalaan ang iyong profile, mga detalye ng sakahan, at mga setting ng app.",
   tab_account: "Account",
+  tab_security: "Seguridad",
   tab_farm: "Profile ng Sakahan",
   tab_preferences: "Mga Kagustuhan",
   tab_notifications: "Mga Notipikasyon",

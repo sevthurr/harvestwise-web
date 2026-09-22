@@ -5,8 +5,6 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { GreenBtn, GhostBtn, inputCls } from "../../global/components/ui/hw-ui";
 const SECTIONS = [
   { id: "about", label: "About HarvestWise" },
-  { id: "privacy", label: "Privacy Policy" },
-  { id: "terms", label: "Terms & Conditions" },
   { id: "faqs", label: "Help / FAQs" },
   { id: "support", label: "Contact Support" }
 ];
@@ -21,12 +19,7 @@ const FAQS = [
 const AboutContent = () => <p className="text-[15px] text-black leading-relaxed">
     HarvestWise helps administrators manage agricultural datasets, monitor system processing, review forecasts and analytical outputs, manage user access, and support crop advisory generation for Davao City vegetable farmers.
   </p>;
-const PrivacyContent = () => <p className="text-[15px] text-black leading-relaxed">
-    HarvestWise protects account and system-related information, including administrator details, user account records, access permissions, submitted datasets, processing activity, and system logs. These details are used only for system management, data validation, monitoring, and HarvestWise processing.
-  </p>;
-const TermsContent = () => <p className="text-[15px] text-black leading-relaxed">
-    HarvestWise provides data management and decision-support information only. Forecasts, analytical outputs, system indicators, and advisory results should be reviewed carefully and should not be treated as guarantees of market prices, production outcomes, system availability, or farm profitability.
-  </p>;
+
 const FAQsContent = () => {
   const [open, setOpen] = useState(0);
   return <div className="space-y-2">
@@ -98,8 +91,6 @@ const SupportContent = () => {
 };
 const SECTION_CONTENT = {
   about: AboutContent,
-  privacy: PrivacyContent,
-  terms: TermsContent,
   faqs: FAQsContent,
   support: SupportContent
 };
@@ -128,10 +119,12 @@ AccordionItem.displayName = "AccordionItem";
 function AdminAbout() {
   const [params] = useSearchParams();
   const sectionParam = params.get("section");
-  const [openId, setOpenId] = useState(sectionParam || "about");
+  const validSections = ["about", "faqs", "support"];
+  const initialOpen = validSections.includes(sectionParam) ? sectionParam : "about";
+  const [openId, setOpenId] = useState(initialOpen);
   const scrollRef = useRef(null);
   useEffect(() => {
-    if (sectionParam) {
+    if (sectionParam && validSections.includes(sectionParam)) {
       setOpenId(sectionParam);
       setTimeout(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });

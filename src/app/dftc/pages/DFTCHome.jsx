@@ -141,11 +141,6 @@ function DFTCHome() {
       (s.status?.toLowerCase() === "saved" || s.status?.toLowerCase() === "validated" || s.status?.toLowerCase() === "accepted")
   );
 
-  const datasetsSavedToday = submissions.filter(
-    (s) =>
-      (s.status?.toLowerCase() === "saved" || s.status?.toLowerCase() === "validated" || s.status?.toLowerCase() === "accepted") &&
-      (s.reporting_date === todayStr || (s.saved_at && s.saved_at.slice(0, 10) === todayStr))
-  );
 
   const needsCorrectionSubmissions = submissions.filter(
     (s) => s.status?.toLowerCase().includes("correction") || s.status?.toLowerCase() === "needs correction"
@@ -264,6 +259,12 @@ function DFTCHome() {
     }
   }
 
+  const currentMonth = kpis.month_name || todayDate.toLocaleDateString("en-US", { month: "long" });
+  const priceCoverageCount = kpis.price_coverage_count ?? 0;
+  const priceCoverageTotal = kpis.price_coverage_total ?? 22;
+  const arrivalCoverageCount = kpis.arrival_coverage_count ?? 0;
+  const arrivalCoverageTotal = kpis.arrival_coverage_total ?? 22;
+
   const hasAttentionItems = attentionItems.length > 0;
 
   return (
@@ -279,7 +280,6 @@ function DFTCHome() {
           label="Price Records Today"
           value={kpis.price_records_today ?? (priceSubmissionsToday.length || 0)}
           loading={isLoading}
-          dotColor="bg-[var(--hw-neutral-400)]"
           labelColor="text-[var(--hw-neutral-800)]"
           valueColor="text-[var(--hw-neutral-900)]"
           onClick={() => navigate("/dftc/price-input")}
@@ -288,28 +288,27 @@ function DFTCHome() {
           label="Arrival Records Today"
           value={kpis.arrival_records_today ?? (arrivalSubmissionsToday.length || 0)}
           loading={isLoading}
-          dotColor="bg-[var(--hw-neutral-400)]"
           labelColor="text-[var(--hw-neutral-800)]"
           valueColor="text-[var(--hw-neutral-900)]"
           onClick={() => navigate("/dftc/arrival-input")}
         />
         <DFTCKpiCard
-          label="Datasets Saved Today"
-          value={kpis.datasets_saved_today ?? (datasetsSavedToday.length || 0)}
+          label={`Price Data Coverage — ${currentMonth}`}
+          value={`${priceCoverageCount}/${priceCoverageTotal}`}
+          sub="monitored commodities"
           loading={isLoading}
-          dotColor="bg-[var(--hw-green-700)]"
           labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-green-700)]"
-          onClick={() => navigate("/dftc/submissions")}
+          valueColor="text-[var(--hw-neutral-900)]"
+          onClick={() => navigate("/dftc/trends?tab=price")}
         />
         <DFTCKpiCard
-          label="Needs Correction"
-          value={kpis.needs_correction_count ?? (needsCorrectionSubmissions.length || 0)}
+          label={`Arrival Data Coverage — ${currentMonth}`}
+          value={`${arrivalCoverageCount}/${arrivalCoverageTotal}`}
+          sub="monitored commodities"
           loading={isLoading}
-          dotColor="bg-orange-500"
           labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-orange-600"
-          onClick={() => navigate("/dftc/submissions")}
+          valueColor="text-[var(--hw-neutral-900)]"
+          onClick={() => navigate("/dftc/trends?tab=arrival")}
         />
       </div>
 

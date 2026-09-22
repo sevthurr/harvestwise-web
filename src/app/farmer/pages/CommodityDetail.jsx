@@ -379,10 +379,6 @@ function CommodityDetailPage() {
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.baseName || commodity.name || '–'}</h1>
               <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">{t("farmer.commodityDetail.price_details", {}, "Price Details")}</p>
-              <div className="flex items-center gap-1.5 text-[12px] text-[var(--hw-neutral-500)] mt-1">
-                <RefreshCw className="w-3 h-3 text-[var(--hw-neutral-400)]" />
-                <span>{t("farmer.prices.updated_today_time", { time: "7:30 AM" }, "Updated today at 7:30 AM")}</span>
-              </div>
             </div>
           </div>
         </div>

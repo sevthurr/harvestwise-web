@@ -4,7 +4,6 @@ import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
 import { Footer } from "../Footer";
-import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
 import { PwaInstallPrompt } from "../pwa/PwaInstallPrompt";
 import { useFarmerPrefetch } from "../../hooks/useFarmerPrefetch";
 
@@ -24,15 +23,8 @@ function resolveActiveNav(pathname) {
   return "";
 }
 
-const FONT_SIZE_MAP = { small: "13px", medium: "15px", large: "17px" };
-
 function FarmerMain({ children }) {
-  const { textSize } = useTextSize();
-  return (
-    <div style={{ fontSize: FONT_SIZE_MAP[textSize] }}>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
 
 const Layout = () => {
@@ -46,8 +38,7 @@ const Layout = () => {
   };
 
   return (
-    <TextSizeProvider>
-      <div className="min-h-screen bg-[var(--hw-neutral-50)]">
+    <div className="min-h-screen bg-[var(--hw-neutral-50)]">
         <PwaInstallPrompt />
         <Sidebar
           activeItem={activeNav}
@@ -80,7 +71,6 @@ const Layout = () => {
 
         <BottomNav activeItem={activeNav} onItemClick={handleNavClick} />
       </div>
-    </TextSizeProvider>
   );
 };
 

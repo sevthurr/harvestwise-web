@@ -2,6 +2,7 @@ export const settings = {
   title: "Settings",
   subtitle: "Manage your profile, farm details, and app preferences.",
   tab_account: "Account",
+  tab_security: "Security",
   tab_farm: "Farm Profile",
   tab_preferences: "Preferences",
   tab_notifications: "Notifications",

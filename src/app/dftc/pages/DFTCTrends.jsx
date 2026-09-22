@@ -773,7 +773,36 @@ function TableSkeleton({ cols = 8, rows = 5 }) {
 }
 
 function DFTCTrends() {
-  const [activeTab, setActiveTab] = useState("price");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("tab") === "arrival" ? "arrival" : "price";
+    }
+    return "price";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get("tab");
+      if (urlTab === "arrival" || urlTab === "price") {
+        setActiveTab(urlTab);
+      }
+    }
+  }, []);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined" && window.location && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", tab);
+        window.history.replaceState({}, "", url.toString());
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   // Price Trend state
   const [pCommodity, setPCommodity] = useState("Kamatis");
@@ -1589,7 +1618,7 @@ function DFTCTrends() {
           className="mb-6"
         />
         <div className={`${cardCls} mb-6 overflow-hidden`}>
-          <TabNav tab={activeTab} onChange={setActiveTab} />
+          <TabNav tab={activeTab} onChange={handleTabChange} />
         </div>
         {activeTab === "price" ? priceTrendsTab : arrivalTrendsTab}
       </div>

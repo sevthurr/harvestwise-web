@@ -27,17 +27,7 @@ const FAQS = [
   }
 ];
 
-const PrivacyContent = () => (
-  <p className="text-[15px] text-black leading-relaxed">
-    HarvestWise protects the personal and farm-related information you provide, including your account details, farm location, crop plans, production costs, expected yield, and selling price information. These details are used only to provide crop advisories, price monitoring, weather guidance, and related system features.
-  </p>
-);
 
-const TermsContent = () => (
-  <p className="text-[15px] text-black leading-relaxed">
-    HarvestWise provides decision-support information only. Price forecasts, profit estimates, weather guidance, and planting advisories are not guarantees of future prices, harvest results, income, or farm profitability. Farmers should still use their own judgment and local farming knowledge when making decisions.
-  </p>
-);
 
 const AboutContent = () => (
   <div className="space-y-3 text-[15px] text-black leading-relaxed">
@@ -157,8 +147,6 @@ const SupportContent = () => {
 };
 
 const SECTION_CONTENT = {
-  privacy: PrivacyContent,
-  terms: TermsContent,
   about: AboutContent,
   faqs: FAQsContent,
   support: SupportContent
@@ -191,19 +179,19 @@ function AboutPage() {
   const { t } = useLanguage();
   const [params] = useSearchParams();
   const sectionParam = params.get("section");
-  const [openId, setOpenId] = useState(sectionParam || "about");
+  const validSections = ["about", "faqs", "support"];
+  const initialOpen = validSections.includes(sectionParam) ? sectionParam : "about";
+  const [openId, setOpenId] = useState(initialOpen);
   const scrollRef = useRef(null);
 
   const sections = [
     { id: "about", title: t("farmer.about.title", {}, "About HarvestWise") },
-    { id: "privacy", title: t("farmer.about.privacy_policy", {}, "Privacy Policy") },
-    { id: "terms", title: t("farmer.about.terms_conditions", {}, "Terms & Conditions") },
     { id: "faqs", title: t("farmer.about.help_faqs", {}, "Help / FAQs") },
     { id: "support", title: t("farmer.about.contact_support", {}, "Contact Support") }
   ];
 
   useEffect(() => {
-    if (sectionParam) {
+    if (sectionParam && validSections.includes(sectionParam)) {
       setOpenId(sectionParam);
       setTimeout(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });

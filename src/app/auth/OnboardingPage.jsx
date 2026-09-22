@@ -136,11 +136,11 @@ const OptionChip = ({ label, selected, onClick, icon }) => (
   </button>
 );
 
-export const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, disabled = false, loading = false }) => {
+export const NavButtons = ({ step, onBack, onContinue, continueLabel, disabled = false, loading = false }) => {
   const { t } = useLanguage();
   const label = continueLabel ?? t("common.continue", {}, "Continue");
   return (
-    <div className="space-y-2 pt-2">
+    <div className="pt-2">
       <div className="flex gap-2">
         {step > 1 && onBack && (
           <button
@@ -164,14 +164,6 @@ export const NavButtons = ({ step, onBack, onContinue, onSkip, continueLabel, di
           {!loading && <ChevronRight className="w-4 h-4" />}
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onSkip}
-        disabled={disabled || loading}
-        className="w-full text-center text-[14px] text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] disabled:opacity-40 transition-colors py-1"
-      >
-        {t("common.skip_for_now", {}, "Skip for now")}
-      </button>
     </div>
   );
 };
@@ -215,13 +207,13 @@ const Step1 = ({ data, onLanguageSelect, onContinue, onSkip, langError }) => {
         ))}
       </div>
       <div className="mt-6">
-        <NavButtons step={1} onContinue={onContinue} onSkip={onSkip} />
+        <NavButtons step={1} onContinue={onContinue} />
       </div>
     </StepCard>
   );
 };
 
-export const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
+export const Step2 = ({ data, onChange, onContinue, onBack }) => {
   const { t } = useLanguage();
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -264,7 +256,7 @@ export const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
         t(
           "onboarding.location_required_error",
           {},
-          "Please confirm your farm location, or choose 'Skip for now'."
+          "Please confirm your farm location."
         )
       );
       return;
@@ -276,7 +268,7 @@ export const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
           t(
             "onboarding.location_required_error",
             {},
-            "Please confirm your farm location, or choose 'Skip for now'."
+            "Please confirm your farm location."
           )
         );
         return;
@@ -332,7 +324,6 @@ export const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
           step={2}
           onBack={handleBack}
           onContinue={handleContinue}
-          onSkip={onSkip}
           continueLabel={continueLabel}
           disabled={isContinueDisabled}
           loading={locationState.resolving}
@@ -342,7 +333,7 @@ export const Step2 = ({ data, onChange, onContinue, onBack, onSkip }) => {
   );
 };
 
-const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities }) => {
+const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities }) => {
   const { t } = useLanguage();
   // Use fetched commodities (real DB IDs) when available; fall back to static slugs
   const cropList = fetchedCommodities.length > 0
@@ -427,13 +418,13 @@ const Step3 = ({ data, onChange, onContinue, onBack, onSkip, fetchedCommodities 
       )}
 
       <div className="mt-6">
-        <NavButtons step={3} onBack={onBack} onContinue={onContinue} onSkip={onSkip} />
+        <NavButtons step={3} onBack={onBack} onContinue={onContinue} />
       </div>
     </StepCard>
   );
 };
 
-const Step4 = ({ data, onChange, onContinue, onBack, onSkip, submitting, submitError }) => {
+const Step4 = ({ data, onChange, onContinue, onBack, submitting, submitError }) => {
   const { t } = useLanguage();
   return (
     <StepCard>
@@ -479,7 +470,6 @@ const Step4 = ({ data, onChange, onContinue, onBack, onSkip, submitting, submitE
           step={4}
           onBack={onBack}
           onContinue={onContinue}
-          onSkip={onSkip}
           continueLabel={t("onboarding.finish_setup", {}, "Finish setup")}
           disabled={submitting}
         />
@@ -700,16 +690,15 @@ function OnboardingPage() {
         </div>
       )}
 
-      {step === 1 && <Step1 data={data} onLanguageSelect={handleLanguageSelect} onContinue={next} onSkip={skip} langError={langError} />}
-      {step === 2 && <Step2 data={data} onChange={patch} onContinue={next} onBack={prev} onSkip={skip} />}
-      {step === 3 && <Step3 data={data} onChange={patch} onContinue={next} onBack={prev} onSkip={skip} fetchedCommodities={fetchedCommodities} />}
+      {step === 1 && <Step1 data={data} onLanguageSelect={handleLanguageSelect} onContinue={next} langError={langError} />}
+      {step === 2 && <Step2 data={data} onChange={patch} onContinue={next} onBack={prev} />}
+      {step === 3 && <Step3 data={data} onChange={patch} onContinue={next} onBack={prev} fetchedCommodities={fetchedCommodities} />}
       {step === 4 && (
         <Step4
           data={data}
           onChange={patch}
           onContinue={submitOnboarding}
           onBack={prev}
-          onSkip={skip}
           submitting={submitting}
           submitError={submitError}
         />

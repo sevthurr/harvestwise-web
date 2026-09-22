@@ -211,7 +211,7 @@ export const en = {
     gps_unavailable: "We couldn't get your location. Try again or enter your farm address.",
     gps_outside_davao: "HarvestWise currently supports farm locations within Davao City. Enter your farm address instead.",
     accuracy_warning: "Please check that the detected Barangay is correct.",
-    location_required_error: "Please confirm your farm location, or choose 'Skip for now'.",
+    location_required_error: "Please confirm your farm location.",
     farm_size_placeholder: "e.g. 1,500 sq m or 0.5 hectare",
     optional: "(optional)",
     modal_location_title: "Allow location access",

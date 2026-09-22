@@ -342,7 +342,6 @@ function DFTCHistory() {
     "Total",
     "Analytics-Supported",
     "Other Commodities",
-    "Needs Correction",
     "Duplicates",
     "Status"
   ];
@@ -489,7 +488,6 @@ function DFTCHistory() {
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.totalRecords}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.analyticsSupported}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.otherCommodities}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.needsCorrection}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.duplicate}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px]">
                         <span
@@ -545,7 +543,6 @@ function DFTCHistory() {
                     <span>{r.totalRecords} total</span>
                     <span>{r.analyticsSupported} analytics</span>
                     <span>{r.otherCommodities} other</span>
-                    {r.needsCorrection > 0 && <span className="text-amber-700 font-medium">{r.needsCorrection} needs correction</span>}
                     {r.duplicate > 0 && <span className="text-amber-700 font-medium">{r.duplicate} duplicate</span>}
                   </p>
                 </div>
