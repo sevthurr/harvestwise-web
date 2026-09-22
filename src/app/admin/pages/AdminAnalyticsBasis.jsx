@@ -19,6 +19,7 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMockData";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
+import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
 import { analyticsApi } from "../../../services/api";
 import { useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 
@@ -34,6 +35,81 @@ const TOP_10_COMMODITIES = [
   "Repolyo",
   "Talong"
 ];
+
+const TOP_10_WEATHER_THRESHOLDS = [
+  {
+    commodity: "Ampalaya",
+    suitable: "Temp 22–30°C; RH≥90% < 3h; Wind ≤ 18 km/h",
+    caution: "Temp 5–22°C or 30–39°C; RH≥90% 3–5h; Wind 18–28.8 km/h",
+    severe: "Temp ≤ 5°C or ≥ 39°C; RH≥90% ≥ 6h; Wind > 28.8 km/h",
+  },
+  {
+    commodity: "Atsal",
+    suitable: "Temp 17–30°C; RH>85% < 3h; Wind < 21.6 km/h",
+    caution: "Temp 0–17°C or 30–42°C; RH>85% 3–5h; Wind 21.6–28.8 km/h",
+    severe: "Temp ≤ 0°C or ≥ 42°C; RH>85% ≥ 6h; Wind ≥ 28.8 km/h",
+  },
+  {
+    commodity: "Carrots",
+    suitable: "Temp 15–21°C",
+    caution: "Temp -1.2–15°C or 21–35°C",
+    severe: "Temp ≤ -1.2°C or ≥ 35°C",
+  },
+  {
+    commodity: "Chinese Pechay",
+    suitable: "Temp 13–20°C; RH>90% < 6h; Wind < 18 km/h",
+    caution: "Temp -0.6–13°C or 20–25°C; RH>90% 6–11h; Wind 18–54 km/h",
+    severe: "Temp ≤ -0.6°C or ≥ 25°C; RH>90% ≥ 12h; Wind ≥ 54 km/h",
+  },
+  {
+    commodity: "Kalabasa",
+    suitable: "Temp 18–30°C; RH≥90% < 3h",
+    caution: "Temp 0–18°C or 30–35°C; RH≥90% 3–5h",
+    severe: "Temp ≤ 0°C or ≥ 35°C; RH≥90% ≥ 6h",
+  },
+  {
+    commodity: "Kamatis",
+    suitable: "Temp 21–24°C; Max RH < 85%; Wind ≤ 39.6 km/h",
+    caution: "Temp 0–21°C or 24–40°C; Max RH 85–90%; Wind 39.6–54 km/h",
+    severe: "Temp ≤ 0°C or ≥ 40°C; Max RH > 90%; Wind > 54 km/h",
+  },
+  {
+    commodity: "Lettuce",
+    suitable: "Temp 18–22°C; RH≥95% < 5h; Wind < 18 km/h",
+    caution: "Temp 0–18°C or 22–33°C; RH≥95% 5–6h; Wind 18–54 km/h",
+    severe: "Temp < 0°C or ≥ 33°C; RH≥95% ≥ 7h; Wind ≥ 54 km/h",
+  },
+  {
+    commodity: "Pipino",
+    suitable: "Temp 18–30°C; RH≥90% < 3h; Wind < 21.6 km/h",
+    caution: "Temp 0–18°C or 30–38°C; RH≥90% 3–5h; Wind 21.6–32.4 km/h",
+    severe: "Temp ≤ 0°C or ≥ 38°C; RH≥90% ≥ 6h; Wind ≥ 32.4 km/h",
+  },
+  {
+    commodity: "Repolyo",
+    suitable: "Temp 15–20°C; RH>90% < 6h",
+    caution: "Temp -7–15°C or 20–30°C; RH>90% 6–11h",
+    severe: "Temp ≤ -7°C or ≥ 30°C; RH>90% ≥ 12h",
+  },
+  {
+    commodity: "Talong",
+    suitable: "Temp 21–30°C; Max RH < 86%",
+    caution: "Temp 0–21°C or 30–35°C; Max RH 86–92%",
+    severe: "Temp ≤ 0°C or ≥ 35°C; Max RH > 92%",
+  },
+];
+
+function formatForecastDate(dateStr) {
+  if (!dateStr) return "-";
+  const parts = String(dateStr).split("-");
+  if (parts.length === 3) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = months[parseInt(parts[1], 10) - 1] || parts[1];
+    return `${month} ${parseInt(parts[2], 10)}`;
+  }
+  return dateStr;
+}
+
 
 const DEFAULT_BASIS_TEMPLATES = {
   "price-outlook": {
@@ -698,6 +774,8 @@ function AdminAnalyticsBasis() {
     ? displayResult.thresholds
     : shownThresholds;
 
+  const isWeatherRisk = result.module === "Weather Risk" || resultId === "weather-risk";
+
   const handleCommodityChange = (newCommodity) => {
     navigate(`/admin/modules/basis/${resultId}?commodity=${encodeURIComponent(newCommodity)}&variety=All%20Varieties`, { replace: true });
   };
@@ -945,113 +1023,127 @@ function AdminAnalyticsBasis() {
         )}
 
         {/* Weather Risk Outlook */}
-        {(result.module === "Weather Risk" || resultId === "weather-risk") && (
-          <div className={vizCardClass}>
-            <div>
-              <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">14-Day Weather Forecast Outlook</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Estimated weather parameters and risks for {selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.</p>
-            </div>
-            {displayResult.forecast_14d && displayResult.forecast_14d.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "thin", scrollbarColor: "var(--hw-neutral-300) transparent" }}>
-                {displayResult.forecast_14d.map((day, i) => (
-                  <div key={i} className="flex-shrink-0 flex flex-col items-center gap-2 bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] px-4 py-5 min-w-[90px] shadow-[var(--shadow-xs)]">
-                    <p className="text-[13px] font-bold text-[var(--hw-neutral-800)]">{day.dayLabel}</p>
-                    <p className="text-[11px] text-[var(--hw-neutral-500)] font-medium">{day.date}</p>
-                    <div className="w-9 h-9 my-1 text-[var(--hw-neutral-700)] flex items-center justify-center text-2xl">☁️</div>
-                    <div className="text-center">
-                      <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax != null ? `${day.tempMax}°` : "-°"}</p>
-                      <p className="text-[12px] text-[var(--hw-neutral-500)] font-medium">{day.tempMin != null ? `${day.tempMin}°` : "-°"}</p>
-                    </div>
-                    <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] mt-0.5">{day.rainfall_mm != null ? `${day.rainfall_mm}mm` : (day.rainPct != null ? `${day.rainPct}%` : "-%")}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="w-full flex-1 flex flex-col justify-center">
-                <div className="flex gap-4 overflow-x-auto pb-3 opacity-50 pointer-events-none" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                  {Array.from({ length: 14 }, (_, i) => (
-                    <div key={i} className="flex-shrink-0 flex flex-col items-center gap-2 bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] px-4 py-5 min-w-[90px]">
-                      <p className="text-[13px] font-bold text-[var(--hw-neutral-700)]">{i === 0 ? "Today" : `+${i}d`}</p>
-                      <p className="text-[11px] text-[var(--hw-neutral-400)] font-medium">-</p>
-                      <div className="w-9 h-9 my-1 text-[var(--hw-neutral-400)] flex items-center justify-center text-2xl">☁️</div>
-                      <div className="text-center">
-                        <p className="text-[15px] font-bold text-[var(--hw-neutral-700)]">-°</p>
-                        <p className="text-[12px] text-[var(--hw-neutral-400)] font-medium">-°</p>
-                      </div>
-                      <p className="text-[12px] font-semibold text-[var(--hw-neutral-500)] mt-0.5">-%</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center justify-center -mt-[160px] mb-[120px] pointer-events-none">
-                  <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-                    No weather data available.
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
+        {isWeatherRisk && (
+          <WeatherForecastOutlook
+            title="14-Day Weather Forecast Outlook"
+            subtitle={`Estimated weather parameters and risks for ${selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.`}
+            forecast={displayResult.forecast_14d || []}
+            emptyMessage="No weather data available."
+          />
         )}
       </div>
 
-      {/* 4. Datasets Used Table (Full Width) */}
-      <DatasetsUsed
-        module={displayResult.module}
-        records={displayResult.records}
-      />
+      {/* 4. Datasets Used Table (Full Width) - Hidden for Weather Risk */}
+      {!isWeatherRisk && (
+        <DatasetsUsed
+          module={displayResult.module}
+          records={displayResult.records}
+        />
+      )}
 
-      {/* 5. Threshold Applied & Result Explanation in 2 Columns with Equal Height */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        {/* Threshold Applied Card */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+      {/* 5. Threshold Applied & Result Explanation */}
+      {isWeatherRisk ? (
+        /* Top 10 Commodities Threshold Table for Weather Risk */
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+              Crop-specific weather classification thresholds for the Top 10 monitored commodities.
+            </p>
           </div>
-          {thresholdsError && (
-            <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
-          )}
-          <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
-            {displayThresholds && displayThresholds.length > 0 ? (
-              displayThresholds.map((t) => {
-                const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
-                return (
-                  <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
-                    <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
-                    <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
-                Threshold information unavailable.
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Result Explanation Card (Concise Empty State) */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
-          </div>
-          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
-            {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
-              <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
-                {displayResult.resultExplanation}
-              </p>
-            ) : (
-              <div className="py-4 space-y-1.5 max-w-sm mx-auto">
-                <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
-                  <Info className="w-5 h-5" />
-                </div>
-                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
-                  No analytical explanation generated for the selected scope.
-                </p>
-              </div>
-            )}
+          <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]/60">
+                  <th className="py-3 px-6 text-[12px] font-semibold text-black uppercase tracking-wide">Commodity</th>
+                  <th className="py-3 px-6 text-[12px] font-semibold text-emerald-700 uppercase tracking-wide">Suitable</th>
+                  <th className="py-3 px-6 text-[12px] font-semibold text-amber-700 uppercase tracking-wide">Caution</th>
+                  <th className="py-3 px-6 text-[12px] font-semibold text-rose-700 uppercase tracking-wide">Severe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                {TOP_10_WEATHER_THRESHOLDS.map((row) => (
+                  <tr key={row.commodity}>
+                    <td className="py-3.5 px-6 whitespace-nowrap">
+                      <div className="flex items-center gap-2.5">
+                        <CommodityIllustration
+                          commodityId={getCommodityIconKey(null, null, row.commodity)}
+                          className="w-5 h-5 flex-shrink-0"
+                        />
+                        <span className="text-[14px] font-semibold text-black">{row.commodity}</span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[200px]">
+                      {row.suitable}
+                    </td>
+                    <td className="py-3.5 px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[200px]">
+                      {row.caution}
+                    </td>
+                    <td className="py-3.5 px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[200px]">
+                      {row.severe}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      ) : (
+        /* 5. Threshold Applied & Result Explanation in 2 Columns with Equal Height */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          {/* Threshold Applied Card */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
+            </div>
+            {thresholdsError && (
+              <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
+            )}
+            <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
+              {displayThresholds && displayThresholds.length > 0 ? (
+                displayThresholds.map((t) => {
+                  const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
+                  return (
+                    <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+                      <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
+                      <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
+                  Threshold information unavailable.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Result Explanation Card (Concise Empty State) */}
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
+            </div>
+            <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
+              {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
+                <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
+                  {displayResult.resultExplanation}
+                </p>
+              ) : (
+                <div className="py-4 space-y-1.5 max-w-sm mx-auto">
+                  <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
+                    No analytical explanation generated for the selected scope.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Missing data warning */}
       {displayResult.basisMissing && (

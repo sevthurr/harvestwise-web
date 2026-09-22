@@ -27,6 +27,7 @@ import {
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
+import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
 
 const RISK_CFG = {
   [WEATHER_SUITABILITY_CODES.SUITABLE]: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
@@ -125,11 +126,17 @@ function MarketWeatherPage() {
     const daily = data.daily_forecasts || [];
     const forecast14 = daily.map((d, i) => ({
       dayLabel: d.day_label || (i === 0 ? 'Today' : `+${i}d`),
-      date: d.date ? new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-',
-      icon: _mapWeatherConditionToIcon(d.weather_condition),
+      date: d.date,
+      weather_condition: d.weather_condition,
+      rainfall_mm: d.rainfall_mm,
       tempMin: d.temperature_min != null ? Math.round(d.temperature_min) : null,
       tempMax: d.temperature_max != null ? Math.round(d.temperature_max) : null,
       rainPct: d.rain_probability_pct != null ? Math.round(d.rain_probability_pct) : 0,
+      suitability: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE
+        ? 'Severe'
+        : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION
+        ? 'Caution'
+        : 'Suitable',
       risk: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE ? 'high' : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION ? 'moderate' : 'low'
     }));
 
@@ -230,79 +237,14 @@ function MarketWeatherPage() {
           </div>
         )}
 
-            {/* ── 1. 14-day forecast carousel ── */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Forecast"}</p>
-            <div className="flex gap-1 lg:hidden">
-              <button
-                onClick={() => scrollBy(-1)}
-                className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
-              </button>
-              <button
-                onClick={() => scrollBy(1)}
-                className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
-              </button>
-            </div>
-          </div>
-
-          <div
-            ref={carouselRef}
-            className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-14 lg:gap-2 lg:overflow-visible"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {forecast14d.length > 0 ? forecast14d.map((day, i) => {
-              const riskCode = normalizeWeatherSuitability(day.suitability);
-              const rc = riskCode ? (RISK_CFG[riskCode] || RISK_CFG[WEATHER_SUITABILITY_CODES.SUITABLE]) : null;
-              const icon = _mapWeatherConditionToIcon(day.weather_condition);
-              const isEmpty = !day.temp_max && !day.temp_min && !day.rain_probability_pct;
-              return (
-                <div
-                  key={i}
-                  className="flex-shrink-0 lg:flex-shrink w-[76px] lg:w-auto flex flex-col items-center justify-between gap-1.5 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 hover:border-[var(--hw-neutral-300)] transition-colors"
-                >
-                  <div className="text-center">
-                    <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{day.dayLabel || day.day_label}</p>
-                    <p className="text-[10px] text-[var(--hw-neutral-600)]">{day.date ? (day.date.includes('-') ? new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : day.date) : '-'}</p>
-                  </div>
-                  <WeatherIconEl icon={icon} cls="w-6 h-6 my-0.5" />
-                  <div className="text-center">
-                    <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax ?? '–'}°</p>
-                    <p className="text-[11px] text-[var(--hw-neutral-500)]">{day.tempMin ?? '–'}°</p>
-                  </div>
-                  <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">{day.rainPct ?? '–'}%</p>
-                  {isEmpty || !riskCode || !rc ? (
-                    <div className="text-[var(--hw-neutral-400)] text-[10px]">–</div>
-                  ) : (
-                    <div className={`flex items-center gap-1 ${rc.color}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${rc.dot}`} />
-                      <span className="text-[10px] font-semibold">{t(`farmer.factors.weather.suitability_${riskCode}`, {}, rc.label)}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            }) : (
-              <div className="flex items-center justify-center p-6 bg-white rounded-2xl border border-[var(--hw-neutral-200)] text-center w-full col-span-full">
-                <p className="text-[14px] text-[var(--hw-neutral-600)]">
-                  {t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.")}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-700)]">
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /><span>{t("farmer.factors.weather.suitability_suitable", {}, "Suitable")}</span></div>
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /><span>{t("farmer.factors.weather.suitability_caution", {}, "Caution")}</span></div>
-            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /><span>{t("farmer.factors.weather.suitability_severe", {}, "Severe")}</span></div>
-            <span>{t("farmer.factors.weather.rain_chance_note", {}, "· % = rain chance")}</span>
-          </div>
-        </section>
+            {/* ── 1. 14-day forecast outlook ── */}
+        <WeatherForecastOutlook
+          title={t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Weather Forecast Outlook"}
+          subtitle={t ? t("farmer.factors.weather.insight_label", { location: locationName }) : `Estimated weather parameters for ${locationName}.`}
+          forecast={forecast14d}
+          showSuitability={true}
+          emptyMessage={t ? t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.") : "No weather details available right now."}
+        />
 
         {/* ── 2. General weather insight ── */}
         <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
