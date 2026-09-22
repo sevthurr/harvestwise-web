@@ -509,120 +509,134 @@ const SecurityTab = ({ showToast }) => {
   );
 };
 
-// The 4 core architectural dependencies of HarvestWise
-const INITIAL_CORE_SERVICES = [
-  {
-    id: "postgres",
-    label: "PostgreSQL Database",
-    status: "Not checked",
-    lastChecked: "-",
-    notes: "Core database and table storage"
-  },
-  {
-    id: "fastapi",
-    label: "FastAPI Backend Service",
-    status: "Not checked",
-    lastChecked: "-",
-    notes: "REST API, authentication, and backend endpoints"
-  },
-  {
-    id: "open_meteo",
-    label: "Open-Meteo Weather API",
-    status: "Not checked",
-    lastChecked: "-",
-    notes: "Precipitation and temperature forecast endpoint"
-  },
-  {
-    id: "psa_openstat",
-    label: "PSA OpenStat API",
-    status: "Not checked",
-    lastChecked: "-",
-    notes: "Regional historical production volume endpoint"
-  }
-];
+
 
 function getStatusStyle(status) {
   if (["Healthy", "Connected", "Running", "Operational"].includes(status)) {
     return {
       text: "text-emerald-700 font-medium",
       dot: "bg-emerald-500",
-      label: status
-    };
-  }
-  if (["Degraded", "Slow", "Warning"].includes(status)) {
-    return {
-      text: "text-amber-700 font-medium",
-      dot: "bg-amber-500",
-      label: status
-    };
-  }
-  if (["Unavailable", "Disconnected", "Failed", "Offline"].includes(status)) {
-    return {
-      text: "text-rose-600 font-medium",
-      dot: "bg-rose-500",
-      label: status
+      label: "Healthy"
     };
   }
   return {
-    text: "text-[var(--hw-neutral-500)]",
-    dot: "bg-[var(--hw-neutral-400)]",
-    label: status || "Not checked"
+    text: "text-rose-600 font-medium",
+    dot: "bg-rose-500",
+    label: "Disconnected"
   };
 }
 
-const HealthTab = ({ showToast }) => {
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState("-");
-  const [services, setServices] = useState(INITIAL_CORE_SERVICES);
+const DEFAULT_CORE_SERVICES = [
+  {
+    id: "postgres",
+    label: "PostgreSQL Database",
+    status: "Checking...",
+    last_updated: "-",
+    notes: "Checking database connectivity..."
+  },
+  {
+    id: "fastapi",
+    label: "FastAPI Backend Service",
+    status: "Checking...",
+    last_updated: "-",
+    notes: "Checking backend operational status..."
+  },
+  {
+    id: "open_meteo",
+    label: "Open-Meteo Weather API",
+    status: "Checking...",
+    last_updated: "-",
+    notes: "Checking weather forecast endpoint..."
+  },
+  {
+    id: "psa_openstat",
+    label: "PSA OpenStat API",
+    status: "Checking...",
+    last_updated: "-",
+    notes: "Checking OpenStat data sync endpoint..."
+  }
+];
 
-  const handleRefresh = () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    setTimeout(() => {
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-      const ts = `Today, ${timeStr}`;
-      setLastRefreshed(ts);
-      setServices([
-        {
-          id: "postgres",
-          label: "PostgreSQL Database",
-          status: "Healthy",
-          lastChecked: ts,
-          notes: "Database reachable & responsive"
-        },
-        {
-          id: "fastapi",
-          label: "FastAPI Backend Service",
-          status: "Healthy",
-          lastChecked: ts,
-          notes: "Application server operational"
-        },
-        {
-          id: "open_meteo",
-          label: "Open-Meteo Weather API",
-          status: "Healthy",
-          lastChecked: ts,
-          notes: "Weather forecast endpoint active"
-        },
-        {
-          id: "psa_openstat",
-          label: "PSA OpenStat API",
-          status: "Healthy",
-          lastChecked: ts,
-          notes: "OpenStat data sync endpoint active"
-        }
-      ]);
-      setRefreshing(false);
+const HealthTab = ({ showToast }) => {
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+
+  const {
+    data: healthData,
+    isLoading,
+    isFetching,
+    isError,
+    error
+  } = useQuery({
+    queryKey: ["adminSystemHealth"],
+    queryFn: () => adminApi.getSystemHealth(),
+    staleTime: 15000,
+    refetchInterval: 60000
+  });
+
+  const isBusy = manualRefreshing || isFetching;
+
+  const handleRefresh = async () => {
+    if (isBusy) return;
+    setManualRefreshing(true);
+    try {
+      const fresh = await adminApi.getSystemHealth({ refresh: "true" });
+      queryClient.setQueryData(["adminSystemHealth"], fresh);
       showToast("System health status updated.");
-    }, 1000);
+    } catch {
+      showToast("Failed to refresh system health.");
+    } finally {
+      setManualRefreshing(false);
+    }
   };
+
+  let services = DEFAULT_CORE_SERVICES;
+  let lastRefreshed = "-";
+
+  if (healthData?.items) {
+    services = healthData.items;
+    lastRefreshed = healthData.last_updated || "-";
+  } else if (isError) {
+    lastRefreshed = "Failed to update";
+    services = [
+      {
+        id: "postgres",
+        label: "PostgreSQL Database",
+        status: "Disconnected",
+        last_updated: "Unavailable",
+        notes: "Cannot verify database connection while backend API is unreachable."
+      },
+      {
+        id: "fastapi",
+        label: "FastAPI Backend Service",
+        status: "Disconnected",
+        last_updated: "Unavailable",
+        notes: error?.message || "FastAPI backend server is unreachable or offline."
+      },
+      {
+        id: "open_meteo",
+        label: "Open-Meteo Weather API",
+        status: "Disconnected",
+        last_updated: "Unavailable",
+        notes: "Cannot verify external weather API while backend API is unreachable."
+      },
+      {
+        id: "psa_openstat",
+        label: "PSA OpenStat API",
+        status: "Disconnected",
+        last_updated: "Unavailable",
+        notes: "Cannot verify PSA OpenStat endpoint while backend API is unreachable."
+      }
+    ];
+  }
 
   return (
     <Card>
       <div className="flex items-center justify-between mb-4">
         <SectionLabel>System Status</SectionLabel>
-        <span className="text-[12px] text-[var(--hw-neutral-500)]">Last refreshed: {lastRefreshed}</span>
+        <span className="text-[12px] text-[var(--hw-neutral-500)]">
+          Last refreshed: {lastRefreshed}
+        </span>
       </div>
 
       {services.length > 0 ? (
@@ -634,13 +648,16 @@ const HealthTab = ({ showToast }) => {
                 <tr className="border-b border-[var(--hw-neutral-200)]">
                   <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Service / Dependency</th>
                   <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Status</th>
-                  <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Last Checked</th>
+                  <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Last Updated</th>
                   <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                 {services.map((s) => {
-                  const style = getStatusStyle(s.status);
+                  const isChecking = isLoading && !healthData && !isError;
+                  const style = isChecking
+                    ? { text: "text-[var(--hw-neutral-500)] font-medium", dot: "bg-amber-400 animate-pulse", label: "Checking..." }
+                    : getStatusStyle(s.status);
                   return (
                     <tr key={s.id}>
                       <td className="py-3.5 text-[14px] font-medium text-black">{s.label}</td>
@@ -650,7 +667,7 @@ const HealthTab = ({ showToast }) => {
                           {style.label}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-[13px] text-black whitespace-nowrap">{s.lastChecked}</td>
+                      <td className="py-3.5 px-4 text-[13px] text-black whitespace-nowrap">{s.last_updated || s.lastChecked || "-"}</td>
                       <td className="py-3.5 text-[13px] text-[var(--hw-neutral-600)]">{s.notes}</td>
                     </tr>
                   );
@@ -662,7 +679,10 @@ const HealthTab = ({ showToast }) => {
           {/* Mobile list */}
           <div className="sm:hidden divide-y divide-[var(--hw-neutral-100)]">
             {services.map((s) => {
-              const style = getStatusStyle(s.status);
+              const isChecking = isLoading && !healthData && !isError;
+              const style = isChecking
+                ? { text: "text-[var(--hw-neutral-500)] font-medium", dot: "bg-amber-400 animate-pulse", label: "Checking..." }
+                : getStatusStyle(s.status);
               return (
                 <div key={s.id} className="py-3 space-y-1">
                   <div className="flex items-center justify-between">
@@ -673,8 +693,8 @@ const HealthTab = ({ showToast }) => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)]">
-                    <span>{s.notes}</span>
-                    <span>{s.lastChecked}</span>
+                    <span className="pr-2">{s.notes}</span>
+                    <span className="whitespace-nowrap flex-shrink-0">{s.last_updated || s.lastChecked || "-"}</span>
                   </div>
                 </div>
               );
@@ -690,12 +710,12 @@ const HealthTab = ({ showToast }) => {
       <div className="pt-4 border-t border-[var(--hw-neutral-100)] mt-4">
         <button
           type="button"
-          disabled={refreshing}
+          disabled={isBusy}
           onClick={handleRefresh}
           className="inline-flex items-center gap-2 h-10 px-4 text-[13px] font-semibold text-black bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 transition-colors cursor-pointer"
         >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-          {refreshing ? "Refreshing status..." : "Refresh status"}
+          <RefreshCw className={`w-4 h-4 ${isBusy ? "animate-spin" : ""}`} />
+          {isBusy ? "Refreshing status..." : "Refresh status"}
         </button>
       </div>
     </Card>

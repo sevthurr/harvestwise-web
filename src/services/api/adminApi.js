@@ -42,3 +42,9 @@ export async function updateUser(userId, payload) {
 export async function deactivateUser(userId) {
   return apiDelete(`/admin/users/${userId}`);
 }
+
+export async function getSystemHealth(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return parseResponse(await apiGet(`/admin/system/health${qs ? `?${qs}` : ""}`));
+}
+
