@@ -35,7 +35,9 @@ export const calendar = {
     market_note: "Market note",
     expected_harvest: "Expected harvest",
     expected_harvest_date: "Expected harvest date",
-    check_crop: "Check this crop"
+    check_crop: "Check this crop",
+    payday: "Payday period",
+    payday_note: "Payday period. Higher consumer spending and market demand expected."
   },
   recommendations_title: "Crop recommendations",
   empty_recommendations_title: "No crop recommendations available yet.",

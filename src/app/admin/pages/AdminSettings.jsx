@@ -6,6 +6,7 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { authApi } from "../../../services/api";
 import { parseResponse } from "../../global/api";
+import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import {
   inputCls,
@@ -143,9 +144,13 @@ const AccountTab = ({ showToast }) => {
               id="adm-ph"
               type="tel"
               inputMode="numeric"
+              maxLength={PHONE_MAX_LENGTH}
               placeholder="09XX XXX XXXX"
               value={form.phone}
-              onChange={set("phone")}
+              onChange={(e) => {
+                setErrorMsg("");
+                setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }));
+              }}
               className={inputCls}
             />
           </div>
