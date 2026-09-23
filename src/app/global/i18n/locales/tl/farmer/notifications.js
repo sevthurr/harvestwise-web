@@ -1,12 +1,22 @@
 export const notifications = {
   title: "Mga Notipikasyon",
+  subtitle: "Manatiling updated sa mga alerto sa pananim, panahon, at galaw ng merkado.",
   mark_as_read: "Markahan bilang nabasa na",
   mark_all_read: "Markahan lahat bilang nabasa na",
   all_caught_up: "Nabasa mo na ang lahat",
   no_notifications: "Walang mga notipikasyon sa ngayon.",
+  load_error: "Hindi ma-load ang mga notipikasyon. Subukan muli.",
   tag_urgent: "Urgent",
   tag_attention: "Kailangang Bantayan",
   tag_info: "Impormasyon",
   related_to: "May kaugnayan sa",
-  why_received: "Bakit mo ito natanggap"
+  why_received: "Bakit mo ito natanggap",
+  details: "Mga Detalye",
+  view_details: "Tingnan ang Detalye",
+  price_change_label: "pagbabago ng presyo",
+  category_price: "Pagbabago ng Presyo",
+  category_weather: "Alerto sa Panahon",
+  category_harvest: "Pag-aani",
+  new_notification: "Bagong Notipikasyon",
+  new_notification_body: "Mayroon kang bagong notipikasyon.",
 };

@@ -1,12 +1,22 @@
 export const notifications = {
   title: "Notifications",
+  subtitle: "Stay updated on crop alerts, weather updates, and market movements.",
   mark_as_read: "Mark as read",
   mark_all_read: "Mark all as read",
   all_caught_up: "You're all caught up",
   no_notifications: "No notifications at this time.",
+  load_error: "Could not load notifications. Please try again.",
   tag_urgent: "Urgent",
   tag_attention: "Attention",
   tag_info: "Information",
   related_to: "Related to",
-  why_received: "Why you received this"
+  why_received: "Why you received this",
+  details: "Details",
+  view_details: "View Details",
+  price_change_label: "price change",
+  category_price: "Price Change",
+  category_weather: "Weather Alert",
+  category_harvest: "Harvest",
+  new_notification: "New Notification",
+  new_notification_body: "You have a new notification.",
 };

@@ -505,6 +505,18 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
     setShowSaveModal(false);
     try {
       setSaving(true);
+
+      // Build preferred_crops from the crops grid
+      // crops = { [commodityName]: varietyLabel }
+      // availableCrops = [{ id, name, baseName }]
+      const nameToId = Object.fromEntries(availableCrops.map((c) => [c.name, c.id]));
+      const preferred_crops = Object.entries(crops)
+        .filter(([name]) => nameToId[name])
+        .map(([name, variety]) => ({
+          commodity_id: nameToId[name],
+          ...(variety ? { preferred_variety_name: variety } : {}),
+        }));
+
       const payload = {
         city: locationState.city || "Davao City",
         district: locationState.district ? locationState.district.trim() : null,
@@ -515,6 +527,7 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
         latitude: locationState.latitude != null ? locationState.latitude : null,
         longitude: locationState.longitude != null ? locationState.longitude : null,
         usual_selling_area_or_buyer: selling.area ? selling.area.trim() : null,
+        preferred_crops,
       };
       const res = await apiPut("/farmer/profile", payload);
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
