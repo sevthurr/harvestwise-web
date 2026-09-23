@@ -37,7 +37,7 @@ const RULE_EDIT_CONFIGS = {
     ]
   },
   "Historical Seasonal Production Level": {
-    description: "Classifies the expected harvest quarter using PSA OpenStat historical production ratios against quartile thresholds.",
+    description: "Classifies quarterly historical production using PSA OpenSTAT historical production ratios against empirical quartile thresholds.",
     fields: [
       { key: "q1_ratio", label: "Q1 ratio", defaultValue: "0.75" },
       { key: "q2_ratio", label: "Q2 ratio", defaultValue: "1.00" },
@@ -155,71 +155,71 @@ const EditModal = ({ ruleName, rules = [], onSaved, onClose }) => {
     setTimeout(onClose, 800);
   };
   return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <div>
-            <p className="font-semibold text-[var(--hw-neutral-800)]">Edit — {ruleName}</p>
-            {RULE_IDS[ruleName] && <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mt-0.5">{RULE_IDS[ruleName]}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+    <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+    <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div>
+          <p className="font-semibold text-[var(--hw-neutral-800)]">Edit — {ruleName}</p>
+          {RULE_IDS[ruleName] && <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mt-0.5">{RULE_IDS[ruleName]}</p>}
         </div>
-        <div className="overflow-y-auto flex-1">
-          <div className="px-5 py-4 space-y-5">
-            <p className="text-[13px] text-[var(--hw-neutral-800)]">{config.description}</p>
-            {config.note && <div className="flex items-start gap-2 px-3 py-2.5 bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl">
-                <Info className="w-4 h-4 text-[var(--hw-neutral-700)] flex-shrink-0 mt-0.5" />
-                <p className="text-[12px] text-[var(--hw-neutral-800)]">{config.note}</p>
-              </div>}
-            <div className="space-y-3">
-              {config.fields.map((f) => <div key={f.key}>
-                  <label className="block text-[12px] text-[var(--hw-neutral-800)] mb-1">{f.label}</label>
-                  <div className="flex items-center gap-2">
-                    {f.isSelect ? <select
-    value={values[f.key]}
-    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-    className={inputCls}
-  >
-                        {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                      </select> : <input
-    type="number"
-    value={values[f.key]}
-    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-    className={inputCls}
-  />}
-                    {f.unit && !f.isSelect && <span className="text-[13px] text-[var(--hw-neutral-700)] flex-shrink-0">{f.unit}</span>}
-                  </div>
-                </div>)}
-            </div>
-            <div>
-              <p className="text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Sample output</p>
-              <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] divide-y divide-[var(--hw-neutral-100)]">
-                {config.sample.map((s, i) => <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <span className="text-[12px] text-[var(--hw-neutral-800)]">{s.scenario}</span>
-                    <span className={`text-[12px] font-semibold flex-shrink-0 ${s.color}`}>{s.result}</span>
-                  </div>)}
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="overflow-y-auto flex-1">
+        <div className="px-5 py-4 space-y-5">
+          <p className="text-[13px] text-[var(--hw-neutral-800)]">{config.description}</p>
+          {config.note && <div className="flex items-start gap-2 px-3 py-2.5 bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl">
+            <Info className="w-4 h-4 text-[var(--hw-neutral-700)] flex-shrink-0 mt-0.5" />
+            <p className="text-[12px] text-[var(--hw-neutral-800)]">{config.note}</p>
+          </div>}
+          <div className="space-y-3">
+            {config.fields.map((f) => <div key={f.key}>
+              <label className="block text-[12px] text-[var(--hw-neutral-800)] mb-1">{f.label}</label>
+              <div className="flex items-center gap-2">
+                {f.isSelect ? <select
+                  value={values[f.key]}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  className={inputCls}
+                >
+                  {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select> : <input
+                  type="number"
+                  value={values[f.key]}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  className={inputCls}
+                />}
+                {f.unit && !f.isSelect && <span className="text-[13px] text-[var(--hw-neutral-700)] flex-shrink-0">{f.unit}</span>}
               </div>
+            </div>)}
+          </div>
+          <div>
+            <p className="text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Sample output</p>
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] divide-y divide-[var(--hw-neutral-100)]">
+              {config.sample.map((s, i) => <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <span className="text-[12px] text-[var(--hw-neutral-800)]">{s.scenario}</span>
+                <span className={`text-[12px] font-semibold flex-shrink-0 ${s.color}`}>{s.result}</span>
+              </div>)}
             </div>
           </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-          <button
-    onClick={onClose}
-    className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-            Cancel
-          </button>
-          <button
-    onClick={handleSave}
-    className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-            {saved ? "Saved!" : "Save Changes"}
-          </button>
         </div>
       </div>
-    </div>;
+      <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+        >
+          {saved ? "Saved!" : "Save Changes"}
+        </button>
+      </div>
+    </div>
+  </div>;
 };
 function AdminAnalyticsThresholds() {
   const navigate = useNavigate();
@@ -272,108 +272,108 @@ function AdminAnalyticsThresholds() {
   const editingRules = editingModule ? rulesByModule[editingModule.id] || [] : [];
 
   return <>
-      {editingRule && <EditModal ruleName={editingRule} rules={editingRules} onSaved={refresh} onClose={() => setEditingRule(null)} />}
+    {editingRule && <EditModal ruleName={editingRule} rules={editingRules} onSaved={refresh} onClose={() => setEditingRule(null)} />}
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 
-        {
-    /* Header */
-  }
-        <div>
-          <button
-    onClick={() => navigate("/admin/analytics")}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors mb-4"
-  >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Analytics
-          </button>
-          <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Rules & Thresholds</h1>
-          <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-            Review and adjust classification rules used by HarvestWise.
-          </p>
-        </div>
-
-        {
-    /* Module rule cards */
-  }
-        {thresholdsLoading ? <div className="px-5 py-10 text-center text-[13px] text-[var(--hw-neutral-500)] bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
-            Loading threshold modules…
-          </div> : thresholdsError ? <div className="px-5 py-4 text-[13px] text-red-600 bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
-            {thresholdsError}
-          </div> : displayModules.length === 0 ? <div className="px-5 py-10 text-center text-[13px] text-[var(--hw-neutral-500)] bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
-            No threshold modules configured.
-          </div> : displayModules.map((mr) => <div key={mr.module} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[var(--hw-neutral-100)]">
-              <div>
-                <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mb-0.5">{mr.ruleId}</p>
-                <p className="font-semibold text-[var(--hw-neutral-900)]">{mr.module}</p>
-                <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">Source: {mr.source}</p>
-                {mr.module === "Profitability" && <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5 italic">
-                    This rule is applied during farmer assessment and is not shown as a global admin analytical result.
-                  </p>}
-                {mr.module === "Weather Risk" && <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">
-                    Weather Risk compares rainfall, temperature, humidity, and wind with crop-specific weather requirements.
-                  </p>}
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <div className="text-right">
-                  <p className="text-[11px] font-medium text-emerald-700">Active</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated {mr.lastUpdated}</p>
-                </div>
-                <button
-    onClick={() => setEditingRule(mr.module)}
-    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-lg hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-                  <Edit2 className="w-3 h-3" />Edit
-                </button>
-              </div>
-            </div>
-            <div className="divide-y divide-[var(--hw-neutral-100)]">
-              {mr.rules.length === 0 ? <div className="px-5 py-4 text-[12px] text-[var(--hw-neutral-500)]">No rules configured for this module.</div> : mr.rules.map((r) => <div key={r.classification} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <span className={`text-[13px] font-semibold flex-shrink-0 ${r.color}`}>{r.classification}</span>
-                  <span className="text-[13px] text-[var(--hw-neutral-800)] text-right">{r.rule}</span>
-                </div>)}
-            </div>
-          </div>)}
-
-        {
-    /* Final Advisory Cutoffs */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[var(--hw-neutral-100)]">
-            <div>
-              <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mb-0.5">RULE-FAC-001</p>
-              <p className="font-semibold text-[var(--hw-neutral-900)]">Final Advisory Cutoffs</p>
-              <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">
-                Source: Adaptive Weight Crop Modules
-              </p>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <div className="text-right">
-                <p className="text-[11px] font-medium text-emerald-700">Active</p>
-                <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated -</p>
-              </div>
-              <button
-    onClick={() => setEditingRule("Final Advisory Cutoffs")}
-    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-lg hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-                <Edit2 className="w-3 h-3" />Edit
-              </button>
-            </div>
-          </div>
-          <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {FINAL_ADVISORY_CUTOFFS.map((c) => <div key={c.advisory} className="flex items-start justify-between gap-4 px-5 py-4">
-                <div>
-                  <p className={`text-[13px] font-semibold ${c.color}`}>{c.advisory}</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{c.description}</p>
-                </div>
-                <span className="text-[13px] font-medium text-[var(--hw-neutral-600)] flex-shrink-0">{c.range}</span>
-              </div>)}
-          </div>
-        </div>
-
+      {
+        /* Header */
+      }
+      <div>
+        <button
+          onClick={() => navigate("/admin/analytics")}
+          className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors mb-4"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to Analytics
+        </button>
+        <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Rules & Thresholds</h1>
+        <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
+          Review and adjust classification rules used by HarvestWise.
+        </p>
       </div>
-    </>;
+
+      {
+        /* Module rule cards */
+      }
+      {thresholdsLoading ? <div className="px-5 py-10 text-center text-[13px] text-[var(--hw-neutral-500)] bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
+        Loading threshold modules…
+      </div> : thresholdsError ? <div className="px-5 py-4 text-[13px] text-red-600 bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
+        {thresholdsError}
+      </div> : displayModules.length === 0 ? <div className="px-5 py-10 text-center text-[13px] text-[var(--hw-neutral-500)] bg-white rounded-2xl border border-[var(--hw-neutral-200)]">
+        No threshold modules configured.
+      </div> : displayModules.map((mr) => <div key={mr.module} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[var(--hw-neutral-100)]">
+          <div>
+            <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mb-0.5">{mr.ruleId}</p>
+            <p className="font-semibold text-[var(--hw-neutral-900)]">{mr.module}</p>
+            <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">Source: {mr.source}</p>
+            {mr.module === "Profitability" && <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5 italic">
+              This rule is applied during farmer assessment and is not shown as a global admin analytical result.
+            </p>}
+            {mr.module === "Weather Risk" && <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">
+              Weather Risk compares rainfall, temperature, humidity, and wind with crop-specific weather requirements.
+            </p>}
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="text-right">
+              <p className="text-[11px] font-medium text-emerald-700">Active</p>
+              <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated {mr.lastUpdated}</p>
+            </div>
+            <button
+              onClick={() => setEditingRule(mr.module)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-lg hover:bg-[var(--hw-neutral-50)] transition-colors"
+            >
+              <Edit2 className="w-3 h-3" />Edit
+            </button>
+          </div>
+        </div>
+        <div className="divide-y divide-[var(--hw-neutral-100)]">
+          {mr.rules.length === 0 ? <div className="px-5 py-4 text-[12px] text-[var(--hw-neutral-500)]">No rules configured for this module.</div> : mr.rules.map((r) => <div key={r.classification} className="flex items-center justify-between gap-4 px-5 py-3">
+            <span className={`text-[13px] font-semibold flex-shrink-0 ${r.color}`}>{r.classification}</span>
+            <span className="text-[13px] text-[var(--hw-neutral-800)] text-right">{r.rule}</span>
+          </div>)}
+        </div>
+      </div>)}
+
+      {
+        /* Final Advisory Cutoffs */
+      }
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="flex items-start justify-between gap-3 px-5 py-3.5 border-b border-[var(--hw-neutral-100)]">
+          <div>
+            <p className="text-[11px] font-mono text-[var(--hw-neutral-700)] mb-0.5">RULE-FAC-001</p>
+            <p className="font-semibold text-[var(--hw-neutral-900)]">Final Advisory Cutoffs</p>
+            <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">
+              Source: Adaptive Weight Crop Modules
+            </p>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="text-right">
+              <p className="text-[11px] font-medium text-emerald-700">Active</p>
+              <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated -</p>
+            </div>
+            <button
+              onClick={() => setEditingRule("Final Advisory Cutoffs")}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-lg hover:bg-[var(--hw-neutral-50)] transition-colors"
+            >
+              <Edit2 className="w-3 h-3" />Edit
+            </button>
+          </div>
+        </div>
+        <div className="divide-y divide-[var(--hw-neutral-100)]">
+          {FINAL_ADVISORY_CUTOFFS.map((c) => <div key={c.advisory} className="flex items-start justify-between gap-4 px-5 py-4">
+            <div>
+              <p className={`text-[13px] font-semibold ${c.color}`}>{c.advisory}</p>
+              <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{c.description}</p>
+            </div>
+            <span className="text-[13px] font-medium text-[var(--hw-neutral-600)] flex-shrink-0">{c.range}</span>
+          </div>)}
+        </div>
+      </div>
+
+    </div>
+  </>;
 }
 export {
   AdminAnalyticsThresholds as default
