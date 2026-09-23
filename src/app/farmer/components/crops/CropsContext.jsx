@@ -45,6 +45,19 @@ export function normalizeCropPlan(raw) {
     ? Math.ceil(totalCost / qty)
     : (item.breakevenPricePerKg != null ? Number(item.breakevenPricePerKg) : (item.breakEvenPrice != null ? Number(item.breakEvenPrice) : null));
 
+  const harvestRecords = Array.isArray(item.harvestRecords) ? item.harvestRecords : [];
+  const latestHarvest = harvestRecords[0] || null;
+  const actualHarvestQty = latestHarvest
+    ? Number(latestHarvest.actualHarvestQty)
+    : item.actualHarvestQty != null
+      ? Number(item.actualHarvestQty)
+      : null;
+  const actualSellingPrice = latestHarvest
+    ? Number(latestHarvest.actualSellingPricePerKg)
+    : item.actualSellingPrice != null
+      ? Number(item.actualSellingPrice)
+      : null;
+
   return {
     id: item.id,
     commodity: commodityId,
@@ -73,6 +86,12 @@ export function normalizeCropPlan(raw) {
     farmAreaUnit: "sqm",
     harvestQuantity: qty,
     expectedHarvestQty: qty,
+    harvestRecords,
+    actualHarvestDate: latestHarvest
+      ? new Date(latestHarvest.actualHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : item.actualHarvestDate || null,
+    actualHarvestQty,
+    actualSellingPrice,
     costMethod,
     expenses,
     farmgatePrice,

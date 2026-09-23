@@ -39,6 +39,60 @@ const WEIGHT_MODULES = [
   "Weather Risk",
   "Profitability"
 ];
+const WEIGHT_ABBR = {
+  "Price Outlook": "Price",
+  "Arrival Pressure": "Arrival",
+  "Historical Seasonal Production Level": "Seasonal",
+  "Weather Risk": "Weather",
+  Profitability: "Profit"
+};
+// Backend crop-stage keys (must match the advisory pipeline's CropStage enum)
+// with the display labels shown to admins.
+const WEIGHT_PHASES = [
+  { key: "before_planting", label: "Planning" },
+  { key: "during_planting", label: "Planting" },
+  { key: "near_harvest", label: "Near Harvest" },
+  { key: "harvest", label: "Harvest" }
+];
+// Validated weather-sensitive presets (percent) — default base profile per
+// stage, pre-filled when no adaptive_weight row exists yet.
+const DEFAULT_STAGE_WEIGHTS = {
+  before_planting: {
+    "Price Outlook": 30, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 25, Profitability: 10
+  },
+  during_planting: {
+    "Price Outlook": 25, "Arrival Pressure": 15,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 35, Profitability: 10
+  },
+  near_harvest: {
+    "Price Outlook": 35, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 30, Profitability: 10
+  },
+  harvest: {
+    "Price Outlook": 40, "Arrival Pressure": 25,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 20, Profitability: 10
+  }
+};
+// Weather-resilient presets (percent) — read-only reference for the admin.
+const RESILIENT_STAGE_WEIGHTS = {
+  before_planting: {
+    "Price Outlook": 35, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 15, Profitability: 15
+  },
+  during_planting: {
+    "Price Outlook": 30, "Arrival Pressure": 15,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 25, Profitability: 15
+  },
+  near_harvest: {
+    "Price Outlook": 40, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 20, Profitability: 15
+  },
+  harvest: {
+    "Price Outlook": 45, "Arrival Pressure": 25,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 10, Profitability: 15
+  }
+};
 const PRICE_OUTLOOK_MODULE = "Price Outlook";
 
 const WEATHER_METRICS = [
@@ -57,9 +111,14 @@ const WEATHER_RISK_LEVELS = ["suitable", "caution", "severe"];
 
 // Edit Adaptive Weights Modal
 const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
+  const phaseLabel = WEIGHT_PHASES.find((p) => p.key === phase)?.label || phase;
   const [values, setValues] = useState(() => {
+    const base =
+      currentWeights && Object.keys(currentWeights).length > 0
+        ? currentWeights
+        : DEFAULT_STAGE_WEIGHTS[phase] || {};
     return Object.fromEntries(
-      WEIGHT_MODULES.map((m) => [m, currentWeights?.[m] !== undefined ? String(currentWeights[m]) : ""])
+      WEIGHT_MODULES.map((m) => [m, base[m] !== undefined ? String(base[m]) : ""])
     );
   });
   const [saved, setSaved] = useState(false);
@@ -83,7 +142,7 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Edit {phase} Weights</p>
+          <p className="font-semibold text-[var(--hw-neutral-900)]">Edit {phaseLabel} Weights</p>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
             <X className="w-4 h-4" />
           </button>
@@ -1265,7 +1324,7 @@ function AdminAnalytics() {
               <div>
                 <h2 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Adaptive Weights</h2>
                 <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-                  Stage-level weights applied across Price Outlook, Arrival Pressure, Historical Production, Weather Risk, and Profitability. Weights per phase must sum to 100%.
+                  One base weight profile per stage (Planning, Planting, Near Harvest, Harvest). It overrides the built-in presets for both weather-sensitive and weather-resilient crops in that stage; leave a stage empty to keep the presets. Weights per stage must sum to 100%.
                 </p>
               </div>
 
@@ -1277,10 +1336,11 @@ function AdminAnalytics() {
                 )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {["Planning", "Planting", "Harvesting"].map((phase) => {
+                {WEIGHT_PHASES.map(({ key: phase, label }) => {
                   const weights = phaseWeights[phase];
                   const hasWeights = weights && Object.keys(weights).length > 0;
                   const total = hasWeights ? Object.values(weights).reduce((a, b) => a + b, 0) : null;
+                  const resilient = RESILIENT_STAGE_WEIGHTS[phase] || {};
 
                   return (
                     <div
@@ -1290,13 +1350,13 @@ function AdminAnalytics() {
                       <div>
                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                           <div>
-                            <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{phase}</h3>
-                            <p className="text-[11px] text-[var(--hw-neutral-500)]">Phase weight profile</p>
+                            <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{label}</h3>
+                            <p className="text-[11px] text-[var(--hw-neutral-500)]">Base weight override for this stage</p>
                           </div>
                           <button
                             onClick={() => setEditingPhase(phase)}
                             className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors cursor-pointer"
-                            title={`Edit ${phase} Weights`}
+                            title={`Edit ${label} Weights`}
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -1304,7 +1364,7 @@ function AdminAnalytics() {
 
                         {!hasWeights ? (
                           <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
-                            No {phase} weights configured.
+                            No override set — using built-in presets.
                           </div>
                         ) : (
                           <div className="space-y-2">
@@ -1318,9 +1378,14 @@ function AdminAnalytics() {
                             ))}
                           </div>
                         )}
+
+                        <div className="mt-4 pt-3 border-t border-dashed border-[var(--hw-neutral-200)] text-[11px] leading-relaxed text-[var(--hw-neutral-500)]">
+                          Weather-resilient default:{" "}
+                          {WEIGHT_MODULES.map((m) => `${WEIGHT_ABBR[m]} ${resilient[m] ?? "-"}%`).join(" · ")}
+                        </div>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
+                      <div className="mt-3 pt-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
                         <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
                         <span className={`text-[13px] font-bold ${total !== null ? "text-emerald-700" : "text-[var(--hw-neutral-400)]"}`}>
                           {total !== null ? `Total ${total}%` : "Total -"}
