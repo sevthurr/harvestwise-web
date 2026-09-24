@@ -98,3 +98,17 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
     await apiGet(`/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${encodeURIComponent(horizon)}`)
   );
 }
+
+// ── Crop Weather Rules ────────────────────────────────────────────────────
+export async function listCropWeatherRules(commodityId) {
+  const qs = commodityId ? `?commodity_id=${encodeURIComponent(commodityId)}` : "";
+  return parseResponse(await apiGet(`/admin/crop-weather-rules${qs}`));
+}
+
+export async function updateCropWeatherRule(ruleId, payload) {
+  return parseResponse(await apiPut(`/admin/crop-weather-rules/${ruleId}`, payload));
+}
+
+export async function createCropWeatherRule(payload) {
+  return parseResponse(await apiPost("/admin/crop-weather-rules", payload));
+}

@@ -564,6 +564,74 @@ function AdminAnalytics() {
     return () => { active = false; };
   }, [scopedCommodity, scopedVariety]);
 
+  // Load weather rules for the scoped commodity from the admin API
+  useEffect(() => {
+    let active = true;
+    async function loadWeatherRules() {
+      if (!scopedCommodityRecord?.id) return;
+      try {
+        const data = await analyticsApi.listCropWeatherRules(scopedCommodityRecord.id);
+        if (!active) return;
+        const items = data?.items || [];
+
+        const tempRangeRule = items.find(
+          (r) => r.metric_key === "temp_range" && r.risk_level === "suitable"
+        );
+        const tempMinCaution = items.find(
+          (r) => r.metric_key === "temp_min" && r.risk_level === "caution"
+        );
+        const tempMaxCaution = items.find(
+          (r) => r.metric_key === "temp_max" && r.risk_level === "caution"
+        );
+        const tempMaxSevere = items.find(
+          (r) => r.metric_key === "temp_max" && r.risk_level === "severe"
+        );
+        const windSevere = items.find(
+          (r) => r.metric_key === "wind_speed_max" && r.risk_level === "severe"
+        );
+        const humSevere = items.find(
+          (r) =>
+            (r.metric_key.includes("rh") || r.metric_key.includes("humidity")) &&
+            r.risk_level === "severe"
+        );
+        const rainRule = items.find((r) => r.metric_key.includes("rain"));
+
+        if (tempRangeRule || rainRule || windSevere || humSevere) {
+          const config = {
+            commodity: scopedCommodity,
+            variety: scopedVariety || "Standard",
+            suitRainMax: rainRule?.threshold_max != null ? Number(rainRule.threshold_max) : 15,
+            cautRainMin: 15,
+            sevRainMin: 30,
+            suitTempMin: tempRangeRule?.threshold_min != null ? Number(tempRangeRule.threshold_min) : null,
+            suitTempMax: tempRangeRule?.threshold_max != null ? Number(tempRangeRule.threshold_max) : null,
+            cautTempMin: tempMinCaution ? Number(tempMinCaution.threshold_min ?? tempMinCaution.threshold_max) : null,
+            cautTempMax: tempMaxCaution ? Number(tempMaxCaution.threshold_min ?? tempMaxCaution.threshold_max) : null,
+            sevTempThresh: tempMaxSevere?.threshold_min != null ? Number(tempMaxSevere.threshold_min) : null,
+            humidityThresh: humSevere?.threshold_min != null ? Number(humSevere.threshold_min) : 90,
+            windThresh: windSevere?.threshold_min != null ? Number(windSevere.threshold_min) : null,
+            ruleIds: {
+              tempRangeId: tempRangeRule?.id || null,
+              rainId: rainRule?.id || null
+            }
+          };
+
+          const key = `${scopedCommodity}_${scopedVariety || "Standard"}`;
+          setWeatherRulesByCrop((prev) => ({
+            ...prev,
+            [key]: config
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to load crop weather rules:", err);
+      }
+    }
+    loadWeatherRules();
+    return () => {
+      active = false;
+    };
+  }, [scopedCommodity, scopedVariety, scopedCommodityRecord?.id]);
+
   useEffect(() => {
     if (!showTooltip) return;
     const h = (e) => {
@@ -665,6 +733,27 @@ function AdminAnalytics() {
     }
   };
 
+  const handleWeatherSave = async (updated) => {
+    try {
+      const existingTempId = currentWeatherConfig?.ruleIds?.tempRangeId;
+      if (existingTempId && updated.suitTempMin != null && updated.suitTempMax != null) {
+        await analyticsApi.updateCropWeatherRule(existingTempId, {
+          threshold_min: updated.suitTempMin,
+          threshold_max: updated.suitTempMax
+        });
+      }
+      setWeatherRulesByCrop((prev) => ({
+        ...prev,
+        [`${updated.commodity}_${updated.variety || "Standard"}`]: {
+          ...currentWeatherConfig,
+          ...updated
+        }
+      }));
+    } catch (err) {
+      console.error("Failed to save weather rules:", err);
+    }
+  };
+
   return (
     <>
       {editingPhase && (
@@ -688,12 +777,7 @@ function AdminAnalytics() {
           variety={scopedVariety}
           currentRules={currentWeatherConfig}
           onClose={() => setEditingWeather(false)}
-          onSave={(updated) => {
-            setWeatherRulesByCrop((prev) => ({
-              ...prev,
-              [`${updated.commodity}_${updated.variety || "Standard"}`]: updated
-            }));
-          }}
+          onSave={handleWeatherSave}
         />
       )}
 
