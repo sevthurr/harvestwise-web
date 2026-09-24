@@ -1035,11 +1035,10 @@ function AdminAnalytics() {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-5 py-3 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  tab === t.id
+                className={`px-5 py-3 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.id
                     ? "border-[var(--hw-green-700)] text-[var(--hw-neutral-900)] font-semibold"
                     : "border-transparent text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
-                }`}
+                  }`}
               >
                 {t.label}
               </button>
@@ -1328,14 +1327,14 @@ function AdminAnalytics() {
                 </p>
               </div>
 
-                {weightsLoading && (
-                  <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading adaptive weights…</p>
-                )}
-                {weightsError && (
-                  <p className="text-[12px] text-red-600">{weightsError}</p>
-                )}
+              {weightsLoading && (
+                <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading adaptive weights…</p>
+              )}
+              {weightsError && (
+                <p className="text-[12px] text-red-600">{weightsError}</p>
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {WEIGHT_PHASES.map(({ key: phase, label }) => {
                   const weights = phaseWeights[phase];
                   const hasWeights = weights && Object.keys(weights).length > 0;
@@ -1406,12 +1405,12 @@ function AdminAnalytics() {
                 </p>
               </div>
 
-                {thresholdsLoading && (
-                  <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading threshold rules…</p>
-                )}
-                {thresholdsError && (
-                  <p className="text-[12px] text-red-600">{thresholdsError}</p>
-                )}
+              {thresholdsLoading && (
+                <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading threshold rules…</p>
+              )}
+              {thresholdsError && (
+                <p className="text-[12px] text-red-600">{thresholdsError}</p>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Price Outlook (Global Admin Configured) */}
@@ -1532,28 +1531,53 @@ function AdminAnalytics() {
                       ) : (
                         <>
                           <div className="grid grid-cols-2 gap-2 text-center">
-                            <div className="rounded-lg border border-[var(--hw-neutral-100)] p-2">
-                              <p className="text-[10px] text-[var(--hw-neutral-500)]">Latest observed season</p>
-                              <p className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">{productionSummary.season} {productionSummary.latest_year}</p>
+                            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2">
+                              <p className="text-[10px] text-emerald-700 font-medium">Peak Season</p>
+                              <p className="text-[12px] font-bold text-emerald-800">{productionSummary.peak_quarter || "—"}</p>
                             </div>
-                            <div className="rounded-lg border border-[var(--hw-neutral-100)] p-2">
-                              <p className="text-[10px] text-[var(--hw-neutral-500)]">Classification</p>
-                              <p className={`text-[12px] font-semibold ${CLASSIFICATION_COLORS[productionSummary.classification] || "text-[var(--hw-neutral-800)]"}`}>
-                                {productionSummary.classification}
-                              </p>
+                            <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-2">
+                              <p className="text-[10px] text-amber-700 font-medium">Lean Season</p>
+                              <p className="text-[12px] font-bold text-amber-800">{productionSummary.lean_quarter || "—"}</p>
                             </div>
                           </div>
                           <div className="overflow-x-auto rounded-lg border border-[var(--hw-neutral-100)]">
                             <table className="w-full text-[10px] text-left">
                               <thead className="bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-500)]">
-                                <tr><th className="px-2 py-1.5">Season</th><th className="px-2 py-1.5 text-right">Total MT</th><th className="px-2 py-1.5 text-right">Years</th></tr>
+                                <tr>
+                                  <th className="px-2 py-1.5">Quarter</th>
+                                  <th className="px-2 py-1.5 text-right">Avg MT</th>
+                                  <th className="px-2 py-1.5 text-right">Ratio</th>
+                                  <th className="px-2 py-1.5 text-center">Level</th>
+                                </tr>
                               </thead>
                               <tbody>
-                                {productionSummary.seasonal_totals.map((season) => (
-                                  <tr key={season.season} className="border-t border-[var(--hw-neutral-100)]">
-                                    <td className="px-2 py-1.5 text-[var(--hw-neutral-700)]">{season.season}</td>
-                                    <td className="px-2 py-1.5 text-right font-medium text-[var(--hw-neutral-800)]">{season.total_production_mt.toLocaleString()}</td>
-                                    <td className="px-2 py-1.5 text-right text-[var(--hw-neutral-700)]">{season.years_available}</td>
+                                {(productionSummary.quarterly_profiles && productionSummary.quarterly_profiles.length > 0
+                                  ? productionSummary.quarterly_profiles
+                                  : (productionSummary.seasonal_totals || []).map((st) => ({
+                                    quarter: st.season,
+                                    average_production_mt: st.average_production_mt || 0,
+                                    seasonal_ratio: 1.0,
+                                    classification: "—"
+                                  }))
+                                ).map((qp) => (
+                                  <tr key={qp.quarter} className="border-t border-[var(--hw-neutral-100)]">
+                                    <td className="px-2 py-1.5 font-semibold text-[var(--hw-neutral-800)]">{qp.quarter}</td>
+                                    <td className="px-2 py-1.5 text-right text-[var(--hw-neutral-700)]">
+                                      {Number(qp.average_production_mt).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-[var(--hw-neutral-600)]">
+                                      {Number(qp.seasonal_ratio).toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center font-medium">
+                                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${qp.classification === "High" ? "bg-red-50 text-red-700" :
+                                          qp.classification === "Upper Middle" ? "bg-amber-50 text-amber-700" :
+                                            qp.classification === "Lower Middle" ? "bg-blue-50 text-blue-700" :
+                                              qp.classification === "Low" ? "bg-emerald-50 text-emerald-700" :
+                                                "text-[var(--hw-neutral-500)]"
+                                        }`}>
+                                        {qp.classification}
+                                      </span>
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>

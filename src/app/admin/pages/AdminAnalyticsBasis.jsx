@@ -159,20 +159,21 @@ const DEFAULT_BASIS_TEMPLATES = {
     processedAt: "-",
     classification: "Not processed",
     basisInputs: {
-      "Expected harvest quarter": "-",
-      "Average quarterly production": "- MT",
-      "Current quarter estimate": "- MT",
-      "Seasonal production ratio": "-",
+      "Grand average quarterly production": "- MT",
+      "Peak production quarter": "-",
+      "Lean production quarter": "-",
+      "Historical baseline period": "-",
       "Source areas": "-",
       "Q1 ratio threshold": "-",
       "Q2 ratio threshold": "-",
       "Q3 ratio threshold": "-"
     },
+    quarterlyProfiles: [],
     thresholds: [
-      { classification: "Low", rule: "PSA production ratio < 0.75" },
-      { classification: "Lower Middle", rule: "PSA production ratio 0.75–1.00" },
-      { classification: "Upper Middle", rule: "PSA production ratio 1.00–1.25" },
-      { classification: "High", rule: "PSA production ratio ≥ 1.25" }
+      { classification: "Low", rule: "PSA production ratio < 0.72" },
+      { classification: "Lower Middle", rule: "PSA production ratio 0.72–0.99" },
+      { classification: "Upper Middle", rule: "PSA production ratio 0.99–1.20" },
+      { classification: "High", rule: "PSA production ratio ≥ 1.20" }
     ],
     resultExplanation: "No explanation available."
   },
@@ -690,35 +691,57 @@ function AdminAnalyticsBasis() {
   const historicalResult = useMemo(() => {
     if (resultId !== "historical-production") return result;
     const isProcessed = productionSummary?.status === "processed";
-    const quartiles = productionSummary?.quartiles;
+    const quartiles = productionSummary?.quartile_thresholds || productionSummary?.quartiles;
     const formatMt = (value) => value == null ? "- MT" : `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT`;
+    const grandAvg = productionSummary?.grand_average_quarterly_mt ?? productionSummary?.average_quarterly_production_mt;
+    const peakQ = productionSummary?.peak_quarter;
+    const leanQ = productionSummary?.lean_quarter;
+    const profiles = productionSummary?.quarterly_profiles || [];
+    const peakProfile = profiles.find((p) => p.quarter === peakQ);
+    const leanProfile = profiles.find((p) => p.quarter === leanQ);
+    const recordCount = productionSummary?.total_valid_records || productionSummary?.record_count || 0;
+    const baselinePeriodText = isProcessed
+      ? `${recordCount} valid quarterly records${productionSummary?.years_covered ? ` (${productionSummary.years_covered})` : ""}`
+      : "Insufficient data";
+
+    const peakText = peakQ
+      ? `${peakQ}${peakProfile?.calendar_period ? ` (${peakProfile.calendar_period})` : ""}${peakProfile?.classification ? ` — ${peakProfile.classification}` : ""}`
+      : "-";
+    const leanText = leanQ
+      ? `${leanQ}${leanProfile?.calendar_period ? ` (${leanProfile.calendar_period})` : ""}${leanProfile?.classification ? ` — ${leanProfile.classification}` : ""}`
+      : "-";
+
     return {
       ...result,
       outputId: productionSummary?.source_commodity_id || "-",
       basisSource: productionSummary?.source || "production_record",
-      inputPeriod: isProcessed ? `${productionSummary.record_count} valid quarterly records` : "Insufficient data",
-      classification: isProcessed ? productionSummary.classification : "Not processed",
+      inputPeriod: isProcessed ? baselinePeriodText : "Insufficient data",
+      classification: isProcessed ? (peakQ && leanQ ? `Peak: ${peakQ} · Lean: ${leanQ}` : (productionSummary.classification || "Processed")) : "Not processed",
+      peakQuarter: peakQ,
+      leanQuarter: leanQ,
+      quarterlyProfiles: profiles,
+      grandAverageQuarterlyMt: grandAvg,
       basisInputs: {
-        "Expected harvest quarter": productionSummary?.season ? `${productionSummary.season} ${productionSummary.latest_year}` : "-",
-        "Average quarterly production": formatMt(productionSummary?.average_quarterly_production_mt),
-        "Current quarter estimate": isProcessed
-          ? formatMt(productionSummary.seasonal_production_ratio * productionSummary.average_quarterly_production_mt)
-          : "- MT",
-        "Seasonal production ratio": productionSummary?.seasonal_production_ratio?.toFixed(4) || "-",
+        "Grand average quarterly production": formatMt(grandAvg),
+        "Peak production quarter": peakText,
+        "Lean production quarter": leanText,
+        "Historical baseline period": isProcessed ? baselinePeriodText : "-",
         "Source areas": productionSummary?.source_areas?.length
           ? productionSummary.source_areas.map((area) => area.name).join(", ")
           : "No geographic source rows available",
-        "Q1 ratio threshold": quartiles ? quartiles.q1.toFixed(4) : "-",
-        "Q2 ratio threshold": quartiles ? quartiles.q2.toFixed(4) : "-",
-        "Q3 ratio threshold": quartiles ? quartiles.q3.toFixed(4) : "-"
+        "Q1 ratio threshold": quartiles ? Number(quartiles.q1).toFixed(4) : "-",
+        "Q2 ratio threshold": quartiles ? Number(quartiles.q2).toFixed(4) : "-",
+        "Q3 ratio threshold": quartiles ? Number(quartiles.q3).toFixed(4) : "-"
       },
       thresholds: quartiles ? [
-        { classification: "Low", rule: `Seasonal ratio < ${quartiles.q1.toFixed(4)}` },
-        { classification: "Lower Middle", rule: `Seasonal ratio ≥ ${quartiles.q1.toFixed(4)} and < ${quartiles.q2.toFixed(4)}` },
-        { classification: "Upper Middle", rule: `Seasonal ratio ≥ ${quartiles.q2.toFixed(4)} and < ${quartiles.q3.toFixed(4)}` },
-        { classification: "High", rule: `Seasonal ratio ≥ ${quartiles.q3.toFixed(4)}` }
+        { classification: "Low", rule: `Seasonal ratio < ${Number(quartiles.q1).toFixed(4)}` },
+        { classification: "Lower Middle", rule: `Seasonal ratio ≥ ${Number(quartiles.q1).toFixed(4)} and < ${Number(quartiles.q2).toFixed(4)}` },
+        { classification: "Upper Middle", rule: `Seasonal ratio ≥ ${Number(quartiles.q2).toFixed(4)} and < ${Number(quartiles.q3).toFixed(4)}` },
+        { classification: "High", rule: `Seasonal ratio ≥ ${Number(quartiles.q3).toFixed(4)}` }
       ] : result.thresholds,
-      productionVolumes: productionSummary?.seasonal_totals || [],
+      productionVolumes: profiles.length > 0
+        ? profiles.map((p) => ({ season: p.quarter, quarter: p.quarter, average_production_mt: p.average_production_mt, volume: p.average_production_mt, classification: p.classification, seasonal_ratio: p.seasonal_ratio }))
+        : (productionSummary?.seasonal_totals || []),
       productionSources: productionSummary?.source_areas || [],
       records: (productionSummary?.records || []).map((record) => ({
         Year: record.reference_year,
@@ -730,7 +753,7 @@ function AdminAnalyticsBasis() {
         Unit: "MT"
       })),
       resultExplanation: isProcessed
-        ? `${productionSummary.season} ${productionSummary.latest_year} production is ${productionSummary.classification} (ratio ${productionSummary.seasonal_production_ratio.toFixed(4)}), compared with quartiles calculated from ${productionSummary.record_count} valid quarterly production_record rows.`
+        ? `Long-term historical seasonal benchmark derived from ${recordCount} quarterly PSA production records${productionSummary?.years_covered ? ` (${productionSummary.years_covered})` : ""}. Peak production historically occurs in ${peakQ || "Q2"}${peakProfile ? ` (avg ${formatMt(peakProfile.average_production_mt)}, ${peakProfile.classification})` : ""}, while leanest production occurs in ${leanQ || "Q3"}${leanProfile ? ` (avg ${formatMt(leanProfile.average_production_mt)}, ${leanProfile.classification})` : ""}.`
         : (productionError || productionSummary?.message || (productionLoading ? "Loading historical production data…" : "No historical production data is available for this scope.")),
       basisMissing: isProcessed ? null : (productionError || productionSummary?.message || null)
     };
@@ -818,17 +841,31 @@ function AdminAnalyticsBasis() {
   return (
     <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto space-y-6">
       {/* Header & Back button */}
-      <div>
-        <button
-          onClick={() => navigate("/admin/modules")}
-          className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors mb-3 cursor-pointer"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Back to Analytical Modules
-        </button>
-        <h1 className="text-[22px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
-          {result.module || "-"} Basis
-        </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <button
+            onClick={() => navigate("/admin/modules")}
+            className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors mb-3 cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to Analytical Modules
+          </button>
+          <h1 className="text-[22px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
+            {result.module || "-"} Basis
+          </h1>
+        </div>
+        {(resultId === "historical-production" || result.module === "Historical Seasonal Production Level") && displayResult.peakQuarter && (
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] font-semibold flex items-center gap-1.5 shadow-[var(--shadow-xs)]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              Peak: {displayResult.peakQuarter}
+            </span>
+            <span className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[12px] font-semibold flex items-center gap-1.5 shadow-[var(--shadow-xs)]">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              Lean: {displayResult.leanQuarter}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 1. Filter Card (Ultra-Compact Height, Styled Farmer Dropdowns with Icons, No Header Bar) */}
@@ -864,16 +901,23 @@ function AdminAnalyticsBasis() {
             <span className="text-[var(--hw-neutral-400)] font-medium">Data Source:</span> <span className="font-semibold text-[var(--hw-neutral-800)]" title={displayResult.basisSource}>{displayResult.basisSource || "-"}</span>
           </div>
           <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Input Period:</span> <span className="font-semibold text-[var(--hw-neutral-800)]">{displayResult.inputPeriod || "-"}</span>
+            <span className="text-[var(--hw-neutral-400)] font-medium">
+              {resultId === "historical-production" || result.module === "Historical Seasonal Production Level" ? "Historical Baseline:" : "Input Period:"}
+            </span>{" "}
+            <span className="font-semibold text-[var(--hw-neutral-800)]">{displayResult.inputPeriod || "-"}</span>
           </div>
         </div>
       </div>
 
-      {/* 2. Input Values (Full Width) */}
+      {/* 2. Baseline / Input Values (Full Width) */}
       {displayResult.basisInputs && Object.keys(displayResult.basisInputs).length > 0 && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Input Values</p>
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
+              {resultId === "historical-production" || result.module === "Historical Seasonal Production Level"
+                ? "Historical Production Baseline"
+                : "Input Values"}
+            </p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             {Object.entries(displayResult.basisInputs).map(([key, val]) => (
@@ -882,6 +926,84 @@ function AdminAnalyticsBasis() {
                 <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] text-right">{val || "-"}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 2b. Quarterly Seasonal Benchmark Table (Historical Seasonal Production Level only) */}
+      {(resultId === "historical-production" || result.module === "Historical Seasonal Production Level") && (
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
+                Quarterly Seasonal Benchmark
+              </p>
+              <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                Long-term quarterly distribution and seasonal index across historical PSA records
+              </p>
+            </div>
+            {displayResult.peakQuarter && (
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Peak: {displayResult.peakQuarter}
+                </span>
+                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  Lean: {displayResult.leanQuarter}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold text-[var(--hw-neutral-600)]">Quarter</th>
+                  <th className="px-6 py-3 text-left font-semibold text-[var(--hw-neutral-600)]">Calendar Period</th>
+                  <th className="px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)]">Average Production</th>
+                  <th className="px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)]">Seasonal Ratio</th>
+                  <th className="px-6 py-3 text-center font-semibold text-[var(--hw-neutral-600)]">Historical Level</th>
+                  <th className="px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)]">Years of Data</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                {displayResult.quarterlyProfiles && displayResult.quarterlyProfiles.length > 0 ? (
+                  displayResult.quarterlyProfiles.map((p) => {
+                    const levelColor =
+                      p.classification === "High"
+                        ? "bg-red-50 text-red-700 border-red-200"
+                        : p.classification === "Upper Middle"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : p.classification === "Lower Middle"
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200";
+                    return (
+                      <tr key={p.quarter} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                        <td className="px-6 py-3.5 font-bold text-[var(--hw-neutral-900)]">{p.quarter}</td>
+                        <td className="px-6 py-3.5 text-[var(--hw-neutral-600)]">{p.calendar_period || p.period}</td>
+                        <td className="px-6 py-3.5 text-right font-semibold text-[var(--hw-neutral-800)]">
+                          {Number(p.average_production_mt).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-mono text-[var(--hw-neutral-700)]">
+                          {Number(p.seasonal_ratio).toFixed(4)}
+                        </td>
+                        <td className="px-6 py-3.5 text-center">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[12px] font-semibold border ${levelColor}`}>
+                            {p.classification}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3.5 text-right text-[var(--hw-neutral-600)]">{p.years_available} yrs</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-[var(--hw-neutral-500)]">
+                      No seasonal benchmark profiles available for this commodity.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -996,11 +1118,28 @@ function AdminAnalyticsBasis() {
               </div>
               <div className="w-full flex-1 flex flex-col justify-center">
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={displayResult.productionVolumes?.length ? displayResult.productionVolumes.map((row) => ({ quarter: row.season, volume: row.average_production_mt || 0 })) : quarterlyGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={72}>
+                  <BarChart data={displayResult.productionVolumes?.length ? displayResult.productionVolumes.map((row) => ({ quarter: row.quarter || row.season, volume: row.average_production_mt || 0, level: row.classification })) : quarterlyGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={72}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="quarter" tick={{ fontSize: 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
                     <YAxis hide domain={[0, "auto"]} />
-                    <Bar dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"} radius={[6, 6, 0, 0]} fill={displayResult.productionVolumes?.length ? "#2f7d32" : "#e2e8f0"} stroke="#cbd5e1" strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"} />
+                    {displayResult.productionVolumes?.length > 0 && (
+                      <RechartsTooltip
+                        formatter={(val, _name, props) => [
+                          `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT${props.payload?.level ? ` (${props.payload.level})` : ""}`,
+                          "Avg Production"
+                        ]}
+                      />
+                    )}
+                    <Bar dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"} radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"}>
+                      {displayResult.productionVolumes?.length > 0 && displayResult.productionVolumes.map((entry, index) => {
+                        const barColor =
+                          entry.classification === "High" ? "#dc2626" :
+                          entry.classification === "Upper Middle" ? "#d97706" :
+                          entry.classification === "Lower Middle" ? "#2563eb" :
+                          "#16a34a";
+                        return <Cell key={`cell-${index}`} fill={barColor} />;
+                      })}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
                 {!displayResult.productionVolumes?.length && <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
