@@ -365,6 +365,7 @@ function AdminAnalytics() {
   const [productionSummary, setProductionSummary] = useState(null);
   const [productionLoading, setProductionLoading] = useState(false);
   const [priceOutlookSummary, setPriceOutlookSummary] = useState(null);
+  const [weatherSummary, setWeatherSummary] = useState(null);
   const [productionError, setProductionError] = useState("");
 
   // History table filters (only Module and Classification since Commodity + Variety are scoped above)
@@ -564,6 +565,51 @@ function AdminAnalytics() {
     return () => { active = false; };
   }, [scopedCommodity, scopedVariety]);
 
+  // Load weather forecast summary for analytical card
+  useEffect(() => {
+    let active = true;
+    async function loadWeatherSummary() {
+      try {
+        const data = await analyticsApi.getWeatherForecast(14);
+        if (!active) return;
+        if (data?.status === "ok" && Array.isArray(data?.days) && data.days.length > 0) {
+          const days = data.days;
+          const cautionDays = days.filter(
+            (d) =>
+              (d.rainfall_mm ?? 0) >= 15 ||
+              (d.temp_max ?? 0) > 30 ||
+              (d.temp_min ?? 0) < 22 ||
+              (d.humidity_pct ?? 0) >= 90
+          );
+          const severeDays = days.filter(
+            (d) =>
+              (d.rainfall_mm ?? 0) >= 30 ||
+              (d.temp_max ?? 0) >= 39 ||
+              (d.temp_min ?? 0) <= 5 ||
+              (d.wind_speed_max_kmh ?? 0) > 28.8
+          );
+          const classification =
+            severeDays.length >= 2
+              ? "Severe"
+              : cautionDays.length > 0 || severeDays.length > 0
+              ? "Caution"
+              : "Suitable";
+          setWeatherSummary({
+            classification,
+            source: "Open-Meteo",
+            processed_at: data.fetched_at || new Date().toISOString()
+          });
+        }
+      } catch {
+        if (active) setWeatherSummary(null);
+      }
+    }
+    loadWeatherSummary();
+    return () => {
+      active = false;
+    };
+  }, [scopedCommodity]);
+
   // Load weather rules for the scoped commodity from the admin API
   useEffect(() => {
     let active = true;
@@ -679,7 +725,15 @@ function AdminAnalytics() {
         ? new Date(productionSummary.processed_at).toLocaleString()
         : "-"
     },
-    { module: "Weather Risk", moduleKey: "weather-risk", classification: "Not processed", source: "-", processed: "-" }
+    {
+      module: "Weather Risk",
+      moduleKey: "weather-risk",
+      classification: weatherSummary?.classification || "Not processed",
+      source: weatherSummary?.source || "-",
+      processed: weatherSummary?.processed_at
+        ? new Date(weatherSummary.processed_at).toLocaleString()
+        : "-"
+    }
   ];
 
   const handleCardClick = (card) => {

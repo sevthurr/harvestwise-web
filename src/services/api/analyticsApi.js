@@ -112,3 +112,9 @@ export async function updateCropWeatherRule(ruleId, payload) {
 export async function createCropWeatherRule(payload) {
   return parseResponse(await apiPost("/admin/crop-weather-rules", payload));
 }
+
+export async function getWeatherForecast(days = 14) {
+  return parseResponse(
+    await apiGet(`/admin/analytics/outputs/weather-forecast?days=${encodeURIComponent(days)}`)
+  );
+}

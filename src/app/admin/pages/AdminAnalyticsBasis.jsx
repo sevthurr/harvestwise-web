@@ -413,6 +413,10 @@ function AdminAnalyticsBasis() {
   const [thresholdsError, setThresholdsError] = useState("");
   const [priceOutlook, setPriceOutlook] = useState(null);
   const [priceOutlookError, setPriceOutlookError] = useState("");
+  const [weatherForecast, setWeatherForecast] = useState(null);
+  const [weatherRules, setWeatherRules] = useState([]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -487,6 +491,32 @@ function AdminAnalyticsBasis() {
     loadPriceOutlook();
     return () => { active = false; };
   }, [resultId, selectedCommodity, selectedVariety]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadWeatherData() {
+      if (resultId !== "weather-risk") return;
+      try {
+        setWeatherLoading(true);
+        setWeatherError("");
+        const [forecastData, rulesData] = await Promise.all([
+          analyticsApi.getWeatherForecast(14),
+          selectedCommodityRecord?.id
+            ? analyticsApi.listCropWeatherRules(selectedCommodityRecord.id)
+            : Promise.resolve({ items: [] })
+        ]);
+        if (!active) return;
+        setWeatherForecast(forecastData);
+        setWeatherRules(rulesData?.items || []);
+      } catch (err) {
+        if (active) setWeatherError(err.message || "Unable to load weather forecast.");
+      } finally {
+        if (active) setWeatherLoading(false);
+      }
+    }
+    loadWeatherData();
+    return () => { active = false; };
+  }, [resultId, selectedCommodityRecord?.id]);
 
   // Load the threshold rules for the current module from the admin API
   useEffect(() => {
@@ -620,10 +650,164 @@ function AdminAnalyticsBasis() {
       records: []
     };
   }, [result, resultId, priceOutlook, priceOutlookError]);
-  const displayResult = resultId === "price-outlook" ? priceResult : historicalResult;
-  const displayThresholds = resultId === "historical-production"
-    ? displayResult.thresholds
-    : shownThresholds;
+
+  const weatherResult = useMemo(() => {
+    if (resultId !== "weather-risk") return null;
+    const isProcessed = weatherForecast?.status === "ok" && Array.isArray(weatherForecast?.days) && weatherForecast.days.length > 0;
+    const days = isProcessed ? weatherForecast.days : [];
+
+    const tempRangeRule = weatherRules.find((r) => r.metric_key === "temp_range" && r.risk_level === "suitable");
+    const tempMinCaution = weatherRules.find((r) => r.metric_key === "temp_min" && r.risk_level === "caution");
+    const tempMaxCaution = weatherRules.find((r) => r.metric_key === "temp_max" && r.risk_level === "caution");
+    const tempMinSevere = weatherRules.find((r) => r.metric_key === "temp_min" && r.risk_level === "severe");
+    const tempMaxSevere = weatherRules.find((r) => r.metric_key === "temp_max" && r.risk_level === "severe");
+    const windSevere = weatherRules.find((r) => r.metric_key === "wind_speed_max" && r.risk_level === "severe");
+    const rainRule = weatherRules.find((r) => r.metric_key.includes("rain"));
+
+    const suitTempMin = tempRangeRule?.threshold_min != null ? Number(tempRangeRule.threshold_min) : 20;
+    const suitTempMax = tempRangeRule?.threshold_max != null ? Number(tempRangeRule.threshold_max) : 30;
+    const suitRainMax = rainRule?.threshold_max != null ? Number(rainRule.threshold_max) : 15;
+    const cautRainMin = 15;
+    const sevRainMin = 30;
+    const sevTempMax = tempMaxSevere?.threshold_min != null ? Number(tempMaxSevere.threshold_min) : 35;
+    const sevTempMin = tempMinSevere?.threshold_max != null ? Number(tempMinSevere.threshold_max) : 5;
+    const sevWind = windSevere?.threshold_min != null ? Number(windSevere.threshold_min) : 28.8;
+
+    let avgMin = 0;
+    let avgMax = 0;
+    let avgRain = 0;
+    let avgHum = 0;
+    let avgProb = 0;
+    let maxWindVal = 0;
+    let severeCount = 0;
+    let cautionCount = 0;
+
+    if (days.length > 0) {
+      days.forEach((d) => {
+        avgMin += d.temp_min ?? 0;
+        avgMax += d.temp_max ?? 0;
+        avgRain += d.rainfall_mm ?? 0;
+        avgHum += d.humidity_pct ?? 0;
+        avgProb += d.rain_probability_pct ?? 0;
+        if ((d.wind_speed_max_kmh ?? 0) > maxWindVal) maxWindVal = d.wind_speed_max_kmh ?? 0;
+
+        const isSevere =
+          (d.rainfall_mm ?? 0) >= sevRainMin ||
+          (d.temp_max ?? 0) >= sevTempMax ||
+          (d.temp_min ?? 0) <= sevTempMin ||
+          (d.wind_speed_max_kmh ?? 0) > sevWind;
+        const isCaution =
+          (d.rainfall_mm ?? 0) >= cautRainMin ||
+          (d.temp_max ?? 0) > suitTempMax ||
+          (d.temp_min ?? 0) < suitTempMin ||
+          (d.humidity_pct ?? 0) >= 90;
+
+        if (isSevere) severeCount++;
+        else if (isCaution) cautionCount++;
+      });
+      avgMin /= days.length;
+      avgMax /= days.length;
+      avgRain /= days.length;
+      avgHum /= days.length;
+      avgProb /= days.length;
+    }
+
+    const overallClass = severeCount >= 2 ? "Severe" : cautionCount > 0 || severeCount > 0 ? "Caution" : "Suitable";
+
+    const firstDate = days[0]?.date
+      ? new Date(days[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "Today";
+    const lastDate = days[days.length - 1]?.date
+      ? new Date(days[days.length - 1].date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "+14d";
+
+    const forecast14d = days.map((day) => {
+      const dateObj = new Date(day.date);
+      const dateStr = !isNaN(dateObj.getTime())
+        ? dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : day.date;
+      return {
+        dayLabel: day.day_label,
+        date: dateStr,
+        tempMax: day.temp_max != null ? Math.round(day.temp_max) : null,
+        tempMin: day.temp_min != null ? Math.round(day.temp_min) : null,
+        rainPct: day.rain_probability_pct != null
+          ? Math.round(day.rain_probability_pct)
+          : (day.rainfall_mm > 0 ? Math.min(Math.round(day.rainfall_mm * 5), 100) : 0),
+        rainfallMm: day.rainfall_mm,
+        humidity: day.humidity_pct,
+        windSpeed: day.wind_speed_max_kmh,
+        weatherCondition: day.weather_condition
+      };
+    });
+
+    const explanation = isProcessed
+      ? `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${
+          avgMin >= suitTempMin && avgMax <= suitTempMax
+            ? `${selectedCommodity} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
+            : `Temperatures fluctuate slightly outside optimal bounds.`
+        } ${
+          cautionCount > 0 || severeCount > 0
+            ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
+            : `Favorable meteorological conditions expected throughout the forecast window.`
+        }`
+      : weatherError || (weatherLoading ? "Loading weather forecast data…" : "No weather forecast data is available for this scope.");
+
+    return {
+      ...result,
+      outputId: selectedCommodityRecord?.id || "WR-001",
+      basisSource: "Open-Meteo 14-day Forecast",
+      inputPeriod: isProcessed ? `${days.length} days (${firstDate} – ${lastDate})` : "14 days",
+      processedAt: weatherForecast?.fetched_at ? new Date(weatherForecast.fetched_at).toLocaleString() : new Date().toLocaleDateString(),
+      classification: isProcessed ? overallClass : "Not processed",
+      basisInputs: {
+        Location: "Davao City & Production Areas",
+        "Forecast period": isProcessed ? `${days.length} days (${firstDate} – ${lastDate})` : "14 days",
+        "Average rainfall": isProcessed ? `${avgRain.toFixed(1)} mm/day` : "- mm/day",
+        "Average rain probability": isProcessed ? `${Math.round(avgProb)}%` : "-%",
+        "Temperature Range": isProcessed ? `${avgMin.toFixed(1)}°C – ${avgMax.toFixed(1)}°C` : "-°C",
+        Humidity: isProcessed ? `${avgHum.toFixed(1)}%` : "-%",
+        "Crop threshold": `Suitable: ${suitTempMin}–${suitTempMax}°C, <${suitRainMax} mm/day`
+      },
+      thresholds: [
+        {
+          classification: "Suitable",
+          rule: `Rainfall < ${suitRainMax} mm/day; temp ${suitTempMin}–${suitTempMax}°C`
+        },
+        {
+          classification: "Caution",
+          rule: `Rainfall ${suitRainMax}–${sevRainMin} mm/day; temp ${suitTempMax}–${sevTempMax}°C`
+        },
+        {
+          classification: "Severe",
+          rule: `Rainfall > ${sevRainMin} mm/day; temp > ${sevTempMax}°C or < ${sevTempMin}°C; wind > ${sevWind} km/h`
+        }
+      ],
+      forecast_14d: forecast14d,
+      records: days.map((day) => ({
+        Date: day.date,
+        Location: "Davao City Region",
+        Rainfall: day.rainfall_mm != null ? `${day.rainfall_mm} mm` : "-",
+        "Temperature Range": `${day.temp_min != null ? day.temp_min : "-"}°C – ${day.temp_max != null ? day.temp_max : "-"}°C`,
+        Humidity: day.humidity_pct != null ? `${day.humidity_pct}%` : "-",
+        Wind: day.wind_speed_max_kmh != null ? `${day.wind_speed_max_kmh} km/h` : "-",
+        Source: "Open-Meteo"
+      })),
+      resultExplanation: explanation,
+      basisMissing: isProcessed ? null : (weatherError || null)
+    };
+  }, [result, resultId, weatherForecast, weatherRules, weatherError, weatherLoading, selectedCommodity, selectedVariety, selectedCommodityRecord]);
+
+  const displayResult =
+    resultId === "price-outlook"
+      ? priceResult
+      : resultId === "weather-risk"
+      ? weatherResult
+      : historicalResult;
+  const displayThresholds =
+    resultId === "historical-production" || resultId === "weather-risk"
+      ? displayResult.thresholds
+      : shownThresholds;
 
   const handleCommodityChange = (newCommodity) => {
     navigate(`/admin/modules/basis/${resultId}?commodity=${encodeURIComponent(newCommodity)}&variety=All%20Varieties`, { replace: true });
@@ -963,13 +1147,15 @@ function AdminAnalyticsBasis() {
               <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">14-Day Weather Forecast Outlook</p>
               <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Estimated weather parameters and risks for {selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.</p>
             </div>
-            {result.forecast_14d && result.forecast_14d.length > 0 ? (
+            {displayResult?.forecast_14d && displayResult.forecast_14d.length > 0 ? (
               <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                {result.forecast_14d.map((day, i) => (
+                {displayResult.forecast_14d.map((day, i) => (
                   <div key={i} className="flex-shrink-0 flex flex-col items-center gap-2 bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] px-4 py-5 min-w-[90px] shadow-[var(--shadow-xs)]">
                     <p className="text-[13px] font-bold text-[var(--hw-neutral-800)]">{day.dayLabel}</p>
                     <p className="text-[11px] text-[var(--hw-neutral-500)] font-medium">{day.date}</p>
-                    <div className="w-9 h-9 my-1 text-[var(--hw-neutral-700)] flex items-center justify-center text-2xl">☁️</div>
+                    <div className="w-9 h-9 my-1 text-[var(--hw-neutral-700)] flex items-center justify-center text-2xl">
+                      {day.rainfallMm != null && day.rainfallMm >= 15 ? "🌧️" : day.rainPct != null && day.rainPct >= 50 ? "🌦️" : (day.tempMax ?? 0) >= 32 ? "☀️" : "⛅"}
+                    </div>
                     <div className="text-center">
                       <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax != null ? `${day.tempMax}°` : "-°"}</p>
                       <p className="text-[12px] text-[var(--hw-neutral-500)] font-medium">{day.tempMin != null ? `${day.tempMin}°` : "-°"}</p>
