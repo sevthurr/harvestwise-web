@@ -883,7 +883,21 @@ function AdminAnalytics() {
     {
       module: "Historical Seasonal Production Level",
       moduleKey: "historical-production",
-      ...(moduleOutputsByCard["historical-production"] || { classification: "Not processed", source: "-", processed: "-" })
+      ...(moduleOutputs?.historical_seasonal_production_level
+        ? moduleOutputsByCard["historical-production"]
+        : {
+            classification: productionLoading
+              ? "Loading..."
+              : productionSummary?.status === "processed"
+                ? (productionSummary.peak_quarter && productionSummary.lean_quarter
+                  ? `Peak: ${productionSummary.peak_quarter} · Lean: ${productionSummary.lean_quarter}`
+                  : (productionSummary.classification || "Processed"))
+                : "Not processed",
+            source: productionSummary?.source || "-",
+            processed: productionSummary?.processed_at
+              ? new Date(productionSummary.processed_at).toLocaleString()
+              : "-"
+          })
     },
     {
       module: "Weather Risk",
