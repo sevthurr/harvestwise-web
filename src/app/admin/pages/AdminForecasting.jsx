@@ -137,6 +137,27 @@ function priceOutlookFromChange(percent) {
   return "Neutral";
 }
 
+function resultExplanationFromForecast({ forecast, latestActual, changePercent, outlook }) {
+  if (forecast?.explanation) {
+    return forecast.explanation;
+  }
+  if (latestActual == null || forecast?.forecast_midpoint == null || !outlook) {
+    return "An explanation will appear when a valid forecast is available for the selected scope.";
+  }
+
+  const midpoint = numericPrice(forecast.forecast_midpoint ?? forecast.predicted_price);
+  if (midpoint == null) return "An explanation will appear when a valid forecast is available for the selected scope.";
+
+  const direction = changePercent > 0 ? "increase" : changePercent < 0 ? "decrease" : "remain stable";
+  const directionText = changePercent > 0 ? "increasing" : changePercent < 0 ? "decreasing" : "stable";
+  const horizon = forecast.horizon_days ? ` over the selected ${forecast.horizon_days}-day horizon` : " over the selected horizon";
+  const range = forecast.lower_forecast != null && forecast.upper_forecast != null
+    ? ` The forecast range is ${formatSummaryPriceRange(forecast.lower_forecast, forecast.upper_forecast)}, indicating the expected uncertainty around the forecast midpoint.`
+    : "";
+
+  return `Forecast prices are expected to ${direction} by ${Math.abs(changePercent).toFixed(1)}%${horizon}, moving from ${formatSummaryPrice(latestActual)} to approximately ${formatSummaryPrice(midpoint)}. This ${directionText} outlook is ${outlook.toLowerCase()} because the change ${outlook === "Favorable" ? "exceeds +5%" : outlook === "Unfavorable" ? "is below -5%" : "remains between -5% and +5%"}.${range}`;
+}
+
 function isoDate(value) {
   if (!value) return "";
   return String(value).slice(0, 10);
@@ -297,9 +318,8 @@ const CustomCommodityDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-                  isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                }`}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
               >
                 <CommodityIllustration commodityId={optIconKey} className="w-5 h-5 flex-shrink-0" />
                 <span className="flex-1 truncate">{optName}</span>
@@ -350,9 +370,8 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-                  isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                }`}
+                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
               >
                 <span className="flex-1 truncate">{optName}</span>
               </button>
@@ -397,9 +416,8 @@ const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
                 onChange(opt);
                 setOpen(false);
               }}
-              className={`w-full flex items-center px-3.5 py-2 text-[13px] text-left transition-colors cursor-pointer ${
-                opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-              }`}
+              className={`w-full flex items-center px-3.5 py-2 text-[13px] text-left transition-colors cursor-pointer ${opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                }`}
             >
               <span className="flex-1 truncate">{opt}</span>
             </button>
@@ -607,6 +625,7 @@ function AdminForecasting() {
 
   const selectedForecast = chartPayload?.forecast || null;
   const latestPriceDate = chartPayload?.recent_records?.[0]?.price_date || null;
+  const latestActualPrice = numericPrice(chartPayload?.recent_records?.[0]?.prevail_price);
   const recentAverage = useMemo(
     () => recentAveragePrice(chartPayload?.recent_records),
     [chartPayload]
@@ -617,12 +636,21 @@ function AdminForecasting() {
     selectedForecast?.forecast_midpoint ?? selectedForecast?.predicted_price
   );
   const changePercent = useMemo(
-    () => forecastChangePercent(forecastMidpoint, recentAverage),
-    [forecastMidpoint, recentAverage]
+    () => forecastChangePercent(forecastMidpoint, latestActualPrice),
+    [forecastMidpoint, latestActualPrice]
   );
   const outlook = useMemo(
     () => priceOutlookFromChange(changePercent),
     [changePercent]
+  );
+  const resultExplanation = useMemo(
+    () => resultExplanationFromForecast({
+      forecast: selectedForecast,
+      latestActual: latestActualPrice,
+      changePercent,
+      outlook,
+    }),
+    [selectedForecast, latestActualPrice, changePercent, outlook]
   );
 
   const historicalDays = parseInt(historicalRange, 10) || 7;
@@ -825,13 +853,19 @@ function AdminForecasting() {
           </div>
           <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
             <div className="py-4 space-y-1.5 max-w-sm mx-auto">
-              <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
-                <Info className="w-5 h-5" />
-              </div>
-              <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
-                No analytical explanation generated for the selected scope.
-              </p>
+              {loading ? (
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Loading result explanation...</p>
+              ) : error ? (
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Unable to generate an explanation for this forecast right now.</p>
+              ) : resultExplanation.startsWith("An explanation will appear") ? (
+                <>
+                  <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                </>
+              ) : null}
+              {!loading && !error ? <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">{resultExplanation}</p> : null}
             </div>
           </div>
         </div>
@@ -859,6 +893,7 @@ export {
   parseHorizonDays,
   priceOutlookFromChange,
   recentAveragePrice,
+  resultExplanationFromForecast,
   toPriceTypeKey,
 };
 export { AdminForecasting as default };

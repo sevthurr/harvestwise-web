@@ -45,14 +45,16 @@ export function transformDashboardPrices(pricesData) {
 }
 
 // Canonical transformation for the Dashboard recommendation card.
+// Preserves advisoryCategory so the Dashboard can cross-reference preferred crops.
 export function transformDashboardRecommendations(rawItems) {
-  return rawItems.slice(0, 2).map((rec) => {
+  return rawItems.map((rec) => {
     const camelRec = toCamelCase(rec);
     return {
       id: camelRec.commodityId,
       name: camelRec.commodityName || "\u2013",
       reason: camelRec.explanation || "\u2013",
       bestVariety: camelRec.bestVarietyName || camelRec.bestVariety || null,
+      advisoryCategory: camelRec.advisoryCategory || null,
     };
   });
 }

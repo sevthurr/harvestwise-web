@@ -1,12 +1,22 @@
 export const notifications = {
   title: "Mga Pahibalo",
+  subtitle: "Mahibalo sa mga alerto sa pananom, panahon, ug merkado.",
   mark_as_read: "Markahi nga nabasa na",
   mark_all_read: "Markahi tanan nga nabasa na",
   all_caught_up: "Nabasa na nimo ang tanan",
   no_notifications: "Walay mga pahibalo sa pagkakaron.",
+  load_error: "Dili ma-load ang mga pahibalo. Sulayi pag-usab.",
   tag_urgent: "Urgent",
   tag_attention: "Kinahanglan Bantayan",
   tag_info: "Impormasyon",
   related_to: "May kalabotan sa",
-  why_received: "Ngano nadawat nimo kini"
+  why_received: "Ngano nadawat nimo kini",
+  details: "Mga Detalye",
+  view_details: "Tan-awa ang Detalye",
+  price_change_label: "pagbag-o sa presyo",
+  category_price: "Pagbag-o sa Presyo",
+  category_weather: "Alerto sa Panahon",
+  category_harvest: "Pag-ani",
+  new_notification: "Bag-ong Pahibalo",
+  new_notification_body: "Naa kay bag-ong pahibalo.",
 };

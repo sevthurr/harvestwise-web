@@ -403,6 +403,18 @@ function RecommendationPage() {
   // Use normalized farmer crop plans
   const { crops: cropPlansData = [], loading: plansLoading } = useCrops();
 
+  // Monthly crop recommendations from adaptive weights / analytics pipeline
+  const { data: recommendationsData } = useQuery({
+    queryKey: ["monthly-recommendations"],
+    queryFn: async () => {
+      const res = await apiGet("/market/monthly-recommendations");
+      if (!res.ok) return { items: [] };
+      return parseResponse(res);
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+  const recommendations = recommendationsData?.items ?? [];
+
   // Weather forecast — fills the calendar's daily weather note + icons
   const { data: weatherForecasts = [] } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
@@ -571,28 +583,90 @@ function RecommendationPage() {
         <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
           {t("farmer.calendar.recommendations_title", {}, "Crop recommendations")}
         </h2>
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center space-y-3">
-          <div className="w-12 h-12 mx-auto rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] flex items-center justify-center">
-            <Sprout className="w-6 h-6" />
+
+        {recommendations.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] flex items-center justify-center">
+              <Sprout className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-semibold text-[var(--hw-neutral-900)] text-[15px]">
+                {t("farmer.calendar.empty_recommendations_title", {}, "No crop recommendations available yet.")}
+              </p>
+              <p className="text-sm text-[var(--hw-neutral-600)] max-w-md mx-auto">
+                {t("farmer.calendar.empty_recommendations_helper", {}, "There is not enough data yet to provide a recommendation for this month.")}
+              </p>
+            </div>
+            <div className="pt-1">
+              <button
+                onClick={() => navigate("/farmer/assess")}
+                className="inline-flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
+              >
+                {t("farmer.calendar.check_a_crop", {}, "Check a crop")}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-          <div className="space-y-1">
-            <p className="font-semibold text-[var(--hw-neutral-900)] text-[15px]">
-              {t("farmer.calendar.empty_recommendations_title", {}, "No crop recommendations available yet.")}
-            </p>
-            <p className="text-sm text-[var(--hw-neutral-600)] max-w-md mx-auto">
-              {t("farmer.calendar.empty_recommendations_helper", {}, "There is not enough data yet to provide a recommendation for this month.")}
-            </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {recommendations.map((rec) => {
+              const category = rec.advisory_category;
+              const isRecommended = category === "Recommended";
+              const isCaution = category === "Proceed with Caution";
+              const badgeCls = isRecommended
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : isCaution
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-red-50 text-red-700 border-red-200";
+              const borderCls = isRecommended
+                ? "border-l-emerald-500"
+                : isCaution
+                ? "border-l-amber-500"
+                : "border-l-red-500";
+
+              return (
+                <div
+                  key={rec.id}
+                  className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] border-l-4 ${borderCls} shadow-[var(--shadow-xs)] p-4 flex flex-col gap-2`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CommodityIllustration
+                        commodityId={rec.commodity_id}
+                        className="w-8 h-8 flex-shrink-0"
+                      />
+                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-snug truncate">
+                        {rec.commodity_name || rec.commodity_id}
+                      </p>
+                    </div>
+                    <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${badgeCls}`}>
+                      {category}
+                    </span>
+                  </div>
+
+                  {rec.explanation && (
+                    <p className="text-[12px] text-[var(--hw-neutral-600)] leading-relaxed line-clamp-2">
+                      {rec.explanation}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-auto pt-1 border-t border-[var(--hw-neutral-100)]">
+                    {rec.price_outlook && (
+                      <span className="text-[11px] text-[var(--hw-neutral-500)]">
+                        {t("farmer.calendar.rec_price", {}, "Price")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.price_outlook}</span>
+                      </span>
+                    )}
+                    {rec.weather_risk_level && (
+                      <span className="text-[11px] text-[var(--hw-neutral-500)]">
+                        {t("farmer.calendar.rec_weather", {}, "Weather")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.weather_risk_level}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="pt-1">
-            <button
-              onClick={() => navigate("/farmer/assess")}
-              className="inline-flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-            >
-              {t("farmer.calendar.check_a_crop", {}, "Check a crop")}
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        )}
       </section>
     </div>
   );

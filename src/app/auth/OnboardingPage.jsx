@@ -628,7 +628,10 @@ function OnboardingPage() {
       );
       const preferredCrops = Object.keys(data.crops)
         .filter((name) => commodityIdByName[name])
-        .map((name) => ({ commodity_id: commodityIdByName[name] }));
+        .map((name) => ({
+          commodity_id: commodityIdByName[name],
+          ...(data.crops[name] ? { preferred_variety_name: data.crops[name] } : {}),
+        }));
 
       const payload = {
         ...(data.language    && { preferred_language: data.language }),
