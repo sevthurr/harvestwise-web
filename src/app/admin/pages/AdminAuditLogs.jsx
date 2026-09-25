@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { adminApi } from "../../../services/api";
+import { createAuditLogsPdf } from "../utils/auditLogsPdf";
 
 import {
   Tooltip,
@@ -162,6 +163,18 @@ const ACTION_FILTER_OPTIONS = [
 ];
 
 const PAGE_SIZE = 20;
+const EXPORT_PAGE_SIZE = 100;
+
+function buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize }) {
+  const params = { page, page_size: pageSize };
+  const actionParts = [];
+  if (actionPrefix) actionParts.push(actionPrefix);
+  if (search.trim()) actionParts.push(search.trim());
+  if (actionParts.length) params.action = actionParts.join(".");
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+  return params;
+}
 
 function AdminAuditLogs() {
   // ── Filter state ─────────────────────────────────────────────────────────
@@ -171,18 +184,13 @@ function AdminAuditLogs() {
   const [dateTo, setDateTo]         = useState("");   // ISO date string
   const [page, setPage]             = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting]   = useState(null); // null | "preview" | "download"
   const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
     queryKey: ["adminAuditLogs", actionPrefix, search, dateFrom, dateTo, page],
-    queryFn: () => {
-      const params = { page, page_size: PAGE_SIZE };
-      const actionParts = [];
-      if (actionPrefix) actionParts.push(actionPrefix);
-      if (search.trim()) actionParts.push(search.trim());
-      if (actionParts.length) params.action = actionParts.join(".");
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      return adminApi.getAuditLogs(params);
-    },
+    queryFn: () =>
+      adminApi.getAuditLogs(
+        buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize: PAGE_SIZE })
+      ),
     staleTime: 1000 * 60 * 5,
     refetchOnMount: true,
   });
@@ -201,6 +209,81 @@ function AdminAuditLogs() {
     setDateFrom("");
     setDateTo("");
     setPage(1);
+  };
+
+  // Fetch every row matching the current filters (usable for full PDF export).
+  const fetchAllLogs = async () => {
+    const all = [];
+    let pageNo = 1;
+    let total = 0;
+    for (;;) {
+      const res = await adminApi.getAuditLogs(
+        buildLogParams({
+          actionPrefix,
+          search,
+          dateFrom,
+          dateTo,
+          page: pageNo,
+          pageSize: EXPORT_PAGE_SIZE,
+        })
+      );
+      total = res.total;
+      all.push(...res.items);
+      if (all.length >= total || res.items.length === 0) break;
+      pageNo += 1;
+    }
+    return { logs: all, total };
+  };
+
+  const buildFilterLabel = () => {
+    const parts = [];
+    const actionParts = [];
+    if (actionPrefix) actionParts.push(actionPrefix);
+    if (search.trim()) actionParts.push(search.trim());
+    if (actionParts.length) parts.push(`Action: ${actionParts.join(".")}`);
+    if (dateFrom) parts.push(`From ${dateFrom}`);
+    if (dateTo) parts.push(`To ${dateTo}`);
+    return parts.length ? parts.join("  |  ") : "All logs";
+  };
+
+  // Build a pixel-perfect PDF and either open it for preview or download it.
+  const generatePdf = async (mode) => {
+    if (exporting) return;
+    setExporting(mode);
+    try {
+      const { logs, total } = await fetchAllLogs();
+      const generatedAt = new Date().toLocaleString("en-PH", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const doc = await createAuditLogsPdf({
+        logs,
+        total,
+        filterLabel: buildFilterLabel(),
+        generatedAt,
+      });
+
+      const slug = new Date().toISOString().slice(0, 10);
+      const filename = `audit-logs-${slug}.pdf`;
+
+      if (mode === "preview") {
+        const blob = doc.output("blob");
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, "_blank");
+        if (!win) doc.save(filename); // pop-up blocked — fall back to download
+      } else {
+        doc.save(filename);
+      }
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert("Failed to generate the PDF. Please try again.");
+    } finally {
+      setExporting(null);
+    }
   };
 
 
@@ -286,17 +369,18 @@ function AdminAuditLogs() {
           <div className="relative ml-auto">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-2 px-3.5 py-2 text-[13px] font-medium rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] bg-white hover:bg-[var(--hw-neutral-50)] transition-colors shadow-sm"
+              disabled={!!exporting}
+              className="flex items-center gap-2 px-3.5 py-2 text-[13px] font-medium rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] bg-white hover:bg-[var(--hw-neutral-50)] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <FileText className="w-4 h-4 text-[#245501]" />
-              Export PDF
+              <FileText className={`w-4 h-4 text-[#245501] ${exporting ? "animate-pulse" : ""}`} />
+              {exporting ? "Preparing PDF…" : "Export PDF"}
             </button>
             {showExportMenu && (
               <div className="absolute right-0 mt-2 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden z-20">
                 <button
                   onClick={() => {
                     setShowExportMenu(false);
-                    window.print();
+                    generatePdf("preview");
                   }}
                   className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2"
                 >
@@ -305,7 +389,7 @@ function AdminAuditLogs() {
                 <button
                   onClick={() => {
                     setShowExportMenu(false);
-                    window.print();
+                    generatePdf("download");
                   }}
                   className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2"
                 >

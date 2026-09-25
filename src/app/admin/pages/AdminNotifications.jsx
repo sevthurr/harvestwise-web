@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   Bell,
@@ -12,7 +12,9 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
+import { useAuth } from "../../global/contexts/AuthContext";
 import { adminApi } from "../../../services/api";
+import { loadReadIds, persistReadIds } from "../../../services/notificationReadState";
 
 const URGENCY_CONFIG = {
   urgent: { label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
@@ -161,8 +163,13 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
 
 function AdminNotifications() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedAlert, setSelectedAlert] = useState(null);
-  const [readIds, setReadIds] = useState(new Set());
+  const [readIds, setReadIds] = useState(() => loadReadIds(user?.id));
+
+  useEffect(() => {
+    setReadIds(loadReadIds(user?.id));
+  }, [user?.id]);
 
   const { data: logsRes, isLoading: loading, error: queryErr, refetch } = useQuery({
     queryKey: ["adminNotifications"],
@@ -181,11 +188,17 @@ function AdminNotifications() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllAsRead = () => {
-    setReadIds(new Set(rawNotifications.map((n) => n.id)));
+    const next = new Set(rawNotifications.map((n) => n.id));
+    setReadIds(next);
+    persistReadIds(user?.id, next);
   };
 
   const markRead = (id) => {
-    setReadIds((prev) => new Set([...prev, id]));
+    setReadIds((prev) => {
+      const next = new Set([...prev, id]);
+      persistReadIds(user?.id, next);
+      return next;
+    });
   };
 
 

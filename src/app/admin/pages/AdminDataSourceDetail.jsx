@@ -21,6 +21,50 @@ const META_COLS = [
   { key: "recorded_at", label: "Recorded At" }
 ];
 
+const RECORD_TYPE_LABELS = {
+  price: "Price",
+  arrival: "Arrival",
+  weather: "Weather",
+  production: "Production",
+};
+
+// Fixed, labeled column sets per record type so the Records table renders
+// stable columns with readable headers, independent of which rows are on the
+// current page.
+const DETAIL_COLS = {
+  price: [
+    { key: "commodity_name", label: "Commodity" },
+    { key: "price_type", label: "Price Type" },
+    { key: "uom", label: "UOM" },
+    { key: "price_min", label: "Min Price" },
+    { key: "price_max", label: "Max Price" },
+    { key: "prevail_price", label: "Prevailing Price" },
+    { key: "observation_status", label: "Observation Status" },
+  ],
+  arrival: [
+    { key: "commodity_name", label: "Commodity" },
+    { key: "volume_kg", label: "Volume (kg)" },
+    { key: "origin_province", label: "Origin Province" },
+  ],
+  weather: [
+    { key: "location_name", label: "Location" },
+    { key: "temperature_min", label: "Temp Min (°C)" },
+    { key: "temperature_max", label: "Temp Max (°C)" },
+    { key: "rainfall_mm", label: "Rainfall (mm)" },
+    { key: "humidity_pct", label: "Humidity (%)" },
+    { key: "weather_condition", label: "Condition" },
+    { key: "record_type", label: "Record Type" },
+  ],
+  production: [
+    { key: "volume_produced", label: "Volume Produced" },
+    { key: "reference_year", label: "Year" },
+    { key: "reference_quarter", label: "Quarter" },
+    { key: "reference_semester", label: "Semester" },
+    { key: "region_id", label: "Region" },
+    { key: "province_id", label: "Province" },
+  ],
+};
+
 function formatDT(v) {
   if (!v) return "—";
   const d = new Date(v);
@@ -29,21 +73,24 @@ function formatDT(v) {
 }
 
 function buildTable(items) {
-  const detailKeys = new Set();
-  items.forEach((it) => {
-    if (it.detail && typeof it.detail === "object") {
-      Object.keys(it.detail).forEach((k) => detailKeys.add(k));
-    }
+  const presentTypes = Array.from(new Set(items.map((it) => it.record_type)));
+  const detailCols = [];
+  presentTypes.forEach((t) => {
+    (DETAIL_COLS[t] || []).forEach((c) => {
+      if (!detailCols.some((d) => d.key === c.key)) detailCols.push(c);
+    });
   });
-  const detailCols = [...detailKeys];
-  const columns = [...META_COLS.map((c) => c.key), ...detailCols];
-  const headers = [...META_COLS.map((c) => c.label), ...detailCols];
+  const columns = [...META_COLS.map((c) => c.key), ...detailCols.map((c) => c.key)];
+  const headers = [...META_COLS.map((c) => c.label), ...detailCols.map((c) => c.label)];
   const rows = items.map((it) => {
     const row = {};
-    META_COLS.forEach((c) => { row[c.key] = c.key === "recorded_at" || c.key === "reference_date" ? formatDT(it[c.key]) : (it[c.key] ?? "—"); });
-    detailCols.forEach((k) => {
-      const val = it.detail && it.detail[k];
-      row[k] = val != null ? String(val) : "—";
+    META_COLS.forEach((c) => {
+      if (c.key === "record_type") row[c.key] = RECORD_TYPE_LABELS[it[c.key]] || it[c.key] || "—";
+      else row[c.key] = c.key === "recorded_at" || c.key === "reference_date" ? formatDT(it[c.key]) : (it[c.key] ?? "—");
+    });
+    detailCols.forEach((c) => {
+      const val = it.detail && it.detail[c.key];
+      row[c.key] = val != null ? String(val) : "—";
     });
     return { row, columns };
   });
@@ -70,7 +117,7 @@ function AdminDataSourceDetail() {
   const src = dataSource || {};
   const statusCode = src.status;
   const statusColor = statusCode === "Updated" ? "text-emerald-700" : (statusCode === "Failed" ? "text-red-600" : (statusCode === "Requires Review" ? "text-amber-700" : "text-[var(--hw-neutral-600)]"));
-  const statusLabel = statusCode || "Not yet updated";
+  const statusLabel = statusCode || "No data uploaded";
   const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
   const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
 
@@ -198,7 +245,7 @@ function AdminDataSourceDetail() {
           <button onClick={() => navigate("/admin/import")} className={btnPrimary}>
             <Upload className="w-4 h-4" />Import Data
           </button>
-          <button onClick={() => navigate("/admin/history")} className={btnSecondary}>
+          <button onClick={() => navigate("/admin/data-sources?tab=history")} className={btnSecondary}>
             <Clock className="w-4 h-4" />View History
           </button>
         </div>

@@ -124,4 +124,47 @@ describe('DFTCHome KPI Overhaul', () => {
     fireEvent.click(screen.getByText('Arrival Data Coverage — September').closest('button'));
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/trends?tab=arrival');
   });
+
+  it('paginates the Latest Arrival Volume commodity list', async () => {
+    const commodities = Array.from({ length: 12 }, (_, i) => ({
+      commodity_id: `c${i + 1}`,
+      commodity_name: `Commodity ${i + 1}`,
+      volume_kg: 100 + i,
+    }));
+    const home = {
+      ...HOME_DATA,
+      latest_arrival_volume: {
+        reporting_period: '2026-09-24',
+        combined_volume_kg: 1266,
+        provenance: [],
+        commodities,
+      },
+    };
+    const fetchFn = mockFetchByUrl([
+      { path: '/dftc/home', response: { ok: true, status: 200, body: home } },
+      { path: '/dftc/submissions', response: { ok: true, status: 200, body: { items: [] } } },
+      { path: '/dftc/requirements', response: { ok: true, status: 200, body: { items: [] } } },
+    ]);
+    vi.stubGlobal('fetch', fetchFn);
+
+    renderDFTCHome();
+
+    // Page 1: first 6 commodities, pagination info shown
+    await screen.findByText('Commodity 1');
+    expect(screen.getByText('Commodity 6')).toBeInTheDocument();
+    expect(screen.queryByText('Commodity 7')).toBeNull();
+    expect(screen.getByText('Showing 1–6 of 12')).toBeInTheDocument();
+
+    // Next -> page 2
+    fireEvent.click(screen.getByText('Next'));
+    expect(await screen.findByText('Commodity 7')).toBeInTheDocument();
+    expect(screen.getByText('Commodity 12')).toBeInTheDocument();
+    expect(screen.queryByText('Commodity 1')).toBeNull();
+    expect(screen.getByText('Showing 7–12 of 12')).toBeInTheDocument();
+
+    // Prev -> back to page 1
+    fireEvent.click(screen.getByText('Prev'));
+    expect(await screen.findByText('Commodity 1')).toBeInTheDocument();
+    expect(screen.queryByText('Commodity 7')).toBeNull();
+  });
 });

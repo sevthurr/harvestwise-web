@@ -16,6 +16,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
 import { apiGet, parseResponse } from "../../global/api";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { loadReadIds, persistReadIds } from "../../../services/notificationReadState";
 
 const URGENCY_CONFIG = {
   urgent: { label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
@@ -116,8 +117,12 @@ const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
 function DFTCNotifications() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [readIds, setReadIds] = useState(() => new Set());
+  const [readIds, setReadIds] = useState(() => loadReadIds(user?.id));
   const [selectedAlert, setSelectedAlert] = useState(null);
+
+  useEffect(() => {
+    setReadIds(loadReadIds(user?.id));
+  }, [user?.id]);
 
   const { data: preferencesData } = useQuery({
     queryKey: ["notification-preferences"],
@@ -242,11 +247,17 @@ function DFTCNotifications() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllAsRead = () => {
-    setReadIds(new Set(notifications.map((n) => n.id)));
+    const next = new Set(notifications.map((n) => n.id));
+    setReadIds(next);
+    persistReadIds(user?.id, next);
   };
 
   const markRead = (id) => {
-    setReadIds((prev) => new Set([...prev, id]));
+    setReadIds((prev) => {
+      const next = new Set([...prev, id]);
+      persistReadIds(user?.id, next);
+      return next;
+    });
   };
 
   return (

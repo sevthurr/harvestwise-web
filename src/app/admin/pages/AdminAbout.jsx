@@ -14,7 +14,7 @@ const FAQS = [
   { q: "Where do I check system health?", a: "Go to System Management > System Health." },
   { q: "Where do I review uploaded datasets?", a: "Go to Data and open the relevant data source or upload record." },
   { q: "Where do I update thresholds and weights?", a: "Go to Analytics > Weights & Thresholds." },
-  { q: "Where do I review processing records?", a: "Go to Processing History." }
+  { q: "Where do I review processing records?", a: "Go to Data Sources and open the Processing History tab." }
 ];
 const AboutContent = () => <p className="text-[15px] text-black leading-relaxed">
     HarvestWise helps administrators manage agricultural datasets, monitor system processing, review forecasts and analytical outputs, manage user access, and support crop advisory generation for Davao City vegetable farmers.

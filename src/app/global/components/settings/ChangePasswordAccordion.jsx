@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Eye, EyeOff, Check } from "lucide-react";
+import { apiPost, parseResponse } from "../../api";
 import { Accordion, FieldLabel, GreenBtn, GhostBtn, inputCls, PW_REQS } from "../ui/hw-ui";
 const ChangePasswordAccordion = ({ showToast }) => {
   const [open, setOpen] = useState(false);
@@ -8,7 +9,8 @@ const ChangePasswordAccordion = ({ showToast }) => {
   const [showNew, setShowNew] = useState(false);
   const [showCfm, setShowCfm] = useState(false);
   const [pwError, setPwError] = useState("");
-  const handleSave = () => {
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
     if (!pw.current || !pw.newPw || !pw.confirm) {
       setPwError("Please fill in all fields.");
       return;
@@ -22,9 +24,22 @@ const ChangePasswordAccordion = ({ showToast }) => {
       return;
     }
     setPwError("");
-    setOpen(false);
-    setPw({ current: "", newPw: "", confirm: "" });
-    showToast("Password updated successfully.");
+    setSaving(true);
+    try {
+      await parseResponse(
+        await apiPost("/auth/change-password", {
+          current_password: pw.current,
+          new_password: pw.newPw,
+        })
+      );
+      setOpen(false);
+      setPw({ current: "", newPw: "", confirm: "" });
+      showToast("Password updated successfully.");
+    } catch {
+      setPwError("Could not update password. Check your current password and try again.");
+    } finally {
+      setSaving(false);
+    }
   };
   const handleCancel = () => {
     setOpen(false);
@@ -121,7 +136,9 @@ const ChangePasswordAccordion = ({ showToast }) => {
 
         <div className="flex gap-2 pt-1">
           <GhostBtn onClick={handleCancel}>Cancel</GhostBtn>
-          <GreenBtn onClick={handleSave}>Update password</GreenBtn>
+          <GreenBtn disabled={saving} onClick={handleSave}>
+            {saving ? "Updating..." : "Update password"}
+          </GreenBtn>
         </div>
 
       </div>

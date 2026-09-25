@@ -588,12 +588,12 @@ function DFTCSubmissionDetail() {
             <>
               <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
                 <p className="text-[14px] text-[var(--hw-neutral-800)]">
-                  Duplicate records are excluded from the dataset and were not saved.
+                  Duplicate records are excluded from the dataset and were not saved. Duplicate detection applies to file-linked submissions; manually entered data is de-duplicated on save.
                 </p>
               </div>
               {ds.duplicateIssues.length === 0 ? (
                 <div className="px-5 py-10 text-center text-[14px] text-[var(--hw-neutral-800)]">
-                  No duplicate records.
+                  No duplicate records were flagged for this dataset.
                 </div>
               ) : (
                 <div className="overflow-x-auto">

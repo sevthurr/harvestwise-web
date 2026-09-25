@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Check, AlertCircle, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
@@ -63,6 +63,42 @@ function getEncodedByName(file) {
     return USER_ID_TO_NAME[file.encodedUserId];
   }
   return file.encodedUserId || "CHRISTIAN JOEY PAUL M. HERMOSO";
+}
+
+// ── Real-data lookup helpers (preview prices come from the API, not mock rows) ──
+
+function normalizeKey(str) {
+  return (str || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function priceStr(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : "—";
+}
+
+function buildRowsLookup(rows) {
+  const lookup = new Map();
+  (rows || []).forEach((row) => {
+    const key = normalizeKey(row.commodity_name || row.name);
+    if (!key) return;
+    if (!lookup.has(key)) lookup.set(key, []);
+    lookup.get(key).push(row);
+  });
+  return lookup;
+}
+
+function resolvePriceRow(commodity, variant, lookup) {
+  const rows = lookup.get(normalizeKey(commodity.name));
+  if (!rows || rows.length === 0) return null;
+  const vKey = normalizeKey(variant.descriptor);
+  if (vKey) {
+    const exact = rows.find((r) => vKey === normalizeKey(r.variety));
+    if (exact) return exact;
+  }
+  const withVariety = rows.filter((r) => normalizeKey(r.variety));
+  const base = rows.find((r) => !normalizeKey(r.variety));
+  return withVariety[0] || base || rows[0];
 }
 
 function triggerDownload(url, filename) {
@@ -328,12 +364,12 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
   );
 }
 
-function PDFPreviewContent({ personnel, reportDate }) {
+function PDFPreviewContent({ personnel, reportDate, categories }) {
   const total = PAGE_CATEGORY_GROUPS.length;
   return (
     <div className="space-y-5">
       {PAGE_CATEGORY_GROUPS.map((group, idx) => {
-        const cats = group.map((n) => DFTC_REPORT_CATEGORIES.find((c) => c.name === n)).filter(Boolean);
+        const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
         return (
           <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
@@ -350,7 +386,7 @@ function PDFPreviewContent({ personnel, reportDate }) {
   );
 }
 
-function ExcelPreviewContent({ personnel, reportDate, reportDateShort }) {
+function ExcelPreviewContent({ personnel, reportDate, reportDateShort, categories }) {
   const total = PAGE_CATEGORY_GROUPS.length;
   return (
     <div className="rounded-xl overflow-hidden border border-[var(--hw-neutral-300)] bg-white">
@@ -365,7 +401,7 @@ function ExcelPreviewContent({ personnel, reportDate, reportDateShort }) {
       </div>
       <div className="overflow-x-auto bg-white">
         {PAGE_CATEGORY_GROUPS.map((group, idx) => {
-          const cats = group.map((n) => DFTC_REPORT_CATEGORIES.find((c) => c.name === n)).filter(Boolean);
+          const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
           return <DFTCReportPage key={idx} pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />;
         })}
       </div>
@@ -376,9 +412,9 @@ function ExcelPreviewContent({ personnel, reportDate, reportDateShort }) {
   );
 }
 
-function IMGPreview({ page, onPageChange, personnel, reportDate }) {
+function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
   const total = PAGE_CATEGORY_GROUPS.length;
-  const currentCats = PAGE_CATEGORY_GROUPS[page].map((name) => DFTC_REPORT_CATEGORIES.find((c) => c.name === name)).filter(Boolean);
+  const currentCats = PAGE_CATEGORY_GROUPS[page].map((name) => categories.find((c) => c.name === name)).filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -446,6 +482,29 @@ function DFTCFilePreview({ file, onClose }) {
     },
     enabled: !!reportingDateShort
   });
+
+  // Build price cells from the real API rows; missing data renders as "—"
+  // (never falls back to the static mock rows in DFTC_REPORT_CATEGORIES).
+  const resolvedCategories = useMemo(() => {
+    const lookup = buildRowsLookup(reportPreviewData?.rows);
+    return DFTC_REPORT_CATEGORIES.map((cat) => ({
+      ...cat,
+      commodities: cat.commodities.map((com) => ({
+        ...com,
+        variants: com.variants.map((v) => {
+          const row = resolvePriceRow(com, v, lookup);
+          return {
+            ...v,
+            bankLanding: row ? priceStr(row.bangkerohan_landing) : "—",
+            bankWholesale: row ? priceStr(row.bangkerohan_wholesale) : "—",
+            bankRetail: row ? priceStr(row.bangkerohan_retail) : "—",
+            dftcWholesale: row ? priceStr(row.dftc_taboan_wholesale) : "—",
+            dftcRetail: row ? priceStr(row.dftc_taboan_retail) : "—"
+          };
+        })
+      }))
+    }));
+  }, [reportPreviewData]);
 
   const reportingDate = reportPreviewData?.subtitle
     ? reportPreviewData.subtitle.replace("Prevailing Market Prices as of ", "")
@@ -596,7 +655,7 @@ function DFTCFilePreview({ file, onClose }) {
       applyHStyle(hRow2, [4, 5, 6], BANK_BG);
       applyHStyle(hRow2, [7, 8], DFTC_BG);
 
-      DFTC_REPORT_CATEGORIES.forEach((cat) => {
+      resolvedCategories.forEach((cat) => {
         const catRow = ws.addRow([cat.name, "", "", "", "", "", "", ""]);
         ws.mergeCells(`A${catRow.number}:H${catRow.number}`);
         const cCell = catRow.getCell(1);
@@ -745,10 +804,11 @@ function DFTCFilePreview({ file, onClose }) {
             onPageChange={setImgPage}
             personnel={personnel}
             reportDate={reportingDate}
+            categories={resolvedCategories}
           />
         )}
-        {format === "PDF" && <PDFPreviewContent personnel={personnel} reportDate={reportingDate} />}
-        {format === "Excel" && <ExcelPreviewContent personnel={personnel} reportDate={reportingDate} reportDateShort={reportingDateShort} />}
+        {format === "PDF" && <PDFPreviewContent personnel={personnel} reportDate={reportingDate} categories={resolvedCategories} />}
+        {format === "Excel" && <ExcelPreviewContent personnel={personnel} reportDate={reportingDate} reportDateShort={reportingDateShort} categories={resolvedCategories} />}
       </div>
 
       {/* ── Report Personnel ── */}
@@ -826,7 +886,7 @@ function DFTCFilePreview({ file, onClose }) {
       {/* Hidden off-screen pages for html2canvas rendering */}
       <div style={{ position: "fixed", left: -9999, top: 0, width: 960, pointerEvents: "none" }}>
         {PAGE_CATEGORY_GROUPS.map((group, idx) => {
-          const cats = group.map((n) => DFTC_REPORT_CATEGORIES.find((c) => c.name === n)).filter(Boolean);
+          const cats = group.map((n) => resolvedCategories.find((c) => c.name === n)).filter(Boolean);
           return (
             <div key={idx} ref={(el) => { pageRefs.current[idx] = el; }}>
               <DFTCReportPage

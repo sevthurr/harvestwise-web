@@ -6,7 +6,6 @@ import {
   Database,
   TrendingUp,
   LineChart,
-  History,
   Bell,
   ChevronDown,
   Settings,
@@ -27,7 +26,6 @@ const ADMIN_NAV = [
   { id: "modules", label: "Analytical Modules", path: "/admin/modules", Icon: Layers },
   { id: "forecasting", label: "Forecasting", path: "/admin/forecasting", Icon: TrendingUp },
   { id: "data", label: "Data Sources", path: "/admin/data-sources", Icon: Database },
-  { id: "history", label: "History", path: "/admin/history", Icon: History },
   { id: "audit", label: "Audit Logs", path: "/admin/audit-logs", Icon: ClipboardList }
 ];
 function getActive(pathname) {
@@ -35,7 +33,6 @@ function getActive(pathname) {
   if (pathname.startsWith("/admin/data-sources") || pathname.startsWith("/admin/import")) return "data";
   if (pathname.startsWith("/admin/forecasting")) return "forecasting";
   if (pathname.startsWith("/admin/modules") || pathname.startsWith("/admin/analytics")) return "modules";
-  if (pathname.startsWith("/admin/history")) return "history";
   if (pathname.startsWith("/admin/audit-logs")) return "audit";
   return "";
 }
