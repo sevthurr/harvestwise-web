@@ -88,7 +88,7 @@ function AdminDashboard() {
       insight: "Completed uploads from today's processing history.",
       color: "text-emerald-700",
       dot: "bg-emerald-500",
-      path: "/admin/history"
+      path: "/admin/data-sources?tab=history"
     },
     {
       value: kpis.advisoriesCreated.toString(),
@@ -337,7 +337,7 @@ function AdminDashboard() {
 
         <div className="px-5 py-3 border-t border-[var(--hw-neutral-100)]">
           <button
-            onClick={() => navigate("/admin/history")}
+            onClick={() => navigate("/admin/data-sources?tab=history")}
             className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 flex items-center gap-1"
           >
             View History <ChevronRight className="w-4 h-4" />

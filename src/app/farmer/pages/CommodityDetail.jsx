@@ -186,7 +186,7 @@ function CommodityDetailPage() {
   const DirIcon = cfg.Icon;
   const uom = commodity?.unitOfMeasure || 'kg';
 
-  const currentPrice = forecast.currentPrice != null ? forecast.currentPrice : (priceRecords[0]?.priceAvg ?? null);
+  const currentPrice = forecast.currentPrice != null ? forecast.currentPrice : (priceRecords[0]?.prevailPrice ?? null);
   const lowerForecast = forecast.lowerForecast != null ? forecast.lowerForecast : null;
   const upperForecast = forecast.upperForecast != null ? forecast.upperForecast : null;
 
@@ -207,10 +207,41 @@ function CommodityDetailPage() {
     return matches.length > 0 ? matches : [commodity];
   }, [commodity, allCommodities]);
 
+  // The /prices list payload carries no forecast data, so sibling varieties on the
+  // FORECASTED PRICE card used to fall back to "-/kg". Fetch each family variant's
+  // own detail (same market + period) so every variety shows its forecasted range.
+  const siblingIds = familyVariants
+    .map(v => String(v.commodityId || v.id))
+    .filter(id => id !== String(commodityId));
+
+  const siblingDetailQuery = useQuery({
+    queryKey: [
+      "prices", "family-detail",
+      [...siblingIds].sort().join('|'),
+      priceTypeKey, period,
+    ],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        siblingIds.map(async (id) => {
+          const response = await apiGet(
+            `/prices/${id}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
+          );
+          if (!response.ok) return [id, null];
+          const data = await parseResponse(response);
+          return [id, toCamelCase(data)];
+        })
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: siblingIds.length > 0,
+    staleTime: 1000 * 60 * 30,
+  });
+  const siblingForecastById = siblingDetailQuery.data || {};
+
   const variantRows = useMemo(() => {
     if (!familyVariants.length) {
       if (!commodity) return [];
-      const priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? null;
+      const priceVal = forecast.currentPrice ?? priceRecords[0]?.prevailPrice ?? null;
       const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
       const forecastRangeText = (lowerForecast != null && upperForecast != null)
         ? `${formatPrice(lowerForecast)}–${formatPrice(upperForecast)}/${uom}`
@@ -254,13 +285,14 @@ function CommodityDetailPage() {
       let upper = null;
 
       if (isCurrentActive && detailData) {
-        priceVal = forecast.currentPrice ?? priceRecords[0]?.priceAvg ?? getAvailablePrice(v.prices);
+        priceVal = forecast.currentPrice ?? priceRecords[0]?.prevailPrice ?? getAvailablePrice(v.prices);
         lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
       } else {
         priceVal = getAvailablePrice(v.prices);
-        lower = v.forecast?.lowerForecast ?? null;
-        upper = v.forecast?.upperForecast ?? null;
+        const siblingDetail = siblingForecastById[v.commodityId || v.id];
+        lower = siblingDetail?.forecast?.lowerForecast ?? v.forecast?.lowerForecast ?? null;
+        upper = siblingDetail?.forecast?.upperForecast ?? v.forecast?.upperForecast ?? null;
       }
 
       const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
@@ -275,7 +307,7 @@ function CommodityDetailPage() {
         forecastRangeText,
       };
     });
-  }, [familyVariants, market, uom, commodity, commodityId, detailData, forecast, priceRecords, lowerForecast, upperForecast]);
+  }, [familyVariants, market, uom, commodity, commodityId, detailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
 
   // Loading state (only show full screen skeleton on cold start if NO data exists in cache)
   if (loading && !detailData && !priceDetail) {
@@ -531,7 +563,7 @@ function CommodityDetailPage() {
                       {row.variety || commodity.variety || '–'}
                     </td>
                     <td className="px-4 py-2.5 text-right font-semibold text-[var(--hw-neutral-900)] whitespace-nowrap">
-                      {row.priceAvg != null ? `₱${Number(row.priceAvg).toFixed(2)}` : '–'}
+                      {row.prevailPrice != null ? `₱${Number(row.prevailPrice).toFixed(2)}` : '–'}
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       {row.change == null || row.change === 0 ? (

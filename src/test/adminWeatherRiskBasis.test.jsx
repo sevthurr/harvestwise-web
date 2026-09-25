@@ -39,6 +39,7 @@ vi.mock('../services/api', () => ({
         { id: 'COM-0002', name: 'Kalabasa', is_top10: true, is_active: true },
       ],
     }),
+    listWeatherRules: vi.fn().mockResolvedValue({ items: [] }),
     listThresholds: vi.fn().mockResolvedValue({ items: [] }),
     listThresholdRules: vi.fn().mockResolvedValue({ items: [] }),
     getHistoricalSeasonalProduction: vi.fn().mockResolvedValue({}),
@@ -51,7 +52,7 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
     vi.clearAllMocks();
   });
 
-  it('removes Result Explanation and Datasets Used, renders Top 10 Commodities threshold table, and displays forecast cards without empty overlay', async () => {
+  it('renders live weather-risk basis (inputs, thresholds, explanation), Top 10 reference table, and forecast cards without empty overlay', async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -66,16 +67,24 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
       </QueryClientProvider>
     );
 
-    // 1. Verify "Result Explanation" is REMOVED on weather risk basis
-    expect(screen.queryByText('Result Explanation')).toBeNull();
+    // 1. Verify the live "Result Explanation" IS present on weather risk basis
+    expect(screen.getAllByText('Result Explanation').length).toBeGreaterThanOrEqual(1);
 
-    // 2. Verify "DATASETS USED" is REMOVED on weather risk basis
-    expect(screen.queryByText(/DATASETS USED/i)).toBeNull();
+    // 2. Verify "DATASETS USED" IS present on weather risk basis (per-day weather records)
+    expect(screen.getAllByText(/DATASETS USED/i).length).toBeGreaterThanOrEqual(1);
 
     // 3. Verify "Threshold Applied" section heading is present
     expect(screen.getByText('Threshold Applied')).toBeDefined();
 
-    // 4. Verify table column headers (each appears exactly once in thead)
+    // 4. Verify "Reference Thresholds" table heading is present
+    expect(screen.getByText('Reference Thresholds · Top 10 Commodities')).toBeDefined();
+
+    // 5. Verify the live classification explanation renders after the forecast resolves
+    await waitFor(() => {
+      expect(screen.getAllByText(/Favorable meteorological conditions expected/).length).toBeGreaterThanOrEqual(1);
+    }, { timeout: 5000 });
+
+    // 6. Verify table column headers (each appears exactly once in thead)
     // Use role-based queries to target the <th> elements specifically,
     // avoiding conflicts with the same text in row badges.
     const columnHeaders = screen.getAllByRole('columnheader');
@@ -85,14 +94,14 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
     expect(headerTexts.some((t) => t === 'Severe')).toBe(true);
     expect(headerTexts.some((t) => t === 'Commodity')).toBe(true);
 
-    // 5. Verify commodity rows appear in the threshold table
+    // 7. Verify commodity rows appear in the threshold table
     expect(screen.getAllByText('Ampalaya').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Kalabasa').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Kamatis').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Carrots').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Chinese Pechay').length).toBeGreaterThanOrEqual(1);
 
-    // 6. Verify 14-day weather forecast section heading always renders
+    // 8. Verify 14-day weather forecast section heading always renders
     expect(screen.getByText('14-Day Weather Forecast Outlook')).toBeDefined();
 
     // Verify forecast card data renders after the async fetch resolves
@@ -104,7 +113,7 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
     expect(screen.getAllByText('23°').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('6.0mm').length).toBeGreaterThanOrEqual(1);
 
-    // 7. Verify the "No weather data available." empty overlay is NOT shown
+    // 9. Verify the "No weather data available." empty overlay is NOT shown
     expect(screen.queryByText('No weather data available.')).toBeNull();
   });
 });

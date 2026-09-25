@@ -17,6 +17,7 @@ export const notifications = {
   category_price: "Price Change",
   category_weather: "Weather Alert",
   category_harvest: "Harvest",
+  category_price_update: "New Prices",
   new_notification: "New Notification",
   new_notification_body: "You have a new notification.",
 };

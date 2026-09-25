@@ -17,6 +17,7 @@ export const notifications = {
   category_price: "Pagbabago ng Presyo",
   category_weather: "Alerto sa Panahon",
   category_harvest: "Pag-aani",
+  category_price_update: "Bagong Presyo",
   new_notification: "Bagong Notipikasyon",
   new_notification_body: "Mayroon kang bagong notipikasyon.",
 };

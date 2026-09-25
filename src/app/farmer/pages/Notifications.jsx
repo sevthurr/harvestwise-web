@@ -42,6 +42,14 @@ const CATEGORY_CONFIG = {
     labelKey: "farmer.notifications.category_harvest",
     defaultLabel: "Harvest",
   },
+  price_update: {
+    urgency: "information",
+    Icon: Info,
+    color: "text-blue-500",
+    bg: "bg-blue-50",
+    labelKey: "farmer.notifications.category_price_update",
+    defaultLabel: "New Prices",
+  },
 };
 
 const URGENCY_CONFIG = {
@@ -71,6 +79,7 @@ const URGENCY_CONFIG = {
 // ─── Action routes by category ─────────────────────────────────────────────
 const CATEGORY_ROUTE = {
   price_change: "/farmer/prices",
+  price_update: "/farmer/prices",
   weather_alert: "/farmer/market-weather",
   harvest_reminder: "/farmer/crops",
 };

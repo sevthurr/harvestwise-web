@@ -61,7 +61,6 @@ import AdminImport from "./admin/pages/AdminImport";
 import AdminAnalytics from "./admin/pages/AdminAnalytics";
 import AdminAnalyticsBasis from "./admin/pages/AdminAnalyticsBasis";
 import AdminAnalyticsThresholds from "./admin/pages/AdminAnalyticsThresholds";
-import AdminHistory from "./admin/pages/AdminHistory";
 import AdminHistoryDetail from "./admin/pages/AdminHistoryDetail";
 import AdminConfiguration from "./admin/pages/AdminConfiguration";
 import AdminDataSourceDetail from "./admin/pages/AdminDataSourceDetail";
@@ -181,7 +180,7 @@ export const router = createBrowserRouter([
       { path: "analytics",                Component: AdminAnalytics      },
       { path: "analytics/basis/:resultId", Component: AdminAnalyticsBasis },
       { path: "analytics/thresholds",      Component: AdminAnalyticsThresholds },
-      { path: "history",              Component: AdminHistory       },
+      { path: "history", element: <Navigate to="/admin/data-sources?tab=history" replace /> },
       { path: "history/:historyId",   Component: AdminHistoryDetail },
       { path: "configuration",        Component: AdminConfiguration },
       { path: "profile",              Component: AdminProfile          },

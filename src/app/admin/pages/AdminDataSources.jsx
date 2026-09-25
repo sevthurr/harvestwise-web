@@ -1,20 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
   FileText,
   Plus,
-  RotateCcw,
   X,
   Pencil,
   Trash2,
   List
 } from "lucide-react";
 import { calendarApi, adminApi, ingestionApi } from "../../../services/api";
+import AdminHistory from "./AdminHistory";
 
 
 function fmtISO(dateStr) {
@@ -54,7 +54,7 @@ const STATUS_TEXT = {
   Updated: "text-emerald-700",
   "Requires Review": "text-amber-700",
   Failed: "text-red-600",
-  "Not yet updated": "text-[var(--hw-neutral-500)]",
+  "No data uploaded": "text-[var(--hw-neutral-500)]",
   "Not yet synced": "text-[var(--hw-neutral-500)]"
 };
 
@@ -128,7 +128,16 @@ const EMPTY_FORM = {
 function AdminDataSources() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState("sources");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTabState] = useState(() => (searchParams.get("tab") === "history" ? "history" : "sources"));
+  const setTab = (id) => {
+    setTabState(id);
+    if (id === "history") {
+      setSearchParams({ tab: "history" }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calFilter, setCalFilter] = useState("30d");
@@ -142,28 +151,7 @@ function AdminDataSources() {
   const [addForm, setAddForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
 
-  const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState("");
   const [fetchingSource, setFetchingSource] = useState({});
-
-  const handleSyncAll = async () => {
-    setSyncing(true);
-    setSyncError("");
-    try {
-      await ingestionApi.syncNow();
-      // Sync runs on the backend as a background task, so poll the source list
-      // briefly so last-sync / record counts refresh once it completes.
-      for (let i = 0; i < 6; i += 1) {
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ["adminApiSyncSources"] });
-        }, i * 10000);
-      }
-    } catch (err) {
-      setSyncError(err.message || "Failed to start sync.");
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   // Identifies which sources have a manual fetch endpoint
   const MANUAL_FETCH_LABEL = {
@@ -223,11 +211,6 @@ function AdminDataSources() {
   const apiSyncSources = apiSyncRes?.items || [];
   const dataSourcesError = dsErr ? (dsErr.message || "Failed to load data sources.") : null;
   const apiSyncError = syncErr ? (syncErr.message || "Failed to load API sync sources.") : null;
-
-
-  const syncHasFailed = apiSyncSources.some((s) => s.status === "Failed");
-  const syncSummary = syncHasFailed ? `${apiSyncSources.filter((s) => s.status === "Failed").length} source failed \u2014 retry recommended` : apiSyncSources.length > 0 ? "All sources updated" : "";
-  const syncSummaryColor = syncHasFailed ? "text-red-600" : "text-emerald-700";
 
   const calGrid = useMemo(() => buildGrid(calYear, calMonth), [calYear, calMonth]);
   const filteredEvents = useMemo(() => {
@@ -725,8 +708,8 @@ function AdminDataSources() {
         />
 
         {/* Tabs */}
-        {<div className="flex border-b border-[var(--hw-neutral-200)]">
-            {[["sources", "Data Sources"], ["api-sync", "API Sync"], ["calendar", "Calendar & Events"]].map(([id, label]) => <button key={id} onClick={() => {
+        {<div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto">
+            {[["sources", "Data Sources"], ["api-sync", "API Sync"], ["history", "Processing History"], ["calendar", "Calendar & Events"]].map(([id, label]) => <button key={id} onClick={() => {
     setTab(id);
     setShowConfiguredEvents(false);
   }} className={tabCls(id)}>{label}</button>)}
@@ -756,7 +739,7 @@ function AdminDataSources() {
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                      {["Source", "Type", "Last Update", "Records Imported", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+                      {["Source", "Type", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--hw-neutral-100)]">
@@ -776,9 +759,9 @@ function AdminDataSources() {
                           <p className="font-medium text-[var(--hw-neutral-800)]">{SOURCE_DISPLAY_NAMES[s.name] || s.name}</p>
                         </td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.type}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "-"}</td>
+                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
-                          {s.records != null ? s.records.toLocaleString() : "-"}
+                          {s.records != null ? s.records.toLocaleString() : "—"}
                         </td>
                         <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
                       </tr>)
@@ -790,24 +773,19 @@ function AdminDataSources() {
             )}
           </div>}
 
+        {/* ══ TAB: PROCESSING HISTORY ══ */}
+        {tab === "history" && <div className="space-y-4">
+            <AdminHistory embedded />
+          </div>}
+
         {/* ══ TAB: API SYNC ══ */}
         {tab === "api-sync" && <div className="space-y-4">
             {/* Header row */}
             <div className="flex items-center justify-end gap-2 flex-shrink-0">
-              <button className={btnPrimary} onClick={handleSyncAll} disabled={syncing || apiSyncSources.length === 0}>
-                {syncing ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Syncing...
-                  </span>
-                ) : syncHasFailed ? <><RotateCcw className="w-4 h-4" />Retry Failed Syncs</> : <><RefreshCw className="w-4 h-4" />Sync Now</>}
-              </button>
-              <button onClick={() => navigate("/admin/history")} className={btnSecondary}>
+              <button onClick={() => setTab("history")} className={btnSecondary}>
                 View Sync History
               </button>
             </div>
-
-            {syncError && <p className="text-[13px] text-red-600">{syncError}</p>}
 
             {apiSyncLoading ? (
 

@@ -17,6 +17,7 @@ export const notifications = {
   category_price: "Pagbag-o sa Presyo",
   category_weather: "Alerto sa Panahon",
   category_harvest: "Pag-ani",
+  category_price_update: "Bag-ong Presyo",
   new_notification: "Bag-ong Pahibalo",
   new_notification_body: "Naa kay bag-ong pahibalo.",
 };

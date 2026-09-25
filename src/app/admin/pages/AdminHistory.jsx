@@ -56,7 +56,7 @@ function parseRecordDate(str) {
   return Number.isNaN(parsed) ? new Date(0) : new Date(parsed);
 }
 
-function AdminHistory() {
+function AdminHistory({ embedded = false }) {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -132,12 +132,14 @@ function AdminHistory() {
   const selectCls = inputCls + " cursor-pointer";
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+    <div className={embedded ? "space-y-6" : "px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6"}>
       {/* Header */}
-      <PageHeader
-        title="Processing History"
-        description="Review uploads, API syncs, forecasts, module calculations, threshold changes, and publishing records."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Processing History"
+          description="Review uploads, API syncs, forecasts, module calculations, threshold changes, and publishing records."
+        />
+      )}
 
       {/* Search & Filter Bar (Matching Table Width) */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">

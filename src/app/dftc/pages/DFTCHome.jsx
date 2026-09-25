@@ -16,6 +16,7 @@ import {
   FileSpreadsheet
 } from "lucide-react";
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
+import { DFTCArrivalVolumeCard } from "../components/DFTCArrivalVolumeCard";
 import { apiGet, parseResponse } from "../../global/api";
 
 function formatMarketName(sourceId) {
@@ -183,7 +184,7 @@ function DFTCHome() {
     return {
       id: req.id,
       requirement: formatRequirementName(req.data_type, req.price_type),
-      market: formatMarketName(req.source_id),
+      market: formatMarketName(req.source_name || req.source_id),
       status,
       lastSaved,
       savedDatasetId,
@@ -195,7 +196,7 @@ function DFTCHome() {
   const attentionItems = [];
   needsCorrectionSubmissions.forEach((sub) => {
     attentionItems.push({
-      label: `${formatMarketName(sub.source_id)} ${sub.price_type || sub.data_type} records need correction`,
+      label: `${formatMarketName(sub.source_name || sub.source_id)} ${sub.price_type || sub.data_type} records need correction`,
       action: "Review Records",
       path: `/dftc/submissions/${sub.id}`
     });
@@ -241,7 +242,7 @@ function DFTCHome() {
     return {
       id: sub.id,
       name: formatDatasetTitle(sub.data_type, sub.price_type),
-      market: formatMarketName(sub.source_id),
+      market: formatMarketName(sub.source_name || sub.source_id),
       entryMethod: sub.submission_method || "Manual Input",
       savedAt: savedTimeDisplay,
       records: "\u2014",
@@ -570,44 +571,11 @@ function DFTCHome() {
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
-          <div className="flex items-center justify-between mb-4">
-            <p className="font-semibold text-[var(--hw-neutral-900)]">Latest Arrival Volume</p>
-            <Truck className="w-4 h-4 text-[var(--hw-neutral-400)]" />
-          </div>
-          {loadingHome ? (
-            <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">Loading…</div>
-          ) : (!homeData?.latest_arrival_volume || (homeData.latest_arrival_volume.combined_volume_kg || 0) <= 0) ? (
-            <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-              No arrival volume records available yet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <p className="text-[12px] text-[var(--hw-neutral-800)]">
-                  Reporting Period {homeData.latest_arrival_volume.reporting_period || "\u2014"}
-                </p>
-                <p className="text-[22px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
-                  {Number(homeData.latest_arrival_volume.combined_volume_kg).toLocaleString()} <span className="text-[13px] font-medium text-[var(--hw-neutral-800)]">kg</span>
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                {(homeData.latest_arrival_volume.provenance || []).map((p, i) => (
-                  <div key={i} className="flex items-center justify-between text-[13px]">
-                    <span className="text-[var(--hw-neutral-800)]">{p.origin_province}</span>
-                    <span className="font-medium text-[var(--hw-neutral-900)]">{Number(p.volume_kg).toLocaleString()} kg</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <button
-            onClick={() => navigate("/dftc/trends")}
-            className="mt-4 flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-          >
-            View Arrival Volume Trends <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <DFTCArrivalVolumeCard
+          loadingHome={loadingHome}
+          latestArrivalVolume={homeData?.latest_arrival_volume}
+          onViewTrends={() => navigate("/dftc/trends")}
+        />
       </div>
     </div>
   );
