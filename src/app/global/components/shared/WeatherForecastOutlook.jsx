@@ -68,6 +68,7 @@ const SUITABILITY_STYLES = {
  * Features:
  * - Clean cards with Day of week, formatted date, 3D weather visual, high/low temp, and precipitation
  * - Native horizontal swipe/trackpad/mobile touch scroll without visible scrollbar track
+ *   (pass showScrollbar to render a visible native scrollbar instead)
  * - Fully responsive across mobile, tablet, and desktop
  */
 export function WeatherForecastOutlook({
@@ -75,6 +76,7 @@ export function WeatherForecastOutlook({
   subtitle = "Estimated weather parameters and risks.",
   forecast = [],
   showSuitability = false,
+  showScrollbar = false,
   className = "",
   emptyMessage = "No weather forecast data available.",
 }) {
@@ -122,15 +124,19 @@ export function WeatherForecastOutlook({
         )}
       </div>
 
-      {/* Cards Container with hidden scrollbars, enabling smooth trackpad and mobile touch scrolling */}
+      {/* Cards Container — hidden scrollbars by default; visible native scrollbar when showScrollbar */}
       {items.length > 0 ? (
         <div
-          className="flex gap-2.5 sm:gap-3 overflow-x-auto pb-1 pt-0.5 no-scrollbar select-none"
-          style={{
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-            WebkitOverflowScrolling: "touch",
-          }}
+          className={`flex gap-2.5 sm:gap-3 overflow-x-auto pb-1 pt-0.5 select-none ${showScrollbar ? "" : "no-scrollbar"}`}
+          style={
+            showScrollbar
+              ? { WebkitOverflowScrolling: "touch" }
+              : {
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
+                  WebkitOverflowScrolling: "touch",
+                }
+          }
         >
           {items.map((day, i) => {
             const suitCfg = showSuitability && day.suitability ? SUITABILITY_STYLES[day.suitability] : null;

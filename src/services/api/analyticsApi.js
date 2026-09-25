@@ -134,6 +134,6 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
 
 export async function getWeatherForecast(days = 14) {
   return parseResponse(
-    await apiGet(`/admin/analytics/outputs/weather-forecast?days=${days}`)
+    await apiGet(`/admin/analytics/outputs/weather-forecast?days=${encodeURIComponent(days)}`)
   );
 }
