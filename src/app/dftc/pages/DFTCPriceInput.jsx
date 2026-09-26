@@ -72,6 +72,10 @@ function localToday() {
   return `${y}-${m}-${day}`;
 }
 
+function isFutureDate(dateStr) {
+  return Boolean(dateStr && dateStr > localToday());
+}
+
 function generateDataName(setup) {
   const dateStr = formatDateLabel(setup.date);
   const marketShort = setup.market.includes("Bangkerohan") ? "Bangkerohan" : "DFTC";
@@ -140,6 +144,10 @@ function SetupModal({ initial, onClose, onApply }) {
   const [priceType, setPriceType] = useState(initial.priceType);
   const [changingDate, setChangingDate] = useState(false);
   const [customDate, setCustomDate] = useState(initial.date);
+  const today = localToday();
+  const [dateError, setDateError] = useState(() =>
+    isFutureDate(initial.date) ? "Reporting date cannot be after today." : ""
+  );
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -151,6 +159,11 @@ function SetupModal({ initial, onClose, onApply }) {
 
   function handleApply() {
     const date = changingDate ? customDate : initial.date;
+    if (isFutureDate(date)) {
+      setDateError("Reporting date cannot be after today.");
+      return;
+    }
+    setDateError("");
     onApply({ ...initial, market, priceType, date });
   }
 
@@ -198,11 +211,19 @@ function SetupModal({ initial, onClose, onApply }) {
                 <input
                   type="date"
                   value={customDate}
-                  onChange={(e) => setCustomDate(e.target.value)}
+                  max={today}
+                  onChange={(e) => {
+                    setCustomDate(e.target.value);
+                    setDateError("");
+                  }}
                   className="flex-1 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
                 />
                 <button
-                  onClick={() => { setChangingDate(false); setCustomDate(initial.date); }}
+                  onClick={() => {
+                    setChangingDate(false);
+                    setCustomDate(initial.date);
+                    setDateError("");
+                  }}
                   className="text-[12px] text-[var(--hw-green-700)] underline whitespace-nowrap"
                 >
                   Reset
@@ -215,6 +236,12 @@ function SetupModal({ initial, onClose, onApply }) {
                   Change Date
                 </button>
               </div>
+            )}
+            {dateError && (
+              <p className="mt-1 flex items-center gap-1.5 text-[12px] text-red-600" role="alert">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {dateError}
+              </p>
             )}
           </div>
         </div>
@@ -938,6 +965,11 @@ function DFTCPriceInput() {
   }
 
   async function handleSave() {
+    if (isFutureDate(setup.date)) {
+      setSetupModalOpen(true);
+      return;
+    }
+
     const sourceId = sourceIdFor(setup);
 
     const removedCommodities = [];

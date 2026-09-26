@@ -41,13 +41,13 @@ export function unlinkAuthLink(accountId) {
   return apiDelete(`/auth-links/${accountId}`);
 }
 
-export function uploadProfilePicture(file) {
+export async function uploadProfilePicture(file) {
   const form = new FormData();
   form.append("file", file);
-  return apiFetch("/auth/profile/picture", {
+  return parseResponse(await apiFetch("/auth/profile/picture", {
     method: "POST",
     body: form,
-  });
+  }));
 }
 
 // ---------------------------------------------------------------------------

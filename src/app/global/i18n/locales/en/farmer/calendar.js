@@ -58,7 +58,8 @@ export const calendar = {
     "historical_arrival": "Past DFTC Arrivals",
     "historical_production": "Past Production",
     "calendar_information": "Calendar Information",
-    "reassess_control": "Assess Again Closer to Planting"
+    "reassess_control": "Assess Again Closer to Planting",
+    "planned_planting": "Planned planting"
   },
   "compact": {
     "compact_price_favorable": "Past Price: Favorable",

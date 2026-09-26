@@ -263,6 +263,60 @@ describe('AuthContext — admin role', () => {
   });
 });
 
+// ── Farmer offline bundle is role-gated ──────────────────────────────────────
+//
+// /auth/me nests the role as { role: { role_name } }. Reading a top-level
+// `role_name` returns undefined, and roleHome() defaults to '/farmer', so every
+// role (DFTC/Admin) seeded the farmer bundle and 403'd on /farmer/daily-snapshot
+// and /farmer/profile.
+
+describe('AuthContext — farmer offline bundle gating', () => {
+  const snapshotCalls = () =>
+    fetch.mock.calls.filter(([url]) => String(url).includes('/farmer/daily-snapshot'));
+  const profileCalls = () =>
+    fetch.mock.calls.filter(([url]) => String(url).includes('/farmer/profile'));
+
+  it('seeds the daily snapshot when a Farmer restores a session', async () => {
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_FARMER }));
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+
+    await waitFor(() => expect(snapshotCalls().length).toBeGreaterThan(0));
+  });
+
+  it('does NOT seed the farmer bundle for a DFTC session', async () => {
+    const dftcUser = { ...FAKE_USER_FARMER, role: { id: 'ROL-0003', role_name: 'DFTC' } };
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: dftcUser }));
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+
+    // Give the (incorrect) async seed a chance to fire before asserting.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(capturedAuth.user.role.role_name).toBe('DFTC');
+    expect(snapshotCalls()).toHaveLength(0);
+    expect(profileCalls()).toHaveLength(0);
+  });
+
+  it('does NOT seed the farmer bundle for an Admin session', async () => {
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_ADMIN }));
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(snapshotCalls()).toHaveLength(0);
+    expect(profileCalls()).toHaveLength(0);
+  });
+});
+
 // ── SELLING_OPTIONS backendLabel mapping ─────────────────────────────────────
 
 describe('SELLING_OPTIONS backendLabel mapping', () => {

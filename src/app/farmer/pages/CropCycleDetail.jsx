@@ -309,15 +309,15 @@ function CropCycleDetailPage() {
     onClick={() => setDrawerOpen(true)}
     className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--hw-green-50)]"
   >
-                  <Pencil className="w-3.5 h-3.5" />{t("farmer.crops.update_phase", {}, "Update phase")}
+                  <Pencil className="w-3.5 h-3.5" />{t("farmer.cropCycle.update_phase", {}, "Update phase")}
                 </button>
               </div>
               <div className="mt-2 space-y-0.5 text-xs text-[var(--hw-neutral-900)]">
-                {phaseCode === PHASE_CODES.PLANNING ? <p>{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: {crop.plantingDate || "-"}</p> : <p>{t("farmer.calendar.labels.planted", {}, "Planted")}: {crop.plantingDate || "-"}</p>}
+                {phaseCode === PHASE_CODES.PLANNING ? <p>{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: {crop.plantingDate || "-"}</p> : <p>{t("farmer.advisory.labels.planted", {}, "Planted")}: {crop.plantingDate || "-"}</p>}
                 <p>{t("farmer.calendar.labels.expected_harvest", {}, "Est. harvest")}: {crop.harvestDate || "-"}</p>
-                <p>{t("farmer.crops.farm_area_label", {}, "Farm area")}: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
+                <p>{t("farmer.assess.farm_area_label", {}, "Farm area")}: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
               </div>
-              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">{t("farmer.crops.last_updated", {}, "Last updated")} {crop.lastUpdated || "-"}</p>
+              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">{t("common.last_updated", {}, "Last updated")} {crop.lastUpdated || "-"}</p>
             </div>
           </div>
         </div>
@@ -326,9 +326,9 @@ function CropCycleDetailPage() {
         {crop.isOnHold && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex items-start gap-3">
             <PauseCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-[13px] font-semibold text-amber-700">{t("farmer.crops.on_hold", {}, "On hold")}</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">{t("farmer.crops.hold_reason_label", {}, "Reason for putting this crop on hold")}: {crop.holdReason || "-"}</p>
-              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.crops.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
+              <p className="text-[13px] font-semibold text-amber-700">{t("farmer.advisory.labels.on_hold", {}, "On hold")}</p>
+              <p className="text-[13px] text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}: {crop.holdReason || "-"}</p>
+              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
             </div>
           </div>}
 
@@ -460,7 +460,7 @@ function CropCycleDetailPage() {
                     onClick={() => navigate(`/farmer/prices/${crop.commodity}`)}
                     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
                   >
-                    {t("farmer.factors.price.view_prices", {}, "View prices")} <ExternalLink className="w-3 h-3" />
+                    {t("farmer.cropCycle.view_prices", {}, "View prices")} <ExternalLink className="w-3 h-3" />
                   </button>
                 </div>
 
@@ -481,7 +481,7 @@ function CropCycleDetailPage() {
                     onClick={() => navigate("/farmer/market/weather")}
                     className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
                   >
-                    {t("farmer.factors.weather.view_weather", {}, "View weather")} <ExternalLink className="w-3 h-3" />
+                    {t("farmer.cropCycle.view_weather", {}, "View weather")} <ExternalLink className="w-3 h-3" />
                   </button>
                 </div>
               </div>

@@ -80,5 +80,9 @@ export const assess = {
   start_again: "Magsugod Pag-usab",
   not_set: "Wala mabutangi",
   all_amounts_estimates: "Ang tanang kantidad kay mga tantiya lamang.",
-  enter_harvest_qty_to_calc: "Ibutang ang gilaomang gidaghanon sa ani aron makalkula ang break-even nga presyo."
+  enter_harvest_qty_to_calc: "Ibutang ang gilaomang gidaghanon sa ani aron makalkula ang break-even nga presyo.",
+  new_expense: "Bag-ong gasto",
+  draft_require_crop: "Pili muna ug tanom sa wala pa i-save ang draft.",
+  draft_saved: "Na-save ang draft. Pwede kang magpadayon bisan kanus-a sa crop assessment home.",
+  draft_save_failed: "Dili pwede i-save ang draft karon. Pakisulayan pag-usab.",
 };

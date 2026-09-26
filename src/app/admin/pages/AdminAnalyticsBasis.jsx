@@ -652,8 +652,7 @@ function AdminAnalyticsBasis() {
 
   const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
     resultId === "historical-production" && !!selectedCommodityRecord?.id,
-    selectedCommodity,
-    selectedVariety
+    selectedCommodityRecord?.id
   );
 
   const { data: priceOutlook, error: priceOutlookError } = usePriceOutlook(
@@ -1322,6 +1321,7 @@ function AdminAnalyticsBasis() {
             forecast={displayResult.forecast_14d || []}
             emptyMessage="No weather data available."
             showScrollbar
+            showForecastTable
           />
         )}
       </div>

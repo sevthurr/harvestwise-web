@@ -653,12 +653,12 @@ function RecommendationPage() {
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-auto pt-1 border-t border-[var(--hw-neutral-100)]">
                     {rec.price_outlook && (
                       <span className="text-[11px] text-[var(--hw-neutral-500)]">
-                        {t("farmer.calendar.rec_price", {}, "Price")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.price_outlook}</span>
+                        {t("farmer.cropCard.price_label", {}, "Price")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.price_outlook}</span>
                       </span>
                     )}
                     {rec.weather_risk_level && (
                       <span className="text-[11px] text-[var(--hw-neutral-500)]">
-                        {t("farmer.calendar.rec_weather", {}, "Weather")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.weather_risk_level}</span>
+                        {t("farmer.factors.weather.factor_title", {}, "Weather")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.weather_risk_level}</span>
                       </span>
                     )}
                   </div>

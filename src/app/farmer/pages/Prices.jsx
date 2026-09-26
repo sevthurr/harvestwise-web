@@ -464,7 +464,7 @@ function PricesPage() {
                 <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
               </div>
               <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
-                {t("farmer.emptyStates.no_prices_title", {}, "No price data available")}
+                {t("farmer.emptyStates.no_prices", {}, "No price data available")}
               </p>
               <p className="text-sm text-[var(--hw-neutral-700)]">
                 {t("farmer.emptyStates.no_prices_desc", {}, "Price data for top 10 commodities will appear here")}

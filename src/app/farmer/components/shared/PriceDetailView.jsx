@@ -365,7 +365,7 @@ function PriceDetailView({
               {commodityName} — {t("farmer.factors.price.unified_chart_title", {}, "Price trend and forecast")}
             </h1>
             <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-              {marketLabel} · {priceTypeLabel} · {t("farmer.common.updated", {}, "Updated")}
+              {marketLabel} · {priceTypeLabel} · {t("common.updated", {}, "Updated")}
             </p>
           </div>
         </div>
@@ -432,7 +432,7 @@ function PriceDetailView({
               <>
                 ₱{priceOutlookModel.recentAverage.toFixed(2)}
                 <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {" "}{t("farmer.common.per_kg", {}, "/ kg")}
+                  {" "}{t("common.per_kg", {}, "/ kg")}
                 </span>
               </>
             ) : (
@@ -449,7 +449,7 @@ function PriceDetailView({
               <>
                 ₱{priceOutlookModel.forecastMidpoint.toFixed(2)}
                 <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {" "}{t("farmer.common.per_kg", {}, "/ kg")}
+                  {" "}{t("common.per_kg", {}, "/ kg")}
                 </span>
               </>
             ) : (
@@ -466,7 +466,7 @@ function PriceDetailView({
               <>
                 ₱{priceOutlookModel.lowerForecast.toFixed(2)}–₱{priceOutlookModel.upperForecast.toFixed(2)}
                 <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {" "}{t("farmer.common.per_kg", {}, "/ kg")}
+                  {" "}{t("common.per_kg", {}, "/ kg")}
                 </span>
               </>
             ) : (
@@ -515,7 +515,7 @@ function PriceDetailView({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {t("farmer.factors.price.forecast_horizon_label", {}, "Forecast Horizon")}
+                  {t("farmer.factors.price.filter_forecast_horizon", {}, "Forecast Horizon")}
                 </span>
                 <select
                   value={horizon}

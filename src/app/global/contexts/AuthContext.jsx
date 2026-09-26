@@ -33,8 +33,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   // Seed the offline bundle after a successful farmer session restore.
+  // /auth/me nests the role as { role: { role_name } } — reading a top-level
+  // `role_name` yields undefined, and roleHome() then defaults to '/farmer',
+  // which seeded the farmer bundle for every role (403s on /farmer/*).
   const seedFarmerOffline = (me) => {
-    if (me && roleHome(me.role_name) === '/farmer') {
+    if (me && roleHome(me.role?.role_name) === '/farmer') {
       loadFarmerOfflineData(queryClient).catch(() => {});
     }
   };

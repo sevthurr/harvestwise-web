@@ -4,10 +4,6 @@ import {
   MinusCircle,
   XCircle,
   TrendingUp,
-  Package,
-  CloudRain,
-  Leaf,
-  PhilippinePeso,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -24,25 +20,27 @@ import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import {
   ADVISORY_CODES,
-  PHASE_CODES,
   PRICE_TREND_CODES,
   normalizeAdvisoryCode,
-  normalizePhaseCode,
   normalizePriceTrendCode,
 } from "../../utils/farmerCodes";
 import {
   composeAdvisorySummary,
   composeAdvisoryBadge,
+  renderComposedMessage,
+} from "../../utils/advisoryMessageComposer";
+import {
   composeAdvisoryReasons,
   composeAdvisoryAction,
-  renderComposedMessage,
-  normalizeLifecycleStage,
-} from "../../utils/advisoryMessageComposer";
+  resolveMainFactor,
+} from "../../utils/advisoryReasons";
 import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
 import { apiPost, parseResponse } from "../../../global/api";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
 
+// Presentation config for each advisory badge state: icon, text colour and card
+// border. The `type` values come from `composeAdvisoryBadge`.
 const ADVISORY_CFG = {
   recommended: {
     Icon: CheckCircle2,
@@ -76,35 +74,6 @@ const ADVISORY_CFG = {
   },
 };
 
-function getWhyFactors(name, commodityId, costToRecover, farmgatePrice, advisory, currentPrice, forecastLo, forecastHi, data) {
-  return [
-    {
-      label: "Price",
-      Icon: TrendingUp,
-      value: data.priceInsight || "Not available"
-    },
-    {
-      label: "Arrival",
-      Icon: Package,
-      value: data.arrivalInsight || data.supplyInsight || "Not available"
-    },
-    {
-      label: "Production",
-      Icon: Leaf,
-      value: data.productionInsight || "Not available"
-    },
-    {
-      label: "Weather",
-      Icon: CloudRain,
-      value: data.weatherInsight || "Not available"
-    },
-    {
-      label: "Profitability",
-      Icon: PhilippinePeso,
-      value: data.profitabilityInsight || "Not available"
-    }
-  ];
-}
 const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, priceBasisShort, margin, hasFarmgate }) => {
   const [open, setOpen] = useState(false);
   const { t } = useLanguage();
@@ -145,10 +114,6 @@ const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, pric
         </div>}
     </div>;
 };
-function makeCropId() {
-  return `crop-${Date.now()}`;
-}
-
 function buildCropPlanPayload(data, status = "Draft") {
   const totalCost = getTotalCost(data);
   const productionCosts = data.costMethod === "detailed"
@@ -176,32 +141,7 @@ function buildCropPlanPayload(data, status = "Draft") {
   };
 }
 
-function buildCropRecord(data, phase, overrides = {}) {
-  const commodityName = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? data.commodity;
-  const totalCost = getTotalCost(data);
-  const qty = typeof data.harvestQuantity === "number" ? data.harvestQuantity : 1;
-  const breakEvenPrice = qty > 0 ? Math.ceil(totalCost / qty) : 0;
-  return {
-    id: makeCropId(),
-    commodity: data.commodity,
-    commodityName,
-    variant: data.variant || void 0,
-    phase,
-    plantingDate: data.plantingDate || "TBD",
-    harvestDate: data.harvestDate || "TBD",
-    farmArea: typeof data.farmArea === "number" ? data.farmArea : 0,
-    farmAreaUnit: data.farmAreaUnit,
-    harvestQuantity: typeof data.harvestQuantity === "number" ? data.harvestQuantity : 0,
-    totalCost,
-    breakEvenPrice,
-    condition: "Monitor market conditions near harvest.",
-    nextMilestone: normalizePhaseCode(phase) === PHASE_CODES.GROWING ? "Monitor crop conditions" : "Reassess market conditions",
-    lastUpdated: "Just now",
-    ...overrides
-  };
-}
-
-const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) => {
+const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, onCompareAnother }) => {
   const { t, langCode } = useLanguage();
   const navigate = useNavigate();
   const { addCrop, refreshCrops, crops } = useCrops();
@@ -253,10 +193,25 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
 
   const composedSummary = composeAdvisorySummary(advisoryCode, cropStage, displayName);
   const summaryText = renderComposedMessage(composedSummary, langCode, advisoryCode ? t(`farmer.advisory.${advisoryCode}_summary`, { crop_name: displayName }) : "");
-  const composedReasons = composeAdvisoryReasons(moduleResults, advisoryCode, cropStage, displayName, 14);
+  const advisoryMeta = advisoryResponse?.advisory || {};
+  const mainFactor = advisoryCode
+    ? resolveMainFactor({
+        moduleResults,
+        contributions: advisoryMeta.module_contributions,
+        weightsApplied: advisoryMeta.weights_applied,
+        vetoes: advisoryMeta.hard_vetoes,
+        lang: langCode,
+      })
+    : null;
+  const composedReasons = composeAdvisoryReasons({
+    moduleResults,
+    contributions: advisoryMeta.module_contributions,
+    vetoes: advisoryMeta.hard_vetoes,
+    cropName: displayName,
+    horizonDays: 14,
+  });
   const composedAction = composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName);
   const hasFarmgate = data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0;
-  const farmgateNum = hasFarmgate ? data.farmgatePrice : null;
   const currentPx = data.currentPrice || null;
   const forecastLo = data.forecastLower || null;
   const forecastHi = data.forecastUpper || null;
@@ -277,7 +232,6 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
   const hasProfit = margin !== null && qty !== null && margin > 0;
   const profitLo = hasProfit ? Math.floor(margin * qty * 0.85 / 1e3) * 1e3 : 0;
   const profitHi = hasProfit ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
-  const whyFactors = getWhyFactors(commodityName, data.commodity, costToRecover ?? 0, farmgateNum, advisoryCode, currentPx, forecastLo, forecastHi, data);
   const dirMap = {
     [ADVISORY_CODES.RECOMMENDED]: PRICE_TREND_CODES.RISING,
     [ADVISORY_CODES.PROCEED_WITH_CAUTION]: PRICE_TREND_CODES.STABLE,
@@ -297,7 +251,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
         : t("farmer.factors.price.trend_label_stable"),
     forecastRange: forecastLo != null && forecastHi != null ? `₱${forecastLo}–₱${forecastHi}/kg` : "-/kg",
     points: pricePoints,
-    summary: whyFactors.find((f) => f.label === "Price")?.value ?? ""
+    summary: data.priceInsight || ""
   };
   const arrivalTabData = data.arrivalData || null;
   const productionTabData = data.productionData || null;
@@ -383,7 +337,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             onClick={() => setShowPlantedForm(false)}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" />{t("farmer.common.back", {}, "Back to recommendation")}
+            <ChevronLeft className="w-4 h-4" />{t("farmer.advisory.back_to_recommendation", {}, "Back to recommendation")}
           </button>
           <div>
             <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">{t("farmer.crops.adjust_planting_details", {}, "Adjust planting details")}</h2>
@@ -408,7 +362,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Sprout className="w-4 h-4" />{saving ? t("farmer.common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
+            <Sprout className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
           </button>
       </div>;
   }
@@ -509,21 +463,29 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
           <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
             {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
           </p>
+
+          {mainFactor && <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--hw-green-50)] border border-[var(--hw-green-400)]">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-green-700)]" />
+            <p className="text-[13px] font-semibold text-[var(--hw-green-900)] leading-snug">
+              {renderComposedMessage(mainFactor, langCode)}
+            </p>
+          </div>}
+
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+            {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+          </p>
           <div className="space-y-2.5">
-            {composedReasons.map((r, idx) => {
-              const text = renderComposedMessage(r, langCode);
-              return (
-                <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
-                  <TrendingUp className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-neutral-900)]" />
-                  <div>
-                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-                      {t("farmer.advisory.reason_title", {}, "Reason")} {idx + 1}
-                    </p>
-                    <p className="text-[12px] text-[var(--hw-neutral-700)]">{text}</p>
-                  </div>
+            {composedReasons.map((r, idx) => (
+              <div key={r.module || idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
+                <TrendingUp className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-neutral-900)]" />
+                <div className="min-w-0">
+                  {r.labelKey && <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                    {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
+                  </p>}
+                  <p className="text-[12px] text-[var(--hw-neutral-700)]">{renderComposedMessage(r, langCode)}</p>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -627,7 +589,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save className="w-4 h-4" />{saving ? t("farmer.common.saving", {}, "Saving...") : t("farmer.crops.save_to_crops", {}, "Save to My Crops")}
+            <Save className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.save_to_crops", {}, "Save to My Crops")}
           </button>
           <button
             onClick={() => setShowPlantedForm(true)}
@@ -637,7 +599,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit }) 
             <Sprout className="w-4 h-4" />{t("farmer.crops.already_planted", {}, "I already planted this")}
           </button>
           <button
-            onClick={() => navigate("/farmer/assess")}
+            onClick={onCompareAnother}
             className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-neutral-900)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
           >
             <RefreshCw className="w-4 h-4" />{t("farmer.crops.compare_another", {}, "Compare another crop")}

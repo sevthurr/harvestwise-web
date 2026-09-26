@@ -803,8 +803,7 @@ function AdminAnalytics() {
   // Historical seasonal production used in the Weights & Thresholds tab.
   const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
     !!scopedCommodityRecord?.id,
-    scopedCommodity,
-    scopedVariety
+    scopedCommodityRecord?.id
   );
 
   useEffect(() => {

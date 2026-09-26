@@ -117,12 +117,12 @@ export async function updateWeatherRule(ruleId, payload) {
 }
 
 // ── Live-computed analytics outputs ───────────────────────────────────────────
-export async function getHistoricalSeasonalProduction(commodityId, variety = "") {
-  const scope = variety && !["All Varieties", "Standard"].includes(variety)
-    ? `${commodityId} ${variety}`
-    : commodityId;
+// `commodityRef` must be a commodity id (e.g. "COM-0001"). A bare crop name is
+// only accepted by the API when the crop has a name-level (variety IS NULL) row,
+// so names alone 404 for crops that exist solely per variety.
+export async function getHistoricalSeasonalProduction(commodityRef) {
   return parseResponse(
-    await apiGet(`/admin/analytics/outputs/historical-seasonal-production?commodity_id=${encodeURIComponent(scope)}`)
+    await apiGet(`/admin/analytics/outputs/historical-seasonal-production?commodity_id=${encodeURIComponent(commodityRef)}`)
   );
 }
 

@@ -58,7 +58,8 @@ export const calendar = {
     "historical_arrival": "Nakaraang Dating sa DFTC",
     "historical_production": "Nakaraang Produksyon",
     "calendar_information": "Impormasyon sa Kalendaryo",
-    "reassess_control": "Suriin Muli Kapag Malapit nang Magtanim"
+    "reassess_control": "Suriin Muli Kapag Malapit nang Magtanim",
+    "planned_planting": "Plano ng pagtatanim"
   },
   "compact": {
     "compact_price_favorable": "Nakaraang Presyo: Maganda",

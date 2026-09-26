@@ -80,5 +80,9 @@ export const assess = {
   start_again: "Magsimulang Muli",
   not_set: "Hindi nakatakda",
   all_amounts_estimates: "Ang lahat ng halaga ay mga pagtatantya lamang.",
-  enter_harvest_qty_to_calc: "Maglagay ng inaasahang dami ng ani upang makalkula ang presyo ng break-even."
+  enter_harvest_qty_to_calc: "Maglagay ng inaasahang dami ng ani upang makalkula ang presyo ng break-even.",
+  new_expense: "Bagong gastos",
+  draft_require_crop: "Pumili muna ng pananim bago i-save ang draft.",
+  draft_saved: "Na-save ang draft. Maaari kang magpatuloy anumang oras sa crop assessment home.",
+  draft_save_failed: "Hindi ma-save ang draft ngayon. Pakisubukan muli.",
 };

@@ -33,5 +33,7 @@ export const profitability = {
   estimated_farmgate: "Tantiya sa Presyong Farmgate",
   farmgate_price_label: "Tantiya sa Presyong Farmgate",
   not_set_reference: "Wala mabutangi — presyo sa merkado ang gamiton nga basehan.",
-  estimate_disclaimer: "Tantiya ra kini. Puwedeng mausab ang aktuwal nga kita."
+  estimate_disclaimer: "Tantiya ra kini. Puwedeng mausab ang aktuwal nga kita.",
+  based_on_current_market: "Base sa karon nga presyo sa merkado",
+  market_price_reference: "Presyo sa merkado isip reference",
 };

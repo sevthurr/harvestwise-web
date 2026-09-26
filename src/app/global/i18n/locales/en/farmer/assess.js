@@ -80,5 +80,9 @@ export const assess = {
   start_again: "Start again",
   not_set: "Not set",
   all_amounts_estimates: "All amounts are estimates.",
-  enter_harvest_qty_to_calc: "Enter an expected harvest quantity to calculate your break-even price."
+  enter_harvest_qty_to_calc: "Enter an expected harvest quantity to calculate your break-even price.",
+  new_expense: "New expense",
+  draft_require_crop: "Select a crop first before saving a draft.",
+  draft_saved: "Draft saved. Continue anytime from the crop assessment home.",
+  draft_save_failed: "We couldn't save your draft right now. Please try again.",
 };

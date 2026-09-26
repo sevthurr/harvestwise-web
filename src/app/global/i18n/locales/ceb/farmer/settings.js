@@ -53,5 +53,10 @@ export const settings = {
   google_connect: "Kumonekta",
   google_disconnect: "Idiskonekta",
   toast_google_connected: "Nakonekta na ang Google account.",
-  toast_google_disconnected: "Dili na konektado ang Google account."
+  toast_google_disconnected: "Dili na konektado ang Google account.",
+  toast_pw_success: "Na-update ang password.",
+  toast_pw_error: "Dili na-update ang password. Susihon ang karon mong password ug pakisulayan pag-usab.",
+  toast_saved: "Na-update ang profile sa uma.",
+  toast_save_error: "Dili na-update ang profile sa uma. Pakisulayan pag-usab.",
+  toast_offline_error: "Dili na-update ang data nga offline. Susihon ang imong koneksyon ug pakisulayan pag-usab.",
 };

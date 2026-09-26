@@ -58,7 +58,8 @@ export const calendar = {
     "historical_arrival": "Miaging Naabot sa DFTC",
     "historical_production": "Miaging Produksyon",
     "calendar_information": "Impormasyon sa Kalendaryo",
-    "reassess_control": "Susiha Pag-usab Kung Duol Na ang Pagtanom"
+    "reassess_control": "Susiha Pag-usab Kung Duol Na ang Pagtanom",
+    "planned_planting": "Plano nga pagtanom"
   },
   "compact": {
     "compact_price_favorable": "Miaging Presyo: Maayo",

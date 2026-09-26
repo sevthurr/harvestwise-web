@@ -665,7 +665,7 @@ export const ceb = {
       analyzing_plan: "Gisusi ang plano sa tanom...",
       see_advisory: "Tan-awa ang advisory",
       save_draft: "I-save ang draft",
-      what_this_means: "Unsa ang buot ipasabot niini"
+      what_this_means: "Unsa ang buot ipasabot niini",       saving_draft: "Gisusi ang draft..."
     },
 
     errors: {

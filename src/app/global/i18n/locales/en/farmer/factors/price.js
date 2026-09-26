@@ -11,5 +11,14 @@ export const price = {
   "price_neutral_basic": "The price of {crop_name} is expected to stay close to its average.",
   "price_unfavorable_basic": "The price condition for {crop_name} is unfavorable.",
   "price_unavailable_crop": "Price information for {crop_name} is not available right now.",
-  "price_unavailable_generic": "Price information is not available right now."
+  "price_unavailable_generic": "Price information is not available right now.",
+  "page_title": "Price Forecast",
+  "forecast_horizon_label": "Forecast Horizon",
+  "forecast_prefix": "Forecast:",
+  "forecast_updated_today": "Forecast updated today at 6:00 AM",
+  "reliability_label": "Reliability",
+  "period_label": "Period:",
+  "days_label": "days",
+  "last_days_option": "Last {days} days",
+  "next_days_option": "Next {days} days",
 };

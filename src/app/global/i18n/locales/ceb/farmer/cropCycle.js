@@ -78,5 +78,6 @@ export const cropCycle = {
   notes_opt: "Mga nota — opsyonal",
   notes_placeholder: "Bisan unsang obserbasyon bahin niining siklo sa tanom…",
   est_gross_revenue: "Tantiya sa kinatibuk-ang halin",
-  all_amounts_estimates: "Tantiya lamang ang tanang kantidad."
+  all_amounts_estimates: "Tantiya lamang ang tanang kantidad.",
+  remove_farmgate: "Alsa",
 };

@@ -191,6 +191,17 @@ export async function apiDelete(url, options = {}) {
 }
 
 /**
+ * Resolve a stored media location (user.profile_picture_path) into a URL the
+ * browser can load. Cloudinary returns an absolute https URL; the local disk
+ * backend returns a root-relative "/media/..." path that needs the API origin.
+ */
+export function resolveMediaUrl(location) {
+  if (!location) return null;
+  if (/^https?:\/\//i.test(location)) return location;
+  return location.startsWith('/') ? `${API_BASE}${location}` : null;
+}
+
+/**
  * Parse a response, throwing a structured error for non-2xx responses.
  * The error message is taken from the backend's `detail` field when present.
  */

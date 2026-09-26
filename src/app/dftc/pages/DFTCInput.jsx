@@ -85,6 +85,7 @@ function SetupModal({ onClose, onContinue }) {
   const [dateLabel] = useState(getCurrentDateLabel());
   const [changingDate, setChangingDate] = useState(false);
   const [customDate, setCustomDate] = useState(todayStr);
+  const [dateError, setDateError] = useState("");
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -98,6 +99,11 @@ function SetupModal({ onClose, onContinue }) {
 
   function handleContinue() {
     const date = changingDate ? customDate : todayStr;
+    if (date && date > todayStr) {
+      setDateError("Reporting date cannot be after today.");
+      return;
+    }
+    setDateError("");
     onContinue({ dataType, market, priceType, date });
   }
 
@@ -181,12 +187,17 @@ function SetupModal({ onClose, onContinue }) {
                 <input
                   type="date"
                   value={customDate}
-                  onChange={(e) => setCustomDate(e.target.value)}
+                  max={todayStr}
+                  onChange={(e) => {
+                    setCustomDate(e.target.value);
+                    setDateError("");
+                  }}
                   className="flex-1 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
                 />
                 <button
                   onClick={() => {
                     setCustomDate(todayStr);
+                    setDateError("");
                     setChangingDate(false);
                   }}
                   className="text-[12px] text-[var(--hw-green-700)] underline whitespace-nowrap"
@@ -204,6 +215,9 @@ function SetupModal({ onClose, onContinue }) {
                   Change Date
                 </button>
               </div>
+            )}
+            {dateError && (
+              <p className="mt-1 text-[12px] text-red-600" role="alert">{dateError}</p>
             )}
           </div>
         </div>

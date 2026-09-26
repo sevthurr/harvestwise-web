@@ -125,6 +125,10 @@ const EMPTY_FORM = {
   description: "",
   status: "Active"
 };
+// Bounded wait (30s) for a background PSA resync to commit and move "Last sync".
+const RESYNC_POLL_ATTEMPTS = 10;
+const RESYNC_POLL_INTERVAL_MS = 3000;
+
 function AdminDataSources() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -159,16 +163,37 @@ function AdminDataSources() {
     psa_openstat: true,
   };
 
+  // The PSA resync is a background job, so "Last sync" only moves once it has
+  // committed and the server has refreshed its cache. Poll until it does rather
+  // than leaving the tile showing the pre-sync value.
+  const pollUntilResynced = async (sourceId, before) => {
+    for (let attempt = 0; attempt < RESYNC_POLL_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, RESYNC_POLL_INTERVAL_MS));
+      const res = await adminApi.listApiSyncSources();
+      queryClient.setQueryData(["adminApiSyncSources"], res);
+      const after = res?.items?.find((s) => s.id === sourceId)?.lastSync ?? null;
+      if (after && after !== before) return;
+    }
+  };
+
   const handleFetchNow = async (sourceId, sourceName) => {
     if (fetchingSource[sourceId]) return;
     setFetchingSource((f) => ({ ...f, [sourceId]: true }));
+    const before = queryClient
+      .getQueryData(["adminApiSyncSources"])
+      ?.items?.find((s) => s.id === sourceId)?.lastSync ?? null;
     try {
       if (sourceName === "open_meteo") {
+        // Synchronous endpoint: the server has already committed and refreshed
+        // its cache by the time this resolves, so the refetch below is fresh.
         await ingestionApi.triggerWeatherSync();
       } else if (sourceName === "psa_openstat") {
+        // 202 acceptance only — the actual sync runs in the background.
         await ingestionApi.triggerPsaSync();
+        await pollUntilResynced(sourceId, before);
       }
       queryClient.invalidateQueries({ queryKey: ["adminApiSyncSources"] });
+      queryClient.invalidateQueries({ queryKey: ["adminDataSources"] });
     } catch (_err) {
       // failure is silent here; the status tile will reflect it on next load
     } finally {

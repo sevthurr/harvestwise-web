@@ -57,8 +57,7 @@ describe('authApi', () => {
     expect(opts.method).toBe('POST');
     expect(opts.body).toBeInstanceOf(FormData);
     expect([...opts.body.entries()].find(([k]) => k === 'file')[1]).toBe(file);
-    const parsed = await res.json();
-    expect(parsed.profile_picture_path).toBe('/pic.png');
+    expect(res.profile_picture_path).toBe('/pic.png');
   });
 });
 

@@ -665,7 +665,7 @@ export const tl = {
       analyzing_plan: "Sinusuri ang plano ng pananim...",
       see_advisory: "Tingnan ang advisory",
       save_draft: "I-save ang draft",
-      what_this_means: "Ano ang ibig sabihin nito"
+      what_this_means: "Ano ang ibig sabihin nito",       saving_draft: "Sinusuri ang draft..."
     },
 
     errors: {

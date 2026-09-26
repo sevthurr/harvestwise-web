@@ -24,5 +24,6 @@ export const production = {
   "production_upper_middle_basic": "Past production of {crop_name} for the expected harvest quarter is moderately high.",
   "production_high_basic": "Past production of {crop_name} for the expected harvest quarter is high.",
   "production_unavailable_crop": "Past production information for {crop_name} is not available right now.",
-  "production_unavailable_generic": "Past production information is not available right now."
+  "production_unavailable_generic": "Past production information is not available right now.",
+  "source_variety_note": "PSA reports production by crop name. Series shown for",
 };

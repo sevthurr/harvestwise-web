@@ -24,5 +24,6 @@ export const production = {
   "production_upper_middle_basic": "Katamtamang taas ang miaging produksyon sa {crop_name} para sa gilaom nga quarter sa ani.",
   "production_high_basic": "Taas ang miaging produksyon sa {crop_name} para sa gilaom nga quarter sa ani.",
   "production_unavailable_crop": "Walay miaging datos sa produksyon sa {crop_name} karon.",
-  "production_unavailable_generic": "Walay miaging datos sa produksyon karon."
+  "production_unavailable_generic": "Walay miaging datos sa produksyon karon.",
+  "source_variety_note": "Ang PSA naghatag og datos sa produksyon pinaagi sa ngalan sa tanom. Ang series nga gipakita alang sa",
 };

@@ -53,5 +53,10 @@ export const settings = {
   google_connect: "Kumonekta",
   google_disconnect: "Idiskonekta",
   toast_google_connected: "Nakakonekta na ang Google account.",
-  toast_google_disconnected: "Hindi na nakakonekta ang Google account."
+  toast_google_disconnected: "Hindi na nakakonekta ang Google account.",
+  toast_pw_success: "Matagumpay na na-update ang password.",
+  toast_pw_error: "Hindi na-update ang password. Suriin ang iyong kasalukuyang password at pakisubukan muli.",
+  toast_saved: "Matagumpay na na-update ang profile ng bukid.",
+  toast_save_error: "Hindi na-update ang profile ng bukid. Pakisubukan muli.",
+  toast_offline_error: "Hindi na-update ang offline na datos. Suriin ang koneksyon at pakisubukan muli.",
 };

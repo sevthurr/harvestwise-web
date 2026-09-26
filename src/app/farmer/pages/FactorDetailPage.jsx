@@ -179,7 +179,7 @@ function FactorDetailPage() {
         className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
       >
         <ChevronLeft className="w-4 h-4" />
-        {backLabel || t("farmer.common.back", {}, "Back")}
+        {backLabel || t("common.back", {}, "Back")}
       </button>
 
       {/* Breadcrumb */}

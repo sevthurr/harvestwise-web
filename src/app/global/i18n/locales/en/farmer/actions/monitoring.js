@@ -42,5 +42,6 @@ export const monitoringActions = {
   save_plan_instruction: "Save to My Crops to start tracking your plan and monitoring conditions.",
   update_farmgate: "Update your farmgate price later when a buyer gives you an offer.",
   confirm_farmgate: "Confirm your farmgate price with your buyer before harvest.",
-  check_prices_near_harvest: "Check prices again closer to harvest before deciding when to sell."
+  check_prices_near_harvest: "Check prices again closer to harvest before deciding when to sell.",
+  weekly_actions_title: "What to do this week",
 };

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { analyticsApi } from "../services/api";
 
-export function useHistoricalSeasonalProduction(enabled, commodity, variety) {
+export function useHistoricalSeasonalProduction(enabled, commodityRef) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,7 +17,7 @@ export function useHistoricalSeasonalProduction(enabled, commodity, variety) {
       try {
         setLoading(true);
         setError("");
-        const result = await analyticsApi.getHistoricalSeasonalProduction(commodity, variety);
+        const result = await analyticsApi.getHistoricalSeasonalProduction(commodityRef);
         if (active) setData(result);
       } catch (err) {
         if (active) {
@@ -32,7 +32,7 @@ export function useHistoricalSeasonalProduction(enabled, commodity, variety) {
     return () => {
       active = false;
     };
-  }, [enabled, commodity, variety]);
+  }, [enabled, commodityRef]);
 
   return { data, loading, error };
 }

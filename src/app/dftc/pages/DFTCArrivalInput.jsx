@@ -57,6 +57,21 @@ function localToday() {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+function isValidDateString(dateStr) {
+  if (typeof dateStr !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= daysInMonth[month - 1];
+}
+function isFutureDate(dateStr) {
+  return isValidDateString(dateStr) && dateStr > localToday();
+}
+function getReportingDateError(dateStr) {
+  if (!isValidDateString(dateStr)) return "Enter a valid reporting date.";
+  return isFutureDate(dateStr) ? "Reporting date cannot be after today." : "";
+}
 function combinedTotal(f) {
   const farm = parseFloat(f.farmSource);
   const other = parseFloat(f.otherSource);
@@ -147,6 +162,7 @@ function DFTCArrivalInput() {
   const location = useLocation();
   const navState = location.state;
   const defaultDate = navState?.date ?? localToday();
+  const reportingDateError = getReportingDateError(defaultDate);
   const [fields, setFields] = useState({});
   const [customVariants, setCustomVariants] = useState({});
   const [addingVariant, setAddingVariant] = useState(null);
@@ -256,6 +272,8 @@ function DFTCArrivalInput() {
     }
   }
   async function handleSave() {
+    if (reportingDateError) return;
+
     const records = [];
     for (const { com, v, f } of allEntries) {
       const farm = f.farmSource === "" ? null : parseFloat(f.farmSource);
@@ -334,6 +352,9 @@ function DFTCArrivalInput() {
           <div>
             <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Arrival Volume</h1>
             <p className="text-[13px] text-[var(--hw-neutral-700)] mt-1">DFTC · {formatDateLabel(defaultDate)}</p>
+            {reportingDateError && (
+              <p className="text-[12px] text-red-600 mt-1" role="alert">{reportingDateError}</p>
+            )}
           </div>
           <SaveStatusIndicator />
         </div>
@@ -434,7 +455,7 @@ function DFTCArrivalInput() {
               </button>
               <button
       onClick={handleSave}
-      disabled={!canReview}
+      disabled={!canReview || Boolean(reportingDateError)}
       className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50"
     >
                 Save {dataName}
@@ -501,12 +522,17 @@ function DFTCArrivalInput() {
         </div>
 
         <div className="flex items-center justify-between gap-4 pl-8">
-          <p className="text-[13px] text-[var(--hw-neutral-700)]">
-            DFTC · {formatDateLabel(defaultDate)}
-          </p>
+          <div>
+            <p className="text-[13px] text-[var(--hw-neutral-700)]">
+              DFTC · {formatDateLabel(defaultDate)}
+            </p>
+            {reportingDateError && (
+              <p className="text-[12px] text-red-600 mt-1" role="alert">{reportingDateError}</p>
+            )}
+          </div>
           <button
             onClick={() => { setDataName(generateArrivalName(defaultDate)); setReviewMode(true); }}
-            disabled={!canReview}
+            disabled={!canReview || Boolean(reportingDateError)}
             className="shrink-0 py-2 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[var(--shadow-xs)]"
           >
             {!canReview ? "Review (0)" : `Review (${enteredCount})`}
