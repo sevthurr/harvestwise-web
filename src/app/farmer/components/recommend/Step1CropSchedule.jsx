@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
-import { CROP_DURATIONS, suggestHarvestDate } from "./types";
+import { CROP_DURATIONS, getCropDuration, suggestHarvestDate } from "./types";
 import { CommodityIllustration, getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
@@ -78,21 +78,19 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     return acc;
   }, []);
 
-  const duration = data.commodity ? CROP_DURATIONS[data.commodity] : null;
-  const suggestion = suggestHarvestDate(data.plantingDate, data.commodity);
+  const duration = data.commodity ? getCropDuration(data.commodity, data.variant) : null;
+  const suggestion = suggestHarvestDate(data.plantingDate, data.commodity, data.variant);
   const selectedPage = Math.floor(
     commodityOptions.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
   );
   const [page, setPage] = useState(() => selectedPage >= 0 ? selectedPage : 0);
 
-  // Auto-calculate suggested harvest date when planting date or commodity changes
+  // Auto-calculate suggested harvest date when planting date, commodity, or variety changes
   useEffect(() => {
     if (suggestion && suggestion.minDate) {
-      if (!data.harvestDate || data.harvestDate < data.plantingDate) {
-        onChange({ harvestDate: suggestion.minDate });
-      }
+      onChange({ harvestDate: suggestion.minDate });
     }
-  }, [data.plantingDate, data.commodity]);
+  }, [data.plantingDate, data.commodity, data.variant]);
 
   const applySuggestion = () => {
     if (suggestion) onChange({ harvestDate: suggestion.minDate });
@@ -206,12 +204,18 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
         {errors.commodity && <p className="mt-2 text-sm text-red-600">{errors.commodity}</p>}
 
         {/* Typical duration chip */}
-        {duration && <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
-            <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
-            <span className="text-[13px] text-[var(--hw-neutral-900)]">
-              {t("farmer.assess.typical_duration", { label: t(`farmer.assess.duration_${data.commodity}`, {}, duration.label) }, `Typical duration: ${duration.label}`)}
-            </span>
-          </div>}
+        {duration && (() => {
+          const varKey = data.variant ? `duration_${data.commodity}_${data.variant.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : `duration_${data.commodity}`;
+          const durationLabel = t(`farmer.assess.${varKey}`, {}, duration.label);
+          return (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
+              <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
+              <span className="text-[13px] text-[var(--hw-neutral-900)]">
+                {t("farmer.assess.typical_duration", { label: durationLabel }, `Typical duration: ${duration.label}`)}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Variant picker — dropdown, shown only when commodity has 2+ varieties */}
         {data.commodity && (() => {

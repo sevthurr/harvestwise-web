@@ -186,6 +186,38 @@ function CommodityDetailPage() {
   const DirIcon = cfg.Icon;
   const uom = commodity?.unitOfMeasure || 'kg';
 
+  // Build a translated advisory from structured fields (lowerForecast / upperForecast / trend)
+  // instead of using the raw English advisoryText string from the API.
+  const buildPriceAdvisory = (forecastObj, commodityName, unitOfMeasure) => {
+    const trend = forecastObj?.trend;
+    const lower = forecastObj?.lowerForecast;
+    const upper = forecastObj?.upperForecast;
+    const days = forecastObj?.horizonDays || 7;
+    const name = commodityName || '';
+    const unit = unitOfMeasure || 'kg';
+
+    const hasRange = lower != null && upper != null;
+    const range = hasRange
+      ? `₱${Number(lower).toFixed(2)}–₱${Number(upper).toFixed(2)}/${unit}`
+      : null;
+
+    if (trend === 'Rising') {
+      return hasRange
+        ? t('farmer.prices.advisory_rising', { commodity: name, range, days }, `Prices for ${name} are expected to rise to ${range} over the next ${days} days.`)
+        : t('farmer.prices.advisory_rising_no_range', { commodity: name }, `Prices for ${name} are expected to rise in the coming days.`);
+    }
+    if (trend === 'Falling') {
+      return hasRange
+        ? t('farmer.prices.advisory_falling', { commodity: name, range, days }, `Prices for ${name} are expected to drop to ${range} over the next ${days} days.`)
+        : t('farmer.prices.advisory_falling_no_range', { commodity: name }, `Prices for ${name} are expected to drop in the coming days.`);
+    }
+    return hasRange
+      ? t('farmer.prices.advisory_stable', { commodity: name, range }, `Prices for ${name} are expected to remain stable around ${range}.`)
+      : t('farmer.prices.advisory_stable_no_range', { commodity: name }, `Prices for ${name} are expected to remain stable.`);
+  };
+
+  const advisoryMessage = buildPriceAdvisory(forecast, commodity?.baseName || commodity?.name, uom);
+
   const currentPrice = forecast.currentPrice != null ? forecast.currentPrice : (priceRecords[0]?.prevailPrice ?? null);
   const lowerForecast = forecast.lowerForecast != null ? forecast.lowerForecast : null;
   const upperForecast = forecast.upperForecast != null ? forecast.upperForecast : null;
@@ -500,7 +532,7 @@ function CommodityDetailPage() {
               <div className={`flex items-center gap-1 ${cfg.color}`}>
                 <DirIcon className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="text-[12px] font-medium">
-                  {forecast.advisoryText || (forecast.trend === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : forecast.trend === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : forecast.trend === 'Stable' ? t("farmer.prices.micro_steady", {}, "Price is steady.") : t("farmer.prices.trend_no_data", {}, "No trend data"))}
+                  {advisoryMessage}
                 </span>
               </div>
             </div>

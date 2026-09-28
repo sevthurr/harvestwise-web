@@ -24,5 +24,11 @@ export const prices = {
   micro_rising: "Posibleng tumaas ang presyo sa lalong madaling panahon.",
   micro_falling: "Posibleng bumaba ang presyo sa lalong madaling panahon.",
   micro_steady: "Halos walang pagbabago sa presyo.",
-  no_results: "Walang nahanap na gulay na tumutugma sa iyong pagsala."
+  no_results: "Walang nahanap na gulay na tumutugma sa iyong pagsala.",
+  advisory_rising: "Ang presyo ng {commodity} ay inaasahang tataas sa {range} sa susunod na {days} na araw. Ito ay magandang pagkakataon para magbenta.",
+  advisory_rising_no_range: "Ang presyo ng {commodity} ay inaasahang tataas sa mga darating na araw. Ito ay magandang pagkakataon para magbenta.",
+  advisory_falling: "Ang presyo ng {commodity} ay inaasahang bababa sa {range} sa susunod na {days} na araw. Pag-aralan kung kailan ang pinakamainam na oras ng pagbebenta.",
+  advisory_falling_no_range: "Ang presyo ng {commodity} ay inaasahang bababa sa mga darating na araw. Pag-aralan kung kailan ang pinakamainam na oras ng pagbebenta.",
+  advisory_stable: "Ang presyo ng {commodity} ay inaasahang mananatili sa {range}. Maaaring magplano nang may kumpiyansa.",
+  advisory_stable_no_range: "Ang presyo ng {commodity} ay inaasahang halos hindi magbabago sa mga darating na araw."
 };

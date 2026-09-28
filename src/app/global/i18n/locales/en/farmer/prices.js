@@ -24,5 +24,11 @@ export const prices = {
   micro_rising: "Price may improve soon.",
   micro_falling: "Price may drop soon.",
   micro_steady: "Price is steady.",
-  no_results: "No commodities found matching your filter."
+  no_results: "No commodities found matching your filter.",
+  advisory_rising: "Prices for {commodity} are expected to rise to {range} over the next {days} days. This may be a good time to sell.",
+  advisory_rising_no_range: "Prices for {commodity} are expected to rise in the coming days. This may be a good time to sell.",
+  advisory_falling: "Prices for {commodity} are expected to drop to {range} over the next {days} days. Consider timing your sale carefully.",
+  advisory_falling_no_range: "Prices for {commodity} are expected to drop in the coming days. Consider timing your sale carefully.",
+  advisory_stable: "Prices for {commodity} are expected to remain stable around {range}.",
+  advisory_stable_no_range: "Prices for {commodity} are expected to remain stable in the coming days."
 };

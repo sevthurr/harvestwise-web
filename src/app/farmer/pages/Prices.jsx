@@ -215,7 +215,27 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
       {/* Action footer */}
       <div className="flex items-center justify-between gap-3 pt-0.5">
         <p className="text-[12px] text-[var(--hw-neutral-500)] truncate">
-          {data.advisoryText || (data.direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : data.direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))}
+          {(() => {
+            const name = commodity.baseName || commodity.name || '';
+            const unit = commodity.unitOfMeasure || 'kg';
+            const hasForecastRange = data.range && !data.range.startsWith('-');
+            // data.range is already formatted as "₱X.XX–₱Y.YY/kg"
+            const range = hasForecastRange ? data.range : null;
+            const days = data.horizonDays || 7;
+            if (data.direction === 'Rising') {
+              return hasForecastRange
+                ? t('farmer.prices.advisory_rising', { commodity: name, range, days }, `Prices for ${name} are expected to rise to ${range} over the next ${days} days.`)
+                : t('farmer.prices.advisory_rising_no_range', { commodity: name }, `Prices for ${name} are expected to rise in the coming days.`);
+            }
+            if (data.direction === 'Falling') {
+              return hasForecastRange
+                ? t('farmer.prices.advisory_falling', { commodity: name, range, days }, `Prices for ${name} are expected to drop to ${range} over the next ${days} days.`)
+                : t('farmer.prices.advisory_falling_no_range', { commodity: name }, `Prices for ${name} are expected to drop in the coming days.`);
+            }
+            return hasForecastRange
+              ? t('farmer.prices.advisory_stable', { commodity: name, range }, `Prices for ${name} are expected to remain stable around ${range}.`)
+              : t('farmer.prices.advisory_stable_no_range', { commodity: name }, `Prices for ${name} are expected to remain stable.`);
+          })()}
         </p>
         <button
           onClick={() => onViewDetails(commodity.id)}
@@ -275,6 +295,7 @@ function PricesPage() {
         dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
         direction: camelItem.forecast?.trend || 'Stable',
         horizonDays: camelItem.forecast?.horizonDays || 7,
+        percentChange: camelItem.forecast?.percentChange ?? null,
         range: (hasLower && hasUpper)
           ? `${formatPrice(camelItem.forecast.lowerForecast)}\u2013${formatPrice(camelItem.forecast.upperForecast)}/${uom}`
           : `-\u2009/\u2009${uom}`,
@@ -333,6 +354,7 @@ function PricesPage() {
             ? existing.displayData.direction 
             : itemPrices.direction,
           horizonDays: existing.displayData.horizonDays || itemPrices.horizonDays,
+          percentChange: existing.displayData.percentChange ?? itemPrices.percentChange,
           range: (existing.displayData.range && !existing.displayData.range.startsWith('-')) 
             ? existing.displayData.range 
             : itemPrices.range,
