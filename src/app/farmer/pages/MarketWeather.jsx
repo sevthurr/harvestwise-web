@@ -57,6 +57,7 @@ function WeatherIconEl({ icon, cls = "w-6 h-6" }) {
 }
 
 const CropWeatherCard = ({ crop }) => {
+  const { t } = useLanguage();
   const riskCode = normalizeWeatherSuitability(crop.risk_level);
   const rc = riskCode ? (RISK_CFG[riskCode] || RISK_CFG[WEATHER_SUITABILITY_CODES.SUITABLE]) : null;
   const RiskIcon = rc?.Icon;
@@ -67,7 +68,7 @@ const CropWeatherCard = ({ crop }) => {
         <CommodityIllustration commodityId={crop.crop_id} className="w-9 h-9 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{displayName}</p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)]">Status: {crop.status}</p>
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("common.status", {}, "Status")}: {crop.status}</p>
           {rc && (
             <div className={`flex items-start gap-1.5 mt-1 ${rc.color}`}>
               {RiskIcon && <RiskIcon className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />}
@@ -83,7 +84,7 @@ const CropWeatherCard = ({ crop }) => {
   }
       <div className="px-4 pb-3 space-y-1.5">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-2">
-          Recommended actions
+          {t("farmer.factors.weather.recommended_actions_title", {}, "Recommended actions")}
         </p>
         {crop.recommended_actions.map((action, i) => <div key={i} className="flex items-start gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
@@ -105,7 +106,17 @@ function MarketWeatherPage() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
 
-  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
+  const { data: profile } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: async () => {
+      const res = await apiGet("/farmer/profile");
+      if (!res.ok) return null;
+      return parseResponse(res);
+    },
+    staleTime: 1000 * 60 * 10,
+    initialData: () => queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]),
+  });
+
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
@@ -220,39 +231,13 @@ function MarketWeatherPage() {
 
         <WeatherLocationBanner />
 
-        {/* ── Top Risk Banner ── */}
-        {(transformedWeather?.risk_level || weatherData?.risk_level) ? (
-          <div className="rounded-xl border px-4 py-3 bg-emerald-50 border-emerald-200">
-            <div className="flex items-start gap-2 text-emerald-700">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[14px] font-bold text-emerald-700">{transformedWeather?.risk_level || weatherData?.risk_level}</p>
-                <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{weatherSummary}</p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-900)]">
-            <p className="text-[13px] font-medium">{t("farmer.empty.no_weather_data")}</p>
-          </div>
-        )}
-
-            {/* ── 1. 14-day forecast outlook ── */}
+        {/* ── 1. 14-day forecast outlook ── */}
         <WeatherForecastOutlook
           title={t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Weather Forecast Outlook"}
-          subtitle={t ? t("farmer.factors.weather.insight_label", { location: locationName }) : `Estimated weather parameters for ${locationName}.`}
           forecast={forecast14d}
-          showSuitability={true}
+          showSuitability={false}
           emptyMessage={t ? t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.") : "No weather details available right now."}
         />
-
-        {/* ── 2. General weather insight ── */}
-        <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
-          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t("farmer.factors.weather.insight_label", { location: locationName })}</p>
-          <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-            {weatherSummary}
-          </p>
-        </div>
 
         {/* ── 3. Crop-specific advisories ── */}
         <section className="space-y-3">
@@ -270,7 +255,7 @@ function MarketWeatherPage() {
                 onClick={() => navigate("/farmer/assess")}
                 className="inline-flex items-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
               >
-                Add crop plan
+                {t("farmer.dashboard.add_crop_plan_btn", {}, "Add Crop Plan")}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

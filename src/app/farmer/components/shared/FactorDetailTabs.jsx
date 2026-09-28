@@ -46,6 +46,7 @@ import {
 } from "../../utils/farmerCodes";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { WeatherLocationBanner } from "./WeatherLocationBanner";
+import { WeatherForecastOutlook } from "../../../global/components/shared/WeatherForecastOutlook";
 
 function buildPricePoints(actualData, currentPrice, direction, forecastLow, forecastHigh, days = 7) {
   const forecastMid = (forecastLow + forecastHigh) / 2;
@@ -625,83 +626,14 @@ const WeatherTab = ({ data, commodityName }) => {
       )}
 
       {/* 14-day forecast section */}
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-            {t("farmer.factors.weather.forecast_14day_title", {}, "14-Day Forecast")}
-          </p>
-          {forecastList.length > 0 && (
-            <div className="flex gap-1">
-              <button
-                onClick={() => scrollBy(-1)}
-                className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
-              </button>
-              <button
-                onClick={() => scrollBy(1)}
-                className="p-1 rounded-full border border-[var(--hw-neutral-200)] bg-white hover:bg-[var(--hw-neutral-50)] shadow-[var(--shadow-xs)] transition-colors"
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {forecastList.length > 0 ? (
-          <>
-            <div
-              ref={carouselRef}
-              className="flex gap-2 overflow-x-auto pb-1"
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
-              {forecastList.map((day, i) => {
-                const dayRisk = normalizeWeatherRisk(day.risk);
-                const dayRc = dayRisk ? RISK_CFG_WEATHER[dayRisk] : null;
-                const label = i === 0 ? t("farmer.factors.weather.today_day_label", {}, "Today") : day.dayLabel;
-
-                return (
-                  <div
-                    key={i}
-                    className="flex-shrink-0 flex flex-col items-center gap-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-2.5 py-2.5 min-w-[68px]"
-                  >
-                    <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)]">{label}</p>
-                    <p className="text-[10px] text-[var(--hw-neutral-900)]">{day.date}</p>
-                    <WeatherIconEl icon={day.icon} cls="w-6 h-6 mt-0.5" />
-                    <div className="text-center mt-0.5">
-                      <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{day.tempMax != null ? `${day.tempMax}°` : ""}</p>
-                      <p className="text-[11px] text-[var(--hw-neutral-900)]">{day.tempMin != null ? `${day.tempMin}°` : ""}</p>
-                    </div>
-                    {day.rainPct != null && (
-                      <p className="text-[11px] font-medium text-[var(--hw-neutral-900)]">{day.rainPct}%</p>
-                    )}
-                    <div className="text-[var(--hw-neutral-900)] text-[10px]">
-                      {dayRc ? (
-                        <div className={`flex items-center gap-1 ${dayRc.color}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dayRc.dot}`} />
-                          <span className="text-[10px] font-semibold">{t(dayRc.titleKey, {}, dayRc.fallback)}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-[11px] text-[var(--hw-neutral-900)]">
-              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /><span>{t("farmer.factors.weather.suitability_suitable", {}, "Suitable")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /><span>{t("farmer.factors.weather.suitability_caution", {}, "Caution")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /><span>{t("farmer.factors.weather.suitability_severe", {}, "Severe")}</span></div>
-              <span>{t("farmer.factors.weather.rain_chance_note", {}, "· % = rain chance")}</span>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
-            {t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.")}
-          </div>
-        )}
-      </section>
+      <WeatherForecastOutlook
+        title={t("farmer.factors.weather.forecast_14day_title", {}, "14-Day Weather Forecast Outlook")}
+        subtitle={commodityName ? t("farmer.factors.weather.insight_crop_title", { crop_name: commodityName }, `Weather parameters and risks for ${commodityName}`) : ""}
+        forecast={forecastList}
+        showSuitability={true}
+        commodityName={commodityName}
+        emptyMessage={t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.")}
+      />
 
       {/* General weather insight */}
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
