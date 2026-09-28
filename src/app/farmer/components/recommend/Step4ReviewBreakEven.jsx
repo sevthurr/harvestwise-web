@@ -5,7 +5,8 @@ import {
   ChevronUp,
   AlertCircle
 } from "lucide-react";
-import { getTotalCost, formatPeso, COMMODITY_OPTIONS, CROP_DURATIONS } from "./types";
+import { getTotalCost, formatPeso, formatDurationLabel, COMMODITY_OPTIONS } from "./types";
+import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
 const ReviewRow = ({ label, value, onEdit, t }) => <div className="flex items-start justify-between gap-3 py-2.5">
@@ -31,6 +32,11 @@ const Step4ReviewBreakEven = ({
 }) => {
   const { t } = useLanguage();
   const [calcOpen, setCalcOpen] = useState(false);
+  const { options } = useCommodityCatalog();
+  const durationLabel = formatDurationLabel(
+    durationForOption(options.find((c) => c.id === data.commodity) || null, data.variant),
+    t
+  );
   const commodityLabel = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? "\u2014";
   const displayLabel = data.variant ? `${commodityLabel} (${data.variant})` : commodityLabel;
   const totalCost = getTotalCost(data);
@@ -99,7 +105,7 @@ const Step4ReviewBreakEven = ({
           {data.variant && <ReviewRow label={t("farmer.commodityDetail.variety", {}, "Variety")} value={data.variant} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.target_planting_date", {}, "Target planting date")} value={data.plantingDate} onEdit={() => onEditStep(1)} t={t} />
           <ReviewRow label={t("farmer.assess.expected_harvest_date", {}, "Expected harvest date")} value={data.harvestDate} onEdit={() => onEditStep(1)} t={t} />
-          {data.commodity && CROP_DURATIONS[data.commodity] && <ReviewRow label={t("farmer.assess.typical_crop_duration", {}, "Typical crop duration")} value={t(`farmer.assess.duration_${data.commodity}`, {}, CROP_DURATIONS[data.commodity].label)} onEdit={() => onEditStep(1)} t={t} />}
+          {data.commodity && <ReviewRow label={t("farmer.assess.typical_crop_duration", {}, "Typical crop duration")} value={durationLabel} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.farm_area_label", {}, "Farm area")} value={farmAreaText} onEdit={() => onEditStep(2)} t={t} />
           <ReviewRow
             label={t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}

@@ -10,30 +10,36 @@ const COMMODITY_OPTIONS = [
   { id: "lettuce", name: "Lettuce" },
   { id: "pechay", name: "Chinese Pechay" }
 ];
-const CROP_DURATIONS = {
-  kamatis: { daysMin: 90, daysMax: 90, label: "3 months" },
-  talong: { daysMin: 120, daysMax: 120, label: "4 months" },
-  repolyo: { daysMin: 90, daysMax: 120, label: "3\u20134 months" },
-  atsal: { daysMin: 120, daysMax: 120, label: "4 months" },
-  carrots: { daysMin: 105, daysMax: 120, label: "3.5\u20134 months" },
-  pipino: { daysMin: 45, daysMax: 45, label: "45 days" },
-  ampalaya: { daysMin: 90, daysMax: 90, label: "3 months" },
-  kalabasa: { daysMin: 105, daysMax: 120, label: "3.5\u20134 months" },
-  lettuce: { daysMin: 45, daysMax: 45, label: "45 days" },
-  pechay: { daysMin: 60, daysMax: 90, label: "2\u20133 months" }
-};
+const DAYS_PER_MONTH = 30;
+// A range is quoted in months only when both ends land on a half-month step,
+// otherwise the day count is the honest unit (e.g. 48–52 days, not "1.6–1.7 mo").
+const MONTH_STEP_DAYS = 15;
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
 }
-function suggestHarvestDate(plantingDate, commodityId) {
-  if (!plantingDate || !commodityId) return null;
-  const dur = CROP_DURATIONS[commodityId];
-  if (!dur) return null;
-  const minDate = addDays(plantingDate, dur.daysMin);
-  const maxDate = dur.daysMin !== dur.daysMax ? addDays(plantingDate, dur.daysMax) : null;
+function suggestHarvestDate(plantingDate, duration) {
+  if (!plantingDate || !duration) return null;
+  const minDate = addDays(plantingDate, duration.min);
+  const maxDate = duration.min !== duration.max ? addDays(plantingDate, duration.max) : null;
   return { minDate, maxDate };
+}
+/**
+ * Localized label for a `{min, max}` day range. Returns null when the database
+ * has no duration, so the caller renders a placeholder rather than inventing
+ * a number.
+ */
+function formatDurationLabel(duration, t) {
+  if (!duration) return null;
+  const isRange = duration.min !== duration.max;
+  const useMonths = duration.min % MONTH_STEP_DAYS === 0 && duration.max % MONTH_STEP_DAYS === 0;
+  const unit = useMonths ? "months" : "days";
+  const lo = useMonths ? duration.min / DAYS_PER_MONTH : duration.min;
+  const hi = useMonths ? duration.max / DAYS_PER_MONTH : duration.max;
+  const key = `farmer.assess.duration_${unit}_${isRange ? "range" : "single"}`;
+  const fallback = isRange ? `${lo}\u2013${hi} ${unit}` : `${lo} ${unit}`;
+  return t ? t(key, { min: lo, max: hi, value: lo }, fallback) : fallback;
 }
 function getHarvestHorizon(harvestDate) {
   if (!harvestDate) return null;
@@ -95,10 +101,10 @@ function formatPeso(amount) {
 }
 export {
   COMMODITY_OPTIONS,
-  CROP_DURATIONS,
   DEFAULT_ASSESSMENT,
   STEP_LABELS,
   TOTAL_STEPS,
+  formatDurationLabel,
   formatPeso,
   getHarvestHorizon,
   getTotalCost,

@@ -2,8 +2,26 @@ import { createContext, useContext, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPut, parseResponse } from "../../../global/api";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
+import { parseLocalDate } from "../../utils/formatters";
 
 const CropsContext = createContext(null);
+
+/**
+ * "Sep 27, 2026" from an API date, timezone-safe.
+ *
+ * `new Date("2026-09-27")` parses as UTC midnight, which renders as the previous
+ * day for viewers at or west of UTC — so a plan dated the 27th would display as
+ * the 26th. See parseLocalDate.
+ */
+function formatLocalDate(isoDate) {
+  const parsed = parseLocalDate(isoDate);
+  if (!parsed) return null;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 const STATUS_TO_PHASE = {
   Draft: "planning",
@@ -69,17 +87,9 @@ export function normalizeCropPlan(raw) {
     status: rawStatus,
     isOnHold: rawStatus === "On Hold",
     holdReason: item.holdReason || null,
-    holdDate: item.updatedAt
-      ? new Date(item.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : null,
-    plantingDate: item.actualPlantingDate
-      ? new Date(item.actualPlantingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : item.plannedPlantingDate
-        ? new Date(item.plannedPlantingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : null,
-    harvestDate: item.expectedHarvestDate
-      ? new Date(item.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : null,
+    holdDate: formatLocalDate(item.updatedAt),
+    plantingDate: formatLocalDate(item.actualPlantingDate || item.plannedPlantingDate),
+    harvestDate: formatLocalDate(item.expectedHarvestDate),
     rawPlantingDate: item.actualPlantingDate || item.plannedPlantingDate || null,
     rawHarvestDate: item.expectedHarvestDate || null,
     farmArea: item.farmArea || null,

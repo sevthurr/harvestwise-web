@@ -24,5 +24,6 @@ export const dashboard = {
   no_active_plan: "No active crop plan yet.",
   harvest_label: "Harvest: ",
   today_price_trends: "Today's price trends",
-  view_guide: "View guide"
+  view_guide: "View guide",
+  scroll_more_prices: "Scroll to see more prices"
 };

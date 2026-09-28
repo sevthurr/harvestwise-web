@@ -21,7 +21,7 @@ import { ProductionSourcePieChart } from "../../global/components/shared/Product
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
 import { analyticsApi } from "../../../services/api";
-import { useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
+import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 
 const TOP_10_COMMODITIES = [
   "Ampalaya",
@@ -329,7 +329,7 @@ function generateDatasets(module) {
     return { columns: cols, rows: [] };
   }
   if (module === "Arrival Pressure") {
-    const cols = ["Week Ending", "Commodity", "Variety", "Arrival Volume", "Unit", "Source"];
+    const cols = ["Date", "Commodity", "Variety", "Arrival Volume", "Farm Source", "Other Sources", "Source"];
     return { columns: cols, rows: [] };
   }
   if (module === "Historical Seasonal Production Level") {
@@ -468,6 +468,15 @@ const DETAIL_MODULE_PERIODS = {
   "weather-risk": "14 days"
 };
 
+// Shared by the Data Reliability badge and its band legend so a band always
+// renders in the same colour in both places.
+const reliabilityBadgeClass = (status) =>
+  status === "High"
+    ? "text-[var(--hw-success)] bg-[var(--hw-success)]/10"
+    : status === "Moderate" || status === "Limited"
+      ? "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10"
+      : "text-[var(--hw-error)] bg-[var(--hw-error)]/10";
+
 function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
   const raw = detail?.basis_inputs?.[DETAIL_MODULE_KEYS[resultId]] || {};
   const classification = detail?.[DETAIL_CLASSIFICATION_FIELDS[resultId]] || "Not processed";
@@ -529,6 +538,10 @@ function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
     classification,
     basisInputs,
     reliability: raw.reliability_status || null,
+    // Factor + band definitions are supplied by the shared reliability layer,
+    // so the explanation below always matches the scoring that set the status.
+    reliabilityFactor: raw.reliability_factor ?? null,
+    reliabilityBands: detail?.basis_inputs?.reliability_bands || [],
     moduleWarnings,
     thresholds: defaultTemplate.thresholds,
     resultExplanation: detail?.explanation || defaultTemplate.resultExplanation
@@ -656,9 +669,13 @@ function AdminAnalyticsBasis() {
   );
 
   const { data: priceOutlook, error: priceOutlookError } = usePriceOutlook(
-    resultId === "price-outlook" && !!selectedCommodity && !!selectedVariety,
-    selectedCommodity,
-    selectedVariety
+    resultId === "price-outlook" && !!selectedCommodityRecord?.id,
+    selectedCommodityRecord?.id
+  );
+
+  const { data: arrivalSummary, loading: arrivalLoading, error: arrivalError } = useArrivalPressure(
+    resultId === "arrival-pressure" && !!selectedCommodityRecord?.id,
+    selectedCommodityRecord?.id
   );
 
   // Load the threshold rules for the current module from the admin API
@@ -790,9 +807,78 @@ function AdminAnalyticsBasis() {
       varieties: [{ variety: selectedVariety }],
       resultExplanation: processed ? priceOutlook.explanation : (priceOutlookError || priceOutlook?.explanation || "Price Outlook could not be calculated for this forecast."),
       basisMissing: processed ? null : (priceOutlookError || priceOutlook?.explanation || null),
-      records: []
+      records: (priceOutlook?.price_records || []).map((row) => ({
+        Date: row.price_date ? formatForecastDate(row.price_date) : "-",
+        Commodity: row.commodity_name || selectedCommodity,
+        Variety: row.variety || selectedVariety,
+        Market: row.market || "-",
+        "Price Type": row.price_type || "-",
+        Price: row.prevail_price != null ? `₱${Number(row.prevail_price).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "-",
+        Source: priceOutlook?.source || "Bangkerohan Retail"
+      }))
     };
-  }, [result, resultId, priceOutlook, priceOutlookError]);
+  }, [result, resultId, priceOutlook, priceOutlookError, selectedCommodity, selectedVariety]);
+
+  const arrivalResult = useMemo(() => {
+    if (resultId !== "arrival-pressure") return null;
+    const processed = arrivalSummary?.status === "processed";
+    const kg = (value) => value == null ? "-" : `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`;
+    const quartiles = arrivalSummary?.quartile_thresholds;
+    const breakdown = arrivalSummary?.source_breakdown || {};
+    const farmKg = breakdown.farm_source_volume_kg;
+    const otherKg = breakdown.other_source_volume_kg;
+    const farmTotal = (Number(farmKg) || 0) + (Number(otherKg) || 0);
+
+    return {
+      ...result,
+      outputId: selectedCommodityRecord?.id || result.outputId,
+      basisSource: arrivalSummary?.source || "DFTC Arrival Volume",
+      inputPeriod: processed
+        ? `${arrivalSummary.record_count} record(s) · latest ${formatForecastDate(arrivalSummary.latest_arrival_date)}`
+        : "-",
+      processedAt: arrivalSummary?.processed_at
+        ? new Date(arrivalSummary.processed_at).toLocaleString("en-US", { dateStyle: "medium" })
+        : "-",
+      classification: processed ? arrivalSummary.classification : "Not processed",
+      basisInputs: {
+        "Current DFTC arrival volume": processed ? kg(arrivalSummary.current_arrival_kg) : "-",
+        "Q1 threshold": quartiles ? kg(quartiles.q1) : "-",
+        "Q2 threshold": quartiles ? kg(quartiles.q2) : "-",
+        "Q3 threshold": quartiles ? kg(quartiles.q3) : "-"
+      },
+      arrivalVolumes: (arrivalSummary?.records || []).map((row) => ({
+        label: formatForecastDate(row.arrival_date),
+        volume_kg: row.volume_kg,
+        classification: row.volume_kg <= (quartiles?.q1 ?? Infinity)
+          ? "Low"
+          : row.volume_kg <= (quartiles?.q2 ?? Infinity)
+            ? "Lower Middle"
+            : row.volume_kg <= (quartiles?.q3 ?? Infinity)
+              ? "Upper Middle"
+              : "High"
+      })),
+      arrivalSources: farmTotal > 0
+        ? [
+            { name: "Farm Source", value: Math.round(((Number(farmKg) || 0) / farmTotal) * 100), volumeKg: Number(farmKg) || 0 },
+            { name: "Other Sources", value: Math.round(((Number(otherKg) || 0) / farmTotal) * 100), volumeKg: Number(otherKg) || 0 }
+          ].filter((slice) => slice.volumeKg > 0)
+        : [],
+      records: (arrivalSummary?.records || []).map((row) => ({
+        Date: row.arrival_date ? formatForecastDate(row.arrival_date) : "-",
+        Commodity: row.commodity_name || selectedCommodity,
+        Variety: row.variety || selectedVariety,
+        "Arrival Volume": kg(row.volume_kg),
+        "Farm Source": kg(row.farm_source_volume_kg),
+        "Other Sources": kg(row.other_source_volume_kg),
+        Source: row.source || "DFTC Arrival Volume"
+      })),
+      resultExplanation: processed
+        ? `Arrival pressure is classified as ${arrivalSummary.classification} from ${arrivalSummary.record_count} DFTC arrival record(s) (latest ${formatForecastDate(arrivalSummary.latest_arrival_date)}), totalling ${kg(arrivalSummary.total_volume_kg)}.`
+        : (arrivalError || arrivalSummary?.message || (arrivalLoading ? "Loading arrival volume data…" : "No arrival volume data is available for this scope.")),
+      moduleWarnings: arrivalSummary?.warnings || [],
+      basisMissing: processed ? null : (arrivalError || arrivalSummary?.message || null)
+    };
+  }, [result, resultId, arrivalSummary, arrivalError, arrivalLoading, selectedCommodity, selectedVariety, selectedCommodityRecord]);
   const weatherResult = useMemo(() => {
     if (resultId !== "weather-risk") return null;
     const isProcessed = weatherForecast?.status === "ok" && Array.isArray(weatherForecast?.days) && weatherForecast.days.length > 0;
@@ -942,9 +1028,11 @@ function AdminAnalyticsBasis() {
 
   const displayResult = resultId === "price-outlook"
     ? priceResult
-    : resultId === "weather-risk"
-      ? weatherResult
-      : historicalResult;
+    : resultId === "arrival-pressure"
+      ? arrivalResult
+      : resultId === "weather-risk"
+        ? weatherResult
+        : historicalResult;
   const displayThresholds = resultId === "historical-production" || resultId === "weather-risk"
     ? displayResult.thresholds
     : shownThresholds;
@@ -1165,23 +1253,42 @@ function AdminAnalyticsBasis() {
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Data Reliability</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+              How far this module&apos;s source records can be trusted &mdash; sufficiency and freshness, scored
+              0.00&ndash;1.00.
+            </p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             <div className="flex justify-between items-center gap-4 px-6 py-3.5">
               <span className="text-[13px] text-[var(--hw-neutral-700)]">Reliability</span>
-              <span
-                className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                  result.reliability === "High"
-                    ? "text-[var(--hw-success)] bg-[var(--hw-success)]/10"
-                    : result.reliability === "Moderate" || result.reliability === "Limited"
-                      ? "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10"
-                      : "text-[var(--hw-error)] bg-[var(--hw-error)]/10"
-                }`}
-              >
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${reliabilityBadgeClass(result.reliability)}`}>
                 {result.reliability || "-"}
               </span>
             </div>
-            {result.moduleWarnings.map((w, i) => (
+            {result.reliabilityFactor != null && (
+              <div className="flex justify-between items-center gap-4 px-6 py-3.5">
+                <span className="text-[13px] text-[var(--hw-neutral-700)]">Reliability factor</span>
+                <span className="text-[13px] font-mono font-semibold text-[var(--hw-neutral-800)]">
+                  {Number(result.reliabilityFactor).toFixed(4)}
+                </span>
+              </div>
+            )}
+            {(result.reliabilityBands || []).length > 0 && (
+              <div className="px-6 py-3.5">
+                <p className="text-[13px] text-[var(--hw-neutral-700)] mb-2">Classification bands</p>
+                <div className="flex flex-wrap gap-2">
+                  {result.reliabilityBands.map((band) => (
+                    <span
+                      key={band.label}
+                      className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${reliabilityBadgeClass(band.label)}`}
+                    >
+                      {band.label} {Number(band.min).toFixed(2)}&ndash;{Number(band.max).toFixed(2)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(result.moduleWarnings || []).map((w, i) => (
               <div key={i} className="flex items-start gap-2.5 px-6 py-3.5">
                 <AlertTriangle className="w-4 h-4 text-[var(--hw-warning)] flex-shrink-0 mt-0.5" />
                 <span className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">{w}</span>
@@ -1229,23 +1336,52 @@ function AdminAnalyticsBasis() {
             <div className={vizCardClass}>
               <div>
                 <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Arrival Volume Trend</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Weekly arrivals · tons</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">DFTC arrivals · kilograms</p>
               </div>
-              <div className="w-full flex-1 flex flex-col justify-center">
+              {displayResult.arrivalVolumes?.length > 0 ? (
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
+                  <BarChart data={displayResult.arrivalVolumes} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
-                    <YAxis hide domain={[0, 10]} />
-                    <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => Number(v).toLocaleString()} width={62} />
+                    <RechartsTooltip
+                      formatter={(val, _name, props) => [
+                        `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg${props.payload?.classification ? ` (${props.payload.classification})` : ""}`,
+                        "Arrival Volume"
+                      ]}
+                    />
+                    <Bar dataKey="volume_kg" radius={[6, 6, 0, 0]} fill="#2f7d32">
+                      {displayResult.arrivalVolumes.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.classification === "High" ? "#dc2626" :
+                            entry.classification === "Upper Middle" ? "#d97706" :
+                            entry.classification === "Lower Middle" ? "#2563eb" :
+                            "#16a34a"
+                          }
+                        />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
-                  <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-                    No comparison data available.
-                  </span>
+              ) : (
+                <div className="w-full flex-1 flex flex-col justify-center">
+                  <ResponsiveContainer width="100%" height={340}>
+                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
+                      <YAxis hide domain={[0, 10]} />
+                      <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
+                    <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
+                      No comparison data available.
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Arrival Volume Sources Pie Chart (Enlarged) */}
@@ -1254,7 +1390,7 @@ function AdminAnalyticsBasis() {
                 <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Arrival Volume Sources Distribution</p>
                 <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Arrival volume breakdown by origin (Farm Source vs Other Sources).</p>
               </div>
-              <ArrivalSourcePieChart showEmpty={!result.arrivalSources || result.arrivalSources.length === 0} data={result.arrivalSources} height={380} />
+              <ArrivalSourcePieChart showEmpty={!displayResult.arrivalSources || displayResult.arrivalSources.length === 0} data={displayResult.arrivalSources} height={380} />
             </div>
           </>
         )}

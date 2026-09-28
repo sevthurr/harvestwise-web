@@ -1,6 +1,7 @@
 import { advisory } from './advisory.js';
 import { calendar } from './calendar.js';
 import { plantingGuide } from './plantingGuide.js';
+import { plantingSuitability } from './plantingSuitability.js';
 import { price } from './factors/price.js';
 import { arrival } from './factors/arrival.js';
 import { production } from './factors/production.js';
@@ -27,6 +28,7 @@ export const farmer = {
   advisory,
   calendar,
   plantingGuide,
+  plantingSuitability,
   factors: {
     price,
     arrival,

@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
-import { CROP_DURATIONS, suggestHarvestDate } from "./types";
-import { CommodityIllustration, getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
+import { suggestHarvestDate, formatDurationLabel } from "./types";
+import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
-import { toCamelCase } from "../../../global/utils/apiTransforms";
-import { fetchPricesList } from "../../../global/hooks/useFarmerPrefetch";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../global/components/ui/select";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
@@ -20,56 +18,9 @@ const PAGE_SIZE = 4;
 const Step1CropSchedule = ({ data, onChange, errors }) => {
   const { t } = useLanguage();
 
-  // Fetch top10 commodities from API (persisted to IndexedDB by the offline layer)
-  const { data: resData, isLoading: loadingCommodities } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: fetchPricesList,
-    staleTime: 1000 * 60 * 30,
-  });
-
-  const commodityOptions = (() => {
-    const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
-    const baseMap = {};
-
-    rawItems.forEach(item => {
-      const camelItem = toCamelCase(item);
-      const isTop = camelItem.isTop10 === true || item.is_top10 === true;
-      if (!isTop) return;
-
-      const nameStr = camelItem.name || camelItem.commodityName || item.name || '';
-      const key = getCommodityIconKey(camelItem.commodityId, camelItem.baseName, nameStr);
-      if (!key) return;
-
-      let baseName = camelItem.baseName || nameStr.split('-')[0].trim();
-      let variety = camelItem.variety || (nameStr.includes('-') ? nameStr.split('-').slice(1).join('-').trim() : '');
-      const rawId = camelItem.commodityId || item.id || camelItem.id;
-
-      if (!baseMap[key]) {
-        baseMap[key] = {
-          id: key,
-          name: baseName,
-          varieties: new Set(),
-          varietyMap: {},
-          defaultCommodityId: rawId,
-        };
-      }
-      if (variety) {
-        baseMap[key].varieties.add(variety);
-        baseMap[key].varietyMap[variety.toLowerCase()] = rawId;
-        if (variety.toLowerCase() === 'medium') {
-          baseMap[key].defaultCommodityId = rawId;
-        }
-      }
-    });
-
-    return Object.values(baseMap).map(c => ({
-      id: c.id,
-      name: c.name,
-      varieties: Array.from(c.varieties),
-      varietyMap: c.varietyMap,
-      defaultCommodityId: c.defaultCommodityId,
-    }));
-  })();
+  // Top10 commodities + per-variety duration from the API
+  // (persisted to IndexedDB by the offline layer).
+  const { options: commodityOptions, isLoading: loadingCommodities } = useCommodityCatalog();
 
   const COMMODITY_PAGES = commodityOptions.reduce((acc, c, i) => {
     const page = Math.floor(i / PAGE_SIZE);
@@ -78,21 +29,25 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     return acc;
   }, []);
 
-  const duration = data.commodity ? CROP_DURATIONS[data.commodity] : null;
-  const suggestion = suggestHarvestDate(data.plantingDate, data.commodity);
+  const selectedOption = commodityOptions.find((c) => c.id === data.commodity) || null;
+  // commodity.typical_duration_min_days / max_days — null when the DB has none.
+  const duration = durationForOption(selectedOption, data.variant);
+  const durationLabel = formatDurationLabel(duration, t);
+  const suggestion = suggestHarvestDate(data.plantingDate, duration);
   const selectedPage = Math.floor(
     commodityOptions.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
   );
   const [page, setPage] = useState(() => selectedPage >= 0 ? selectedPage : 0);
 
-  // Auto-calculate suggested harvest date when planting date or commodity changes
+  // Auto-calculate suggested harvest date when planting date, crop, variety or
+  // its duration changes.
   useEffect(() => {
     if (suggestion && suggestion.minDate) {
       if (!data.harvestDate || data.harvestDate < data.plantingDate) {
         onChange({ harvestDate: suggestion.minDate });
       }
     }
-  }, [data.plantingDate, data.commodity]);
+  }, [data.plantingDate, data.commodity, data.variant, duration?.min, duration?.max]);
 
   const applySuggestion = () => {
     if (suggestion) onChange({ harvestDate: suggestion.minDate });
@@ -205,19 +160,19 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
 
         {errors.commodity && <p className="mt-2 text-sm text-red-600">{errors.commodity}</p>}
 
-        {/* Typical duration chip */}
-        {duration && <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
+        {/* Typical duration chip — stays visible; "-" when the database has no
+            duration for the selected crop/variety. */}
+        {data.commodity && <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
             <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
             <span className="text-[13px] text-[var(--hw-neutral-900)]">
-              {t("farmer.assess.typical_duration", { label: t(`farmer.assess.duration_${data.commodity}`, {}, duration.label) }, `Typical duration: ${duration.label}`)}
+              {t("farmer.assess.typical_duration", { label: durationLabel || "-" }, `Typical duration: ${durationLabel || "-"}`)}
             </span>
           </div>}
 
         {/* Variant picker — dropdown, shown only when commodity has 2+ varieties */}
         {data.commodity && (() => {
-          const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
-          const baseName = selectedCommodity?.name || HW_ID_TO_NAME[data.commodity] || "";
-          const dbVariants = selectedCommodity?.varieties || [];
+          const baseName = selectedOption?.name || HW_ID_TO_NAME[data.commodity] || "";
+          const dbVariants = selectedOption?.varieties || [];
           const localVariants = getVariants(baseName);
           const allVariants = Array.from(new Set([...dbVariants, ...localVariants]));
 
@@ -228,7 +183,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
                 {t("farmer.commodityDetail.variety", {}, "Variety")}
               </label>
               <Select value={data.variant || undefined} onValueChange={(v) => {
-                const varId = selectedCommodity?.varietyMap?.[v.toLowerCase()] || selectedCommodity?.defaultCommodityId || data.commodityId;
+                const varId = selectedOption?.varietyMap?.[v.toLowerCase()] || selectedOption?.defaultCommodityId || data.commodityId;
                 onChange({ variant: v, commodityId: varId });
               }}>
                 <SelectTrigger className="w-full h-10 text-[14px] font-medium text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] hover:border-[var(--hw-neutral-400)] transition-colors">
@@ -315,7 +270,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   }
       {data.commodity && <PlantingActivityContext
     commodityId={data.commodity}
-    commodityName={commodityOptions.find((c) => c.id === data.commodity)?.name ?? data.commodity}
+    commodityName={selectedOption?.name ?? data.commodity}
     defaultExpanded={false}
   />}
     </div>;

@@ -45,6 +45,7 @@ vi.mock('../services/api', () => ({
     listThresholdRules: vi.fn().mockResolvedValue({ items: [] }),
     getHistoricalSeasonalProduction: vi.fn().mockResolvedValue({}),
     getPriceOutlook: vi.fn().mockResolvedValue({}),
+    getArrivalPressure: vi.fn().mockResolvedValue({}),
   },
 }));
 

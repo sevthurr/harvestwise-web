@@ -132,6 +132,12 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
   );
 }
 
+export async function getArrivalPressure(commodityId) {
+  return parseResponse(
+    await apiGet(`/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`)
+  );
+}
+
 export async function getWeatherForecast(days = 14) {
   return parseResponse(
     await apiGet(`/admin/analytics/outputs/weather-forecast?days=${encodeURIComponent(days)}`)

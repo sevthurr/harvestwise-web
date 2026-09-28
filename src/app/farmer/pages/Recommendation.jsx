@@ -1,384 +1,33 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ArrowRight,
-  CloudRain,
-  Sun,
-  CalendarClock,
-  Sprout,
-  Banknote
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowRight, Sprout } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
-import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { useCrops } from "../components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
-
-const TwoToneStormIcon = ({ className }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path stroke="#3b82f6" d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973" />
-    <path stroke="#f59e0b" d="m13 12-3 5h4l-3 5" />
-  </svg>
-);
-
-// Build calendar markers from market events, crop plans, and the weather forecast for the grid
-function forecastMarkerType(f) {
-  const condition = String(f.suitability || f.weather_condition || "").toLowerCase();
-  if (condition.includes("severe")) return "storm";
-  if (condition.includes("heat")) return "heat";
-  const rainfall = Number(f.rainfall_mm) || 0;
-  const rainProb = Number(f.rain_probability_pct) || 0;
-  if (rainfall >= 5 || rainProb >= 60) return "rain";
-  if (condition.includes("caution") && rainfall > 0) return "rain";
-  return "sun";
-}
-
-function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, month) {
-  const markers = {};
-
-  (marketEvents || []).forEach((item) => {
-    const camel = toCamelCase(item);
-    const origDate = camel.calendarDate || camel.date;
-    if (!origDate) return;
-    const ds = String(origDate);
-    const startParts = ds.split("-");
-    if (startParts.length < 3) return;
-    const startDay = parseInt(startParts[2], 10);
-    if (isNaN(startDay)) return;
-    if (startParts[0] !== String(year) || parseInt(startParts[1], 10) !== month) return;
-
-    if (camel.isPayday) {
-      if (!markers[startDay]) markers[startDay] = {};
-      markers[startDay].payday = true;
-    }
-
-    const eName = camel.holidayName || camel.eventName;
-    if (!eName) return;
-
-    let endDay = startDay;
-    const endParts = (camel.endDate || "").split("-");
-    if (endParts.length === 3 && endParts[0] === String(year) && parseInt(endParts[1], 10) === month) {
-      endDay = Math.max(startDay, parseInt(endParts[2], 10) || startDay);
-    }
-
-    for (let d = startDay; d <= endDay; d += 1) {
-      if (!markers[d]) markers[d] = {};
-      markers[d].event = eName;
-    }
-  });
-
-  (cropPlans || []).forEach((c) => {
-    const pDate = c.rawPlantingDate || c.actualPlantingDate || c.plannedPlantingDate || c.plantingDate;
-    const name = c.commodityName && c.commodityName !== "\u2013" ? c.commodityName : "Crop";
-    const variant = c.variant || c.variety || null;
-    if (pDate) {
-      const ds = String(pDate);
-      const parts = ds.split("-");
-      if (parts[0] === String(year) && parseInt(parts[1], 10) === month) {
-        const d = parseInt(parts[2], 10);
-        if (!markers[d]) markers[d] = {};
-        markers[d].crop = {
-          id: c.commodityId || c.commodity || "crop",
-          name,
-          variant,
-          type: "plant",
-          harvestStr: c.harvestDate || (c.expectedHarvestDate ? new Date(c.expectedHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null),
-        };
-      }
-    }
-    const hDate = c.rawHarvestDate || c.expectedHarvestDate || c.harvestDate;
-    if (hDate) {
-      const ds = String(hDate);
-      const parts = ds.split("-");
-      if (parts[0] === String(year) && parseInt(parts[1], 10) === month) {
-        const d = parseInt(parts[2], 10);
-        if (!markers[d]) markers[d] = {};
-        markers[d].crop = {
-          id: c.commodityId || c.commodity || "crop",
-          name,
-          variant,
-          type: "harvest",
-        };
-      }
-    }
-  });
-
-  (weatherForecasts || []).forEach((f) => {
-    const ds = String(f.date || "");
-    const parts = ds.split("-");
-    if (parts.length < 3) return;
-    if (parts[0] === String(year) && parseInt(parts[1], 10) === month) {
-      const d = parseInt(parts[2], 10);
-      if (isNaN(d)) return;
-      if (!markers[d]) markers[d] = {};
-      markers[d].weather = forecastMarkerType(f);
-      markers[d].weatherInfo = {
-        tempMin: f.temperature_min,
-        tempMax: f.temperature_max,
-        rainfall: f.rainfall_mm,
-        rainProb: f.rain_probability_pct,
-        condition: f.suitability || f.weather_condition || null,
-      };
-    }
-  });
-
-  return markers;
-}
-
-const DAY_LABELS = [
-  { key: "farmer.calendar.days.sun", fallback: "Sun" },
-  { key: "farmer.calendar.days.mon", fallback: "Mon" },
-  { key: "farmer.calendar.days.tue", fallback: "Tue" },
-  { key: "farmer.calendar.days.wed", fallback: "Wed" },
-  { key: "farmer.calendar.days.thu", fallback: "Thu" },
-  { key: "farmer.calendar.days.fri", fallback: "Fri" },
-  { key: "farmer.calendar.days.sat", fallback: "Sat" }
-];
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December"
-];
-
-function monthKey(year, month) {
-  return `${year}-${month}`;
-}
-
-function daysInMonth(year, month) {
-  return new Date(year, month, 0).getDate();
-}
-
-function firstWeekday(year, month) {
-  return new Date(year, month - 1, 1).getDay();
-}
-
-function hasAnyMarker(m) {
-  return !!(m.crop || m.weather || m.event || m.payday);
-}
-
-const WIcon = ({ type, cls }) => {
-  if (type === "rain") return <CloudRain className={cls} />;
-  if (type === "storm") return <TwoToneStormIcon className={cls} />;
-  return <Sun className={cls} />;
-};
-
-const weatherColor = (type, selected = false) => {
-  if (selected) return "text-white/80";
-  if (type === "heat") return "text-orange-500";
-  if (type === "storm") return "text-blue-600";
-  return "text-blue-500";
-};
-
-const _weatherNote = (type, info, t) => {
-  const hasInfo = !!(info && (info.rainProb != null || info.rainfall != null || info.tempMax != null));
-  const rainProb = hasInfo && info.rainProb != null ? ` (${Math.round(info.rainProb)}% chance)` : "";
-  const rainMm = hasInfo && info.rainfall != null ? ` ~${info.rainfall} mm` : "";
-  const temps =
-    hasInfo && info.tempMax != null && info.tempMin != null
-      ? ` ${Math.round(info.tempMin)}°–${Math.round(info.tempMax)}°`
-      : "";
-  if (type === "storm") return t("farmer.calendar.weather_note_storm", { rain_mm: rainMm });
-  if (type === "heat") return t("farmer.calendar.weather_note_heat");
-  if (type === "rain") return t("farmer.calendar.weather_note_rain", { rain_mm: rainMm, rain_chance: rainProb });
-  return t("farmer.calendar.weather_note_fair", { temps });
-};
-
-const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) => {
-  const { t } = useLanguage();
-  const today = new Date();
-  const isNow = today.getFullYear() === year && today.getMonth() + 1 === month;
-  const todayDay = isNow ? today.getDate() : -1;
-  const total = daysInMonth(year, month);
-  const startCol = firstWeekday(year, month);
-  const data = calendarData[monthKey(year, month)] ?? {};
-  const cells = [
-    ...Array(startCol).fill(null),
-    ...Array.from({ length: total }, (_, i) => i + 1)
-  ];
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  return (
-    <>
-      <div className="grid grid-cols-7 mb-1">
-        {DAY_LABELS.map((d) => (
-          <div key={d.key} className="text-center text-[12px] font-semibold text-[var(--hw-neutral-700)] py-1">
-            {t(d.key, {}, d.fallback)}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-y-1">
-        {cells.map((day, i) => {
-          if (day === null) return <div key={`e${i}`} />;
-          const m = data[day] ?? {};
-          const marked = hasAnyMarker(m);
-          const isToday = day === todayDay;
-          const isSelected = day === selectedDay;
-          return (
-            <button
-              key={day}
-              onClick={() => onSelectDay(day)}
-              className={`flex flex-col items-center justify-start pt-1.5 pb-1 min-h-[52px] rounded-xl text-[13px] font-medium transition-colors
-                ${isSelected ? "bg-[var(--hw-green-700)] text-white" : isToday ? "ring-2 ring-[var(--hw-green-700)] text-[var(--hw-neutral-900)]" : marked ? "text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-100)]" : "text-[var(--hw-neutral-400)] hover:bg-[var(--hw-neutral-50)]"}
-              `}
-            >
-              <span>{day}</span>
-              {marked && (
-                <div className="flex items-center justify-center gap-0.5 mt-0.5 px-0.5">
-                  {m.crop && (
-                    <CommodityIllustration
-                      commodityId={m.crop.id}
-                      className={`w-4 h-4 flex-shrink-0 ${isSelected ? "opacity-80" : ""}`}
-                    />
-                  )}
-                  {m.weather && (
-                    <WIcon
-                      type={m.weather}
-                      cls={`w-3.5 h-3.5 flex-shrink-0 ${weatherColor(m.weather, isSelected)}`}
-                    />
-                  )}
-                  {m.event && (
-                    <CalendarClock
-                      className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? "text-white/80" : "text-emerald-600"}`}
-                    />
-                  )}
-                  {m.payday && (
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isSelected ? "bg-white/80" : "bg-amber-500"}`} />
-                  )}
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </>
-  );
-};
-
-const SelectedDateCard = ({ year, month, day, markers }) => {
-  const navigate = useNavigate();
-  const { t } = useLanguage();
-  const rawMonthName = MONTH_NAMES[month - 1];
-  const localizedMonth = t(`farmer.calendar.months.${rawMonthName.toLowerCase()}`, {}, rawMonthName);
-
-  return (
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-      <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
-        {localizedMonth} {day}, {year}
-      </p>
-
-      {markers.crop && (
-        <div className="flex items-start gap-2.5">
-          <CommodityIllustration commodityId={markers.crop.id} className="w-8 h-8 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-              {markers.crop.variant ? `${markers.crop.name} (${markers.crop.variant})` : markers.crop.name}
-            </p>
-            {markers.crop.type === "plant" && markers.crop.harvestStr && (
-              <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-                {t("farmer.calendar.selected_date.expected_harvest", {}, "Expected harvest")}: {markers.crop.harvestStr}
-              </p>
-            )}
-            {markers.crop.type === "harvest" && (
-              <p className="text-[13px] text-emerald-600 font-medium mt-0.5">
-                {t("farmer.calendar.selected_date.expected_harvest_date", {}, "Expected harvest date")}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {markers.weather ? (
-        <div className="flex items-start gap-2">
-          <WIcon
-            type={markers.weather}
-            cls={`w-4 h-4 flex-shrink-0 mt-0.5 ${weatherColor(markers.weather)}`}
-          />
-          <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
-              {t("farmer.calendar.selected_date.weather_note", {}, "Weather note")}
-            </p>
-            <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-              {_weatherNote(markers.weather, markers.weatherInfo || null, t)}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-start gap-2">
-          <CloudRain className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
-              {t("farmer.calendar.selected_date.weather_note", {}, "Weather note")}
-            </p>
-            <p className="text-[13px] text-[var(--hw-neutral-500)] mt-0.5 leading-snug">
-              {t("farmer.calendar.empty_weather_note", {}, "No weather note available right now.")}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {markers.event && (
-        <div className="flex items-start gap-2">
-          <CalendarClock className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
-              {t("farmer.calendar.selected_date.market_note", {}, "Market note")}
-            </p>
-            <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{markers.event}</p>
-          </div>
-        </div>
-      )}
-
-      {markers.payday && (
-        <div className="flex items-start gap-2">
-          <Banknote className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">
-              {t("farmer.calendar.selected_date.payday", {}, "Payday period")}
-            </p>
-            <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-              {t("farmer.calendar.selected_date.payday_note", {}, "Payday period. Higher consumer spending and market demand expected.")}
-            </p>
-          </div>
-        </div>
-      )}
-
-      <button
-        onClick={() => navigate("/farmer/assess")}
-        className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-      >
-        {t("farmer.calendar.selected_date.check_crop", {}, "Check this crop")}
-        <ArrowRight className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};
+import CalendarGrid from "../components/calendar/CalendarGrid";
+import CalendarLegend from "../components/calendar/CalendarLegend";
+import DayDetailCard from "../components/calendar/DayDetailCard";
+import {
+  MONTH_NAMES,
+  buildCalendarMarkers,
+  hasAnyMarker,
+  monthKey,
+} from "../utils/calendarMarkers";
+import {
+  advisoryCategoryLabel,
+  recommendationLine,
+  toneClasses,
+} from "../utils/plantingLabels";
+import { formatCropLabel } from "../utils/formatters";
 
 function RecommendationPage() {
   const queryClient = useQueryClient();
-  const { t } = useLanguage();
+  const { t, langCode } = useLanguage();
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -537,42 +186,21 @@ function RecommendationPage() {
               month={viewMonth}
               selectedDay={selectedDay}
               onSelectDay={handleSelectDay}
-              calendarData={calendarData}
+              markers={dayMarkers}
             />
 
-            {/* Legend */}
-            <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-[var(--hw-neutral-100)]">
-              <div className="flex items-center gap-1">
-                <CloudRain className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
-                  {t("farmer.calendar.legend.light_rain", {}, "Light rain")}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <TwoToneStormIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
-                  {t("farmer.calendar.legend.heavy_rain", {}, "Heavy rain")}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Sun className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
-                  {t("farmer.calendar.legend.hot_days", {}, "Hot days")}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <CalendarClock className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                <span className="text-[12px] text-[var(--hw-neutral-900)] whitespace-nowrap">
-                  {t("farmer.calendar.legend.events", {}, "Events")}
-                </span>
-              </div>
-            </div>
+            <CalendarLegend markers={dayMarkers} />
           </div>
 
           {/* Selected date card — only when a marked day is tapped */}
           {showDetail && selectedDay !== null && selMarkers !== null && (
             <div className="mt-4 md:mt-0">
-              <SelectedDateCard year={viewYear} month={viewMonth} day={selectedDay} markers={selMarkers} />
+              <DayDetailCard
+                year={viewYear}
+                month={viewMonth}
+                day={selectedDay}
+                marker={selMarkers}
+              />
             </div>
           )}
         </div>
@@ -610,56 +238,37 @@ function RecommendationPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {recommendations.map((rec) => {
-              const category = rec.advisory_category;
-              const isRecommended = category === "Recommended";
-              const isCaution = category === "Proceed with Caution";
-              const badgeCls = isRecommended
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : isCaution
-                ? "bg-amber-50 text-amber-700 border-amber-200"
-                : "bg-red-50 text-red-700 border-red-200";
-              const borderCls = isRecommended
-                ? "border-l-emerald-500"
-                : isCaution
-                ? "border-l-amber-500"
-                : "border-l-red-500";
+              const category = advisoryCategoryLabel(rec.advisory_category, t);
+              const line = recommendationLine(rec, t, langCode);
 
               return (
                 <div
                   key={rec.id}
-                  className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] border-l-4 ${borderCls} shadow-[var(--shadow-xs)] p-4 flex flex-col gap-2`}
+                  className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 flex items-start gap-2.5"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CommodityIllustration
-                        commodityId={rec.commodity_id}
-                        className="w-8 h-8 flex-shrink-0"
-                      />
-                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-snug truncate">
-                        {rec.commodity_name || rec.commodity_id}
+                  <CommodityIllustration
+                    commodityId={rec.commodity_id}
+                    commodityName={rec.commodity_name}
+                    baseName={rec.commodity_name}
+                    className="w-8 h-8 flex-shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] truncate">
+                        {formatCropLabel(rec.commodity_name, rec.commodity_variety, rec.commodity_id)}
                       </p>
+                      {category && (
+                        <span
+                          className={`flex-shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${toneClasses(category.tone)}`}
+                        >
+                          {category.text}
+                        </span>
+                      )}
                     </div>
-                    <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${badgeCls}`}>
-                      {category}
-                    </span>
-                  </div>
-
-                  {rec.explanation && (
-                    <p className="text-[12px] text-[var(--hw-neutral-600)] leading-relaxed line-clamp-2">
-                      {rec.explanation}
-                    </p>
-                  )}
-
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-auto pt-1 border-t border-[var(--hw-neutral-100)]">
-                    {rec.price_outlook && (
-                      <span className="text-[11px] text-[var(--hw-neutral-500)]">
-                        {t("farmer.cropCard.price_label", {}, "Price")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.price_outlook}</span>
-                      </span>
-                    )}
-                    {rec.weather_risk_level && (
-                      <span className="text-[11px] text-[var(--hw-neutral-500)]">
-                        {t("farmer.factors.weather.factor_title", {}, "Weather")}: <span className="font-medium text-[var(--hw-neutral-700)]">{rec.weather_risk_level}</span>
-                      </span>
+                    {line && (
+                      <p className="text-[12px] text-[var(--hw-neutral-600)] leading-snug line-clamp-1 mt-0.5">
+                        {line}
+                      </p>
                     )}
                   </div>
                 </div>

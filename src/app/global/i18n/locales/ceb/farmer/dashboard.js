@@ -24,5 +24,6 @@ export const dashboard = {
   no_active_plan: "Wala pay aktibong plano sa tanom.",
   harvest_label: "Ani: ",
   today_price_trends: "Lihok sa presyo karon",
-  view_guide: "Tan-awa ang giya"
+  view_guide: "Tan-awa ang giya",
+  scroll_more_prices: "Scroll aron makita ang tanan nga presyo"
 };

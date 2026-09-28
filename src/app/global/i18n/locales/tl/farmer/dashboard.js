@@ -24,5 +24,6 @@ export const dashboard = {
   no_active_plan: "Wala pang aktibong plano sa pananim.",
   harvest_label: "Ani: ",
   today_price_trends: "Galaw ng presyo ngayon",
-  view_guide: "Tingnan ang gabay"
+  view_guide: "Tingnan ang gabay",
+  scroll_more_prices: "I-scroll para makita ang lahat ng presyo"
 };

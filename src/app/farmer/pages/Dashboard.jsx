@@ -2,9 +2,7 @@ import {
   Clock,
   ArrowRight,
   ChevronRight,
-  CheckCircle2,
-  AlertTriangle,
-  AlertOctagon,
+  ChevronDown,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -13,6 +11,7 @@ import {
   RefreshCw,
   MapPin
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -22,9 +21,10 @@ import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton, SkeletonListRow } from "../components/shared/FarmerSkeletons";
+import PlantingSuitabilityCard from "../components/crops/PlantingSuitabilityCard";
+import { getPhaseConfig } from "../components/crops/types";
 import { useCrops } from "../components/crops/CropsContext";
 import { useAuth } from "../../global/contexts/AuthContext";
-import { ADVISORY_CODES, normalizeAdvisoryCode } from "../utils/farmerCodes";
 
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
@@ -33,26 +33,36 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
-const ADV_CFG = {
-  [ADVISORY_CODES.RECOMMENDED]: {
-    labelKey: "farmer.advisory.labels.recommended",
-    Icon: CheckCircle2,
-    color: "text-[var(--hw-green-700)]",
-    border: "border-[var(--hw-green-300)]"
-  },
-  [ADVISORY_CODES.PROCEED_WITH_CAUTION]: {
-    labelKey: "farmer.advisory.labels.proceed_with_caution",
-    Icon: AlertTriangle,
-    color: "text-amber-600",
-    border: "border-amber-200"
-  },
-  [ADVISORY_CODES.AVOID_FOR_NOW]: {
-    labelKey: "farmer.advisory.labels.avoid_for_now",
-    Icon: AlertOctagon,
-    color: "text-red-500",
-    border: "border-red-200"
-  }
-};
+/**
+ * Tracks whether a scroll region actually overflows, so the "scroll for more"
+ * affordance is only rendered when there is something hidden below the fold.
+ *
+ * The list height is decided by flexbox and by the neighbouring column, so a
+ * one-off measurement is not enough: it changes on resize and whenever the
+ * suitability card beside it grows.
+ */
+function useOverflowHint(revision) {
+  const ref = useRef(null);
+  const [scrollable, setScrollable] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => setScrollable(el.scrollHeight - el.clientHeight > 4);
+    measure();
+    const observer =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    observer?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [revision]);
+
+  return [ref, scrollable];
+}
+
 
 function getGreeting(t) {
   const hour = new Date().getHours();
@@ -243,57 +253,19 @@ function DashboardPage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  const recsQuery = useQuery({
-    queryKey: ["dashboard", "recommendations"],
-    queryFn: async () => {
-      const res = await apiGet("/market/monthly-recommendations");
-      if (!res.ok) return {};
-      const recsData = await parseResponse(res);
-      const rawItems = recsData?.items || recsData?.recommendations || (Array.isArray(recsData) ? recsData : []);
-      // Build a lookup map: commodity_id → rec (latest per commodity)
-      const map = {};
-      rawItems.forEach(rec => {
-        const camelRec = toCamelCase(rec);
-        const id = camelRec.commodityId;
-        if (id && !map[id]) {
-          map[id] = {
-            id,
-            name: camelRec.commodityName || '\u2013',
-            reason: camelRec.explanation || null,
-            bestVariety: camelRec.bestVarietyName || camelRec.bestVariety || null,
-            advisoryCode: normalizeAdvisoryCode(camelRec.advisoryCategory) || ADVISORY_CODES.PROCEED_WITH_CAUTION,
-          };
-        }
-      });
-      return map;
-    },
-    staleTime: 1000 * 60 * 30,
-  });
-
   const farmerProfile = profileQuery.data;
   const prices = pricesQuery.data ?? [];
-  const recsMap = recsQuery.data ?? {};
-  const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading || recsQuery.isLoading;
+  const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading;
 
-  // Join farmer's preferred crops with advisory data
+  // Re-measured whenever the list content or the page loading state changes.
+  const [pricesListRef, pricesScrollable] = useOverflowHint(`${prices.length}:${isLoading}`);
+
+  // Preferred crops the farmer already selected. The advisory now comes from
+  // the planting-suitability engine inside <PlantingSuitabilityCard />, which
+  // evaluates the forecast against each crop's own weather rules instead of
+  // joining against a monthly recommendation row.
   const preferredCrops = farmerProfile?.preferred_crops || farmerProfile?.preferredCrops || [];
   const preferredCropIds = new Set(preferredCrops.map(p => p.commodity_id || p.commodityId));
-  const preferredCropCards = preferredCrops.slice(0, 3).map(pref => {
-    const commodityId = pref.commodity_id || pref.commodityId;
-    const rec = recsMap[commodityId];
-    return {
-      id: commodityId,
-      name: pref.commodity_name || pref.commodityName || rec?.name || '\u2013',
-      advisoryCode: rec?.advisoryCode || null,
-      reason: rec?.reason || null,
-      bestVariety: pref.variety_name || pref.varietyName || rec?.bestVariety || null,
-    };
-  });
-
-  // Recommended crops not already in preferred list, up to 2
-  const otherGoodCrops = Object.values(recsMap)
-    .filter(r => r.advisoryCode === ADVISORY_CODES.RECOMMENDED && !preferredCropIds.has(r.id))
-    .slice(0, 2);
 
   const greeting = getGreeting(t);
   const firstName = farmerProfile?.first_name || user?.first_name;
@@ -354,7 +326,7 @@ function DashboardPage() {
         <div className="md:grid md:grid-cols-2 md:gap-5 space-y-5 md:space-y-0">
 
           {/* ── 4. Today's prices ── */}
-          <section>
+          <section className="flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.todays_prices", {}, "Today's prices")}</h2>
               <button
@@ -365,7 +337,7 @@ function DashboardPage() {
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] flex-1 flex flex-col min-h-0 overflow-hidden">
               {isLoading ? (
                 <div className="divide-y divide-[var(--hw-neutral-100)]">
                   <SkeletonListRow />
@@ -377,47 +349,66 @@ function DashboardPage() {
                   {t("farmer.emptyStates.no_prices", {}, "No price data available")}
                 </div>
               ) : (
-                <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[260px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                  {prices.map((item) => {
-                    const hasForecast = item.price != null && item.direction != null;
-                    const cfg = hasForecast ? (DIR_CFG[item.direction] || DIR_CFG.default) : DIR_CFG.default;
-                    const DirIcon = cfg.Icon;
-                    const count = getVariants(item.name).length;
-                    const formattedPrice = item.price != null && item.price !== '' ? `₱${item.price}/${item.uom || 'kg'}` : `-/${item.uom || 'kg'}`;
+                <>
+                  <div className="relative flex-1 flex flex-col min-h-0">
+                    <div
+                      ref={pricesListRef}
+                      className="divide-y divide-[var(--hw-neutral-100)] flex-1 min-h-0 max-h-[260px] md:max-h-[420px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                    >
+                      {prices.map((item) => {
+                        const hasForecast = item.price != null && item.direction != null;
+                        const cfg = hasForecast ? (DIR_CFG[item.direction] || DIR_CFG.default) : DIR_CFG.default;
+                        const DirIcon = cfg.Icon;
+                        const count = getVariants(item.name).length;
+                        const formattedPrice = item.price != null && item.price !== '' ? `₱${item.price}/${item.uom || 'kg'}` : `-/${item.uom || 'kg'}`;
 
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => navigate(`/farmer/prices/${item.id}`)}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
-                      >
-                        <CommodityIllustration 
-                          commodityId={item.id} 
-                          baseName={item.baseName}
-                          commodityName={item.name}
-                          className="w-9 h-9 flex-shrink-0" 
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{item.name || '–'}</p>
-                          <p className="text-[12px] font-semibold text-[var(--hw-green-700)]">
-                            {count === 1 ? t("common.variety_one", {}, "1 variety") : t("common.varieties_count", { count }, `${count} varieties`)}
-                          </p>
-                          <p className="text-[12px] text-[var(--hw-neutral-900)]">{formattedPrice}</p>
-                        </div>
-                        <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
-                          {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-                          <span className="text-[13px] font-medium">{hasForecast ? t(cfg.key, {}, cfg.label) : t("farmer.prices.trend_no_data", {}, "No trend data")}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => navigate(`/farmer/prices/${item.id}`)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
+                          >
+                            <CommodityIllustration 
+                              commodityId={item.id} 
+                              baseName={item.baseName}
+                              commodityName={item.name}
+                              className="w-9 h-9 flex-shrink-0" 
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{item.name || '–'}</p>
+                              <p className="text-[12px] font-semibold text-[var(--hw-green-700)]">
+                                {count === 1 ? t("common.variety_one", {}, "1 variety") : t("common.varieties_count", { count }, `${count} varieties`)}
+                              </p>
+                              <p className="text-[12px] text-[var(--hw-neutral-900)]">{formattedPrice}</p>
+                            </div>
+                            <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+                              {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
+                              <span className="text-[13px] font-medium">{hasForecast ? t(cfg.key, {}, cfg.label) : t("farmer.prices.trend_no_data", {}, "No trend data")}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Soft bottom edge: the half-visible row is the cue that the
+                        list continues. Paired with the label below, it works for
+                        farmers who do not notice a cut-off row. */}
+                    {pricesScrollable && (
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-white to-transparent" />
+                    )}
+                  </div>
+                  {pricesScrollable && (
+                    <div className="flex-shrink-0 flex items-center justify-center gap-1.5 border-t border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)] px-4 py-2 text-[12px] font-medium text-[var(--hw-neutral-700)]">
+                      <ChevronDown className="w-3.5 h-3.5" />
+                      {t("farmer.dashboard.scroll_more_prices", {}, "Scroll to see more prices")}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </section>
 
           {/* ── 5. Good crops to plant ── */}
-          <section>
+          <section className="flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.good_crops_title", {}, "Good crops to plant")}</h2>
               <button
@@ -430,120 +421,22 @@ function DashboardPage() {
             </div>
 
             {isLoading ? (
-              <div className="space-y-2.5">
+              <div className="flex-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden divide-y divide-[var(--hw-neutral-100)]">
+                <div className="px-4 py-2.5"><Skeleton className="h-3 w-28 rounded" /></div>
                 {[0, 1].map(i => (
-                  <div key={i} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2 animate-pulse">
-                    <div className="flex items-start gap-3">
-                      <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
-                      <div className="flex-1 space-y-1.5">
-                        <Skeleton className="h-3 w-20 rounded" />
-                        <Skeleton className="h-4 w-28 rounded" />
-                        <Skeleton className="h-3 w-36 rounded" />
-                      </div>
+                  <div key={i} className="px-4 py-3 flex items-start gap-3">
+                    <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-20 rounded" />
+                      <Skeleton className="h-4 w-28 rounded" />
+                      <Skeleton className="h-3 w-36 rounded" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="space-y-2.5">
-
-                {/* Preferred crops with their advisory */}
-                {preferredCropCards.length > 0 && (
-                  <>
-                    <p className="text-[12px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide px-0.5">
-                      {t("farmer.dashboard.my_preferred_crops_title", {}, "My preferred crops")}
-                    </p>
-                    {preferredCropCards.map(crop => {
-                      const code = crop.advisoryCode;
-                      const cfg = (code && ADV_CFG[code]) || ADV_CFG[ADVISORY_CODES.RECOMMENDED];
-                      const AdvIcon = cfg.Icon;
-                      return (
-                        <div key={crop.id} className={`bg-white rounded-2xl border ${cfg.border} shadow-[var(--shadow-xs)] p-4`}>
-                          <div className="flex items-start gap-3">
-                            <CommodityIllustration commodityId={crop.id} commodityName={crop.name} baseName={crop.name} className="w-9 h-9 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1 min-w-0">
-                              <div className={`flex items-center gap-1.5 mb-0.5 ${cfg.color}`}>
-                                <AdvIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                                <span className="text-[12px] font-semibold">
-                                  {code ? t(cfg.labelKey, {}, cfg.labelKey) : t("farmer.dashboard.good_option_badge", {}, "Good option")}
-                                </span>
-                              </div>
-                              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{crop.name}</p>
-                              {crop.bestVariety && (
-                                <p className={`text-[12px] font-medium ${cfg.color}`}>
-                                  {t("farmer.dashboard.good_variety_prefix", { variety: crop.bestVariety }, `Good variety: ${crop.bestVariety}`)}
-                                </p>
-                              )}
-                              {crop.reason && <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{crop.reason}</p>}
-                            </div>
-                            <button
-                              onClick={() => navigate("/farmer/market")}
-                              className="flex-shrink-0 text-[12px] font-medium text-[var(--hw-green-700)] hover:opacity-70 whitespace-nowrap pt-0.5"
-                            >
-                              {t("farmer.dashboard.view_guide", {}, "View guide")}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-
-                {/* Other recommended crops not in preferred list */}
-                {otherGoodCrops.length > 0 && (
-                  <>
-                    {preferredCropCards.length > 0 && (
-                      <p className="text-[12px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide px-0.5 pt-1">
-                        {t("farmer.dashboard.good_crops_title", {}, "Good crops to plant")}
-                      </p>
-                    )}
-                    {otherGoodCrops.map(crop => (
-                      <div key={crop.id} className="bg-white rounded-2xl border border-[var(--hw-green-300)] shadow-[var(--shadow-xs)] p-4">
-                        <div className="flex items-start gap-3">
-                          <CommodityIllustration commodityId={crop.id} commodityName={crop.name} baseName={crop.name} className="w-9 h-9 flex-shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5 text-[var(--hw-green-700)]">
-                              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span className="text-[12px] font-semibold">{t("farmer.advisory.labels.recommended", {}, "Recommended")}</span>
-                            </div>
-                            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{crop.name}</p>
-                            {crop.bestVariety && (
-                              <p className="text-[12px] font-medium text-[var(--hw-green-700)]">
-                                {t("farmer.dashboard.good_variety_prefix", { variety: crop.bestVariety }, `Good variety: ${crop.bestVariety}`)}
-                              </p>
-                            )}
-                            {crop.reason && <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">{crop.reason}</p>}
-                          </div>
-                          <button
-                            onClick={() => navigate("/farmer/market")}
-                            className="flex-shrink-0 text-[12px] font-medium text-[var(--hw-green-700)] hover:opacity-70 whitespace-nowrap pt-0.5"
-                          >
-                            {t("farmer.dashboard.view_guide", {}, "View guide")}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {/* Empty state: nothing to show at all */}
-                {preferredCropCards.length === 0 && otherGoodCrops.length === 0 && (
-                  <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
-                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-                      {t("farmer.plantingGuide.no_recommendations", {}, "No recommendations available for this month.")}
-                    </p>
-                    <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-                      {t("farmer.plantingGuide.check_crop_card_desc", {}, "Open the Planting Guide to compare other crops.")}
-                    </p>
-                    <button
-                      onClick={() => navigate("/farmer/market")}
-                      className="inline-flex items-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-                    >
-                      {t("farmer.plantingGuide.view_guide_btn", {}, "Open Planting Guide")}
-                    </button>
-                  </div>
-                )}
-
+              <div className="flex-1 flex flex-col min-h-0">
+                <PlantingSuitabilityCard preferredCropIds={[...preferredCropIds]} />
               </div>
             )}
           </section>
@@ -573,22 +466,30 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="divide-y divide-[var(--hw-neutral-100)]">
-                {cropPlans.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => navigate("/farmer/crops")}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
-                  >
-                    <CommodityIllustration commodityId={item.commodityId} commodityName={item.commodityName} baseName={item.commodityName} className="w-9 h-9 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-                        {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
-                      </p>
-                      <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{t("common.status", {}, "Status")}: {item.status || '–'}</p>
-                      {item.notes && <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug mt-0.5">{item.notes}</p>}
-                    </div>
-                  </button>
-                ))}
+                {cropPlans.map((item) => {
+                  // The API stores the status as an English string
+                  // ("Pre-Harvest", "On Hold", …). Resolve it through the same
+                  // phase codes the crop cards use so it renders localized.
+                  const phase = getPhaseConfig(item.status);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => navigate("/farmer/crops")}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
+                    >
+                      <CommodityIllustration commodityId={item.commodityId} commodityName={item.commodityName} baseName={item.commodityName} className="w-9 h-9 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                          {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
+                        </p>
+                        <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
+                          {t("common.status", {}, "Status")}: {t(phase.labelKey, {}, phase.label)}
+                        </p>
+                        {item.notes && <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug mt-0.5">{item.notes}</p>}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

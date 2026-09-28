@@ -25,11 +25,17 @@ export const calendar = {
     december: "December"
   },
   legend: {
-    light_rain: "Light rain",
-    heavy_rain: "Heavy rain",
-    hot_days: "Hot days",
-    events: "Events"
+    crop: "Your crop",
+    weather: "Weather",
+    events: "Events",
+    payday: "Payday"
   },
+  weather_rain_chance: "{pct}% rain",
+  weather_note_storm: "Heavy rain expected.",
+  weather_note_heat: "Hot day ahead.",
+  weather_note_rain: "Rain likely.",
+  weather_note_sun: "Fair weather.",
+  day_summary: "{day}: {summary}",
   selected_date: {
     weather_note: "Weather note",
     market_note: "Market note",
