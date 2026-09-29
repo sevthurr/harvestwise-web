@@ -3,12 +3,21 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, parseResponse } from "../api";
 import { toCamelCase } from "../utils/apiTransforms";
 import { normalizeCropPlan } from "../../farmer/components/crops/CropsContext";
+import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
-export const DEFAULT_WEATHER_LAT = 7.0722;
-export const DEFAULT_WEATHER_LON = 125.6131;
+// Must stay identical to DAVAO_CITY_FALLBACK_COORDINATES: the weather pages key
+// their advisory query off that constant, so a farmer with no farm location
+// would otherwise miss the seeded entry and refetch. Kept as aliases because
+// the fallback coordinates live in one canonical place.
+export const DEFAULT_WEATHER_LAT = DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+export const DEFAULT_WEATHER_LON = DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
 const STALE_TIME = 1000 * 60 * 30; // 30 mins
+
+// The horizon the server bundles price detail for. Must match the server's
+// BUNDLE_DETAIL_HORIZON and the page's default period chip.
+export const BUNDLE_DETAIL_PERIOD = 7;
 
 export function weatherAdvisoryKey(lat, lon) {
   return ["weather", "advisory", lat, lon];
@@ -106,6 +115,14 @@ export async function fetchDashboardPrices() {
   return transformDashboardPrices(pricesData);
 }
 
+// Key shape CommodityDetail.jsx reads:
+//   ["prices", "detail", commodityId, priceTypeKey, period]
+// The server bundles the default period (7) for the top commodities only, so a
+// 14/21/28 chip still misses and fetches on demand — which is exactly what we want.
+export function priceDetailKey(commodityId, priceTypeKey, period = 7) {
+  return ["prices", "detail", commodityId, priceTypeKey, period];
+}
+
 // Single round-trip: the /farmer/daily-snapshot bundle covers every top-level
 // dataset used by the farmer workspace. Write each section into its matching
 // cache key so the persister pushes it to IndexedDB on login and sync.
@@ -133,6 +150,19 @@ export async function seedFarmerOfflineBundle(queryClient) {
       ["dashboard", "prices"],
       transformDashboardPrices({ items: bundle.price_trends })
     );
+  }
+
+  if (Array.isArray(bundle.price_detail)) {
+    bundle.price_detail.forEach((entry) => {
+      const camel = toCamelCase(entry);
+      if (!camel.commodityId || !camel.selectedPriceType) return;
+      // Same transformation the page's queryFn applies, so a bundle hit and a
+      // network hit are byte-identical in the cache.
+      queryClient.setQueryData(
+        priceDetailKey(camel.commodityId, camel.selectedPriceType, BUNDLE_DETAIL_PERIOD),
+        camel
+      );
+    });
   }
 
   if (Array.isArray(bundle.advisory_summary)) {

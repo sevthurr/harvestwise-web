@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2 } from "lucide-react";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
@@ -47,7 +47,6 @@ function CommodityDetailPage() {
   const { t } = useLanguage();
   const { commodityId } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [market, setMarket] = useState("bangkerohan");
   const [period, setPeriod] = useState(7);
   const [showMore, setShowMore] = useState(false);
@@ -57,26 +56,11 @@ function CommodityDetailPage() {
   const [priceDetail, setPriceDetail] = useState(null);
   const [priceRecords, setPriceRecords] = useState([]);
 
-  // Prefetch all 4 price types whenever commodityId or period is active
-  useEffect(() => {
-    if (!commodityId) return;
-    const priceTypes = ["bangkerohan_retail", "bangkerohan_wholesale", "dftc_retail", "dftc_wholesale"];
-    priceTypes.forEach((pt) => {
-      queryClient.prefetchQuery({
-        queryKey: ["prices", "detail", commodityId, pt, period],
-        queryFn: async () => {
-          const response = await apiGet(
-            `/prices/${commodityId}?price_type=${pt}&horizon=${period}&records_limit=5`
-          );
-          if (!response.ok) return null;
-          const data = await parseResponse(response);
-          return toCamelCase(data);
-        },
-        staleTime: 1000 * 60 * 30,
-      });
-    });
-  }, [commodityId, period, queryClient]);
-
+  // No prefetch here on purpose: the login bundle (/farmer/daily-snapshot) already
+  // seeds ["prices","detail", id, priceTypeKey, 7] for the top commodities, which
+  // covers the default market + default period. The useQuery below is the fallback
+  // and still fetches on a cache miss — a non-top-10 commodity from a deep link, or
+  // a 14/21/28 period chip, works exactly as before, it just is not pre-warmed.
   // Reuse prefetched prices list for navigation chips and variety dropdowns
   const { data: pricesListData } = useQuery({
     queryKey: ["prices", "list"],

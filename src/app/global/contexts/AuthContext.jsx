@@ -86,7 +86,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ------------------------------------------------------------------
-  // Listen for forced-logout event from the API client
+  // Listen for forced-logout event from the API client.
+  // api.js only dispatches this when the 401'd request actually carried a
+  // token, so an anonymous 401 must never reach here. clearQueryPersistedCache
+  // uses resetQueries() (not clear()) so mounted observers are not stranded.
   // ------------------------------------------------------------------
   useEffect(() => {
     const handle = () => {
