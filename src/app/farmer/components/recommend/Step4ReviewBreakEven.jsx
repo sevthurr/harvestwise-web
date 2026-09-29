@@ -372,7 +372,7 @@ const Step4ReviewBreakEven = ({
           {data.variant && <ReviewRow label={t("farmer.commodityDetail.variety", {}, "Variety")} value={data.variant} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.target_planting_date", {}, "Target planting date")} value={data.plantingDate} onEdit={() => onEditStep(1)} t={t} />
           <ReviewRow label={t("farmer.assess.expected_harvest_date", {}, "Expected harvest date")} value={data.harvestDate} onEdit={() => onEditStep(1)} t={t} />
-          {data.commodity && <ReviewRow label={t("farmer.assess.typical_crop_duration", {}, "Typical crop duration")} value={durationLabel} onEdit={() => onEditStep(1)} t={t} />}
+          {duration && <ReviewRow label={t("farmer.assess.typical_crop_duration", {}, "Typical crop duration")} value={durationLabel} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.farm_area_label", {}, "Farm area")} value={farmAreaText} onEdit={() => onEditStep(2)} t={t} />
           <ReviewRow
             label={t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}

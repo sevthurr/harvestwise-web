@@ -165,14 +165,18 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
 
         {errors.commodity && <p className="mt-2 text-sm text-red-600">{errors.commodity}</p>}
 
-        {/* Typical duration chip — stays visible; "-" when no duration is known
-            for the selected crop/variety. */}
-        {data.commodity && <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
-            <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
-            <span className="text-[13px] text-[var(--hw-neutral-900)]">
-              {t("farmer.assess.typical_duration", { label: durationLabel || "-" }, `Typical duration: ${durationLabel || "-"}`)}
-            </span>
-          </div>}
+        {/* Typical duration chip — hidden when no duration is known for the
+            selected crop/variety. */}
+        {duration && (() => {
+          return (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
+              <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
+              <span className="text-[13px] text-[var(--hw-neutral-900)]">
+                {t("farmer.assess.typical_duration", { label: durationLabel }, `Typical duration: ${durationLabel}`)}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Variant picker — dropdown, shown only when commodity has 2+ varieties */}
         {data.commodity && (() => {

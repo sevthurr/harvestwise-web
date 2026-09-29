@@ -7,9 +7,13 @@
  * so every farmer was told to expect harvest weeks too early. Duration must
  * now come from the API and a variety with no duration must read as unknown
  * rather than inheriting a sibling variety's numbers.
+ *
+ * `CROP_DURATIONS` survives as a fallback for crops the API catalog does not
+ * cover (offline bundle, non-top-10 crops). The API value must always win
+ * when both exist — that priority is what this file guards.
  */
 import { describe, it, expect } from "vitest";
-import { formatDurationLabel, suggestHarvestDate } from "./types.js";
+import { CROP_DURATIONS, formatDurationLabel, getCropDuration, suggestHarvestDate } from "./types.js";
 import { buildCatalog, durationForOption } from "./useCommodityCatalog.js";
 
 // Trimmed from GET /api/v1/prices?is_top10=true
@@ -100,5 +104,35 @@ describe("suggestHarvestDate", () => {
   it("returns null without a planting date or a duration", () => {
     expect(suggestHarvestDate("", { min: 46, max: 50 })).toBeNull();
     expect(suggestHarvestDate(PLANTING, null)).toBeNull();
+  });
+
+  it("falls back to CROP_DURATIONS when given a commodity id", () => {
+    // Step 1 passes a commodity id whenever the API catalog has no row, so the
+    // farmer still gets a window instead of a blank suggestion.
+    expect(suggestHarvestDate(PLANTING, "talong", "Banate King").minDate).toBe("2026-11-16");
+  });
+
+  it("prefers the API duration over CROP_DURATIONS when both are available", () => {
+    // Ampalaya's crop-wide table range is 45–75 days; the database says 48–52.
+    // If the API value ever stops winning, farmers get a four-week window
+    // instead of the four-day one the research specifies.
+    const apiDuration = { min: 48, max: 52 };
+    expect(getCropDuration("ampalaya")).toMatchObject({ daysMin: 45, daysMax: 75 });
+    expect(suggestHarvestDate(PLANTING, apiDuration, "Galaxy")).toEqual({
+      minDate: "2026-11-18",
+      maxDate: "2026-11-22",
+    });
+  });
+});
+
+describe("getCropDuration", () => {
+  it("resolves the fallback table by commodity and by variety", () => {
+    expect(getCropDuration("talong")).toMatchObject({ daysMin: 46, daysMax: 50 });
+    expect(getCropDuration("talong", "Banate King")).toMatchObject({ daysMin: 46, daysMax: 50 });
+  });
+
+  it("returns null for a crop that is in neither source", () => {
+    expect(getCropDuration("saba")).toBeNull();
+    expect(getCropDuration(null)).toBeNull();
   });
 });
