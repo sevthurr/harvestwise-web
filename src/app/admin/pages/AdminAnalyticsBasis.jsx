@@ -950,13 +950,20 @@ function AdminAnalyticsBasis() {
       : "+14d";
 
     const forecast14d = days.map((day) => {
-      const dateObj = new Date(day.date);
-      const dateStr = !isNaN(dateObj.getTime())
-        ? dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        : day.date;
+      const isSevere =
+        (day.rainfall_mm ?? 0) >= sevRainMin ||
+        (day.temp_max ?? 0) >= sevTempMax ||
+        (day.temp_min ?? 0) <= sevTempMin ||
+        (day.wind_speed_max_kmh ?? 0) > sevWind;
+      const isCaution =
+        (day.rainfall_mm ?? 0) >= cautRainMin ||
+        (day.temp_max ?? 0) > suitTempMax ||
+        (day.temp_min ?? 0) < suitTempMin ||
+        (day.humidity_pct ?? 0) >= 90;
+
       return {
         dayLabel: day.day_label,
-        date: dateStr,
+        date: day.date,
         tempMax: day.temp_max != null ? Math.round(day.temp_max) : null,
         tempMin: day.temp_min != null ? Math.round(day.temp_min) : null,
         rainPct: day.rain_probability_pct != null
@@ -965,7 +972,8 @@ function AdminAnalyticsBasis() {
         rainfallMm: day.rainfall_mm,
         humidity: day.humidity_pct,
         windSpeed: day.wind_speed_max_kmh,
-        weatherCondition: day.weather_condition
+        weatherCondition: day.weather_condition,
+        suitability: isSevere ? "Severe" : isCaution ? "Caution" : "Suitable",
       };
     });
 
@@ -1455,6 +1463,8 @@ function AdminAnalyticsBasis() {
             title="14-Day Weather Forecast Outlook"
             subtitle={`Estimated weather parameters and risks for ${selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.`}
             forecast={displayResult.forecast_14d || []}
+            showSuitability={true}
+            commodityName={selectedCommodity !== "-" ? selectedCommodity : "Ampalaya"}
             emptyMessage="No weather data available."
             showScrollbar
             showForecastTable

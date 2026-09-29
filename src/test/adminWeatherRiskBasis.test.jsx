@@ -120,7 +120,7 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
 
     // Verify forecast card data renders after the async fetch resolves
     await waitFor(() => {
-      expect(screen.getAllByText('Today').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Today|Karon|Ngayon/i).length).toBeGreaterThanOrEqual(1);
     }, { timeout: 5000 });
 
     expect(screen.getAllByText('29°').length).toBeGreaterThanOrEqual(1);
@@ -146,9 +146,9 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
       </QueryClientProvider>
     );
 
-    // Cards still render
+    // Cards still render (day 0 label is localized: Today / Karon / Ngayon)
     await waitFor(() => {
-      expect(screen.getAllByText('Today').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Today|Karon|Ngayon/i).length).toBeGreaterThanOrEqual(1);
     });
     // The admin-only detail table must NOT appear without the opt-in prop
     expect(screen.queryByText('Forecast Data')).toBeNull();

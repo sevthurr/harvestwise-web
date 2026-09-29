@@ -24,5 +24,11 @@ export const prices = {
   micro_rising: "Posibleng mosaka ang presyo sa dili madugay.",
   micro_falling: "Posibleng moubos ang presyo sa dili madugay.",
   micro_steady: "Halos walay kausaban sa presyo.",
-  no_results: "Walay nakit-an nga gulay nga motugma sa imong gipangita."
+  no_results: "Walay nakit-an nga gulay nga motugma sa imong gipangita.",
+  advisory_rising: "Ang presyo sa {commodity} gilaoman nga mosaka sa {range} sa sunod {days} ka adlaw. Maayo kini nga higayon para magbaligya.",
+  advisory_rising_no_range: "Ang presyo sa {commodity} gilaoman nga mosaka sa umaabot nga mga adlaw. Maayo kini nga higayon para magbaligya.",
+  advisory_falling: "Ang presyo sa {commodity} gilaoman nga moubos sa {range} sa sunod {days} ka adlaw. Mas maayo nga tagdaan kon kanus-a magbaligya.",
+  advisory_falling_no_range: "Ang presyo sa {commodity} gilaoman nga moubos sa umaabot nga mga adlaw. Mas maayo nga tagdaan kon kanus-a magbaligya.",
+  advisory_stable: "Ang presyo sa {commodity} gilaoman nga magpabilin sa {range}. Pwede magplano nga walay kabalaka.",
+  advisory_stable_no_range: "Ang presyo sa {commodity} gilaoman nga halos dili mausab sa umaabot."
 };

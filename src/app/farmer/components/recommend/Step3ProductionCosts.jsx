@@ -200,60 +200,6 @@ const Step3ProductionCosts = ({ data, onChange, errors }) => {
           {total > 0 ? formatPeso(total) : "₱0"}
         </p>
       </div>
-
-      {/* Farmgate price section */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">
-          {t("farmer.assess.how_will_you_sell", {}, "How will you sell?")}
-        </p>
-
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={data.useFarmgate}
-            onChange={(e) => onChange({ useFarmgate: e.target.checked, farmgatePrice: e.target.checked ? data.farmgatePrice : "" })}
-            className="mt-0.5 w-4 h-4 rounded border-[var(--hw-neutral-300)] text-[var(--hw-green-700)] focus:ring-[var(--hw-green-600)] cursor-pointer"
-          />
-          <div>
-            <p className="text-sm text-[var(--hw-neutral-900)]">
-              {t("farmer.assess.sell_farmgate_check", {}, "I will sell the produce to a buyer using farmgate price.")}
-            </p>
-            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
-              {t("farmer.assess.farmgate_explainer", {}, "Farmgate price is the price a buyer may pay you. You can update this later.")}
-            </p>
-          </div>
-        </label>
-
-        {data.useFarmgate ? <div>
-            <label
-              htmlFor="farmgate-price"
-              className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
-            >
-              {t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-[var(--hw-neutral-700)] flex-shrink-0">₱</span>
-              <input
-                id="farmgate-price"
-                type="number"
-                min="0"
-                step="any"
-                value={data.farmgatePrice}
-                onChange={(e) => onChange({ farmgatePrice: e.target.value === "" ? "" : Number(e.target.value) })}
-                placeholder="70"
-                className={`
-                  flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none transition
-                  focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]
-                  ${errors.farmgatePrice ? "border-red-400 bg-red-50" : "border-[var(--hw-neutral-200)] bg-white"}
-                `}
-              />
-              <span className="text-sm text-[var(--hw-neutral-700)] flex-shrink-0">/kg</span>
-            </div>
-            {errors.farmgatePrice && <p className="mt-1.5 text-sm text-red-600">{errors.farmgatePrice}</p>}
-          </div> : <p className="text-[13px] text-[var(--hw-neutral-700)] italic">
-            {t("farmer.assess.market_reference_note", {}, "Market price will be used as reference. Actual buyer price may be different.")}
-          </p>}
-      </div>
     </div>;
 };
 export {

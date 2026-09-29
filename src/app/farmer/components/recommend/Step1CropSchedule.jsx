@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
-import { suggestHarvestDate, formatDurationLabel } from "./types";
+import { formatDurationLabel, getCropDuration, suggestHarvestDate } from "./types";
 import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
@@ -30,10 +30,17 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   }, []);
 
   const selectedOption = commodityOptions.find((c) => c.id === data.commodity) || null;
-  // commodity.typical_duration_min_days / max_days — null when the DB has none.
-  const duration = durationForOption(selectedOption, data.variant);
-  const durationLabel = formatDurationLabel(duration, t);
-  const suggestion = suggestHarvestDate(data.plantingDate, duration);
+  // commodity.typical_duration_min_days / max_days from GET /prices; falls back
+  // to the CROP_DURATIONS table when the catalog has no row for this crop
+  // (offline bundle or a crop outside the top 10).
+  const apiDuration = durationForOption(selectedOption, data.variant);
+  const duration = apiDuration || (data.commodity ? getCropDuration(data.commodity, data.variant) : null);
+  const durationVarKey = data.variant
+    ? `duration_${data.commodity}_${data.variant.toLowerCase().replace(/[^a-z0-9]/g, "_")}`
+    : `duration_${data.commodity}`;
+  const durationLabel = formatDurationLabel(apiDuration, t)
+    || (data.commodity ? t(`farmer.assess.${durationVarKey}`, {}, duration?.label || "") : null);
+  const suggestion = suggestHarvestDate(data.plantingDate, apiDuration || data.commodity, data.variant);
   const selectedPage = Math.floor(
     commodityOptions.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
   );
@@ -43,9 +50,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   // its duration changes.
   useEffect(() => {
     if (suggestion && suggestion.minDate) {
-      if (!data.harvestDate || data.harvestDate < data.plantingDate) {
-        onChange({ harvestDate: suggestion.minDate });
-      }
+      onChange({ harvestDate: suggestion.minDate });
     }
   }, [data.plantingDate, data.commodity, data.variant, duration?.min, duration?.max]);
 
@@ -160,8 +165,8 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
 
         {errors.commodity && <p className="mt-2 text-sm text-red-600">{errors.commodity}</p>}
 
-        {/* Typical duration chip — stays visible; "-" when the database has no
-            duration for the selected crop/variety. */}
+        {/* Typical duration chip — stays visible; "-" when no duration is known
+            for the selected crop/variety. */}
         {data.commodity && <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
             <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
             <span className="text-[13px] text-[var(--hw-neutral-900)]">

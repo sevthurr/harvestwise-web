@@ -37,6 +37,8 @@ function validateStep(step, data, t) {
   }
   if (step === 3) {
     if (getTotalCost(data) <= 0) errors.totalCost = t ? t("farmer.assess.validation_total_cost", {}, "Enter your estimated total cost.") : "Enter your estimated total cost.";
+  }
+  if (step === 4) {
     if (data.useFarmgate && (data.farmgatePrice === "" || Number(data.farmgatePrice) <= 0)) {
       errors.farmgatePrice = t ? t("farmer.assess.validation_farmgate_price", {}, "Enter your estimated farmgate price, or uncheck the option above.") : "Enter your estimated farmgate price, or uncheck the option above.";
     }
