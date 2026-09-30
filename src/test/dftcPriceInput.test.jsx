@@ -195,6 +195,55 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
     });
   });
 
+  it('does not navigate away or claim success when a market fails to save', async () => {
+    // Regression: a failed market POST was swallowed by a bare console.error,
+    // so the page still navigated to /dftc/input reporting "saved successfully"
+    // even though that market's prices never reached the database.
+    global.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
+        return { ok: false, status: 500, json: async () => ({ detail: 'Internal error' }) };
+      }
+      return mockFetch()(url, opts);
+    });
+
+    renderDFTCPriceInput();
+
+    const landingTab = screen.getByRole('button', { name: /Bangkerohan Landing/i });
+    fireEvent.click(landingTab);
+
+    const lowlandBtn = screen.getByText(/Lowland Vegetables/i).closest('button');
+    fireEvent.click(lowlandBtn);
+
+    const inputs = screen.getAllByPlaceholderText('0.00');
+    fireEvent.change(inputs[0], { target: { value: '25' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('₱25.00')).toBeInTheDocument();
+    });
+
+    // The previous test's success path navigates on a 900ms timer that outlives
+    // its assertions; clear the spy so this test only sees its own navigation.
+    mockNavigate.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
+
+    // The failure must be surfaced, not swallowed.
+    await waitFor(() => {
+      expect(screen.getByText(/Could not save 1 of 5 markets/i)).toBeInTheDocument();
+    });
+
+    // The success path navigates on a 900ms timer, so wait past that window
+    // before asserting the user was NOT navigated away.
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // And the user must stay on the page rather than seeing a false success.
+    expect(mockNavigate).not.toHaveBeenCalledWith('/dftc/input', expect.anything());
+  });
+
   it('supports summary card filtering, displays Date entered with time, DFTC staff fields, and leaves empty cells blank', async () => {
     global.fetch = vi.fn(async (url) => {
       if (url.includes('/dftc/staff')) {

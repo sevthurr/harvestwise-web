@@ -700,6 +700,7 @@ function DFTCPriceInput() {
   // Guards a reporting date that arrived from navigation state: handleDateChange
   // clamps user input, but a future date passed in via navState bypasses it.
   const [dateError, setDateError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
 
   // DFTC Personnel from database (with standard staff fallbacks)
@@ -806,6 +807,8 @@ function DFTCPriceInput() {
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
+    // Any edit means the user is acting on the failure notice.
+    setSaveError("");
     setSaveStatus("saving");
     saveTimer.current = setTimeout(() => {
       setSaveStatus("saved");
@@ -1203,9 +1206,11 @@ function DFTCPriceInput() {
       return;
     }
     setDateError("");
+    setSaveError("");
     setIsSaving(true);
     let totalSaved = 0;
     let dropped = 0;
+    const failedTabs = [];
 
     for (const tab of MARKET_TABS) {
       const tabMap = tabFields[tab.id] || {};
@@ -1268,7 +1273,21 @@ function DFTCPriceInput() {
         totalSaved += records.length;
       } catch (err) {
         console.error(`Failed to save submission for ${tab.label}:`, err);
+        failedTabs.push(tab.label);
       }
+    }
+
+    // Never report success when a market failed. Records are written as
+    // idempotent upserts, so staying on the page and letting the user retry is
+    // safe — navigating away would silently drop that market's prices and
+    // discard the local draft that holds the retyped values.
+    if (failedTabs.length > 0) {
+      setSaveError(
+        `Could not save ${failedTabs.length} of ${MARKET_TABS.length} markets: ${failedTabs.join(", ")}. ` +
+        `Your entries are still on this page — check your connection and press Save again.`
+      );
+      setIsSaving(false);
+      return;
     }
 
     try {
@@ -1548,6 +1567,15 @@ function DFTCPriceInput() {
           </div>
 
           <div className="pt-2">
+            {saveError && (
+              <div
+                role="alert"
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {saveError}
+              </div>
+            )}
             {dateError && (
               <p
                 role="alert"

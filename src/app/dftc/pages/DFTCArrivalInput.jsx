@@ -717,6 +717,7 @@ export default function DFTCArrivalInput() {
   const [reviewFilter, setReviewFilter] = useState("all");
   const [dataName, setDataName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
 
   // DFTC Personnel from database (with standard staff fallbacks)
@@ -740,8 +741,9 @@ export default function DFTCArrivalInput() {
       const label = `${monthObj.name} ${selectedYear}`;
       const lastDay = new Date(parseInt(selectedYear, 10), parseInt(selectedMonth, 10), 0).getDate();
       const iso = `${selectedYear}-${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
+      const startIso = `${selectedYear}-${selectedMonth}-01`;
       const subtitle = `For the Month of ${monthObj.name} ${selectedYear}`;
-      return { label, subtitle, rangeLabel: `${monthObj.name} 1 – ${lastDay}, ${selectedYear}`, iso, freq: "Monthly" };
+      return { label, subtitle, rangeLabel: `${monthObj.name} 1 – ${lastDay}, ${selectedYear}`, iso, startIso, freq: "Monthly" };
     }
     if (periodType === "weekly") {
       const label = activeWeekObj.fullLabel; // e.g. "Week 1 of September 2026"
@@ -751,11 +753,12 @@ export default function DFTCArrivalInput() {
         subtitle,
         rangeLabel: activeWeekObj.rangeLabel, // e.g. "Sep 1 – Sep 7, 2026"
         iso: activeWeekObj.endIso,
+        startIso: activeWeekObj.startIso,
         freq: "Weekly"
       };
     }
     const label = formatDateLabel(selectedDate);
-    return { label, subtitle: `For ${label}`, rangeLabel: label, iso: selectedDate, freq: "Daily" };
+    return { label, subtitle: `For ${label}`, rangeLabel: label, iso: selectedDate, startIso: selectedDate, freq: "Daily" };
   }, [periodType, selectedDate, selectedMonth, selectedYear, activeWeekObj]);
 
   // Update default data name whenever period changes
@@ -763,10 +766,21 @@ export default function DFTCArrivalInput() {
     setDataName(`DFTC Arrival Volume — ${effectivePeriodInfo.label}`);
   }, [effectivePeriodInfo.label]);
 
-  // Reporting-date guard. `effectivePeriodInfo.iso` is the exact date sent as
-  // `reporting_date`, for every period type (daily / weekly / monthly), so this
-  // validates the real payload rather than the raw date picker value.
-  const reportingDateError = getReportingDateError(effectivePeriodInfo.iso);
+  // Reporting-date guard, mirroring the server rule in
+  // `ManualArrivalSubmissionCreate`.
+  //
+  // Daily submissions are stamped with the day the data was observed, so that
+  // date must not be in the future. Weekly/monthly submissions are stamped with
+  // the *last* day of the period, which legitimately falls in the future while
+  // the period is still running — staff file figures for the week or month in
+  // progress. What must never be allowed is a period that has not begun, so
+  // those are validated on the period start instead.
+  const reportingDateError =
+    periodType === "daily"
+      ? getReportingDateError(effectivePeriodInfo.iso)
+      : isFutureDate(effectivePeriodInfo.startIso)
+        ? "Reporting period cannot start in the future."
+        : "";
 
   // Fetch DFTC staff profiles from database
   useEffect(() => {
@@ -836,6 +850,8 @@ export default function DFTCArrivalInput() {
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
+    // Any edit means the user is acting on the failure notice.
+    setSaveError("");
     setSaveStatus("saving");
     saveTimer.current = setTimeout(() => {
       try {
@@ -1143,6 +1159,9 @@ export default function DFTCArrivalInput() {
       source_id: "dftc_volume",
       reporting_date: effectivePeriodInfo.iso,
       period_type: periodType,
+      // The server validates the period start, not the end: the end date of an
+      // in-progress week/month is legitimately in the future.
+      period_start: effectivePeriodInfo.startIso,
       encoded_by: encodedBy,
       reviewed_by: reviewedBy,
       records
@@ -1153,6 +1172,12 @@ export default function DFTCArrivalInput() {
       totalSaved = records.length;
     } catch (err) {
       console.error("Failed to save arrival volume submission:", err);
+      setSaveError(
+        "Could not save this arrival volume submission. Your entries are still on " +
+        "this page — check your connection and press Save again."
+      );
+      setIsSaving(false);
+      return;
     }
 
     try {
@@ -1496,6 +1521,15 @@ export default function DFTCArrivalInput() {
           </div>
 
           <div className="pt-2">
+            {saveError && (
+              <div
+                role="alert"
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {saveError}
+              </div>
+            )}
             {reportingDateError && (
               <p
                 role="alert"

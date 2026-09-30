@@ -309,4 +309,75 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
       expect(requestPayload.encoded_by).toBe('MARIA SANTOS');
     });
   });
+
+  it('does not navigate away or claim success when the save request fails', async () => {
+    global.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/commodities')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [{ id: 'com-1', name: 'Ampalaya', category: 'Lowland Vegetables' }] })
+        };
+      }
+      if (url.includes('/dftc/staff')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [{ first_name: 'MARIA', last_name: 'SANTOS', position_title: 'DFTC Records Clerk' }] })
+        };
+      }
+      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
+        return { ok: false, status: 500, json: async () => ({ detail: 'Internal error' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ items: [] }) };
+    });
+
+    renderDFTCArrivalInput();
+
+    const lowlandBtn = screen.getByText(/Lowland Vegetables/i).closest('button');
+    fireEvent.click(lowlandBtn);
+
+    const inputs = screen.getAllByPlaceholderText('0');
+    fireEvent.change(inputs[0], { target: { value: '800' } });
+
+    const reviewBtn = screen.getByRole('button', { name: /Review Entered Data/i });
+    fireEvent.click(reviewBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Save DFTC Arrival Volume/i })).toBeInTheDocument();
+    });
+
+    const encodedByTrigger = document.getElementById('encoded-by-select');
+    fireEvent.click(encodedByTrigger);
+    await waitFor(() => {
+      expect(screen.getByText('MARIA SANTOS')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('MARIA SANTOS'));
+
+    // The previous test's success path navigates on a 600ms timer that outlives
+    // its assertions; clear the spy so this test only sees its own navigation.
+    mockNavigate.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Arrival Volume/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Confirm Finalize & Save Arrival Volume')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
+
+    // The failure must be surfaced, not swallowed.
+    await waitFor(() => {
+      expect(screen.getByText(/Could not save this arrival volume submission/i)).toBeInTheDocument();
+    });
+
+    // The success path navigates on a 600ms timer, so wait past that window
+    // before asserting the user was NOT navigated away.
+    await new Promise((r) => setTimeout(r, 900));
+
+    // And the user must stay on the page with their data intact.
+    expect(mockNavigate).not.toHaveBeenCalledWith('/dftc/input', expect.anything());
+    expect(screen.getByText('Add Arrival Volume — Review')).toBeInTheDocument();
+    expect(screen.getAllByText(/800/).length).toBeGreaterThan(0);
+  });
 });

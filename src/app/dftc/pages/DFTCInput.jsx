@@ -13,6 +13,7 @@ import {
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCFilePreview } from "../components/DFTCFilePreview";
+import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 
 function formatMarketName(sourceId) {
   if (!sourceId) return "—";
@@ -67,7 +68,13 @@ export default function DFTCInput() {
     queryFn: async () => {
       const res = await apiGet("/dftc/submissions?page=1&page_size=50");
       return parseResponse(res);
-    }
+    },
+    // Global defaults set staleTime: 30min and refetchOnMount: false, so
+    // returning here from the price/arrival entry pages reused the pre-save
+    // cache and the submission just saved was missing from the recent list.
+    // Saving invalidates this key while this page is unmounted, which only
+    // marks it stale — the refetch therefore has to be forced on mount.
+    refetchOnMount: "always"
   });
 
   const rawSubmissions = submissionsData?.items || [];
@@ -107,6 +114,10 @@ export default function DFTCInput() {
 
         list.push({
           id: sub.submission_id || sub.id,
+          submissionId: sub.id || sub.submission_id,
+          isArrival,
+          analyticsRecords: sub.analytics_records || [],
+          otherRecords: sub.other_records || [],
           dataName,
           dataType,
           market,
@@ -185,6 +196,10 @@ export default function DFTCInput() {
 
     setPreviewFile({
       reportId: file.id,
+      submissionId: file.submissionId,
+      isArrival: file.isArrival,
+      analyticsRecords: file.analyticsRecords,
+      otherRecords: file.otherRecords,
       dataName: file.dataName,
       dataType: file.dataType,
       market: file.market,
@@ -200,9 +215,13 @@ export default function DFTCInput() {
   };
 
   if (previewFile) {
+    // Arrival volumes are a separate dataset from prevailing prices, and
+    // DFTCFilePreview only renders the price report. Routing by isArrival stops
+    // an arrival row from opening a price report for the same date.
+    const PreviewComponent = previewFile.isArrival ? DFTCArrivalPreview : DFTCFilePreview;
     return (
       <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto">
-        <DFTCFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
+        <PreviewComponent file={previewFile} onClose={() => setPreviewFile(null)} />
       </div>
     );
   }
