@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
-import { apiGet, parseResponse } from "../../global/api";
+import { apiGet, openEventStream, parseResponse } from "../../global/api";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { loadReadIds, persistReadIds } from "../../../services/notificationReadState";
 
@@ -144,18 +144,12 @@ function DFTCNotifications() {
   });
 
   useEffect(() => {
-    let es;
-    try {
-      es = new EventSource("/api/v1/notifications/stream");
-      es.addEventListener("DATASET_INGESTED", () => {
-        refetch();
-      });
-    } catch {
-      // SSE fallback
-    }
-    return () => {
-      if (es) es.close();
-    };
+    // openEventStream attaches the bearer token; native EventSource cannot,
+    // and /notifications/stream requires authentication.
+    const stream = openEventStream("/notifications/stream", {
+      DATASET_INGESTED: () => refetch(),
+    });
+    return () => stream.close();
   }, [refetch]);
 
   const enabledTypes = useMemo(() => {

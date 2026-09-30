@@ -143,8 +143,7 @@ export const ceb = {
       account_inactive: "Dili aktibo ang imong account. Kontaka ang suporta.",
       account_locked: "Naka-lock ang account. Palihug sulayi pag-usab unya.",
       general: "Adunay sayop nga nahitabo. Palihug sulayi pag-usab.",
-      email_registered: "Kini nga email narehistro na.",
-      phone_registered: "Kini nga numero sa telepono narehistro na.",
+      contact_unavailable: "Wala kami mahimong muban og account nga kaniya. Kon naa ka na nga account, login na lang.",
       need_login_for_2fa: "Ang imong account nanginahanglan og two-factor authentication. Palihug mag-sign in sa login page.",
     },
     requirements: {

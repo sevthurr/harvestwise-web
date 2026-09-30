@@ -9,6 +9,7 @@ import { Toast } from "../ui/hw-ui";
 import { PwaInstallPrompt } from "../pwa/PwaInstallPrompt";
 import { useFarmerPrefetch } from "../../hooks/useFarmerPrefetch";
 import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { openEventStream } from "../../api";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
@@ -76,10 +77,8 @@ const Layout = () => {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    let es = null;
-    const handler = (e) => {
+    const handler = (eventData) => {
       try {
-        const eventData = JSON.parse(e.data);
         if (eventData.type === "FARMER_NOTIF") {
           // If the event carries a user_id, only act on it for the matching farmer.
           // Bulk events (price/weather alerts) omit user_id — always act on those.
@@ -105,20 +104,14 @@ const Layout = () => {
       }
     };
 
-    try {
-      es = new EventSource("/api/v1/notifications/stream");
-      es.onmessage = handler;
-      es.addEventListener("FARMER_NOTIF", handler);
-    } catch {
-      // SSE not available (offline / unsupported)
-    }
+    // openEventStream attaches the bearer token; native EventSource cannot,
+    // and /notifications/stream requires authentication.
+    const stream = openEventStream("/notifications/stream", {
+      message: handler,
+      FARMER_NOTIF: handler,
+    });
 
-    return () => {
-      if (es) {
-        es.removeEventListener("FARMER_NOTIF", handler);
-        es.close();
-      }
-    };
+    return () => stream.close();
   }, [queryClient, refreshUnread, t]);
 
   const handleNavClick = (id) => {

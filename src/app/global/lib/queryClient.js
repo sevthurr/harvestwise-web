@@ -46,6 +46,27 @@ export const persister = createAsyncStoragePersister({
   key: "HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1",
 });
 
+/**
+ * CacheStorage name for runtime-cached API GETs, configured in vite.config.js.
+ */
+const API_RUNTIME_CACHE = 'harvestwise-api-cache';
+
+/**
+ * Drop every trace of the previous user from this device.
+ *
+ * Two stores are involved and both must be cleared:
+ *
+ *  1. The react-query IndexedDB persister, holding up to 7 days of farmer PII.
+ *  2. The service worker's CacheStorage (`harvestwise-api-cache`), holding raw
+ *     API GET bodies under NetworkFirst.
+ *
+ * Clearing only (1) leaves (2) intact. On a shared handset the next user can go
+ * offline, have the network call fail, and be served the previous farmer's
+ * cached /farmer responses straight out of CacheStorage — a cross-user data
+ * disclosure that no amount of token handling prevents, because the response
+ * body is already on disk and the service worker replays it without consulting
+ * any credential.
+ */
 export async function clearQueryPersistedCache() {
   // resetQueries(), NOT clear(). clear()/removeQueries() destroy the Query
   // object a mounted observer is attached to; the observer then re-attaches to
@@ -56,6 +77,13 @@ export async function clearQueryPersistedCache() {
     await del("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
   } catch {
     // ignore
+  }
+  try {
+    if (typeof caches !== 'undefined') {
+      await caches.delete(API_RUNTIME_CACHE);
+    }
+  } catch {
+    // CacheStorage unavailable (private mode / older browser) — not fatal.
   }
 }
 

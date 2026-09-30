@@ -90,15 +90,31 @@ export function AuthProvider({ children }) {
   // api.js only dispatches this when the 401'd request actually carried a
   // token, so an anonymous 401 must never reach here. clearQueryPersistedCache
   // uses resetQueries() (not clear()) so mounted observers are not stranded.
+  //
+  // Also clears on the browser 'storage' event, which fires when ANOTHER tab
+  // logs out or logs in as someone else. Without it, tab A stays logged in with
+  // user A's tokens while tab B has already switched to user B, and both tabs
+  // read and write the same shared caches. Shared handsets are the norm here,
+  // and this is the path that leaks one farmer's data to the next.
   // ------------------------------------------------------------------
   useEffect(() => {
-    const handle = () => {
+    const purge = () => {
       setUser(null);
       clearQueryPersistedCache();
       try { del(USER_CACHE_KEY); } catch {}
     };
-    window.addEventListener('hw:auth:expired', handle);
-    return () => window.removeEventListener('hw:auth:expired', handle);
+    const handleExpiry = () => purge();
+    // A token key changing value in another tab means the session identity
+    // changed underneath us.
+    const handleStorage = (e) => {
+      if (e.key === 'hw_access_token' || e.key === 'hw_refresh_token') purge();
+    };
+    window.addEventListener('hw:auth:expired', handleExpiry);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('hw:auth:expired', handleExpiry);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   // ------------------------------------------------------------------

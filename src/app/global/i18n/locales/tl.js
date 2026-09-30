@@ -143,8 +143,7 @@ export const tl = {
       account_inactive: "Hindi aktibo ang iyong account. Makipag-ugnayan sa suporta.",
       account_locked: "Naka-lock ang account. Subukang muli mamaya.",
       general: "May nangyaring mali. Subukang muli.",
-      email_registered: "Ang email na ito ay nakarehistro na.",
-      phone_registered: "Ang numerong ito ay nakarehistro na.",
+      contact_unavailable: "Hindi ka namin magawa ng account gamit ang mga detalyeng iyon. Kung mayroon ka nang account, mag-sign in sa halip.",
       need_login_for_2fa: "Ang iyong account ay nangangailangan ng two-factor authentication. Mangyaring mag-sign in mula sa login page.",
     },
     requirements: {

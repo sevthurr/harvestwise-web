@@ -143,8 +143,7 @@ export const en = {
       account_inactive: "Your account is inactive. Contact support.",
       account_locked: "Account locked. Please try again later.",
       general: "Something went wrong. Please try again.",
-      email_registered: "This email is already registered.",
-      phone_registered: "This phone number is already registered.",
+      contact_unavailable: "We could not create an account with those details. If you already have an account, sign in instead.",
       need_login_for_2fa: "Your account requires two-factor authentication. Please sign in from the login page.",
     },
     requirements: {
