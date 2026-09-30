@@ -42,5 +42,6 @@ export const monitoringActions = {
   save_plan_instruction: "I-save sa Aking mga Pananim upang masimulan ang pagsubaybay sa iyong plano at mga kondisyon.",
   update_farmgate: "I-update ang presyong farmgate mamaya kapag may alok na ang mamimili sa iyo.",
   confirm_farmgate: "Kumpirmahin ang iyong presyong farmgate sa mamimili bago ang pag-aani.",
-  check_prices_near_harvest: "Tingnan muli ang presyo kapag malapit na ang ani bago magdesisyon kung kailan magbebenta."
+  check_prices_near_harvest: "Tingnan muli ang presyo kapag malapit na ang ani bago magdesisyon kung kailan magbebenta.",
+  weekly_actions_title: "Ano ang dapat kong gawin ngayong linggo",
 };

@@ -392,6 +392,7 @@ function AssessPage() {
         data={data}
         advisoryResponse={advisoryResponse}
         onEdit={() => setShowResult(false)}
+        onCompareAnother={handleStart}
       />
     );
   }

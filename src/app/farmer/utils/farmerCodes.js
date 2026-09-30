@@ -143,6 +143,39 @@ export function normalizeMarketStatusCode(value) {
   return map[normalized] || null;
 }
 
+export const LIFECYCLE_STAGE_CODES = {
+  PLANNING: "planning",
+  GROWING: "growing",
+  PRE_HARVEST: "pre_harvest",
+  HARVEST: "harvest",
+};
+
+/**
+ * Normalizes a backend crop stage into one of the four lifecycle stages.
+ * Unknown values fall back to PLANNING.
+ */
+export function normalizeLifecycleStage(value) {
+  const normalized = String(value || "").toLowerCase().trim();
+
+  const map = {
+    "before_planting": LIFECYCLE_STAGE_CODES.PLANNING,
+    "planning": LIFECYCLE_STAGE_CODES.PLANNING,
+    "draft": LIFECYCLE_STAGE_CODES.PLANNING,
+    "during_planting": LIFECYCLE_STAGE_CODES.GROWING,
+    "growing": LIFECYCLE_STAGE_CODES.GROWING,
+    "planted": LIFECYCLE_STAGE_CODES.GROWING,
+    "near_harvest": LIFECYCLE_STAGE_CODES.PRE_HARVEST,
+    "pre_harvest": LIFECYCLE_STAGE_CODES.PRE_HARVEST,
+    "pre-harvest": LIFECYCLE_STAGE_CODES.PRE_HARVEST,
+    "preharvest": LIFECYCLE_STAGE_CODES.PRE_HARVEST,
+    "harvest": LIFECYCLE_STAGE_CODES.HARVEST,
+    "harvesting": LIFECYCLE_STAGE_CODES.HARVEST,
+    "harvested": LIFECYCLE_STAGE_CODES.HARVEST,
+  };
+
+  return map[normalized] || LIFECYCLE_STAGE_CODES.PLANNING;
+}
+
 export function normalizePriceTrendCode(value) {
   const normalized = String(value || "").trim().toLowerCase();
 

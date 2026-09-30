@@ -24,5 +24,6 @@ export const production = {
   "production_upper_middle_basic": "Katamtamang mataas ang nakaraang produksyon ng {crop_name} para sa inaasahang quarter ng ani.",
   "production_high_basic": "Mataas ang nakaraang produksyon ng {crop_name} para sa inaasahang quarter ng ani.",
   "production_unavailable_crop": "Walang nakaraang datos ng produksyon ng {crop_name} ngayon.",
-  "production_unavailable_generic": "Walang nakaraang datos ng produksyon ngayon."
+  "production_unavailable_generic": "Walang nakaraang datos ng produksyon ngayon.",
+  "source_variety_note": "Ang PSA ay nag-uulat ng produksyon ayon sa pangalan ng pananim. Ang seryeng ipinapakita para sa",
 };

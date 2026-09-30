@@ -10,6 +10,13 @@ const COMMODITY_OPTIONS = [
   { id: "lettuce", name: "Lettuce" },
   { id: "pechay", name: "Chinese Pechay" }
 ];
+const DAYS_PER_MONTH = 30;
+// A range is quoted in months only when both ends land on a half-month step,
+// otherwise the day count is the honest unit (e.g. 48–52 days, not "1.6–1.7 mo").
+const MONTH_STEP_DAYS = 15;
+// Fallback durations used when the API catalog has no row for the crop
+// (offline bundle, or a crop missing from GET /prices). The API duration
+// always wins when it exists — see `durationForOption` in useCommodityCatalog.
 const CROP_DURATIONS = {
   ampalaya: {
     daysMin: 45,
@@ -99,6 +106,22 @@ function addDays(dateStr, days) {
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
 }
+/**
+ * Localized label for a `{min, max}` day range. Returns null when the database
+ * has no duration, so the caller renders a placeholder rather than inventing
+ * a number.
+ */
+function formatDurationLabel(duration, t) {
+  if (!duration) return null;
+  const isRange = duration.min !== duration.max;
+  const useMonths = duration.min % MONTH_STEP_DAYS === 0 && duration.max % MONTH_STEP_DAYS === 0;
+  const unit = useMonths ? "months" : "days";
+  const lo = useMonths ? duration.min / DAYS_PER_MONTH : duration.min;
+  const hi = useMonths ? duration.max / DAYS_PER_MONTH : duration.max;
+  const key = `farmer.assess.duration_${unit}_${isRange ? "range" : "single"}`;
+  const fallback = isRange ? `${lo}\u2013${hi} ${unit}` : `${lo} ${unit}`;
+  return t ? t(key, { min: lo, max: hi, value: lo }, fallback) : fallback;
+}
 
 function getCropDuration(commodityId, variant = null) {
   if (!commodityId) return null;
@@ -128,13 +151,29 @@ function getCropDuration(commodityId, variant = null) {
   return baseConfig;
 }
 
-function suggestHarvestDate(plantingDate, commodityId, variant = null) {
-  if (!plantingDate || !commodityId) return null;
-  const dur = getCropDuration(commodityId, variant);
+/**
+ * Harvest window from a planting date.
+ *
+ * Accepts either the API duration shape (`{min, max}` from the commodity
+ * catalog — preferred, since it reflects the database) or a commodity id plus
+ * an optional variety, in which case the `CROP_DURATIONS` fallback table is
+ * consulted. Returns `null` when there is nothing to base the window on.
+ */
+function suggestHarvestDate(plantingDate, durationOrCommodity, variant = null) {
+  if (!plantingDate || !durationOrCommodity) return null;
+  const isApiDuration =
+    typeof durationOrCommodity === "object" &&
+    typeof durationOrCommodity.min === "number" &&
+    typeof durationOrCommodity.max === "number";
+  const dur = isApiDuration
+    ? durationOrCommodity
+    : getCropDuration(durationOrCommodity, variant);
   if (!dur) return null;
-  const minDate = addDays(plantingDate, dur.daysMin);
-  const maxDate = dur.daysMin !== dur.daysMax ? addDays(plantingDate, dur.daysMax) : null;
-  return { minDate, maxDate, duration: dur };
+  const min = isApiDuration ? dur.min : dur.daysMin;
+  const max = isApiDuration ? dur.max : dur.daysMax;
+  const minDate = addDays(plantingDate, min);
+  const maxDate = min !== max ? addDays(plantingDate, max) : null;
+  return { minDate, maxDate, duration: isApiDuration ? undefined : dur };
 }
 
 function getHarvestHorizon(harvestDate) {
@@ -201,6 +240,7 @@ export {
   DEFAULT_ASSESSMENT,
   STEP_LABELS,
   TOTAL_STEPS,
+  formatDurationLabel,
   formatPeso,
   getCropDuration,
   getHarvestHorizon,

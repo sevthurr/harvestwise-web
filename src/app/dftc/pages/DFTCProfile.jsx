@@ -86,7 +86,7 @@ function DFTCProfile() {
       {/* ── Card 1: Profile Header ── */}
       <Card>
         <div className="relative flex items-start gap-4">
-          <ProfileAvatar initials={initials} />
+          <ProfileAvatar initials={initials} src={user?.profile_picture_path} alt={fullName} />
 
           <div className="flex-1 min-w-0 pt-0.5">
             <p className="text-[20px] font-bold text-black leading-snug">{fullName}</p>

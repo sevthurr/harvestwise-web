@@ -707,7 +707,7 @@ export const en = {
       analyzing_plan: "Analyzing crop plan...",
       see_advisory: "See advisory",
       save_draft: "Save draft",
-      what_this_means: "What this means"
+      what_this_means: "What this means",       saving_draft: "Saving draft..."
     },
 
     errors: {

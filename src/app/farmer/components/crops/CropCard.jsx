@@ -1,6 +1,7 @@
 import { ChevronRight, PauseCircle } from "lucide-react";
 import { getPhaseConfig } from "./types";
 import { PHASE_CODES, normalizePhaseCode } from "../../utils/farmerCodes";
+import { formatCropLabel } from "../../utils/formatters";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
@@ -63,7 +64,9 @@ const CropCard = ({ crop, onView }) => {
       {/* Top row: icon + name + pill */}
       <div className="flex items-center gap-3">
         <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-10 h-10 flex-shrink-0" />
-        <p className="font-bold text-[var(--hw-neutral-900)] flex-1 leading-tight">{crop.commodityName || "-"}</p>
+        <p className="font-bold text-[var(--hw-neutral-900)] flex-1 leading-tight">
+          {formatCropLabel(crop.commodityName, crop.variety ?? crop.variant)}
+        </p>
         <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
       </div>
 

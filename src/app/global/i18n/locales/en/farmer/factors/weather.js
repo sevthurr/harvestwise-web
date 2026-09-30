@@ -24,5 +24,6 @@ export const weather = {
   "weather_severe_basic": "Weather risk for {crop_name} is severe.",
   "weather_values_no_classification": "Weather information for {crop_name} is available, but there is not enough information to determine its crop-specific risk level.",
   "weather_unavailable_crop": "Weather information for {crop_name} is not available right now.",
-  "weather_unavailable_generic": "Weather information is not available right now."
+  "weather_unavailable_generic": "Weather information is not available right now.",
+  "unavailable": "Not available",
 };

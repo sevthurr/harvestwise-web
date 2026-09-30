@@ -1,5 +1,5 @@
 import React from "react";
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, useParams } from "react-router";
 import { Layout } from "./global/components/layout/Layout";
 import { AdminLayout } from "./global/components/layout/AdminLayout";
 import { ProtectedRoute } from "./global/components/ProtectedRoute";
@@ -81,6 +81,12 @@ export function SmartRedirect({ fallback }) {
   if (isLoggedIn) return <Navigate to={roleHome(user?.role?.role_name)} replace />;
 
   return fallback ?? <Navigate to="/login" replace />;
+}
+
+// Legacy /admin/analytics/basis/:resultId → canonical /admin/modules/basis/:resultId
+function LegacyAnalyticsBasisRedirect() {
+  const { resultId } = useParams();
+  return <Navigate to={`/admin/modules/basis/${resultId}`} replace />;
 }
 
 export const router = createBrowserRouter([
@@ -177,9 +183,9 @@ export const router = createBrowserRouter([
       { path: "forecasting",              Component: AdminForecasting    },
       { path: "modules/basis/:resultId",  Component: AdminAnalyticsBasis },
       { path: "modules/thresholds",       Component: AdminAnalyticsThresholds },
-      { path: "analytics",                Component: AdminAnalytics      },
-      { path: "analytics/basis/:resultId", Component: AdminAnalyticsBasis },
-      { path: "analytics/thresholds",      Component: AdminAnalyticsThresholds },
+      { path: "analytics",                 element: <Navigate to="/admin/modules" replace /> },
+      { path: "analytics/basis/:resultId", element: <LegacyAnalyticsBasisRedirect /> },
+      { path: "analytics/thresholds",      element: <Navigate to="/admin/modules/thresholds" replace /> },
       { path: "history", element: <Navigate to="/admin/data-sources?tab=history" replace /> },
       { path: "history/:historyId",   Component: AdminHistoryDetail },
       { path: "configuration",        Component: AdminConfiguration },

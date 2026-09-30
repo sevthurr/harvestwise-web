@@ -25,12 +25,21 @@ export const calendar = {
     december: "December"
   },
   legend: {
+    crop: "Your crop",
+    weather: "Weather",
+    events: "Events",
+    payday: "Payday",
     light_rain: "Light rain",
     heavy_rain: "Heavy rain",
     hot_days: "Hot days",
-    events: "Events",
     crop_schedule: "Crop schedule"
   },
+  weather_rain_chance: "{pct}% rain",
+  weather_note_storm: "Heavy rain expected.",
+  weather_note_heat: "Hot day ahead.",
+  weather_note_rain: "Rain likely.",
+  weather_note_sun: "Fair weather.",
+  day_summary: "{day}: {summary}",
   selected_date: {
     title: "Daily Calendar & Farming Details",
     weather_note: "Weather note",
@@ -98,7 +107,8 @@ export const calendar = {
     "historical_arrival": "Past DFTC Arrivals",
     "historical_production": "Past Production",
     "calendar_information": "Calendar Information",
-    "reassess_control": "Assess Again Closer to Planting"
+    "reassess_control": "Assess Again Closer to Planting",
+    "planned_planting": "Planned planting"
   },
   "compact": {
     "compact_price_favorable": "Past Price: Favorable",

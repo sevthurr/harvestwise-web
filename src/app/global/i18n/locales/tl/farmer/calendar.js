@@ -25,12 +25,21 @@ export const calendar = {
     december: "Disyembre"
   },
   legend: {
+    crop: "Iyong pananim",
+    weather: "Panahon",
+    events: "Mga kaganapan",
+    payday: "Payday",
     light_rain: "Bahagyang ulan",
     heavy_rain: "Malakas na ulan",
     hot_days: "Mainit na mga araw",
-    events: "Mga Kaganapan",
     crop_schedule: "Iskedyul ng pananim"
   },
+  weather_rain_chance: "{pct}% ulan",
+  weather_note_storm: "Malakas na ulan ang inaasahan.",
+  weather_note_heat: "Mainit na araw ang papunta.",
+  weather_note_rain: "Malamang umulan.",
+  weather_note_sun: "Maganda ang panahon.",
+  day_summary: "{day}: {summary}",
   selected_date: {
     title: "Arawang Detalye ng Kalendaryo at Pagsasaka",
     weather_note: "Paalala sa panahon",
@@ -98,7 +107,8 @@ export const calendar = {
     "historical_arrival": "Nakaraang Dating sa DFTC",
     "historical_production": "Nakaraang Produksyon",
     "calendar_information": "Impormasyon sa Kalendaryo",
-    "reassess_control": "Suriin Muli Kapag Malapit nang Magtanim"
+    "reassess_control": "Suriin Muli Kapag Malapit nang Magtanim",
+    "planned_planting": "Plano ng pagtatanim"
   },
   "compact": {
     "compact_price_favorable": "Nakaraang Presyo: Maganda",

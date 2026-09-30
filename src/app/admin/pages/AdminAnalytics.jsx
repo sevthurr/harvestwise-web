@@ -1,6 +1,6 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { ChevronDown, Info, X, Edit2, Sliders } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
@@ -559,7 +559,16 @@ const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder 
 
 function AdminAnalytics() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState("outputs");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTabState] = useState(() => (searchParams.get("tab") === "weights" ? "weights" : "outputs"));
+  const setTab = (id) => {
+    setTabState(id);
+    if (id === "weights") {
+      setSearchParams({ tab: "weights" }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
   const [commodities, setCommodities] = useState([]);
   const [loadingCommodities, setLoadingCommodities] = useState(true);
 
@@ -803,8 +812,7 @@ function AdminAnalytics() {
   // Historical seasonal production used in the Weights & Thresholds tab.
   const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
     !!scopedCommodityRecord?.id,
-    scopedCommodity,
-    scopedVariety
+    scopedCommodityRecord?.id
   );
 
   useEffect(() => {

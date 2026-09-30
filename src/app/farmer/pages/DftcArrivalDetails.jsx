@@ -88,20 +88,20 @@ function buildInsight(name, classification, weeks, t) {
   if (classification === "High") {
     return {
       headline: `${name} arrivals were above the usual level in ${above} of the last 4 weeks, reaching ${latest.tons.toFixed(1)} tons on ${latest.week}.`,
-      meaning: t ? t("farmer.factors.arrival.arrival_meaning_high", { crop_name: name }) : `More ${name} is entering DFTC, which may place pressure on market prices.`,
+      meaning: t ? t("farmer.factors.arrival.arrival_high_meaning", { crop_name: name }) : `More ${name} is entering DFTC, which may place pressure on market prices.`,
       action: t ? t("farmer.factors.arrival.arrival_action_high") : `Based on recent DFTC arrivals, consider comparing current prices and reviewing your selling schedule.`
     };
   }
   if (classification === "Low") {
     return {
       headline: `${name} arrivals were below the usual level in ${below} of the last 4 weeks.`,
-      meaning: t ? t("farmer.factors.arrival.arrival_meaning_low", { crop_name: name }) : `Fewer ${name} deliveries reaching DFTC may reduce supply pressure in the near term.`,
+      meaning: t ? t("farmer.factors.arrival.arrival_low_meaning", { crop_name: name }) : `Fewer ${name} deliveries reaching DFTC may reduce supply pressure in the near term.`,
       action: t ? t("farmer.factors.arrival.arrival_action_low") : `Based on recent DFTC arrivals, lower volumes may support prices. Confirm the current market price before selling.`
     };
   }
   return {
     headline: `${name} arrivals stayed within the usual range during the last 4 weeks.`,
-    meaning: t ? t("farmer.factors.arrival.arrival_meaning_normal", { crop_name: name }) : `Arrival volumes at DFTC are consistent with recent seasonal patterns.`,
+    meaning: t ? t("farmer.factors.arrival.meaning_moderate", { crop_name: name }) : `Arrival volumes at DFTC are consistent with recent seasonal patterns.`,
     action: t ? t("farmer.factors.arrival.arrival_action_normal") : `Based on recent DFTC arrivals, no strong arrival warning is present. Continue checking current prices before harvesting or selling.`
   };
 }

@@ -24,5 +24,6 @@ export const weather = {
   "weather_severe_basic": "Taas ang risgo sa panahon para sa {crop_name}.",
   "weather_values_no_classification": "Naay datos sa panahon para sa {crop_name}, pero kulang ang impormasyon para matino kung maayo o delikado ang kondisyon para sa tanom.",
   "weather_unavailable_crop": "Walay datos sa panahon para sa {crop_name} karon.",
-  "weather_unavailable_generic": "Walay datos sa panahon karon."
+  "weather_unavailable_generic": "Walay datos sa panahon karon.",
+  "unavailable": "Dili available",
 };

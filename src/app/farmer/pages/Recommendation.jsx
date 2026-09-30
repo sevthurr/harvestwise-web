@@ -21,8 +21,8 @@ import {
   TrendingUp
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
-import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, parseResponse } from "../../global/api";
+import { toCamelCase } from "../../global/utils/apiTransforms";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { useCrops } from "../components/crops/CropsContext";
@@ -659,7 +659,7 @@ const SelectedDateDetails = ({ year, month, day, markers = {}, onClose }) => {
 function RecommendationPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { t } = useLanguage();
+  const { t, langCode } = useLanguage();
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);

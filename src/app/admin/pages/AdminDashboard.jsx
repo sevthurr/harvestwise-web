@@ -14,7 +14,7 @@ import { adminApi } from "../../../services/api";
 
 const QUICK_ACCESS = [
   { Icon: Upload,             label: "Import & Validate",    path: "/admin/import" },
-  { Icon: SlidersHorizontal, label: "Weights & Thresholds", path: "/admin/analytics/thresholds" },
+  { Icon: SlidersHorizontal, label: "Weights & Thresholds", path: "/admin/modules?tab=weights" },
   { Icon: Users,             label: "Manage Users",          path: "/admin/system?tab=users" },
   { Icon: ClipboardList,     label: "Audit Logs",            path: "/admin/audit-logs" }
 ];

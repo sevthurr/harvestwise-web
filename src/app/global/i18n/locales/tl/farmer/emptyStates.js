@@ -5,5 +5,6 @@ export const emptyStates = {
   no_forecast: "Hindi pa available ang pagtataya sa ngayon.",
   crop_not_found: "Hindi nahanap ang pananim.",
   no_active_crop_plan: "Wala pang aktibong plano sa pananim.",
-  no_crop_reminders: "Wala pang mga paalala sa pananim."
+  no_crop_reminders: "Wala pang mga paalala sa pananim.",
+  no_prices_desc: "Lalabas dito ang datos ng presyo ng top 10 na produkto",
 };

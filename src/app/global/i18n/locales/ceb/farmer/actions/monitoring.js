@@ -42,5 +42,6 @@ export const monitoringActions = {
   save_plan_instruction: "I-save sa Akong mga Tanom aron masugdan ang pagsubay sa imong plano ug pagmonitor sa kondisyon.",
   update_farmgate: "I-update ang presyong farmgate kung naa na kay offer gikan sa mamalitay.",
   confirm_farmgate: "Kumpirmaha ang imong presyong farmgate sa imong mamalitay sa dili pa ang ani.",
-  check_prices_near_harvest: "Tan-awa pag-usab ang presyo kung hapit na ang ani bago ka magdesisyon kanus-a ibaligya."
+  check_prices_near_harvest: "Tan-awa pag-usab ang presyo kung hapit na ang ani bago ka magdesisyon kanus-a ibaligya.",
+  weekly_actions_title: "Unsa akong buhaton karon nga semanaha",
 };

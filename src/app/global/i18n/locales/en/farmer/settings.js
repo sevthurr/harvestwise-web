@@ -53,5 +53,10 @@ export const settings = {
   google_connect: "Connect",
   google_disconnect: "Disconnect",
   toast_google_connected: "Google account connected.",
-  toast_google_disconnected: "Google account disconnected."
+  toast_google_disconnected: "Google account disconnected.",
+  toast_pw_success: "Password updated successfully.",
+  toast_pw_error: "Could not update password. Check your current password and try again.",
+  toast_saved: "Farm profile updated successfully.",
+  toast_save_error: "Could not update farm profile. Please try again.",
+  toast_offline_error: "Could not update offline data. Check your connection and try again.",
 };

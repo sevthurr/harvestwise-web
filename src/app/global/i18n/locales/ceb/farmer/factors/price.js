@@ -11,5 +11,14 @@ export const price = {
   "price_neutral_basic": "Ang presyo sa {crop_name} gilaom nga magpabiling duol sa kasagarang presyo niini.",
   "price_unfavorable_basic": "Dili maayo ang kahimtang sa presyo sa {crop_name}.",
   "price_unavailable_crop": "Walay datos sa presyo sa {crop_name} karon.",
-  "price_unavailable_generic": "Walay datos sa presyo karon."
+  "price_unavailable_generic": "Walay datos sa presyo karon.",
+  "page_title": "Tantiya sa Presyo",
+  "forecast_horizon_label": "Panahon sa Tantiya",
+  "forecast_prefix": "Tantiya:",
+  "forecast_updated_today": "Na-update ang tantiya karon sa 6:00 sa buntag",
+  "reliability_label": "Katakus-tanan",
+  "period_label": "Periodo:",
+  "days_label": "adlaw",
+  "last_days_option": "Miaging {days} ka adlaw",
+  "next_days_option": "Sunod nga {days} ka adlaw",
 };

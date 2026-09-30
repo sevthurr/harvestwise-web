@@ -5,7 +5,8 @@
  * - On 401, attempts a single token refresh then retries the original request.
  * - On second 401 (refresh also expired / revoked), clears storage and
  *   dispatches a custom "hw:auth:expired" event so AuthContext can log the
- *   user out without a circular import.
+ *   user out without a circular import. Only if the request actually carried an
+ *   access token — an anonymous 401 is not an expired session and stays silent.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ?? 'http://localhost:8080';
@@ -34,6 +35,17 @@ export function storeTokens({ access_token, refresh_token }) {
 export function clearTokens() {
   localStorage.removeItem(STORAGE.ACCESS);
   localStorage.removeItem(STORAGE.REFRESH);
+}
+
+/**
+ * Auth failure. Tagged with status: 401 so queryClient's retry predicate can
+ * tell "the session is gone" apart from a transient network/server error, and
+ * fail fast instead of retrying a request that can never succeed.
+ */
+function authError(message) {
+  const err = new Error(message);
+  err.status = 401;
+  return err;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,9 +141,9 @@ async function _refreshAndRetry(url, options) {
     if (err.message === 'refresh_failed') {
       clearTokens();
       window.dispatchEvent(new Event('hw:auth:expired'));
-      _refreshQueue.forEach(({ reject }) => reject(new Error('Session expired')));
+      _refreshQueue.forEach(({ reject }) => reject(authError('Session expired')));
       _refreshQueue = [];
-      throw new Error('Session expired. Please log in again.');
+      throw authError('Session expired. Please log in again.');
     }
     // Network error — don't clear tokens, just fail this request
     _refreshQueue.forEach(({ reject }) => reject(err));
@@ -146,6 +158,10 @@ async function _refreshAndRetry(url, options) {
 // Public fetch wrapper
 // ---------------------------------------------------------------------------
 export async function apiFetch(url, options = {}) {
+  // Must be read BEFORE the request: a 401 on an anonymous request (e.g. a
+  // pre-login /crop-plans probe) is not an expired session, so it must not
+  // clear tokens or fire hw:auth:expired.
+  const hadAuth = Boolean(getAccessToken());
   const res = await _fetch(url, options);
 
   if (res.status === 401) {
@@ -153,9 +169,12 @@ export async function apiFetch(url, options = {}) {
     if (getRefreshToken()) {
       return _refreshAndRetry(url, options);
     }
-    clearTokens();
-    window.dispatchEvent(new Event('hw:auth:expired'));
-    throw new Error('Not authenticated');
+    if (hadAuth) {
+      // The request carried a token and still got a 401 — session genuinely died.
+      clearTokens();
+      window.dispatchEvent(new Event('hw:auth:expired'));
+    }
+    throw authError('Not authenticated');
   }
 
   return res;
@@ -188,6 +207,17 @@ export async function apiPut(url, body, options = {}) {
 
 export async function apiDelete(url, options = {}) {
   return apiFetch(url, { ...options, method: 'DELETE' });
+}
+
+/**
+ * Resolve a stored media location (user.profile_picture_path) into a URL the
+ * browser can load. Cloudinary returns an absolute https URL; the local disk
+ * backend returns a root-relative "/media/..." path that needs the API origin.
+ */
+export function resolveMediaUrl(location) {
+  if (!location) return null;
+  if (/^https?:\/\//i.test(location)) return location;
+  return location.startsWith('/') ? `${API_BASE}${location}` : null;
 }
 
 /**

@@ -78,5 +78,6 @@ export const cropCycle = {
   notes_opt: "Notes — optional",
   notes_placeholder: "Any observations about this crop cycle…",
   est_gross_revenue: "Estimated gross revenue",
-  all_amounts_estimates: "All amounts are estimates."
+  all_amounts_estimates: "All amounts are estimates.",
+  remove_farmgate: "Remove",
 };

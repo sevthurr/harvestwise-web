@@ -24,5 +24,6 @@ export const weather = {
   "weather_severe_basic": "Mataas ang panganib sa panahon para sa {crop_name}.",
   "weather_values_no_classification": "May datos ng panahon para sa {crop_name}, pero kulang ang impormasyon para matukoy kung maayos o mapanganib ang kondisyon para sa pananim.",
   "weather_unavailable_crop": "Walang datos ng panahon para sa {crop_name} ngayon.",
-  "weather_unavailable_generic": "Walang datos ng panahon ngayon."
+  "weather_unavailable_generic": "Walang datos ng panahon ngayon.",
+  "unavailable": "Hindi available",
 };

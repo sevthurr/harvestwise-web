@@ -11,5 +11,14 @@ export const price = {
   "price_neutral_basic": "Ang presyo ng {crop_name} ay inaasahang manatiling malapit sa karaniwang presyo nito.",
   "price_unfavorable_basic": "Hindi maganda ang kalagayan ng presyo ng {crop_name}.",
   "price_unavailable_crop": "Walang datos ng presyo ng {crop_name} ngayon.",
-  "price_unavailable_generic": "Walang datos ng presyo ngayon."
+  "price_unavailable_generic": "Walang datos ng presyo ngayon.",
+  "page_title": "Tinantyang Presyo",
+  "forecast_horizon_label": "Horizon ng Tantiya",
+  "forecast_prefix": "Tinantya:",
+  "forecast_updated_today": "Na-update ang tantinya ngayon at 6:00 ng umaga",
+  "reliability_label": "Katiyakan",
+  "period_label": "Periodo:",
+  "days_label": "araw",
+  "last_days_option": "Nakaraang {days} na araw",
+  "next_days_option": "Susunod na {days} na araw",
 };

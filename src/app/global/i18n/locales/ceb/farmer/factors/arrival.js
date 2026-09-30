@@ -23,5 +23,10 @@ export const arrival = {
   "arrival_upper_middle_basic": "Katamtamang taas ang kahimtang sa arrival sa {crop_name} kung ikumpara sa miaging datos sa DFTC.",
   "arrival_high_basic": "Taas ang kahimtang sa arrival sa {crop_name} kung ikumpara sa miaging datos sa DFTC.",
   "arrival_unavailable_crop": "Walay datos sa arrival sa {crop_name} gikan sa DFTC karon.",
-  "arrival_unavailable_generic": "Walay datos sa mga naabot gikan sa DFTC karon."
+  "arrival_unavailable_generic": "Walay datos sa mga naabot gikan sa DFTC karon.",
+  "page_title": "Detalye sa Naabot sa DFTC",
+  "chart_subtitle_actual": "Aktuwal nga naabot · Miaging 6 ka bulan · kg",
+  "arrival_action_high": "Base sa pinakabag-ong naabot sa DFTC, isumpa ang karon nga presyo ug tanawa ang imong iskedyul sa pagbaligya.",
+  "arrival_action_low": "Base sa pinakabag-ong naabot sa DFTC, posibleng maka-tabang ang ubos nga gidaghanon sa presyo. Kumpirmaha ang karon nga presyo sa merkado sa wala pa i-baligya.",
+  "arrival_action_normal": "Base sa pinakabag-ong naabot sa DFTC, walay kusog nga pasidaan. Ipagpadayon ang pagpugod sa karon nga presyo sa wala pa mag-ani o magbaligya.",
 };

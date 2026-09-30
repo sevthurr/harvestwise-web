@@ -18,6 +18,7 @@ import { apiGet, parseResponse } from "../../global/api";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { ADVISORY_CODES, normalizeAdvisoryCode } from "../utils/farmerCodes";
+import { formatMonthShort } from "../utils/formatters";
 
 const ADV_CFG = {
   [ADVISORY_CODES.RECOMMENDED]: {
@@ -119,7 +120,7 @@ function PlantingGuidePage() {
           name: camelRec.commodityName || "–",
           advisory: advisoryCode,
           profit: "–",
-          harvest: camelRec.harvestWindowStart ? new Date(camelRec.harvestWindowStart).toLocaleDateString('en-US', { month: 'short' }) : "–",
+          harvest: camelRec.harvestWindowStart ? formatMonthShort(camelRec.harvestWindowStart) : "–",
           reason: camelRec.explanation || "–",
           bestVariety: camelRec.bestVarietyName || null,
           note: null

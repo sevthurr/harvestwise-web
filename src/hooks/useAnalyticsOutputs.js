@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { analyticsApi } from "../services/api";
 
-export function useHistoricalSeasonalProduction(enabled, commodity, variety) {
+export function useHistoricalSeasonalProduction(enabled, commodityRef) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,7 +17,7 @@ export function useHistoricalSeasonalProduction(enabled, commodity, variety) {
       try {
         setLoading(true);
         setError("");
-        const result = await analyticsApi.getHistoricalSeasonalProduction(commodity, variety);
+        const result = await analyticsApi.getHistoricalSeasonalProduction(commodityRef);
         if (active) setData(result);
       } catch (err) {
         if (active) {
@@ -32,12 +32,12 @@ export function useHistoricalSeasonalProduction(enabled, commodity, variety) {
     return () => {
       active = false;
     };
-  }, [enabled, commodity, variety]);
+  }, [enabled, commodityRef]);
 
   return { data, loading, error };
 }
 
-export function usePriceOutlook(enabled, commodity, variety) {
+export function usePriceOutlook(enabled, commodityId) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -50,7 +50,7 @@ export function usePriceOutlook(enabled, commodity, variety) {
       }
       try {
         setError("");
-        const result = await analyticsApi.getPriceOutlook(`${commodity} ${variety}`);
+        const result = await analyticsApi.getPriceOutlook(commodityId);
         if (active) setData(result);
       } catch (err) {
         if (active) {
@@ -63,7 +63,43 @@ export function usePriceOutlook(enabled, commodity, variety) {
     return () => {
       active = false;
     };
-  }, [enabled, commodity, variety]);
+  }, [enabled, commodityId]);
 
   return { data, error };
+}
+
+export function useArrivalPressure(enabled, commodityRef) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (!enabled) {
+        setData(null);
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        setError("");
+        const result = await analyticsApi.getArrivalPressure(commodityRef);
+        if (active) setData(result);
+      } catch (err) {
+        if (active) {
+          setData(null);
+          setError(err.message || "Unable to load arrival pressure.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      active = false;
+    };
+  }, [enabled, commodityRef]);
+
+  return { data, loading, error };
 }

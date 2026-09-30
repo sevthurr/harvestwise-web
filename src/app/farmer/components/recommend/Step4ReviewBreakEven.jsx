@@ -9,7 +9,8 @@ import {
   TrendingDown,
   Minus
 } from "lucide-react";
-import { getTotalCost, formatPeso, COMMODITY_OPTIONS, CROP_DURATIONS, getCropDuration } from "./types";
+import { getTotalCost, formatPeso, formatDurationLabel, COMMODITY_OPTIONS, getCropDuration } from "./types";
+import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { fetchPricesList } from "../../../global/hooks/useFarmerPrefetch";
 import { getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
@@ -111,13 +112,21 @@ const Step4ReviewBreakEven = ({
 }) => {
   const { t } = useLanguage();
   const [calcOpen, setCalcOpen] = useState(false);
-  const commodityLabel = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? "—";
+  const { options } = useCommodityCatalog();
+  // API duration first, CROP_DURATIONS as the fallback table (see Step1).
+  const apiDuration = durationForOption(options.find((c) => c.id === data.commodity) || null, data.variant);
+  const duration = apiDuration || (data.commodity ? getCropDuration(data.commodity, data.variant) : null);
+  const durationVarKey = data.variant
+    ? `duration_${data.commodity}_${data.variant.toLowerCase().replace(/[^a-z0-9]/g, "_")}`
+    : `duration_${data.commodity}`;
+  const durationLabel = formatDurationLabel(apiDuration, t)
+    || (data.commodity ? t(`farmer.assess.${durationVarKey}`, {}, duration?.label || "") : null);
+  const commodityLabel = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? "\u2014";
   const displayLabel = data.variant ? `${commodityLabel} (${data.variant})` : commodityLabel;
   const totalCost = getTotalCost(data);
   const harvestQty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
   const breakEven = harvestQty ? Math.ceil(totalCost / harvestQty) : null;
   const farmAreaText = data.farmArea !== "" ? `${data.farmArea} ${data.farmAreaUnit === "sqm" ? t("farmer.assess.sqm", {}, "sq m") : t("farmer.assess.hectares", {}, "ha")}` : "—";
-  const duration = data.commodity ? getCropDuration(data.commodity, data.variant) : null;
 
   // Query top10 prices from cache / API
   const { data: pricesListData } = useQuery({
@@ -363,17 +372,7 @@ const Step4ReviewBreakEven = ({
           {data.variant && <ReviewRow label={t("farmer.commodityDetail.variety", {}, "Variety")} value={data.variant} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.target_planting_date", {}, "Target planting date")} value={data.plantingDate} onEdit={() => onEditStep(1)} t={t} />
           <ReviewRow label={t("farmer.assess.expected_harvest_date", {}, "Expected harvest date")} value={data.harvestDate} onEdit={() => onEditStep(1)} t={t} />
-          {duration && (
-            <ReviewRow
-              label={t("farmer.assess.typical_crop_duration", {}, "Typical crop duration")}
-              value={(() => {
-                const varKey = data.variant ? `duration_${data.commodity}_${data.variant.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : `duration_${data.commodity}`;
-                return t(`farmer.assess.${varKey}`, {}, duration.label);
-              })()}
-              onEdit={() => onEditStep(1)}
-              t={t}
-            />
-          )}
+          {duration && <ReviewRow label={t("farmer.assess.typical_crop_duration", {}, "Typical crop duration")} value={durationLabel} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.farm_area_label", {}, "Farm area")} value={farmAreaText} onEdit={() => onEditStep(2)} t={t} />
           <ReviewRow
             label={t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}

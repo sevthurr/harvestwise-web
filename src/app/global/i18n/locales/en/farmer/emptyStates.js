@@ -5,5 +5,6 @@ export const emptyStates = {
   no_forecast: "Forecast data not currently available.",
   crop_not_found: "Crop not found.",
   no_active_crop_plan: "No active crop plan yet.",
-  no_crop_reminders: "No crop reminders yet."
+  no_crop_reminders: "No crop reminders yet.",
+  no_prices_desc: "Price data for top 10 commodities will appear here",
 };
