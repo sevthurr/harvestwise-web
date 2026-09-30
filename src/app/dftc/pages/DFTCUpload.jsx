@@ -1,1085 +1,1330 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
-  ChevronLeft,
   Upload,
+  Check,
   X,
-  FileSpreadsheet,
-  AlertCircle,
-  CheckCircle,
+  FileText,
   CheckCircle2,
-  Loader2
+  AlertCircle,
+  Download,
+  RefreshCw,
+  Loader2,
+  Sparkles,
+  ChevronLeft
 } from "lucide-react";
-import { DFTCKpiCard } from "../components/DFTCKpiCard";
-import { apiGet, apiPost, parseResponse } from "../../global/api";
-const DATASET_TYPES = [
-  "DFTC Retail Prices",
-  "DFTC Wholesale Prices",
-  "DFTC Landing Prices",
-  "Bankerohan Retail Prices",
-  "Bankerohan Wholesale Prices",
-  "Bankerohan Landing Prices",
-  "DFTC Arrival Volume"
-];
-const DFTC_DATA_TYPE_MAP = {
-  "DFTC Retail Prices": "dftc_daily_retail",
-  "DFTC Wholesale Prices": "dftc_daily_wholesale",
-  "DFTC Landing Prices": "dftc_daily_landing",
-  "Bankerohan Retail Prices": "bankerohan_daily_retail",
-  "Bankerohan Wholesale Prices": "bankerohan_daily_wholesale",
-  "Bankerohan Landing Prices": "bankerohan_daily_landing",
-  "Daily Retail Prices": "dftc_daily_retail",
-  "Daily Wholesale Prices": "dftc_daily_wholesale",
-  "Daily Landing Prices": "dftc_daily_landing",
-  "DFTC Arrival Volume": "arrival"
-};
-const ACCEPTED_EXTS = [".xlsx", ".xls", ".csv"];
-const STEPS = [
-  { id: "upload", label: "Upload File" },
-  { id: "preview", label: "Preview File" },
-  { id: "match", label: "Match Format" },
-  { id: "validate", label: "Review & Submit" }
-];
-const isPriceType = (t) => t !== "DFTC Arrival Volume";
-const PRICE_UPLOAD_COLS = ["Market", "Price_Type", "Date", "Src_Category", "Commodity", "Variety", "Unit", "Price", "Obs_Status"];
-const ARRIVAL_UPLOAD_COLS = ["Date", "Facility", "Commodity", "Variety", "Farm_Volume", "Other_Volume", "Total_Volume", "Unit", "Obs_Status"];
-const HW_PRICE_FIELDS = [
-  { field: "Market", required: true },
-  { field: "Price Type", required: true },
-  { field: "Date", required: true },
-  { field: "Source Category", required: true },
-  { field: "Commodity", required: true },
-  { field: "Variety / Grade / Descriptor", required: false },
-  { field: "Full Source Commodity Label", required: false },
-  { field: "UOM", required: true },
-  { field: "Price", required: false },
-  { field: "Observation Status", required: false }
-];
-const HW_ARRIVAL_FIELDS = [
-  { field: "Date / Month", required: true },
-  { field: "Facility", required: false },
-  { field: "Commodity", required: true },
-  { field: "Variety / Descriptor", required: false },
-  { field: "Farm Source Volume", required: false },
-  { field: "Other Source Volume", required: false },
-  { field: "Combined Total Volume", required: false },
-  { field: "Unit", required: true },
-  { field: "Observation Status", required: false }
-];
-const PRICE_SUGGESTIONS = {
-  Market: "Market",
-  Price_Type: "Price Type",
-  Date: "Date",
-  Src_Category: "Source Category",
-  Commodity: "Commodity",
-  Variety: "Variety / Grade / Descriptor",
-  Unit: "UOM",
-  Price: "Price",
-  Obs_Status: "Observation Status"
-};
-const ARRIVAL_SUGGESTIONS = {
-  Date: "Date / Month",
-  Facility: "Facility",
-  Commodity: "Commodity",
-  Variety: "Variety / Descriptor",
-  Farm_Volume: "Farm Source Volume",
-  Other_Volume: "Other Source Volume",
-  Total_Volume: "Combined Total Volume",
-  Unit: "Unit",
-  Obs_Status: "Observation Status"
-};
-const PRICE_PREVIEW_ROWS = [
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Kamatis", Variety: "Round", Unit: "kg", Price: "85.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Talong", Variety: "Long Purple", Unit: "kg", Price: "72.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Repolyo", Variety: "Green", Unit: "kg", Price: "60.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Spices", Commodity: "Atsal", Variety: "Red", Unit: "kg", Price: "120.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Highland Veg.", Commodity: "Carrots", Variety: "Regular", Unit: "kg", Price: "90.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Pipino", Variety: "Regular", Unit: "kg", Price: "40.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Ampalaya", Variety: "Regular", Unit: "kg", Price: "75.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Kalabasa", Variety: "Orange", Unit: "kg", Price: "35.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Lettuce", Variety: "Iceberg", Unit: "kg", Price: "80.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Chinese Pechay", Variety: "Regular", Unit: "kg", Price: "35.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Rootcrops", Commodity: "Onion", Variety: "Yellow", Unit: "kg", Price: "95.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Spices", Commodity: "Garlic", Variety: "Local", Unit: "kg", Price: "180.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Rootcrops", Commodity: "Potato", Variety: "", Unit: "kg", Price: "55.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Kangkong", Variety: "Regular", Unit: "kg", Price: "25.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Sitaw", Variety: "", Unit: "kg", Price: "45.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Sayote", Variety: "", Unit: "kg", Price: "28.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Okra", Variety: "", Unit: "kg", Price: "38.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Upo", Variety: "", Unit: "kg", Price: "0.00", Obs_Status: "Zero in source" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Fruits", Commodity: "Banana", Variety: "", Unit: "kg", Price: "", Obs_Status: "" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Mustasa", Variety: "Local", Unit: "kg", Price: "22.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "", Commodity: "", Variety: "", Unit: "", Price: "", Obs_Status: "" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Kamatis", Variety: "Round", Unit: "kg", Price: "85.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Patola", Variety: "", Unit: "kg", Price: "50.00", Obs_Status: "Reported value" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "2026-08-02", Src_Category: "Lowland Vegetables", Commodity: "Bataw", Variety: "", Unit: "kg", Price: "", Obs_Status: "Missing / not reported" },
-  { Market: "Bangkerohan", Price_Type: "Retail", Date: "invalid", Src_Category: "Spices", Commodity: "Ginger", Variety: "", Unit: "kg", Price: "120.00", Obs_Status: "Reported value" }
-];
-const ARRIVAL_PREVIEW_ROWS = [
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Kamatis", Variety: "Round", Farm_Volume: "1800", Other_Volume: "400", Total_Volume: "2200", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Talong", Variety: "Long Purple", Farm_Volume: "950", Other_Volume: "200", Total_Volume: "1150", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Repolyo", Variety: "", Farm_Volume: "620", Other_Volume: "130", Total_Volume: "750", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Atsal", Variety: "Red", Farm_Volume: "340", Other_Volume: "80", Total_Volume: "420", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Carrots", Variety: "Regular", Farm_Volume: "1100", Other_Volume: "250", Total_Volume: "1350", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Pipino", Variety: "", Farm_Volume: "480", Other_Volume: "100", Total_Volume: "580", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Ampalaya", Variety: "", Farm_Volume: "390", Other_Volume: "60", Total_Volume: "450", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Kalabasa", Variety: "Orange", Farm_Volume: "820", Other_Volume: "180", Total_Volume: "1000", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Lettuce", Variety: "Iceberg", Farm_Volume: "210", Other_Volume: "50", Total_Volume: "260", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Chinese Pechay", Variety: "Regular", Farm_Volume: "670", Other_Volume: "150", Total_Volume: "820", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Onion", Variety: "Yellow", Farm_Volume: "900", Other_Volume: "300", Total_Volume: "1200", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Garlic", Variety: "Local", Farm_Volume: "250", Other_Volume: "120", Total_Volume: "370", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Potato", Variety: "", Farm_Volume: "560", Other_Volume: "90", Total_Volume: "650", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Kangkong", Variety: "", Farm_Volume: "120", Other_Volume: "30", Total_Volume: "150", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Sitaw", Variety: "", Farm_Volume: "310", Other_Volume: "0", Total_Volume: "310", Unit: "kg", Obs_Status: "Zero in source" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Sayote", Variety: "", Farm_Volume: "", Other_Volume: "", Total_Volume: "", Unit: "kg", Obs_Status: "Missing / not reported" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "", Variety: "", Farm_Volume: "", Other_Volume: "", Total_Volume: "", Unit: "", Obs_Status: "" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Kamatis", Variety: "Round", Farm_Volume: "1800", Other_Volume: "400", Total_Volume: "2200", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "2026-08-02", Facility: "DFTC Taboan", Commodity: "Okra", Variety: "", Farm_Volume: "140", Other_Volume: "30", Total_Volume: "170", Unit: "kg", Obs_Status: "Reported value" },
-  { Date: "invalid", Facility: "DFTC Taboan", Commodity: "Bataw", Variety: "", Farm_Volume: "80", Other_Volume: "20", Total_Volume: "100", Unit: "kg", Obs_Status: "Reported value" }
-];
-const VALIDATION_COUNTS = { accepted: 82, temporary: 27, correction: 8, duplicate: 3 };
-const ACCEPTED_SAMPLE = [
-  { row: 1, commodity: "Kamatis", category: "Lowland Vegetables", variety: "Round", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B185.00", obs: "Reported value", result: "Accepted" },
-  { row: 2, commodity: "Talong", category: "Lowland Vegetables", variety: "Long Purple", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B172.00", obs: "Reported value", result: "Accepted" },
-  { row: 3, commodity: "Repolyo", category: "Lowland Vegetables", variety: "Green", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B160.00", obs: "Reported value", result: "Accepted" },
-  { row: 4, commodity: "Atsal", category: "Spices", variety: "Red", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B1120.00", obs: "Reported value", result: "Accepted" },
-  { row: 5, commodity: "Carrots", category: "Highland Vegetables", variety: "Regular", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B190.00", obs: "Reported value", result: "Accepted" },
-  { row: 6, commodity: "Pipino", category: "Lowland Vegetables", variety: "Regular", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B140.00", obs: "Reported value", result: "Accepted" },
-  { row: 7, commodity: "Ampalaya", category: "Lowland Vegetables", variety: "Regular", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B175.00", obs: "Reported value", result: "Accepted" },
-  { row: 8, commodity: "Kalabasa", category: "Lowland Vegetables", variety: "Orange", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B135.00", obs: "Reported value", result: "Accepted" },
-  { row: 9, commodity: "Lettuce", category: "Lowland Vegetables", variety: "Iceberg", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B180.00", obs: "Reported value", result: "Accepted" },
-  { row: 10, commodity: "Chinese Pechay", category: "Lowland Vegetables", variety: "Regular", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B135.00", obs: "Reported value", result: "Accepted" }
-];
-const TEMPORARY_SAMPLE = [
-  { row: 11, commodity: "Onion", category: "Rootcrops", variety: "Yellow", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B195.00", obs: "Reported value" },
-  { row: 12, commodity: "Garlic", category: "Spices", variety: "Local", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B1180.00", obs: "Reported value" },
-  { row: 13, commodity: "Potato", category: "Rootcrops", variety: "\u2014", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B155.00", obs: "Reported value" },
-  { row: 14, commodity: "Kangkong", category: "Lowland Vegetables", variety: "Regular", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B125.00", obs: "Reported value" },
-  { row: 15, commodity: "Sitaw", category: "Lowland Vegetables", variety: "\u2014", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B145.00", obs: "Reported value" },
-  { row: 16, commodity: "Sayote", category: "Lowland Vegetables", variety: "\u2014", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B128.00", obs: "Reported value" },
-  { row: 17, commodity: "Okra", category: "Lowland Vegetables", variety: "\u2014", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B138.00", obs: "Reported value" },
-  { row: 23, commodity: "Patola", category: "Lowland Vegetables", variety: "\u2014", date: "2026-08-02", uom: "kg", priceOrVol: "\u20B150.00", obs: "Reported value" }
-];
-const CORRECTION_SAMPLE = [
-  { row: 19, commodity: "Banana", issue: "Missing price and observation status", fields: [{ label: "Price", value: "", key: "price" }, { label: "Observation Status", value: "", key: "obs" }] },
-  { row: 21, commodity: "(blank)", issue: "Missing commodity name and source category", fields: [{ label: "Commodity", value: "", key: "commodity" }, { label: "Source Category", value: "", key: "category" }] },
-  { row: 25, commodity: "Ginger", issue: "Invalid date format", fields: [{ label: "Date", value: "invalid", key: "date" }] },
-  { row: 30, commodity: "Paria", issue: "Unknown commodity \u2014 cannot match to official list", fields: [{ label: "Commodity", value: "Paria", key: "commodity" }] },
-  { row: 44, commodity: "Bisaya Kamatis", issue: "Unknown commodity \u2014 cannot match to official list", fields: [{ label: "Commodity", value: "Bisaya Kamatis", key: "commodity" }] },
-  { row: 57, commodity: "Upo", issue: "Zero value without observation status", fields: [{ label: "Price", value: "0.00", key: "price" }, { label: "Observation Status", value: "", key: "obs" }] },
-  { row: 68, commodity: "Mustasa", issue: "Missing UOM", fields: [{ label: "UOM", value: "", key: "uom" }] },
-  { row: 82, commodity: "Saluyot", issue: "Unknown commodity \u2014 cannot match to official list", fields: [{ label: "Commodity", value: "Saluyot", key: "commodity" }] }
-];
-const DUPLICATE_SAMPLE = [
-  { row: 22, commodity: "Kamatis", variety: "Round", date: "2026-08-02", uom: "kg", price: "\u20B185.00", reason: "Matches row 1 \u2014 same commodity, date, UOM, and market" },
-  { row: 91, commodity: "Talong", variety: "Long Purple", date: "2026-08-01", uom: "kg", price: "\u20B170.00", reason: "Already submitted on Aug 1, 2026" },
-  { row: 97, commodity: "Repolyo", variety: "Green", date: "2026-08-01", uom: "kg", price: "\u20B158.00", reason: "Already submitted on Aug 1, 2026" }
-];
-const inputCls = [
-  "w-full px-3 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-lg bg-white",
-  "text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-600)]",
-  "focus:ring-1 focus:ring-[var(--hw-green-600)] transition-colors"
-].join(" ");
-const selectCls = `${inputCls} appearance-none`;
-const labelCls = "block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1";
-function StepBar({ step }) {
-  const idx = STEPS.findIndex((s) => s.id === step);
-  const label = STEPS[idx]?.label ?? "";
-  return <>
-      {
-    /* Mobile: compact "X of 4 · Label" */
-  }
-      <div className="flex items-center gap-2 md:hidden">
-        <div className="w-6 h-6 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
-          {idx + 1}
-        </div>
-        <span className="text-[12px] font-medium text-[var(--hw-neutral-800)]">
-          Step {idx + 1} of {STEPS.length} · {label}
-        </span>
-      </div>
+import { ingestionApi } from "../../../services/api";
+import { useBackgroundProcess } from "../../global/contexts/BackgroundProcessContext";
+import { PageHeader } from "../../global/components/shared/PageHeader";
 
-      {
-    /* Desktop: full horizontal stepper */
-  }
-      <div className="hidden md:flex items-center">
-        {STEPS.map((s, i) => {
-    const done = i < idx;
-    const active = s.id === step;
-    return <React.Fragment key={s.id}>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${done || active ? "bg-[var(--hw-green-700)] text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-800)]"}`}>
-                  {done ? "\u2713" : i + 1}
-                </div>
-                <span className={`text-[12px] font-medium whitespace-nowrap ${active ? "text-[var(--hw-green-700)]" : done ? "text-[var(--hw-neutral-800)]" : "text-[var(--hw-neutral-700)]"}`}>
-                  {s.label}
-                </span>
-              </div>
-              {i < STEPS.length - 1 && <div className={`flex-1 h-px mx-3 min-w-[12px] ${i < idx ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-200)]"}`} />}
-            </React.Fragment>;
-  })}
-      </div>
-    </>;
-}
-function ActionBar({ children }) {
-  return <>
-      <div className="h-20 md:hidden" />
-      <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-[var(--hw-neutral-100)] px-4 py-3 flex gap-2 z-30 md:static md:bg-transparent md:border-0 md:px-0 md:py-0 md:mt-6">
-        {children}
-      </div>
-    </>;
-}
-const TAB_LABELS = {
-  accepted: `Accepted (82)`,
-  temporary: `Reporting-Only (27)`,
-  correction: `Needs Correction (8)`,
-  duplicate: `Duplicate (3)`
+const DATA_TYPE_MAP = {
+  "DFTC Wholesale Prices": "dftc_daily_wholesale",
+  "DFTC Retail Prices": "dftc_daily_retail",
+  "DFTC Landing Prices": "dftc_daily_landing",
+  "Bangkerohan Retail Prices": "bankerohan_daily_retail",
+  "Bangkerohan Wholesale Prices": "bankerohan_daily_wholesale",
+  "Bangkerohan Landing Prices": "bankerohan_daily_landing",
+  "DFTC Arrival Volume": "arrival",
+  "Price Consolidated Wholesale": "price_consolidated_wholesale",
+  "Price Consolidated Retail": "price_consolidated_retail",
+  "Price Consolidated Landing": "price_consolidated_landing"
 };
-function TabNav({ active, onChange, correctedCount }) {
-  const tabs = Object.keys(TAB_LABELS);
-  return <div className="flex gap-0 border-b border-[var(--hw-neutral-200)] overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-      {tabs.map((t) => <button
-    key={t}
-    onClick={() => onChange(t)}
-    className={`px-4 py-2.5 text-[12px] font-medium whitespace-nowrap border-b-2 transition-colors -mb-px ${active === t ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]" : "border-transparent text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-800)]"}`}
-  >
-          {t === "correction" && correctedCount > 0 ? `Needs Correction (${Math.max(0, 8 - correctedCount)})` : TAB_LABELS[t]}
-        </button>)}
-    </div>;
-}
-function TableWrap({ cols, children }) {
-  return <div className="overflow-x-auto">
-      <table className="w-full text-[12px]">
-        <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-          <tr>
-            {cols.map((c) => <th key={c} className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">{c}</th>)}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--hw-neutral-100)]">{children}</tbody>
-      </table>
-    </div>;
-}
-const td = "px-3 py-2.5 whitespace-nowrap text-[var(--hw-neutral-700)]";
-const tdBold = `${td} font-medium text-[var(--hw-neutral-800)]`;
-function CorrectionModal({
-  row,
-  onClose,
-  onSave
-}) {
-  const [vals, setVals] = useState(
-    Object.fromEntries(row.fields.map((f) => [f.key, f.value]))
-  );
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
-  return <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <div>
-            <p className="font-semibold text-[var(--hw-neutral-900)]">
-              Correct Row {row.row}
-            </p>
-            <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
-              {row.commodity !== "(blank)" ? row.commodity : "\u2014"} · {row.issue}
-            </p>
-          </div>
-          <button onClick={onClose} className="p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="px-5 py-4 space-y-3">
-          {row.fields.map((f) => <div key={f.key}>
-              <label className={labelCls}>{f.label}</label>
-              <input
-    className={inputCls}
-    value={vals[f.key]}
-    onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
-    placeholder={`Enter ${f.label.toLowerCase()}...`}
-  />
-            </div>)}
-        </div>
-        <div className="px-5 py-4 border-t border-[var(--hw-neutral-100)] flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors">
-            Cancel
-          </button>
-          <button
-    onClick={() => onSave(row.row)}
-    className="flex-[2] bg-[var(--hw-green-700)] text-white py-2.5 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-            Save changes
-          </button>
-        </div>
-      </div>
-    </div>;
-}
-function DFTCUpload() {
-  const navigate = useNavigate();
-  const fileInputRef = useRef(null);
-  const [step, setStep] = useState("upload");
-  const [validating, setValidating] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [datasetType, setDatasetType] = useState("");
-  const [file, setFile] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [fileError, setFileError] = useState("");
-  const [ingestionStatus, setIngestionStatus] = useState("idle");
-  const [uploadMessage, setUploadMessage] = useState("");
-  const [uploadError, setUploadError] = useState("");
-  const [analyzingFile, setAnalyzingFile] = useState(false);
-  const [previewPage, setPreviewPage] = useState(1);
-  const PAGE_SIZE = 20;
-  const [mappings, setMappings] = useState({});
-  const [activeTab, setActiveTab] = useState("accepted");
-  const [correctionRow, setCorrectionRow] = useState(null);
-  const [correctedRows, setCorrectedRows] = useState(/* @__PURE__ */ new Set());
-  const [revalidating, setRevalidating] = useState(false);
-  const uploadCols = datasetType && isPriceType(datasetType) ? PRICE_UPLOAD_COLS : ARRIVAL_UPLOAD_COLS;
-  const suggestions = datasetType && isPriceType(datasetType) ? PRICE_SUGGESTIONS : ARRIVAL_SUGGESTIONS;
-  const hwFields = datasetType && isPriceType(datasetType) ? HW_PRICE_FIELDS : HW_ARRIVAL_FIELDS;
-  const previewRows = datasetType && isPriceType(datasetType) ? PRICE_PREVIEW_ROWS : ARRIVAL_PREVIEW_ROWS;
-  const totalPreviewPages = Math.ceil(previewRows.length / PAGE_SIZE);
-  const pageRows = previewRows.slice((previewPage - 1) * PAGE_SIZE, previewPage * PAGE_SIZE);
-  function initMappings() {
-    const m = {};
-    uploadCols.forEach((col) => {
-      m[col] = suggestions[col] ?? "";
-    });
-    setMappings(m);
-  }
-  async function tryAcceptFile(f) {
-    setFileError("");
-    if (!datasetType) {
-      setFileError("Please select a Dataset Type before uploading a file.");
+
+const DATASET_TYPES = Object.keys(DATA_TYPE_MAP);
+const SOURCES = [
+  "Davao Food Terminal Complex (DFTC)",
+  "Bangkerohan Public Market"
+];
+
+const STEP_CONFIG = [
+  { active: "Upload", done: "Uploaded" },
+  { active: "Validate", done: "Validated" },
+  { active: "Standardize", done: "Standardized" },
+  { active: "Store", done: "Stored" },
+];
+const STEPS = STEP_CONFIG.map((s) => s.done);
+
+function readFileText(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof file.text === "function") {
+      file.text().then(resolve).catch(reject);
       return;
     }
-    const ext = "." + f.name.split(".").pop()?.toLowerCase();
-    if (!ACCEPTED_EXTS.includes(ext)) {
-      setFileError(`Unsupported file type: ${ext}. Use .xlsx, .xls, or .csv.`);
-      return;
-    }
-    setAnalyzingFile(true);
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target?.result || "");
+    reader.onerror = (e) => reject(e);
+    reader.readAsText(file);
+  });
+}
+
+async function parseFileReal(selectedFile) {
+  const ext = (selectedFile.name.split('.').pop() || '').toLowerCase();
+  
+  if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) {
     try {
-      const formData = new FormData();
-      formData.append("file", f);
-      const mappedDataType = DFTC_DATA_TYPE_MAP[datasetType];
-      if (mappedDataType) {
-        formData.append("data_type", mappedDataType);
+      const ExcelJSModule = await import("exceljs");
+      const Workbook = ExcelJSModule.default?.Workbook ?? ExcelJSModule.Workbook;
+      const wb = new Workbook();
+      const buffer = await selectedFile.arrayBuffer();
+      await wb.xlsx.load(buffer);
+
+      const allSheets = wb.worksheets || [];
+      const validWorksheets = allSheets.filter(w => !/\(2\)|\boverflow\b/i.test(w.name));
+      if (validWorksheets.length === 0 && allSheets.length > 0) {
+        validWorksheets.push(allSheets[0]);
       }
-      const res = await apiPost("/ingestion/upload", formData);
-      const data = parseResponse(res);
-      const importId = data?.import_id || data?.importId || res?.import_id || res?.importId;
-      setFile({
-        name: f.name,
-        ext,
-        sizeKb: Math.round(f.size / 1024),
-        rows: data?.rows_count || Math.floor(Math.random() * 60) + 80,
-        importId: importId
+      if (validWorksheets.length === 0) return { headers: [], rows: [], rawRows: [], sheetNames: [], sheetsData: {}, totalRowCount: 0 };
+
+      const formatCellValue = (v) => {
+        if (v == null) return '';
+        if (typeof v === 'object') {
+          if (v.text !== undefined) return v.text;
+          if (Array.isArray(v.richText)) {
+            return v.richText.map(t => t.text || '').join('');
+          }
+          if (v.result !== undefined) return String(v.result);
+        }
+        return v;
+      };
+
+      const sheetNames = validWorksheets.map(w => w.name);
+      const sheetsData = {};
+
+      validWorksheets.forEach(ws => {
+        const rowsData = [];
+        ws.eachRow({ includeEmpty: true }, (row) => {
+          const maxCols = Math.max(row.values?.length || 0, ws.columnCount || 0, 35);
+          const vals = [];
+          for (let c = 1; c <= maxCols; c++) {
+            const cell = row.getCell(c);
+            vals.push(formatCellValue(cell.value));
+          }
+          rowsData.push(vals);
+        });
+        sheetsData[ws.name] = rowsData;
       });
-    } catch (err) {
-      console.warn("Upload background notice:", err);
-      setFile({
-        name: f.name,
-        ext,
-        sizeKb: Math.round(f.size / 1024),
-        rows: Math.floor(Math.random() * 60) + 80
-      });
-    } finally {
-      setAnalyzingFile(false);
-    }
-  }
-  const onDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) tryAcceptFile(f);
-  }, [datasetType]);
-  const onFileChange = (e) => {
-    const f = e.target.files?.[0];
-    if (f) tryAcceptFile(f);
-    e.target.value = "";
-  };
-  function handleValidate() {
-    setValidating(true);
-    setTimeout(() => {
-      setValidating(false);
-      setStep("validate");
-    }, 1200);
-  }
-  function handleRevalidate() {
-    setRevalidating(true);
-    setTimeout(() => setRevalidating(false), 900);
-  }
-  async function handleSubmit() {
-    setSubmitting(true);
-    setFileError("");
-    setIngestionStatus("processing");
-    setUploadMessage("Dataset accepted and processing in the background...");
-    try {
-      if (file?.importId) {
-        let isFinished = false;
-        let attempts = 0;
-        while (!isFinished && attempts < 15) {
-          attempts++;
-          const res = await apiPost(`/ingestion/promote/${file.importId}`, {});
-          const data = parseResponse(res);
-          if (data?.status === "completed" || data?.status === "success") {
-            isFinished = true;
-            setIngestionStatus("success");
-            setUploadMessage("Dataset processed and imported successfully into HarvestWise DB.");
-            setStep("success");
-            return;
-          } else if (data?.status === "failed") {
-            setIngestionStatus("failed");
-            setUploadError(data?.error_message || "Dataset processing failed on backend.");
-            throw new Error(data?.error_message || "Dataset processing failed on backend.");
-          } else {
-            await new Promise((r) => setTimeout(r, 1000));
+
+      const extractPreviewForRows = (rowsData) => {
+        if (!rowsData || rowsData.length === 0) return { headers: [], rows: [] };
+
+        let headerRowIdx = -1;
+        for (let i = 0; i < Math.min(15, rowsData.length); i++) {
+          const rVals = rowsData[i].map(v => String(v ?? '').trim().toUpperCase());
+          if (rVals.some(v => v === "COMMODITY" || v.startsWith("COMMODIT"))) {
+            headerRowIdx = i;
+            break;
           }
         }
-        setIngestionStatus("success");
-        setUploadMessage("Dataset processed and imported successfully into HarvestWise DB.");
-        setStep("success");
-      } else {
-        setIngestionStatus("success");
-        setUploadMessage("Dataset processed and imported successfully into HarvestWise DB.");
-        setStep("success");
-      }
+
+        if (headerRowIdx !== -1) {
+          const rawHdr = rowsData[headerRowIdx];
+          const nextRow = rowsData[headerRowIdx + 1];
+          let hasDayRow = false;
+          if (nextRow && nextRow.some(v => { const n = parseInt(v, 10); return !isNaN(n) && n >= 1 && n <= 31; })) {
+            hasDayRow = true;
+          }
+          const dataStartIdx = hasDayRow ? headerRowIdx + 2 : headerRowIdx + 1;
+          const maxCols = Math.max(rawHdr?.length || 0, nextRow?.length || 0);
+
+          const headers = [];
+          for (let i = 0; i < maxCols; i++) {
+            const hVal = rawHdr ? rawHdr[i] : undefined;
+            const hStr = hVal != null ? String(hVal).trim() : '';
+            const dayVal = (hasDayRow && nextRow && nextRow[i] != null) ? String(nextRow[i]).trim() : '';
+            const n = parseInt(dayVal, 10);
+            if (hasDayRow && !isNaN(n) && n >= 1 && n <= 31) {
+              headers.push(`Day ${n}`);
+            } else if (hStr) {
+              headers.push(hStr);
+            } else {
+              headers.push(`col_${i + 1}`);
+            }
+          }
+
+          const dataRows = rowsData.slice(dataStartIdx).filter(r => {
+            const rowStr = r.map(v => String(v ?? '').trim().toLowerCase()).join(" ");
+            if (rowStr.startsWith("prepared") || rowStr.startsWith("checked") || rowStr.startsWith("approved")) return false;
+            // Ensure commodity column (index 1) is present
+            const comm = String(r[1] ?? '').trim();
+            return comm.length > 0;
+          });
+
+          // Trim trailing empty generated column headers
+          let lastNonEmptyCol = -1;
+          for (let i = headers.length - 1; i >= 0; i--) {
+            const h = headers[i];
+            const hasData = dataRows.some(r => r[i] !== undefined && r[i] !== null && String(r[i]).trim() !== '');
+            if (hasData || (h && !h.startsWith('col_'))) {
+              lastNonEmptyCol = i;
+              break;
+            }
+          }
+          const activeHeaders = headers.slice(0, lastNonEmptyCol + 1);
+
+          const rows = dataRows.map(r => {
+            const rowObj = {};
+            activeHeaders.forEach((h, i) => {
+              rowObj[h] = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
+            });
+            return rowObj;
+          });
+
+          return { headers: activeHeaders, rows };
+        }
+
+        const headers = (rowsData[0] || []).map((h, i) => String(h).trim() || `col_${i + 1}`);
+        const rows = rowsData.slice(1).map(r => {
+          const rowObj = {};
+          headers.forEach((h, i) => {
+            rowObj[h] = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
+          });
+          return rowObj;
+        });
+        return { headers, rows };
+      };
+
+      let totalRowCount = 0;
+      validWorksheets.forEach(ws => {
+        const preview = extractPreviewForRows(sheetsData[ws.name]);
+        totalRowCount += preview.rows.length;
+      });
+
+      const primarySheetName = validWorksheets[0].name;
+      const { headers, rows } = extractPreviewForRows(sheetsData[primarySheetName]);
+
+      return {
+        headers,
+        rows,
+        rawRows: sheetsData[primarySheetName] || [],
+        sheetNames,
+        sheetsData,
+        totalRowCount,
+        extractPreviewForRows,
+      };
     } catch (err) {
-      console.error("Submission failed:", err);
-      setIngestionStatus("failed");
-      setUploadError(err.message || "Failed to finalize dataset storage.");
-      setFileError(err.message || "Failed to finalize dataset storage. Please check file format.");
-    } finally {
-      setSubmitting(false);
+      console.warn("Excel parsing fallback to text:", err);
     }
   }
-  function handleCorrectionSave(rowNum) {
-    setCorrectedRows((prev) => /* @__PURE__ */ new Set([...prev, rowNum]));
-    setCorrectionRow(null);
+
+  const text = await readFileText(selectedFile);
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return { headers: [], rows: [], rawRows: [], sheetNames: [], sheetsData: {}, totalRowCount: 0 };
+
+  const delimiter = ext === 'tsv' ? '\t' : ',';
+  
+  const parseLine = (line) => {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        inQuotes = !inQuotes;
+      } else if (c === delimiter && !inQuotes) {
+        result.push(cur.trim());
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    result.push(cur.trim());
+    return result;
+  };
+
+  const rawHeaders = parseLine(lines[0]);
+  const headers = rawHeaders.map((h, i) => h.replace(/^"|"$/g, '').trim() || `col_${i + 1}`);
+  const rows = [];
+  const rawRows = lines.slice(0, 30).map(l => parseLine(l));
+  
+  for (let i = 1; i < lines.length; i++) {
+    const parsed = parseLine(lines[i]);
+    const rowObj = {};
+    let hasAnyData = false;
+    headers.forEach((h, idx) => {
+      const val = (parsed[idx] || '').replace(/^"|"$/g, '').trim();
+      if (val) hasAnyData = true;
+      rowObj[h] = val;
+    });
+    if (hasAnyData) rows.push(rowObj);
   }
-  const canContinueUpload = datasetType && file && !analyzingFile;
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
 
-      {
-    /* Correction modal */
-  }
-      {correctionRow && <CorrectionModal
-    row={correctionRow}
-    onClose={() => setCorrectionRow(null)}
-    onSave={handleCorrectionSave}
-  />}
-
-      {
-    /* Back + step bar */
-  }
-      {step !== "success" && <div className="mb-5 space-y-3">
-          <button
-    onClick={() => {
-      if (step === "upload") navigate("/dftc");
-      if (step === "preview") setStep("upload");
-      if (step === "match") setStep("preview");
-      if (step === "validate") setStep("match");
-    }}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors"
-  >
-            <ChevronLeft className="w-4 h-4" />
-            {step === "upload" ? "Back to Home" : "Back"}
-          </button>
-          <StepBar step={step} />
-        </div>}
-
-      {
-    /* ═══════════════════════════════════════════════════════════
-        STEP 1 — Upload File
-    ═══════════════════════════════════════════════════════════ */
-  }
-      {step === "upload" && <div className="space-y-5">
-          <div>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Upload Dataset</h1>
-            <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-              Upload an Excel or CSV file containing DFTC price or arrival-volume records.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-
-            {
-    /* Dataset type */
-  }
-            <div>
-              <label className={labelCls}>Dataset Type</label>
-              <select
-    className={selectCls}
-    value={datasetType}
-    onChange={(e) => {
-      setDatasetType(e.target.value);
-      setFile(null);
-      setFileError("");
-    }}
-  >
-                <option value="">Select dataset type...</option>
-                {DATASET_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            {
-    /* File drop zone */
-  }
-            <div>
-              <label className={labelCls}>File</label>
-              <input
-    ref={fileInputRef}
-    type="file"
-    accept=".xlsx,.xls,.csv"
-    className="sr-only"
-    onChange={onFileChange}
-  />
-
-              {analyzingFile ? <div className="border border-[var(--hw-neutral-200)] rounded-xl p-8 flex flex-col items-center gap-2">
-                  <Loader2 className="w-6 h-6 text-[var(--hw-green-700)] animate-spin" />
-                  <p className="text-[13px] text-[var(--hw-neutral-800)]">Analyzing file...</p>
-                </div> : file ? <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 flex items-start gap-3">
-                  <FileSpreadsheet className="w-8 h-8 text-[var(--hw-green-700)] flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)] truncate">{file.name}</p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                      <span className="text-[12px] text-[var(--hw-neutral-800)]">{file.ext.toUpperCase()}</span>
-                      <span className="text-[12px] text-[var(--hw-neutral-800)]">{file.sizeKb} KB</span>
-                      <span className="text-[12px] text-[var(--hw-neutral-800)]">{file.rows} rows detected</span>
-                    </div>
-                  </div>
-                  <button
-    onClick={() => setFile(null)}
-    className="p-1 text-[var(--hw-neutral-700)] hover:text-red-500 transition-colors flex-shrink-0"
-  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div> : <div
-    onDragOver={(e) => {
-      e.preventDefault();
-      setIsDragging(true);
-    }}
-    onDragLeave={() => setIsDragging(false)}
-    onDrop={onDrop}
-    onClick={() => fileInputRef.current?.click()}
-    className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 cursor-pointer transition-colors ${isDragging ? "border-[var(--hw-green-600)] bg-[var(--hw-green-50)]" : "border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-                  <Upload className="w-6 h-6 text-[var(--hw-neutral-700)]" />
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-700)]">
-                    Drag and drop or tap to select a file
-                  </p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)]">
-                    Accepts .xlsx, .xls, .csv
-                  </p>
-                </div>}
-
-              {fileError && <div className="mt-2 flex items-start gap-2 text-red-600">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <p className="text-[12px]">{fileError}</p>
-                </div>}
-            </div>
-          </div>
-
-          <ActionBar>
-            <button
-    onClick={() => navigate("/dftc")}
-    className="flex-1 py-3 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors bg-white"
-  >
-              Cancel
-            </button>
-            <button
-    disabled={!canContinueUpload}
-    onClick={() => {
-      setPreviewPage(1);
-      setStep("preview");
-    }}
-    className="flex-[2] bg-[var(--hw-green-700)] text-white py-3 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-  >
-              Continue
-            </button>
-          </ActionBar>
-        </div>}
-
-      {
-    /* ═══════════════════════════════════════════════════════════
-        STEP 2 — Check Records
-    ═══════════════════════════════════════════════════════════ */
-  }
-      {step === "preview" && <div className="space-y-4">
-          <div>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Check Records</h1>
-            <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-              {datasetType} · {file?.name} · {file?.rows} rows detected
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">
-                Showing rows {(previewPage - 1) * PAGE_SIZE + 1}–{Math.min(previewPage * PAGE_SIZE, previewRows.length)} of {previewRows.length} (preview sample)
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">#</th>
-                    {uploadCols.map((c) => <th key={c} className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">{c}</th>)}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {pageRows.map((row, i) => {
-    const rowNum = (previewPage - 1) * PAGE_SIZE + i + 1;
-    return <tr key={rowNum} className={uploadCols.some((c) => !row[c]) ? "bg-amber-50/50" : ""}>
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-700)]">{rowNum}</td>
-                        {uploadCols.map((c) => <td key={c} className={`px-3 py-2.5 whitespace-nowrap ${!row[c] ? "text-[var(--hw-neutral-700)] italic" : "text-[var(--hw-neutral-700)]"}`}>
-                            {row[c] || "(blank)"}
-                          </td>)}
-                      </tr>;
-  })}
-                </tbody>
-              </table>
-            </div>
-
-            {
-    /* Pagination */
-  }
-            {totalPreviewPages > 1 && <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-[var(--hw-neutral-100)]">
-                <p className="text-[12px] text-[var(--hw-neutral-800)]">
-                  Page {previewPage} of {totalPreviewPages}
-                </p>
-                <div className="flex gap-1">
-                  <button
-    disabled={previewPage === 1}
-    onClick={() => setPreviewPage((p) => p - 1)}
-    className="px-2.5 py-1 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-  >
-                    Prev
-                  </button>
-                  {Array.from({ length: totalPreviewPages }, (_, i) => i + 1).map((p) => <button
-    key={p}
-    onClick={() => setPreviewPage(p)}
-    className={`px-2.5 py-1 text-[12px] border rounded-lg transition-colors ${p === previewPage ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-                      {p}
-                    </button>)}
-                  <button
-    disabled={previewPage === totalPreviewPages}
-    onClick={() => setPreviewPage((p) => p + 1)}
-    className="px-2.5 py-1 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-  >
-                    Next
-                  </button>
-                </div>
-              </div>}
-          </div>
-
-          <ActionBar>
-            <button
-    onClick={() => setStep("upload")}
-    className="flex-1 py-3 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors bg-white"
-  >
-              Back
-            </button>
-            <button
-    onClick={() => {
-      initMappings();
-      setStep("match");
-    }}
-    className="flex-[2] bg-[var(--hw-green-700)] text-white py-3 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-              Continue
-            </button>
-          </ActionBar>
-        </div>}
-
-      {
-    /* ═══════════════════════════════════════════════════════════
-        STEP 3 — Match Format
-    ═══════════════════════════════════════════════════════════ */
-  }
-      {step === "match" && <div className="space-y-5">
-          <div>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Match Format</h1>
-            <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-              Map each uploaded column to the matching HarvestWise field. Required fields are marked.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            {
-    /* Column headers */
-  }
-            <div className="grid grid-cols-2 gap-4 px-4 py-2.5 border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
-              <p className="text-[11px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Uploaded Column</p>
-              <p className="text-[11px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">HarvestWise Field</p>
-            </div>
-
-            <div className="divide-y divide-[var(--hw-neutral-100)]">
-              {uploadCols.map((col) => {
-    const hwMatch = hwFields.find((f) => f.field === mappings[col]);
-    const isRequired = hwMatch?.required ?? false;
-    return <div key={col} className="grid grid-cols-2 gap-4 px-4 py-3 items-center">
-                    <div>
-                      <p className="text-[13px] font-medium text-[var(--hw-neutral-800)]">{col}</p>
-                      {mappings[col] && <p className="text-[10px] font-medium text-[var(--hw-green-700)] mt-0.5">
-                          Auto-suggested
-                        </p>}
-                    </div>
-                    <div>
-                      <select
-      className={`${selectCls} py-2`}
-      value={mappings[col] ?? ""}
-      onChange={(e) => setMappings((m) => ({ ...m, [col]: e.target.value }))}
-    >
-                        <option value="">— Skip this column —</option>
-                        {hwFields.map((f) => <option key={f.field} value={f.field}>
-                            {f.field}{f.required ? " *" : ""}
-                          </option>)}
-                      </select>
-                    </div>
-                  </div>;
-  })}
-            </div>
-
-            <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)]">
-              <p className="text-[12px] text-[var(--hw-neutral-800)]">* Required field</p>
-            </div>
-          </div>
-
-          {
-    /* Validate Records button — shows loading */
-  }
-          <ActionBar>
-            <button
-    onClick={() => setStep("preview")}
-    className="flex-1 py-3 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors bg-white"
-  >
-              Back
-            </button>
-            <button
-    onClick={handleValidate}
-    disabled={validating}
-    className="flex-[2] bg-[var(--hw-green-700)] text-white py-3 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
-  >
-              {validating ? <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Validating records...
-                </> : "Validate Records"}
-            </button>
-          </ActionBar>
-        </div>}
-
-      {
-    /* ═══════════════════════════════════════════════════════════
-        STEP 4 — Submit to HarvestWise
-    ═══════════════════════════════════════════════════════════ */
-  }
-      {step === "validate" && <div className="space-y-5">
-          <div>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Submit to HarvestWise</h1>
-            <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-              Review the validation results before submission.
-            </p>
-          </div>
-
-          {/* 4 summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <DFTCKpiCard
-              label="Accepted for Analytics"
-              value={VALIDATION_COUNTS.accepted ?? 0}
-              dotColor="bg-emerald-500"
-              labelColor="text-[var(--hw-neutral-700)]"
-              valueColor="text-emerald-700"
-              active={activeTab === "accepted"}
-              onClick={() => setActiveTab("accepted")}
-            />
-            <DFTCKpiCard
-              label="Reporting-Only Records"
-              value={VALIDATION_COUNTS.temporary ?? 0}
-              dotColor="bg-[var(--hw-neutral-400)]"
-              labelColor="text-[var(--hw-neutral-700)]"
-              valueColor="text-[var(--hw-neutral-800)]"
-              active={activeTab === "temporary"}
-              onClick={() => setActiveTab("temporary")}
-            />
-            <DFTCKpiCard
-              label="Needs Correction"
-              value={Math.max(0, VALIDATION_COUNTS.correction - correctedRows.size)}
-              dotColor="bg-amber-500"
-              labelColor="text-[var(--hw-neutral-700)]"
-              valueColor="text-amber-700"
-              active={activeTab === "correction"}
-              onClick={() => setActiveTab("correction")}
-            />
-            <DFTCKpiCard
-              label="Duplicate Records"
-              value={VALIDATION_COUNTS.duplicate ?? 0}
-              dotColor="bg-[var(--hw-neutral-400)]"
-              labelColor="text-[var(--hw-neutral-700)]"
-              valueColor="text-[var(--hw-neutral-800)]"
-              active={activeTab === "duplicate"}
-              onClick={() => setActiveTab("duplicate")}
-            />
-          </div>
-
-          {
-    /* Temporary note */
-  }
-          {activeTab === "temporary" && <p className="text-[12px] text-[var(--hw-neutral-800)]">
-              Reporting only. Stored for up to 15 days and not used for forecasting or farmer advisories.
-            </p>}
-
-          {
-    /* Tab navigation */
-  }
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            <TabNav active={activeTab} onChange={setActiveTab} correctedCount={correctedRows.size} />
-
-            {
-    /* Accepted table */
-  }
-            {activeTab === "accepted" && <TableWrap cols={["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price / Vol.", "Obs. Status", "Result"]}>
-                {ACCEPTED_SAMPLE.map((r) => <tr key={r.row}>
-                    <td className={td}>{r.row}</td>
-                    <td className={tdBold}>{r.commodity}</td>
-                    <td className={td}>{r.category}</td>
-                    <td className={td}>{r.variety}</td>
-                    <td className={td}>{r.date}</td>
-                    <td className={td}>{r.uom}</td>
-                    <td className={td}>{r.priceOrVol}</td>
-                    <td className={td}>{r.obs}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-emerald-700 font-medium">{r.result}</td>
-                  </tr>)}
-                <tr>
-                  <td colSpan={9} className="px-3 py-2 text-[12px] text-[var(--hw-neutral-800)]">
-                    Showing 10 of {VALIDATION_COUNTS.accepted} accepted records
-                  </td>
-                </tr>
-              </TableWrap>}
-
-            {
-    /* Temporary table */
-  }
-            {activeTab === "temporary" && <TableWrap cols={["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price / Vol.", "Obs. Status"]}>
-                {TEMPORARY_SAMPLE.map((r) => <tr key={r.row}>
-                    <td className={td}>{r.row}</td>
-                    <td className={tdBold}>{r.commodity}</td>
-                    <td className={td}>{r.category}</td>
-                    <td className={td}>{r.variety}</td>
-                    <td className={td}>{r.date}</td>
-                    <td className={td}>{r.uom}</td>
-                    <td className={td}>{r.priceOrVol}</td>
-                    <td className={td}>{r.obs}</td>
-                  </tr>)}
-                <tr>
-                  <td colSpan={8} className="px-3 py-2 text-[12px] text-[var(--hw-neutral-800)]">
-                    Showing {TEMPORARY_SAMPLE.length} of {VALIDATION_COUNTS.temporary} temporary records
-                  </td>
-                </tr>
-              </TableWrap>}
-
-            {
-    /* Needs Correction table */
-  }
-            {activeTab === "correction" && <>
-                <TableWrap cols={["Row", "Commodity", "Issue", "Validation Result"]}>
-                  {CORRECTION_SAMPLE.filter((r) => !correctedRows.has(r.row)).map((r) => <tr
-    key={r.row}
-    onClick={() => setCorrectionRow(r)}
-    className="cursor-pointer hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-                      <td className={td}>{r.row}</td>
-                      <td className={tdBold}>{r.commodity}</td>
-                      <td className={td}>{r.issue}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-amber-700 font-medium">Needs Correction</td>
-                    </tr>)}
-                  {CORRECTION_SAMPLE.filter((r) => correctedRows.has(r.row)).map((r) => <tr key={r.row} className="opacity-60">
-                      <td className={td}>{r.row}</td>
-                      <td className={tdBold}>{r.commodity}</td>
-                      <td className={td}>{r.issue}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-emerald-700 font-medium">Corrected — pending revalidation</td>
-                    </tr>)}
-                  {CORRECTION_SAMPLE.every((r) => correctedRows.has(r.row)) && <tr>
-                      <td colSpan={4} className="px-3 py-4 text-center text-[12px] text-[var(--hw-neutral-800)]">
-                        All records corrected. Click Revalidate Records to update counts.
-                      </td>
-                    </tr>}
-                </TableWrap>
-                {correctedRows.size > 0 && <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)]">
-                    <button
-    onClick={handleRevalidate}
-    disabled={revalidating}
-    className="flex items-center gap-2 px-4 py-2 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-60"
-  >
-                      {revalidating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                      {revalidating ? "Revalidating..." : "Revalidate Records"}
-                    </button>
-                  </div>}
-                {!correctedRows.size && <div className="px-4 py-2.5 border-t border-[var(--hw-neutral-100)]">
-                    <p className="text-[12px] text-[var(--hw-neutral-800)]">
-                      Click any row to open the correction form. Needs Correction records will not be submitted.
-                    </p>
-                  </div>}
-              </>}
-
-            {
-    /* Duplicate table */
-  }
-            {activeTab === "duplicate" && <>
-                <TableWrap cols={["Row", "Commodity", "Variety", "Date", "UOM", "Price", "Reason"]}>
-                  {DUPLICATE_SAMPLE.map((r) => <tr key={r.row}>
-                      <td className={td}>{r.row}</td>
-                      <td className={tdBold}>{r.commodity}</td>
-                      <td className={td}>{r.variety}</td>
-                      <td className={td}>{r.date}</td>
-                      <td className={td}>{r.uom}</td>
-                      <td className={td}>{r.price}</td>
-                      <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] max-w-[220px] whitespace-normal leading-snug">{r.reason}</td>
-                    </tr>)}
-                </TableWrap>
-                <div className="px-4 py-2.5 border-t border-[var(--hw-neutral-100)]">
-                  <p className="text-[12px] text-[var(--hw-neutral-800)]">
-                    Duplicate records will not be submitted.
-                  </p>
-                </div>
-              </>}
-          </div>
-
-          {
-    /* Submission summary */
-  }
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-1.5">
-            <p className="text-[12px] font-semibold text-[var(--hw-neutral-800)] mb-2">Submission summary</p>
-            {[
-    ["Accepted records", "Will be submitted for HarvestWise processing", `${VALIDATION_COUNTS.accepted} records`],
-    ["Temporary records", "Will be stored for reporting up to 15 days", `${VALIDATION_COUNTS.temporary} records`],
-    ["Needs Correction", "Will not be submitted", `${Math.max(0, VALIDATION_COUNTS.correction - correctedRows.size)} records`],
-    ["Duplicate records", "Will not be submitted", `${VALIDATION_COUNTS.duplicate} records`]
-  ].map(([label, desc, count]) => <div key={label} className="flex items-center justify-between gap-3 py-1">
-                <div>
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-800)]">{label}</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)]">{desc}</p>
-                </div>
-                <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)] flex-shrink-0">{count}</p>
-              </div>)}
-          </div>
-
-          <ActionBar>
-            <button
-    onClick={() => setStep("match")}
-    className="flex-1 py-3 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors bg-white"
-  >
-              Back
-            </button>
-            {fileError && (
-        <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px] font-medium flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
-          <span>{fileError}</span>
-        </div>
-      )}
-      <button
-    onClick={handleSubmit}
-    disabled={submitting}
-    className="flex-[2] bg-[var(--hw-green-700)] text-white py-3 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
-  >
-              {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</> : "Submit to HarvestWise"}
-            </button>
-          </ActionBar>
-        </div>}
-
-      {
-    /* ═══════════════════════════════════════════════════════════
-        SUCCESS
-    ═══════════════════════════════════════════════════════════ */
-  }
-      {step === "success" && <div className="flex flex-col items-center text-center space-y-5 py-8 px-4 max-w-sm mx-auto">
-          {ingestionStatus === "processing" && (
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 w-full text-left">
-              <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[13px] font-bold text-blue-950">Background Task In Progress</p>
-                <p className="text-[13px] text-blue-800 mt-0.5">{uploadMessage || "Import accepted and processing in background."}</p>
-                <p className="text-[12px] text-blue-600 mt-1">Polling background worker status…</p>
-              </div>
-            </div>
-          )}
-          {ingestionStatus === "success" && (
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 w-full text-left">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[13px] font-bold text-emerald-950">Import Completed Successfully</p>
-                <p className="text-[13px] text-emerald-800 mt-0.5">{uploadMessage || "Dataset processed and imported into HarvestWise DB."}</p>
-                {file?.name && <p className="text-[12px] text-emerald-700 mt-1">File: <span className="font-mono">{file.name}</span></p>}
-              </div>
-            </div>
-          )}
-          {ingestionStatus === "failed" && (
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 w-full text-left">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[13px] font-bold text-red-950">Background Import Failed</p>
-                <p className="text-[13px] text-red-800 mt-0.5">{uploadError || "The background ingestion task failed."}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="w-16 h-16 rounded-full bg-[var(--hw-green-50)] flex items-center justify-center">
-            <CheckCircle className="w-8 h-8 text-[var(--hw-green-700)]" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Dataset submitted to HarvestWise</h1>
-          </div>
-
-          {
-    /* Summary card */
-  }
-          <div className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left space-y-2.5">
-            {[
-    ["Dataset type", datasetType],
-    ["Submitted records", `${VALIDATION_COUNTS.accepted + VALIDATION_COUNTS.temporary}`],
-    ["Accepted for processing", `${VALIDATION_COUNTS.accepted}`],
-    ["Temporary records", `${VALIDATION_COUNTS.temporary}`],
-    ["Excluded records", `${Math.max(0, VALIDATION_COUNTS.correction - correctedRows.size) + VALIDATION_COUNTS.duplicate}`]
-  ].map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3">
-                <span className="text-[13px] text-[var(--hw-neutral-800)]">{label}</span>
-                <span className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">{value}</span>
-              </div>)}
-          </div>
-
-          <div className="w-full space-y-2">
-            <button
-    onClick={() => navigate("/dftc")}
-    className="w-full bg-[var(--hw-green-700)] text-white py-3 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-              Return to Home
-            </button>
-            {VALIDATION_COUNTS.temporary > 0 && <button
-    onClick={() => navigate("/dftc/temporary-records")}
-    className="w-full py-3 border border-[var(--hw-green-600)] rounded-xl text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors bg-white"
-  >
-                View Temporary Market Records
-              </button>}
-            <button
-    onClick={() => {
-      setStep("upload");
-      setFile(null);
-      setDatasetType("");
-      setFileError("");
-      setCorrectedRows(/* @__PURE__ */ new Set());
-    }}
-    className="w-full py-3 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors bg-white"
-  >
-              Upload Another Dataset
-            </button>
-          </div>
-        </div>}
-
-    </div>;
+  return { headers, rows, rawRows, sheetNames: [], sheetsData: {}, totalRowCount: rows.length };
 }
-export {
-  DFTCUpload as default
+
+function detectDatasetInfo({ fileName = "", sheetNames = [], rawRows = [], headers = [], rows = [] }) {
+  const fn = fileName.toLowerCase();
+  const sheets = sheetNames.map(s => String(s || '').trim().toLowerCase());
+  
+  const topRawRows = rawRows.slice(0, 25);
+  const rawLines = topRawRows.map(r => Array.isArray(r) ? r.map(v => String(v ?? '').trim()).filter(Boolean).join(" ") : "");
+  const allText = (fn + " " + sheets.join(" ") + " " + rawLines.join(" ") + " " + headers.join(" ")).toLowerCase();
+
+  let detectedDatasetType = "";
+  let detectedSource = "";
+  let detectedPeriod = "";
+
+  // 1. DATASET TYPE DETECTION (Price and Arrival Volume only)
+  const hasOverallTotalSheet = sheets.some(s => s === "overall total" || s.includes("overall total"));
+  const hasArrivalKeywords = 
+    allText.includes("arrival_date") || 
+    allText.includes("farm_source_vol") || 
+    allText.includes("farm_volume") || 
+    allText.includes("total_volume") ||
+    allText.includes("arrival volume") ||
+    (allText.includes("commodity") && (allText.includes("volume_kg") || allText.includes("volume_mt")));
+  const isArrival = 
+    hasOverallTotalSheet || 
+    hasArrivalKeywords || 
+    ((fn.includes("dftc") || fn.includes("taboan") || fn.includes("food terminal")) && (fn.includes("vol") || fn.includes("arrival")));
+
+  const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  let hasConsolidatedRow = false;
+  for (const r of topRawRows) {
+    if (Array.isArray(r)) {
+      const rowTokens = r.map(v => String(v ?? '').toLowerCase().trim());
+      const mCount = rowTokens.filter(t => months.includes(t)).length;
+      if (mCount >= 6) {
+        hasConsolidatedRow = true;
+        break;
+      }
+    }
+  }
+  const isConsolidated = hasConsolidatedRow || fn.includes("consolidated");
+
+  if (isArrival) {
+    detectedDatasetType = "DFTC Arrival Volume";
+    detectedSource = "Davao Food Terminal Complex (DFTC)";
+  } else if (isConsolidated) {
+    detectedSource = "Davao Food Terminal Complex (DFTC)";
+    if (fn.includes("retail") || allText.includes("retail")) {
+      detectedDatasetType = "Price Consolidated Retail";
+    } else if (fn.includes("landing") || allText.includes("landing")) {
+      detectedDatasetType = "Price Consolidated Landing";
+    } else {
+      detectedDatasetType = "Price Consolidated Wholesale";
+    }
+  } else {
+    // Daily Price monitoring (Bankerohan or DFTC)
+    let isWholesale = fn.includes("wholesale") || fn.includes("whls");
+    let isRetail = fn.includes("retail") || fn.includes("ret");
+    let isLanding = fn.includes("landing") || fn.includes("land");
+
+    if (!isWholesale && !isRetail && !isLanding) {
+      isWholesale = allText.includes("wholesale") || allText.includes("prevailing wholesale");
+      isRetail = allText.includes("retail") || allText.includes("prevailing retail");
+      isLanding = allText.includes("landing");
+    }
+
+    let isDftc = fn.includes("dftc") || fn.includes("taboan") || fn.includes("food terminal");
+    let isBankerohan = fn.includes("bankerohan") || fn.includes("bangkerohan") || fn.includes("bkr");
+
+    if (!isDftc && !isBankerohan) {
+      isDftc = allText.includes("dftc") || allText.includes("taboan") || allText.includes("davao food terminal");
+      isBankerohan = allText.includes("bankerohan") || allText.includes("bangkerohan");
+    }
+
+    if (isDftc) {
+      detectedSource = "Davao Food Terminal Complex (DFTC)";
+      if (isWholesale) detectedDatasetType = "DFTC Wholesale Prices";
+      else if (isLanding) detectedDatasetType = "DFTC Landing Prices";
+      else detectedDatasetType = "DFTC Retail Prices";
+    } else if (isBankerohan) {
+      detectedSource = "Bangkerohan Public Market";
+      if (isWholesale) detectedDatasetType = "Bangkerohan Wholesale Prices";
+      else if (isLanding) detectedDatasetType = "Bangkerohan Landing Prices";
+      else detectedDatasetType = "Bangkerohan Retail Prices";
+    } else if (isRetail || isWholesale || isLanding) {
+      detectedSource = "Bangkerohan Public Market";
+      if (isLanding) detectedDatasetType = "Bangkerohan Landing Prices";
+      else detectedDatasetType = isWholesale ? "Bangkerohan Wholesale Prices" : "Bangkerohan Retail Prices";
+    }
+  }
+
+  if (detectedDatasetType && !detectedSource) {
+    if (detectedDatasetType.includes("Bangkerohan")) {
+      detectedSource = "Bangkerohan Public Market";
+    } else {
+      detectedSource = "Davao Food Terminal Complex (DFTC)";
+    }
+  }
+
+  // 2. REPORTING PERIOD DETECTION
+  const MONTH_NAMES = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
+  ];
+  const MONTH_DISPLAY = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const recognizedMonthIndices = [];
+  for (const s of sheetNames) {
+    const sClean = String(s || '').trim().toLowerCase().replace(/\s*\(\d+\)$/, '');
+    const idx = MONTH_NAMES.indexOf(sClean);
+    if (idx !== -1 && !recognizedMonthIndices.includes(idx)) {
+      recognizedMonthIndices.push(idx);
+    }
+  }
+  recognizedMonthIndices.sort((a, b) => a - b);
+
+  const yrMatch = (fn + " " + rawLines.slice(0, 5).join(" ")).match(/\b(20\d\d)\b/);
+  const yearStr = yrMatch ? yrMatch[1] : "";
+
+  if (recognizedMonthIndices.length > 1) {
+    const minM = recognizedMonthIndices[0];
+    const maxM = recognizedMonthIndices[recognizedMonthIndices.length - 1];
+    if (minM === 0 && maxM === 11) {
+      detectedPeriod = yearStr ? `January – December ${yearStr}` : "January – December";
+    } else {
+      detectedPeriod = `${MONTH_DISPLAY[minM]} – ${MONTH_DISPLAY[maxM]}${yearStr ? ` ${yearStr}` : ''}`;
+    }
+  } else if (recognizedMonthIndices.length === 1 && !topRawRows.some(r => r && r.some(c => /^Period\s*[:\-–]/i.test(String(c ?? ''))))) {
+    const m = recognizedMonthIndices[0];
+    detectedPeriod = `${MONTH_DISPLAY[m]}${yearStr ? ` ${yearStr}` : ''}`;
+  }
+
+  if (!detectedPeriod) {
+    for (const r of topRawRows) {
+      if (!Array.isArray(r)) continue;
+      for (let c = 0; c < r.length; c++) {
+        const cellStr = String(r[c] ?? '').trim();
+        if (/^Period\s*[:\-–]/i.test(cellStr)) {
+          let val = cellStr.replace(/^Period\s*[:\-–]\s*/i, '').trim();
+          if (c + 1 < r.length && /^\s*20\d\d\s*$/.test(String(r[c + 1] ?? ''))) {
+            val = `${val}, ${String(r[c + 1]).trim()}`;
+          }
+          if (val) {
+            detectedPeriod = val;
+            break;
+          }
+        }
+      }
+      if (detectedPeriod) break;
+    }
+  }
+
+  if (!detectedPeriod) {
+    for (const line of rawLines) {
+      const periodMatch = line.match(/(?:Covered\s+Period|Reporting\s+Period|Period)\s*[:\-–]\s*([^,;|\r\n]+(?:,\s*\d{4})?)/i);
+      if (periodMatch && periodMatch[1]) {
+        const val = periodMatch[1].trim().replace(/^["']|["']$/g, '');
+        if (val.length > 2 && !val.toLowerCase().includes("market") && !val.toLowerCase().includes("division")) {
+          detectedPeriod = val;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!detectedPeriod) {
+    for (const line of rawLines) {
+      const asOfMatch = line.match(/As\s+of\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
+      if (asOfMatch && asOfMatch[1]) {
+        detectedPeriod = asOfMatch[1].trim();
+        break;
+      }
+    }
+  }
+
+  if (!detectedPeriod) {
+    const yearRangeMatch = (fn + " " + rawLines.slice(0, 10).join(" ")).match(/\b(20\d\d\s*[-–—]\s*20\d\d)\b/);
+    if (yearRangeMatch && yearRangeMatch[1]) {
+      detectedPeriod = yearRangeMatch[1].replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  if (!detectedPeriod) {
+    const qMatch = (fn + " " + rawLines.slice(0, 10).join(" ")).match(/\b(Q[1-4]\s*[-–—/ ]?\s*20\d\d|20\d\d\s*[-–—/ ]?\s*Q[1-4])\b/i);
+    if (qMatch && qMatch[1]) {
+      detectedPeriod = qMatch[1].toUpperCase().trim();
+    }
+  }
+
+  if (!detectedPeriod) {
+    const monthYearRegex = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[-_ ]*(20\d\d)\b/i;
+    for (const s of sheetNames) {
+      const sm = s.match(monthYearRegex);
+      if (sm) {
+        detectedPeriod = `${sm[1]} ${sm[2]}`;
+        break;
+      }
+    }
+    if (!detectedPeriod) {
+      const fnm = fn.match(monthYearRegex);
+      if (fnm) {
+        const monthCap = fnm[1].charAt(0).toUpperCase() + fnm[1].slice(1);
+        detectedPeriod = `${monthCap} ${fnm[2]}`;
+      }
+    }
+  }
+
+  if (!detectedPeriod) {
+    const yrMatch = fn.match(/\b(20\d\d)\b/);
+    if (yrMatch && yrMatch[1]) {
+      detectedPeriod = yrMatch[1];
+    }
+  }
+
+  if (!detectedPeriod && rows.length > 0) {
+    const dateHeaders = headers.filter(h => h.toLowerCase().includes("date") || h.toLowerCase() === "time");
+    const dates = [];
+    for (const r of rows) {
+      for (const dh of dateHeaders) {
+        const val = r[dh];
+        if (val && !isNaN(Date.parse(val))) {
+          dates.push(new Date(val));
+          break;
+        }
+      }
+      if (dates.length >= 100) break;
+    }
+    if (dates.length > 0) {
+      dates.sort((a, b) => a.getTime() - b.getTime());
+      const minD = dates[0];
+      const maxD = dates[dates.length - 1];
+      const opt = { year: 'numeric', month: 'short', day: 'numeric' };
+      if (minD.getTime() === maxD.getTime()) {
+        detectedPeriod = minD.toLocaleDateString('en-US', opt);
+      } else {
+        detectedPeriod = `${minD.toLocaleDateString('en-US', opt)} - ${maxD.toLocaleDateString('en-US', opt)}`;
+      }
+    }
+  }
+
+  if (detectedPeriod) {
+    detectedPeriod = detectedPeriod.replace(/([A-Za-z0-9])\s+(20\d\d)$/, '$1, $2');
+  }
+
+  return {
+    datasetType: detectedDatasetType,
+    source: detectedSource,
+    period: detectedPeriod
+  };
+}
+
+const ISSUE_CODE_LABELS = {
+  duplicate: "Duplicate",
+  missing_required: "Missing Data",
+  invalid_date: "Invalid Date",
+  new_commodity: "New Commodity",
+  invalid_price: "Invalid Price",
+  price_out_of_range: "Price Out of Range",
+  invalid_price_range: "Invalid Price Range",
+  historical_cutoff: "Invalid Date",
+  invalid_volume: "Invalid Volume",
+  volume_out_of_range: "Volume Out of Range",
+  invalid_quarter: "Invalid Format",
+  unexpected_year: "Invalid Year",
+  invalid_temp_range: "Invalid Temperature",
+  precip_out_of_range: "Precipitation Out of Range",
+  humidity_out_of_range: "Humidity Out of Range",
 };
+
+function DFTCUpload() {
+  const queryClient = useQueryClient();
+  let navigate;
+  try {
+    navigate = useNavigate();
+  } catch {
+    navigate = (path) => {
+      if (typeof window !== "undefined") window.location.href = path;
+    };
+  }
+
+  const [step, setStep] = useState("form");
+  const [completedImportId, setCompletedImportId] = useState(null);
+  const [completedSummary, setCompletedSummary] = useState(null);
+
+  const [datasetType, setDatasetType] = useState("");
+  const [source, setSource] = useState("");
+  const [period, setPeriod] = useState("");
+  const [overwrite, setOverwrite] = useState(false);
+  const [autoDetected, setAutoDetected] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const [file, setFile] = useState(null);
+  const [parsedHeaders, setParsedHeaders] = useState([]);
+  const [parsedRows, setParsedRows] = useState([]);
+  const [fileSheets, setFileSheets] = useState([]);
+  const [activeSheet, setActiveSheet] = useState("");
+  const [totalDetectedRows, setTotalDetectedRows] = useState(0);
+  const sheetsDataRef = useRef({});
+  const extractPreviewFnRef = useRef(null);
+  const [validationResult, setValidationResult] = useState({
+    totalRows: 0,
+    valid: 0,
+    duplicates: 0,
+    missingValues: 0,
+    unrecognizedCommodities: 0,
+    rejected: 0
+  });
+  const [validationRows, setValidationRows] = useState([]);
+  const [validating, setValidating] = useState(false);
+  const [tableFilter, setTableFilter] = useState("all");
+  const [currentStep, setCurrentStep] = useState(0);
+  const [parsing, setParsing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [ingestionStatus, setIngestionStatus] = useState("idle");
+  const fileRef = useRef(null);
+
+  const runValidation = async (targetFile, dt, isOverwrite) => {
+    const f = targetFile || file;
+    const targetDt = dt || datasetType;
+    if (!f) return;
+    if (!targetDt) {
+      setUploadError("Select a dataset type before validating.");
+      return;
+    }
+    const mappedType = DATA_TYPE_MAP[targetDt] || targetDt;
+    setValidating(true);
+    setUploadError("");
+    try {
+      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite);
+      const summary = res?.summary || {};
+      setValidationResult({
+        totalRows: summary.total_rows ?? 0,
+        valid: summary.valid_rows ?? 0,
+        duplicates: summary.duplicate_rows ?? 0,
+        missingValues: summary.missing_value_rows ?? 0,
+        unrecognizedCommodities: summary.unrecognized_commodity_rows ?? 0,
+        rejected: summary.rejected_rows ?? 0,
+      });
+      setValidationRows(res?.rows || []);
+      setStep("validated");
+      setCurrentStep(1);
+    } catch (err) {
+      console.error("Validation error:", err);
+      setUploadError("We couldn't validate this file. Please try again.");
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleFileSelect = async (e) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    setFile(selected);
+    setFileName(selected.name);
+    setUploadError("");
+    setUploadMessage("");
+    setIngestionStatus("idle");
+    setValidationRows([]);
+    setValidationResult({
+      totalRows: 0,
+      valid: 0,
+      duplicates: 0,
+      missingValues: 0,
+      unrecognizedCommodities: 0,
+      rejected: 0,
+    });
+    setParsing(true);
+    try {
+      const { headers, rows, rawRows, sheetNames, sheetsData, totalRowCount, extractPreviewForRows } = await parseFileReal(selected);
+      setParsedHeaders(headers);
+      setParsedRows(rows);
+      setFileSheets(sheetNames || []);
+      setActiveSheet(sheetNames?.[0] || "");
+      setTotalDetectedRows(totalRowCount || rows.length);
+      sheetsDataRef.current = sheetsData || {};
+      extractPreviewFnRef.current = extractPreviewForRows || null;
+
+      // Auto-detect dataset information from file content and metadata
+      const detected = detectDatasetInfo({
+        fileName: selected.name,
+        sheetNames: sheetNames || [],
+        rawRows: rawRows || [],
+        headers: headers || [],
+        rows: rows || []
+      });
+
+      let detectedAny = false;
+      if (detected.datasetType) {
+        setDatasetType(detected.datasetType);
+        detectedAny = true;
+      }
+      if (detected.source) {
+        setSource(detected.source);
+        detectedAny = true;
+      }
+      if (detected.period) {
+        setPeriod(detected.period);
+        detectedAny = true;
+      }
+      setAutoDetected(detectedAny);
+
+      setStep("preview");
+      setCurrentStep(0);
+    } catch (err) {
+      setUploadError("Failed to parse file: " + (err.message || "Unknown error"));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleSheetChange = (sheetName) => {
+    setActiveSheet(sheetName);
+    if (sheetsDataRef.current?.[sheetName] && extractPreviewFnRef.current) {
+      const { headers: h, rows: r } = extractPreviewFnRef.current(sheetsDataRef.current[sheetName]);
+      setParsedHeaders(h);
+      setParsedRows(r);
+    }
+  };
+
+  const handleValidate = () => {
+    runValidation(file, datasetType, overwrite);
+  };
+
+  const { startProcess, updateProgress, finishProcess } = useBackgroundProcess();
+
+  const handleImport = async () => {
+    if (!file) return;
+    if (!datasetType) {
+      setUploadError("Select a dataset type before importing.");
+      return;
+    }
+    setUploading(true);
+    setUploadError("");
+    setUploadMessage("");
+    setStep("importing");
+    setCurrentStep(2);
+    try {
+      const dataType = DATA_TYPE_MAP[datasetType];
+      const res = await ingestionApi.uploadFile(file, dataType, overwrite);
+      const importId = res?.import_id || res?.importId || res?.data?.import_id;
+      if (importId) setCompletedImportId(importId);
+
+      setUploadMessage(res?.message || "Import accepted and processing in background.");
+      setIngestionStatus("processing");
+      setStep("importing");
+      setCurrentStep(2);
+
+      startProcess({
+        title: `Importing ${datasetType}`,
+        statusText: "Uploading file...",
+        initialProgress: 10,
+        importId,
+      });
+      updateProgress(15, "File uploaded, processing in background...");
+
+      if (importId) {
+        let isFinished = false;
+        let attempts = 0;
+        while (!isFinished && attempts < 60) {
+          attempts++;
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const statusRes = await ingestionApi.getHistoryDetail(importId);
+            if (statusRes?.status === "completed" || statusRes?.status === "success") {
+              isFinished = true;
+              setIngestionStatus("success");
+              const subId = statusRes?.submission_id || res?.submission_id || null;
+              setCompletedImportId(importId);
+              setCompletedSummary({
+                fileName: fileName || file?.name || "Uploaded File",
+                importId: importId || "—",
+                submissionId: subId || "—",
+                datasetType: datasetType || "—",
+                source: source || (DATA_TYPE_MAP[datasetType]?.includes("dftc") ? "Davao Food Terminal Complex (DFTC)" : "Bangkerohan Public Market"),
+                period: period || "—",
+                recordsImported: statusRes.records_imported ?? validationResult.valid,
+                totalRows: validationResult.totalRows,
+                validRows: validationResult.valid,
+                rejectedRows: validationResult.rejected,
+                fileFormat: file?.name ? ("." + file.name.split(".").pop().toLowerCase()) : ".xlsx",
+                finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+              });
+              setUploadMessage(`Import completed successfully! Stored ${statusRes.records_imported || 0} records.`);
+              finishProcess(`Stored ${statusRes.records_imported || 0} records`);
+              setStep("stored");
+              setCurrentStep(4);
+              queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
+              queryClient.invalidateQueries({ queryKey: ["submissions"] });
+              queryClient.invalidateQueries({ queryKey: ["dftc-home"] });
+              queryClient.invalidateQueries();
+              queryClient.refetchQueries();
+            } else if (statusRes?.status === "failed") {
+              isFinished = true;
+              setIngestionStatus("failed");
+              setUploadError(statusRes.error_message || "Background ingestion task failed.");
+              finishProcess(statusRes.error_message || "Import failed", true);
+              setStep("validated");
+              setCurrentStep(1);
+              queryClient.invalidateQueries();
+              queryClient.refetchQueries();
+            } else {
+              const pct = Math.min(90, 20 + attempts * 3);
+              updateProgress(pct, `Processing records... (${attempts * 2}s)`);
+            }
+          } catch (statusErr) {
+            console.warn("Status poll error:", statusErr);
+          }
+        }
+        if (!isFinished) {
+          finishProcess("Import timed out", true);
+        }
+      }
+    } catch (err) {
+      setUploadError(err.message || "Upload failed.");
+      setStep("validated");
+      setCurrentStep(1);
+      finishProcess("Upload failed", true);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setStep("form");
+    setFileName("");
+    setCurrentStep(0);
+    setDatasetType("");
+    setPeriod("");
+    setAutoDetected(false);
+    setOverwrite(false);
+    setFile(null);
+    setParsedHeaders([]);
+    setParsedRows([]);
+    setFileSheets([]);
+    setActiveSheet("");
+    setTotalDetectedRows(0);
+    sheetsDataRef.current = {};
+    extractPreviewFnRef.current = null;
+    setValidationRows([]);
+    setValidationResult({
+      totalRows: 0,
+      valid: 0,
+      duplicates: 0,
+      missingValues: 0,
+      unrecognizedCommodities: 0,
+      rejected: 0
+    });
+    setUploadError("");
+    setUploadMessage("");
+    setIngestionStatus("idle");
+    setCompletedImportId(null);
+    setCompletedSummary(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const displayedIssueRows = validationRows.filter((r) => r.issues && r.issues.length > 0);
+
+  const filteredTableRows = displayedIssueRows.filter((r) => {
+    if (tableFilter === "all") return true;
+    if (tableFilter === "rejected") return r.result === "rejected";
+    if (tableFilter === "warning") return r.result === "valid_with_warning";
+    if (tableFilter === "duplicate") return r.issues?.some((i) => i.code === "duplicate");
+    if (tableFilter === "missing") return r.issues?.some((i) => i.code === "missing_required");
+    if (tableFilter === "new_commodity") return r.issues?.some((i) => i.code === "new_commodity");
+    return true;
+  });
+
+  const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
+
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      
+      {/* Navigation & Header */}
+        <div>
+          <button
+            onClick={() => {
+              if (step === "form") navigate("/dftc/input");
+              else if (step === "preview") handleReset();
+              else if (step === "validated") setStep("preview");
+              else navigate("/dftc/input");
+            }}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--hw-neutral-800)] hover:text-[var(--hw-green-700)] transition-colors cursor-pointer mb-2"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            {step === "form" ? "Back to Submit Data" : "Back"}
+          </button>
+          <PageHeader
+            title="Upload Dataset"
+            description="Upload CSV or Excel files, preview data, and validate before storing."
+          />
+        </div>
+
+        {/* Processing steps indicator */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3.5">
+          <div className="flex items-center justify-between">
+            {STEP_CONFIG.map((stepCfg, i) => {
+              const isDone = i < currentStep;
+              const stepLabel = isDone ? stepCfg.done : stepCfg.active;
+              return (
+                <React.Fragment key={stepCfg.active}>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${isDone ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : i === currentStep ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] bg-white" : "border-[var(--hw-neutral-300)] text-[var(--hw-neutral-400)] bg-white"}`}>
+                      {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                    </div>
+                    <span className={`text-[10px] font-medium ${i <= currentStep ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`}>
+                      {stepLabel}
+                    </span>
+                  </div>
+                  {i < STEP_CONFIG.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-2 transition-colors ${isDone ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-200)]"}`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Form */}
+        {(step === "form" || step === "preview") && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
+            {/* File upload area */}
+            {!fileName ? (
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={parsing}
+                className="w-full border-2 border-dashed border-[var(--hw-neutral-300)] rounded-2xl p-8 flex flex-col items-center gap-3 hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <div className="p-3 bg-[var(--hw-neutral-100)] rounded-2xl">
+                  {parsing ? <Loader2 className="w-7 h-7 text-[var(--hw-green-700)] animate-spin" /> : <Upload className="w-7 h-7 text-[var(--hw-neutral-800)]" />}
+                </div>
+                <div className="text-center">
+                  <p className="text-[15px] font-medium text-[var(--hw-neutral-700)]">
+                    {parsing ? "Parsing file content…" : "Drop file here or click to upload"}
+                  </p>
+                  <p className="text-[13px] text-[var(--hw-neutral-800)] mt-1">CSV or Excel (.xlsx, .ods) · Max 20 MB</p>
+                </div>
+                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xlsm,.ods,.tsv,.parquet,.feather" className="hidden" onChange={handleFileSelect} />
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 p-3.5 bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl">
+                <FileText className="w-5 h-5 text-[var(--hw-green-700)] flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{fileName}</p>
+                  <p className="text-[12px] text-[var(--hw-neutral-700)]">
+                    {file ? `${(file.size / 1024).toFixed(1)} KB` : ""} · {fileSheets.length > 1 ? `${fileSheets.length} sheets · ` : ""}{totalDetectedRows || parsedRows.length} rows detected
+                  </p>
+                </div>
+                <button onClick={handleReset} className="p-1 text-[var(--hw-neutral-400)] hover:text-red-500 transition-colors cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {uploadError && (
+              <p className="text-[12px] text-red-600 font-medium">{uploadError}</p>
+            )}
+
+            <div className="pt-2 border-t border-[var(--hw-neutral-200)] space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Dataset information</h2>
+                {autoDetected && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Auto-filled from file
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="dataset-type-select" className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5">Dataset type *</label>
+                  <select
+                    id="dataset-type-select"
+                    value={datasetType}
+                    onChange={(e) => {
+                      setDatasetType(e.target.value);
+                      if (step === "validated") {
+                        setStep("preview");
+                        setCurrentStep(0);
+                        setValidationRows([]);
+                      }
+                    }}
+                    className={inputCls}
+                  >
+                    <option value="">Select dataset type…</option>
+                    {DATASET_TYPES.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="source-select" className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5">Source</label>
+                  <select id="source-select" value={source} onChange={(e) => setSource(e.target.value)} className={inputCls}>
+                    <option value="">Select source…</option>
+                    {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5">Reporting period</label>
+                  <input
+                    type="text"
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    placeholder="e.g. Jun 23, 2026 or Q1 2026"
+                    className={inputCls}
+                  />
+                </div>
+                <div className="sm:col-span-2 flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="overwrite-checkbox"
+                    checked={overwrite}
+                    onChange={(e) => {
+                      const newVal = e.target.checked;
+                      setOverwrite(newVal);
+                      if (step === "validated" && file) {
+                        runValidation(file, datasetType, newVal);
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-[var(--hw-neutral-300)] text-[var(--hw-green-700)] focus:ring-[var(--hw-green-600)] cursor-pointer"
+                  />
+                  <label htmlFor="overwrite-checkbox" className="text-[13px] font-medium text-[var(--hw-neutral-700)] cursor-pointer">
+                    Overwrite existing records (upsert mode)
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview */}
+        {step === "preview" && fileName && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
+                {fileSheets.length > 1
+                  ? `File preview — sheet "${activeSheet}" (first ${Math.min(5, parsedRows.length)} of ${parsedRows.length} rows)`
+                  : `File preview — first ${Math.min(5, parsedRows.length)} of ${parsedRows.length} rows`}
+              </p>
+              {fileSheets.length > 1 && (
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  <label htmlFor="sheet-select" className="text-[var(--hw-neutral-600)] font-medium">Sheet:</label>
+                  <select
+                    id="sheet-select"
+                    value={activeSheet}
+                    onChange={(e) => handleSheetChange(e.target.value)}
+                    className="px-2.5 py-1 border border-[var(--hw-neutral-300)] rounded-lg text-[12px] bg-white text-[var(--hw-neutral-800)] focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] font-medium cursor-pointer shadow-sm"
+                  >
+                    {fileSheets.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {parsedRows.length > 0 && parsedHeaders.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] max-h-64">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)] sticky top-0">
+                    <tr>
+                      {parsedHeaders.map((h) => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                    {parsedRows.slice(0, 5).map((r, i) => (
+                      <tr key={i}>
+                        {parsedHeaders.map((h) => (
+                          <td key={h} className="px-3 py-2 text-[var(--hw-neutral-800)] whitespace-nowrap">
+                            {r[h] !== undefined && r[h] !== "" ? r[h] : <span className="text-gray-400 italic">—</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-[13px] text-gray-500 italic py-2">No rows parsed from file.</p>
+            )}
+
+            <button
+              onClick={handleValidate}
+              disabled={validating}
+              className="w-full py-2.5 bg-[var(--hw-green-700)] text-white text-[15px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {validating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Validating Data with Backend…
+                </>
+              ) : (
+                "Validate Data"
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Validation results & importing progress */}
+        {(step === "validated" || step === "importing" || (step === "done" && ingestionStatus !== "success")) && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation complete</p>
+            </div>
+
+            {/* 6 KPI Cards (3 on Row 1, 3 on Row 2) */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Total Rows</p>
+                  <p className="text-[18px] font-bold text-[var(--hw-neutral-900)] mt-0.5">{validationResult.totalRows}</p>
+                </div>
+                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Valid Rows</p>
+                  <p className="text-[18px] font-bold text-emerald-700 mt-0.5">{validationResult.valid}</p>
+                </div>
+                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Rejected Rows</p>
+                  <p className="text-[18px] font-bold text-red-600 mt-0.5">{validationResult.rejected}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Duplicates</p>
+                  <p className="text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.duplicates}</p>
+                </div>
+                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Missing Values</p>
+                  <p className="text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.missingValues}</p>
+                </div>
+                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Unrecognized Commodities</p>
+                  <p className="text-[18px] font-bold text-[var(--hw-neutral-800)] mt-0.5">{validationResult.unrecognizedCommodities}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Validation Details Table Section */}
+            <div className="pt-2 border-t border-[var(--hw-neutral-200)] space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">Validation Details</p>
+                {validationRows.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-[12px]">
+                    <span className="text-[var(--hw-neutral-600)]">Filter:</span>
+                    <select
+                      value={tableFilter}
+                      onChange={(e) => setTableFilter(e.target.value)}
+                      className="px-2 py-1 border border-[var(--hw-neutral-300)] rounded-lg text-[12px] bg-white text-[var(--hw-neutral-800)] focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] cursor-pointer"
+                    >
+                      <option value="all">All Issues ({displayedIssueRows.length})</option>
+                      <option value="rejected">Rejected Only</option>
+                      <option value="warning">Warnings Only</option>
+                      <option value="duplicate">Duplicates</option>
+                      <option value="missing">Missing Values</option>
+                      <option value="new_commodity">New Commodities</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {filteredTableRows.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] max-h-80">
+                  <table className="w-full text-[12px] text-left border-collapse">
+                    <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)] sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] w-28">Source</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)]">Commodity / Record</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] w-36">Result</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)]">Issues</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)]">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--hw-neutral-100)] bg-white">
+                      {filteredTableRows.map((r, idx) => {
+                        const isRejected = r.result === "rejected";
+                        const isWarning = r.result === "valid_with_warning";
+                        const resultLabel = isRejected ? "Rejected" : (isWarning ? "Valid with warning" : "Valid");
+                        const resultTextColor = isRejected ? "text-red-600" : (isWarning ? "text-amber-700" : "text-emerald-700");
+
+                        const issuesText = (r.issues || []).map(i => ISSUE_CODE_LABELS[i.code] || i.code).join(", ");
+                        const reasonText = (r.issues || []).map(i => i.message).join(" ");
+                        const sourceDisplay = r.source_label || (r.source_sheet ? `${r.source_sheet} · Row ${r.row_number}` : `Row ${r.row_number}`);
+
+                        return (
+                          <tr key={idx}>
+                            <td className="px-3 py-2 text-[var(--hw-neutral-700)] whitespace-nowrap font-medium">{sourceDisplay}</td>
+                            <td className="px-3 py-2 font-medium text-[var(--hw-neutral-900)]">{r.record_label || "—"}</td>
+                            <td className={`px-3 py-2 font-medium ${resultTextColor}`}>{resultLabel}</td>
+                            <td className="px-3 py-2 text-[var(--hw-neutral-800)]">{issuesText || "—"}</td>
+                            <td className="px-3 py-2 text-[var(--hw-neutral-600)]">{reasonText || "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-white border border-[var(--hw-neutral-200)] text-[13px]">
+                  <p className="font-semibold text-emerald-700">No validation issues found.</p>
+                  <p className="text-black mt-0.5">All rows passed validation and are ready to import.</p>
+                </div>
+              )}
+            </div>
+
+            {uploadError && (
+              <p className="text-[12px] text-red-600 font-medium">{uploadError}</p>
+            )}
+
+            {step === "validated" && (
+              <div className="flex flex-wrap gap-3 pt-1">
+                <button
+                  onClick={handleImport}
+                  disabled={uploading || validationResult.valid === 0}
+                  className="flex-1 min-w-[140px] py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Import Valid Records ({validationResult.valid})
+                </button>
+                <button onClick={handleReset} className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Replace File
+                </button>
+              </div>
+            )}
+
+            {step === "importing" && (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
+                <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
+                <div>
+                  <p className="text-[13px] font-bold text-blue-950">Standardizing & Storing Records…</p>
+                  <p className="text-[12px] text-blue-800 mt-0.5">
+                    {uploadMessage || "Uploading and processing dataset in the background…"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {step === "done" && ingestionStatus === "failed" && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-900">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[13px] font-bold text-red-950">Background Import Failed</p>
+                    <p className="text-[13px] text-red-800 mt-0.5">{uploadError || "The background ingestion task failed."}</p>
+                    {fileName && <p className="text-[12px] text-red-700 mt-1">File: <span className="font-mono">{fileName}</span></p>}
+                  </div>
+                </div>
+                <button
+                  onClick={handleReset}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Try another file
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 4: Stored View */}
+        {(step === "stored" || (step === "done" && ingestionStatus === "success")) && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 space-y-6">
+            <div className="flex items-start gap-3.5 pb-5 border-b border-[var(--hw-neutral-100)]">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+                  Import Completed & Stored
+                </h2>
+                <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+                  {uploadMessage || "The dataset was successfully validated, standardized, and stored in the database."}
+                </p>
+              </div>
+            </div>
+
+            {/* Summary of the Uploaded File */}
+            <div className="rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]/50 overflow-hidden">
+              <div className="px-5 py-3 border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-100)]/60 flex items-center justify-between">
+                <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
+                  Upload Summary
+                </p>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Completed
+                </span>
+              </div>
+
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Submission ID</p>
+                  <p className="text-[13px] font-semibold text-emerald-800 font-mono mt-0.5">
+                    {completedSummary?.submissionId || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">History ID</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] font-mono mt-0.5">
+                    {completedSummary?.importId || completedImportId || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Source / File Name</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate mt-0.5" title={completedSummary?.fileName || fileName}>
+                    {completedSummary?.fileName || fileName || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Dataset Type</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {completedSummary?.datasetType || datasetType || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Records Stored</p>
+                  <p className="text-[14px] font-bold text-emerald-700 mt-0.5">
+                    {(completedSummary?.recordsImported ?? validationResult.valid).toLocaleString()} records
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Reporting Period</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {completedSummary?.period || period || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Data Source</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {completedSummary?.source || source || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Total Rows Processed</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {(completedSummary?.totalRows ?? validationResult.totalRows).toLocaleString()} rows
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Completion Time</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {completedSummary?.finishedAt || "Just now"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions: View Details and Import another file */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                onClick={() => {
+                  navigate("/dftc/submissions");
+                }}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-sm cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                View Submission History
+              </button>
+
+              <button
+                onClick={handleReset}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Upload another file
+              </button>
+            </div>
+          </div>
+        )}
+    </div>
+  );
+}
+
+export { DFTCUpload as default };

@@ -72,9 +72,9 @@ function normalizeKey(str) {
 }
 
 function priceStr(value) {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return "";
   const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(2) : "—";
+  return Number.isFinite(n) ? n.toFixed(2) : "";
 }
 
 function buildRowsLookup(rows) {
@@ -495,11 +495,11 @@ function DFTCFilePreview({ file, onClose }) {
           const row = resolvePriceRow(com, v, lookup);
           return {
             ...v,
-            bankLanding: row ? priceStr(row.bangkerohan_landing) : "—",
-            bankWholesale: row ? priceStr(row.bangkerohan_wholesale) : "—",
-            bankRetail: row ? priceStr(row.bangkerohan_retail) : "—",
-            dftcWholesale: row ? priceStr(row.dftc_taboan_wholesale) : "—",
-            dftcRetail: row ? priceStr(row.dftc_taboan_retail) : "—"
+            bankLanding: row ? priceStr(row.bangkerohan_landing) : "",
+            bankWholesale: row ? priceStr(row.bangkerohan_wholesale) : "",
+            bankRetail: row ? priceStr(row.bangkerohan_retail) : "",
+            dftcWholesale: row ? priceStr(row.dftc_taboan_wholesale) : "",
+            dftcRetail: row ? priceStr(row.dftc_taboan_retail) : ""
           };
         })
       }))
