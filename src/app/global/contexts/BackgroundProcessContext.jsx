@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ingestionApi } from "../../../services/api";
-import { openEventStream } from "../api";
+import { useNotificationEvent } from "./NotificationStreamContext";
 
 const BackgroundProcessContext = createContext(null);
 
@@ -90,9 +90,10 @@ export const BackgroundProcessProvider = ({ children }) => {
     }, 4000);
   }, [queryClient]);
 
-  // Connect to SSE stream for real-time background events
-  useEffect(() => {
-    const handleEvent = async (eventData) => {
+  // Listen for real-time background events on the shared notification stream.
+  // This provider used to open its own SSE connection; it now subscribes, so a
+  // session holds one connection instead of one per layout plus one per page.
+  const handleEvent = useCallback(async (eventData) => {
       try {
 
           // Only act on completion/failure events. A broadcast's import_id must
@@ -133,17 +134,12 @@ export const BackgroundProcessProvider = ({ children }) => {
       } catch (err) {
         console.warn("SSE handler error", err);
       }
-    };
-
-    // openEventStream attaches the bearer token; native EventSource cannot,
-    // and the /notifications/stream endpoint requires authentication.
-    const stream = openEventStream("/notifications/stream", {
-      message: handleEvent,
-      DATASET_INGESTED: handleEvent,
-    });
-
-    return () => stream.close();
   }, [finishProcess]);
+
+  // DATASET_INGESTED is the SSE event name the server uses for everything on
+  // the shared data channel. The payload's own `type` still discriminates
+  // ingestion success / price update / ingestion failure below.
+  useNotificationEvent("DATASET_INGESTED", handleEvent);
 
   return (
     <BackgroundProcessContext.Provider

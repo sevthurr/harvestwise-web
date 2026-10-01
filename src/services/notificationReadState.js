@@ -1,10 +1,21 @@
 /**
- * Per-user persistent "read" state for notifications that are derived
- * client-side (DFTC submissions, Admin audit logs). Farmer notifications
- * persist read state on the backend, so they do not use this helper.
+ * Per-user persistent "read" state for notifications.
+ *
+ * This started life as a helper for notifications derived purely client-side
+ * (DFTC submissions, Admin audit logs); the backend did not persist read state
+ * for those. It is now the local half of a union for *all three* notification
+ * pages — see `useNotificationReadState`. The backend remains authoritative and
+ * does persist `read_at`; this store only adds ids the user has acknowledged on
+ * this device, so a mark-read still shows as read when the request could not
+ * reach the server (offline PWA session, rural connectivity).
  *
  * Read IDs are kept per user in localStorage so a read notification stays
- * read across logout / login on the same device/browser.
+ * read across logout / login on the same device/browser. Being localStorage,
+ * this does not follow the user to another device — a known limit, not a bug.
+ *
+ * The set only ever grows, which is safe because notifications are append-only:
+ * read is one-way on the backend (no mark-as-unread route exists), so a stale
+ * local entry can only ever agree with the server, never contradict it.
  */
 
 const STORAGE_KEY_PREFIX = "hw:notif_read:";

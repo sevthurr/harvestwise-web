@@ -56,7 +56,7 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function buildUrl(url) {
+export function buildUrl(url) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   const path = url.startsWith('/') ? url : `/${url}`;
   if (path.startsWith('/api/v1')) {
@@ -218,11 +218,14 @@ export async function apiDelete(url, options = {}) {
  * the same way every other request does. It refreshes once on a 401 and then
  * reconnects, so a rotated token does not permanently kill the stream.
  *
- * Handlers are registered by event name and receive the parsed `data` payload.
- * `ping` keep-alives are consumed internally and not surfaced.
+ * Handlers are registered by event name and receive the parsed `data` payload
+ * plus the SSE event name as a second argument. The key `*` matches any event
+ * that has no specific handler. `ping` keep-alives are consumed internally and
+ * not surfaced.
  *
  * @param {string} path                 API path, e.g. '/notifications/stream'
- * @param {Record<string, (data:any)=>void>} handlers  keyed by SSE event name
+ * @param {Record<string, (data:any, eventName:string)=>void>} handlers
+ *        keyed by SSE event name, or `*` for a catch-all
  * @param {{ signal?: AbortSignal }} options
  * @returns {{ close: () => void }}
  */
@@ -294,10 +297,12 @@ export function openEventStream(path, handlers = {}, options = {}) {
             }
             if (eventName === 'ping' || dataLines.length === 0) continue;
 
-            const handler = handlers[eventName];
+            // A `*` handler receives every non-ping event, so a new server event
+            // type does not require a client change to start flowing.
+            const handler = handlers[eventName] || handlers['*'];
             if (!handler) continue;
             try {
-              handler(JSON.parse(dataLines.join('\n')));
+              handler(JSON.parse(dataLines.join('\n')), eventName);
             } catch {
               /* a malformed frame must not kill the stream */
             }

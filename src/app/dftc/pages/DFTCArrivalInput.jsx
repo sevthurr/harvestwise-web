@@ -708,6 +708,7 @@ export default function DFTCArrivalInput() {
   const [saveStatus, setSaveStatus] = useState("idle");
   const saveTimer = useRef(null);
   const oldTimer = useRef(null);
+  const navTimer = useRef(null);
 
   const [hasDraft, setHasDraft] = useState(() => {
     try { return localStorage.getItem("dftc_arrival_draft") === "true"; } catch { return false; }
@@ -1199,7 +1200,7 @@ export default function DFTCArrivalInput() {
     queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
 
-    setTimeout(() => {
+    navTimer.current = setTimeout(() => {
       setIsSaving(false);
       navigate("/dftc/input", {
         state: {
@@ -1215,6 +1216,14 @@ export default function DFTCArrivalInput() {
       });
     }, 600);
   }
+
+  // Timers scheduled above outlive unmount and fire setState/navigate on a dead
+  // tree, which leaks navigation into whatever screen the user moved to.
+  useEffect(() => () => {
+    clearTimeout(navTimer.current);
+    clearTimeout(saveTimer.current);
+    clearTimeout(oldTimer.current);
+  }, []);
 
   // ── Autosave Status Indicator ──
   function SaveStatusIndicator() {

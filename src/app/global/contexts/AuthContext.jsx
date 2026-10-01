@@ -169,3 +169,13 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
+
+/**
+ * Same as `useAuth` but returns null instead of throwing when there is no
+ * provider. For components that can degrade gracefully outside an auth tree —
+ * per-user local read state, for example, which simply starts empty rather
+ * than taking the whole page down.
+ */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
+}

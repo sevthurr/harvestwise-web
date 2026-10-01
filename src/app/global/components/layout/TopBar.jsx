@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
@@ -15,6 +15,8 @@ const TopBar = ({
   notificationCount = 0
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isNotificationOpen = Boolean(location?.pathname?.includes("/notifications"));
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
@@ -106,11 +108,20 @@ const TopBar = ({
 
           <button
             onClick={onNotificationClick}
-            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
-            aria-label="Notifications"
+            className={`relative p-2 rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
+              isNotificationOpen
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={notificationCount > 0 ? `Notifications, ${notificationCount} unread` : "Notifications"}
+            aria-current={isNotificationOpen ? "page" : undefined}
           >
             <Bell className="w-5 h-5" />
-            {notificationCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--hw-error)] rounded-full" />}
+            {notificationCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {notificationCount > 9 ? "9+" : notificationCount}
+              </span>
+            )}
           </button>
 
           {/* Avatar + dropdown */}
