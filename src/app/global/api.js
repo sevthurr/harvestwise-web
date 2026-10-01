@@ -56,7 +56,7 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function buildUrl(url) {
+export function buildUrl(url) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   const path = url.startsWith('/') ? url : `/${url}`;
   if (path.startsWith('/api/v1')) {

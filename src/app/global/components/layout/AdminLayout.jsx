@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
+import { getUnreadCount, subscribeNotificationStream } from "../../../../services/api/notificationsApi";
 import {
   LayoutDashboard,
   Database,
@@ -126,6 +127,37 @@ const AdminLayoutInner = () => {
     }
   };
 
+  const { data: unreadData, refetch: refreshUnread } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      try {
+        const res = await getUnreadCount();
+        return res?.unread_count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+  }, [location.pathname, queryClient]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeNotificationStream({
+      onNotification: () => {
+        queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-unread-notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+        refreshUnread();
+      },
+    });
+    return () => unsubscribe();
+  }, [queryClient, refreshUnread]);
+
   const handleLogout = () => {
     setAvatarOpen(false);
     logout();
@@ -158,16 +190,23 @@ const AdminLayoutInner = () => {
           <BackgroundProcessBadge />
           <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
-
-
-
           {/* Bell */}
           <button
             onClick={() => navigate("/admin/notifications")}
-            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0 cursor-pointer"
-            aria-label="Notifications"
+            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+              location?.pathname?.includes("/notifications")
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
           >
             <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
 
