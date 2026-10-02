@@ -1,12 +1,18 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { ChevronDown, Info, X, Edit2, Sliders } from "lucide-react";
+import { ChevronDown, Info, X, Edit2, Sliders, ArrowRight } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
-import { useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
+import { useArrivalPressure, useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
+import {
+  arrivalBoundaryRows,
+  arrivalSeriesTotals,
+  bucketArrivals,
+  latestArrivalBucket
+} from "../components/analytics/arrivalVolumeSeries";
 import {
   MODULES,
   CLASSIFICATIONS,
@@ -19,6 +25,16 @@ const RELIABILITY_TONES = {
   Moderate: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
   Limited: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
   Low: "text-[var(--hw-error)] bg-[var(--hw-error)]/10"
+};
+// The Arrival Pressure card reads as a supply scale: Low (deficit) through
+// High (surplus). This is deliberately not CLASSIFICATION_COLORS, which maps
+// Low to emerald and Lower Middle to blue because it is shared with Price
+// Outlook, where those labels mean something different.
+const ARRIVAL_PRESSURE_TONES = {
+  Low: "text-blue-600",
+  "Lower Middle": "text-emerald-600",
+  "Upper Middle": "text-amber-600",
+  High: "text-red-600"
 };
 const MODULE_CARD_DATA = {
   "price-outlook": { label: "days", required: 14, key: "days_available" },
@@ -557,6 +573,65 @@ const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder 
   );
 };
 
+// Commodity + variety scope control. Both tabs drive the same `scopedCommodity`
+// / `scopedVariety` state, so this renders on each of them rather than being
+// duplicated inline -- the threshold cards read that scope, and without a
+// control on the Weights & Thresholds tab the card had no way to change
+// commodity and silently kept whatever the other tab had selected.
+const ScopeSelector = ({
+  commodity,
+  variety,
+  commodities = [],
+  variants = [],
+  selectCls = "",
+  onCommodityChange,
+  onVarietyChange
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+    <div className="flex items-center gap-3">
+      {commodity && (
+        <CommodityIllustration
+          commodityId={getCommodityIconKey(null, null, commodity)}
+          className="w-8 h-8 flex-shrink-0"
+        />
+      )}
+      <span className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+        {commodity ? `${commodity} · ${variety || "Standard"}` : "Select a commodity and variety"}
+      </span>
+    </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Commodity</label>
+        <TextOnlyCommodityDropdown
+          value={commodity}
+          options={commodities}
+          onChange={onCommodityChange}
+          placeholder="Select Commodity"
+        />
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Variety</label>
+        <select
+          value={variety}
+          onChange={(e) => onVarietyChange(e.target.value)}
+          disabled={!commodity || variants.length === 0}
+          className={`${selectCls} min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {variants.length === 0 ? (
+            <option value="Standard">Standard</option>
+          ) : (
+            variants.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    </div>
+  </div>
+);
+
 function AdminAnalytics() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -722,13 +797,18 @@ function AdminAnalytics() {
     return getVariants(scopedCommodity);
   }, [scopedCommodity]);
 
+  // Wait for the commodity list before defaulting the variety. Setting
+  // "Standard" while the list was still in flight made the scope briefly
+  // ("Kalabasa" + "Standard") look complete, so `reloadAnalytics` computed and
+  // persisted a second set of module outputs for a variety nobody selected.
   useEffect(() => {
+    if (loadingCommodities) return;
     if (scopedVariants.length > 0) {
       setScopedVariety(scopedVariants[0]);
     } else {
       setScopedVariety("Standard");
     }
-  }, [scopedCommodity, scopedVariants]);
+  }, [scopedCommodity, scopedVariants, loadingCommodities]);
 
   // Load the persisted module-output history.
   //
@@ -760,9 +840,13 @@ function AdminAnalytics() {
     }
   }, []);
 
+  // Mount only. Once a scope exists, `reloadAnalytics` owns the refresh: it
+  // awaits the compute before reloading, so the table never shows pre-compute
+  // rows. Listing the scope here as well raced that and fetched the same
+  // unfiltered page twice on every scope change.
   useEffect(() => {
     loadProcessedResults();
-  }, [loadProcessedResults, scopedCommodity, scopedVariety]);
+  }, [loadProcessedResults]);
 
   // A module or classification chosen for the previous commodity can mask the
   // new one entirely, leaving an empty table that looks like missing records.
@@ -839,6 +923,34 @@ function AdminAnalytics() {
     !!scopedCommodityRecord?.id,
     scopedCommodityRecord?.id
   );
+
+  // Live arrival volume behind the Arrival Pressure card. The backend withholds
+  // the classification and quartiles below four records rather than publishing a
+  // zero-padded reading, so this card can legitimately show "—" for the
+  // thresholds while still reporting the volumes it does have.
+  const { data: arrivalSummary, loading: arrivalLoading, error: arrivalError } = useArrivalPressure(
+    !!scopedCommodityRecord?.id,
+    scopedCommodityRecord?.id
+  );
+
+  const arrivalQuartiles = arrivalSummary?.quartile_thresholds || null;
+  const arrivalClassification = arrivalSummary?.classification || null;
+  const arrivalSeries = useMemo(
+    () => bucketArrivals(arrivalSummary?.records || [], { granularity: "monthly" }),
+    [arrivalSummary]
+  );
+  const arrivalTotals = useMemo(() => arrivalSeriesTotals(arrivalSeries), [arrivalSeries]);
+  const arrivalCurrentKg = useMemo(() => {
+    const bucket = latestArrivalBucket(arrivalSeries);
+    return bucket ? bucket.total_kg : null;
+  }, [arrivalSeries]);
+  const arrivalBoundary = useMemo(() => arrivalBoundaryRows(arrivalQuartiles), [arrivalQuartiles]);
+  const arrivalBasisParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (scopedCommodity) params.set("commodity", scopedCommodity);
+    if (scopedVariety) params.set("variety", scopedVariety);
+    return params.toString();
+  }, [scopedCommodity, scopedVariety]);
 
   useEffect(() => {
     if (!showTooltip) return;
@@ -1110,49 +1222,15 @@ function AdminAnalytics() {
         {tab === "outputs" && (
           <div className="space-y-6">
             {/* Scoped Variety Selector */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-              <div className="flex items-center gap-3">
-                {scopedCommodity && (
-                  <CommodityIllustration
-                    commodityId={getCommodityIconKey(null, null, scopedCommodity)}
-                    className="w-8 h-8 flex-shrink-0"
-                  />
-                )}
-                <span className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
-                  {scopedCommodity ? `${scopedCommodity} · ${scopedVariety || "Standard"}` : "Select a commodity and variety"}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex flex-col gap-0.5">
-                  <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Commodity</label>
-                  <TextOnlyCommodityDropdown
-                    value={scopedCommodity}
-                    options={commodities}
-                    onChange={setScopedCommodity}
-                    placeholder="Select Commodity"
-                  />
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Variety</label>
-                  <select
-                    value={scopedVariety}
-                    onChange={(e) => setScopedVariety(e.target.value)}
-                    disabled={!scopedCommodity || scopedVariants.length === 0}
-                    className={`${selectCls} min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed`}
-                  >
-                    {scopedVariants.length === 0 ? (
-                      <option value="Standard">Standard</option>
-                    ) : (
-                      scopedVariants.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-              </div>
-            </div>
+            <ScopeSelector
+              commodity={scopedCommodity}
+              variety={scopedVariety}
+              commodities={commodities}
+              variants={scopedVariants}
+              selectCls={selectCls}
+              onCommodityChange={setScopedCommodity}
+              onVarietyChange={setScopedVariety}
+            />
 
             {/* 4 Module Output Cards (Clickable & Empty State) */}
             {analyticsError && (
@@ -1392,6 +1470,18 @@ function AdminAnalytics() {
         {/* ══ WEIGHTS & THRESHOLDS TAB ══ */}
         {tab === "weights" && (
           <div className="space-y-8">
+            {/* The threshold cards below read this scope, so the control has to
+                be reachable from this tab too. */}
+            <ScopeSelector
+              commodity={scopedCommodity}
+              variety={scopedVariety}
+              commodities={commodities}
+              variants={scopedVariants}
+              selectCls={selectCls}
+              onCommodityChange={setScopedCommodity}
+              onVarietyChange={setScopedVariety}
+            />
+
             {/* Section 1: Adaptive Weights */}
             <section className="space-y-4">
               <div>
@@ -1536,29 +1626,108 @@ function AdminAnalytics() {
                       <div>
                         <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Arrival Pressure</h3>
                         <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
-                          Source: DFTC Arrival Volume records · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
+                          Source: DFTC Arrival Volume · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
-                        <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q1 Threshold</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">- MT/week</p>
+                        {[
+                          { label: "Q1 Threshold", value: arrivalQuartiles?.q1 },
+                          { label: "Q2 (Median)", value: arrivalQuartiles?.q2 },
+                          { label: "Q3 Threshold", value: arrivalQuartiles?.q3 }
+                        ].map((q) => (
+                          <div key={q.label}>
+                            <p className="text-[11px] text-[var(--hw-neutral-500)]">{q.label}</p>
+                            {/* Number bold, unit lighter -- as the design sets it. */}
+                            <p className="text-[13px] mt-0.5">
+                              {q.value == null ? (
+                                <span className="font-bold text-[var(--hw-neutral-400)]">— kg/mo</span>
+                              ) : (
+                                <>
+                                  <span className="font-bold text-[var(--hw-neutral-800)]">
+                                    {q.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                  </span>{" "}
+                                  <span className="text-[11px] text-[var(--hw-neutral-500)]">kg/mo</span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-blue-700">Current Month Volume</p>
+                          <p className="mt-0.5 flex items-center justify-center gap-1.5">
+                            <span className="text-[15px] font-bold text-blue-800">
+                              {arrivalCurrentKg == null
+                                ? "—"
+                                : `${arrivalCurrentKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`}
+                            </span>
+                            {arrivalClassification && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-[10px] font-bold text-blue-700">
+                                {arrivalClassification}
+                              </span>
+                            )}
+                          </p>
                         </div>
-                        <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q2 (Median)</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">- MT/week</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q3 Threshold</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">- MT/week</p>
+                        <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Annual Recorded Total</p>
+                          <p className="mt-0.5 text-[15px] font-bold text-[var(--hw-neutral-800)]">
+                            {arrivalTotals.total_kg == null ? (
+                              "—"
+                            ) : (
+                              <>
+                                {arrivalTotals.total_kg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg{" "}
+                                <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+                                  ({arrivalTotals.months} mo)
+                                </span>
+                              </>
+                            )}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
-                        Insufficient arrival history to calculate quartiles for this variety.
-                      </p>
+
+                      {arrivalBoundary.length > 0 ? (
+                        <div className="border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
+                          <div className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)] text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-500)]">
+                            <span>Classification</span>
+                            <span>Monthly Boundary</span>
+                            <span className="text-right">Supply Pressure</span>
+                          </div>
+                          {arrivalBoundary.map((row) => (
+                            <div
+                              key={row.classification}
+                              className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 border-b border-[var(--hw-neutral-100)] last:border-b-0 text-[11px]"
+                            >
+                              <span className={`font-bold ${ARRIVAL_PRESSURE_TONES[row.classification]}`}>
+                                {row.classification}
+                              </span>
+                              <span className="text-[var(--hw-neutral-700)]">{row.boundary}</span>
+                              <span className="text-right text-[var(--hw-neutral-600)]">{row.supply}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                          {arrivalLoading
+                            ? "Loading arrival volume…"
+                            : arrivalError || "Insufficient arrival history to calculate quartiles for this variety."}
+                        </p>
+                      )}
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/modules/basis/arrival-pressure?${arrivalBasisParams}`)}
+                          className="text-[13px] font-bold text-[var(--hw-green-700)] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          View Basis
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
