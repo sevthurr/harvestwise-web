@@ -3,54 +3,19 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  PhilippinePeso,
   CloudSun,
   CloudRain,
   CloudLightning,
-  CalendarDays,
-  Sprout,
-  CircleCheck,
-  CircleX,
-  TriangleAlert,
-  ClipboardCheck,
-  Upload,
-  Activity,
-  Lightbulb,
-  Database,
-  Server,
-  SlidersHorizontal,
-  Users,
-  ShieldCheck,
-  Bell,
 } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey, COMMODITY_REGISTRY } from "./CommodityIllustrations";
+import {
+  NOTIFICATION_CATEGORIES,
+  getCategoryConfig,
+} from "../../utils/notificationCategories";
 
-const CATEGORY_MAP = {
-  // Farmer
-  price_change: { Icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50" },
-  price_update: { Icon: PhilippinePeso, color: "text-blue-600", bg: "bg-blue-50" },
-  weather_alert: { Icon: CloudSun, color: "text-sky-600", bg: "bg-sky-50" },
-  harvest_reminder: { Icon: CalendarDays, color: "text-emerald-600", bg: "bg-emerald-50" },
-  planting_advisory: { Icon: Sprout, color: "text-emerald-600", bg: "bg-emerald-50" },
-
-  // DFTC
-  submission_accepted: { Icon: CircleCheck, color: "text-emerald-600", bg: "bg-emerald-50" },
-  submission_failed: { Icon: CircleX, color: "text-red-600", bg: "bg-red-50" },
-  records_need_correction: { Icon: TriangleAlert, color: "text-amber-600", bg: "bg-amber-50" },
-  upload_validation_completed: { Icon: ClipboardCheck, color: "text-blue-600", bg: "bg-blue-50" },
-
-  // Admin
-  import_event: { Icon: Upload, color: "text-indigo-600", bg: "bg-indigo-50" },
-  processing_event: { Icon: Activity, color: "text-purple-600", bg: "bg-purple-50" },
-  advisory_event: { Icon: Lightbulb, color: "text-teal-600", bg: "bg-teal-50" },
-  data_event: { Icon: Database, color: "text-blue-600", bg: "bg-blue-50" },
-  system_event: { Icon: Server, color: "text-red-600", bg: "bg-red-50" },
-  config_event: { Icon: SlidersHorizontal, color: "text-amber-600", bg: "bg-amber-50" },
-  user_event: { Icon: Users, color: "text-sky-600", bg: "bg-sky-50" },
-  auth_event: { Icon: ShieldCheck, color: "text-rose-600", bg: "bg-rose-50" },
-};
-
-const DEFAULT_CATEGORY = { Icon: Bell, color: "text-blue-600", bg: "bg-blue-50" };
+// Re-exported under the original name: the category→glyph table now lives in
+// notificationCategories.js so a new category is declared in exactly one place.
+const CATEGORY_MAP = NOTIFICATION_CATEGORIES;
 
 /**
  * Resolves a Top 10 commodity key ONLY from structured metadata.
@@ -132,7 +97,7 @@ export function getNotificationIconConfig(category, metadata = {}) {
   }
 
   // 3. Fallback to category map
-  return CATEGORY_MAP[category] || DEFAULT_CATEGORY;
+  return getCategoryConfig(category);
 }
 
 export function NotificationIcon({

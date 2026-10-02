@@ -8,6 +8,17 @@ import { NotificationStreamProvider, useNotificationEvent } from '../app/global/
 import { openEventStream } from '../app/global/api';
 import { AdminLayout } from '../app/global/components/layout/AdminLayout';
 import { DFTCLayout } from '../app/global/components/layout/DFTCLayout';
+import AdminNotifications from '../app/admin/pages/AdminNotifications';
+import DFTCNotifications from '../app/dftc/pages/DFTCNotifications';
+import FarmerNotifications from '../app/farmer/pages/Notifications';
+import {
+  ALL_CATEGORIES,
+  URGENCY_LEVELS,
+  getCategoryConfig,
+  getCategoryUrgency,
+  getCategoryActionLabel,
+  getCategoryReason,
+} from '../app/global/utils/notificationCategories';
 import * as notificationsApi from '../services/api/notificationsApi';
 
 // Mutable so the "no signed-in user" case can be exercised without re-mocking.
@@ -31,6 +42,8 @@ vi.mock('../app/global/contexts/BackgroundProcessContext', () => ({
 vi.mock('../services/api/notificationsApi', () => ({
   getUnreadCount: vi.fn().mockResolvedValue({ unread_count: 0 }),
   listNotifications: vi.fn().mockResolvedValue({ items: [], unread_count: 0 }),
+  markRead: vi.fn().mockResolvedValue({}),
+  markAllRead: vi.fn().mockResolvedValue({ updated: 0 }),
 }));
 
 beforeAll(() => {
@@ -321,5 +334,161 @@ describe('C. Real layouts ride the shared stream', () => {
       expect(notificationsApi.getUnreadCount.mock.calls.length).toBeGreaterThan(before),
     );
     expect(openEventStream).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('D. Real pages receive real SSE frames', () => {
+  // The mocked-API suites elsewhere prove rendering, not live updates. These
+  // drive the actual page components through the actual provider and fire
+  // SSE-shaped frames at the real transport, so a renamed event or an
+  // unmounted provider fails here instead of shipping silently.
+
+  const wrap = (ui) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <NotificationStreamProvider>{ui}</NotificationStreamProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  };
+
+  const fire = async (data, eventName) => {
+    const handlers = openEventStream.mock.calls[0][1];
+    await act(async () => {
+      handlers['*'](data, eventName);
+    });
+  };
+
+  beforeEach(() => {
+    notificationsApi.listNotifications.mockResolvedValue({ items: [], unread_count: 0 });
+    notificationsApi.getUnreadCount.mockResolvedValue({ unread_count: 0 });
+  });
+
+  it('AdminNotifications refetches on NOTIFICATION_CREATED', async () => {
+    render(wrap(<AdminNotifications />));
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalled());
+    const before = notificationsApi.listNotifications.mock.calls.length;
+
+    await fire({ category: 'import_event' }, 'NOTIFICATION_CREATED');
+
+    await waitFor(() =>
+      expect(notificationsApi.listNotifications.mock.calls.length).toBeGreaterThan(before),
+    );
+  });
+
+  it('DFTCNotifications refetches on NOTIFICATION_CREATED', async () => {
+    render(wrap(<DFTCNotifications />));
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalled());
+    const before = notificationsApi.listNotifications.mock.calls.length;
+
+    await fire({ category: 'submission_accepted' }, 'NOTIFICATION_CREATED');
+
+    await waitFor(() =>
+      expect(notificationsApi.listNotifications.mock.calls.length).toBeGreaterThan(before),
+    );
+  });
+
+  it('DFTCNotifications refetches on DATASET_INGESTED, so an upload lands without a reload', async () => {
+    render(wrap(<DFTCNotifications />));
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalled());
+    const before = notificationsApi.listNotifications.mock.calls.length;
+
+    await fire({ filename: 'prices.parquet' }, 'DATASET_INGESTED');
+
+    await waitFor(() =>
+      expect(notificationsApi.listNotifications.mock.calls.length).toBeGreaterThan(before),
+    );
+  });
+
+  it('farmer Notifications refetches on NOTIFICATION_CREATED', async () => {
+    render(wrap(<FarmerNotifications />));
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalled());
+    const before = notificationsApi.listNotifications.mock.calls.length;
+
+    await fire({ category: 'price_change' }, 'NOTIFICATION_CREATED');
+
+    await waitFor(() =>
+      expect(notificationsApi.listNotifications.mock.calls.length).toBeGreaterThan(before),
+    );
+  });
+
+  it('a bulk broadcast on the data channel still reaches the feeds', async () => {
+    // Bulk events arrive as DATASET_INGESTED with data.type === NOTIFICATION_CREATED.
+    render(wrap(<AdminNotifications />));
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalled());
+    const before = notificationsApi.listNotifications.mock.calls.length;
+
+    await fire({ type: 'NOTIFICATION_CREATED', category: 'user_event' }, 'DATASET_INGESTED');
+
+    await waitFor(() =>
+      expect(notificationsApi.listNotifications.mock.calls.length).toBeGreaterThan(before),
+    );
+  });
+
+  it('all three pages share one connection, not one each', async () => {
+    render(
+      wrap(
+        <>
+          <FarmerNotifications />
+          <DFTCNotifications />
+          <AdminNotifications />
+        </>,
+      ),
+    );
+    await waitFor(() => expect(openEventStream).toHaveBeenCalledTimes(1));
+  });
+
+  it('stops refetching after the page unmounts', async () => {
+    const { unmount } = render(wrap(<DFTCNotifications />));
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalled());
+    unmount();
+    const before = notificationsApi.listNotifications.mock.calls.length;
+
+    await fire({ category: 'submission_failed' }, 'NOTIFICATION_CREATED');
+
+    expect(notificationsApi.listNotifications.mock.calls.length).toBe(before);
+  });
+});
+
+describe('E. Category taxonomy is declared in one place', () => {
+  it('every category the backend persists has a declared icon, urgency and DFTC action', () => {
+    // These four are exactly what notifications.service.notify_dftc_submission_event
+    // writes. A miss here is the silent regression the shared taxonomy prevents:
+    // the category would fall back to the bell icon and the /admin/audit-logs route.
+    for (const category of [
+      'submission_accepted',
+      'submission_failed',
+      'records_need_correction',
+      'upload_validation_completed',
+    ]) {
+      expect(getCategoryConfig(category).Icon).toBeTruthy();
+      expect(getCategoryUrgency(category)).toBeTruthy();
+      expect(getCategoryActionLabel(category)).toBeTruthy();
+    }
+  });
+
+  it('every declared category resolves a known urgency level', () => {
+    for (const category of ALL_CATEGORIES) {
+      expect(Object.keys(URGENCY_LEVELS)).toContain(getCategoryUrgency(category));
+    }
+  });
+
+  it('never exposes an enum name as user-facing reason copy', () => {
+    for (const category of ALL_CATEGORIES) {
+      const reason = getCategoryReason(category);
+      if (!reason) continue;
+      expect(reason.toLowerCase()).not.toContain(category.toLowerCase());
+      expect(reason).not.toContain('(');
+    }
+  });
+
+  it('falls back safely for a category that was never declared', () => {
+    expect(getCategoryConfig('some_future_event').Icon).toBeTruthy();
+    expect(getCategoryUrgency('some_future_event')).toBe('information');
+    expect(getCategoryActionLabel('some_future_event')).toBeNull();
+    expect(getCategoryReason('some_future_event')).toBeNull();
   });
 });

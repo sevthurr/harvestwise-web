@@ -6,9 +6,6 @@ import {
   CheckCheck,
   ChevronRight,
   AlertTriangle,
-  AlertOctagon,
-  CheckCircle2,
-  Info,
   X,
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -20,46 +17,19 @@ import {
 } from "../../../services/api/notificationsApi";
 import { NotificationIcon } from "../../global/components/shared/NotificationIcon";
 import { resolveNotificationRoute } from "../../global/utils/notificationRoutes";
+import {
+  URGENCY_LEVELS,
+  getCategoryUrgency,
+  getCategoryActionLabel,
+  getCategoryReason,
+} from "../../global/utils/notificationCategories";
 import { useNotificationEvent } from "../../global/contexts/NotificationStreamContext";
 import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
 
-const URGENCY_CONFIG = {
-  urgent: { label: "Urgent", Icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50" },
-  attention: { label: "Attention", Icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
-  information: { label: "Information", Icon: Info, color: "text-blue-500", bg: "bg-blue-50" },
-  success: { label: "Completed", Icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" }
-};
-
-// The backend persists DFTC submission events under these categories
-// (see notifications.service.notify_dftc_submission_event), so the urgency
-// pill and the drawer action come from the category, not from client-side
-// synthesis over the submissions list.
-const CATEGORY_URGENCY = {
-  submission_accepted: "success",
-  submission_failed: "urgent",
-  records_need_correction: "attention",
-  upload_validation_completed: "information",
-  weather_alert: "attention",
-};
-
-const CATEGORY_REASON = {
-  submission_accepted: "Submission accepted notification (submission_accepted)",
-  submission_failed: "Submission failed alert (submission_failed)",
-  records_need_correction: "Correction required notification (records_need_correction)",
-  upload_validation_completed: "Upload validation completed (upload_validation_completed)",
-};
-
-const CATEGORY_ACTION_LABEL = {
-  submission_accepted: "View Dataset",
-  submission_failed: "View Error",
-  records_need_correction: "Review Records",
-  upload_validation_completed: "View Summary",
-};
-
 const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
   if (!alert) return null;
-  const urgency = URGENCY_CONFIG[alert.urgency] || URGENCY_CONFIG.information;
+  const urgency = URGENCY_LEVELS[alert.urgency] || URGENCY_LEVELS.information;
   const UrgencyIcon = urgency.Icon;
 
   return (
@@ -219,7 +189,7 @@ function DFTCNotifications() {
     return notificationsData.items.map((item) => {
       const metadata = item.metadata || item.payload || {};
       const submissionId = metadata.submission_id || null;
-      const actionLabel = CATEGORY_ACTION_LABEL[item.category];
+      const actionLabel = getCategoryActionLabel(item.category);
       return {
         id: item.id,
         category: item.category,
@@ -229,8 +199,8 @@ function DFTCNotifications() {
         read: isRead(item),
         metadata,
         route: item.route,
-        urgency: CATEGORY_URGENCY[item.category] || "information",
-        reason: CATEGORY_REASON[item.category],
+        urgency: getCategoryUrgency(item.category),
+        reason: getCategoryReason(item.category),
         relatedTo: submissionId,
         action:
           submissionId && actionLabel

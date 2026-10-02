@@ -730,8 +730,49 @@ function AdminAnalytics() {
     }
   }, [scopedCommodity, scopedVariants]);
 
-  // Compute + persist module outputs and load the Processed Results history
-  // whenever the scoped commodity/variety changes.
+  // Load the persisted module-output history.
+  //
+  // Refreshes whenever the commodity or variety scope changes, so the table
+  // always reflects the commodity currently selected in Module Outputs. It also
+  // runs on mount, before any scope exists, so the table is populated on open
+  // rather than waiting for a commodity to be picked.
+  const loadProcessedResults = useCallback(async () => {
+    try {
+      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
+      const rows = (data?.items || []).flatMap((r) =>
+        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
+          id: r.id,
+          basisId: key,
+          module,
+          commodity: r.commodity_name,
+          // `variant`, not `variety` — the row shape uses `variant` and the
+          // filter below reads it. Reading `variety` here left it undefined,
+          // which made every non-Standard variety match nothing.
+          variant: r.variety || "Standard",
+          classification: r[field] || "Not available",
+          inputPeriod: r.reference_month,
+          processedAt: r.generated_at
+        }))
+      );
+      setProcessedResults(rows);
+    } catch {
+      setProcessedResults([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProcessedResults();
+  }, [loadProcessedResults, scopedCommodity, scopedVariety]);
+
+  // A module or classification chosen for the previous commodity can mask the
+  // new one entirely, leaving an empty table that looks like missing records.
+  // Reset both whenever the scope changes so the table starts from "All".
+  useEffect(() => {
+    setFModule("All");
+    setFClassification("All");
+  }, [scopedCommodity, scopedVariety]);
+
+  // Compute + persist module outputs for the scoped commodity/variety.
   const reloadAnalytics = useCallback(async () => {
     if (!scopedCommodity || !scopedVariety) return;
     setAnalyticsLoading(true);
@@ -750,29 +791,13 @@ function AdminAnalytics() {
     } catch (err) {
       setAnalyticsError(err.message || "Failed to compute module outputs.");
       setModuleOutputs(null);
-    }
-
-    try {
-      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
-      const rows = (data?.items || []).flatMap((r) =>
-        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
-          id: r.id,
-          basisId: key,
-          module,
-          commodity: r.commodity_name,
-          variant: r.variety || "Standard",
-          classification: r[field] || "Not available",
-          inputPeriod: r.reference_month,
-          processedAt: r.generated_at
-        }))
-      );
-      setProcessedResults(rows);
-    } catch {
-      setProcessedResults([]);
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [scopedCommodity, scopedVariety]);
+
+    // A compute rewrites rows, so refresh the history it feeds.
+    await loadProcessedResults();
+  }, [scopedCommodity, scopedVariety, loadProcessedResults]);
 
   useEffect(() => {
     reloadAnalytics();
@@ -829,15 +854,28 @@ function AdminAnalytics() {
   // Filter processed results using the top scope (scopedCommodity + scopedVariety) + module & classification
   const filteredResults = processedResults.filter((r) => {
     const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
+    // Rows carry `variant`; "Standard" in the selector means the commodity's
+    // plain (null-variety) row. Comparing against `r.variety` here silently
+    // matched nothing for every named variety.
+    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
     const matchVar =
-      !scopedVariety ||
-      (r.variety || "") === (scopedVariety === "Standard" ? "" : scopedVariety);
+      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
     const matchMod = fModule === "All" || r.module === fModule;
     const matchClass = fClassification === "All" || r.classification === fClassification;
     return matchComm && matchVar && matchMod && matchClass;
   });
 
   const visibleResults = showAll ? filteredResults : filteredResults.slice(0, DEFAULT_ROWS);
+
+  // True when rows exist for the scope but the module/classification filters are
+  // hiding them. Distinguishes "no records" from "filtered everything away".
+  const scopeHasFiltered = processedResults.some((r) => {
+    const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
+    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
+    const matchVar =
+      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
+    return matchComm && matchVar;
+  });
 
   // 4 Module cards built from the latest computed outputs for the current scope.
   const withCardData = (key, moduleOutput) => {
@@ -1284,7 +1322,22 @@ function AdminAnalytics() {
                       {filteredResults.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-4 py-10 text-center text-[var(--hw-neutral-500)] text-[13px]">
-                            No processed results found for the selected commodity, variety, and filters.
+                            {scopeHasFiltered ? (
+                              "No processed results match the selected module and classification."
+                            ) : scopedCommodity ? (
+                              <>
+                                No processed results for{" "}
+                                <span className="font-medium text-[var(--hw-neutral-800)]">
+                                  {scopedCommodity}
+                                  {scopedVariety && scopedVariety !== "Standard"
+                                    ? ` · ${scopedVariety}`
+                                    : ""}
+                                </span>
+                                . Run the module outputs for this commodity to create them.
+                              </>
+                            ) : (
+                              "No processed results yet. Run the module outputs for a commodity to create them."
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -1292,7 +1345,7 @@ function AdminAnalytics() {
                           const cc = CLASSIFICATION_COLORS[r.classification] ?? "text-[var(--hw-neutral-700)]";
                           return (
                             <tr
-                              key={r.id}
+                              key={`${r.id}::${r.basisId}`}
                               onClick={() => handleRowClick(r)}
                               className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                             >
