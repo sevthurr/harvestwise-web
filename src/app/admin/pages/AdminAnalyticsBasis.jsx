@@ -244,9 +244,8 @@ const CustomCommodityDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-                  isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                }`}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
               >
                 <CommodityIllustration commodityId={optIconKey} className="w-5 h-5 flex-shrink-0" />
                 <span className="flex-1 truncate">{optName}</span>
@@ -292,9 +291,8 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
               onChange("All Varieties");
               setOpen(false);
             }}
-            className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-              selectedVariety === "All Varieties" ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-            }`}
+            className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${selectedVariety === "All Varieties" ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
           >
             All Varieties
           </button>
@@ -309,9 +307,8 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-                  isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                }`}
+                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
               >
                 <span className="flex-1 truncate">{optName}</span>
               </button>
@@ -417,9 +414,8 @@ const DatasetsUsed = ({ module, records = [] }) => {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`px-3 py-1.5 text-[12px] border rounded-lg transition-colors ${
-                      p === page ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                    }`}
+                    className={`px-3 py-1.5 text-[12px] border rounded-lg transition-colors ${p === page ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                      }`}
                   >
                     {p}
                   </button>
@@ -703,11 +699,11 @@ function AdminAnalyticsBasis() {
   const shownThresholds =
     thresholdRules.length > 0
       ? thresholdRules.map((r) => ({
-          classification: r.classification,
-          rule:
-            r.display_text ||
-            (((r.operator || "") + " " + (r.threshold_value != null ? Math.round(Number(r.threshold_value) * 100) / 100 : "")).trim())
-        }))
+        classification: r.classification,
+        rule:
+          r.display_text ||
+          (((r.operator || "") + " " + (r.threshold_value != null ? Math.round(Number(r.threshold_value) * 100) / 100 : "")).trim())
+      }))
       : result.thresholds || [];
 
   const historicalResult = useMemo(() => {
@@ -798,11 +794,11 @@ function AdminAnalyticsBasis() {
       },
       forecastPoints: processed
         ? (priceOutlook.forecast_points || []).map((point) => ({
-            date: point.forecast_date,
-            [selectedVariety]: point.forecast_midpoint,
-            [`${selectedVariety}__lo`]: point.lower_forecast,
-            [`${selectedVariety}__hi`]: point.upper_forecast
-          }))
+          date: point.forecast_date,
+          [selectedVariety]: point.forecast_midpoint,
+          [`${selectedVariety}__lo`]: point.lower_forecast,
+          [`${selectedVariety}__hi`]: point.upper_forecast
+        }))
         : [],
       varieties: [{ variety: selectedVariety }],
       resultExplanation: processed ? priceOutlook.explanation : (priceOutlookError || priceOutlook?.explanation || "Price Outlook could not be calculated for this forecast."),
@@ -859,9 +855,9 @@ function AdminAnalyticsBasis() {
       })),
       arrivalSources: farmTotal > 0
         ? [
-            { name: "Farm Source", value: Math.round(((Number(farmKg) || 0) / farmTotal) * 100), volumeKg: Number(farmKg) || 0 },
-            { name: "Other Sources", value: Math.round(((Number(otherKg) || 0) / farmTotal) * 100), volumeKg: Number(otherKg) || 0 }
-          ].filter((slice) => slice.volumeKg > 0)
+          { name: "Farm Source", value: Math.round(((Number(farmKg) || 0) / farmTotal) * 100), volumeKg: Number(farmKg) || 0 },
+          { name: "Other Sources", value: Math.round(((Number(otherKg) || 0) / farmTotal) * 100), volumeKg: Number(otherKg) || 0 }
+        ].filter((slice) => slice.volumeKg > 0)
         : [],
       records: (arrivalSummary?.records || []).map((row) => ({
         Date: row.arrival_date ? formatForecastDate(row.arrival_date) : "-",
@@ -978,15 +974,13 @@ function AdminAnalyticsBasis() {
     });
 
     const explanation = isProcessed
-      ? `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${
-          avgMin >= suitTempMin && avgMax <= suitTempMax
-            ? `${selectedCommodity} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
-            : `Temperatures fluctuate slightly outside optimal bounds.`
-        } ${
-          cautionCount > 0 || severeCount > 0
-            ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
-            : `Favorable meteorological conditions expected throughout the forecast window.`
-        }`
+      ? `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${avgMin >= suitTempMin && avgMax <= suitTempMax
+        ? `${selectedCommodity} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
+        : `Temperatures fluctuate slightly outside optimal bounds.`
+      } ${cautionCount > 0 || severeCount > 0
+        ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
+        : `Favorable meteorological conditions expected throughout the forecast window.`
+      }`
       : weatherError || (weatherLoading ? "Loading weather forecast data…" : "No weather forecast data is available for this scope.");
 
     return {
@@ -1220,10 +1214,10 @@ function AdminAnalyticsBasis() {
                       p.classification === "High"
                         ? "bg-red-50 text-red-700 border-red-200"
                         : p.classification === "Upper Middle"
-                        ? "bg-amber-50 text-amber-700 border-amber-200"
-                        : p.classification === "Lower Middle"
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : "bg-emerald-50 text-emerald-700 border-emerald-200";
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : p.classification === "Lower Middle"
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200";
                     return (
                       <tr key={p.quarter} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
                         <td className="px-6 py-3.5 font-bold text-[var(--hw-neutral-900)]">{p.quarter}</td>
@@ -1364,9 +1358,9 @@ function AdminAnalyticsBasis() {
                           key={`cell-${index}`}
                           fill={
                             entry.classification === "High" ? "#dc2626" :
-                            entry.classification === "Upper Middle" ? "#d97706" :
-                            entry.classification === "Lower Middle" ? "#2563eb" :
-                            "#16a34a"
+                              entry.classification === "Upper Middle" ? "#d97706" :
+                                entry.classification === "Lower Middle" ? "#2563eb" :
+                                  "#16a34a"
                           }
                         />
                       ))}
@@ -1430,9 +1424,9 @@ function AdminAnalyticsBasis() {
                       {displayResult.productionVolumes?.length > 0 && displayResult.productionVolumes.map((entry, index) => {
                         const barColor =
                           entry.classification === "High" ? "#dc2626" :
-                          entry.classification === "Upper Middle" ? "#d97706" :
-                          entry.classification === "Lower Middle" ? "#2563eb" :
-                          "#16a34a";
+                            entry.classification === "Upper Middle" ? "#d97706" :
+                              entry.classification === "Lower Middle" ? "#2563eb" :
+                                "#16a34a";
                         return <Cell key={`cell-${index}`} fill={barColor} />;
                       })}
                     </Bar>
@@ -1529,57 +1523,57 @@ function AdminAnalyticsBasis() {
 
       {/* 6. Threshold Applied & Result Explanation in 2 Columns with Equal Height */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          {/* Threshold Applied Card */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
-            </div>
-            {thresholdsError && (
-              <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
-            )}
-            <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
-              {displayThresholds && displayThresholds.length > 0 ? (
-                displayThresholds.map((t) => {
-                  const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
-                  return (
-                    <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
-                      <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
-                      <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
-                  Threshold information unavailable.
-                </div>
-              )}
-            </div>
+        {/* Threshold Applied Card */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
           </div>
-
-          {/* Result Explanation Card (Concise Empty State) */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
-            </div>
-            <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
-              {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
-                <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
-                  {displayResult.resultExplanation}
-                </p>
-              ) : (
-                <div className="py-4 space-y-1.5 max-w-sm mx-auto">
-                  <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
-                    <Info className="w-5 h-5" />
+          {thresholdsError && (
+            <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
+          )}
+          <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
+            {displayThresholds && displayThresholds.length > 0 ? (
+              displayThresholds.map((t) => {
+                const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
+                return (
+                  <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+                    <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
+                    <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
                   </div>
-                  <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
-                    No analytical explanation generated for the selected scope.
-                  </p>
-                </div>
-              )}
-            </div>
+                );
+              })
+            ) : (
+              <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
+                Threshold information unavailable.
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Result Explanation Card (Concise Empty State) */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
+          </div>
+          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
+            {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
+              <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
+                {displayResult.resultExplanation}
+              </p>
+            ) : (
+              <div className="py-4 space-y-1.5 max-w-sm mx-auto">
+                <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                  <Info className="w-5 h-5" />
+                </div>
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
+                  No analytical explanation generated for the selected scope.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Missing data warning */}
       {displayResult.basisMissing && (

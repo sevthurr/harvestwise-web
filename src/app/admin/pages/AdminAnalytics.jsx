@@ -831,7 +831,7 @@ function AdminAnalytics() {
     const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
     const matchVar =
       !scopedVariety ||
-      (r.variety || "") === (scopedVariety === "Standard" ? "" : scopedVariety);
+      (r.variant || "Standard") === (scopedVariety || "Standard");
     const matchMod = fModule === "All" || r.module === fModule;
     const matchClass = fClassification === "All" || r.classification === fClassification;
     return matchComm && matchVar && matchMod && matchClass;
@@ -867,14 +867,14 @@ function AdminAnalytics() {
 
   const moduleOutputsByCard = moduleOutputs
     ? {
-        "price-outlook": withCardData("price-outlook", moduleOutputs.price_outlook),
-        "arrival-pressure": withCardData("arrival-pressure", moduleOutputs.arrival_pressure),
-        "historical-production": withCardData(
-          "historical-production",
-          moduleOutputs.historical_seasonal_production_level
-        ),
-        "weather-risk": withCardData("weather-risk", moduleOutputs.weather_risk)
-      }
+      "price-outlook": withCardData("price-outlook", moduleOutputs.price_outlook),
+      "arrival-pressure": withCardData("arrival-pressure", moduleOutputs.arrival_pressure),
+      "historical-production": withCardData(
+        "historical-production",
+        moduleOutputs.historical_seasonal_production_level
+      ),
+      "weather-risk": withCardData("weather-risk", moduleOutputs.weather_risk)
+    }
     : {};
 
   const moduleCards = [
@@ -894,18 +894,18 @@ function AdminAnalytics() {
       ...(moduleOutputs?.historical_seasonal_production_level
         ? moduleOutputsByCard["historical-production"]
         : {
-            classification: productionLoading
-              ? "Loading..."
-              : productionSummary?.status === "processed"
-                ? (productionSummary.peak_quarter && productionSummary.lean_quarter
-                  ? `Peak: ${productionSummary.peak_quarter} · Lean: ${productionSummary.lean_quarter}`
-                  : (productionSummary.classification || "Processed"))
-                : "Not processed",
-            source: productionSummary?.source || "-",
-            processed: productionSummary?.processed_at
-              ? new Date(productionSummary.processed_at).toLocaleString()
-              : "-"
-          })
+          classification: productionLoading
+            ? "Loading..."
+            : productionSummary?.status === "processed"
+              ? (productionSummary.peak_quarter && productionSummary.lean_quarter
+                ? `Peak: ${productionSummary.peak_quarter} · Lean: ${productionSummary.lean_quarter}`
+                : (productionSummary.classification || "Processed"))
+              : "Not processed",
+          source: productionSummary?.source || "-",
+          processed: productionSummary?.processed_at
+            ? new Date(productionSummary.processed_at).toLocaleString()
+            : "-"
+        })
     },
     {
       module: "Weather Risk",
@@ -1058,8 +1058,8 @@ function AdminAnalytics() {
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`px-5 py-3 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.id
-                    ? "border-[var(--hw-green-700)] text-[var(--hw-neutral-900)] font-semibold"
-                    : "border-transparent text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+                  ? "border-[var(--hw-green-700)] text-[var(--hw-neutral-900)] font-semibold"
+                  : "border-transparent text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
                   }`}
               >
                 {t.label}
@@ -1160,12 +1160,11 @@ function AdminAnalytics() {
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="text-[12px] text-[var(--hw-neutral-700)]">Data</span>
                           <span
-                            className={`text-[12px] font-medium ${
-                              card.dataAvailable !== null &&
+                            className={`text-[12px] font-medium ${card.dataAvailable !== null &&
                               card.dataAvailable < card.dataRequired
-                                ? "text-[var(--hw-error)]"
-                                : "text-[var(--hw-neutral-800)]"
-                            }`}
+                              ? "text-[var(--hw-error)]"
+                              : "text-[var(--hw-neutral-800)]"
+                              }`}
                           >
                             {card.dataLabel}
                           </span>
@@ -1356,11 +1355,13 @@ function AdminAnalytics() {
                 <p className="text-[12px] text-red-600">{weightsError}</p>
               )}
 
-<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {WEIGHT_PHASES.map(({ key: phase, label }) => {
                   const weights = phaseWeights[phase];
                   const hasWeights = weights && Object.keys(weights).length > 0;
-                  const total = hasWeights ? Object.values(weights).reduce((a, b) => a + b, 0) : null;
+                  const defaultWeights = DEFAULT_STAGE_WEIGHTS[phase] || {};
+                  const effectiveWeights = hasWeights ? weights : defaultWeights;
+                  const total = Object.values(effectiveWeights).reduce((a, b) => a + (Number(b) || 0), 0);
                   const resilient = RESILIENT_STAGE_WEIGHTS[phase] || {};
 
                   return (
@@ -1408,8 +1409,8 @@ function AdminAnalytics() {
 
                       <div className="mt-3 pt-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
                         <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
-                        <span className={`text-[13px] font-bold ${total !== null ? "text-emerald-700" : "text-[var(--hw-neutral-400)]"}`}>
-                          {total !== null ? `Total ${total}%` : "Total -"}
+                        <span className={`text-[13px] font-bold ${Math.abs(total - 100) < 0.01 ? "text-emerald-700" : "text-amber-600"}`}>
+                          {total}%
                         </span>
                       </div>
                     </div>
@@ -1592,10 +1593,10 @@ function AdminAnalytics() {
                                     </td>
                                     <td className="px-2 py-1.5 text-center font-medium">
                                       <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${qp.classification === "High" ? "bg-red-50 text-red-700" :
-                                          qp.classification === "Upper Middle" ? "bg-amber-50 text-amber-700" :
-                                            qp.classification === "Lower Middle" ? "bg-blue-50 text-blue-700" :
-                                              qp.classification === "Low" ? "bg-emerald-50 text-emerald-700" :
-                                                "text-[var(--hw-neutral-500)]"
+                                        qp.classification === "Upper Middle" ? "bg-amber-50 text-amber-700" :
+                                          qp.classification === "Lower Middle" ? "bg-blue-50 text-blue-700" :
+                                            qp.classification === "Low" ? "bg-emerald-50 text-emerald-700" :
+                                              "text-[var(--hw-neutral-500)]"
                                         }`}>
                                         {qp.classification}
                                       </span>
@@ -1726,6 +1727,12 @@ function AdminAnalytics() {
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+export { AdminAnalytics as default };
+      </div >
     </>
   );
 }
