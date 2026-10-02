@@ -12,7 +12,7 @@ export const dashboard = {
   nearest_harvest_caption: "Nearest harvest among your crops.",
   estimate_income_notice: "Estimate only. Actual income may change.",
   todays_prices: "Today's prices",
-  good_crops_title: "Good crops to plant",
+  good_crops_title: "Best vegetables to plant this {month}",
   my_preferred_crops_title: "My preferred crops",
   good_option_badge: "Good option",
   good_variety_prefix: "Good variety: {variety}",

@@ -12,7 +12,7 @@ export const dashboard = {
   nearest_harvest_caption: "Pinakamalapit na ani sa iyong mga pananim.",
   estimate_income_notice: "Tantiya lamang ito. Maaaring magbago ang aktuwal na kita.",
   todays_prices: "Mga presyo ngayong araw",
-  good_crops_title: "Magagandang pananim na itanim",
+  good_crops_title: "Magagandang gulay na itanim ngayong {month}",
   my_preferred_crops_title: "Aking mga paboritong pananim",
   good_option_badge: "Magandang pagpipilian",
   good_variety_prefix: "Magandang barayti: {variety}",
