@@ -241,14 +241,37 @@ function DashboardPage() {
             uom: camelItem.unitOfMeasure || 'kg',
             direction: camelItem.forecast?.trend || null
           });
-        } else if (retailPrice !== null && baseMap.get(name).price === null) {
+        } else {
           const existing = baseMap.get(name);
-          existing.price = retailPrice;
-          existing.direction = camelItem.forecast?.trend || existing.direction;
-          existing.id = camelItem.commodityId;
+          if (retailPrice !== null && existing.price === null) {
+            existing.price = retailPrice;
+            existing.id = camelItem.commodityId;
+          }
+          if (!existing.direction && camelItem.forecast?.trend) {
+            existing.direction = camelItem.forecast.trend;
+          }
         }
       });
-      return Array.from(baseMap.values());
+      const itemsList = Array.from(baseMap.values());
+      // Populate real increasing / decreasing trend for commodities from their price detail endpoint
+      await Promise.all(
+        itemsList.map(async (item) => {
+          if (!item.direction && item.id) {
+            try {
+              const dRes = await apiGet(`/prices/${item.id}?price_type=bangkerohan_retail&horizon=7&records_limit=1`);
+              if (dRes.ok) {
+                const detail = await parseResponse(dRes);
+                if (detail?.forecast?.trend) {
+                  item.direction = detail.forecast.trend;
+                }
+              }
+            } catch {
+              // fallback remains null
+            }
+          }
+        })
+      );
+      return itemsList;
     },
     staleTime: 1000 * 60 * 30,
   });
@@ -260,16 +283,22 @@ function DashboardPage() {
   // Re-measured whenever the list content or the page loading state changes.
   const [pricesListRef, pricesScrollable] = useOverflowHint(`${prices.length}:${isLoading}`);
 
-  // Preferred crops the farmer already selected. The advisory now comes from
-  // the planting-suitability engine inside <PlantingSuitabilityCard />, which
-  // evaluates the forecast against each crop's own weather rules instead of
-  // joining against a monthly recommendation row.
+  // Preferred crops the farmer already selected.
   const preferredCrops = farmerProfile?.preferred_crops || farmerProfile?.preferredCrops || [];
   const preferredCropIds = new Set(preferredCrops.map(p => p.commodity_id || p.commodityId));
 
   const greeting = getGreeting(t);
   const firstName = farmerProfile?.first_name || user?.first_name;
   const greetingText = firstName ? t("farmer.dashboard.greeting_name", { greeting, name: firstName }, `${greeting}, ${firstName}!`) : `${greeting}!`;
+
+  const now = new Date();
+  const monthNames = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
+  ];
+  const currentMonthKey = monthNames[now.getMonth()];
+  const rawMonthName = currentMonthKey.charAt(0).toUpperCase() + currentMonthKey.slice(1);
+  const localizedMonth = t(`farmer.calendar.months.${currentMonthKey}`, {}, rawMonthName);
 
   // Format farmer's location: [purok_sitio, street, barangay, district, city]
   const formatLocationSubtitle = () => {
@@ -353,7 +382,7 @@ function DashboardPage() {
                   <div className="relative flex-1 flex flex-col min-h-0">
                     <div
                       ref={pricesListRef}
-                      className="divide-y divide-[var(--hw-neutral-100)] flex-1 min-h-0 max-h-[260px] md:max-h-[420px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                      className="divide-y divide-[var(--hw-neutral-100)] flex-1 min-h-0 h-[240px] max-h-[240px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                     >
                       {prices.map((item) => {
                         const hasForecast = item.price != null && item.direction != null;
@@ -366,7 +395,7 @@ function DashboardPage() {
                           <button
                             key={item.id}
                             onClick={() => navigate(`/farmer/prices/${item.id}`)}
-                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
+                            className="w-full flex items-center gap-3 px-4 py-2.5 h-[80px] hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
                           >
                             <CommodityIllustration 
                               commodityId={item.id} 
@@ -375,11 +404,11 @@ function DashboardPage() {
                               className="w-9 h-9 flex-shrink-0" 
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{item.name || '–'}</p>
-                              <p className="text-[12px] font-semibold text-[var(--hw-green-700)]">
+                              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-tight truncate">{item.name || '–'}</p>
+                              <p className="text-[12px] font-semibold text-[var(--hw-green-700)] leading-tight mt-0.5 truncate">
                                 {count === 1 ? t("common.variety_one", {}, "1 variety") : t("common.varieties_count", { count }, `${count} varieties`)}
                               </p>
-                              <p className="text-[12px] text-[var(--hw-neutral-900)]">{formattedPrice}</p>
+                              <p className="text-[12px] text-[var(--hw-neutral-900)] leading-tight mt-0.5">{formattedPrice}</p>
                             </div>
                             <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
                               {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
@@ -389,16 +418,9 @@ function DashboardPage() {
                         );
                       })}
                     </div>
-                    {/* Soft bottom edge: the half-visible row is the cue that the
-                        list continues. Paired with the label below, it works for
-                        farmers who do not notice a cut-off row. */}
-                    {pricesScrollable && (
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-white to-transparent" />
-                    )}
                   </div>
                   {pricesScrollable && (
-                    <div className="flex-shrink-0 flex items-center justify-center gap-1.5 border-t border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)] px-4 py-2 text-[12px] font-medium text-[var(--hw-neutral-700)]">
-                      <ChevronDown className="w-3.5 h-3.5" />
+                    <div className="flex-shrink-0 flex items-center justify-center border-t border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)] px-4 py-2 text-[12px] font-medium text-[var(--hw-neutral-700)]">
                       {t("farmer.dashboard.scroll_more_prices", {}, "Scroll to see more prices")}
                     </div>
                   )}
@@ -410,7 +432,9 @@ function DashboardPage() {
           {/* ── 5. Good crops to plant ── */}
           <section className="flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.dashboard.good_crops_title", {}, "Good crops to plant")}</h2>
+              <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">
+                {t("farmer.dashboard.good_crops_title", { month: localizedMonth }, `Maayong gulay nga itanom karong ${localizedMonth}`)}
+              </h2>
               <button
                 onClick={() => navigate("/farmer/market")}
                 className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
@@ -420,25 +444,9 @@ function DashboardPage() {
               </button>
             </div>
 
-            {isLoading ? (
-              <div className="flex-1 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden divide-y divide-[var(--hw-neutral-100)]">
-                <div className="px-4 py-2.5"><Skeleton className="h-3 w-28 rounded" /></div>
-                {[0, 1].map(i => (
-                  <div key={i} className="px-4 py-3 flex items-start gap-3">
-                    <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-3 w-20 rounded" />
-                      <Skeleton className="h-4 w-28 rounded" />
-                      <Skeleton className="h-3 w-36 rounded" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col min-h-0">
-                <PlantingSuitabilityCard preferredCropIds={[...preferredCropIds]} />
-              </div>
-            )}
+            <div className="flex-1 flex flex-col min-h-0">
+              <PlantingSuitabilityCard preferredCropIds={[...preferredCropIds]} />
+            </div>
           </section>
         </div>
 
