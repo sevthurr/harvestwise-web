@@ -68,7 +68,7 @@ export function usePriceOutlook(enabled, commodityId) {
   return { data, error };
 }
 
-export function useArrivalPressure(enabled, commodityRef) {
+export function useArrivalPressure(enabled, commodityRef, year = null, source = null) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -84,7 +84,14 @@ export function useArrivalPressure(enabled, commodityRef) {
       try {
         setLoading(true);
         setError("");
-        const result = await analyticsApi.getArrivalPressure(commodityRef);
+        let result;
+        if (source != null && source !== "overall") {
+          result = await analyticsApi.getArrivalPressure(commodityRef, year, source);
+        } else if (year != null) {
+          result = await analyticsApi.getArrivalPressure(commodityRef, year);
+        } else {
+          result = await analyticsApi.getArrivalPressure(commodityRef);
+        }
         if (active) setData(result);
       } catch (err) {
         if (active) {
@@ -99,7 +106,8 @@ export function useArrivalPressure(enabled, commodityRef) {
     return () => {
       active = false;
     };
-  }, [enabled, commodityRef]);
+  }, [enabled, commodityRef, year, source]);
 
   return { data, loading, error };
 }
+
