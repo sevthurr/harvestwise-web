@@ -37,6 +37,13 @@ function mapHistory(rec) {
     activity = "API Sync";
   }
 
+  const duration = (() => {
+    if (!rec.finished_at || !rec.started_at) return "—";
+    const ms = new Date(rec.finished_at).getTime() - new Date(rec.started_at).getTime();
+    if (Number.isNaN(ms) || ms < 0) return "—";
+    return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+  })();
+
   return {
     id: rec.id,
     datetime: formatHistoryDT(rec.started_at),
@@ -46,7 +53,16 @@ function mapHistory(rec) {
     submittedBy: rec.uploaded_by_name || rec.uploaded_by_user_id || "Admin",
     recordsCount: rec.records_imported != null ? String(rec.records_imported) : "—",
     result,
-    status
+    status,
+    // Only fields ImportHistoryResponse actually returns. The previous shape
+    // advertised Commodity/Variety/Module, which the list endpoint never
+    // sends, so those search branches were permanently dead.
+    details: {
+      "Submission ID": rec.submission_id || "—",
+      "File format": rec.file_format || "—",
+      "Uploaded by": rec.uploaded_by_name || rec.uploaded_by_user_id || "—",
+      Duration: duration,
+    }
   };
 }
 
@@ -92,23 +108,20 @@ function AdminHistory({ embedded = false }) {
       }
       if (search.trim()) {
         const q = search.toLowerCase();
-        const src = (r.sourceModule || "").toLowerCase();
-        const act = (r.activity || "").toLowerCase();
-        const res = (r.result || "").toLowerCase();
-        const file = (r.details?.["File name"] || "").toLowerCase();
-        const comm = (r.details?.["Commodity"] || "").toLowerCase();
-        const varName = (r.details?.["Variety"] || "").toLowerCase();
-        const mod = (r.details?.["Module"] || "").toLowerCase();
-
-        return (
-          src.includes(q) ||
-          act.includes(q) ||
-          res.includes(q) ||
-          file.includes(q) ||
-          comm.includes(q) ||
-          varName.includes(q) ||
-          mod.includes(q)
-        );
+        // One haystack over every surfaced field, so no branch can silently
+        // stop matching a column that is actually on screen.
+        const haystack = [
+          r.sourceModule,
+          r.activity,
+          r.status,
+          r.result,
+          r.submittedBy,
+          r.recordsCount,
+          ...Object.values(r.details || {}),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
       }
       return true;
     });
@@ -154,7 +167,7 @@ function AdminHistory({ embedded = false }) {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search source, module, file, commodity, or variety..."
+              placeholder="Search file name, submission ID, status, result, or uploader..."
               className="w-full pl-9 pr-3.5 py-2 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white focus:bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20 transition text-[var(--hw-neutral-800)] placeholder:text-[var(--hw-neutral-400)]"
             />
           </div>

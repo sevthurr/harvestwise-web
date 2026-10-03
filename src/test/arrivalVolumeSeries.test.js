@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   CLASSIFICATION_BAR_COLORS,
+  FARM_COLOR,
   NO_QUARTILE_BAR_COLOR,
+  OTHER_COLOR,
   arrivalBoundaryRows,
   arrivalSeriesTotals,
   availableArrivalYears,
@@ -45,6 +47,23 @@ describe('classifyArrival', () => {
     // compare against and a guess here would contradict the card.
     expect(classifyArrival(207, null)).toBeNull();
     expect(classifyArrival(207, undefined)).toBeNull();
+  });
+});
+
+describe('source legend colors', () => {
+  // Farm green, Other orange, per the design's tooltip legend. Asserted as a
+  // pair being distinct rather than as literal hexes, so a brand-token swap
+  // does not read as a regression.
+  it('gives Farm and Other two distinct legend colors', () => {
+    expect(FARM_COLOR).not.toBe(OTHER_COLOR);
+  });
+
+  // The regression: FARM_COLOR was once aliased as the `Low` band, so making
+  // Farm green collided with the already-green `Lower Middle` band.
+  it('keeps the source pair out of the classification band scale', () => {
+    const bands = Object.values(CLASSIFICATION_BAR_COLORS);
+    expect(bands).not.toContain(FARM_COLOR);
+    expect(bands).not.toContain(OTHER_COLOR);
   });
 });
 

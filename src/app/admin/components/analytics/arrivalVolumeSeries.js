@@ -16,20 +16,24 @@ const MONTH_LABELS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ];
 
-// Farm / Other series colors, read off the design. Farm is blue, Other amber.
-// These identify the two series in the tooltip legend, and are the same pair
-// the bar scale uses so the legend never contradicts the chart.
-const FARM_COLOR = "#2563eb";
-const OTHER_COLOR = "#d97706";
+// Farm / Other source colors, read off the design's tooltip legend: Farm green,
+// Other orange. These identify *which source* a number came from, so they are
+// deliberately NOT the bar scale below — a source color must keep its meaning
+// regardless of where the card's quartiles land, and reusing band values here
+// is what previously made the green Farm dot collide with the green band.
+// `#538D22` is the app's own `--hw-green-600`; neither value appears in
+// CLASSIFICATION_BAR_COLORS, which keeps the two scales legible side by side.
+const FARM_COLOR = "#538D22";
+const OTHER_COLOR = "#ea580c";
 
 // Bar scale for the trend chart: one bar per month, coloured by where that
 // month's total falls against the card's own Q1/Q2/Q3, so the two views of the
 // module cannot disagree. Sourced from the design, where Low and Lower Middle
 // read blue and the upper two read amber/red.
 const CLASSIFICATION_BAR_COLORS = {
-  Low: FARM_COLOR,
+  Low: "#2563eb",
   "Lower Middle": "#16a34a",
-  "Upper Middle": OTHER_COLOR,
+  "Upper Middle": "#d97706",
   High: "#dc2626"
 };
 const NO_QUARTILE_BAR_COLOR = "#94a3b8";
