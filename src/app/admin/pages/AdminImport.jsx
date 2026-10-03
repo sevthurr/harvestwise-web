@@ -57,6 +57,52 @@ function readFileText(file) {
   });
 }
 
+// A cell only marks a "day column" when the header above it is blank.
+//
+// The DFTC arrival workbook puts a row *number* in the first column of its
+// monthly sheets, so the old "is the cell below a number between 1 and 31"
+// test matched that 1, decided the sheet was day-granular, dropped the first
+// data row, and renamed JANUARY..DECEMBER to "Day 17", "Day 5", ... Genuine
+// day-column price reports label those columns with an empty header cell
+// (NO. | COMMODITY | UOM | DATE | <blank> | 1 | 2 | 3 ...), so requiring the
+// blank header keeps them working.
+function isDayNumber(value) {
+  const n = parseInt(String(value ?? "").trim(), 10);
+  return !Number.isNaN(n) && n >= 1 && n <= 31;
+}
+
+const MONTH_HEADER_RE =
+  /^(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t)?|oct(ober)?|nov(ember)?|dec(ember)?)/i;
+
+function isMonthHeader(value) {
+  return MONTH_HEADER_RE.test(String(value ?? "").trim());
+}
+
+// Workbook headers are not guaranteed unique, and the preview keys rows by
+// header name — a collision silently drops a column's values. Suffix repeats.
+function uniqueHeaders(names) {
+  const seen = new Map();
+  return names.map((name) => {
+    const count = (seen.get(name) || 0) + 1;
+    seen.set(name, count);
+    return count === 1 ? name : `${name} (${count})`;
+  });
+}
+
+// DFTC writes its share columns as fractions under a percent cell format
+// (0.20169 displayed as 20.17%). Values already in percent points are left
+// alone, so a file that stores 20.17 does not become 2017%.
+function formatPercentCell(header, value) {
+  const text = String(value ?? "").trim();
+  if (!text) return value;
+  const n = Number(text);
+  if (!Number.isFinite(n)) return value;
+  const isPercentHeader = /percent|%/.test(String(header).toLowerCase());
+  if (!isPercentHeader) return value;
+  const pct = Math.abs(n) <= 1 ? n * 100 : n;
+  return `${pct.toFixed(2)}%`;
+}
+
 async function parseFileReal(selectedFile) {
   const ext = (selectedFile.name.split('.').pop() || '').toLowerCase();
   
@@ -75,16 +121,26 @@ async function parseFileReal(selectedFile) {
       }
       if (validWorksheets.length === 0) return { headers: [], rows: [], rawRows: [], sheetNames: [], sheetsData: {}, totalRowCount: 0 };
 
+      // Must return a primitive for every input. A bare object here reaches
+      // the table as `String(obj)` and renders "[object Object]".
       const formatCellValue = (v) => {
         if (v == null) return '';
-        if (typeof v === 'object') {
-          if (v.text !== undefined) return v.text;
-          if (Array.isArray(v.richText)) {
-            return v.richText.map(t => t.text || '').join('');
-          }
-          if (v.result !== undefined) return String(v.result);
+        if (typeof v !== 'object') return v;
+        if (v instanceof Date) return v.toISOString();
+        if (v.text !== undefined) return v.text;
+        if (Array.isArray(v.richText)) {
+          return v.richText.map(t => t.text || '').join('');
         }
-        return v;
+        // A formula cell only carries `result` when the file was saved with a
+        // cached value. DFTC writes none for a sum over blank cells, so
+        // 148 cells across the volume workbooks — every all-empty OVERALL
+        // TOTAL on the Apple/Asparagus rows among them — arrived as
+        // `{formula: "SUM(C9:N9)"}` with nothing for the branches above to
+        // match, and fell through to `return v`.
+        if ('result' in v) return v.result == null ? '' : String(v.result);
+        if ('formula' in v || 'sharedFormula' in v) return '';
+        if ('error' in v) return String(v.error);
+        return '';
       };
 
       const sheetNames = validWorksheets.map(w => w.name);
@@ -119,23 +175,49 @@ async function parseFileReal(selectedFile) {
         if (headerRowIdx !== -1) {
           const rawHdr = rowsData[headerRowIdx];
           const nextRow = rowsData[headerRowIdx + 1];
-          let hasDayRow = false;
-          if (nextRow && nextRow.some(v => { const n = parseInt(v, 10); return !isNaN(n) && n >= 1 && n <= 31; })) {
-            hasDayRow = true;
-          }
-          const dataStartIdx = hasDayRow ? headerRowIdx + 2 : headerRowIdx + 1;
+          const parentAt = (i) => {
+            const v = rawHdr ? rawHdr[i] : undefined;
+            return v == null ? '' : String(v).trim();
+          };
+
+          // A day column is a 1..31 number sitting under a *blank* header.
+          // Month columns in the DFTC arrival workbook are labelled
+          // JANUARY..DECEMBER and the leading "No." column holds a row
+          // number, so neither can be mistaken for a day column.
+          const dayColumns = (nextRow || []).map((v, i) => parentAt(i) === '' && isDayNumber(v));
+          const hasDayRow = dayColumns.some(Boolean);
+
+          // A second header line shows up when a parent label spans merged
+          // cells (FARM SOURCE over Volume/Percentage), which leaves blank
+          // parent cells above the sub-labels. Only treat it as a header when
+          // it adds labels under those blanks and carries no commodity name,
+          // so a genuine first data row is never swallowed.
+          const hasSubHeader = !hasDayRow && !!nextRow && nextRow.some((v, i) => {
+            if (parentAt(i) !== '' && parentAt(i) !== `col_${i + 1}`) return false;
+            const text = v == null ? '' : String(v).trim();
+            return text !== '' && !isDayNumber(text);
+          }) && String(nextRow[1] ?? '').trim() === '';
+
+          const dataStartIdx = hasDayRow || hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
           const maxCols = Math.max(rawHdr?.length || 0, nextRow?.length || 0);
 
           const headers = [];
+          let carriedParent = '';
           for (let i = 0; i < maxCols; i++) {
-            const hVal = rawHdr ? rawHdr[i] : undefined;
-            const hStr = hVal != null ? String(hVal).trim() : '';
-            const dayVal = (hasDayRow && nextRow && nextRow[i] != null) ? String(nextRow[i]).trim() : '';
-            const n = parseInt(dayVal, 10);
-            if (hasDayRow && !isNaN(n) && n >= 1 && n <= 31) {
-              headers.push(`Day ${n}`);
-            } else if (hStr) {
-              headers.push(hStr);
+            const own = parentAt(i);
+            if (own !== '' && !own.startsWith('col_')) carriedParent = own;
+            if (hasSubHeader && carriedParent !== '') {
+              const sub = nextRow && nextRow[i] != null ? String(nextRow[i]).trim() : '';
+              // A merged parent repeats across the columns it spans, so carry
+              // it forward instead of dropping the sub-label's context.
+              if (sub !== '' && own !== '') headers.push(`${own} — ${sub}`);
+              else if (own !== '') headers.push(own);
+              else if (sub !== '') headers.push(`${carriedParent} — ${sub}`);
+              else headers.push(`col_${i + 1}`);
+            } else if (dayColumns[i]) {
+              headers.push(`Day ${parseInt(String(nextRow[i]).trim(), 10)}`);
+            } else if (own !== '') {
+              headers.push(own);
             } else {
               headers.push(`col_${i + 1}`);
             }
@@ -159,12 +241,13 @@ async function parseFileReal(selectedFile) {
               break;
             }
           }
-          const activeHeaders = headers.slice(0, lastNonEmptyCol + 1);
+          const activeHeaders = uniqueHeaders(headers.slice(0, lastNonEmptyCol + 1));
 
           const rows = dataRows.map(r => {
             const rowObj = {};
             activeHeaders.forEach((h, i) => {
-              rowObj[h] = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
+              const cell = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
+              rowObj[h] = formatPercentCell(h, cell);
             });
             return rowObj;
           });
@@ -172,11 +255,12 @@ async function parseFileReal(selectedFile) {
           return { headers: activeHeaders, rows };
         }
 
-        const headers = (rowsData[0] || []).map((h, i) => String(h).trim() || `col_${i + 1}`);
+        const headers = uniqueHeaders((rowsData[0] || []).map((h, i) => String(h).trim() || `col_${i + 1}`));
         const rows = rowsData.slice(1).map(r => {
           const rowObj = {};
           headers.forEach((h, i) => {
-            rowObj[h] = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
+            const cell = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
+            rowObj[h] = formatPercentCell(h, cell);
           });
           return rowObj;
         });
@@ -184,18 +268,26 @@ async function parseFileReal(selectedFile) {
       };
 
       let totalRowCount = 0;
+      const previewsBySheet = {};
       validWorksheets.forEach(ws => {
         const preview = extractPreviewForRows(sheetsData[ws.name]);
+        previewsBySheet[ws.name] = preview;
         totalRowCount += preview.rows.length;
       });
 
-      const primarySheetName = validWorksheets[0].name;
-      const { headers, rows } = extractPreviewForRows(sheetsData[primarySheetName]);
+      // Land on a monthly sheet when the workbook has one. DFTC files open on
+      // "OVERALL TOTAL", which is a single annual row per commodity, so the
+      // upload used to present the one table that cannot show months.
+      const primarySheetName =
+        validWorksheets.find(ws => (previewsBySheet[ws.name].headers || []).some(isMonthHeader))?.name
+        || validWorksheets[0].name;
+      const { headers, rows } = previewsBySheet[primarySheetName];
 
       return {
         headers,
         rows,
         rawRows: sheetsData[primarySheetName] || [],
+        primarySheetName,
         sheetNames,
         sheetsData,
         totalRowCount,
@@ -653,11 +745,11 @@ function AdminImport() {
     });
     setParsing(true);
     try {
-      const { headers, rows, rawRows, sheetNames, sheetsData, totalRowCount, extractPreviewForRows } = await parseFileReal(selected);
+      const { headers, rows, rawRows, primarySheetName, sheetNames, sheetsData, totalRowCount, extractPreviewForRows } = await parseFileReal(selected);
       setParsedHeaders(headers);
       setParsedRows(rows);
       setFileSheets(sheetNames || []);
-      setActiveSheet(sheetNames?.[0] || "");
+      setActiveSheet(primarySheetName || sheetNames?.[0] || "");
       setTotalDetectedRows(totalRowCount || rows.length);
       sheetsDataRef.current = sheetsData || {};
       extractPreviewFnRef.current = extractPreviewForRows || null;
@@ -1343,4 +1435,5 @@ function AdminImport() {
   );
 }
 
-export { AdminImport as default };
+// `parseFileReal` is exported for the preview tests; nothing else imports it.
+export { AdminImport as default, parseFileReal };

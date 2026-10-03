@@ -343,13 +343,26 @@ export function resolveMediaUrl(location) {
 /**
  * Parse a response, throwing a structured error for non-2xx responses.
  * The error message is taken from the backend's `detail` field when present.
+ *
+ * `detail` is only adopted when it is a string. FastAPI returns a *list* of
+ * objects for 422 validation errors and a dict for some handlers, and
+ * `new Error(object)` coerces through String() — the admin screens then showed
+ * the literal "[object Object]" instead of a message, and because that string
+ * is truthy it defeated every `err.message || "Unable to load ..."` fallback.
  */
 export async function parseResponse(res) {
   if (res.ok) return res.json();
   let detail = `Request failed (${res.status})`;
   try {
     const body = await res.json();
-    if (body?.detail) detail = body.detail;
+    if (typeof body?.detail === "string" && body.detail.trim()) {
+      detail = body.detail;
+    } else if (Array.isArray(body?.detail) && body.detail.length) {
+      // 422 validation errors: surface the field messages, not the objects.
+      detail = body.detail
+        .map((d) => (d && typeof d === "object" ? `${d.loc?.join(".") || "request"}: ${d.msg || "invalid"}` : String(d)))
+        .join("; ");
+    }
   } catch { /* ignore parse error */ }
   const err = new Error(detail);
   err.status = res.status;

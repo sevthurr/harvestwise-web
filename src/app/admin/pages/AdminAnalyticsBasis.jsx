@@ -37,10 +37,10 @@ const ARRIVAL_SOURCE_OPTIONS = [
   { value: "farm", label: "Farm Source", subtitle: "Farm Source" },
   { value: "other", label: "Other Sources", subtitle: "Other Sources" }
 ];
-const ARRIVAL_GRANULARITY_OPTIONS = [
-  { value: "monthly", label: "Monthly" },
-  { value: "daily", label: "Daily" }
-];
+// Arrival rows are stored at a month's last day by design, so a day bucket is
+// always one point per month wearing a day label. Monthly is the only
+// granularity the DFTC workbook can actually supply.
+const ARRIVAL_GRANULARITY_OPTIONS = [{ value: "monthly", label: "Monthly" }];
 const ARRIVAL_CLASSIFICATION_TONES = {
   Low: "bg-blue-100 border-blue-200 text-blue-700",
   "Lower Middle": "bg-emerald-100 border-emerald-200 text-emerald-700",
