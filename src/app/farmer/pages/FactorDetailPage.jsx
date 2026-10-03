@@ -127,12 +127,19 @@ function FactorDetailPage() {
     summary: weather?.summary || cropWeatherAdv?.explanation || "",
   };
 
-  const breadcrumbItems = (breadcrumbs || []).map((bc) => ({
-    label: bc.label,
-    onClick: bc.path ? () => navigate(bc.path) : void 0,
-  }));
+  const displayTitle = title || `${commodityName || "Crop"} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`;
+  const breadcrumbItems = (breadcrumbs && breadcrumbs.length > 0)
+    ? breadcrumbs.map((bc) => ({
+        label: bc.label,
+        onClick: bc.path ? () => navigate(bc.path) : void 0,
+      }))
+    : [
+        { label: t("farmer.dashboard.title", {}, "Dashboard"), onClick: () => navigate("/farmer") },
+        { label: commodityName || "Crop" },
+        { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
+      ];
 
-  const advisoryText = advisoryLabel || (subtitle && subtitle.includes("·") ? subtitle.split("·")[1].trim() : subtitle);
+  const advisoryText = advisoryLabel || (subtitle && subtitle.includes("·") ? subtitle.split("·")[1].trim() : subtitle) || t("farmer.advisory.labels.recommended", {}, "Recommended");
   const advCode = String(advisoryCode || "").toLowerCase();
 
   const isAvoid = advCode.includes("avoid") || advCode.includes("risk") || (advisoryText && /ayaw|dili|avoid|panganib/i.test(advisoryText));
@@ -188,7 +195,7 @@ function FactorDetailPage() {
       {/* Page title & Emphasized Final Advisory */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1">
         <div>
-          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">{title}</h1>
+          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">{displayTitle}</h1>
           <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
             {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
           </p>

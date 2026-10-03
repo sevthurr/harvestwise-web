@@ -1,7 +1,7 @@
 import { apiGet, apiPost, parseResponse } from "../../app/global/api";
 
 /**
- * Fetch paginated farmer notifications.
+ * Fetch paginated current user notifications.
  * @param {number} page
  * @param {number} pageSize
  * @returns {Promise<import("../../app/global/api").FarmerNotificationListResponse>}
@@ -30,7 +30,7 @@ export async function markRead(id) {
 }
 
 /**
- * Mark all farmer notifications as read.
+ * Mark all notifications as read for current user.
  * @returns {Promise<{updated: number}>}
  */
 export async function markAllRead() {

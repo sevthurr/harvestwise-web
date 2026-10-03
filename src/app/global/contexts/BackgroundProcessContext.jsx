@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ingestionApi } from "../../../services/api";
+import { useNotificationEvent } from "./NotificationStreamContext";
 
 const BackgroundProcessContext = createContext(null);
 
@@ -89,16 +90,11 @@ export const BackgroundProcessProvider = ({ children }) => {
     }, 4000);
   }, [queryClient]);
 
-  // Connect to SSE stream for real-time background events
-  useEffect(() => {
-    let es = null;
-    const handlers = [];
-    try {
-      es = new EventSource("/api/v1/notifications/stream");
-
-      const handleEvent = async (e) => {
-        try {
-          const eventData = JSON.parse(e.data);
+  // Listen for real-time background events on the shared notification stream.
+  // This provider used to open its own SSE connection; it now subscribes, so a
+  // session holds one connection instead of one per layout plus one per page.
+  const handleEvent = useCallback(async (eventData) => {
+      try {
 
           // Only act on completion/failure events. A broadcast's import_id must
           // match the currently active import; otherwise (unrelated PSA syncs,
@@ -135,26 +131,15 @@ export const BackgroundProcessProvider = ({ children }) => {
             if (eventId && String(eventId) !== String(activeId)) return;
             finishProcess(eventData.error || "Ingestion failed", true);
           }
-        } catch (err) {
-          console.warn("SSE parse error", err);
-        }
-      };
-
-      // Listen for the default "message" event (no "event:" field in SSE)
-      es.onmessage = handleEvent;
-      // Also listen for named events sent by backend ("event: DATASET_INGESTED")
-      es.addEventListener("DATASET_INGESTED", handleEvent);
-      handlers.push(["DATASET_INGESTED", handleEvent]);
-    } catch (err) {
-      console.warn("SSE connection error", err);
-    }
-    return () => {
-      if (es) {
-        handlers.forEach(([name, fn]) => es.removeEventListener(name, fn));
-        es.close();
+      } catch (err) {
+        console.warn("SSE handler error", err);
       }
-    };
   }, [finishProcess]);
+
+  // DATASET_INGESTED is the SSE event name the server uses for everything on
+  // the shared data channel. The payload's own `type` still discriminates
+  // ingestion success / price update / ingestion failure below.
+  useNotificationEvent("DATASET_INGESTED", handleEvent);
 
   return (
     <BackgroundProcessContext.Provider

@@ -14,14 +14,116 @@ import {
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { getVariants } from "../../global/data/commodities";
 import { useParams, useNavigate, useSearchParams } from "react-router";
-import { ChevronLeft, ChevronDown, AlertTriangle, Info } from "lucide-react";
+import { ChevronLeft, ChevronDown, AlertTriangle, Info, Calendar } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMockData";
+import {
+  FARM_COLOR,
+  NO_QUARTILE_BAR_COLOR,
+  OTHER_COLOR,
+  availableArrivalYears,
+  bucketArrivals,
+  classifyArrival,
+  classificationColor,
+  monthlyAxisForYear
+} from "../components/analytics/arrivalVolumeSeries";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
-import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
+
+const ARRIVAL_SOURCE_OPTIONS = [
+  { value: "overall", label: "Overall", subtitle: "Overall (Farm + Other)" },
+  { value: "farm", label: "Farm Source", subtitle: "Farm Source" },
+  { value: "other", label: "Other Sources", subtitle: "Other Sources" }
+];
+const ARRIVAL_GRANULARITY_OPTIONS = [
+  { value: "monthly", label: "Monthly" },
+  { value: "daily", label: "Daily" }
+];
+const ARRIVAL_CLASSIFICATION_TONES = {
+  Low: "bg-blue-100 border-blue-200 text-blue-700",
+  "Lower Middle": "bg-emerald-100 border-emerald-200 text-emerald-700",
+  "Upper Middle": "bg-amber-100 border-amber-200 text-amber-700",
+  High: "bg-red-100 border-red-200 text-red-700"
+};
+
+const kgFmt = (value) =>
+  `${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`;
+
+// Pill switch used by the trend card's source and granularity controls.
+function SegmentedControl({ value, onChange, options }) {
+  return (
+    <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)]">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+            className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-colors cursor-pointer ${
+              active
+                ? "bg-white text-[var(--hw-green-800)] shadow-sm border border-[var(--hw-neutral-200)]"
+                : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] border border-transparent"
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Tooltip card: period + classification badge, the overall total, the farm/other
+// split with each share, then the total for whichever view is selected.
+function ArrivalTrendTooltip({ active, payload, sourceLabel, sourceValueFor }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+
+  const split = (value) => {
+    const pct = row.total_kg > 0 ? Math.round((Number(value || 0) / row.total_kg) * 100) : 0;
+    return `${kgFmt(value)} (${pct}%)`;
+  };
+
+  return (
+    <div className="rounded-xl border border-[var(--hw-neutral-200)] bg-white p-3 shadow-lg min-w-[210px]">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">{row.tipLabel}</span>
+        {row.classification && (
+          <span className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${ARRIVAL_CLASSIFICATION_TONES[row.classification] || "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)]"}`}>
+            {row.classification}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-3 py-0.5">
+        <span className="text-[12px] text-[var(--hw-neutral-700)]">Overall Total:</span>
+        <span className="text-[12px] font-bold text-[var(--hw-neutral-900)]">{kgFmt(row.total_kg)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 py-0.5">
+        <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--hw-neutral-800)]">
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: FARM_COLOR }} />
+          Farm Source:
+        </span>
+        <span className="text-[12px] text-[var(--hw-neutral-700)]">{split(row.farm_kg)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 py-0.5">
+        <span className="flex items-center gap-1.5 text-[12px] text-[var(--hw-neutral-700)]">
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: OTHER_COLOR }} />
+          Other Sources:
+        </span>
+        <span className="text-[12px] text-[var(--hw-neutral-700)]">{split(row.other_kg)}</span>
+      </div>
+      <div className="mt-2 pt-2 border-t border-dashed border-[var(--hw-neutral-200)] flex items-center justify-between gap-3">
+        <span className="text-[12px] font-bold text-[var(--hw-neutral-800)]">{sourceLabel}:</span>
+        <span className="text-[12px] font-bold text-[var(--hw-neutral-900)]">{kgFmt(sourceValueFor(row))}</span>
+      </div>
+    </div>
+  );
+}
 
 const TOP_10_COMMODITIES = [
   "Ampalaya",
@@ -244,9 +346,8 @@ const CustomCommodityDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-                  isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                }`}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
               >
                 <CommodityIllustration commodityId={optIconKey} className="w-5 h-5 flex-shrink-0" />
                 <span className="flex-1 truncate">{optName}</span>
@@ -292,9 +393,8 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
               onChange("All Varieties");
               setOpen(false);
             }}
-            className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-              selectedVariety === "All Varieties" ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-            }`}
+            className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${selectedVariety === "All Varieties" ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
           >
             All Varieties
           </button>
@@ -309,9 +409,8 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${
-                  isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                }`}
+                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
               >
                 <span className="flex-1 truncate">{optName}</span>
               </button>
@@ -417,9 +516,8 @@ const DatasetsUsed = ({ module, records = [] }) => {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`px-3 py-1.5 text-[12px] border rounded-lg transition-colors ${
-                      p === page ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
-                    }`}
+                    className={`px-3 py-1.5 text-[12px] border rounded-lg transition-colors ${p === page ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                      }`}
                   >
                     {p}
                   </button>
@@ -678,6 +776,46 @@ function AdminAnalyticsBasis() {
     selectedCommodityRecord?.id
   );
 
+  // Trend card controls. The year list is derived from the records so the
+  // selector can only offer years that actually hold data.
+  const [arrivalSource, setArrivalSource] = useState("overall");
+  const [arrivalGranularity, setArrivalGranularity] = useState("monthly");
+  const [arrivalYear, setArrivalYear] = useState(null);
+
+  const arrivalRecords = arrivalSummary?.records || [];
+  const arrivalYears = useMemo(() => availableArrivalYears(arrivalRecords), [arrivalRecords]);
+  const arrivalActiveYear = arrivalYears.includes(arrivalYear) ? arrivalYear : arrivalYears[0] ?? null;
+
+  const arrivalSeries = useMemo(
+    () => bucketArrivals(arrivalRecords, { granularity: arrivalGranularity, year: arrivalActiveYear }),
+    [arrivalRecords, arrivalGranularity, arrivalActiveYear]
+  );
+
+  // Monthly keeps a full Jan-Dec axis so a year with a few recorded months
+  // still reads as a yearly trend. Daily only has the days that recorded.
+  const arrivalChartData = useMemo(() => {
+    const withLabels = arrivalSeries.map((bucket) => ({
+      ...bucket,
+      tipLabel: `${bucket.label} ${bucket.year}`,
+      classification: classifyArrival(bucket.total_kg, arrivalSummary?.quartile_thresholds)
+    }));
+    return arrivalGranularity === "monthly"
+      ? monthlyAxisForYear(arrivalActiveYear, withLabels)
+      : withLabels;
+  }, [arrivalSeries, arrivalGranularity, arrivalActiveYear, arrivalSummary]);
+
+  const arrivalSourceOption =
+    ARRIVAL_SOURCE_OPTIONS.find((o) => o.value === arrivalSource) || ARRIVAL_SOURCE_OPTIONS[0];
+  const arrivalSourceValueFor = (row) =>
+    arrivalSource === "farm" ? row.farm_kg : arrivalSource === "other" ? row.other_kg : row.total_kg;
+  // One bar per month, as the design shows. The source toggle picks which value
+  // that single bar plots rather than adding a second column.
+  const arrivalBarKey = arrivalSource === "farm" ? "farm_kg" : arrivalSource === "other" ? "other_kg" : "total_kg";
+  const arrivalHasData = arrivalChartData.some((b) => b.total_kg > 0);
+  const arrivalSubtitle = `DFTC ${arrivalGranularity} arrivals · ${arrivalSourceOption.subtitle} · kilograms${
+    arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
+  }`;
+
   // Load the threshold rules for the current module from the admin API
   useEffect(() => {
     let active = true;
@@ -703,11 +841,11 @@ function AdminAnalyticsBasis() {
   const shownThresholds =
     thresholdRules.length > 0
       ? thresholdRules.map((r) => ({
-          classification: r.classification,
-          rule:
-            r.display_text ||
-            (((r.operator || "") + " " + (r.threshold_value != null ? Math.round(Number(r.threshold_value) * 100) / 100 : "")).trim())
-        }))
+        classification: r.classification,
+        rule:
+          r.display_text ||
+          (((r.operator || "") + " " + (r.threshold_value != null ? Math.round(Number(r.threshold_value) * 100) / 100 : "")).trim())
+      }))
       : result.thresholds || [];
 
   const historicalResult = useMemo(() => {
@@ -798,11 +936,11 @@ function AdminAnalyticsBasis() {
       },
       forecastPoints: processed
         ? (priceOutlook.forecast_points || []).map((point) => ({
-            date: point.forecast_date,
-            [selectedVariety]: point.forecast_midpoint,
-            [`${selectedVariety}__lo`]: point.lower_forecast,
-            [`${selectedVariety}__hi`]: point.upper_forecast
-          }))
+          date: point.forecast_date,
+          [selectedVariety]: point.forecast_midpoint,
+          [`${selectedVariety}__lo`]: point.lower_forecast,
+          [`${selectedVariety}__hi`]: point.upper_forecast
+        }))
         : [],
       varieties: [{ variety: selectedVariety }],
       resultExplanation: processed ? priceOutlook.explanation : (priceOutlookError || priceOutlook?.explanation || "Price Outlook could not be calculated for this forecast."),
@@ -824,10 +962,6 @@ function AdminAnalyticsBasis() {
     const processed = arrivalSummary?.status === "processed";
     const kg = (value) => value == null ? "-" : `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`;
     const quartiles = arrivalSummary?.quartile_thresholds;
-    const breakdown = arrivalSummary?.source_breakdown || {};
-    const farmKg = breakdown.farm_source_volume_kg;
-    const otherKg = breakdown.other_source_volume_kg;
-    const farmTotal = (Number(farmKg) || 0) + (Number(otherKg) || 0);
 
     return {
       ...result,
@@ -846,23 +980,9 @@ function AdminAnalyticsBasis() {
         "Q2 threshold": quartiles ? kg(quartiles.q2) : "-",
         "Q3 threshold": quartiles ? kg(quartiles.q3) : "-"
       },
-      arrivalVolumes: (arrivalSummary?.records || []).map((row) => ({
-        label: formatForecastDate(row.arrival_date),
-        volume_kg: row.volume_kg,
-        classification: row.volume_kg <= (quartiles?.q1 ?? Infinity)
-          ? "Low"
-          : row.volume_kg <= (quartiles?.q2 ?? Infinity)
-            ? "Lower Middle"
-            : row.volume_kg <= (quartiles?.q3 ?? Infinity)
-              ? "Upper Middle"
-              : "High"
-      })),
-      arrivalSources: farmTotal > 0
-        ? [
-            { name: "Farm Source", value: Math.round(((Number(farmKg) || 0) / farmTotal) * 100), volumeKg: Number(farmKg) || 0 },
-            { name: "Other Sources", value: Math.round(((Number(otherKg) || 0) / farmTotal) * 100), volumeKg: Number(otherKg) || 0 }
-          ].filter((slice) => slice.volumeKg > 0)
-        : [],
+      // The trend card buckets `arrivalSummary.records` through
+      // `arrivalVolumeSeries`, so no pre-bucketed copy is kept here. The
+      // source split it needs comes from the same records.
       records: (arrivalSummary?.records || []).map((row) => ({
         Date: row.arrival_date ? formatForecastDate(row.arrival_date) : "-",
         Commodity: row.commodity_name || selectedCommodity,
@@ -978,15 +1098,13 @@ function AdminAnalyticsBasis() {
     });
 
     const explanation = isProcessed
-      ? `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${
-          avgMin >= suitTempMin && avgMax <= suitTempMax
-            ? `${selectedCommodity} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
-            : `Temperatures fluctuate slightly outside optimal bounds.`
-        } ${
-          cautionCount > 0 || severeCount > 0
-            ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
-            : `Favorable meteorological conditions expected throughout the forecast window.`
-        }`
+      ? `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${avgMin >= suitTempMin && avgMax <= suitTempMax
+        ? `${selectedCommodity} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
+        : `Temperatures fluctuate slightly outside optimal bounds.`
+      } ${cautionCount > 0 || severeCount > 0
+        ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
+        : `Favorable meteorological conditions expected throughout the forecast window.`
+      }`
       : weatherError || (weatherLoading ? "Loading weather forecast data…" : "No weather forecast data is available for this scope.");
 
     return {
@@ -1220,10 +1338,10 @@ function AdminAnalyticsBasis() {
                       p.classification === "High"
                         ? "bg-red-50 text-red-700 border-red-200"
                         : p.classification === "Upper Middle"
-                        ? "bg-amber-50 text-amber-700 border-amber-200"
-                        : p.classification === "Lower Middle"
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : "bg-emerald-50 text-emerald-700 border-emerald-200";
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : p.classification === "Lower Middle"
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200";
                     return (
                       <tr key={p.quarter} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
                         <td className="px-6 py-3.5 font-bold text-[var(--hw-neutral-900)]">{p.quarter}</td>
@@ -1339,68 +1457,112 @@ function AdminAnalyticsBasis() {
 
         {/* Arrival Pressure Visualizations */}
         {(result.module === "Arrival Pressure" || resultId === "arrival-pressure") && (
-          <>
-            {/* Arrival Volume Trend Bar Chart */}
-            <div className={vizCardClass}>
+          <div className={vizCardClass}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Arrival Volume Trend</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">DFTC arrivals · kilograms</p>
+                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                  Arrival Volume Trend
+                </p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">{arrivalSubtitle}</p>
               </div>
-              {displayResult.arrivalVolumes?.length > 0 ? (
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={displayResult.arrivalVolumes} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => Number(v).toLocaleString()} width={62} />
-                    <RechartsTooltip
-                      formatter={(val, _name, props) => [
-                        `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg${props.payload?.classification ? ` (${props.payload.classification})` : ""}`,
-                        "Arrival Volume"
-                      ]}
-                    />
-                    <Bar dataKey="volume_kg" radius={[6, 6, 0, 0]} fill="#2f7d32">
-                      {displayResult.arrivalVolumes.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            entry.classification === "High" ? "#dc2626" :
-                            entry.classification === "Upper Middle" ? "#d97706" :
-                            entry.classification === "Lower Middle" ? "#2563eb" :
-                            "#16a34a"
-                          }
-                        />
+              <div className="flex flex-wrap items-center gap-3">
+                <SegmentedControl
+                  value={arrivalSource}
+                  onChange={setArrivalSource}
+                  options={ARRIVAL_SOURCE_OPTIONS}
+                />
+                <SegmentedControl
+                  value={arrivalGranularity}
+                  onChange={setArrivalGranularity}
+                  options={ARRIVAL_GRANULARITY_OPTIONS}
+                />
+                {arrivalYears.length > 0 && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
+                    <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
+                    <select
+                      value={arrivalActiveYear ?? ""}
+                      onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
+                      aria-label="Arrival year"
+                      className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
+                    >
+                      {arrivalYears.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
                       ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="w-full flex-1 flex flex-col justify-center">
-                  <ResponsiveContainer width="100%" height={340}>
-                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
-                      <YAxis hide domain={[0, 10]} />
-                      <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
-                    <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-                      No comparison data available.
-                    </span>
+                    </select>
+                    <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            {/* Arrival Volume Sources Pie Chart (Enlarged) */}
-            <div className={vizCardClass}>
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Arrival Volume Sources Distribution</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Arrival volume breakdown by origin (Farm Source vs Other Sources).</p>
+            {arrivalHasData ? (
+              <ResponsiveContainer width="100%" height={340}>
+                <BarChart
+                  data={arrivalChartData}
+                  margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
+                  barCategoryGap="32%"
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#9ca3af" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => Number(v).toLocaleString()}
+                    width={62}
+                  />
+                  <RechartsTooltip
+                    cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                    content={
+                      <ArrivalTrendTooltip
+                        sourceLabel={arrivalSourceOption.label}
+                        sourceValueFor={arrivalSourceValueFor}
+                      />
+                    }
+                  />
+                  <Bar
+                    dataKey={arrivalBarKey}
+                    name={arrivalSourceOption.label}
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={44}
+                    fill={NO_QUARTILE_BAR_COLOR}
+                  >
+                    {arrivalChartData.map((entry) => (
+                      <Cell
+                        key={`bar-${entry.key}`}
+                        fill={entry.total_kg > 0 ? classificationColor(entry.classification) : "transparent"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-full flex-1 flex flex-col justify-center">
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
+                    <YAxis hide domain={[0, 10]} />
+                    <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
+                  <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
+                    {arrivalLoading
+                      ? "Loading arrival volume…"
+                      : arrivalError || "No arrival volume records for this scope."}
+                  </span>
+                </div>
               </div>
-              <ArrivalSourcePieChart showEmpty={!displayResult.arrivalSources || displayResult.arrivalSources.length === 0} data={displayResult.arrivalSources} height={380} />
-            </div>
-          </>
+            )}
+          </div>
         )}
 
         {/* Historical Production Visualizations */}
@@ -1430,9 +1592,9 @@ function AdminAnalyticsBasis() {
                       {displayResult.productionVolumes?.length > 0 && displayResult.productionVolumes.map((entry, index) => {
                         const barColor =
                           entry.classification === "High" ? "#dc2626" :
-                          entry.classification === "Upper Middle" ? "#d97706" :
-                          entry.classification === "Lower Middle" ? "#2563eb" :
-                          "#16a34a";
+                            entry.classification === "Upper Middle" ? "#d97706" :
+                              entry.classification === "Lower Middle" ? "#2563eb" :
+                                "#16a34a";
                         return <Cell key={`cell-${index}`} fill={barColor} />;
                       })}
                     </Bar>
@@ -1529,57 +1691,57 @@ function AdminAnalyticsBasis() {
 
       {/* 6. Threshold Applied & Result Explanation in 2 Columns with Equal Height */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          {/* Threshold Applied Card */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
-            </div>
-            {thresholdsError && (
-              <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
-            )}
-            <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
-              {displayThresholds && displayThresholds.length > 0 ? (
-                displayThresholds.map((t) => {
-                  const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
-                  return (
-                    <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
-                      <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
-                      <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
-                  Threshold information unavailable.
-                </div>
-              )}
-            </div>
+        {/* Threshold Applied Card */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
           </div>
-
-          {/* Result Explanation Card (Concise Empty State) */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
-            </div>
-            <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
-              {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
-                <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
-                  {displayResult.resultExplanation}
-                </p>
-              ) : (
-                <div className="py-4 space-y-1.5 max-w-sm mx-auto">
-                  <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
-                    <Info className="w-5 h-5" />
+          {thresholdsError && (
+            <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
+          )}
+          <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
+            {displayThresholds && displayThresholds.length > 0 ? (
+              displayThresholds.map((t) => {
+                const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
+                return (
+                  <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+                    <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
+                    <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
                   </div>
-                  <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
-                    No analytical explanation generated for the selected scope.
-                  </p>
-                </div>
-              )}
-            </div>
+                );
+              })
+            ) : (
+              <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
+                Threshold information unavailable.
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Result Explanation Card (Concise Empty State) */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
+          </div>
+          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
+            {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
+              <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
+                {displayResult.resultExplanation}
+              </p>
+            ) : (
+              <div className="py-4 space-y-1.5 max-w-sm mx-auto">
+                <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                  <Info className="w-5 h-5" />
+                </div>
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
+                  No analytical explanation generated for the selected scope.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Missing data warning */}
       {displayResult.basisMissing && (

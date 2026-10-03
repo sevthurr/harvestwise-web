@@ -132,10 +132,15 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
   );
 }
 
-export async function getArrivalPressure(commodityId) {
-  return parseResponse(
-    await apiGet(`/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`)
-  );
+export async function getArrivalPressure(commodityId, year = null, source = null) {
+  let url = `/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`;
+  if (year != null) {
+    url += `&year=${encodeURIComponent(year)}`;
+  }
+  if (source != null && source !== "overall") {
+    url += `&source=${encodeURIComponent(source)}`;
+  }
+  return parseResponse(await apiGet(url));
 }
 
 export async function getWeatherForecast(days = 14) {
@@ -143,3 +148,4 @@ export async function getWeatherForecast(days = 14) {
     await apiGet(`/admin/analytics/outputs/weather-forecast?days=${encodeURIComponent(days)}`)
   );
 }
+

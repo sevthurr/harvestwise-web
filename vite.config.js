@@ -98,5 +98,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     include: ['src/**/*.{test,spec}.{js,jsx}'],
+    // The DFTC entry suites need 7s+ of wall clock once all 40+ files run in
+    // parallel, so vitest's 5s default killed them on a loaded machine. This is
+    // headroom for slow rendering, not a relaxation of any assertion.
+    testTimeout: 15000,
   },
 })

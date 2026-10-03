@@ -145,19 +145,29 @@ function RegisterPage() {
 
       const res = await apiPost("/api/v1/auth/register", payload);
       const tokens = await parseResponse(res);
-      await login(tokens);
+      // The register endpoint answers 201 with a well-formed but unusable token
+      // pair when the identifier is already taken, so this endpoint cannot be
+      // used to discover which email addresses have accounts. That also means
+      // a duplicate surfaces as a failure of the follow-up /auth/me call rather
+      // than a distinct 409, so it is handled here in one uniform message
+      // instead of the previous "email already registered" / "phone already
+      // registered" pair.
+      try {
+        await login(tokens);
+      } catch {
+        setErrors({
+          contact: t(
+            "auth.errors.contact_unavailable",
+            {},
+            "We could not create an account with those details. If you already have an account, sign in instead."
+          ),
+        });
+        return;
+      }
       navigate("/onboarding", { replace: true });
     } catch (err) {
       const msg = err.message ?? "";
-      if (err.status === 409) {
-        if (msg.toLowerCase().includes("email")) {
-          setErrors({ contact: t("auth.errors.email_registered", {}, "This email is already registered.") });
-        } else if (msg.toLowerCase().includes("phone")) {
-          setErrors({ contact: t("auth.errors.phone_registered", {}, "This phone number is already registered.") });
-        } else {
-          setErrors({ general: msg });
-        }
-      } else if (err.status === 422) {
+      if (err.status === 422) {
         setErrors({ general: t("auth.errors.general", {}, "Something went wrong. Please try again.") });
       } else {
         setErrors({ general: msg || t("auth.errors.general", {}, "Something went wrong. Please try again.") });

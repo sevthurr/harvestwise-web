@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
@@ -9,6 +9,7 @@ import { Toast } from "../ui/hw-ui";
 import { PwaInstallPrompt } from "../pwa/PwaInstallPrompt";
 import { useFarmerPrefetch } from "../../hooks/useFarmerPrefetch";
 import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
@@ -56,70 +57,48 @@ const Layout = () => {
   };
 
   // ── Unread notification count ──────────────────────────────────────────
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { data: unreadData, refetch: refreshUnread } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      try {
+        const res = await getUnreadCount();
+        return res?.unread_count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
 
-  const refreshUnread = useCallback(async () => {
-    try {
-      const { unread_count } = await getUnreadCount();
-      setUnreadCount(unread_count);
-    } catch {
-      // non-fatal — badge stays at last known count
-    }
-  }, []);
-
-  // Initial load
   useEffect(() => {
-    refreshUnread();
-  }, [refreshUnread]);
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+  }, [location.pathname, queryClient]);
 
-  // ── SSE: listen for FARMER_NOTIF events ────────────────────────────────
+  // ── SSE: react to NOTIFICATION_CREATED events ──────────────────────────
   const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    let es = null;
-    const handler = (e) => {
-      try {
-        const eventData = JSON.parse(e.data);
-        if (eventData.type === "FARMER_NOTIF") {
-          // If the event carries a user_id, only act on it for the matching farmer.
-          // Bulk events (price/weather alerts) omit user_id — always act on those.
-          if (eventData.user_id && eventData.user_id !== String(user?.id ?? "")) return;
-
-          // Invalidate cached notifications list so the page refreshes
-          queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
-          // Refresh bell badge
-          refreshUnread();
-          // Show a brief toast
-          setToast({
-            type: "info",
-            title: t("farmer.notifications.new_notification", {}, "New Notification"),
-            message: t(
-              "farmer.notifications.new_notification_body",
-              {},
-              "You have a new notification."
-            ),
-          });
-        }
-      } catch {
-        // ignore malformed SSE payloads
-      }
-    };
-
-    try {
-      es = new EventSource("/api/v1/notifications/stream");
-      es.onmessage = handler;
-      es.addEventListener("FARMER_NOTIF", handler);
-    } catch {
-      // SSE not available (offline / unsupported)
-    }
-
-    return () => {
-      if (es) {
-        es.removeEventListener("FARMER_NOTIF", handler);
-        es.close();
-      }
-    };
-  }, [queryClient, refreshUnread, t]);
+  // The stream is shared app-wide and already scoped to the authenticated
+  // user's private Redis channel, so every NOTIFICATION_CREATED frame on it
+  // belongs to this user — no client-side user_id filtering is needed.
+  useNotificationEvent("NOTIFICATION_CREATED", () => {
+    // Invalidate cached notifications list so the page refreshes
+    queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
+    // Refresh bell badge
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    refreshUnread();
+    // Show a brief toast
+    setToast({
+      type: "info",
+      title: t("farmer.notifications.new_notification", {}, "New Notification"),
+      message: t(
+        "farmer.notifications.new_notification_body",
+        {},
+        "You have a new notification."
+      ),
+    });
+  });
 
   const handleNavClick = (id) => {
     navigate(NAV_ROUTES[id] || "/");
@@ -145,7 +124,6 @@ const Layout = () => {
         onMenuClick={() => setSidebarCollapsed((v) => !v)}
         notificationCount={unreadCount}
         onNotificationClick={() => {
-          setUnreadCount(0); // optimistic clear on click
           navigate("/farmer/notifications");
         }}
       />

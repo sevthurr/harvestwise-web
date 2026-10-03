@@ -16,7 +16,19 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase =
   SUPABASE_URL && SUPABASE_ANON_KEY
     ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { flowType: "pkce", detectSessionInUrl: false },
+        auth: {
+          flowType: "pkce",
+          detectSessionInUrl: false,
+          // This client is an OAuth *broker* only. The app's own authority is
+          // the backend, and HarvestWise's session lives in its own token
+          // store. Leaving Supabase session persistence on would additionally
+          // write a Supabase session JWT to localStorage under
+          // `sb-<ref>-auth-token`, which is a second JS-readable credential on
+          // the same device for no benefit — the id_token is read once, handed
+          // to the backend, and never needed again.
+          persistSession: false,
+          autoRefreshToken: false,
+        },
       })
     : null;
 

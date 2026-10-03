@@ -2,11 +2,13 @@ import { useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import { authApi } from "../../../../services/api";
 import { resolveMediaUrl } from "../../api";
+import { useAuth } from "../../contexts/AuthContext";
 import { AvatarCropper } from "./AvatarCropper";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
 const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
+  const { refreshUser } = useAuth();
   const fileRef = useRef(null);
   const [avatarSrc, setAvatarSrc] = useState(() => resolveMediaUrl(src));
   const [uploading, setUploading] = useState(false);
@@ -42,8 +44,23 @@ const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
     setError("");
     try {
       const res = await authApi.uploadProfilePicture(cropped);
-      // Backend returns the stored location (Cloudinary URL or /media path).
+      // Cloudinary is the only backend, so this is always an absolute HTTPS URL.
       setAvatarSrc(resolveMediaUrl(res?.profile_picture_path));
+
+      // Also refresh the auth context so the new path lands in the shared user
+      // object and the IndexedDB cache. Without this, `avatarSrc` is local
+      // state seeded from `user.profile_picture_path` only on mount — so a
+      // remount or a navigation away and back re-reads the stale value and the
+      // picture visibly reverts. Most visible offline, where /auth/me is
+      // unreachable and the cached copy is what gets restored.
+      //
+      // Failure here is not an upload failure: the picture is already stored,
+      // so it must not surface an error over a successful save.
+      try {
+        await refreshUser();
+      } catch {
+        /* keep the locally-set avatar; the next sign-in picks it up */
+      }
     } catch (err) {
       setError(err.message || "Upload failed.");
     } finally {
