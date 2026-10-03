@@ -119,28 +119,28 @@ const arrivalCard = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   apiGet.mockResolvedValue({
-      ok: true,
-      json: async () => [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
-    });
-    parseResponse.mockImplementation(async (res) => res.json());
+    ok: true,
+    json: async () => [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
+  });
+  parseResponse.mockImplementation(async (res) => res.json());
 
-    analyticsApi.listWeights.mockResolvedValue({ items: [] });
-    analyticsApi.listThresholds.mockResolvedValue({ items: [] });
-    analyticsApi.listThresholdRules.mockResolvedValue({ items: [] });
-    analyticsApi.listModuleOutputs.mockResolvedValue({ items: [] });
-    analyticsApi.computeModuleOutputs.mockResolvedValue({ commodity_id: 'COM-0001' });
-    analyticsApi.listWeatherRules.mockResolvedValue({ items: [] });
-    analyticsApi.getHistoricalSeasonalProduction.mockResolvedValue({});
-    analyticsApi.getArrivalPressure.mockResolvedValue(PROCESSED);
+  analyticsApi.listWeights.mockResolvedValue({ items: [] });
+  analyticsApi.listThresholds.mockResolvedValue({ items: [] });
+  analyticsApi.listThresholdRules.mockResolvedValue({ items: [] });
+  analyticsApi.listModuleOutputs.mockResolvedValue({ items: [] });
+  analyticsApi.computeModuleOutputs.mockResolvedValue({ commodity_id: 'COM-0001' });
+  analyticsApi.listWeatherRules.mockResolvedValue({ items: [] });
+  analyticsApi.getHistoricalSeasonalProduction.mockResolvedValue({});
+  analyticsApi.getArrivalPressure.mockResolvedValue(PROCESSED);
 
-    // Basis-view mocks. Resolved here too so a mount effect that fires late
-    // never meets an undefined mock.
-    analyticsApi.listCommodities.mockResolvedValue({
-      items: [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
-    });
-    analyticsApi.getModuleOutputDetail.mockResolvedValue(null);
-    analyticsApi.getWeatherForecast.mockResolvedValue({ status: 'ok', days: [] });
-    analyticsApi.getPriceOutlook.mockResolvedValue({});
+  // Basis-view mocks. Resolved here too so a mount effect that fires late
+  // never meets an undefined mock.
+  analyticsApi.listCommodities.mockResolvedValue({
+    items: [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
+  });
+  analyticsApi.getModuleOutputDetail.mockResolvedValue(null);
+  analyticsApi.getWeatherForecast.mockResolvedValue({ status: 'ok', days: [] });
+  analyticsApi.getPriceOutlook.mockResolvedValue({});
 });
 
 describe('Admin Arrival Pressure card', () => {
@@ -296,9 +296,9 @@ describe('Admin arrival volume trend', () => {
   // The trend card mounts a recharts ResponsiveContainer.
   beforeEach(() => {
     global.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      observe() { }
+      unobserve() { }
+      disconnect() { }
     };
   });
 
@@ -343,6 +343,26 @@ describe('Admin arrival volume trend', () => {
     ).toBeInTheDocument();
   });
 
+
+  it('shows the source pie card below the trend with the selected year totals', async () => {
+    analyticsApi.getArrivalPressure.mockResolvedValue({
+      ...PROCESSED,
+      records: [
+        RECORD({ arrival_date: '2025-03-31', volume_kg: 300, farm_source_volume_kg: 100, other_source_volume_kg: 200 })
+      ],
+    });
+    renderBasis();
+
+    await settleTrend();
+    const trendHeading = screen.getByText('Arrival Volume Trend');
+    const pieHeading = await screen.findByText('Arrival Volume Sources Distribution');
+
+    expect(Boolean(trendHeading.compareDocumentPosition(pieHeading) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByText('33%')).toBeInTheDocument();
+    expect(screen.getByText('67%')).toBeInTheDocument();
+    expect(screen.getByText('(100 kg)')).toBeInTheDocument();
+    expect(screen.getByText('(200 kg)')).toBeInTheDocument();
+  });
   it('switches the subtitle when a different source is chosen', async () => {
     analyticsApi.getArrivalPressure.mockResolvedValue({ ...PROCESSED, records: multiYear() });
     renderBasis();
@@ -388,13 +408,14 @@ describe('Admin arrival volume trend', () => {
     );
   });
 
-  it('replaced the sources pie chart', async () => {
-    // The design drops the pie in favour of the source toggle inside the trend.
+  it('shows the sources pie chart below the trend', async () => {
     analyticsApi.getArrivalPressure.mockResolvedValue({ ...PROCESSED, records: multiYear() });
     renderBasis();
 
     await settleTrend();
-    expect(screen.queryByText('Arrival Volume Sources Distribution')).toBeNull();
+    const trendHeading = screen.getByText('Arrival Volume Trend');
+    const pieHeading = await screen.findByText('Arrival Volume Sources Distribution');
+    expect(Boolean(trendHeading.compareDocumentPosition(pieHeading) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it('keeps one bar series whichever source is selected', async () => {

@@ -28,6 +28,7 @@ import {
   monthlyAxisForYear
 } from "../components/analytics/arrivalVolumeSeries";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
+import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
@@ -63,11 +64,10 @@ function SegmentedControl({ value, onChange, options }) {
             type="button"
             onClick={() => onChange(opt.value)}
             aria-pressed={active}
-            className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-colors cursor-pointer ${
-              active
+            className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-colors cursor-pointer ${active
                 ? "bg-white text-[var(--hw-green-800)] shadow-sm border border-[var(--hw-neutral-200)]"
                 : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] border border-transparent"
-            }`}
+              }`}
           >
             {opt.label}
           </button>
@@ -812,9 +812,25 @@ function AdminAnalyticsBasis() {
   // that single bar plots rather than adding a second column.
   const arrivalBarKey = arrivalSource === "farm" ? "farm_kg" : arrivalSource === "other" ? "other_kg" : "total_kg";
   const arrivalHasData = arrivalChartData.some((b) => b.total_kg > 0);
-  const arrivalSubtitle = `DFTC ${arrivalGranularity} arrivals · ${arrivalSourceOption.subtitle} · kilograms${
-    arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
-  }`;
+  const arrivalSourcePieData = useMemo(() => {
+    const totals = arrivalChartData.reduce(
+      (sum, row) => ({
+        farm: sum.farm + Number(row.farm_kg || 0),
+        other: sum.other + Number(row.other_kg || 0)
+      }),
+      { farm: 0, other: 0 }
+    );
+    const combined = totals.farm + totals.other;
+    if (combined <= 0) return [];
+
+    const farmPercent = Math.round((totals.farm / combined) * 100);
+    return [
+      { name: "Farm Source", value: farmPercent, volumeKg: totals.farm },
+      { name: "Other Sources", value: 100 - farmPercent, volumeKg: totals.other }
+    ];
+  }, [arrivalChartData]);
+  const arrivalSubtitle = `DFTC ${arrivalGranularity} arrivals · ${arrivalSourceOption.subtitle} · kilograms${arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
+    }`;
 
   // Load the threshold rules for the current module from the admin API
   useEffect(() => {
@@ -1457,112 +1473,130 @@ function AdminAnalyticsBasis() {
 
         {/* Arrival Pressure Visualizations */}
         {(result.module === "Arrival Pressure" || resultId === "arrival-pressure") && (
-          <div className={vizCardClass}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
-                  Arrival Volume Trend
-                </p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">{arrivalSubtitle}</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <SegmentedControl
-                  value={arrivalSource}
-                  onChange={setArrivalSource}
-                  options={ARRIVAL_SOURCE_OPTIONS}
-                />
-                <SegmentedControl
-                  value={arrivalGranularity}
-                  onChange={setArrivalGranularity}
-                  options={ARRIVAL_GRANULARITY_OPTIONS}
-                />
-                {arrivalYears.length > 0 && (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
-                    <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
-                    <select
-                      value={arrivalActiveYear ?? ""}
-                      onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
-                      aria-label="Arrival year"
-                      className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
-                    >
-                      {arrivalYears.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {arrivalHasData ? (
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart
-                  data={arrivalChartData}
-                  margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
-                  barCategoryGap="32%"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }}
-                    tickLine={false}
-                    axisLine={false}
+          <>
+            <div className={vizCardClass}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                    Arrival Volume Trend
+                  </p>
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">{arrivalSubtitle}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <SegmentedControl
+                    value={arrivalSource}
+                    onChange={setArrivalSource}
+                    options={ARRIVAL_SOURCE_OPTIONS}
                   />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "#9ca3af" }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => Number(v).toLocaleString()}
-                    width={62}
+                  <SegmentedControl
+                    value={arrivalGranularity}
+                    onChange={setArrivalGranularity}
+                    options={ARRIVAL_GRANULARITY_OPTIONS}
                   />
-                  <RechartsTooltip
-                    cursor={{ fill: "rgba(0,0,0,0.03)" }}
-                    content={
-                      <ArrivalTrendTooltip
-                        sourceLabel={arrivalSourceOption.label}
-                        sourceValueFor={arrivalSourceValueFor}
-                      />
-                    }
-                  />
-                  <Bar
-                    dataKey={arrivalBarKey}
-                    name={arrivalSourceOption.label}
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={44}
-                    fill={NO_QUARTILE_BAR_COLOR}
-                  >
-                    {arrivalChartData.map((entry) => (
-                      <Cell
-                        key={`bar-${entry.key}`}
-                        fill={entry.total_kg > 0 ? classificationColor(entry.classification) : "transparent"}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="w-full flex-1 flex flex-col justify-center">
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
-                    <YAxis hide domain={[0, 10]} />
-                    <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
-                  <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-                    {arrivalLoading
-                      ? "Loading arrival volume…"
-                      : arrivalError || "No arrival volume records for this scope."}
-                  </span>
+                  {arrivalYears.length > 0 && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
+                      <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
+                      <select
+                        value={arrivalActiveYear ?? ""}
+                        onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
+                        aria-label="Arrival year"
+                        className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
+                      >
+                        {arrivalYears.map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+
+              {arrivalHasData ? (
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart
+                    data={arrivalChartData}
+                    margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
+                    barCategoryGap="32%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#9ca3af" }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => Number(v).toLocaleString()}
+                      width={62}
+                    />
+                    <RechartsTooltip
+                      cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                      content={
+                        <ArrivalTrendTooltip
+                          sourceLabel={arrivalSourceOption.label}
+                          sourceValueFor={arrivalSourceValueFor}
+                        />
+                      }
+                    />
+                    <Bar
+                      dataKey={arrivalBarKey}
+                      name={arrivalSourceOption.label}
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={44}
+                      fill={NO_QUARTILE_BAR_COLOR}
+                    >
+                      {arrivalChartData.map((entry) => (
+                        <Cell
+                          key={`bar-${entry.key}`}
+                          fill={entry.total_kg > 0 ? classificationColor(entry.classification) : "transparent"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="w-full flex-1 flex flex-col justify-center">
+                  <ResponsiveContainer width="100%" height={340}>
+                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
+                      <YAxis hide domain={[0, 10]} />
+                      <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#e2e8f0" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
+                    <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
+                      {arrivalLoading
+                        ? "Loading arrival volume…"
+                        : arrivalError || "No arrival volume records for this scope."}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={vizCardClass}>
+              <div>
+                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                  Arrival Volume Sources Distribution
+                </p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                  Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
+                </p>
+              </div>
+              <ArrivalSourcePieChart
+                showEmpty={!arrivalSourcePieData.length}
+                data={arrivalSourcePieData}
+                height={340}
+              />
+            </div>
+          </>
         )}
 
         {/* Historical Production Visualizations */}
