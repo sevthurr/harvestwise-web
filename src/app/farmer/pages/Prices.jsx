@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   ChevronRight,
@@ -16,14 +16,35 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
-import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
+import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
+import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
   Falling: { color: "text-red-500", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
   Stable: { color: "text-blue-500", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
+};
+
+const getForecastPeriod = (forecast) => {
+  const dates = (forecast?.points ?? [])
+    .map((point) => point.forecast_date)
+    .filter((date) => typeof date === "string" && !Number.isNaN(Date.parse(`${date}T00:00:00`)))
+    .sort();
+  const endDate = forecast?.forecast_date || dates.at(-1);
+  if (!endDate || Number.isNaN(Date.parse(`${endDate}T00:00:00`))) return null;
+
+  const startDate = dates[0] || endDate;
+  const formatDate = (date) => new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+  const start = formatDate(startDate);
+  const end = formatDate(endDate);
+  return startDate === endDate ? end : `${start} – ${end}`;
 };
 
 const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
@@ -134,19 +155,31 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
 const CropPriceCard = ({ commodity, data, onViewDetails }) => {
   const { t } = useLanguage();
   const unit = commodity.unitOfMeasure || 'kg';
-  
-  const hasForecast = data.range && data.range !== `-/${unit}` && data.range !== `-\u2009/\u2009${unit}`;
-  const cfg = hasForecast ? (DIR_CFG[data.direction] || DIR_CFG.default) : DIR_CFG.default;
+  const forecast = data.trendDetail?.forecast;
+  const forecastPrice = forecast?.forecast_midpoint != null
+    ? Number(forecast.forecast_midpoint)
+    : null;
+  const hasForecast = (data.trendDetail?.recent_records?.length ?? 0) > 0
+    && forecastPrice != null;
+  const direction = hasForecast ? forecast.trend : null;
+  const horizonDays = hasForecast ? forecast.horizon_days : 7;
+  const forecastPeriod = hasForecast ? getForecastPeriod(forecast) : null;
+  const cfg = direction ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const outlook = hasForecast
-    ? (data.direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : data.direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))
-    : t("farmer.prices.trend_no_data", {}, "No trend data");
+    ? (direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))
+    : data.trendError
+      ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
+      : t("farmer.prices.trend_no_data", {}, "No trend data");
 
   const formatPriceValue = (value) => {
     if (value === null || value === undefined || value === '') return `-/${unit}`;
     const clean = typeof value === 'string' ? value.replace(/^₱+/, '') : value;
     return `₱${clean}/${unit}`;
   };
+  const forecastRange = forecast?.lower_forecast != null && forecast?.upper_forecast != null
+    ? `₱${Number(forecast.lower_forecast).toFixed(2)}–₱${Number(forecast.upper_forecast).toFixed(2)}/${unit}`
+    : null;
 
   return (
     <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
@@ -163,7 +196,13 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
         </div>
         <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
           {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-          <span className="text-[13px] font-medium">{hasForecast ? t(cfg.key, {}, cfg.label) : t("farmer.prices.trend_no_data", {}, "No trend data")}</span>
+          <span className="text-[13px] font-medium">
+            {data.trendLoading
+                ? t("farmer.prices.trend_loading", {}, "Loading trend")
+              : hasForecast
+                ? t(cfg.key, {}, cfg.label)
+                : outlook}
+          </span>
         </div>
       </div>
 
@@ -205,10 +244,24 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
 
       {/* Outlook summary */}
       <div className="rounded-xl bg-[var(--hw-neutral-50)] px-3.5 py-3 space-y-0.5">
-        <p className={`text-[13px] font-medium ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>{outlook}</p>
+        <p className={`text-[13px] font-medium ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+          {data.trendLoading ? t("farmer.prices.trend_loading", {}, "Loading trend") : outlook}
+        </p>
         <p className="text-[12px] text-[var(--hw-neutral-900)]">
-          {t("farmer.prices.expected_horizon", { days: data.horizonDays || 7 }, `Expected next ${data.horizonDays || 7} days:`)}{" "}
-          <span className="font-semibold text-[var(--hw-neutral-900)]">{hasForecast ? data.range : `-/${unit}`}</span>
+          {forecastPeriod
+            ? t("farmer.prices.forecast_period", { period: forecastPeriod }, `Forecast period ${forecastPeriod}:`)
+            : t("farmer.prices.forecast_horizon", { days: horizonDays }, `Forecast horizon: ${horizonDays} days:`)}{" "}
+          <span className="font-semibold text-[var(--hw-neutral-900)]">
+            {hasForecast ? formatPriceValue(forecastPrice) : t("farmer.prices.forecast_unavailable", {}, "Not available")}
+          </span>
+        </p>
+        {hasForecast && forecastRange && (
+          <p className="text-[11px] text-[var(--hw-neutral-600)]">
+            {t("farmer.prices.forecast_range", {}, "Possible range")}: {forecastRange}
+          </p>
+        )}
+        <p className="text-[10px] text-[var(--hw-neutral-500)]">
+          {t("farmer.prices.trend_series_label", {}, "Bankerohan Retail")}
         </p>
       </div>
 
@@ -217,22 +270,24 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
         <p className="text-[12px] text-[var(--hw-neutral-500)] truncate">
           {(() => {
             const name = commodity.baseName || commodity.name || '';
-            const unit = commodity.unitOfMeasure || 'kg';
-            const hasForecastRange = data.range && !data.range.startsWith('-');
-            // data.range is already formatted as "₱X.XX–₱Y.YY/kg"
-            const range = hasForecastRange ? data.range : null;
-            const days = data.horizonDays || 7;
-            if (data.direction === 'Rising') {
-              return hasForecastRange
+            const range = forecastRange || (forecastPrice != null ? formatPriceValue(forecastPrice) : null);
+            const days = horizonDays;
+            if (!hasForecast) {
+              return data.trendError
+                ? t('farmer.prices.trend_unavailable_for_crop', { commodity: name }, `Price trend is unavailable for ${name}.`)
+                : t('farmer.prices.no_trend_for_crop', { commodity: name }, `No price trend data is available for ${name}.`);
+            }
+            if (direction === 'Rising') {
+              return range
                 ? t('farmer.prices.advisory_rising', { commodity: name, range, days }, `Prices for ${name} are expected to rise to ${range} over the next ${days} days.`)
                 : t('farmer.prices.advisory_rising_no_range', { commodity: name }, `Prices for ${name} are expected to rise in the coming days.`);
             }
-            if (data.direction === 'Falling') {
-              return hasForecastRange
+            if (direction === 'Falling') {
+              return range
                 ? t('farmer.prices.advisory_falling', { commodity: name, range, days }, `Prices for ${name} are expected to drop to ${range} over the next ${days} days.`)
                 : t('farmer.prices.advisory_falling_no_range', { commodity: name }, `Prices for ${name} are expected to drop in the coming days.`);
             }
-            return hasForecastRange
+            return range
               ? t('farmer.prices.advisory_stable', { commodity: name, range }, `Prices for ${name} are expected to remain stable around ${range}.`)
               : t('farmer.prices.advisory_stable_no_range', { commodity: name }, `Prices for ${name} are expected to remain stable.`);
           })()}
@@ -263,15 +318,16 @@ function PricesPage() {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return parseResponse(response);
     },
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 
-  const { commodities, priceData } = useMemo(() => {
-    if (!apiData) return { commodities: [], priceData: {} };
+  const { commodities } = useMemo(() => {
+    if (!apiData) return { commodities: [] };
 
     const items = apiData.items || [];
     const baseMap = new Map();
-    const transformed = {};
 
     items.forEach(item => {
       const camelItem = toCamelCase(item);
@@ -285,23 +341,12 @@ function PricesPage() {
         baseName = baseName.split(' (')[0].trim();
       }
       const uom = camelItem.unitOfMeasure || 'kg';
-      const hasLower = camelItem.forecast?.lowerForecast != null;
-      const hasUpper = camelItem.forecast?.upperForecast != null;
-
       const itemPrices = {
         bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
         bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
         dftcRetail: camelItem.prices?.dftcRetail ?? null,
         dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
-        direction: camelItem.forecast?.trend || 'Stable',
-        horizonDays: camelItem.forecast?.horizonDays || 7,
-        percentChange: camelItem.forecast?.percentChange ?? null,
-        range: (hasLower && hasUpper)
-          ? `${formatPrice(camelItem.forecast.lowerForecast)}\u2013${formatPrice(camelItem.forecast.upperForecast)}/${uom}`
-          : `-\u2009/\u2009${uom}`,
       };
-
-      transformed[camelItem.commodityId] = itemPrices;
 
       const variantItem = {
         id: camelItem.commodityId,
@@ -350,23 +395,40 @@ function PricesPage() {
           bangkerohanWholesale: existing.displayData.bangkerohanWholesale ?? itemPrices.bangkerohanWholesale,
           dftcRetail: existing.displayData.dftcRetail ?? itemPrices.dftcRetail,
           dftcWholesale: existing.displayData.dftcWholesale ?? itemPrices.dftcWholesale,
-          direction: (existing.displayData.direction && existing.displayData.direction !== 'Stable') 
-            ? existing.displayData.direction 
-            : itemPrices.direction,
-          horizonDays: existing.displayData.horizonDays || itemPrices.horizonDays,
-          percentChange: existing.displayData.percentChange ?? itemPrices.percentChange,
-          range: (existing.displayData.range && !existing.displayData.range.startsWith('-')) 
-            ? existing.displayData.range 
-            : itemPrices.range,
         };
       }
     });
 
     return {
       commodities: Array.from(baseMap.values()),
-      priceData: transformed,
     };
   }, [apiData]);
+
+  const priceTrendQueries = useQueries({
+    queries: commodities.map((commodity) => ({
+      queryKey: ["farmer-price-card-trend", commodity.id, "bangkerohan_retail", 7],
+      queryFn: () => pricesApi.getPriceDetail(commodity.id, {
+        price_type: "bangkerohan_retail",
+        horizon: 7,
+        records_limit: 100,
+      }),
+      enabled: Boolean(commodity.id),
+      staleTime: 60 * 1000,
+      refetchOnMount: true,
+    })),
+  });
+
+  const priceTrendByCommodity = useMemo(
+    () => new Map(commodities.map((commodity, index) => [
+      commodity.id,
+      {
+        trendDetail: priceTrendQueries[index]?.data,
+        trendLoading: priceTrendQueries[index]?.isPending || priceTrendQueries[index]?.isFetching,
+        trendError: priceTrendQueries[index]?.isError,
+      },
+    ])),
+    [commodities, priceTrendQueries],
+  );
   
   const activeCount = (filter.direction !== "All" ? 1 : 0)
     + (filter.sortBy !== "name" ? 1 : 0)
@@ -380,18 +442,18 @@ function PricesPage() {
   
   const visible = useMemo(() => {
     let list = commodities.map(commodity => {
-      const data = priceData[commodity.id] || commodity.displayData;
+      const data = commodity.displayData;
       return {
         ...commodity,
-        displayData: data || {
+        displayData: {
+          ...(data || {
           bangkerohanRetail: null,
           bangkerohanWholesale: null,
           dftcRetail: null,
           dftcWholesale: null,
-          direction: 'Stable',
-          horizonDays: 7,
-          range: `-/${commodity.unitOfMeasure || 'kg'}`,
-        }
+          }),
+          ...(priceTrendByCommodity.get(commodity.id) || {}),
+        },
       };
     });
     
@@ -422,7 +484,7 @@ function PricesPage() {
     });
     
     return list;
-  }, [searchQuery, filter, commodities, priceData]);
+  }, [searchQuery, filter, commodities, priceTrendByCommodity]);
   
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">

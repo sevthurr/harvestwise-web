@@ -13,18 +13,18 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
-import { apiGet, parseResponse } from "../../global/api";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton, SkeletonListRow } from "../components/shared/FarmerSkeletons";
 import PlantingSuitabilityCard from "../components/crops/PlantingSuitabilityCard";
 import { getPhaseConfig } from "../components/crops/types";
 import { useCrops } from "../components/crops/CropsContext";
 import { useAuth } from "../../global/contexts/AuthContext";
+import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
@@ -32,6 +32,26 @@ const DIR_CFG = {
   Stable: { color: "text-blue-500", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
+
+function formatForecastPeriod(forecast) {
+  const forecastDates = (forecast?.points ?? [])
+    .map((point) => point.forecast_date)
+    .filter((date) => typeof date === "string" && !Number.isNaN(Date.parse(`${date}T00:00:00`)))
+    .sort();
+  const endDate = forecast?.forecast_date || forecastDates.at(-1);
+  if (!endDate || Number.isNaN(Date.parse(`${endDate}T00:00:00`))) return null;
+
+  const startDate = forecastDates[0] || endDate;
+  const formatDate = (date) => new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+  const start = formatDate(startDate);
+  const end = formatDate(endDate);
+  return startDate === endDate ? end : `${start} – ${end}`;
+}
 
 /**
  * Tracks whether a scroll region actually overflows, so the "scroll for more"
@@ -222,30 +242,35 @@ function DashboardPage() {
   const pricesQuery = useQuery({
     queryKey: ["dashboard", "prices"],
     queryFn: async () => {
-      const res = await apiGet("/prices?is_top10=true&page_size=50");
-      if (!res.ok) return [];
-      const pricesData = await parseResponse(res);
+      const pricesData = await pricesApi.getPriceList({ is_top10: true, page_size: 50 });
       const baseMap = new Map();
       (pricesData?.items || []).forEach(item => {
         const camelItem = toCamelCase(item);
         const isTop = camelItem.isTop10 === true || item.is_top10 === true;
         if (!isTop) return;
         const name = camelItem.name || '\u2013';
-        const retailPrice = camelItem.prices?.bangkerohanRetail ?? camelItem.prices?.dftcRetail ?? null;
+        const bangkerohanRetail = camelItem.prices?.bangkerohanRetail;
+        const dftcRetail = camelItem.prices?.dftcRetail;
+        const priceType = bangkerohanRetail != null
+          ? "bangkerohan_retail"
+          : dftcRetail != null
+            ? "dftc_retail"
+            : null;
+        const retailPrice = bangkerohanRetail ?? dftcRetail ?? null;
         if (!baseMap.has(name)) {
           baseMap.set(name, {
             id: camelItem.commodityId,
             name,
             baseName: camelItem.baseName,
             price: retailPrice,
+            priceType,
             uom: camelItem.unitOfMeasure || 'kg',
-            direction: camelItem.forecast?.trend || null
           });
         } else if (retailPrice !== null && baseMap.get(name).price === null) {
           const existing = baseMap.get(name);
           existing.price = retailPrice;
-          existing.direction = camelItem.forecast?.trend || existing.direction;
           existing.id = camelItem.commodityId;
+          existing.priceType = priceType;
         }
       });
       return Array.from(baseMap.values());
@@ -255,6 +280,19 @@ function DashboardPage() {
 
   const farmerProfile = profileQuery.data;
   const prices = pricesQuery.data ?? [];
+  const priceTrendQueries = useQueries({
+    queries: prices.map((item) => ({
+      queryKey: ["farmer-price-card-trend", item.id, item.priceType, 7],
+      queryFn: () => pricesApi.getPriceDetail(item.id, {
+        price_type: item.priceType,
+        horizon: 7,
+        records_limit: 100,
+      }),
+      enabled: Boolean(item.id && item.priceType),
+      staleTime: 60 * 1000,
+      refetchOnMount: true,
+    })),
+  });
   const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading;
 
   // Re-measured whenever the list content or the page loading state changes.
@@ -355,9 +393,17 @@ function DashboardPage() {
                       ref={pricesListRef}
                       className="divide-y divide-[var(--hw-neutral-100)] flex-1 min-h-0 max-h-[260px] md:max-h-[420px] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                     >
-                      {prices.map((item) => {
-                        const hasForecast = item.price != null && item.direction != null;
-                        const cfg = hasForecast ? (DIR_CFG[item.direction] || DIR_CFG.default) : DIR_CFG.default;
+                      {prices.map((item, index) => {
+                        const trendQuery = priceTrendQueries[index];
+                        const trendDetail = trendQuery?.data;
+                        const forecast = trendDetail?.forecast;
+                        const direction = forecast?.trend;
+                        const forecastPeriod = formatForecastPeriod(forecast);
+                        const hasForecast = item.price != null
+                          && (trendDetail?.recent_records?.length ?? 0) > 0
+                          && forecast?.forecast_midpoint != null
+                          && direction != null;
+                        const cfg = hasForecast ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
                         const DirIcon = cfg.Icon;
                         const count = getVariants(item.name).length;
                         const formattedPrice = item.price != null && item.price !== '' ? `₱${item.price}/${item.uom || 'kg'}` : `-/${item.uom || 'kg'}`;
@@ -383,7 +429,22 @@ function DashboardPage() {
                             </div>
                             <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
                               {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-                              <span className="text-[13px] font-medium">{hasForecast ? t(cfg.key, {}, cfg.label) : t("farmer.prices.trend_no_data", {}, "No trend data")}</span>
+                              <span className="flex flex-col items-end text-[13px] font-medium">
+                                <span>
+                                  {item.id && item.priceType && (trendQuery?.isPending || trendQuery?.isFetching)
+                                  ? t("farmer.prices.trend_loading", {}, "Loading trend")
+                                  : hasForecast
+                                    ? t(cfg.key, {}, cfg.label)
+                                    : trendQuery?.isError
+                                      ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
+                                      : t("farmer.prices.trend_no_data", {}, "No trend data")}
+                                </span>
+                                {hasForecast && forecastPeriod && (
+                                  <span className="text-[10px] font-normal text-[var(--hw-neutral-500)]">
+                                    {t("farmer.prices.forecast_period", { period: forecastPeriod }, `Forecast period ${forecastPeriod}:`)}
+                                  </span>
+                                )}
+                              </span>
                             </div>
                           </button>
                         );
