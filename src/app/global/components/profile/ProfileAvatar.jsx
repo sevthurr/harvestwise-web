@@ -4,11 +4,12 @@ import { authApi } from "../../../../services/api";
 import { resolveMediaUrl } from "../../api";
 import { useAuth } from "../../contexts/AuthContext";
 import { AvatarCropper } from "./AvatarCropper";
+import { UserAvatar } from "./UserAvatar";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
 const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
-  const { refreshUser } = useAuth();
+  const { refreshUser, patchUser } = useAuth();
   const fileRef = useRef(null);
   const [avatarSrc, setAvatarSrc] = useState(() => resolveMediaUrl(src));
   const [uploading, setUploading] = useState(false);
@@ -45,17 +46,22 @@ const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
     try {
       const res = await authApi.uploadProfilePicture(cropped);
       // Cloudinary is the only backend, so this is always an absolute HTTPS URL.
-      setAvatarSrc(resolveMediaUrl(res?.profile_picture_path));
+      const stored = res?.profile_picture_path ?? null;
+      setAvatarSrc(resolveMediaUrl(stored));
 
-      // Also refresh the auth context so the new path lands in the shared user
-      // object and the IndexedDB cache. Without this, `avatarSrc` is local
-      // state seeded from `user.profile_picture_path` only on mount — so a
-      // remount or a navigation away and back re-reads the stale value and the
-      // picture visibly reverts. Most visible offline, where /auth/me is
-      // unreachable and the cached copy is what gets restored.
-      //
-      // Failure here is not an upload failure: the picture is already stored,
-      // so it must not surface an error over a successful save.
+      // Write the path into the shared user object directly. The upload
+      // response already carries it, and every avatar in the app — the topnav
+      // circle in all three role layouts included — reads it from there, so
+      // making them wait on the refreshUser() round-trip below meant the new
+      // picture stayed invisible everywhere except this circle whenever that
+      // request was slow, failed, or answered from a stale cache.
+      if (stored) await patchUser({ profile_picture_path: stored });
+
+      // Still refresh, so the session snapshot, IndexedDB cache, and anything
+      // the server derived line up with what was just stored. This is
+      // reconciliation, not the update path: failure here is not an upload
+      // failure — the picture is already stored — so it must not surface an
+      // error over a successful save.
       try {
         await refreshUser();
       } catch {
@@ -69,11 +75,13 @@ const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
   };
 
   return <div className="relative flex-shrink-0 group">
-      <div className="w-16 h-16 rounded-full overflow-hidden bg-[var(--hw-green-700)] flex items-center justify-center">
-        {avatarSrc
-          ? <img src={avatarSrc} alt={alt} className="w-full h-full object-cover" />
-          : <span className="text-white text-[22px] font-bold select-none">{initials}</span>}
-      </div>
+      <UserAvatar
+        src={avatarSrc}
+        initials={initials}
+        alt={alt}
+        className="w-16 h-16"
+        textClassName="text-[22px]"
+      />
       <button
     type="button"
     onClick={() => fileRef.current?.click()}

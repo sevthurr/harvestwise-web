@@ -24,6 +24,11 @@ import {
   PRICE_CATEGORIES,
   UOM_OPTIONS
 } from "./dftc-add-data-data";
+import {
+  MARKET_TABS,
+  clearPrefillCache,
+  loadPrefillSnapshot
+} from "./dftcPricePrefill";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
@@ -57,14 +62,6 @@ const CATEGORY_OPTIONS = [
   { id: "others", name: "Others" }
 ];
 
-const MARKET_TABS = [
-  { id: "bangkerohan-retail", label: "Bangkerohan Retail", market: "Bangkerohan Public Market", priceType: "Retail", sourceId: "bankerohan", columnKey: "bankRetail" },
-  { id: "bangkerohan-wholesale", label: "Bangkerohan Wholesale", market: "Bangkerohan Public Market", priceType: "Wholesale", sourceId: "bankerohan", columnKey: "bankWholesale" },
-  { id: "bangkerohan-landing", label: "Bangkerohan Landing", market: "Bangkerohan Public Market", priceType: "Landing", sourceId: "bankerohan", columnKey: "bankLanding" },
-  { id: "dftc-retail", label: "DFTC Retail", market: "DFTC Taboan", priceType: "Retail", sourceId: "dftc", columnKey: "dftcRetail" },
-  { id: "dftc-wholesale", label: "DFTC Wholesale", market: "DFTC Taboan", priceType: "Wholesale", sourceId: "dftc", columnKey: "dftcWholesale" }
-];
-
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
 const DFTC_BG = "#dae8fc";
@@ -73,6 +70,28 @@ const EMPTY_SAMPLES = ["", "", "", "", ""];
 
 function emptyField(uom = "kg") {
   return { samples: [...EMPTY_SAMPLES], uom, low: null, high: null, prevailing: null };
+}
+
+function emptyTabFields() {
+  return Object.fromEntries(MARKET_TABS.map((t) => [t.id, {}]));
+}
+
+function emptyTabMaps() {
+  return Object.fromEntries(MARKET_TABS.map((t) => [t.id, new Map()]));
+}
+
+function emptyTabSets() {
+  return Object.fromEntries(MARKET_TABS.map((t) => [t.id, new Set()]));
+}
+
+/** The source date a carried value came from, or null for anything else. */
+function carriedSourceDate(carried, tabId, vid, date) {
+  return carried[tabId]?.has(vid) ? date : null;
+}
+
+/** Field shape for a single stored prevailing price. */
+function priceField(price, uom = "kg") {
+  return { samples: [String(price), "", "", "", ""], uom, low: price, high: price, prevailing: price };
 }
 
 function formatDateLabel(iso) {
@@ -259,6 +278,8 @@ function ConfirmFinalizeModal({
   date,
   totalRecords,
   tabBreakdown,
+  skippedCarried,
+  carriedDate,
   encodedBy,
   encodedByRole,
   reviewedBy,
@@ -293,6 +314,15 @@ function ConfirmFinalizeModal({
               <span className="text-[13px] font-medium text-[var(--hw-green-800)]">Total Price Records to Save</span>
               <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{totalRecords}</span>
             </div>
+            {skippedCarried > 0 && (
+              <div className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>
+                  {skippedCarried} value{skippedCarried === 1 ? "" : "s"} carried from {formatDateLabel(carriedDate)} {skippedCarried === 1 ? "was" : "were"} left unchanged and will <strong>not</strong> be saved as {formatDateLabel(date)} prices.
+                </span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px] text-[var(--hw-neutral-700)] bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-200)]">
               <div>
                 <p className="font-semibold text-[var(--hw-neutral-900)] mb-1">Bangkerohan Public Market</p>
@@ -555,6 +585,29 @@ function AnalyticsCoverageOverlay({ onClose }) {
   );
 }
 
+// ─── Review price cell ───────────────────────────────────────────────────────
+/** A price cell that dims a value the user never touched, so the review screen
+ *  does not present a previous-day carry as something that will be saved. */
+function ReviewPriceCell({ bg, value, skipped, carriedDate }) {
+  return (
+    <td
+      style={{
+        background: bg,
+        border: "1px solid #999",
+        padding: "4px 8px",
+        textAlign: "right",
+        fontWeight: value !== null ? "bold" : "normal",
+        fontStyle: skipped ? "italic" : "normal",
+        color: skipped ? "#92400e" : undefined
+      }}
+      title={skipped ? `Carried from ${formatDateLabel(carriedDate)} — not saved unless changed` : undefined}
+    >
+      {value !== null ? `₱${fmt(value)}` : ""}
+      {skipped && <span className="block text-[9px] font-medium not-italic">from {formatDateLabel(carriedDate)}</span>}
+    </td>
+  );
+}
+
 // ─── Computed pill ───────────────────────────────────────────────────────────
 function ComputedCell({ label, value, accent }) {
   const colors = accent
@@ -571,13 +624,13 @@ function ComputedCell({ label, value, accent }) {
 }
 
 // ─── Mobile variant row ──────────────────────────────────────────────────────
-function MobileVariantRow({ v, f, onUpdateSample, onUpdateUom }) {
+function MobileVariantRow({ v, f, carriedFrom, onUpdateSample, onUpdateUom }) {
   const [expanded, setExpanded] = useState(false);
   const hasVal = hasValue(f);
   const { low, high, prevailing } = f;
 
   return (
-    <div className={`border-b border-[var(--hw-neutral-50)] last:border-0 ${hasVal ? "bg-[var(--hw-green-50)]/30" : ""}`}>
+    <div className={`border-b border-[var(--hw-neutral-50)] last:border-0 ${hasVal ? "bg-[var(--hw-green-50)]/30" : ""} ${carriedFrom ? "border-l-2 border-amber-400" : ""}`}>
       <button
         type="button"
         className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
@@ -585,6 +638,11 @@ function MobileVariantRow({ v, f, onUpdateSample, onUpdateUom }) {
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[13px] font-medium text-[var(--hw-neutral-800)] truncate">{v.name}</span>
+          {carriedFrom && (
+            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-800 whitespace-nowrap">
+              from {formatDateLabel(carriedFrom)}
+            </span>
+          )}
           {hasVal && (
             <span className="shrink-0 text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-1.5 py-0.5">
               {parseValid(f.samples).length} sample{parseValid(f.samples).length !== 1 ? "s" : ""}
@@ -687,6 +745,7 @@ function DFTCPriceInput() {
   const [saveStatus, setSaveStatus] = useState("idle");
   const saveTimer = useRef(null);
   const oldTimer = useRef(null);
+  const navTimer = useRef(null);
 
   const [hasDraft, setHasDraft] = useState(() => {
     try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
@@ -702,6 +761,13 @@ function DFTCPriceInput() {
   const [dateError, setDateError] = useState("");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
+  // Stable identity for the commodity resolver: the prefill module keys its
+  // session memo on it, so a fresh closure per render would defeat the cache.
+  // It only reads catalogRef, which never changes identity.
+  const stableResolverRef = useRef(null);
+  if (stableResolverRef.current === null) {
+    stableResolverRef.current = (com, v) => resolveCommodityId(com, v);
+  }
 
   // DFTC Personnel from database (with standard staff fallbacks)
   const [staffList, setStaffList] = useState([
@@ -716,18 +782,41 @@ function DFTCPriceInput() {
     return new Date().toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   });
 
-  const prefilledRef = useRef({
-    "bangkerohan-retail": new Map(),
-    "bangkerohan-wholesale": new Map(),
-    "bangkerohan-landing": new Map(),
-    "dftc-retail": new Map(),
-    "dftc-wholesale": new Map()
-  });
-  const [prefillCount, setPrefillCount] = useState(0);
+  // Same-day rows only. This map is the sole input to remove_records, and a
+  // previous-day row has no row on the selected date to delete.
+  const prefilledRef = useRef(emptyTabMaps());
+  // tabId -> Set<vid> of values that came from the previous calendar day.
+  const carriedRef = useRef(emptyTabSets());
+  // "tabId|vid" of every field the user touched, so a carried value is only
+  // written when it was actually edited.
+  const dirtyRef = useRef(new Set());
+  // Monotonic load id: a slow response for date A must not overwrite a newer one.
+  const prefillSeqRef = useRef(0);
+
+  const [sameDayCount, setSameDayCount] = useState(0);
+  const [carriedCount, setCarriedCount] = useState(0);
+  const [unrenderableCount, setUnrenderableCount] = useState(0);
+  const [carriedDate, setCarriedDate] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  /** True only for a previous-day value the user has not touched. */
+  const isUntouchedCarried = useCallback(
+    (tabId, vid) =>
+      carriedRef.current[tabId]?.has(vid) === true &&
+      !dirtyRef.current.has(`${tabId}|${vid}`),
+    []
+  );
+
   const draftRef = useRef({});
-  draftRef.current = { selectedDate, tabFields, customVariants, customCommodities };
+  draftRef.current = {
+    selectedDate,
+    tabFields,
+    customVariants,
+    customCommodities,
+    carried: Object.fromEntries(MARKET_TABS.map((t) => [t.id, [...(carriedRef.current[t.id] ?? [])]])),
+    carriedDate,
+    dirty: [...dirtyRef.current]
+  };
 
   // Fetch DFTC staff profiles from database
   useEffect(() => {
@@ -795,7 +884,7 @@ function DFTCPriceInput() {
         const hasLocalDraft = (() => {
           try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
         })();
-        if (!hasLocalDraft) await loadDayPrefill(selectedDate);
+        if (!hasLocalDraft) await loadDayPrefill(selectedDate, { preserveEdits: true });
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
@@ -820,7 +909,10 @@ function DFTCPriceInput() {
     }, 1500);
   }, []);
 
+  // Timers scheduled above outlive unmount and fire setState/navigate on a dead
+  // tree, which leaks navigation into whatever screen the user moved to.
   useEffect(() => () => {
+    if (navTimer.current) clearTimeout(navTimer.current);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
   }, []);
@@ -841,6 +933,20 @@ function DFTCPriceInput() {
     if (savedData?.tabFields) setTabFields(savedData.tabFields);
     if (savedData?.customVariants) setCustomVariants(savedData.customVariants);
     if (savedData?.customCommodities) setCustomCommodities(savedData.customCommodities);
+    // A draft written before provenance existed has no `carried` key at all.
+    // Treat it as all same-day (today's behaviour) so a retyped draft is never
+    // silently dropped from the payload.
+    const carried = emptyTabSets();
+    if (savedData?.carried) {
+      for (const tab of MARKET_TABS) {
+        carried[tab.id] = new Set(savedData.carried[tab.id] ?? []);
+      }
+    }
+    carriedRef.current = carried;
+    dirtyRef.current = new Set(Array.isArray(savedData?.dirty) ? savedData.dirty : []);
+    // carriedRef.current is keyed by tab id, not an iterable of Sets.
+    setCarriedCount(Object.values(carriedRef.current).reduce((n, s) => n + s.size, 0));
+    if (savedData?.carriedDate) setCarriedDate(savedData.carriedDate);
     setDraftDismissed(true);
   }
 
@@ -851,93 +957,86 @@ function DFTCPriceInput() {
       localStorage.removeItem("dftc_price_draft");
       localStorage.removeItem("dftc_price_draft_data");
     } catch { }
-    setTabFields({
-      "bangkerohan-retail": {},
-      "bangkerohan-wholesale": {},
-      "bangkerohan-landing": {},
-      "dftc-retail": {},
-      "dftc-wholesale": {}
-    });
+    setTabFields(emptyTabFields());
     loadDayPrefill(selectedDate);
   }
 
-  // Load existing day prices for the given date across all 5 price columns
-  async function loadDayPrefill(date) {
+  // Load existing prices for the given date across all 5 price columns, then
+  // fall back to the previous calendar day only for markets that have nothing
+  // of their own on the selected date.
+  //
+  // `preserveEdits` is for the mount path: the user may have started typing
+  // while the lookup was in flight, and a prefill must never discard that. A date
+  // change is the opposite — those edits belong to the old date.
+  async function loadDayPrefill(date, { preserveEdits = false } = {}) {
     if (!date) return;
+    const seq = ++prefillSeqRef.current;
+
+    // Reset synchronously, BEFORE the await. With exact-date lookups an empty or
+    // failed response is now the common path, and leaving the previous date's
+    // numbers on screen meant they could be saved under the wrong date.
+    if (preserveEdits) {
+      setTabFields((prev) => {
+        const next = emptyTabFields();
+        for (const tab of MARKET_TABS) {
+          for (const [vid, field] of Object.entries(prev[tab.id] || {})) {
+            if (dirtyRef.current.has(`${tab.id}|${vid}`)) next[tab.id][vid] = field;
+          }
+        }
+        return next;
+      });
+    } else {
+      setTabFields(emptyTabFields());
+      dirtyRef.current = new Set();
+    }
+    prefilledRef.current = emptyTabMaps();
+    carriedRef.current = emptyTabSets();
+    setSameDayCount(0);
+    setCarriedCount(0);
+    setUnrenderableCount(0);
+    setCarriedDate(null);
+
     try {
-      const data = await parseResponse(await apiGet(`/dftc/reports/preview?date=${encodeURIComponent(date)}`));
-      const rows = data?.rows ?? [];
-      if (!Array.isArray(rows) || rows.length === 0) {
-        setPrefillCount(0);
-        return;
-      }
+      const snap = await loadPrefillSnapshot(date, stableResolverRef.current);
+      // A slow response for a date the user has already moved off of.
+      if (!snap || seq !== prefillSeqRef.current) return;
 
-      const nextTabs = {
-        "bangkerohan-retail": {},
-        "bangkerohan-wholesale": {},
-        "bangkerohan-landing": {},
-        "dftc-retail": {},
-        "dftc-wholesale": {}
-      };
+      const nextPrefilled = emptyTabMaps();
+      const nextCarried = emptyTabSets();
+      const prefillByTab = emptyTabFields();
 
-      const newPrefilled = {
-        "bangkerohan-retail": new Map(),
-        "bangkerohan-wholesale": new Map(),
-        "bangkerohan-landing": new Map(),
-        "dftc-retail": new Map(),
-        "dftc-wholesale": new Map()
-      };
-
-      let count = 0;
-
-      for (const row of rows) {
-        // Find matching variant
-        let hit = null;
-        for (const cat of PRICE_CATEGORIES) {
-          for (const com of cat.commodities) {
-            for (const v of com.variants) {
-              if (!hit && resolveCommodityId(com, v) === row.commodity_id) {
-                hit = { cat, com, v };
-              }
-            }
-          }
+      for (const tab of MARKET_TABS) {
+        for (const [vid, entry] of snap.sameDayByTab[tab.id] ?? []) {
+          prefillByTab[tab.id][vid] = priceField(entry.price, entry.uom);
+          nextPrefilled[tab.id].set(vid, entry);
         }
-
-        const vid = hit?.v?.id ?? `com-${row.commodity_id}`;
-        const uom = row.uom || "kg";
-
-        const checks = [
-          { tabId: "bangkerohan-retail", val: row.bangkerohan_retail },
-          { tabId: "bangkerohan-wholesale", val: row.bangkerohan_wholesale },
-          { tabId: "bangkerohan-landing", val: row.bangkerohan_landing },
-          { tabId: "dftc-retail", val: row.dftc_taboan_retail },
-          { tabId: "dftc-wholesale", val: row.dftc_taboan_wholesale }
-        ];
-
-        for (const { tabId, val } of checks) {
-          if (val !== null && val !== undefined) {
-            count += 1;
-            nextTabs[tabId][vid] = {
-              samples: [String(val), "", "", "", ""],
-              uom,
-              low: val,
-              high: val,
-              prevailing: val
-            };
-            newPrefilled[tabId].set(vid, {
-              commodity_id: row.commodity_id,
-              name: row.commodity_name,
-              variety: row.variety || "Base"
-            });
-          }
+        for (const [vid, entry] of snap.carriedByTab[tab.id] ?? []) {
+          prefillByTab[tab.id][vid] = priceField(entry.price, entry.uom);
+          nextCarried[tab.id].add(vid);
         }
       }
 
-      setPrefillCount(count);
-      prefilledRef.current = newPrefilled;
-      setTabFields(nextTabs);
+      prefilledRef.current = nextPrefilled;
+      carriedRef.current = nextCarried;
+      // Merge, never replace: anything the user typed while the lookup was in
+      // flight survives, and a value they edited is not overwritten by a prefill.
+      setTabFields((prev) => {
+        const next = emptyTabFields();
+        for (const tab of MARKET_TABS) {
+          next[tab.id] = { ...prefillByTab[tab.id] };
+          for (const [vid, field] of Object.entries(prev[tab.id] || {})) {
+            if (dirtyRef.current.has(`${tab.id}|${vid}`)) next[tab.id][vid] = field;
+          }
+        }
+        return next;
+      });
+      setSameDayCount(snap.sameDayCount);
+      setCarriedCount(snap.carriedCount);
+      setUnrenderableCount(snap.unrenderableCount);
+      setCarriedDate(snap.carriedCount > 0 ? snap.previousDate : null);
     } catch {
-      setPrefillCount(0);
+      // Prefill is an enhancement; the form stays empty and the user encodes
+      // from scratch. State was already reset above, so nothing to undo here.
     }
   }
 
@@ -966,6 +1065,7 @@ function DFTCPriceInput() {
   }
 
   function updateSample(variantId, sampleIdx, value) {
+    dirtyRef.current.add(`${activeTabId}|${variantId}`);
     setTabFields((prev) => {
       const curTabMap = prev[activeTabId] || {};
       const existing = curTabMap[variantId] || emptyField();
@@ -984,6 +1084,7 @@ function DFTCPriceInput() {
   }
 
   function updateUom(variantId, uom) {
+    dirtyRef.current.add(`${activeTabId}|${variantId}`);
     setTabFields((prev) => {
       const curTabMap = prev[activeTabId] || {};
       const existing = curTabMap[variantId] || emptyField(uom);
@@ -1107,10 +1208,23 @@ function DFTCPriceInput() {
   }
 
   // ── Counts Across All Tabs ──
+  // Counts mean "prices that will actually be written", so an untouched
+  // previous-day carry is excluded: it is a starting point, not an entry.
   function getTabCount(tabId) {
     const map = tabFields[tabId] || {};
-    return Object.values(map).filter(hasValue).length;
+    return Object.entries(map).filter(([vid, f]) => hasValue(f) && !isUntouchedCarried(tabId, vid)).length;
   }
+
+  /** Values pre-filled from the previous day that will not be saved untouched. */
+  const skippedCarriedCount = useMemo(() => {
+    let sum = 0;
+    for (const tab of MARKET_TABS) {
+      for (const [vid, f] of Object.entries(tabFields[tab.id] || {})) {
+        if (hasValue(f) && isUntouchedCarried(tab.id, vid)) sum += 1;
+      }
+    }
+    return sum;
+  }, [tabFields]);
 
   const tabBreakdown = useMemo(() => {
     const res = {};
@@ -1158,6 +1272,14 @@ function DFTCPriceInput() {
 
           if (hasAny) {
             const uom = bankRetailField.uom || bankWholesaleField.uom || bankLandingField.uom || dftcRetailField.uom || dftcWholesaleField.uom || "kg";
+            const skipped = {
+              bankLanding: isUntouchedCarried("bangkerohan-landing", v.id),
+              bankWholesale: isUntouchedCarried("bangkerohan-wholesale", v.id),
+              bankRetail: isUntouchedCarried("bangkerohan-retail", v.id),
+              dftcWholesale: isUntouchedCarried("dftc-wholesale", v.id),
+              dftcRetail: isUntouchedCarried("dftc-retail", v.id)
+            };
+            const anyCarried = MARKET_TABS.some((t) => carriedRef.current[t.id]?.has(v.id));
             catRows.push({
               no: vi === 0 ? itemNumber++ : "",
               cat,
@@ -1165,6 +1287,8 @@ function DFTCPriceInput() {
               v,
               vi,
               uom,
+              carriedDate: anyCarried ? carriedDate : null,
+              skipped,
               bankLanding: bankLandingField.prevailing,
               bankWholesale: bankWholesaleField.prevailing,
               bankRetail: bankRetailField.prevailing,
@@ -1179,7 +1303,7 @@ function DFTCPriceInput() {
       }
     });
     return rows;
-  }, [tabFields, customCommodities, customVariants]);
+  }, [tabFields, customCommodities, customVariants, carriedDate]);
 
   // Filtered review rows based on clicked summary card
   const filteredReviewRows = useMemo(() => {
@@ -1214,7 +1338,11 @@ function DFTCPriceInput() {
 
     for (const tab of MARKET_TABS) {
       const tabMap = tabFields[tab.id] || {};
-      const tabEntered = Object.entries(tabMap).filter(([, f]) => hasValue(f));
+      // An untouched previous-day value is a starting point, not an entry:
+      // committing it would save yesterday's price as today's.
+      const tabEntered = Object.entries(tabMap).filter(([vid, f]) => hasValue(f) && !isUntouchedCarried(tab.id, vid));
+      // prefilledRef holds same-day rows only, so carried vids can never reach
+      // remove_records — there is no row on this date to delete.
       const prefillMap = prefilledRef.current[tab.id] || new Map();
       const removedCommodities = [];
 
@@ -1273,7 +1401,11 @@ function DFTCPriceInput() {
         totalSaved += records.length;
       } catch (err) {
         console.error(`Failed to save submission for ${tab.label}:`, err);
-        failedTabs.push(tab.label);
+        // Carry the real reason. The bare label produced "check your
+        // connection" for every failure, including backend 500s and timeouts.
+        failedTabs.push(
+          err?.message ? `${tab.label} — ${err.message}` : tab.label
+        );
       }
     }
 
@@ -1283,8 +1415,8 @@ function DFTCPriceInput() {
     // discard the local draft that holds the retyped values.
     if (failedTabs.length > 0) {
       setSaveError(
-        `Could not save ${failedTabs.length} of ${MARKET_TABS.length} markets: ${failedTabs.join(", ")}. ` +
-        `Your entries are still on this page — check your connection and press Save again.`
+        `Could not save ${failedTabs.length} of ${MARKET_TABS.length} markets: ${failedTabs.join("; ")}. ` +
+        `Your entries are still on this page — resolve the reason above and press Save again.`
       );
       setIsSaving(false);
       return;
@@ -1306,12 +1438,15 @@ function DFTCPriceInput() {
 
     setHasDraft(false);
     setSaved(true);
+    // Without this the session memo would serve the pre-save snapshot to the
+    // next mount, so a freshly saved day would reload its own previous values.
+    clearPrefillCache();
     queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
     queryClient.invalidateQueries({ queryKey: ["prices"] });
 
-    setTimeout(() => {
+    navTimer.current = setTimeout(() => {
       setIsSaving(false);
       navigate("/dftc/input", {
         state: {
@@ -1361,6 +1496,9 @@ function DFTCPriceInput() {
         {/* Info Banner */}
         <DFTCNotificationBanner variant="info" className="mb-4">
           Review entered prevailing market prices for <strong className="text-[var(--hw-neutral-900)]">{formatDateLabel(selectedDate)}</strong> before saving.
+          {skippedCarriedCount > 0 && (
+            <>{" "}<strong className="text-[var(--hw-neutral-900)]">{skippedCarriedCount}</strong> value{skippedCarriedCount === 1 ? "" : "s"} carried from {formatDateLabel(carriedDate)} {skippedCarriedCount === 1 ? "was" : "were"} left unchanged and will not be saved.</>
+          )}
         </DFTCNotificationBanner>
 
         {/* Summary Badges Card — Clickable to filter details */}
@@ -1491,21 +1629,11 @@ function DFTCPriceInput() {
                           <td style={{ background: LEFT_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "center" }}>
                             {r.uom}
                           </td>
-                          <td style={{ background: BANK_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "right", fontWeight: r.bankLanding !== null ? "bold" : "normal" }}>
-                            {r.bankLanding !== null ? `₱${fmt(r.bankLanding)}` : ""}
-                          </td>
-                          <td style={{ background: BANK_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "right", fontWeight: r.bankWholesale !== null ? "bold" : "normal" }}>
-                            {r.bankWholesale !== null ? `₱${fmt(r.bankWholesale)}` : ""}
-                          </td>
-                          <td style={{ background: BANK_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "right", fontWeight: r.bankRetail !== null ? "bold" : "normal" }}>
-                            {r.bankRetail !== null ? `₱${fmt(r.bankRetail)}` : ""}
-                          </td>
-                          <td style={{ background: DFTC_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "right", fontWeight: r.dftcWholesale !== null ? "bold" : "normal" }}>
-                            {r.dftcWholesale !== null ? `₱${fmt(r.dftcWholesale)}` : ""}
-                          </td>
-                          <td style={{ background: DFTC_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "right", fontWeight: r.dftcRetail !== null ? "bold" : "normal" }}>
-                            {r.dftcRetail !== null ? `₱${fmt(r.dftcRetail)}` : ""}
-                          </td>
+                          <ReviewPriceCell bg={BANK_BG} value={r.bankLanding} skipped={r.skipped.bankLanding} carriedDate={r.carriedDate} />
+                          <ReviewPriceCell bg={BANK_BG} value={r.bankWholesale} skipped={r.skipped.bankWholesale} carriedDate={r.carriedDate} />
+                          <ReviewPriceCell bg={BANK_BG} value={r.bankRetail} skipped={r.skipped.bankRetail} carriedDate={r.carriedDate} />
+                          <ReviewPriceCell bg={DFTC_BG} value={r.dftcWholesale} skipped={r.skipped.dftcWholesale} carriedDate={r.carriedDate} />
+                          <ReviewPriceCell bg={DFTC_BG} value={r.dftcRetail} skipped={r.skipped.dftcRetail} carriedDate={r.carriedDate} />
                         </tr>
                       ))}
                     </React.Fragment>
@@ -1613,12 +1741,27 @@ function DFTCPriceInput() {
               date={selectedDate}
               totalRecords={totalEnteredCount}
               tabBreakdown={tabBreakdown}
+              skippedCarried={skippedCarriedCount}
+              carriedDate={carriedDate}
               encodedBy={encodedBy}
               encodedByRole={encodedByRole}
               reviewedBy={reviewedBy}
               reviewedByRole={reviewedByRole}
               onClose={() => setConfirmOpen(false)}
-              onConfirm={() => { setConfirmOpen(false); handleSave(); }}
+              onConfirm={() => {
+                setConfirmOpen(false);
+                // handleSave can reject outside its own try (registerCommodity at
+                // the top of the loop); without this the modal freezes on
+                // "Saving" forever.
+                handleSave().catch((err) => {
+                  console.error("DFTC price save failed:", err);
+                  setIsSaving(false);
+                  setSaveError(
+                    `Could not save: ${err?.message || "unexpected error"}. ` +
+                    `Your entries are still on this page — press Save again.`
+                  );
+                });
+              }}
             />
           )}
         </div>
@@ -1659,14 +1802,31 @@ function DFTCPriceInput() {
         />
       )}
 
-      {/* Amend banner — existing records for this day were loaded */}
-      {prefillCount > 0 && (
+      {/* Amend banner — records already on file for this day were loaded */}
+      {sameDayCount > 0 && (
         <DFTCNotificationBanner
           variant="info"
           title="Amending existing entry"
-          description={`${prefillCount} existing price records were loaded for ${formatDateLabel(selectedDate)}. Adjust values you need to change, or switch tabs to add more.`}
+          description={`${sameDayCount} existing price records were loaded for ${formatDateLabel(selectedDate)}. Adjust values you need to change, or switch tabs to add more.`}
           className="mb-5"
         />
+      )}
+
+      {/* Carry banner — values came from the previous day, not from this date */}
+      {carriedCount > 0 && (
+        <DFTCNotificationBanner
+          variant="warning"
+          title={`Starting point from ${formatDateLabel(carriedDate)}`}
+          description={`${carriedCount} price values were loaded from the previous day because no records exist yet for ${formatDateLabel(selectedDate)}. Rows are marked "from ${formatDateLabel(carriedDate)}" — they are saved as ${formatDateLabel(selectedDate)} prices only if you change them.`}
+          className="mb-5"
+        />
+      )}
+
+      {/* Disclosure — records this page has no input for, so they cannot be amended here */}
+      {unrenderableCount > 0 && (
+        <p className="mb-5 text-[12px] text-[var(--hw-neutral-600)]">
+          {unrenderableCount} existing price {unrenderableCount === 1 ? "record" : "records"} for commodities not available in this form are left unchanged and are not shown here.
+        </p>
       )}
 
       {/* Header: Back Button, Title, SaveStatusIndicator, Top Hyperlink Review Button */}
@@ -1895,8 +2055,15 @@ function DFTCPriceInput() {
                             className={`hidden md:grid gap-2 items-center px-4 py-2 border-b border-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-50)] transition-colors ${hasValue(f) ? "bg-[var(--hw-green-50)]/20" : ""}`}
                             style={{ gridTemplateColumns: "1fr 88px repeat(5, 78px) 76px 76px 84px" }}
                           >
-                            <div className="pl-6 flex items-center gap-2 min-w-0">
+                            <div
+                              className={`pl-6 flex items-center gap-2 min-w-0 self-stretch ${carriedSourceDate(carriedRef.current, activeTabId, v.id, carriedDate) ? "border-l-2 border-amber-400 -ml-4 pl-4" : ""}`}
+                            >
                               <span className="text-[12px] text-[var(--hw-neutral-800)] truncate">{v.name}</span>
+                              {carriedSourceDate(carriedRef.current, activeTabId, v.id, carriedDate) && (
+                                <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-800 whitespace-nowrap">
+                                  from {formatDateLabel(carriedDate)}
+                                </span>
+                              )}
                             </div>
 
                             <select
@@ -1950,6 +2117,7 @@ function DFTCPriceInput() {
                             <MobileVariantRow
                               v={v}
                               f={f}
+                              carriedFrom={carriedSourceDate(carriedRef.current, activeTabId, v.id, carriedDate)}
                               onUpdateSample={(i, val) => updateSample(v.id, i, val)}
                               onUpdateUom={(uom) => updateUom(v.id, uom)}
                             />
@@ -2025,6 +2193,11 @@ function DFTCPriceInput() {
           className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[var(--shadow-xs)] flex items-center justify-center gap-2 cursor-pointer"
         >
           <span>Review Entered Data</span>
+          {skippedCarriedCount > 0 && (
+            <span className="text-[11px] font-medium text-amber-700 whitespace-nowrap">
+              {skippedCarriedCount} carried from {formatDateLabel(carriedDate)} will be skipped
+            </span>
+          )}
           {totalEnteredCount > 0 && (
             <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold">
               {totalEnteredCount}

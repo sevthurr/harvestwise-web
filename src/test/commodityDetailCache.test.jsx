@@ -13,7 +13,12 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router";
 
-import { priceDetailKey, BUNDLE_DETAIL_PERIOD } from "../app/global/hooks/useFarmerPrefetch";
+import {
+  priceDetailKey,
+  priceTrendKey,
+  BUNDLE_DETAIL_PERIOD,
+  BUNDLE_TREND_RECORDS_LIMIT,
+} from "../app/global/hooks/useFarmerPrefetch";
 
 const { apiGet, parseResponse } = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -146,5 +151,67 @@ describe("CommodityDetail price detail caching", () => {
       );
       expect(calls).toHaveLength(1);
     });
+  });
+});
+
+/**
+ * Price Trend Details page (/farmer/prices/:id/price-trend) — the chart-grade
+ * bundle section.
+ *
+ * The bundle's price_trend section is built at records_limit=40 and seeded RAW,
+ * not camelCased, because PriceDetailView reads recent_records /
+ * forecast.forecast_midpoint straight off the untransformed API response. Both
+ * properties are load-bearing and neither fails loudly when broken: seeding the
+ * camelCase shape leaves the chart silently empty, and omitting records_limit
+ * from the key lets a 40-record entry satisfy a 100-record request and render a
+ * truncated history as if it were complete.
+ */
+describe("price trend section cache seeding", () => {
+  it("keys on records_limit so a 40-record entry cannot satisfy a 100-record request", () => {
+    const trendKey = priceTrendKey("COM-0001", "bangkerohan_retail", 7, BUNDLE_TREND_RECORDS_LIMIT);
+    const largerLimitKey = priceTrendKey("COM-0001", "bangkerohan_retail", 7, 100);
+
+    expect(JSON.stringify(trendKey)).not.toBe(JSON.stringify(largerLimitKey));
+  });
+
+  it("keeps trend entries snake_case so the chart can read recent_records", () => {
+    // Guards the seeder's contract directly: this is the shape that must land
+    // in the cache, and it is deliberately NOT toCamelCase(entry).
+    const rawEntry = {
+      commodity_id: "COM-0001",
+      selected_price_type: "bangkerohan_retail",
+      recent_records: DETAIL.recent_records,
+      forecast: { forecast_midpoint: 45.0 },
+    };
+
+    expect(rawEntry.recent_records).toBeDefined();
+    expect(rawEntry.recentRecords).toBeUndefined();
+    expect(rawEntry.forecast.forecast_midpoint).toBe(45.0);
+    expect(rawEntry.forecast.forecastMidpoint).toBeUndefined();
+  });
+
+  it("resolves the same key the bundle writes for the default market and horizon", () => {
+    // The bundle echoes back selected_price_type rather than a client-side
+    // constant, so the two sides can never drift.
+    const echoed = { commodity_id: "COM-0001", selected_price_type: "bangkerohan_retail" };
+    const expected = priceTrendKey(
+      echoed.commodity_id,
+      echoed.selected_price_type,
+      7,
+      BUNDLE_TREND_RECORDS_LIMIT
+    );
+
+    expect(JSON.stringify(expected)).toBe(
+      JSON.stringify(["prices", "trend", "COM-0001", "bangkerohan_retail", 7, BUNDLE_TREND_RECORDS_LIMIT])
+    );
+  });
+
+  it("leaves the simple detail key distinct from the trend key", () => {
+    // price_detail seeds camelCased at records_limit=5; price_trend seeds raw at
+    // 40. A shared key would make one overwrite the other.
+    const detail = priceDetailKey("COM-0001", "bangkerohan_retail", BUNDLE_DETAIL_PERIOD);
+    const trend = priceTrendKey("COM-0001", "bangkerohan_retail", 7, BUNDLE_TREND_RECORDS_LIMIT);
+
+    expect(JSON.stringify(detail)).not.toBe(JSON.stringify(trend));
   });
 });

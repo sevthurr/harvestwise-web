@@ -10,10 +10,10 @@ const RULE_EDIT_CONFIGS = {
   "Price Outlook": {
     description: "Compares the forecast midpoint with the recent average price to classify the price direction.",
     fields: [
-      { key: "fav_min", label: "Favorable minimum change (%)", defaultValue: "5" },
+      { key: "fav_min", label: "Favorable minimum change (%)", defaultValue: "5", classification: "Favorable", operator: ">" },
       { key: "neut_min", label: "Neutral minimum change (%)", defaultValue: "-5" },
       { key: "neut_max", label: "Neutral maximum change (%)", defaultValue: "5" },
-      { key: "unfav_max", label: "Unfavorable maximum change (%)", defaultValue: "-5" }
+      { key: "unfav_max", label: "Unfavorable maximum change (%)", defaultValue: "-5", classification: "Unfavorable", operator: "<" }
     ],
     sample: [
       { scenario: "Forecast Price Change = 7.5%", result: "Favorable", color: "text-emerald-700" },
@@ -127,32 +127,71 @@ function ruleText(r) {
   if (r.operator == null || r.threshold_value == null) return "-";
   return `${r.operator} ${Math.round(Number(r.threshold_value) * 100) / 100}`;
 }
-const EditModal = ({ ruleName, rules = [], onSaved, onClose }) => {
+const EditModal = ({ ruleName, rules = [], moduleId, onSaved, onClose }) => {
   const config = RULE_EDIT_CONFIGS[ruleName];
   const [values, setValues] = useState(
     Object.fromEntries(config.fields.map((f) => [f.key, f.defaultValue]))
   );
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
   const handleSave = async () => {
+    setSaveError("");
+    setSaving(true);
     try {
+      let written = 0;
       for (const f of config.fields) {
-        if (f.isSelect) continue;
-        const rule = rules.find((r) => r.rule_key === f.key);
-        if (!rule) continue;
+        // A field with no `classification` has no stored rule behind it. It is
+        // skipped rather than invented, so "Neutral minimum/maximum" stay inert
+        // until a rule for them actually exists in the database.
+        if (f.isSelect || !f.classification) continue;
         const val = Number(values[f.key]);
         if (isNaN(val)) continue;
-        await analyticsApi.updateThresholdRule(rule.id, {
-          threshold_value: val,
-          display_text: f.unit ? `${values[f.key]} ${f.unit}` : values[f.key]
-        });
+        const display = f.unit ? `${values[f.key]} ${f.unit}` : values[f.key];
+        // Join on `classification`, NOT `rule_key`. The stored rows carry
+        // descriptive keys (favorable_min_change, unfavorable_max_change) that
+        // share no namespace with these form keys, so a rule_key lookup matched
+        // nothing at all and the modal reported success without ever issuing a
+        // request. Matches the ensureRule pattern in AdminAnalytics.jsx.
+        const existing = rules.find(
+          (r) =>
+            (r.classification || "").toLowerCase() ===
+            f.classification.toLowerCase()
+        );
+        if (existing) {
+          await analyticsApi.updateThresholdRule(existing.id, {
+            threshold_value: val,
+            display_text: display
+          });
+        } else if (moduleId) {
+          await analyticsApi.createThresholdRule(moduleId, {
+            rule_key: f.classification.toLowerCase().replace(/\s+/g, "_"),
+            classification: f.classification,
+            operator: f.operator ?? ">",
+            threshold_value: val,
+            display_text: display
+          });
+        } else {
+          continue;
+        }
+        written += 1;
+      }
+      if (written === 0) {
+        setSaveError(
+          "None of these settings map to a stored threshold rule, so there was nothing to save."
+        );
+        setSaving(false);
+        return;
       }
       onSaved();
+      setSaved(true);
+      setSaving(false);
+      setTimeout(onClose, 800);
     } catch (err) {
-      return;
+      setSaveError(err.message || "Failed to save threshold rules.");
+      setSaving(false);
     }
-    setSaved(true);
-    setTimeout(onClose, 800);
   };
   return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div className="absolute inset-0 bg-black/30" onClick={onClose} />
@@ -204,18 +243,23 @@ const EditModal = ({ ruleName, rules = [], onSaved, onClose }) => {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+      <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex-1 min-w-0">
+          {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+        </div>
         <button
           onClick={onClose}
-          className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
+          disabled={saving}
+          className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
-          className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+          disabled={saving || saved}
+          className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50"
         >
-          {saved ? "Saved!" : "Save Changes"}
+          {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
         </button>
       </div>
     </div>
@@ -272,7 +316,7 @@ function AdminAnalyticsThresholds() {
   const editingRules = editingModule ? rulesByModule[editingModule.id] || [] : [];
 
   return <>
-    {editingRule && <EditModal ruleName={editingRule} rules={editingRules} onSaved={refresh} onClose={() => setEditingRule(null)} />}
+    {editingRule && <EditModal ruleName={editingRule} rules={editingRules} moduleId={editingModule?.id} onSaved={refresh} onClose={() => setEditingRule(null)} />}
 
     <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 

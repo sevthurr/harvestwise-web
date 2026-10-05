@@ -114,15 +114,44 @@ export function resolveNotificationRoute(item, role = "Farmer") {
   }
 
   // 3. Admin Routes
+  //
+  // The backend picks the destination per audit action and always sends a
+  // route (see api/src/modules/notifications/events.py `_resolve_admin_route`),
+  // so the category switch below is only a fallback for rows written before
+  // that resolver existed, or by a producer that sends no route at all. Both
+  // paths must name real pages: /admin/configuration is an orphan mock whose
+  // buttons do nothing, so config work lands on the modules page instead.
   if (item.route) {
     // Avoid legacy redirects
     if (item.route === "/admin/analytics") return "/admin/modules";
-    if (item.route === "/admin/history") return "/admin/import";
+    // Mirrors the router redirect in app/routes.jsx — import history lives
+    // under Data Sources, not Import & Validate.
+    // /admin/history/:id is a real detail page and must pass through — only the
+    // bare list path is the legacy redirect.
+    if (item.route === "/admin/history") return "/admin/data-sources?tab=history";
+    // Pre-fix import rows carry /admin/import and no import_id. New rows land on
+    // the history entry directly, so only repair those that still point at the
+    // form and can be resolved from their audit action.
+    if (item.route === "/admin/import" && meta.import_id) {
+      return `/admin/history/${meta.import_id}`;
+    }
+    // Written by the pre-resolver fan-out. The audit action is still in
+    // metadata, so route it the same way the backend does now.
+    if (item.route === "/admin/configuration") {
+      const action = String(meta.action || "");
+      if (action.startsWith("config.threshold")) return "/admin/modules/thresholds";
+      if (action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
+      return "/admin/modules";
+    }
     return item.route;
   }
 
   switch (cat) {
     case "import_event":
+      // An import alert is about a finished upload. The backend supplies
+      // metadata.import_id for new rows so this opens that upload's own history
+      // entry; /admin/import is only the form that starts one.
+      if (meta.import_id) return `/admin/history/${meta.import_id}`;
       return "/admin/import";
     case "processing_event":
     case "advisory_event":
@@ -130,12 +159,21 @@ export function resolveNotificationRoute(item, role = "Farmer") {
     case "data_event":
       return "/admin/data-sources";
     case "system_event":
-      return "/admin/system";
-    case "config_event":
-      return "/admin/configuration";
+      // Weather syncs are driven from the API Sync tab; anything else under
+      // system.* is a platform-health concern.
+      if (String(meta.action || "").startsWith("system.weather")) {
+        return "/admin/data-sources?tab=api-sync";
+      }
+      return "/admin/system?tab=health";
+    case "config_event": {
+      const action = String(meta.action || "");
+      if (action.startsWith("config.threshold")) return "/admin/modules/thresholds";
+      if (action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
+      return "/admin/modules";
+    }
     case "user_event":
       if (meta.user_id) return `/admin/system/user/${meta.user_id}`;
-      return "/admin/system";
+      return "/admin/system?tab=users";
     case "auth_event":
       return "/admin/audit-logs";
     default:

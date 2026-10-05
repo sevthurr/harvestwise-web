@@ -114,9 +114,9 @@ describe('AdminHistory search', () => {
     const { container } = await renderHistory([ARRIVAL, PRICE]);
     fireEvent.change(searchBox(), { target: { value: 'zzzz-no-such-thing' } });
 
-    // The table falls back to a single colSpan=6 empty-state row.
+    // The table falls back to a single colSpan=5 empty-state row.
     await waitFor(() => {
-      expect(container.querySelector('tbody td[colspan="6"]')).not.toBeNull();
+      expect(container.querySelector('tbody td[colspan="5"]')).not.toBeNull();
     });
     expect(screen.getByText(/Showing 0 of 2 activities/)).toBeInTheDocument();
   });

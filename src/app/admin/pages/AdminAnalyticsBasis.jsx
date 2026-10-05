@@ -27,6 +27,7 @@ import {
   classificationColor,
   monthlyAxisForYear
 } from "../components/analytics/arrivalVolumeSeries";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../global/components/ui/tooltip";
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
@@ -574,6 +575,36 @@ const reliabilityBadgeClass = (status) =>
     : status === "Moderate" || status === "Limited"
       ? "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10"
       : "text-[var(--hw-error)] bg-[var(--hw-error)]/10";
+
+// One band in the Data Reliability legend. The explanation is supplied by the
+// scoring layer in `reliability.py`, so the tooltip can never drift from the
+// cutoffs it describes. `title` keeps a native hover (and a long-press fallback)
+// available where the Radix tooltip is not, matching AdminAuditLogs.
+const ReliabilityBandChip = ({ band }) => {
+  const chip = (
+    <span
+      tabIndex={band.description ? 0 : undefined}
+      title={band.description || undefined}
+      className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${band.description ? "md:cursor-help" : ""} ${reliabilityBadgeClass(band.label)}`}
+    >
+      {band.label} {Number(band.min).toFixed(2)}&ndash;{Number(band.max).toFixed(2)}
+    </span>
+  );
+
+  if (!band.description) return chip;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="max-w-xs bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed z-50"
+      >
+        <p>{band.description}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+};
 
 function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
   const raw = detail?.basis_inputs?.[DETAIL_MODULE_KEYS[resultId]] || {};
@@ -1420,12 +1451,7 @@ function AdminAnalyticsBasis() {
                 <p className="text-[13px] text-[var(--hw-neutral-700)] mb-2">Classification bands</p>
                 <div className="flex flex-wrap gap-2">
                   {result.reliabilityBands.map((band) => (
-                    <span
-                      key={band.label}
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${reliabilityBadgeClass(band.label)}`}
-                    >
-                      {band.label} {Number(band.min).toFixed(2)}&ndash;{Number(band.max).toFixed(2)}
-                    </span>
+                    <ReliabilityBandChip key={band.label} band={band} />
                   ))}
                 </div>
               </div>

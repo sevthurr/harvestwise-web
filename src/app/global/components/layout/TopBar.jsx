@@ -7,6 +7,7 @@ import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { UserAvatar } from "../profile/UserAvatar";
 
 const TopBar = ({
   logo,
@@ -131,9 +132,13 @@ const TopBar = ({
               className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
               aria-label="Account menu"
             >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-xs font-bold select-none">
-                {initials}
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={displayName}
+                className="w-7 h-7"
+                textClassName="text-xs"
+              />
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
 
@@ -144,9 +149,13 @@ const TopBar = ({
                   onClick={() => go("profile")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left border-b border-[var(--hw-neutral-100)]"
                 >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-sm font-bold select-none flex-shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={displayName}
+                    className="w-9 h-9"
+                    textClassName="text-sm"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">{t("auth.role_farmer", {}, "Farmer")}</p>

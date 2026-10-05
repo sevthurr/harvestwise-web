@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { UserAvatar } from "../profile/UserAvatar";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -212,9 +213,13 @@ const AdminLayoutInner = () => {
               onClick={() => setAvatarOpen((v) => !v)}
               className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
             >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center">
-                <span className="text-white text-[11px] font-bold select-none">{initials}</span>
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={displayName}
+                className="w-7 h-7"
+                textClassName="text-[11px]"
+              />
               <span className="hidden sm:block text-[13px] font-medium text-black">{displayName}</span>
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
@@ -230,9 +235,13 @@ const AdminLayoutInner = () => {
     onClick={() => go("/admin/profile")}
     className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-[13px] font-bold select-none">{initials}</span>
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={displayName}
+                    className="w-9 h-9"
+                    textClassName="text-[13px]"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">Admin</p>

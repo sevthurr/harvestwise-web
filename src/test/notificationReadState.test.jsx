@@ -24,7 +24,10 @@ import * as notificationsApi from '../services/api/notificationsApi';
 // Mutable so the "no signed-in user" case can be exercised without re-mocking.
 let currentUser = { id: 'USR-1' };
 
-vi.mock('../app/global/api', () => ({
+// Partial mock: the layouts' topbar avatars read resolveMediaUrl through this
+// module, and a full replacement would strip it out and fail the render.
+vi.mock('../app/global/api', async (importOriginal) => ({
+  ...(await importOriginal()),
   openEventStream: vi.fn(() => ({ close: vi.fn() })),
   buildUrl: (p) => p,
   authHeaders: () => ({}),

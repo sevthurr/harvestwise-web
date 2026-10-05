@@ -138,17 +138,34 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
     );
   });
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const total = WEIGHT_MODULES.reduce((sum, m) => sum + (parseFloat(values[m]) || 0), 0);
   const totalOk = Math.abs(total - 100) < 0.01;
   const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
 
-  const handleSave = () => {
+  // `onSave` resolves to null on success or the failure message. It must be
+  // awaited: setting "Saved!" before the write resolves is what let a rejected
+  // save look identical to a successful one.
+  const handleSave = async () => {
     if (!totalOk) return;
     const formatted = Object.fromEntries(
       WEIGHT_MODULES.map((m) => [m, parseFloat(values[m]) || 0])
     );
-    onSave(phase, formatted);
+    setSaveError("");
+    setSaving(true);
+    let failure;
+    try {
+      failure = await onSave(phase, formatted);
+    } catch (err) {
+      failure = err.message || "Failed to save weights.";
+    }
+    setSaving(false);
+    if (failure) {
+      setSaveError(`${failure} Nothing was changed.`);
+      return;
+    }
     setSaved(true);
     setTimeout(onClose, 600);
   };
@@ -186,19 +203,23 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
           </div>
           {!totalOk && <p className="text-[12px] text-red-600">Weights must total 100%.</p>}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            disabled={!totalOk}
+            disabled={!totalOk || saving || saved}
             onClick={handleSave}
             className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {saved ? "Saved!" : "Save Changes"}
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -211,15 +232,29 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
   const [favMin, setFavMin] = useState(currentRules?.favMin !== undefined ? String(currentRules.favMin) : "");
   const [unfavMax, setUnfavMax] = useState(currentRules?.unfavMax !== undefined ? String(currentRules.unfavMax) : "");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const favNum = parseFloat(favMin);
   const unfavNum = parseFloat(unfavMax);
   const isValid = !isNaN(favNum) && !isNaN(unfavNum) && unfavNum < favNum;
   const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!isValid) return;
-    onSave({ favMin: favNum, unfavMax: unfavNum });
+    setSaveError("");
+    setSaving(true);
+    let failure;
+    try {
+      failure = await onSave({ favMin: favNum, unfavMax: unfavNum });
+    } catch (err) {
+      failure = err.message || "Failed to save threshold rules.";
+    }
+    setSaving(false);
+    if (failure) {
+      setSaveError(`${failure} Nothing was changed.`);
+      return;
+    }
     setSaved(true);
     setTimeout(onClose, 600);
   };
@@ -264,19 +299,23 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
             <p className="text-[12px] text-red-600">Unfavorable cutoff must be strictly less than Favorable cutoff.</p>
           )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            disabled={!isValid}
+            disabled={!isValid || saving || saved}
             onClick={handleSave}
             className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {saved ? "Saved!" : "Save Changes"}
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -1100,8 +1139,13 @@ function AdminAnalytics() {
         : await analyticsApi.createWeight({ crop_stage: phase, ...payload });
       setWeightIds((prev) => ({ ...prev, [phase]: saved.id }));
       setPhaseWeights((prev) => ({ ...prev, [phase]: updated }));
+      return null;
     } catch (err) {
-      setWeightsError(err.message || "Failed to save weights.");
+      const message = err.message || "Failed to save weights.";
+      setWeightsError(message);
+      // Returned so the modal can refuse to claim success. Without this the
+      // modal closed showing "Saved!" even when the write was rejected.
+      return message;
     }
   };
 
@@ -1156,8 +1200,13 @@ function AdminAnalytics() {
       await ensureRule(unfav, "Unfavorable", "<", unfavVal, `< ${unfavPct}%`);
 
       await refreshPriceOutlook();
+      return null;
     } catch (err) {
-      setThresholdsError(err.message || "Failed to save threshold rules.");
+      const message = err.message || "Failed to save threshold rules.";
+      setThresholdsError(message);
+      // Returned so the modal can refuse to claim success. Without this the
+      // modal closed showing "Saved!" even when the write was rejected.
+      return message;
     }
   };
 
@@ -1953,4 +2002,8 @@ function AdminAnalytics() {
   );
 }
 
-export { AdminAnalytics as default };
+export {
+  AdminAnalytics as default,
+  EditWeightModal,
+  EditPriceOutlookModal,
+};

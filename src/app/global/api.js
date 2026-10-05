@@ -68,10 +68,14 @@ export function buildUrl(url) {
 // fetch() with a hard timeout. Combines any caller-supplied signal with an
 // internal abort timer so a hung request always settles.
 function fetchWithTimeout(url, options = {}) {
+  // Per-call override for endpoints that are known to be slower than the
+  // global default. Raising the global value is not an option: it would mask
+  // genuinely hung requests.
+  const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort(new DOMException('Request timed out', 'TimeoutError'));
-  }, FETCH_TIMEOUT_MS);
+  }, timeoutMs);
 
   const external = options.signal;
   if (external) {
@@ -79,7 +83,8 @@ function fetchWithTimeout(url, options = {}) {
     else external.addEventListener('abort', () => controller.abort(external.reason), { once: true });
   }
 
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+  const { timeoutMs: _ignored, ...fetchOptions } = options;
+  return fetch(url, { ...fetchOptions, signal: controller.signal }).finally(() => {
     clearTimeout(timeoutId);
   });
 }
