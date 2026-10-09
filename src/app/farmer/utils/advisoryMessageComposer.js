@@ -11,7 +11,12 @@ import { normalizeLifecycleStage } from './farmerCodes.js';
 
 // Reason ranking and the stage action selector live in ./advisoryReasons.js.
 // Re-exported so existing import sites keep resolving from this module.
-export { composeAdvisoryReasons, composeAdvisoryAction } from './advisoryReasons.js';
+export {
+  composeAdvisoryReasons,
+  composeAdvisoryAction,
+  composeImmediateActions,
+  composeWeeklyActions,
+} from './advisoryReasons.js';
 export { normalizeLifecycleStage };
 
 
