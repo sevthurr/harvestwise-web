@@ -57,8 +57,8 @@ function AdminDashboard() {
   const attentionCount = s.sources_requiring_attention ?? s.sourcesRequiringAttention ?? (data?.sources_requiring_attention?.length || data?.sourcesRequiringAttention?.length || 0);
   const kpis = {
     uploadedToday: s.uploaded_today ?? s.uploadedToday ?? 0,
+    recordsIngestedToday: s.records_ingested_today ?? s.recordsIngestedToday ?? 0,
     sourcesRequiringAttention: attentionCount,
-    activeCropPlans: s.active_crop_plans ?? s.activeCropPlans ?? 0,
     registeredFarmers: s.registered_farmers ?? s.registeredFarmers ?? 0
   };
 
@@ -92,8 +92,16 @@ function AdminDashboard() {
       value: kpis.uploadedToday.toString(),
       label: "Uploaded Today",
       subtext: kpis.uploadedToday > 0
-        ? `${kpis.uploadedToday} data batch${kpis.uploadedToday > 1 ? "es" : ""} ingested today`
+        ? `${kpis.uploadedToday} data file${kpis.uploadedToday > 1 ? "s" : ""} ingested today`
         : "Data files ingested today",
+      path: "/admin/data-sources?tab=history"
+    },
+    {
+      value: kpis.recordsIngestedToday.toLocaleString(),
+      label: "Records Ingested Today",
+      subtext: kpis.recordsIngestedToday > 0
+        ? `${kpis.recordsIngestedToday.toLocaleString()} market data points captured`
+        : "Daily market data points captured",
       path: "/admin/data-sources?tab=history"
     },
     {
@@ -103,14 +111,6 @@ function AdminDashboard() {
         ? "All data sources operational"
         : `${kpis.sourcesRequiringAttention} source${kpis.sourcesRequiringAttention > 1 ? "s" : ""} need review`,
       path: "/admin/system?tab=health"
-    },
-    {
-      value: kpis.activeCropPlans.toString(),
-      label: "Active Crop Plans",
-      subtext: kpis.activeCropPlans > 0
-        ? `${kpis.activeCropPlans} farming cycles in progress`
-        : "Farming cycles in progress",
-      path: "/admin/modules"
     },
     {
       value: kpis.registeredFarmers.toString(),

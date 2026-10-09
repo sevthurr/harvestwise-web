@@ -1147,27 +1147,10 @@ function AdminAnalytics() {
                             {card.source}
                           </span>
                         </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Processed</span>
-                          <span className="text-[12px] text-[var(--hw-neutral-800)]">{card.processed}</span>
-                        </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[12px] text-[var(--hw-neutral-700)]">Reliability</span>
                           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${RELIABILITY_TONES[card.reliability] ?? "text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)]"}`}>
                             {card.reliability}
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Data</span>
-                          <span
-                            className={`text-[12px] font-medium ${
-                              card.dataAvailable !== null &&
-                              card.dataAvailable < card.dataRequired
-                                ? "text-[var(--hw-error)]"
-                                : "text-[var(--hw-neutral-800)]"
-                            }`}
-                          >
-                            {card.dataLabel}
                           </span>
                         </div>
                       </div>

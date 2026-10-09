@@ -15,8 +15,8 @@ import AdminDashboard from '../app/admin/pages/AdminDashboard';
 const DASHBOARD = {
   summary: {
     uploaded_today: 12,
+    records_ingested_today: 148,
     sources_requiring_attention: 1,
-    active_crop_plans: 8,
     registered_farmers: 45,
     advisories_created_today: 7,
     for_review: 3,
@@ -76,10 +76,10 @@ describe('AdminDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('12')).toBeInTheDocument());
     expect(screen.getByText('Uploaded Today')).toBeInTheDocument();
+    expect(screen.getByText('Records Ingested Today')).toBeInTheDocument();
+    expect(screen.getByText('148')).toBeInTheDocument();
     expect(screen.getAllByText('Sources Requiring Attention').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Active Crop Plans')).toBeInTheDocument();
     expect(screen.getByText('Registered Farmers')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.getByText('45')).toBeInTheDocument();
   });
 
