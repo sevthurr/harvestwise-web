@@ -32,6 +32,7 @@ import {
 import {
   composeAdvisoryReasons,
   composeAdvisoryAction,
+  composeImmediateActions,
   resolveMainFactor,
 } from "../../utils/advisoryReasons";
 import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
@@ -203,15 +204,27 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
         lang: langCode,
       })
     : null;
+  const horizonCandidate = Number(advisoryResponse?.price_horizon || data.horizonDays || 14);
+  const horizonDays = [7, 14, 21, 28].includes(horizonCandidate) ? horizonCandidate : 14;
   const composedReasons = composeAdvisoryReasons({
     moduleResults,
     contributions: advisoryMeta.module_contributions,
     vetoes: advisoryMeta.hard_vetoes,
     cropName: displayName,
-    horizonDays: 14,
+    horizonDays,
   });
-  const composedAction = composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName);
   const hasFarmgate = data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0;
+  const immediateActions = composeImmediateActions({
+    advisoryCode,
+    cropStage,
+    moduleResults,
+    cropName: displayName,
+    contributions: advisoryMeta.module_contributions,
+    vetoes: advisoryMeta.hard_vetoes,
+    actionGuidance: advisoryMeta.action_guidance,
+    hasFarmgate,
+  });
+  const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName, advisoryMeta);
   const currentPx = data.currentPrice || null;
   const forecastLo = data.forecastLower || null;
   const forecastHi = data.forecastUpper || null;
@@ -552,32 +565,16 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
           <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.advisory.advisory_action_title", {}, "What should I do next?")}</p>
           <div className="space-y-2.5">
-            <div className="flex items-start gap-3">
-              <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">1</p>
+            {(immediateActions.length > 0 ? immediateActions.slice(0, 2) : [composedAction].filter(Boolean)).map((act, idx) => (
+              <div key={act.key || idx} className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">{idx + 1}</p>
+                </div>
+                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
+                  {renderComposedMessage(act, langCode, t("farmer.actions.monitoring.save_plan_instruction", {}, "Save to My Crops to start tracking your plan and monitoring conditions."))}
+                </p>
               </div>
-              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-                {renderComposedMessage(composedAction, langCode, t("farmer.actions.monitoring.save_plan_instruction", {}, "Save to My Crops to start tracking your plan and monitoring conditions."))}
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">2</p>
-              </div>
-              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-                {hasFarmgate
-                  ? t("farmer.actions.monitoring.confirm_farmgate", {}, "Confirm your farmgate price with your buyer before harvest.")
-                  : t("farmer.actions.monitoring.update_farmgate", {}, "Update your farmgate price later when a buyer gives you an offer.")}
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">3</p>
-              </div>
-              <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
-                {t("farmer.actions.monitoring.check_prices_near_harvest", {}, "Check prices again closer to harvest before deciding when to sell.")}
-              </p>
-            </div>
+            ))}
           </div>
         </div>
 

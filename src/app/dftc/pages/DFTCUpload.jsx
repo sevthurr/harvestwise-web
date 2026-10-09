@@ -17,6 +17,7 @@ import {
 import { ingestionApi } from "../../../services/api";
 import { useBackgroundProcess } from "../../global/contexts/BackgroundProcessContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
+import { parseFileReal } from "../../global/utils/excelFilePreview";
 
 const DATA_TYPE_MAP = {
   "DFTC Wholesale Prices": "dftc_daily_wholesale",
@@ -44,213 +45,6 @@ const STEP_CONFIG = [
   { active: "Store", done: "Stored" },
 ];
 const STEPS = STEP_CONFIG.map((s) => s.done);
-
-function readFileText(file) {
-  return new Promise((resolve, reject) => {
-    if (typeof file.text === "function") {
-      file.text().then(resolve).catch(reject);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target?.result || "");
-    reader.onerror = (e) => reject(e);
-    reader.readAsText(file);
-  });
-}
-
-async function parseFileReal(selectedFile) {
-  const ext = (selectedFile.name.split('.').pop() || '').toLowerCase();
-  
-  if (['xlsx', 'xlsm', 'xls', 'ods'].includes(ext)) {
-    try {
-      const ExcelJSModule = await import("exceljs");
-      const Workbook = ExcelJSModule.default?.Workbook ?? ExcelJSModule.Workbook;
-      const wb = new Workbook();
-      const buffer = await selectedFile.arrayBuffer();
-      await wb.xlsx.load(buffer);
-
-      const allSheets = wb.worksheets || [];
-      const validWorksheets = allSheets.filter(w => !/\(2\)|\boverflow\b/i.test(w.name));
-      if (validWorksheets.length === 0 && allSheets.length > 0) {
-        validWorksheets.push(allSheets[0]);
-      }
-      if (validWorksheets.length === 0) return { headers: [], rows: [], rawRows: [], sheetNames: [], sheetsData: {}, totalRowCount: 0 };
-
-      const formatCellValue = (v) => {
-        if (v == null) return '';
-        if (typeof v === 'object') {
-          if (v.text !== undefined) return v.text;
-          if (Array.isArray(v.richText)) {
-            return v.richText.map(t => t.text || '').join('');
-          }
-          if (v.result !== undefined) return String(v.result);
-        }
-        return v;
-      };
-
-      const sheetNames = validWorksheets.map(w => w.name);
-      const sheetsData = {};
-
-      validWorksheets.forEach(ws => {
-        const rowsData = [];
-        ws.eachRow({ includeEmpty: true }, (row) => {
-          const maxCols = Math.max(row.values?.length || 0, ws.columnCount || 0, 35);
-          const vals = [];
-          for (let c = 1; c <= maxCols; c++) {
-            const cell = row.getCell(c);
-            vals.push(formatCellValue(cell.value));
-          }
-          rowsData.push(vals);
-        });
-        sheetsData[ws.name] = rowsData;
-      });
-
-      const extractPreviewForRows = (rowsData) => {
-        if (!rowsData || rowsData.length === 0) return { headers: [], rows: [] };
-
-        let headerRowIdx = -1;
-        for (let i = 0; i < Math.min(15, rowsData.length); i++) {
-          const rVals = rowsData[i].map(v => String(v ?? '').trim().toUpperCase());
-          if (rVals.some(v => v === "COMMODITY" || v.startsWith("COMMODIT"))) {
-            headerRowIdx = i;
-            break;
-          }
-        }
-
-        if (headerRowIdx !== -1) {
-          const rawHdr = rowsData[headerRowIdx];
-          const nextRow = rowsData[headerRowIdx + 1];
-          let hasDayRow = false;
-          if (nextRow && nextRow.some(v => { const n = parseInt(v, 10); return !isNaN(n) && n >= 1 && n <= 31; })) {
-            hasDayRow = true;
-          }
-          const dataStartIdx = hasDayRow ? headerRowIdx + 2 : headerRowIdx + 1;
-          const maxCols = Math.max(rawHdr?.length || 0, nextRow?.length || 0);
-
-          const headers = [];
-          for (let i = 0; i < maxCols; i++) {
-            const hVal = rawHdr ? rawHdr[i] : undefined;
-            const hStr = hVal != null ? String(hVal).trim() : '';
-            const dayVal = (hasDayRow && nextRow && nextRow[i] != null) ? String(nextRow[i]).trim() : '';
-            const n = parseInt(dayVal, 10);
-            if (hasDayRow && !isNaN(n) && n >= 1 && n <= 31) {
-              headers.push(`Day ${n}`);
-            } else if (hStr) {
-              headers.push(hStr);
-            } else {
-              headers.push(`col_${i + 1}`);
-            }
-          }
-
-          const dataRows = rowsData.slice(dataStartIdx).filter(r => {
-            const rowStr = r.map(v => String(v ?? '').trim().toLowerCase()).join(" ");
-            if (rowStr.startsWith("prepared") || rowStr.startsWith("checked") || rowStr.startsWith("approved")) return false;
-            // Ensure commodity column (index 1) is present
-            const comm = String(r[1] ?? '').trim();
-            return comm.length > 0;
-          });
-
-          // Trim trailing empty generated column headers
-          let lastNonEmptyCol = -1;
-          for (let i = headers.length - 1; i >= 0; i--) {
-            const h = headers[i];
-            const hasData = dataRows.some(r => r[i] !== undefined && r[i] !== null && String(r[i]).trim() !== '');
-            if (hasData || (h && !h.startsWith('col_'))) {
-              lastNonEmptyCol = i;
-              break;
-            }
-          }
-          const activeHeaders = headers.slice(0, lastNonEmptyCol + 1);
-
-          const rows = dataRows.map(r => {
-            const rowObj = {};
-            activeHeaders.forEach((h, i) => {
-              rowObj[h] = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
-            });
-            return rowObj;
-          });
-
-          return { headers: activeHeaders, rows };
-        }
-
-        const headers = (rowsData[0] || []).map((h, i) => String(h).trim() || `col_${i + 1}`);
-        const rows = rowsData.slice(1).map(r => {
-          const rowObj = {};
-          headers.forEach((h, i) => {
-            rowObj[h] = r[i] !== undefined && r[i] !== null ? String(r[i]).trim() : '';
-          });
-          return rowObj;
-        });
-        return { headers, rows };
-      };
-
-      let totalRowCount = 0;
-      validWorksheets.forEach(ws => {
-        const preview = extractPreviewForRows(sheetsData[ws.name]);
-        totalRowCount += preview.rows.length;
-      });
-
-      const primarySheetName = validWorksheets[0].name;
-      const { headers, rows } = extractPreviewForRows(sheetsData[primarySheetName]);
-
-      return {
-        headers,
-        rows,
-        rawRows: sheetsData[primarySheetName] || [],
-        sheetNames,
-        sheetsData,
-        totalRowCount,
-        extractPreviewForRows,
-      };
-    } catch (err) {
-      console.warn("Excel parsing fallback to text:", err);
-    }
-  }
-
-  const text = await readFileText(selectedFile);
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (lines.length === 0) return { headers: [], rows: [], rawRows: [], sheetNames: [], sheetsData: {}, totalRowCount: 0 };
-
-  const delimiter = ext === 'tsv' ? '\t' : ',';
-  
-  const parseLine = (line) => {
-    const result = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        inQuotes = !inQuotes;
-      } else if (c === delimiter && !inQuotes) {
-        result.push(cur.trim());
-        cur = '';
-      } else {
-        cur += c;
-      }
-    }
-    result.push(cur.trim());
-    return result;
-  };
-
-  const rawHeaders = parseLine(lines[0]);
-  const headers = rawHeaders.map((h, i) => h.replace(/^"|"$/g, '').trim() || `col_${i + 1}`);
-  const rows = [];
-  const rawRows = lines.slice(0, 30).map(l => parseLine(l));
-  
-  for (let i = 1; i < lines.length; i++) {
-    const parsed = parseLine(lines[i]);
-    const rowObj = {};
-    let hasAnyData = false;
-    headers.forEach((h, idx) => {
-      const val = (parsed[idx] || '').replace(/^"|"$/g, '').trim();
-      if (val) hasAnyData = true;
-      rowObj[h] = val;
-    });
-    if (hasAnyData) rows.push(rowObj);
-  }
-
-  return { headers, rows, rawRows, sheetNames: [], sheetsData: {}, totalRowCount: rows.length };
-}
 
 function detectDatasetInfo({ fileName = "", sheetNames = [], rawRows = [], headers = [], rows = [] }) {
   const fn = fileName.toLowerCase();
@@ -622,11 +416,14 @@ function DFTCUpload() {
     });
     setParsing(true);
     try {
-      const { headers, rows, rawRows, sheetNames, sheetsData, totalRowCount, extractPreviewForRows } = await parseFileReal(selected);
+      const { headers, rows, rawRows, primarySheetName, sheetNames, sheetsData, totalRowCount, extractPreviewForRows } = await parseFileReal(selected);
       setParsedHeaders(headers);
       setParsedRows(rows);
       setFileSheets(sheetNames || []);
-      setActiveSheet(sheetNames?.[0] || "");
+      // `primarySheetName` is the parser's monthly-sheet choice. Falling back to
+      // `sheetNames[0]` would land on "OVERALL TOTAL", the one DFTC sheet that
+      // is a single annual row per commodity and cannot show months.
+      setActiveSheet(primarySheetName || sheetNames?.[0] || "");
       setTotalDetectedRows(totalRowCount || rows.length);
       sheetsDataRef.current = sheetsData || {};
       extractPreviewFnRef.current = extractPreviewForRows || null;

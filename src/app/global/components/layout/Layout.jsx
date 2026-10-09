@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { TopBar } from "./TopBar";
@@ -12,7 +12,7 @@ import { getUnreadCount } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
 
 const NAV_ROUTES = {
   home: "/farmer",
@@ -45,15 +45,24 @@ const Layout = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const activeNav = resolveActiveNav(location.pathname);
 
-  // ── Must-change-password prompt ────────────────────────────────────────
-  const [showChangePw, setShowChangePw] = useState(false);
-  useEffect(() => {
-    setShowChangePw(user?.must_change_password === true);
-  }, [user?.must_change_password]);
+  // ── Must-change-password block ─────────────────────────────────────────
+  // Replaces the workspace content, not an overlay. `rotated` is cleared the
+  // moment the POST succeeds: change_password() revokes every session and
+  // purges the cached snapshot before returning, so the next /auth/me can come
+  // back 401 and null out `user` — and with no dismiss affordance, a gate
+  // derived from the flag alone would strand the user with no way forward. The
+  // rotation already committed server-side; refreshUser() only reconciles the
+  // cache, so it is best-effort. Same reasoning as AuthContext.patchUser.
+  const [rotated, setRotated] = useState(false);
+  const pendingPasswordChange = user?.must_change_password === true && !rotated;
 
-  const handlePasswordChanged = async () => {
-    await refreshUser?.();
-    setShowChangePw(false);
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
   };
 
   // ── Unread notification count ──────────────────────────────────────────
@@ -133,8 +142,14 @@ const Layout = () => {
         style={{ overflowX: "hidden" }}
       >
         <FarmerMain>
-          <Outlet />
-          <Footer className="mt-4 mb-1" />
+          {pendingPasswordChange ? (
+            <ChangePasswordPanel onRotated={handlePasswordRotated} />
+          ) : (
+            <>
+              <Outlet />
+              <Footer className="mt-4 mb-1" />
+            </>
+          )}
         </FarmerMain>
       </main>
 
@@ -146,14 +161,6 @@ const Layout = () => {
           message={toast}
           onClose={() => setToast(null)}
           duration={5000}
-        />
-      )}
-
-      {/* Must-change-password prompt */}
-      {showChangePw && (
-        <ChangePasswordPrompt
-          onClose={() => setShowChangePw(false)}
-          onChanged={handlePasswordChanged}
         />
       )}
     </div>

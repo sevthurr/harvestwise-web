@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
-import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
+import { UserAvatar } from "../profile/UserAvatar";
 
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -51,7 +52,6 @@ function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
-  const [showChangePw, setShowChangePw] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
   const active = getActive(location.pathname);
@@ -115,12 +115,15 @@ function DFTCLayoutInner() {
     navigate("/login", { replace: true });
   };
 
-  // Suggest a password change while the account is still on a temporary
-  // password (set by admin user creation). Dismissible — a suggestion, not a lock.
-  const pendingChangePassword = user?.must_change_password === true;
-  useEffect(() => {
-    setShowChangePw(pendingChangePassword);
-  }, [pendingChangePassword]);
+  // Replace the workspace content while the account is still on an
+  // admin-provisioned temporary password. `rotated` is cleared the moment the
+  // POST succeeds: change_password() revokes every session and purges the
+  // cached snapshot before returning, so the next /auth/me can come back 401
+  // and null out `user` — and with no dismiss affordance, a gate derived from
+  // the flag alone would strand the user. The rotation already committed
+  // server-side; refreshUser() only reconciles the cache, so it is best-effort.
+  const [rotated, setRotated] = useState(false);
+  const pendingChangePassword = user?.must_change_password === true && !rotated;
 
   const { data: unreadData, refetch: refreshUnread } = useQuery({
     queryKey: ["notifications", "unread-count"],
@@ -148,9 +151,13 @@ function DFTCLayoutInner() {
     refreshUnread();
   });
 
-  const handlePasswordChanged = async () => {
-    await refreshUser();
-    setShowChangePw(false);
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
   };
 
   return (
@@ -204,9 +211,13 @@ function DFTCLayoutInner() {
     onClick={() => setAvatarOpen((v) => !v)}
     className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
   >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[11px] font-bold">
-                {initials}
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={name}
+                className="w-7 h-7"
+                textClassName="text-[11px]"
+              />
               <span className="hidden sm:block text-[13px] font-medium text-[var(--hw-neutral-700)] max-w-[100px] truncate">{name}</span>
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
@@ -220,9 +231,13 @@ function DFTCLayoutInner() {
     onClick={() => go("/dftc/profile")}
     className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={name}
+                    className="w-9 h-9"
+                    textClassName="text-[13px]"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{name}</p>
                     <p className="text-[12px] text-black">{roleName}</p>
@@ -282,8 +297,14 @@ function DFTCLayoutInner() {
     /* ── Main content ── */
   }
       <DFTCMain>
-        <Outlet />
-        <Footer className="mt-6 mb-2" />
+        {pendingChangePassword ? (
+          <ChangePasswordPanel onRotated={handlePasswordRotated} />
+        ) : (
+          <>
+            <Outlet />
+            <Footer className="mt-6 mb-2" />
+          </>
+        )}
       </DFTCMain>
 
       {
@@ -304,13 +325,6 @@ function DFTCLayoutInner() {
   })}
         </div>
       </nav>
-
-      {showChangePw && (
-        <ChangePasswordPrompt
-          onClose={() => setShowChangePw(false)}
-          onChanged={handlePasswordChanged}
-        />
-      )}
     </div>
   );
 }

@@ -41,6 +41,8 @@ import {
   composeAdvisorySummary,
   composeAdvisoryBadge,
   composeAdvisoryAction,
+  composeImmediateActions,
+  composeWeeklyActions,
   renderComposedMessage,
   normalizeLifecycleStage,
 } from "../utils/advisoryMessageComposer";
@@ -54,38 +56,22 @@ const ADVISORY_CFG = {
   high_risk: { Icon: AlertOctagon, color: "text-red-700", border: "border-[var(--hw-neutral-200)]" },
 };
 
-const WEEKLY_ACTIONS = {
-  [PHASE_CODES.PLANNING]: [
-    { Icon: CloudRain, key: "farmer.monitoring.action_planning_1", text: "Check weather before planting." },
-    { Icon: PhilippinePeso, key: "farmer.monitoring.action_planning_2", text: "Review forecasted price and your estimated profit." },
-    { Icon: Droplets, key: "farmer.monitoring.action_planning_3", text: "Prepare drainage, labor, and inputs in advance." }
-  ],
-  [PHASE_CODES.ON_HOLD]: [
-    { Icon: Eye, key: "farmer.monitoring.action_on_hold_1", text: "Reassess market conditions before resuming." },
-    { Icon: TrendingUp, key: "farmer.monitoring.action_on_hold_2", text: "Check if the current price has improved." },
-    { Icon: Scale, key: "farmer.monitoring.action_on_hold_3", text: "Update your expected cost if input prices changed." }
-  ],
-  [PHASE_CODES.GROWING]: [
-    { Icon: Droplets, key: "farmer.monitoring.action_growing_1", text: "Check drainage and crop condition." },
-    { Icon: Plus, key: "farmer.monitoring.action_growing_2", text: "Update added costs if you have new inputs." },
-    { Icon: TrendingUp, key: "farmer.monitoring.action_growing_3", text: "Monitor weather and price changes." }
-  ],
-  [PHASE_CODES.PRE_HARVEST]: [
-    { Icon: TrendingUp, key: "farmer.monitoring.action_pre_harvest_1", text: "Check current price and the 7-day forecast." },
-    { Icon: PhilippinePeso, key: "farmer.monitoring.action_pre_harvest_2", text: "Update farmgate price if a buyer gives an offer." },
-    { Icon: Tractor, key: "farmer.monitoring.action_pre_harvest_3", text: "Prepare harvest labor and transport." }
-  ],
-  [PHASE_CODES.HARVESTED]: [
-    { Icon: PhilippinePeso, key: "farmer.monitoring.action_harvested_1", text: "Compare market price and buyer price." },
-    { Icon: Droplets, key: "farmer.monitoring.action_harvested_2", text: "Protect harvested produce from rain and moisture." },
-    { Icon: Scale, key: "farmer.monitoring.action_harvested_3", text: "Record actual harvest and selling price." }
-  ],
-  [PHASE_CODES.COMPLETED]: [
-    { Icon: Scale, key: "farmer.monitoring.action_completed_1", text: "Record final harvest volume and selling price." },
-    { Icon: TrendingUp, key: "farmer.monitoring.action_completed_2", text: "Review your profit or loss for this cycle." },
-    { Icon: Sprout, key: "farmer.monitoring.action_completed_3", text: "Save notes for your next planting cycle." }
-  ]
-};
+function resolveWeeklyActionIcon(action) {
+  if (action?.Icon) return action.Icon;
+  const factor = action?.factor;
+  if (factor === 'weather_risk' || action?.key?.includes('weather')) return CloudRain;
+  if (factor === 'price_outlook' || action?.key?.includes('price')) return TrendingUp;
+  if (factor === 'profitability' || action?.key?.includes('profit')) return PhilippinePeso;
+  if (factor === 'arrival_pressure' || factor === 'supply' || action?.key?.includes('arrival')) return Tractor;
+  if (factor === 'historical_seasonal_production_level' || action?.key?.includes('production')) return Scale;
+  if (action?.key?.includes('cost') || action?.key?.includes('growing_2')) return Plus;
+  if (action?.key?.includes('drainage') || action?.key?.includes('rain') || action?.key?.includes('harvested_2')) return Droplets;
+  if (action?.key?.includes('completed_1') || action?.key?.includes('harvested_3')) return Scale;
+  if (action?.key?.includes('completed_3')) return Sprout;
+  if (action?.key?.includes('on_hold_1')) return Eye;
+  return Sprout;
+}
+
 const ProfitCalcAccordion = ({
   qty,
   totalCost,
@@ -266,10 +252,41 @@ function CropCycleDetailPage() {
   const cropDisplayName = crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName;
   const composedSummary = composeAdvisorySummary(advisoryCode, currentCropStage, cropDisplayName);
   const summaryText = renderComposedMessage(composedSummary, langCode);
-  const composedAction = composeAdvisoryAction(advisoryCode, currentCropStage, planAdvisoryData?.module_results, cropDisplayName);
-  const actionText = renderComposedMessage(composedAction, langCode);
+  const immediateActions = composeImmediateActions({
+    advisoryCode,
+    cropStage: currentCropStage,
+    moduleResults: planAdvisoryData?.module_results,
+    cropName: cropDisplayName,
+    contributions: planAdvisoryData?.advisory?.module_contributions,
+    vetoes: planAdvisoryData?.advisory?.hard_vetoes,
+    actionGuidance: planAdvisoryData?.advisory?.action_guidance,
+    hasFarmgate,
+  });
+  const composedAction = immediateActions[0] || composeAdvisoryAction(
+    advisoryCode,
+    currentCropStage,
+    planAdvisoryData?.module_results,
+    cropDisplayName,
+    {
+      contributions: planAdvisoryData?.advisory?.module_contributions,
+      vetoes: planAdvisoryData?.advisory?.hard_vetoes,
+      actionGuidance: planAdvisoryData?.advisory?.action_guidance,
+      hasFarmgate,
+    }
+  );
+  const displayImmediateActions = immediateActions.length > 0 ? immediateActions.slice(0, 2) : [composedAction].filter(Boolean);
 
-  const weeklyActions = crop.isOnHold ? WEEKLY_ACTIONS[PHASE_CODES.ON_HOLD] ?? [] : WEEKLY_ACTIONS[phaseCode] ?? [];
+  const weeklyActions = composeWeeklyActions({
+    cropStage: currentCropStage,
+    phaseCode,
+    moduleResults: planAdvisoryData?.module_results,
+    contributions: planAdvisoryData?.advisory?.module_contributions,
+    vetoes: planAdvisoryData?.advisory?.hard_vetoes,
+    cropName: cropDisplayName,
+    actionGuidance: planAdvisoryData?.advisory?.action_guidance,
+    immediateAction: displayImmediateActions[0] || composedAction,
+    isOnHold: crop.isOnHold,
+  });
   const isCompleted = phaseCode === PHASE_CODES.COMPLETED;
   const isActive = !isCompleted;
   const isPlanted = [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST].includes(phaseCode);
@@ -342,11 +359,14 @@ function CropCycleDetailPage() {
             <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
               {summaryText}
             </p>
-            {actionText && (
-              <p className={`text-[13px] font-medium mt-1.5 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
-                {actionText}
-              </p>
-            )}
+            {displayImmediateActions.map((act, idx) => {
+              const text = renderComposedMessage(act, langCode);
+              return text ? (
+                <p key={act.key || idx} className={`text-[13px] font-medium mt-1.5 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+                  {text}
+                </p>
+              ) : null;
+            })}
             <button
               onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
               className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
@@ -416,14 +436,18 @@ function CropCycleDetailPage() {
             </p>
             <div className="space-y-2">
               {weeklyActions.map((action, i) => {
-    const Icon = action.Icon;
-    return <div key={i} className="flex items-start gap-3 py-1">
+                const Icon = resolveWeeklyActionIcon(action);
+                return (
+                  <div key={i} className="flex items-start gap-3 py-1">
                     <div className="w-6 h-6 rounded-lg bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Icon className="w-3.5 h-3.5 text-[var(--hw-neutral-900)]" />
                     </div>
-                    <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{action.key ? t(action.key) : action.text}</p>
-                  </div>;
-  })}
+                    <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
+                      {action.key ? t(action.key, action.params || {}, action.text || "") : (action.text || "")}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>}
 

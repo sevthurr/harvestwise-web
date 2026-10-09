@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import ExcelJS from 'exceljs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseFileReal } from '../app/admin/pages/AdminImport';
+import { parseFileReal } from '../app/global/utils/excelFilePreview';
 
 // `[object Object]` in the upload preview. `formatCellValue` matched a formula
 // cell only when it had a cached `result`. DFTC writes no cached result for a

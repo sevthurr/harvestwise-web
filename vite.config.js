@@ -58,7 +58,30 @@ export default defineConfig({
         // Runtime caching for API responses — enables offline-first for farmers
         runtimeCaching: [
           {
-            // Cache all API GET responses with NetworkFirst strategy
+            // Authenticated identity must never come from a service-worker
+            // cache. Two reasons, the second being the reason this rule has to
+            // come first (workbox matches routes in registration order):
+            //
+            //  1. Correctness. `/auth/me` is what carries
+            //     `profile_picture_path` into AuthContext, and every avatar in
+            //     the app reads it from there. NetworkFirst falls back to the
+            //     cached copy once a request exceeds `networkTimeoutSeconds`,
+            //     so a save-then-navigate could hand back the *pre-save*
+            //     response and silently revert the change on screen.
+            //  2. Isolation. The cache key is the URL, with no notion of who
+            //     is signed in, and entries live 7 days. On a shared handset —
+            //     the case AuthContext already guards against for tokens — user
+            //     A's cached identity, email, and role could be served to user
+            //     B during a slow request.
+            //
+            // Offline is unaffected: AuthContext restores a cached session from
+            // IndexedDB (HARVESTWISE_USER_CACHE_V1) when /auth/me is
+            // unreachable, which is the intended offline path, not this cache.
+            urlPattern: /\/api\/v1\/auth\//i,
+            handler: 'NetworkOnly',
+          },
+          {
+            // Cache all other API GET responses with NetworkFirst strategy
             // (try network, fall back to cache when offline)
             // Match any origin with /api/v1/ path — works for localhost, production domains, etc.
             urlPattern: /\/api\/v1\/.*/i,
