@@ -67,7 +67,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
+
 
   // Load account and profile data from the shared cached profile
   const { data: rawProfile, isLoading: loading } = useQuery({
@@ -126,11 +126,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     }
   };
 
-  const handleDelete = () => {
-    if (deleteConfirm !== "DELETE") return;
-    setShowDeleteModal(false);
-    onDeleteAccount();
-  };
+
 
   return (
     <div className="space-y-4">
@@ -232,15 +228,15 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">Danger Zone</p>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.delete_account", {}, "Delete account")}</p>
-            <p className="text-[13px] text-black">{t("farmer.settings.delete_warning", {}, "Permanently remove your account and all data.")}</p>
+            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.request_deletion_title", {}, "Request Account Deletion")}</p>
+            <p className="text-[13px] text-black">{t("farmer.settings.request_deletion_desc", {}, "Account deletion is processed after verification. Requests are handled by the HarvestWise team.")}</p>
           </div>
           <button
             type="button"
             onClick={() => setShowDeleteModal(true)}
             className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
           >
-            {t("common.delete", {}, "Delete")}
+            {t("farmer.settings.request_deletion_btn", {}, "Request Deletion")}
           </button>
         </div>
       </Card>
@@ -257,50 +253,35 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 
       {showDeleteModal && (
         <Modal
-          title={t("farmer.settings.delete_account", {}, "Delete account")}
-          onClose={() => {
-            setShowDeleteModal(false);
-            setDeleteConfirm("");
-          }}
+          title={t("farmer.settings.request_deletion_title", {}, "Request Account Deletion")}
+          onClose={() => setShowDeleteModal(false)}
         >
-          <p className="text-[14px] text-black mb-4">
-            {t("farmer.settings.delete_warning", {}, "This will permanently delete your HarvestWise account, saved farm profile, crop preferences, and crop plans. This action cannot be undone.")}
+          <p className="text-[14px] text-black mb-4 leading-relaxed">
+            {t("farmer.settings.request_deletion_modal_body", {}, "To protect your account and records from unauthorized deletion, HarvestWise verifies all requests before processing. Please send a deletion request to harvestwise.app@gmail.com from your registered email address. Once verified, identifying account information, contact information, and precise farm-location coordinates will be permanently removed or irreversibly anonymized in accordance with our Privacy Policy.")}
           </p>
-          <div className="space-y-1.5 mb-5">
-            <label className="block text-[14px] font-semibold text-black">
-              Type <span className="font-mono text-red-600">DELETE</span> to confirm
-            </label>
-            <input
-              type="text"
-              value={deleteConfirm}
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="DELETE"
-              className={inputCls}
-            />
+          <div className="bg-[var(--hw-neutral-50)] p-3.5 rounded-xl border border-[var(--hw-neutral-200)] mb-5 text-sm space-y-1">
+            <p className="font-semibold text-black">Contact:</p>
+            <a href="mailto:harvestwise.app@gmail.com?subject=Account%20Deletion%20Request" className="text-[var(--hw-green-800)] font-medium hover:underline block">
+              harvestwise.app@gmail.com
+            </a>
           </div>
           <div className="flex gap-2 justify-end">
-            <GhostBtn
-              onClick={() => {
-                setShowDeleteModal(false);
-                setDeleteConfirm("");
-              }}
-            >
-              {t("common.cancel", {}, "Cancel")}
+            <GhostBtn onClick={() => setShowDeleteModal(false)}>
+              {t("common.close", {}, "Close")}
             </GhostBtn>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleteConfirm !== "DELETE"}
-              className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 disabled:opacity-40 transition-colors"
+            <a
+              href="mailto:harvestwise.app@gmail.com?subject=Account%20Deletion%20Request"
+              className="h-10 px-4 flex items-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
             >
-              {t("farmer.settings.delete_account", {}, "Delete account")}
-            </button>
+              Email harvestwise.app@gmail.com
+            </a>
           </div>
         </Modal>
       )}
     </div>
   );
 };
+
 
 /* -------------------------------------------------------------------------- */
 /* 2. Security Tab                                                            */
@@ -825,10 +806,6 @@ function FarmerSettings() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   useEffect(() => {
     const bar = tabBarRef.current;
@@ -869,7 +846,7 @@ function FarmerSettings() {
         ))}
       </div>
 
-      {activeTab === "account" && <AccountTab showToast={showToast} onDeleteAccount={handleDeleteAccount} />}
+      {activeTab === "account" && <AccountTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
       {activeTab === "farm" && <FarmTab showToast={showToast} />}
       {activeTab === "preferences" && <PreferencesTab showToast={showToast} />}

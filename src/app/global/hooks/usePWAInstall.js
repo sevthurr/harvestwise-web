@@ -7,11 +7,12 @@ export function usePWAInstall() {
 
   useEffect(() => {
     // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    if (window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone) {
       console.log('[PWA] App is already installed');
       setIsInstalled(true);
       return;
     }
+
 
     const handleBeforeInstallPrompt = (e) => {
       console.log('[PWA] beforeinstallprompt event fired');
@@ -33,10 +34,11 @@ export function usePWAInstall() {
 
     // Debug: Check current state
     console.log('[PWA] Hook initialized', {
-      isStandalone: window.matchMedia('(display-mode: standalone)').matches,
-      hasServiceWorker: 'serviceWorker' in navigator,
-      isSecure: window.isSecureContext
+      isStandalone: !!window.matchMedia?.('(display-mode: standalone)')?.matches,
+      hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+      isSecure: typeof window !== 'undefined' && window.isSecureContext
     });
+
 
     // Try to force check if prompt is already available
     if (window.deferredPrompt) {
