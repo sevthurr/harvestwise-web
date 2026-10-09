@@ -59,7 +59,8 @@ function AdminDashboard() {
     uploadedToday: s.uploaded_today ?? s.uploadedToday ?? 0,
     recordsIngestedToday: s.records_ingested_today ?? s.recordsIngestedToday ?? 0,
     sourcesRequiringAttention: attentionCount,
-    registeredFarmers: s.registered_farmers ?? s.registeredFarmers ?? 0
+    registeredFarmers: s.registered_farmers ?? s.registeredFarmers ?? 0,
+    activeCropPlans: s.active_crop_plans ?? s.activeCropPlans ?? 0
   };
 
   const attentionSources = (data?.sources_requiring_attention || []).map((src) => ({
@@ -119,6 +120,14 @@ function AdminDashboard() {
         ? `${kpis.registeredFarmers} active farmer accounts`
         : "Verified active farmer accounts",
       path: "/admin/system?tab=users"
+    },
+    {
+      value: kpis.activeCropPlans.toString(),
+      label: "Active Crop Plans",
+      subtext: kpis.activeCropPlans > 0
+        ? `${kpis.activeCropPlans} active crop plan${kpis.activeCropPlans > 1 ? "s" : ""} on record`
+        : "Crop plans currently active",
+      path: "/admin/modules"
     }
   ];
 
@@ -137,7 +146,7 @@ function AdminDashboard() {
       )}
 
       {/* ── KPI task cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
         {kpiCards.map((c) => (
           <button
             key={c.label}

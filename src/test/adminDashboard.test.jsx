@@ -21,6 +21,7 @@ const DASHBOARD = {
     advisories_created_today: 7,
     for_review: 3,
     failed_uploads_today: 1,
+    active_crop_plans: 9,
   },
   sources_requiring_attention: [
     { id: 'src-1', source_name: 'DFTC Wholesale', source_type: 'API', ingestion_method: 'sync', reason: 'Timed out' },
@@ -81,6 +82,8 @@ describe('AdminDashboard', () => {
     expect(screen.getAllByText('Sources Requiring Attention').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Registered Farmers')).toBeInTheDocument();
     expect(screen.getByText('45')).toBeInTheDocument();
+    expect(screen.getByText('Active Crop Plans')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
   });
 
   it('renders sources requiring attention from the dashboard payload', async () => {
