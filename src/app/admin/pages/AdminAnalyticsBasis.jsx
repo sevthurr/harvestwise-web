@@ -20,6 +20,7 @@ import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMoc
 import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
+import { getCommodityProfile } from "../../global/components/shared/weatherExplanations";
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 
@@ -36,68 +37,94 @@ const TOP_10_COMMODITIES = [
   "Talong"
 ];
 
-const TOP_10_WEATHER_THRESHOLDS = [
+const TOP_10_WEATHER_TEMPLATES = [
   {
     commodity: "Ampalaya",
-    suitable: "Temp 22–30°C; RH≥90% < 3h; Wind ≤ 18 km/h",
-    caution: "Temp 5–22°C or 30–39°C; RH≥90% 3–5h; Wind 18–28.8 km/h",
-    severe: "Temp ≤ 5°C or ≥ 39°C; RH≥90% ≥ 6h; Wind > 28.8 km/h",
+    extraSuitable: "; RH≥90% < 3h; Wind ≤ 18 km/h",
+    extraCaution: "; RH≥90% 3–5h; Wind 18–28.8 km/h",
+    extraSevere: "; RH≥90% ≥ 6h; Wind > 28.8 km/h",
   },
   {
     commodity: "Atsal",
-    suitable: "Temp 17–30°C; RH>85% < 3h; Wind < 21.6 km/h",
-    caution: "Temp 0–17°C or 30–42°C; RH>85% 3–5h; Wind 21.6–28.8 km/h",
-    severe: "Temp ≤ 0°C or ≥ 42°C; RH>85% ≥ 6h; Wind ≥ 28.8 km/h",
+    extraSuitable: "; RH>85% < 3h; Wind < 21.6 km/h",
+    extraCaution: "; RH>85% 3–5h; Wind 21.6–28.8 km/h",
+    extraSevere: "; RH>85% ≥ 6h; Wind ≥ 28.8 km/h",
   },
   {
     commodity: "Carrots",
-    suitable: "Temp 15–21°C",
-    caution: "Temp -1.2–15°C or 21–35°C",
-    severe: "Temp ≤ -1.2°C or ≥ 35°C",
+    extraSuitable: "",
+    extraCaution: "",
+    extraSevere: "",
   },
   {
     commodity: "Chinese Pechay",
-    suitable: "Temp 13–20°C; RH>90% < 6h; Wind < 18 km/h",
-    caution: "Temp -0.6–13°C or 20–25°C; RH>90% 6–11h; Wind 18–54 km/h",
-    severe: "Temp ≤ -0.6°C or ≥ 25°C; RH>90% ≥ 12h; Wind ≥ 54 km/h",
+    extraSuitable: "; RH>90% < 6h; Wind < 18 km/h",
+    extraCaution: "; RH>90% 6–11h; Wind 18–54 km/h",
+    extraSevere: "; RH>90% ≥ 12h; Wind ≥ 54 km/h",
   },
   {
     commodity: "Kalabasa",
-    suitable: "Temp 18–30°C; RH≥90% < 3h",
-    caution: "Temp 0–18°C or 30–35°C; RH≥90% 3–5h",
-    severe: "Temp ≤ 0°C or ≥ 35°C; RH≥90% ≥ 6h",
+    extraSuitable: "; RH≥90% < 3h",
+    extraCaution: "; RH≥90% 3–5h",
+    extraSevere: "; RH≥90% ≥ 6h",
   },
   {
     commodity: "Kamatis",
-    suitable: "Temp 21–24°C; Max RH < 85%; Wind ≤ 39.6 km/h",
-    caution: "Temp 0–21°C or 24–40°C; Max RH 85–90%; Wind 39.6–54 km/h",
-    severe: "Temp ≤ 0°C or ≥ 40°C; Max RH > 90%; Wind > 54 km/h",
+    extraSuitable: "; Max RH < 85%; Wind ≤ 39.6 km/h",
+    extraCaution: "; Max RH 85–90%; Wind 39.6–54 km/h",
+    extraSevere: "; Max RH > 90%; Wind > 54 km/h",
   },
   {
     commodity: "Lettuce",
-    suitable: "Temp 18–22°C; RH≥95% < 5h; Wind < 18 km/h",
-    caution: "Temp 0–18°C or 22–33°C; RH≥95% 5–6h; Wind 18–54 km/h",
-    severe: "Temp < 0°C or ≥ 33°C; RH≥95% ≥ 7h; Wind ≥ 54 km/h",
+    extraSuitable: "; RH≥95% < 5h; Wind < 18 km/h",
+    extraCaution: "; RH≥95% 5–6h; Wind 18–54 km/h",
+    extraSevere: "; RH≥95% ≥ 7h; Wind ≥ 54 km/h",
   },
   {
     commodity: "Pipino",
-    suitable: "Temp 18–30°C; RH≥90% < 3h; Wind < 21.6 km/h",
-    caution: "Temp 0–18°C or 30–38°C; RH≥90% 3–5h; Wind 21.6–32.4 km/h",
-    severe: "Temp ≤ 0°C or ≥ 38°C; RH≥90% ≥ 6h; Wind ≥ 32.4 km/h",
+    extraSuitable: "; RH≥90% < 3h; Wind < 21.6 km/h",
+    extraCaution: "; RH≥90% 3–5h; Wind 21.6–32.4 km/h",
+    extraSevere: "; RH≥90% ≥ 6h; Wind ≥ 32.4 km/h",
   },
   {
     commodity: "Repolyo",
-    suitable: "Temp 15–20°C; RH>90% < 6h",
-    caution: "Temp -7–15°C or 20–30°C; RH>90% 6–11h",
-    severe: "Temp ≤ -7°C or ≥ 30°C; RH>90% ≥ 12h",
+    extraSuitable: "; RH>90% < 6h",
+    extraCaution: "; RH>90% 6–11h",
+    extraSevere: "; RH>90% ≥ 12h",
   },
   {
     commodity: "Talong",
-    suitable: "Temp 21–30°C; Max RH < 86%",
-    caution: "Temp 0–21°C or 30–35°C; Max RH 86–92%",
-    severe: "Temp ≤ 0°C or ≥ 35°C; Max RH > 92%",
+    extraSuitable: "; Max RH < 86%",
+    extraCaution: "; Max RH 86–92%",
+    extraSevere: "; Max RH > 92%",
   },
 ];
+
+function buildCommodityWeatherThreshold(template, commodityRules = [], profile = null) {
+  const tempRangeRule = commodityRules.find((r) => r.metric_key === "temp_range" && r.risk_level === "suitable");
+  const tempMinCaution = commodityRules.find((r) => r.metric_key === "temp_min" && r.risk_level === "caution" && r.operator === ">");
+  const tempMaxCaution = commodityRules.find((r) => r.metric_key === "temp_max" && r.risk_level === "caution" && r.operator === "<");
+  const tempMinSevere = commodityRules.find((r) => r.metric_key === "temp_min" && r.risk_level === "severe");
+  const tempMaxSevere = commodityRules.find((r) => r.metric_key === "temp_max" && r.risk_level === "severe");
+
+  const suitMin = tempRangeRule?.threshold_min != null ? Number(tempRangeRule.threshold_min) : (profile?.suitTempMin ?? 20);
+  const suitMax = tempRangeRule?.threshold_max != null ? Number(tempRangeRule.threshold_max) : (profile?.suitTempMax ?? 30);
+  const sevMin = tempMinSevere?.threshold_max != null ? Number(tempMinSevere.threshold_max) : (profile?.sevTempMin ?? 5);
+  const sevMax = tempMaxSevere?.threshold_min != null ? Number(tempMaxSevere.threshold_min) : (profile?.sevTempMax ?? 38);
+  const cautColdMin = tempMinCaution?.threshold_min != null ? Number(tempMinCaution.threshold_min) : sevMin;
+  const cautHotMax = tempMaxCaution?.threshold_max != null ? Number(tempMaxCaution.threshold_max) : sevMax;
+
+  const suitableText = `Temp ${suitMin}–${suitMax}°C${template.extraSuitable || ""}`;
+  const cautionText = `Temp ${cautColdMin}–${suitMin}°C or ${suitMax}–${cautHotMax}°C${template.extraCaution || ""}`;
+  const severeText = `Temp ≤ ${sevMin}°C or ≥ ${sevMax}°C${template.extraSevere || ""}`;
+
+  return {
+    commodity: template.commodity,
+    suitable: suitableText,
+    caution: cautionText,
+    severe: severeText,
+  };
+}
 
 function formatForecastDate(dateStr) {
   if (!dateStr) return "-";
@@ -607,6 +634,7 @@ function AdminAnalyticsBasis() {
   const [thresholdsError, setThresholdsError] = useState("");
   const [weatherForecast, setWeatherForecast] = useState(null);
   const [weatherRules, setWeatherRules] = useState([]);
+  const [allWeatherRules, setAllWeatherRules] = useState([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState("");
 
@@ -644,15 +672,17 @@ function AdminAnalyticsBasis() {
       try {
         setWeatherLoading(true);
         setWeatherError("");
-        const [forecastData, rulesData] = await Promise.all([
+        const [forecastData, rulesData, allRulesData] = await Promise.all([
           analyticsApi.getWeatherForecast(14),
           selectedCommodityRecord?.id
             ? analyticsApi.listWeatherRules(selectedCommodityRecord.id)
-            : Promise.resolve({ items: [] })
+            : Promise.resolve({ items: [] }),
+          analyticsApi.listWeatherRules().catch(() => ({ items: [] })),
         ]);
         if (!active) return;
         setWeatherForecast(forecastData);
         setWeatherRules(rulesData?.items || []);
+        setAllWeatherRules(allRulesData?.items || []);
       } catch (err) {
         if (active) setWeatherError(err.message || "Unable to load weather forecast.");
       } finally {
@@ -662,6 +692,15 @@ function AdminAnalyticsBasis() {
     loadWeatherData();
     return () => { active = false; };
   }, [resultId, selectedCommodityRecord?.id]);
+
+  const weatherThresholdsRows = useMemo(() => {
+    return TOP_10_WEATHER_TEMPLATES.map((tmpl) => {
+      const cRec = commodityRecords.find((c) => c.name?.toLowerCase() === tmpl.commodity.toLowerCase());
+      const cRules = (allWeatherRules || []).filter((r) => cRec && r.commodity_id === cRec.id);
+      const profile = getCommodityProfile(tmpl.commodity);
+      return buildCommodityWeatherThreshold(tmpl, cRules, profile);
+    });
+  }, [commodityRecords, allWeatherRules]);
 
   const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
     resultId === "historical-production" && !!selectedCommodityRecord?.id,
@@ -1472,17 +1511,19 @@ function AdminAnalyticsBasis() {
         )}
       </div>
 
-      {/* 4. Datasets Used Table (Full Width) */}
-      <DatasetsUsed
-        module={displayResult.module}
-        records={displayResult.records}
-      />
+      {/* 4. Datasets Used Table (Full Width) — Weather Risk basis excluded */}
+      {!isWeatherRisk && (
+        <DatasetsUsed
+          module={displayResult.module}
+          records={displayResult.records}
+        />
+      )}
 
-      {/* 5. Reference Thresholds — Top 10 Commodities (Weather Risk only) */}
+      {/* 5. Weather Threshold — Top 10 Commodities (Weather Risk only) */}
       {isWeatherRisk && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Reference Thresholds · Top 10 Commodities</p>
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Weather Threshold · Top 10 Commodities</p>
             <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
               Crop-specific weather classification thresholds for the Top 10 monitored commodities.
             </p>
@@ -1499,7 +1540,7 @@ function AdminAnalyticsBasis() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                {TOP_10_WEATHER_THRESHOLDS.map((row) => (
+                {weatherThresholdsRows.map((row) => (
                   <tr key={row.commodity}>
                     <td className="py-3.5 px-6 whitespace-nowrap">
                       <div className="flex items-center gap-2.5">
@@ -1527,8 +1568,32 @@ function AdminAnalyticsBasis() {
         </div>
       )}
 
-      {/* 6. Threshold Applied & Result Explanation in 2 Columns with Equal Height */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      {/* 6. Threshold Applied & Result Explanation */}
+      {isWeatherRisk ? (
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
+          </div>
+          <div className="p-6">
+            {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
+              <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed">
+                {displayResult.resultExplanation}
+              </p>
+            ) : (
+              <div className="py-4 space-y-1.5 max-w-sm mx-auto text-center">
+                <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                  <Info className="w-5 h-5" />
+                </div>
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
+                  No analytical explanation generated for the selected scope.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Threshold Applied Card */}
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
             <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
@@ -1580,6 +1645,7 @@ function AdminAnalyticsBasis() {
             </div>
           </div>
         </div>
+      )}
 
       {/* Missing data warning */}
       {displayResult.basisMissing && (

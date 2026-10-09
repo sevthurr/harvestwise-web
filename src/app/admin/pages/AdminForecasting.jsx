@@ -21,6 +21,7 @@ import { formatDate, formatPrice } from "../../global/utils/apiTransforms";
 import { filterRecordsByPeriod } from "../../global/utils/priceChartTransforms";
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { pricesApi } from "../../../services/api";
+import { formatPriceOutlookExplanation, ADMIN_TEXT_TEMPLATES } from "../utils/textTemplates";
 
 const FALLBACK_MARKETS = ["Bankerohan", "DFTC"];
 
@@ -81,21 +82,26 @@ function formatAxisDate(iso) {
 
 function formatSummaryPrice(value) {
   if (value == null || value === "") return "-/kg";
-  return `${formatPrice(value)}/kg`;
+  const num = numericPrice(value);
+  if (num == null) return `${formatPrice(value)}/kg`;
+  return `₱${num.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/kg`;
 }
 
 function formatSummaryPriceRange(lower, upper) {
   const lo = numericPrice(lower);
   const hi = numericPrice(upper);
   if (lo == null && hi == null) return "-/kg";
-  const parts = [lo != null ? formatPrice(lo) : "-", hi != null ? formatPrice(hi) : "-"];
-  return `${parts.join(" – ")}/kg`;
+  const formatVal = (v) =>
+    v != null
+      ? `₱${v.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+      : "-";
+  return `${formatVal(lo)} – ${formatVal(hi)}/kg`;
 }
 
 function formatChange(percent) {
   if (percent == null || !Number.isFinite(percent)) return "-";
   const sign = percent > 0 ? "+" : "";
-  return `${sign}${percent.toFixed(1)}%`;
+  return `${sign}${percent.toFixed(2)}%`;
 }
 
 const RECENT_AVERAGE_WINDOW = 7;
@@ -137,25 +143,17 @@ function priceOutlookFromChange(percent) {
   return "Neutral";
 }
 
-function resultExplanationFromForecast({ forecast, latestActual, changePercent, outlook }) {
-  if (forecast?.explanation) {
-    return forecast.explanation;
-  }
-  if (latestActual == null || forecast?.forecast_midpoint == null || !outlook) {
-    return "An explanation will appear when a valid forecast is available for the selected scope.";
-  }
+function resultExplanationFromForecast({ forecast, latestActual, recentAverage, changePercent, outlook }) {
+  const midpoint = numericPrice(forecast?.forecast_midpoint ?? forecast?.predicted_price);
+  const baseline = numericPrice(recentAverage ?? latestActual);
 
-  const midpoint = numericPrice(forecast.forecast_midpoint ?? forecast.predicted_price);
-  if (midpoint == null) return "An explanation will appear when a valid forecast is available for the selected scope.";
-
-  const direction = changePercent > 0 ? "increase" : changePercent < 0 ? "decrease" : "remain stable";
-  const directionText = changePercent > 0 ? "increasing" : changePercent < 0 ? "decreasing" : "stable";
-  const horizon = forecast.horizon_days ? ` over the selected ${forecast.horizon_days}-day horizon` : " over the selected horizon";
-  const range = forecast.lower_forecast != null && forecast.upper_forecast != null
-    ? ` The forecast range is ${formatSummaryPriceRange(forecast.lower_forecast, forecast.upper_forecast)}, indicating the expected uncertainty around the forecast midpoint.`
-    : "";
-
-  return `Forecast prices are expected to ${direction} by ${Math.abs(changePercent).toFixed(1)}%${horizon}, moving from ${formatSummaryPrice(latestActual)} to approximately ${formatSummaryPrice(midpoint)}. This ${directionText} outlook is ${outlook.toLowerCase()} because the change ${outlook === "Favorable" ? "exceeds +5%" : outlook === "Unfavorable" ? "is below -5%" : "remains between -5% and +5%"}.${range}`;
+  return formatPriceOutlookExplanation({
+    midpoint,
+    recentAverage: baseline,
+    changePercent,
+    outlook,
+    customExplanation: forecast?.explanation,
+  });
 }
 
 function isoDate(value) {
@@ -636,8 +634,8 @@ function AdminForecasting() {
     selectedForecast?.forecast_midpoint ?? selectedForecast?.predicted_price
   );
   const changePercent = useMemo(
-    () => forecastChangePercent(forecastMidpoint, latestActualPrice),
-    [forecastMidpoint, latestActualPrice]
+    () => forecastChangePercent(forecastMidpoint, recentAverage ?? latestActualPrice),
+    [forecastMidpoint, recentAverage, latestActualPrice]
   );
   const outlook = useMemo(
     () => priceOutlookFromChange(changePercent),
@@ -647,10 +645,11 @@ function AdminForecasting() {
     () => resultExplanationFromForecast({
       forecast: selectedForecast,
       latestActual: latestActualPrice,
+      recentAverage,
       changePercent,
       outlook,
     }),
-    [selectedForecast, latestActualPrice, changePercent, outlook]
+    [selectedForecast, latestActualPrice, recentAverage, changePercent, outlook]
   );
 
   const historicalDays = parseInt(historicalRange, 10) || 7;
@@ -851,22 +850,26 @@ function AdminForecasting() {
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
           </div>
-          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
-            <div className="py-4 space-y-1.5 max-w-sm mx-auto">
-              {loading ? (
-                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Loading result explanation...</p>
-              ) : error ? (
-                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Unable to generate an explanation for this forecast right now.</p>
-              ) : resultExplanation.startsWith("An explanation will appear") ? (
-                <>
-                  <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
-                    <Info className="w-5 h-5" />
-                  </div>
-                  <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
-                </>
-              ) : null}
-              {!loading && !error ? <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">{resultExplanation}</p> : null}
-            </div>
+          <div className="p-6 flex-1 flex flex-col justify-center">
+            {loading ? (
+              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Loading result explanation...</p>
+            ) : error ? (
+              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Unable to generate an explanation for this forecast right now.</p>
+            ) : !resultExplanation || resultExplanation === ADMIN_TEXT_TEMPLATES.priceOutlookFallback || resultExplanation.startsWith("An explanation will appear") ? (
+              <div className="py-4 space-y-1.5 max-w-sm mx-auto text-center">
+                <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                  <Info className="w-5 h-5" />
+                </div>
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
+                  Price Outlook could not be calculated for this forecast.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
+                {resultExplanation}
+              </p>
+            )}
           </div>
         </div>
       </div>

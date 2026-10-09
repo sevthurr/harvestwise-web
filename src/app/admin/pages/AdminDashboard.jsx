@@ -42,27 +42,33 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const { data, error: queryErr } = useQuery({
+  const { data, isFetching, refetch, error: queryErr } = useQuery({
     queryKey: ["adminDashboard"],
-    queryFn: () => adminApi.getDashboard(),
-    staleTime: 1000 * 60 * 5,
+    queryFn: () => adminApi.getDashboard({ _t: Date.now() }),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 30000,
   });
 
 
   const error = queryErr ? (queryErr.message || "Failed to load dashboard") : null;
 
   const s = data?.summary || {};
+  const attentionCount = s.sources_requiring_attention ?? s.sourcesRequiringAttention ?? (data?.sources_requiring_attention?.length || data?.sourcesRequiringAttention?.length || 0);
   const kpis = {
-    uploadedToday: s.uploaded_today ?? 0,
-    advisoriesCreated: s.advisories_created_today ?? 0,
-    forReview: s.for_review ?? 0,
-    failedUploads: s.failed_uploads_today ?? 0
+    uploadedToday: s.uploaded_today ?? s.uploadedToday ?? 0,
+    sourcesRequiringAttention: attentionCount,
+    activeCropPlans: s.active_crop_plans ?? s.activeCropPlans ?? 0,
+    registeredFarmers: s.registered_farmers ?? s.registeredFarmers ?? 0
   };
 
   const attentionSources = (data?.sources_requiring_attention || []).map((src) => ({
+    id: src.id,
     source: src.source_name || "Unknown source",
     type: src.source_type || src.ingestion_method || "—",
-    issue: src.reason || "Requires attention"
+    issue: src.reason || "Requires attention",
+    status: "Warning",
+    path: src.id ? `/admin/data-sources/${src.id}` : "/admin/data-sources"
   }));
 
   const todayActivities = (data?.recent_audit_logs || []).map((log) => ({
@@ -85,34 +91,34 @@ function AdminDashboard() {
     {
       value: kpis.uploadedToday.toString(),
       label: "Uploaded Today",
-      insight: "Completed uploads from today's processing history.",
-      color: "text-emerald-700",
-      dot: "bg-emerald-500",
+      subtext: kpis.uploadedToday > 0
+        ? `${kpis.uploadedToday} data batch${kpis.uploadedToday > 1 ? "es" : ""} ingested today`
+        : "Data files ingested today",
       path: "/admin/data-sources?tab=history"
     },
     {
-      value: kpis.advisoriesCreated.toString(),
-      label: "Advisories Created",
-      insight: "Advisory outputs generated from analytical processing.",
-      color: "text-blue-700",
-      dot: "bg-blue-500",
+      value: kpis.sourcesRequiringAttention.toString(),
+      label: "Sources Requiring Attention",
+      subtext: kpis.sourcesRequiringAttention === 0
+        ? "All data sources operational"
+        : `${kpis.sourcesRequiringAttention} source${kpis.sourcesRequiringAttention > 1 ? "s" : ""} need review`,
+      path: "/admin/system?tab=health"
+    },
+    {
+      value: kpis.activeCropPlans.toString(),
+      label: "Active Crop Plans",
+      subtext: kpis.activeCropPlans > 0
+        ? `${kpis.activeCropPlans} farming cycles in progress`
+        : "Farming cycles in progress",
       path: "/admin/modules"
     },
     {
-      value: kpis.forReview.toString(),
-      label: "For Review",
-      insight: "Uploads that need checking before publishing.",
-      color: "text-amber-700",
-      dot: "bg-amber-400",
-      path: "/admin/data-sources"
-    },
-    {
-      value: kpis.failedUploads.toString(),
-      label: "Failed Uploads",
-      insight: "Uploads or data processes that failed today.",
-      color: "text-red-700",
-      dot: "bg-red-500",
-      path: "/admin/data-sources"
+      value: kpis.registeredFarmers.toString(),
+      label: "Registered Farmers",
+      subtext: kpis.registeredFarmers > 0
+        ? `${kpis.registeredFarmers} active farmer accounts`
+        : "Verified active farmer accounts",
+      path: "/admin/system?tab=users"
     }
   ];
 
@@ -122,6 +128,17 @@ function AdminDashboard() {
       <PageHeader
         title={greeting}
         description="Manage uploads, API sync, processed outputs, and publishing for the farmer app."
+        action={
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[12px] font-semibold transition-colors border border-white/20 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            {isFetching ? "Refreshing..." : "Refresh"}
+          </button>
+        }
       />
 
       {error && (
@@ -136,19 +153,23 @@ function AdminDashboard() {
           <button
             key={c.label}
             onClick={() => navigate(c.path)}
-            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98] group flex flex-col justify-between"
+            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98] group flex flex-col justify-between cursor-pointer"
           >
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
-              <span className={`text-[11px] font-semibold uppercase tracking-wide ${c.color}`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">
                 {c.label}
               </span>
-            </div>
-            <div className="flex items-end justify-between mt-auto pt-1">
-              <p className={`text-[11px] font-semibold ${c.color} opacity-0 group-hover:opacity-100 transition-opacity`}>
+              <span className="text-[11px] font-semibold text-[var(--hw-green-700)] opacity-0 group-hover:opacity-100 transition-opacity">
                 View →
+              </span>
+            </div>
+            <div>
+              <p className="text-3xl font-bold text-[var(--hw-neutral-900)] leading-none mb-1.5">
+                {c.value}
               </p>
-              <p className={`text-3xl font-bold ${c.color} leading-none text-right ml-auto`}>{c.value}</p>
+              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-snug">
+                {c.subtext}
+              </p>
             </div>
           </button>
         ))}
@@ -178,12 +199,20 @@ function AdminDashboard() {
       {/* ── Sources requiring attention ── */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
         <div className="px-5 py-3.5 border-b border-[var(--hw-neutral-100)] flex items-center justify-between gap-3">
-          <p className="font-semibold text-[var(--hw-neutral-800)]">Sources requiring attention</p>
-          {attentionSources.length > 0 && (
-            <span className="text-[11px] font-semibold text-amber-700">
-              {attentionSources.length}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-[var(--hw-neutral-800)]">Sources requiring attention</p>
+            {attentionSources.length > 0 && (
+              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                {attentionSources.length}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => navigate("/admin/system?tab=health")}
+            className="text-[12px] font-medium text-[var(--hw-green-700)] hover:underline inline-flex items-center gap-0.5"
+          >
+            System Health <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {attentionSources.length === 0 ? (
