@@ -42,7 +42,7 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const { data, isFetching, refetch, error: queryErr } = useQuery({
+  const { data, error: queryErr } = useQuery({
     queryKey: ["adminDashboard"],
     queryFn: () => adminApi.getDashboard({ _t: Date.now() }),
     staleTime: 0,
@@ -128,17 +128,6 @@ function AdminDashboard() {
       <PageHeader
         title={greeting}
         description="Manage uploads, API sync, processed outputs, and publishing for the farmer app."
-        action={
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[12px] font-semibold transition-colors border border-white/20 cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
-            {isFetching ? "Refreshing..." : "Refresh"}
-          </button>
-        }
       />
 
       {error && (
