@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Check, Navigation, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { PageHeader } from "../../global/components/shared/PageHeader";
+import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import {
   inputCls,
   SUFFIX_OPTIONS,
-  PW_REQS,
   Card,
   SectionLabel,
   FieldLabel,
@@ -307,135 +307,22 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 /* -------------------------------------------------------------------------- */
 const SecurityTab = ({ showToast }) => {
   const { t } = useLanguage();
-  const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
-  const [showCur, setShowCur] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showCfm, setShowCfm] = useState(false);
   const [pwError, setPwError] = useState("");
   const googleLink = useGoogleLink({
     redirectTo: `${window.location.origin}/farmer/settings?tab=security`,
     onResult: () => showToast(t("farmer.settings.toast_google_connected", {}, "Google account connected.")),
   });
 
-  const handlePasswordSave = async () => {
-    if (!pw.current || !pw.newPw || !pw.confirm) {
-      setPwError("Please fill in all fields.");
-      return;
-    }
-    if (pw.newPw !== pw.confirm) {
-      setPwError("Passwords do not match.");
-      return;
-    }
-    if (!PW_REQS.every((r) => r.test(pw.newPw))) {
-      setPwError("Password does not meet all requirements.");
-      return;
-    }
-    setPwError("");
-    try {
-      await parseResponse(
-        await apiPost("/auth/change-password", {
-          current_password: pw.current,
-          new_password: pw.newPw,
-        })
-      );
-      setPw({ current: "", newPw: "", confirm: "" });
-      showToast(t("farmer.settings.toast_pw_success", {}, "Password updated successfully."));
-    } catch {
-      setPwError(t("farmer.settings.toast_pw_error", {}, "Could not update password. Check your current password and try again."));
-    }
-  };
-
-  const handlePasswordCancel = () => {
-    setPw({ current: "", newPw: "", confirm: "" });
-    setPwError("");
-  };
-
   return (
     <div className="space-y-4">
       <Card>
         <SectionLabel>{t("farmer.settings.change_password", {}, "Change Password")}</SectionLabel>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-cur">{t("farmer.settings.current_password", {}, "Current password")}</FieldLabel>
-            <div className="relative">
-              <input
-                id="f-cpw-cur"
-                type={showCur ? "text" : "password"}
-                value={pw.current}
-                onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
-                placeholder="••••••••"
-                className={`${inputCls} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowCur((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-              >
-                {showCur ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-new">{t("farmer.settings.new_password", {}, "New password")}</FieldLabel>
-            <div className="relative">
-              <input
-                id="f-cpw-new"
-                type={showNew ? "text" : "password"}
-                value={pw.newPw}
-                onChange={(e) => setPw((p) => ({ ...p, newPw: e.target.value }))}
-                placeholder="New password"
-                className={`${inputCls} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-              >
-                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {pw.newPw && (
-              <ul className="space-y-1 mt-1">
-                {PW_REQS.map((r) => {
-                  const ok = r.test(pw.newPw);
-                  return (
-                    <li key={r.label} className={`flex items-center gap-1.5 text-[12px] ${ok ? "text-emerald-600" : "text-black"}`}>
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border ${ok ? "bg-emerald-500 border-emerald-500" : "border-[var(--hw-neutral-300)]"}`}>
-                        {ok && <Check className="w-2.5 h-2.5 text-white" />}
-                      </div>
-                      {r.label}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-cfm">{t("farmer.settings.confirm_new_password", {}, "Confirm new password")}</FieldLabel>
-            <div className="relative">
-              <input
-                id="f-cpw-cfm"
-                type={showCfm ? "text" : "password"}
-                value={pw.confirm}
-                onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))}
-                placeholder="Repeat new password"
-                className={`${inputCls} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowCfm((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-              >
-                {showCfm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          {pwError && <p className="text-[13px] text-red-600">{pwError}</p>}
-          <div className="flex gap-2 pt-1">
-            <GhostBtn onClick={handlePasswordCancel}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
-            <GreenBtn onClick={handlePasswordSave}>{t("farmer.settings.update_password", {}, "Update password")}</GreenBtn>
-          </div>
-        </div>
+        <PasswordChangeForm
+          idPrefix="f-cpw"
+          onSuccess={() => showToast(t("farmer.settings.toast_pw_success", {}, "Password updated successfully."))}
+          onError={() => setPwError(t("farmer.settings.toast_pw_error", {}, "Could not update password. Check your current password and try again."))}
+        />
+        {pwError && <p className="mt-3 text-[13px] text-red-600">{pwError}</p>}
       </Card>
 
       <Card>

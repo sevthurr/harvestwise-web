@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
-import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
 import { UserAvatar } from "../profile/UserAvatar";
 
 
@@ -52,7 +52,6 @@ function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
-  const [showChangePw, setShowChangePw] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
   const active = getActive(location.pathname);
@@ -116,12 +115,15 @@ function DFTCLayoutInner() {
     navigate("/login", { replace: true });
   };
 
-  // Suggest a password change while the account is still on a temporary
-  // password (set by admin user creation). Dismissible — a suggestion, not a lock.
-  const pendingChangePassword = user?.must_change_password === true;
-  useEffect(() => {
-    setShowChangePw(pendingChangePassword);
-  }, [pendingChangePassword]);
+  // Replace the workspace content while the account is still on an
+  // admin-provisioned temporary password. `rotated` is cleared the moment the
+  // POST succeeds: change_password() revokes every session and purges the
+  // cached snapshot before returning, so the next /auth/me can come back 401
+  // and null out `user` — and with no dismiss affordance, a gate derived from
+  // the flag alone would strand the user. The rotation already committed
+  // server-side; refreshUser() only reconciles the cache, so it is best-effort.
+  const [rotated, setRotated] = useState(false);
+  const pendingChangePassword = user?.must_change_password === true && !rotated;
 
   const { data: unreadData, refetch: refreshUnread } = useQuery({
     queryKey: ["notifications", "unread-count"],
@@ -149,9 +151,13 @@ function DFTCLayoutInner() {
     refreshUnread();
   });
 
-  const handlePasswordChanged = async () => {
-    await refreshUser();
-    setShowChangePw(false);
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
   };
 
   return (
@@ -291,8 +297,14 @@ function DFTCLayoutInner() {
     /* ── Main content ── */
   }
       <DFTCMain>
-        <Outlet />
-        <Footer className="mt-6 mb-2" />
+        {pendingChangePassword ? (
+          <ChangePasswordPanel onRotated={handlePasswordRotated} />
+        ) : (
+          <>
+            <Outlet />
+            <Footer className="mt-6 mb-2" />
+          </>
+        )}
       </DFTCMain>
 
       {
@@ -313,13 +325,6 @@ function DFTCLayoutInner() {
   })}
         </div>
       </nav>
-
-      {showChangePw && (
-        <ChangePasswordPrompt
-          onClose={() => setShowChangePw(false)}
-          onChanged={handlePasswordChanged}
-        />
-      )}
     </div>
   );
 }
