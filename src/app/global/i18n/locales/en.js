@@ -1,8 +1,12 @@
 import { farmer as modularFarmer } from './en/farmer/index.js';
 import { settings as dftcSettings } from './en/dftc/settings.js';
 import { settings as adminSettings } from './en/admin/settings.js';
+import { about } from './en/about.js';
+import { privacy as privacyLegal } from './en/legal/privacy.js';
+import { terms as termsLegal } from './en/legal/terms.js';
 
 function deepMerge(target, source) {
+
   const result = { ...target };
   for (const key of Object.keys(source || {})) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -117,7 +121,11 @@ export const en = {
     no_farmer_account: "Don't have a Farmer account?",
     create_one: "Create one",
     already_have_farmer_account: "Already have an account?",
+    registration_agreement: "By creating an account, you agree to the {terms} and acknowledge the {privacy}.",
+    terms_and_conditions: "Terms and Conditions",
+    privacy_policy: "Privacy Policy",
     sign_in_link: "Sign in",
+
     install_pwa: "Install HarvestWise app",
     installing_pwa: "Installing…",
     or: "or",
@@ -722,5 +730,11 @@ export const en = {
   },
   admin: {
     settings: adminSettings
+  },
+  about,
+  legal: {
+    privacy: privacyLegal,
+    terms: termsLegal,
   }
 };
+

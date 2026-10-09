@@ -37,7 +37,11 @@ import ShowcasePage from "./farmer/pages/Showcase";
 import FarmerProfile from "./farmer/pages/FarmerProfile";
 import FarmerSettings from "./farmer/pages/FarmerSettings";
 import AboutPage from "./farmer/pages/About";
+
+import PrivacyPolicyPage from "./global/pages/PrivacyPolicyPage";
+import TermsPage from "./global/pages/TermsPage";
 // DFTC workspace
+
 import { DFTCLayout }       from "./global/components/layout/DFTCLayout";
 import DFTCHome             from "./dftc/pages/DFTCHome";
 import DFTCInput            from "./dftc/pages/DFTCInput";
@@ -90,11 +94,14 @@ function LegacyAnalyticsBasisRedirect() {
 }
 
 export const router = createBrowserRouter([
-  // ── Auth pages (unprotected) ──────────────────────────────────────────────────
+  // ── Auth & Legal pages (unprotected) ──────────────────────────────────────────
   { path: "/", element: <SmartRedirect /> },
   { path: "/login", element: <SmartRedirect fallback={<LoginPage />} /> },
   { path: "/register",   element: <RegisterPage /> },
   { path: "/onboarding", element: <OnboardingPage /> },
+  { path: "/privacy",    element: <PrivacyPolicyPage /> },
+  { path: "/terms",      element: <TermsPage /> },
+
 
   // ── Farmer workspace ─────────────────────────────────────────────────────────
   {

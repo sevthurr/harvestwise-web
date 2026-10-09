@@ -80,44 +80,7 @@ const ConfirmDialog = ({ open, title, message, confirmLabel = "Confirm", danger,
       </div>
     </div>;
 };
-const LEGAL = {
-  privacy: {
-    title: "Privacy",
-    body: <p className="text-sm text-[var(--hw-neutral-900)] leading-relaxed">HarvestWise collects only the information needed to provide market monitoring and planting recommendations. Your farm data and planting records are stored on your device. Account information is stored securely on HarvestWise servers and is not shared with third parties without your consent. Full privacy policy available on the HarvestWise website.</p>
-  },
-  terms: {
-    title: "Terms of use",
-    body: <p className="text-sm text-[var(--hw-neutral-900)] leading-relaxed">HarvestWise is a decision-support tool. Recommendations and forecasts are estimates based on available data and do not guarantee income or profit. Farmers are responsible for their own planting and selling decisions. Full terms available on the HarvestWise website.</p>
-  },
-  about: {
-    title: "About HarvestWise",
-    body: <div className="space-y-3 text-sm text-[var(--hw-neutral-900)]">
-        <p>HarvestWise is a mobile-first Progressive Web Application designed to help vegetable farmers in Davao City make informed planting and selling decisions.</p>
-        <p>HarvestWise uses market price data, supply information, weather forecasts, and calendar indicators to provide personalized planting recommendations and crop-cycle monitoring.</p>
-        <p className="text-xs text-[var(--hw-neutral-500)]">Geocoding and administrative location data powered by OpenStreetMap contributors under ODbL.</p>
-        <div className="pt-2 border-t border-[var(--hw-neutral-100)] space-y-1 text-xs text-[var(--hw-neutral-900)]">
-          <p>Version 1.0.0 — prototype build</p>
-          <p>© 2026 HarvestWise. All rights reserved.</p>
-        </div>
-      </div>
-  }
-};
-const LegalDrawer = ({ id, onClose }) => {
-  if (!id) return null;
-  const content = LEGAL[id];
-  return <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[85vh] md:max-h-none">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">{content.title}</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-5">{content.body}</div>
-      </div>
-    </>;
-};
+
 const HELP_ITEMS = [
   { title: "How recommendations work", body: "A recommendation is based on your planting schedule, expected harvest date, production costs, and current market conditions. HarvestWise compares your cost to recover to the expected market price at harvest and considers supply and weather risks." },
   { title: "What the advisory labels mean", body: '"Recommended" means conditions look favorable for your crop. "Proceed with Caution" means risks are present — monitor conditions closely. "Avoid for Now" means significant risks exist and it may be better to wait.' },
@@ -156,8 +119,8 @@ function MenuPage() {
   });
   const [syncStatus, setSyncStatus] = useState("updated");
   const [installStatus, setInstallStatus] = useState("not-installed");
-  const [legalOpen, setLegalOpen] = useState(null);
   const [showSignOut, setShowSignOut] = useState(false);
+
   const [showClearData, setShowClearData] = useState(false);
   const [toast, setToast] = useState(null);
   const showToast = (msg) => {
@@ -442,15 +405,15 @@ function MenuPage() {
         <section>
           <SectionLabel>Privacy and about</SectionLabel>
           <Card>
-            <SettingsRow icon={<Shield className="w-5 h-5" />} label="Privacy" onClick={() => setLegalOpen("privacy")} />
+            <SettingsRow icon={<Shield className="w-5 h-5" />} label="Privacy" onClick={() => navigate("/privacy")} />
             <Divider />
-            <SettingsRow icon={<FileText className="w-5 h-5" />} label="Terms of use" onClick={() => setLegalOpen("terms")} />
+            <SettingsRow icon={<FileText className="w-5 h-5" />} label="Terms of use" onClick={() => navigate("/terms")} />
             <Divider />
-            <SettingsRow icon={<Info className="w-5 h-5" />} label="About HarvestWise" onClick={() => setLegalOpen("about")} />
+            <SettingsRow icon={<Info className="w-5 h-5" />} label="About HarvestWise" onClick={() => navigate("/farmer/about")} />
             <Divider />
             <div className="px-4 py-3.5">
               <p className="text-sm font-medium text-[var(--hw-neutral-900)]">App version</p>
-              <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">Version 1.0.0 — prototype</p>
+              <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">Version 1.0</p>
             </div>
           </Card>
         </section>
@@ -466,9 +429,8 @@ function MenuPage() {
           Sign out
         </button>
 
-      <LegalDrawer id={legalOpen} onClose={() => setLegalOpen(null)} />
-
       <ConfirmDialog
+
     open={showSignOut}
     title="Sign out?"
     message="You will be signed out of HarvestWise. Your saved crop records and preferences will remain on this device."
