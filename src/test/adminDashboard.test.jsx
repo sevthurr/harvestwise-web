@@ -15,9 +15,13 @@ import AdminDashboard from '../app/admin/pages/AdminDashboard';
 const DASHBOARD = {
   summary: {
     uploaded_today: 12,
+    records_ingested_today: 148,
+    sources_requiring_attention: 1,
+    registered_farmers: 45,
     advisories_created_today: 7,
     for_review: 3,
     failed_uploads_today: 1,
+    active_crop_plans: 9,
   },
   sources_requiring_attention: [
     { id: 'src-1', source_name: 'DFTC Wholesale', source_type: 'API', ingestion_method: 'sync', reason: 'Timed out' },
@@ -73,9 +77,13 @@ describe('AdminDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('12')).toBeInTheDocument());
     expect(screen.getByText('Uploaded Today')).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Records Ingested Today')).toBeInTheDocument();
+    expect(screen.getByText('148')).toBeInTheDocument();
+    expect(screen.getAllByText('Sources Requiring Attention').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Registered Farmers')).toBeInTheDocument();
+    expect(screen.getByText('45')).toBeInTheDocument();
+    expect(screen.getByText('Active Crop Plans')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
   });
 
   it('renders sources requiring attention from the dashboard payload', async () => {

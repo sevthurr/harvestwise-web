@@ -1,8 +1,12 @@
 import { farmer as modularFarmer } from './ceb/farmer/index.js';
 import { settings as dftcSettings } from './ceb/dftc/settings.js';
 import { settings as adminSettings } from './ceb/admin/settings.js';
+import { about } from './ceb/about.js';
+import { privacy as privacyLegal } from './ceb/legal/privacy.js';
+import { terms as termsLegal } from './ceb/legal/terms.js';
 
 function deepMerge(target, source) {
+
   const result = { ...target };
   for (const key of Object.keys(source || {})) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -134,7 +138,11 @@ export const ceb = {
     no_farmer_account: "Wala pa kay Farmer account?",
     create_one: "Maghimo og usa",
     already_have_farmer_account: "Naa na kay account?",
+    registration_agreement: "Paghimo nimo og account, mouyon ka sa {terms} ug nagpamatuod nga nabasa nimo ang {privacy}.",
+    terms_and_conditions: "Mga Termino ug Kondisyon",
+    privacy_policy: "Patakaran sa Privacy",
     sign_in_link: "Mag-sign in",
+
     install_pwa: "I-install ang HarvestWise app",
     installing_pwa: "Nag-install…",
     or: "o",
@@ -696,5 +704,11 @@ export const ceb = {
   },
   admin: {
     settings: adminSettings
+  },
+  about,
+  legal: {
+    privacy: privacyLegal,
+    terms: termsLegal,
   }
 };
+
