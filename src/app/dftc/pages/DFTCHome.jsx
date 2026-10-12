@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import { DFTCArrivalVolumeCard } from "../components/DFTCArrivalVolumeCard";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { apiGet, parseResponse } from "../../global/api";
 
 function formatMarketName(sourceId) {
@@ -56,6 +57,42 @@ function getLocalDateString(d = new Date()) {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatSavedDate(val) {
+  if (!val) return "—";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  } catch {
+    return String(val);
+  }
+}
+
+function formatDateTimeDisplay(val) {
+  if (!val) return "—";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    const dateStr = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+    const timeStr = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
+    return `${dateStr} · ${timeStr}`;
+  } catch {
+    return String(val);
+  }
 }
 
 function getTimeOfDay() {
@@ -119,8 +156,7 @@ function DFTCHome() {
     queryFn: async () => {
       const res = await apiGet("/dftc/home");
       return parseResponse(res);
-    },
-    staleTime: 30_000
+    }
   });
 
   const kpis = homeData?.kpis || {};
@@ -147,19 +183,44 @@ function DFTCHome() {
     (s) => s.status?.toLowerCase().includes("correction") || s.status?.toLowerCase() === "needs correction"
   );
 
-  const statusRows = requirements.map((req) => {
-    const matchingSub = submissions.find(
-      (s) =>
-        s.source_id === req.source_id &&
-        s.data_type === req.data_type &&
-        (s.price_type || null) === (req.price_type || null) &&
-        (s.reporting_date === todayStr || (s.saved_at && s.saved_at.slice(0, 10) === todayStr))
+  const requirementsList =
+    requirements.length > 0
+      ? requirements
+      : (homeData?.today_status || []).map((ts) => ({
+          id: ts.requirement_id || `${ts.source_id}-${ts.data_type}`,
+          source_id: ts.source_id,
+          source_name: ts.source_name || ts.source_id,
+          data_type: ts.data_type,
+          price_type: ts.price_type,
+          status: ts.status,
+          submission_id: ts.submission_id,
+          last_saved: ts.last_saved
+        }));
+
+  const statusRows = requirementsList.map((req) => {
+    const matchingSub = submissions.find((s) => {
+      const matchSource = s.source_id === req.source_id;
+      const matchDataType = s.data_type === req.data_type;
+      const matchPriceType = (s.price_type || null) === (req.price_type || null);
+      const isDateToday =
+        s.reporting_date === todayStr ||
+        (s.saved_at && getLocalDateString(new Date(s.saved_at)) === todayStr) ||
+        (s.created_at && getLocalDateString(new Date(s.created_at)) === todayStr);
+      return matchSource && matchDataType && matchPriceType && isDateToday;
+    });
+
+    const matchingHomeStatus = (homeData?.today_status || []).find(
+      (ts) =>
+        ts.requirement_id === req.id ||
+        (ts.source_id === req.source_id &&
+          ts.data_type === req.data_type &&
+          (ts.price_type || null) === (req.price_type || null))
     );
 
-    let status = "Not Encoded";
-    let lastSaved = "\u2014";
-    let savedDatasetId = null;
+    let status = req.status || matchingHomeStatus?.status || "Not Encoded";
+    let savedDatasetId = req.submission_id || matchingHomeStatus?.submission_id || null;
     let historyDatasetId = null;
+    let rawDate = req.last_saved || matchingHomeStatus?.last_saved || null;
 
     if (matchingSub) {
       const subStatus = (matchingSub.status || "").toLowerCase();
@@ -170,14 +231,12 @@ function DFTCHome() {
         status = "Needs Correction";
         historyDatasetId = matchingSub.id;
       }
-      if (matchingSub.saved_at) {
-        lastSaved = new Date(matchingSub.saved_at).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit"
-        });
+      if (matchingSub.saved_at || matchingSub.created_at) {
+        rawDate = matchingSub.saved_at || matchingSub.created_at;
       }
     }
 
+    const lastSaved = formatDateTimeDisplay(rawDate);
     const entryPath =
       req.data_type === "arrival_volume" ? "/dftc/arrival-input" : "/dftc/price-input";
 
@@ -221,23 +280,27 @@ function DFTCHome() {
     });
   }
 
-  const recentSaved = submissions.slice(0, 5).map((sub) => {
-    let savedTimeDisplay = "\u2014";
-    if (sub.saved_at) {
-      savedTimeDisplay = new Date(sub.saved_at).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit"
-      });
-    } else if (sub.created_at) {
-      savedTimeDisplay = new Date(sub.created_at).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit"
-      });
-    }
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const recentSavedSubmissions = submissions.filter((sub) => {
+    const rawDate = sub.saved_at || sub.created_at || sub.reporting_date;
+    if (!rawDate) return false;
+    const subDate = new Date(rawDate);
+    if (isNaN(subDate.getTime())) return false;
+    const isWithin7Days = subDate >= sevenDaysAgo;
+    const status = (sub.status || "").toLowerCase();
+    const isSaved = status === "saved" || status === "validated" || status === "accepted" || !status;
+    return isWithin7Days && isSaved;
+  });
+
+  const recentSaved = recentSavedSubmissions.slice(0, 5).map((sub) => {
+    const savedTimeDisplay = formatSavedDate(sub.saved_at || sub.created_at || sub.reporting_date);
+    const isToday =
+      sub.reporting_date === todayStr ||
+      (sub.saved_at && getLocalDateString(new Date(sub.saved_at)) === todayStr) ||
+      (sub.created_at && getLocalDateString(new Date(sub.created_at)) === todayStr);
 
     return {
       id: sub.id,
@@ -245,28 +308,36 @@ function DFTCHome() {
       market: formatMarketName(sub.source_name || sub.source_id),
       entryMethod: sub.submission_method || "Manual Input",
       savedAt: savedTimeDisplay,
-      records: "\u2014",
-      status: sub.status || "Saved"
+      records: "—",
+      status: sub.status || "Saved",
+      isToday: Boolean(isToday)
     };
   });
 
-  function handleRowClick(row) {
-    if (row.status === "Saved" && row.savedDatasetId) {
-      navigate(`/dftc/submissions/${row.savedDatasetId}`);
-    } else if (row.status === "Not Encoded" && row.entryPath) {
-      navigate(row.entryPath);
-    } else if (row.status === "Needs Correction" && row.historyDatasetId) {
-      navigate(`/dftc/submissions/${row.historyDatasetId}`);
-    }
-  }
+  const volatileItems = (homeData?.price_movement || []).filter(
+    (p) => p.change_pct !== null && p.change_pct !== undefined && Math.abs(p.change_pct) >= 10.0
+  );
+  const priceVolatilityCount = kpis.price_volatility_alerts_count ?? volatileItems.length;
+  const topVolatile = kpis.top_volatile_commodity || volatileItems[0]?.crop_name || null;
 
-  const currentMonth = kpis.month_name || todayDate.toLocaleDateString("en-US", { month: "long" });
-  const priceCoverageCount = kpis.price_coverage_count ?? 0;
-  const priceCoverageTotal = kpis.price_coverage_total ?? 22;
-  const arrivalCoverageCount = kpis.arrival_coverage_count ?? 0;
-  const arrivalCoverageTotal = kpis.arrival_coverage_total ?? 22;
+  const oversupplyCount = kpis.oversupply_commodities_count ?? 0;
+  const topOversupply = kpis.top_oversupply_commodity || null;
 
   const hasAttentionItems = attentionItems.length > 0;
+
+  const priceSubmissionsCount = priceSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0) || priceSubmissionsToday.length;
+  const arrivalSubmissionsCount = arrivalSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0) || arrivalSubmissionsToday.length;
+
+  const priceRecordsTodayVal = kpis.price_records_today || priceSubmissionsCount || 0;
+  const arrivalRecordsTodayVal = kpis.arrival_records_today || arrivalSubmissionsCount || 0;
+
+  const latestPriceSub =
+    priceSubmissionsToday[0] ||
+    submissions.find((s) => s.data_type === "price" || s.data_type === "daily_price");
+
+  const latestArrivalSub =
+    arrivalSubmissionsToday[0] ||
+    submissions.find((s) => s.data_type === "arrival_volume");
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -279,37 +350,65 @@ function DFTCHome() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <DFTCKpiCard
           label="Price Records Today"
-          value={kpis.price_records_today ?? (priceSubmissionsToday.length || 0)}
+          value={priceRecordsTodayVal}
           loading={isLoading}
           labelColor="text-[var(--hw-neutral-800)]"
           valueColor="text-[var(--hw-neutral-900)]"
-          onClick={() => navigate("/dftc/price-input")}
+          onClick={() => {
+            if (latestPriceSub?.id) {
+              navigate(`/dftc/submissions/${latestPriceSub.id}`);
+            } else {
+              navigate("/dftc/submissions");
+            }
+          }}
         />
         <DFTCKpiCard
           label="Arrival Records Today"
-          value={kpis.arrival_records_today ?? (arrivalSubmissionsToday.length || 0)}
+          value={arrivalRecordsTodayVal}
           loading={isLoading}
           labelColor="text-[var(--hw-neutral-800)]"
           valueColor="text-[var(--hw-neutral-900)]"
-          onClick={() => navigate("/dftc/arrival-input")}
+          onClick={() => {
+            if (latestArrivalSub?.id) {
+              navigate(`/dftc/submissions/${latestArrivalSub.id}`);
+            } else {
+              navigate("/dftc/submissions");
+            }
+          }}
         />
         <DFTCKpiCard
-          label={`Price Data Coverage — ${currentMonth}`}
-          value={`${priceCoverageCount}/${priceCoverageTotal}`}
-          sub="monitored commodities"
+          label="Price Volatility Alerts"
+          value={priceVolatilityCount}
+          sub={priceVolatilityCount === 1 ? "1 commodity with >10% shift" : `${priceVolatilityCount} commodities with >10% shift`}
           loading={isLoading}
           labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-          onClick={() => navigate("/dftc/trends?tab=price")}
+          valueColor={priceVolatilityCount > 0 ? "text-amber-600" : "text-[var(--hw-neutral-900)]"}
+          onClick={() => {
+            if (priceVolatilityCount === 0) {
+              navigate("/dftc/trends?tab=price");
+            } else if (priceVolatilityCount === 1) {
+              navigate(`/dftc/trends?tab=price&commodity=${encodeURIComponent(topVolatile || "")}`);
+            } else {
+              navigate("/dftc/trends?tab=price&alert=volatility");
+            }
+          }}
         />
         <DFTCKpiCard
-          label={`Arrival Data Coverage — ${currentMonth}`}
-          value={`${arrivalCoverageCount}/${arrivalCoverageTotal}`}
-          sub="monitored commodities"
+          label="Oversupply Commodities"
+          value={oversupplyCount}
+          sub={oversupplyCount === 1 ? "1 in high arrival pressure (≥Q3)" : `${oversupplyCount} in high arrival pressure (≥Q3)`}
           loading={isLoading}
           labelColor="text-[var(--hw-neutral-800)]"
-          valueColor="text-[var(--hw-neutral-900)]"
-          onClick={() => navigate("/dftc/trends?tab=arrival")}
+          valueColor={oversupplyCount > 0 ? "text-rose-600" : "text-[var(--hw-neutral-900)]"}
+          onClick={() => {
+            if (oversupplyCount === 0) {
+              navigate("/dftc/trends?tab=arrival");
+            } else if (oversupplyCount === 1) {
+              navigate(`/dftc/trends?tab=arrival&commodity=${encodeURIComponent(topOversupply || "")}`);
+            } else {
+              navigate("/dftc/trends?tab=arrival&alert=oversupply");
+            }
+          }}
         />
       </div>
 
@@ -355,98 +454,6 @@ function DFTCHome() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Today's Data Status</p>
-          <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-            Check which daily market datasets have already been encoded or uploaded.
-          </p>
-        </div>
-
-        {isLoading ? (
-          <div className="p-4 space-y-3 animate-pulse">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
-                <div className="space-y-1.5 flex-1">
-                  <div className="h-4 w-1/3 bg-[var(--hw-neutral-200)] rounded" />
-                  <div className="h-3 w-1/4 bg-[var(--hw-neutral-200)] rounded" />
-                </div>
-                <div className="h-4 w-20 bg-[var(--hw-neutral-200)] rounded" />
-              </div>
-            ))}
-          </div>
-        ) : statusRows.length === 0 ? (
-          <div className="p-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-            No active data requirements configured.
-          </div>
-        ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                  <tr>
-                    <th className="px-5 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                      Data Requirement
-                    </th>
-                    <th className="px-5 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                      Market / Facility
-                    </th>
-                    <th className="px-5 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                      Status
-                    </th>
-                    <th className="px-5 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                      Last Saved
-                    </th>
-                    <th className="px-5 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {statusRows.map((row) => (
-                    <tr
-                      key={row.id}
-                      onClick={() => handleRowClick(row)}
-                      className="border-b border-[var(--hw-neutral-100)] last:border-0 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-                    >
-                      <td className="px-5 py-3.5 text-[14px] font-medium text-[var(--hw-neutral-900)]">
-                        {row.requirement}
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px] text-[var(--hw-neutral-800)]">{row.market}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge status={row.status} />
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px] text-[var(--hw-neutral-800)]">{row.lastSaved}</td>
-                      <td className="px-5 py-3.5 text-right">
-                        <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] ml-auto" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-[var(--hw-neutral-100)]">
-              {statusRows.map((row) => (
-                <button
-                  key={row.id}
-                  onClick={() => handleRowClick(row)}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
-                >
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)]">{row.requirement}</p>
-                    <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{row.market}</p>
-                    <div className="mt-1.5 flex items-center gap-3">
-                      <StatusBadge status={row.status} />
-                      <span className="text-[12px] text-[var(--hw-neutral-800)]">{row.lastSaved}</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
       {hasAttentionItems && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)] flex items-center gap-2">
@@ -472,10 +479,15 @@ function DFTCHome() {
 
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
         <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
+          <div>
+            <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
+            <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
+              Datasets saved and validated in the last 7 days
+            </p>
+          </div>
           <button
             onClick={() => navigate("/dftc/submissions")}
-            className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+            className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0"
           >
             View Data History
           </button>
@@ -494,7 +506,7 @@ function DFTCHome() {
           </div>
         ) : recentSaved.length === 0 ? (
           <div className="p-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-            No recent saved data found. Encoded or uploaded datasets will appear here.
+            No saved datasets from the last 7 days. Encoded or uploaded datasets will appear here.
           </div>
         ) : (
           <div className="divide-y divide-[var(--hw-neutral-100)]">
@@ -505,7 +517,14 @@ function DFTCHome() {
                 className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">{row.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">{row.name}</p>
+                    {row.isToday && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
+                        Today
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
                     {row.market} · {row.entryMethod} · {row.savedAt}
                   </p>
@@ -539,15 +558,22 @@ function DFTCHome() {
                 <button
                   key={item.commodity_id}
                   onClick={() => navigate(`/dftc/trends?commodity=${item.commodity_id}`)}
-                  className="w-full flex items-center justify-between gap-3 text-left hover:bg-[var(--hw-neutral-50)] rounded-lg p-2 -m-2 transition-colors"
+                  className="w-full flex items-center justify-between gap-3 text-left hover:bg-[var(--hw-neutral-50)] rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                 >
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">
-                      {item.crop_name}{item.variety ? ` · ${item.variety}` : ""}
-                    </p>
-                    <p className="text-[12px] text-[var(--hw-neutral-800)] truncate">
-                      {formatMarketName(item.market)} · {item.price_type || "Retail"}
-                    </p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <CommodityIllustration
+                      commodityId={item.commodity_id}
+                      commodityName={item.crop_name}
+                      className="w-8 h-8 shrink-0 object-contain"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">
+                        {item.crop_name}{item.variety ? ` · ${item.variety}` : ""}
+                      </p>
+                      <p className="text-[12px] text-[var(--hw-neutral-800)] truncate">
+                        {formatMarketName(item.market)} · {item.price_type || "Retail"}
+                      </p>
+                    </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
@@ -574,7 +600,8 @@ function DFTCHome() {
         <DFTCArrivalVolumeCard
           loadingHome={loadingHome}
           latestArrivalVolume={homeData?.latest_arrival_volume}
-          onViewTrends={() => navigate("/dftc/trends")}
+          onViewTrends={() => navigate("/dftc/trends?tab=arrival")}
+          onSelectCommodity={(commodityId) => navigate(`/dftc/trends?tab=arrival&commodity=${commodityId}`)}
         />
       </div>
     </div>

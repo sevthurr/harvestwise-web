@@ -1,3 +1,5 @@
+import { Leaf } from "lucide-react";
+
 const TomatoSVG = ({ className }) => <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
     <ellipse cx="28" cy="36" rx="18" ry="16" fill="#EF4444" />
     <ellipse cx="23" cy="33" rx="5" ry="6" fill="#F87171" opacity="0.35" />
@@ -96,12 +98,12 @@ const ChinesePechaySVG = ({ className }) => <svg viewBox="0 0 56 56" fill="none"
     <ellipse cx="28" cy="22" rx="4" ry="8" fill="#4ADE80" opacity="0.4" />
     <path d="M28 34 C28 34 28 12 28 12" stroke="#15803D" strokeWidth="0.8" fill="none" />
   </svg>;
-const PlaceholderSVG = ({ className }) => <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <circle cx="28" cy="32" r="18" fill="#D1FAE5" />
-    <circle cx="28" cy="32" r="10" fill="#6EE7B7" />
-    <path d="M28 14 C24 10 18 12 20 16" stroke="#059669" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    <path d="M28 14 C32 10 38 12 36 16" stroke="#059669" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-  </svg>;
+const PlaceholderSVG = ({ className }) => (
+  <Leaf
+    className={`text-[var(--hw-neutral-400)] shrink-0 ${className || "w-12 h-12"}`}
+    strokeWidth={1.75}
+  />
+);
 const COMMODITY_REGISTRY = {
   kamatis: { name: "Kamatis", SVG: TomatoSVG },
   talong: { name: "Talong", SVG: EggplantSVG },
@@ -131,11 +133,11 @@ function getCommodityIconKey(commodityId, baseName, commodityName) {
   if (combined.includes('kalabasa') || combined.includes('squash')) return 'kalabasa';
   if (combined.includes('pipino') || combined.includes('cucumber')) return 'pipino';
   if (combined.includes('ampalaya') || combined.includes('bitter')) return 'ampalaya';
-  if (combined.includes('pechay') || combined.includes('wongbok') || combined.includes('cabbage chinese') || combined.includes('chinese-pechay')) return 'pechay';
+  if (!combined.includes('native') && (combined.includes('pechay') || combined.includes('wongbok') || combined.includes('cabbage chinese') || combined.includes('chinese-pechay') || combined.includes('petchay'))) return 'pechay';
   if (combined.includes('lettuce')) return 'lettuce';
   if (combined.includes('repolyo') || combined.includes('cabbage')) return 'repolyo';
   if (combined.includes('carrot')) return 'carrots';
-  if (combined.includes('atsal') || combined.includes('bell pepper') || combined.includes('bell-pepper') || combined.includes('pepper')) return 'atsal';
+  if (combined.includes('atsal') || combined.includes('bell pepper') || combined.includes('bell-pepper')) return 'atsal';
 
   for (const key of Object.keys(COMMODITY_REGISTRY)) {
     if (combined.includes(key)) {
@@ -156,7 +158,6 @@ const CommodityIllustration = ({
   const entry = iconKey ? COMMODITY_REGISTRY[iconKey] : null;
   
   if (!entry) {
-    console.log('Using placeholder for:', commodityName);
     return <PlaceholderSVG className={className} />;
   }
   return <entry.SVG className={className} />;
