@@ -777,7 +777,7 @@ function RecommendationPage() {
             supply: rec.arrival_pressure ? `Arrival pressure is ${rec.arrival_pressure}.` : "Moderate supply pressure.",
             production: rec.historical_seasonal_production_level ? `${harvestWindowStr} supply expected to be ${rec.historical_seasonal_production_level}.` : "Moderate seasonal production.",
             weather: rec.weather_risk_level ? `Weather conditions evaluated as ${rec.weather_risk_level}.` : "Conditions suitable for planting.",
-            profit: "Favorable margin compared to estimated production costs.",
+            profit: rec.profitability ? `Estimated profitability is ${rec.profitability}.` : "Favorable margin compared to estimated production costs.",
           };
 
       result.push({

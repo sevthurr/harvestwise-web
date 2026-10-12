@@ -24,10 +24,9 @@ const RULE_EDIT_CONFIGS = {
   "Arrival Pressure": {
     description: "Classifies market arrival volume by comparing current DFTC arrivals with historical Q1/Q2/Q3 quartile thresholds.",
     fields: [
-      { key: "q1", label: "Q1 threshold", defaultValue: "32", unit: "MT/week" },
-      { key: "q2", label: "Q2 threshold", defaultValue: "35", unit: "MT/week" },
-      { key: "q3", label: "Q3 threshold", defaultValue: "41", unit: "MT/week" },
-      { key: "unit", label: "Volume unit", defaultValue: "MT/week", isSelect: true, options: ["kg/week", "MT/week", "tons/week"] }
+      { key: "q1", label: "Q1 threshold (kg/week)", defaultValue: "32000", classification: "Lower Middle", operator: ">=", unit: "kg/week" },
+      { key: "q2", label: "Q2 threshold (kg/week)", defaultValue: "35000", classification: "Upper Middle", operator: ">=", unit: "kg/week" },
+      { key: "q3", label: "Q3 threshold (kg/week)", defaultValue: "41000", classification: "High", operator: ">=", unit: "kg/week" }
     ],
     sample: [
       { scenario: "Current arrival volume \u2264 Q1", result: "Low", color: "text-emerald-700" },
@@ -39,9 +38,9 @@ const RULE_EDIT_CONFIGS = {
   "Historical Seasonal Production Level": {
     description: "Classifies quarterly historical production using PSA OpenSTAT historical production ratios against empirical quartile thresholds.",
     fields: [
-      { key: "q1_ratio", label: "Q1 ratio", defaultValue: "0.75" },
-      { key: "q2_ratio", label: "Q2 ratio", defaultValue: "1.00" },
-      { key: "q3_ratio", label: "Q3 ratio", defaultValue: "1.25" }
+      { key: "q1_ratio", label: "Q1 ratio", defaultValue: "0.75", classification: "Lower Middle", operator: ">=" },
+      { key: "q2_ratio", label: "Q2 ratio", defaultValue: "1.00", classification: "Upper Middle", operator: ">=" },
+      { key: "q3_ratio", label: "Q3 ratio", defaultValue: "1.25", classification: "High", operator: ">=" }
     ],
     sample: [
       { scenario: "Ratio < Q1", result: "Low", color: "text-emerald-700" },

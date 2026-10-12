@@ -5,7 +5,7 @@
  * tests pin the two properties that make an un-dismissable gate safe:
  *
  *   1. While user.must_change_password is true, the routed page must not render
- *      and the panel must — for both the Farmer and DFTC layouts.
+ *      and the panel must — for the Farmer, DFTC and Admin layouts.
  *   2. Once the rotation POST succeeds the gate clears, even if the follow-up
  *      /auth/me fails. change_password() deletes every session before it
  *      returns, so that call really can 401 and null out `user`; deriving the
@@ -19,6 +19,7 @@ import { MemoryRouter, Routes, Route } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from '../app/global/components/layout/Layout';
 import { DFTCLayout } from '../app/global/components/layout/DFTCLayout';
+import { AdminLayout } from '../app/global/components/layout/AdminLayout';
 
 // Mutable so each test can swap the signed-in user's flag.
 const authState = vi.hoisted(() => ({
@@ -129,6 +130,7 @@ describe('temporary-password layout gate', () => {
   describe.each([
     ['Farmer', '/farmer', Layout],
     ['DFTC', '/dftc', DFTCLayout],
+    ['Admin', '/admin', AdminLayout],
   ])('%s workspace', (roleName, path, layout) => {
     it('renders the panel and hides the routed page while pending', () => {
       setUser({ roleName, mustChange: true });

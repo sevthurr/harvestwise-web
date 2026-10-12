@@ -197,4 +197,53 @@ describe('Rules & Thresholds save wiring', () => {
     expect(screen.queryByText('Saved!')).not.toBeInTheDocument();
     expect(writeCalls(fetchFn)).toHaveLength(0);
   });
+
+  it('creates kg-unit rules for Arrival Pressure when the module has none', async () => {
+    // Regression: the AP card defaults used to be MT/week while the backend
+    // classifier compares kg arrivals, so saving the defaults would either
+    // misclassify (unit mismatch) or — while the modal was gated — write
+    // nothing at all. Now the fields carry kg defaults plus classification and
+    // operator, so a save creates real rules the pipeline consumes.
+    const arrivalModule = {
+      id: 'TMD-0002',
+      module_name: 'Arrival Pressure',
+      source_label: 'DFTC Arrival Volume',
+      updated_at: '2026-10-01T00:00:00',
+      rules: [],
+    };
+    const fetchFn = mockFetch([
+      // Rule-less modules trigger a per-module rules fetch on load; must be
+      // matched before the /admin/thresholds catch-all.
+      { method: 'GET', match: (u) => u.includes('/admin/thresholds/TMD-0002/rules'), body: { items: [] } },
+      { method: 'GET', match: (u) => u.includes('/admin/thresholds'), body: { items: [arrivalModule], total: 1 } },
+      { method: 'POST', match: (u) => u.includes('/admin/thresholds/TMD-0002/rules'), body: {} },
+    ]);
+    vi.stubGlobal('fetch', fetchFn);
+
+    renderPage();
+    await screen.findByText('Arrival Pressure');
+
+    // Only the Arrival Pressure card (plus the hardcoded Final Advisory
+    // Cutoffs card at the end) renders, so the first Edit button is AP's.
+    await userEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
+
+    // Defaults already carry the kg thresholds the classifier compares.
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(writeCalls(fetchFn).length).toBeGreaterThan(0));
+
+    const writes = writeCalls(fetchFn).filter(([url]) =>
+      String(url).includes('/rules')
+    );
+    expect(writes).toHaveLength(3);
+    const sent = writes.map(([, init]) => JSON.parse(init.body));
+    expect(sent.map((s) => s.threshold_value)).toEqual([32000, 35000, 41000]);
+    expect(sent.map((s) => s.classification)).toEqual([
+      'Lower Middle',
+      'Upper Middle',
+      'High',
+    ]);
+    expect(sent.every((s) => s.operator === '>=')).toBe(true);
+    expect(sent[0].display_text).toBe('32000 kg/week');
+  });
 });

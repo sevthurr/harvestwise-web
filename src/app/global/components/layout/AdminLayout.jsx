@@ -19,6 +19,7 @@ import {
   ClipboardList
 } from "lucide-react";
 import { Footer } from "../Footer";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
 import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 import { UserAvatar } from "../profile/UserAvatar";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
@@ -48,7 +49,29 @@ const AdminLayoutInner = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const active = getActive(location.pathname);
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
+
+  // ── Must-change-password gate ──────────────────────────────────────────
+  // Admin-provisioned accounts — including SuperAdmins created by
+  // scripts/seed_superadmin.py — start on a temporary password. The admin API
+  // rejects every privileged route with 403 until it is rotated, so this must
+  // replace the workspace rather than render behind it. `rotated` is cleared
+  // the moment the POST succeeds: change_password() revokes every session and
+  // purges the cached snapshot before returning, so the next /auth/me can come
+  // back 401 and null out `user` — and a gate derived from the flag alone
+  // would strand the user. The rotation already committed server-side;
+  // refreshUser() only reconciles the cache, so it is best-effort.
+  const [rotated, setRotated] = useState(false);
+  const pendingPasswordChange = user?.must_change_password === true && !rotated;
+
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
+  };
   // Build a proper display name whether or not the profile fields are populated.
   // If first_name is available, use "First Last". Otherwise parse the username
   // (which may contain dots, e.g. "kaye.mayugba") and title-case it.
@@ -309,8 +332,14 @@ const AdminLayoutInner = () => {
     /* ── Main content area ── */
   }
       <AdminMain>
-        <Outlet />
-        <Footer className="mt-6 mb-2" />
+        {pendingPasswordChange ? (
+          <ChangePasswordPanel onRotated={handlePasswordRotated} />
+        ) : (
+          <>
+            <Outlet />
+            <Footer className="mt-6 mb-2" />
+          </>
+        )}
       </AdminMain>
 
       {
