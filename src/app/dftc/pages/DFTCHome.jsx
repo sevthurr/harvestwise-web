@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -8,133 +9,25 @@ import {
   Upload,
   ChevronRight,
   TrendingUp,
-  CheckCircle,
-  AlertCircle,
-  Clock,
-  ArrowRight,
-  AlertTriangle,
-  FileSpreadsheet
+  ArrowRight
 } from "lucide-react";
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import { DFTCArrivalVolumeCard } from "../components/DFTCArrivalVolumeCard";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+import { DFTCFilePreview } from "../components/DFTCFilePreview";
+import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
-
-function formatMarketName(sourceId) {
-  if (!sourceId) return "\u2014";
-  const lower = sourceId.toLowerCase();
-  if (lower.includes("bkrh") || lower.includes("bangkerohan") || lower.includes("bankerohan")) {
-    return "Bangkerohan Public Market";
-  }
-  if (lower.includes("dftc") || lower.includes("taboan")) {
-    return "DFTC Taboan";
-  }
-  return sourceId;
-}
-
-function formatRequirementName(dataType, priceType) {
-  if (dataType === "arrival_volume" || dataType === "arrival") {
-    return "Arrival Volume";
-  }
-  if (priceType) {
-    return `${priceType.charAt(0).toUpperCase() + priceType.slice(1).toLowerCase()} Prices`;
-  }
-  return "Price Records";
-}
-
-function formatDatasetTitle(dataType, priceType) {
-  if (dataType === "arrival_volume" || dataType === "arrival") {
-    return "DFTC Arrival Volume";
-  }
-  if (priceType) {
-    return `Daily ${priceType.charAt(0).toUpperCase() + priceType.slice(1).toLowerCase()} Prices`;
-  }
-  return "Daily Prices";
-}
-
-function isSubmissionFileUpload(sub) {
-  if (!sub) return false;
-  const m = String(sub.submission_method || "").toLowerCase();
-  if (m.includes("upload") || m.includes("file") || m.includes("excel") || m.includes("csv")) {
-    return true;
-  }
-  return Boolean(sub.original_file_name || sub.file_name);
-}
-
-function getLocalDateString(d = new Date()) {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatSavedDate(val) {
-  if (!val) return "—";
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return String(val);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    });
-  } catch {
-    return String(val);
-  }
-}
-
-function formatDateTimeDisplay(val) {
-  if (!val) return "—";
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return String(val);
-    const dateStr = d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    });
-    const timeStr = d.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    });
-    return `${dateStr} · ${timeStr}`;
-  } catch {
-    return String(val);
-  }
-}
+import {
+  buildSavedDatasetsList,
+  formatMarketName,
+  getLocalDateString
+} from "./dftcSavedDatasets";
 
 function getTimeOfDay() {
   const hour = new Date().getHours();
   if (hour < 12) return "morning";
   if (hour < 18) return "afternoon";
   return "evening";
-}
-
-function StatusBadge({ status }) {
-  const normalized = (status || "").toLowerCase();
-  if (normalized === "saved" || normalized === "validated" || normalized === "accepted") {
-    return (
-      <span className="flex items-center gap-1.5">
-        <CheckCircle className="w-3.5 h-3.5 text-[var(--hw-green-700)] shrink-0" />
-        <span className="text-[13px] text-[var(--hw-green-700)] font-medium">Saved</span>
-      </span>
-    );
-  }
-  if (normalized.includes("correction") || normalized === "needs correction") {
-    return (
-      <span className="flex items-center gap-1.5">
-        <AlertTriangle className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-        <span className="text-[13px] text-orange-700 font-medium">Needs Correction</span>
-      </span>
-    );
-  }
-  return (
-    <span className="flex items-center gap-1.5">
-      <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-500)] shrink-0" />
-      <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Not Encoded</span>
-    </span>
-  );
 }
 
 function DFTCHome() {
@@ -149,15 +42,8 @@ function DFTCHome() {
     queryFn: async () => {
       const res = await apiGet("/dftc/submissions?page=1&page_size=50");
       return parseResponse(res);
-    }
-  });
-
-  const { data: requirementsData, isLoading: loadingRequirements } = useQuery({
-    queryKey: ["dftc", "requirements"],
-    queryFn: async () => {
-      const res = await apiGet("/dftc/requirements");
-      return parseResponse(res);
-    }
+    },
+    refetchOnMount: "always"
   });
 
   const { data: homeData, isLoading: loadingHome } = useQuery({
@@ -165,13 +51,13 @@ function DFTCHome() {
     queryFn: async () => {
       const res = await apiGet("/dftc/home");
       return parseResponse(res);
-    }
+    },
+    refetchOnMount: "always"
   });
 
   const kpis = homeData?.kpis || {};
-  const isLoading = loadingSubmissions || loadingRequirements || loadingHome;
+  const isLoading = loadingSubmissions || loadingHome;
   const submissions = submissionsData?.items || [];
-  const requirements = requirementsData?.items || [];
 
   const priceSubmissionsToday = submissions.filter(
     (s) =>
@@ -187,146 +73,80 @@ function DFTCHome() {
       (s.status?.toLowerCase() === "saved" || s.status?.toLowerCase() === "validated" || s.status?.toLowerCase() === "accepted")
   );
 
+  const [previewFile, setPreviewFile] = useState(null);
 
-  const needsCorrectionSubmissions = submissions.filter(
-    (s) => s.status?.toLowerCase().includes("correction") || s.status?.toLowerCase() === "needs correction"
-  );
+  const { data: todayReportPreview } = useQuery({
+    queryKey: ["dftc-report-preview", todayStr],
+    queryFn: async () => {
+      const res = await apiGet(`/dftc/reports/preview?date=${todayStr}`);
+      return parseResponse(res);
+    },
+    enabled: !!todayStr,
+    refetchOnMount: "always"
+  });
 
-  const requirementsList =
-    requirements.length > 0
-      ? requirements
-      : (homeData?.today_status || []).map((ts) => ({
-          id: ts.requirement_id || `${ts.source_id}-${ts.data_type}`,
-          source_id: ts.source_id,
-          source_name: ts.source_name || ts.source_id,
-          data_type: ts.data_type,
-          price_type: ts.price_type,
-          status: ts.status,
-          submission_id: ts.submission_id,
-          last_saved: ts.last_saved
-        }));
+  const todayReportRecordCount = useMemo(() => {
+    if (!todayReportPreview?.rows) return 0;
+    return todayReportPreview.rows.filter(
+      (r) =>
+        r.bangkerohan_landing != null ||
+        r.bangkerohan_wholesale != null ||
+        r.bangkerohan_retail != null ||
+        r.dftc_taboan_wholesale != null ||
+        r.dftc_taboan_retail != null
+    ).length;
+  }, [todayReportPreview]);
 
-  const statusRows = requirementsList.map((req) => {
-    const matchingSub = submissions.find((s) => {
-      const matchSource = s.source_id === req.source_id;
-      const matchDataType = s.data_type === req.data_type;
-      const matchPriceType = (s.price_type || null) === (req.price_type || null);
-      const isDateToday =
-        s.reporting_date === todayStr ||
-        (s.saved_at && getLocalDateString(new Date(s.saved_at)) === todayStr) ||
-        (s.created_at && getLocalDateString(new Date(s.created_at)) === todayStr);
-      return matchSource && matchDataType && matchPriceType && isDateToday;
+  const sevenDaysAgo = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const recentSaved = useMemo(() => {
+    const all = buildSavedDatasetsList(submissions, todayStr, todayReportRecordCount);
+    return all.filter((item) => {
+      const rawDate = item.savedAtRaw || item.reportingDate;
+      if (!rawDate) return false;
+      const d = new Date(rawDate);
+      const isWithin7Days = !isNaN(d.getTime()) && d >= sevenDaysAgo;
+      return isWithin7Days || item.isToday;
     });
+  }, [submissions, todayStr, todayReportRecordCount, sevenDaysAgo]);
 
-    const matchingHomeStatus = (homeData?.today_status || []).find(
-      (ts) =>
-        ts.requirement_id === req.id ||
-        (ts.source_id === req.source_id &&
-          ts.data_type === req.data_type &&
-          (ts.price_type || null) === (req.price_type || null))
-    );
-
-    let status = req.status || matchingHomeStatus?.status || "Not Encoded";
-    let savedDatasetId = req.submission_id || matchingHomeStatus?.submission_id || null;
-    let historyDatasetId = null;
-    let rawDate = req.last_saved || matchingHomeStatus?.last_saved || null;
-
-    if (matchingSub) {
-      const subStatus = (matchingSub.status || "").toLowerCase();
-      if (subStatus === "saved" || subStatus === "validated" || subStatus === "accepted") {
-        status = "Saved";
-        savedDatasetId = matchingSub.id;
-      } else if (subStatus.includes("correction")) {
-        status = "Needs Correction";
-        historyDatasetId = matchingSub.id;
-      }
-      if (matchingSub.saved_at || matchingSub.created_at) {
-        rawDate = matchingSub.saved_at || matchingSub.created_at;
-      }
+  const handleSelectFile = (file) => {
+    if (file.isFileUpload) {
+      navigate(`/dftc/submissions/${file.submissionId || file.id}`);
+      return;
     }
 
-    const lastSaved = formatDateTimeDisplay(rawDate);
-    const entryPath =
-      req.data_type === "arrival_volume" ? "/dftc/arrival-input" : "/dftc/price-input";
+    let meta = {};
+    try {
+      const stored = localStorage.getItem(`dftc_report_personnel_${file.reportingDate}`);
+      if (stored) meta = JSON.parse(stored);
+    } catch {}
 
-    return {
-      id: req.id,
-      requirement: formatRequirementName(req.data_type, req.price_type),
-      market: formatMarketName(req.source_name || req.source_id),
-      status,
-      lastSaved,
-      savedDatasetId,
-      historyDatasetId,
-      entryPath
-    };
-  });
-
-  const attentionItems = [];
-  needsCorrectionSubmissions.forEach((sub) => {
-    attentionItems.push({
-      label: `${formatMarketName(sub.source_name || sub.source_id)} ${sub.price_type || sub.data_type} records need correction`,
-      action: "Review Records",
-      path: `/dftc/submissions/${sub.id}`
+    setPreviewFile({
+      reportId: file.id,
+      submissionId: file.submissionId,
+      isArrival: file.isArrival,
+      analyticsRecords: file.analyticsRecords,
+      otherRecords: file.otherRecords,
+      dataName: file.dataName || file.name,
+      dataType: file.dataType,
+      market: file.market,
+      submissionMethod: file.submissionMethod,
+      entryMethod: file.submissionMethod,
+      reportingDate: file.reportingDate || file.savedDate,
+      savedDate: file.savedDate,
+      records: file.records,
+      encodedBy: file.encodedBy || meta.encodedBy || "MARIA S. SANTOS",
+      encodedByRole: file.encodedByRole || meta.encodedByRole || "Data Analyst",
+      reviewedBy: file.reviewedBy || meta.reviewedBy || "MARIA S. SANTOS",
+      reviewedByRole: file.reviewedByRole || meta.reviewedByRole || "Data Analyst"
     });
-  });
-
-  statusRows
-    .filter((row) => row.status === "Not Encoded")
-    .forEach((row) => {
-      attentionItems.push({
-        label: `${row.market} ${row.requirement.toLowerCase()} not yet entered`,
-        action: "Continue Entry",
-        path: row.entryPath
-      });
-    });
-
-  const failedUploads = submissions.filter((s) => s.status?.toLowerCase() === "failed");
-  if (failedUploads.length > 0) {
-    attentionItems.push({
-      label: `${failedUploads.length} uploaded file${failedUploads.length > 1 ? "s" : ""} failed validation`,
-      action: "Retry Upload",
-      path: "/dftc/upload"
-    });
-  }
-
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  sevenDaysAgo.setHours(0, 0, 0, 0);
-
-  const recentSavedSubmissions = submissions.filter((sub) => {
-    const rawDate = sub.saved_at || sub.created_at || sub.reporting_date;
-    if (!rawDate) return false;
-    const subDate = new Date(rawDate);
-    if (isNaN(subDate.getTime())) return false;
-    const isWithin7Days = subDate >= sevenDaysAgo;
-    const status = (sub.status || "").toLowerCase();
-    const isSaved = status === "saved" || status === "validated" || status === "accepted" || !status;
-    return isWithin7Days && isSaved;
-  });
-
-  const recentSaved = recentSavedSubmissions.map((sub) => {
-    const savedTimeDisplay = formatSavedDate(sub.saved_at || sub.created_at || sub.reporting_date);
-    const isToday =
-      sub.reporting_date === todayStr ||
-      (sub.saved_at && getLocalDateString(new Date(sub.saved_at)) === todayStr) ||
-      (sub.created_at && getLocalDateString(new Date(sub.created_at)) === todayStr);
-
-    const isFileUpload = isSubmissionFileUpload(sub);
-    const name = isFileUpload
-      ? (sub.original_file_name || sub.file_name || formatDatasetTitle(sub.data_type, sub.price_type))
-      : formatDatasetTitle(sub.data_type, sub.price_type);
-
-    return {
-      id: sub.id,
-      name,
-      market: formatMarketName(sub.source_name || sub.source_id),
-      entryMethod: isFileUpload ? "File Upload" : "Manual Input",
-      savedAt: savedTimeDisplay,
-      records: sub.record_count ?? "—",
-      status: sub.status || "Saved",
-      isToday: Boolean(isToday)
-    };
-  });
+  };
 
   const volatileItems = (homeData?.price_movement || []).filter(
     (p) => p.change_pct !== null && p.change_pct !== undefined && Math.abs(p.change_pct) >= 10.0
@@ -336,8 +156,6 @@ function DFTCHome() {
 
   const oversupplyCount = kpis.oversupply_commodities_count ?? 0;
   const topOversupply = kpis.top_oversupply_commodity || null;
-
-  const hasAttentionItems = attentionItems.length > 0;
 
   const priceSubmissionsCount = priceSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0) || priceSubmissionsToday.length;
   const arrivalSubmissionsCount = arrivalSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0) || arrivalSubmissionsToday.length;
@@ -352,6 +170,15 @@ function DFTCHome() {
   const latestArrivalSub =
     arrivalSubmissionsToday[0] ||
     submissions.find((s) => s.data_type === "arrival_volume");
+
+  if (previewFile) {
+    const PreviewComponent = previewFile.isArrival ? DFTCArrivalPreview : DFTCFilePreview;
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto">
+        <PreviewComponent file={previewFile} onClose={() => setPreviewFile(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -468,29 +295,6 @@ function DFTCHome() {
         </button>
       </div>
 
-      {hasAttentionItems && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)] flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-orange-600 shrink-0" />
-            <p className="font-semibold text-[var(--hw-neutral-900)]">Needs Attention</p>
-          </div>
-          <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {attentionItems.map((item, i) => (
-              <div key={i} className="px-5 py-3.5 flex items-center justify-between gap-4">
-                <p className="text-[13px] text-[var(--hw-neutral-800)]">{item.label}</p>
-                <button
-                  onClick={() => navigate(item.path)}
-                  className="shrink-0 flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors whitespace-nowrap"
-                >
-                  {item.action}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
         <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
           <div>
@@ -527,8 +331,8 @@ function DFTCHome() {
             {recentSaved.map((row) => (
               <button
                 key={row.id}
-                onClick={() => navigate(`/dftc/submissions/${row.id}`)}
-                className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
+                onClick={() => handleSelectFile(row)}
+                className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -544,7 +348,7 @@ function DFTCHome() {
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.id}</p>
+                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.submissionId || row.id}</p>
                   <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 capitalize">{row.status}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />

@@ -588,17 +588,18 @@ function AnalyticsCoverageOverlay({ onClose }) {
 // ─── Review price cell ───────────────────────────────────────────────────────
 /** A price cell that dims a value the user never touched, so the review screen
  *  does not present a previous-day carry as something that will be saved. */
-function ReviewPriceCell({ bg, value, skipped, carriedDate }) {
+function ReviewPriceCell({ bg, value, skipped, carriedDate, isFilteredColumn, isDimmed }) {
   return (
     <td
       style={{
         background: bg,
-        border: "1px solid #999",
+        border: isFilteredColumn ? "2px solid #166534" : "1px solid #999",
         padding: "4px 8px",
         textAlign: "right",
         fontWeight: value !== null ? "bold" : "normal",
         fontStyle: skipped ? "italic" : "normal",
-        color: skipped ? "#92400e" : undefined
+        color: skipped ? "#92400e" : undefined,
+        opacity: isDimmed ? 0.35 : 1
       }}
       title={skipped ? `Carried from ${formatDateLabel(carriedDate)} — not saved unless changed` : undefined}
     >
@@ -756,6 +757,8 @@ function DFTCPriceInput() {
   const [dataName, setDataName] = useState(() => `DFTC Price Monitoring — ${formatDateLabel(localToday())}`);
   const [saved, setSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState(0);
+  const [saveProgressStage, setSaveProgressStage] = useState("Validating price entries...");
   // Guards a reporting date that arrived from navigation state: handleDateChange
   // clamps user input, but a future date passed in via navState bypasses it.
   const [dateError, setDateError] = useState("");
@@ -769,15 +772,12 @@ function DFTCPriceInput() {
     stableResolverRef.current = (com, v) => resolveCommodityId(com, v);
   }
 
-  // DFTC Personnel from database (with standard staff fallbacks)
-  const [staffList, setStaffList] = useState([
-    { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker I" },
-    { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" }
-  ]);
-  const [encodedBy, setEncodedBy] = useState("IVY JOYCE P. BOLODO");
-  const [encodedByRole, setEncodedByRole] = useState("Agri-Service & Related Worker I");
-  const [reviewedBy, setReviewedBy] = useState("CHRISTIAN JOEY PAUL M. HERMOSO");
-  const [reviewedByRole, setReviewedByRole] = useState("Agricultural Technologist");
+  // DFTC Personnel from database
+  const [staffList, setStaffList] = useState([]);
+  const [encodedBy, setEncodedBy] = useState("");
+  const [encodedByRole, setEncodedByRole] = useState("");
+  const [reviewedBy, setReviewedBy] = useState("");
+  const [reviewedByRole, setReviewedByRole] = useState("");
   const [enteredTime, setEnteredTime] = useState(() => {
     return new Date().toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   });
@@ -835,22 +835,35 @@ function DFTCPriceInput() {
               role: s.position_title || "DFTC Staff"
             };
           });
-          const existingNames = new Set(list.map((l) => l.name));
-          const defaults = [
-            { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker I" },
-            { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" }
-          ];
-          defaults.forEach((d) => {
-            if (!existingNames.has(d.name)) list.push(d);
-          });
           setStaffList(list);
+
+          // Restore previously selected personnel if they exist in the DB staff list
+          let restoredEncoded = null;
+          let restoredReviewed = null;
+          try {
+            const stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`));
+            if (stored?.encodedBy && list.some((s) => s.name === stored.encodedBy)) {
+              restoredEncoded = list.find((s) => s.name === stored.encodedBy);
+            }
+            if (stored?.reviewedBy && list.some((s) => s.name === stored.reviewedBy)) {
+              restoredReviewed = list.find((s) => s.name === stored.reviewedBy);
+            }
+          } catch {}
+
+          const defaultEncoder = restoredEncoded || list[0];
+          const defaultReviewer = restoredReviewed || (list.length > 1 ? list[1] : list[0]);
+
+          setEncodedBy(defaultEncoder.name);
+          setEncodedByRole(defaultEncoder.role);
+          setReviewedBy(defaultReviewer.name);
+          setReviewedByRole(defaultReviewer.role);
         }
       } catch {
-        // Fallback default personnel already set
+        // Staff list will remain empty on network error
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedDate]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
@@ -949,6 +962,12 @@ function DFTCPriceInput() {
     if (savedData?.carriedDate) setCarriedDate(savedData.carriedDate);
     setDraftDismissed(true);
   }
+
+  useEffect(() => {
+    if (location.state?.restoreDraft) {
+      restoreDraft();
+    }
+  }, [location.state]);
 
   function discardDraft() {
     setDraftDismissed(true);
@@ -1332,11 +1351,17 @@ function DFTCPriceInput() {
     setDateError("");
     setSaveError("");
     setIsSaving(true);
+    setSaveProgress(15);
+    setSaveProgressStage("Validating price entries...");
     let totalSaved = 0;
     let dropped = 0;
     const failedTabs = [];
 
+    let tabIndex = 0;
     for (const tab of MARKET_TABS) {
+      tabIndex++;
+      setSaveProgress(15 + Math.round((tabIndex / MARKET_TABS.length) * 65));
+      setSaveProgressStage(`Saving ${tab.label} records...`);
       const tabMap = tabFields[tab.id] || {};
       // An untouched previous-day value is a starting point, not an entry:
       // committing it would save yesterday's price as today's.
@@ -1422,6 +1447,9 @@ function DFTCPriceInput() {
       return;
     }
 
+    setSaveProgress(92);
+    setSaveProgressStage("Consolidating price monitoring records...");
+
     try {
       localStorage.setItem(
         `dftc_report_personnel_${selectedDate}`,
@@ -1438,12 +1466,16 @@ function DFTCPriceInput() {
 
     setHasDraft(false);
     setSaved(true);
+    setSaveProgress(100);
+    setSaveProgressStage("Price monitoring data saved successfully!");
     // Without this the session memo would serve the pre-save snapshot to the
     // next mount, so a freshly saved day would reload its own previous values.
     clearPrefillCache();
     queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
     queryClient.invalidateQueries({ queryKey: ["prices"] });
 
     navTimer.current = setTimeout(() => {
@@ -1452,7 +1484,10 @@ function DFTCPriceInput() {
         state: {
           successMsg: `${dataName} saved successfully (${totalSaved} price records across all markets).`,
           restoreMarketFilter: navState?.restoreMarketFilter,
-          restoreDataTypeFilter: navState?.restoreDataTypeFilter
+          restoreDataTypeFilter: navState?.restoreDataTypeFilter,
+          justSavedType: "price",
+          justSavedDate: selectedDate,
+          justSavedAt: new Date().toISOString()
         }
       });
     }, 900);
@@ -1577,16 +1612,83 @@ function DFTCPriceInput() {
                   <th rowSpan={2} style={{ background: LEFT_BG, border: "1px solid #999", padding: "6px 8px", width: 44, textAlign: "center" }}>No.</th>
                   <th rowSpan={2} style={{ background: LEFT_BG, border: "1px solid #999", padding: "6px 8px", minWidth: 160, textAlign: "left" }}>Commodity</th>
                   <th rowSpan={2} style={{ background: LEFT_BG, border: "1px solid #999", padding: "6px 8px", width: 72, textAlign: "center" }}>UOM</th>
-                  <th colSpan={3} style={{ background: BANK_BG, border: "1px solid #999", padding: "6px 8px", textAlign: "center", fontWeight: "bold" }}>BANKEROHAN MARKET</th>
-                  <th colSpan={2} style={{ background: DFTC_BG, border: "1px solid #999", padding: "6px 8px", textAlign: "center", fontWeight: "bold" }}>DFTC TABOAN</th>
+                  <th
+                    colSpan={3}
+                    style={{
+                      background: BANK_BG,
+                      border: "1px solid #999",
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      opacity: reviewFilter.startsWith("dftc") ? 0.45 : 1
+                    }}
+                  >
+                    BANKEROHAN MARKET
+                  </th>
+                  <th
+                    colSpan={2}
+                    style={{
+                      background: DFTC_BG,
+                      border: "1px solid #999",
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      opacity: reviewFilter.startsWith("bangkerohan") ? 0.45 : 1
+                    }}
+                  >
+                    DFTC TABOAN
+                  </th>
                 </tr>
                 <tr>
-                  {["Landing", "Wholesale", "Retail"].map((h) => (
-                    <th key={h} style={{ background: BANK_BG, border: "1px solid #999", padding: "5px 8px", textAlign: "right", fontSize: 11, width: 90 }}>{h}</th>
-                  ))}
-                  {["Wholesale", "Retail"].map((h) => (
-                    <th key={h} style={{ background: DFTC_BG, border: "1px solid #999", padding: "5px 8px", textAlign: "right", fontSize: 11, width: 90 }}>{h}</th>
-                  ))}
+                  {[
+                    { id: "bangkerohan-landing", name: "Landing" },
+                    { id: "bangkerohan-wholesale", name: "Wholesale" },
+                    { id: "bangkerohan-retail", name: "Retail" }
+                  ].map((h) => {
+                    const isFiltered = reviewFilter === h.id;
+                    const isDimmed = reviewFilter !== "all" && !isFiltered;
+                    return (
+                      <th
+                        key={h.id}
+                        style={{
+                          background: BANK_BG,
+                          border: isFiltered ? "2px solid #166534" : "1px solid #999",
+                          padding: "5px 8px",
+                          textAlign: "right",
+                          fontSize: 11,
+                          width: 90,
+                          fontWeight: isFiltered ? "bold" : "normal",
+                          opacity: isDimmed ? 0.45 : 1
+                        }}
+                      >
+                        {h.name} {isFiltered && "✓"}
+                      </th>
+                    );
+                  })}
+                  {[
+                    { id: "dftc-wholesale", name: "Wholesale" },
+                    { id: "dftc-retail", name: "Retail" }
+                  ].map((h) => {
+                    const isFiltered = reviewFilter === h.id;
+                    const isDimmed = reviewFilter !== "all" && !isFiltered;
+                    return (
+                      <th
+                        key={h.id}
+                        style={{
+                          background: DFTC_BG,
+                          border: isFiltered ? "2px solid #166534" : "1px solid #999",
+                          padding: "5px 8px",
+                          textAlign: "right",
+                          fontSize: 11,
+                          width: 90,
+                          fontWeight: isFiltered ? "bold" : "normal",
+                          opacity: isDimmed ? 0.45 : 1
+                        }}
+                      >
+                        {h.name} {isFiltered && "✓"}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -1629,11 +1731,46 @@ function DFTCPriceInput() {
                           <td style={{ background: LEFT_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "center" }}>
                             {r.uom}
                           </td>
-                          <ReviewPriceCell bg={BANK_BG} value={r.bankLanding} skipped={r.skipped.bankLanding} carriedDate={r.carriedDate} />
-                          <ReviewPriceCell bg={BANK_BG} value={r.bankWholesale} skipped={r.skipped.bankWholesale} carriedDate={r.carriedDate} />
-                          <ReviewPriceCell bg={BANK_BG} value={r.bankRetail} skipped={r.skipped.bankRetail} carriedDate={r.carriedDate} />
-                          <ReviewPriceCell bg={DFTC_BG} value={r.dftcWholesale} skipped={r.skipped.dftcWholesale} carriedDate={r.carriedDate} />
-                          <ReviewPriceCell bg={DFTC_BG} value={r.dftcRetail} skipped={r.skipped.dftcRetail} carriedDate={r.carriedDate} />
+                          <ReviewPriceCell
+                            bg={BANK_BG}
+                            value={reviewFilter === "all" || reviewFilter === "bangkerohan-landing" ? r.bankLanding : null}
+                            skipped={r.skipped.bankLanding}
+                            carriedDate={r.carriedDate}
+                            isFilteredColumn={reviewFilter === "bangkerohan-landing"}
+                            isDimmed={reviewFilter !== "all" && reviewFilter !== "bangkerohan-landing"}
+                          />
+                          <ReviewPriceCell
+                            bg={BANK_BG}
+                            value={reviewFilter === "all" || reviewFilter === "bangkerohan-wholesale" ? r.bankWholesale : null}
+                            skipped={r.skipped.bankWholesale}
+                            carriedDate={r.carriedDate}
+                            isFilteredColumn={reviewFilter === "bangkerohan-wholesale"}
+                            isDimmed={reviewFilter !== "all" && reviewFilter !== "bangkerohan-wholesale"}
+                          />
+                          <ReviewPriceCell
+                            bg={BANK_BG}
+                            value={reviewFilter === "all" || reviewFilter === "bangkerohan-retail" ? r.bankRetail : null}
+                            skipped={r.skipped.bankRetail}
+                            carriedDate={r.carriedDate}
+                            isFilteredColumn={reviewFilter === "bangkerohan-retail"}
+                            isDimmed={reviewFilter !== "all" && reviewFilter !== "bangkerohan-retail"}
+                          />
+                          <ReviewPriceCell
+                            bg={DFTC_BG}
+                            value={reviewFilter === "all" || reviewFilter === "dftc-wholesale" ? r.dftcWholesale : null}
+                            skipped={r.skipped.dftcWholesale}
+                            carriedDate={r.carriedDate}
+                            isFilteredColumn={reviewFilter === "dftc-wholesale"}
+                            isDimmed={reviewFilter !== "all" && reviewFilter !== "dftc-wholesale"}
+                          />
+                          <ReviewPriceCell
+                            bg={DFTC_BG}
+                            value={reviewFilter === "all" || reviewFilter === "dftc-retail" ? r.dftcRetail : null}
+                            skipped={r.skipped.dftcRetail}
+                            carriedDate={r.carriedDate}
+                            isFilteredColumn={reviewFilter === "dftc-retail"}
+                            isDimmed={reviewFilter !== "all" && reviewFilter !== "dftc-retail"}
+                          />
                         </tr>
                       ))}
                     </React.Fragment>
@@ -1723,15 +1860,35 @@ function DFTCPriceInput() {
             </button>
           </div>
 
-          {/* Centered Loading Modal Overlay while saving */}
+          {/* Centered Loading Modal Overlay while saving (Progress Bar) */}
           {isSaving && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-              <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full text-center shadow-xl border border-[var(--hw-neutral-200)] flex flex-col items-center">
-                <Loader2 className="w-10 h-10 text-[var(--hw-green-700)] animate-spin mb-4" />
+              <div className="bg-white rounded-2xl p-6 sm:p-7 max-w-sm w-full text-center shadow-xl border border-[var(--hw-neutral-200)] flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] flex items-center justify-center text-[var(--hw-green-700)] mb-3">
+                  {saveProgress === 100 ? (
+                    <Check className="w-6 h-6 text-[var(--hw-green-700)]" />
+                  ) : (
+                    <FileText className="w-6 h-6 text-[var(--hw-green-700)]" />
+                  )}
+                </div>
                 <h3 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Saving Price Monitoring Data</h3>
-                <p className="text-[13px] text-[var(--hw-neutral-600)] mt-1.5 leading-relaxed">
+                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-1 leading-relaxed">
                   Please wait while your data is being validated and consolidated...
                 </p>
+
+                {/* Progress Bar */}
+                <div className="w-full mt-5">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-[var(--hw-neutral-600)] mb-1.5">
+                    <span className="truncate pr-2">{saveProgressStage}</span>
+                    <span className="font-bold text-[var(--hw-green-700)] shrink-0">{saveProgress}%</span>
+                  </div>
+                  <div className="w-full bg-[var(--hw-neutral-100)] h-2.5 rounded-full overflow-hidden border border-[var(--hw-neutral-200)]">
+                    <div
+                      className="bg-[var(--hw-green-700)] h-full rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${saveProgress}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}

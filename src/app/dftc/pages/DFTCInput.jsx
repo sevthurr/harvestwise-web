@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -14,65 +14,14 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCFilePreview } from "../components/DFTCFilePreview";
 import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
-
-function formatMarketName(sourceId) {
-  if (!sourceId) return "—";
-  const lower = sourceId.toLowerCase();
-  if (lower.includes("bkrh") || lower.includes("bangkerohan") || lower.includes("bankerohan")) {
-    return "Bangkerohan Public Market";
-  }
-  if (lower.includes("dftc") || lower.includes("taboan")) {
-    return "DFTC Taboan";
-  }
-  return sourceId;
-}
-
-function getLocalDateString(d = new Date()) {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatSavedDate(dateStr) {
-  if (!dateStr) return "—";
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleString("en-PH", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
-function isSubmissionFileUpload(sub) {
-  if (!sub) return false;
-  const m = String(sub.submission_method || "").toLowerCase();
-  if (m.includes("upload") || m.includes("file") || m.includes("excel") || m.includes("csv")) {
-    return true;
-  }
-  return Boolean(sub.file_name || sub.original_file_name);
-}
-
-function isSubmissionToday(sub, todayStr) {
-  if (!sub) return false;
-  const checkDate = (val) => {
-    if (!val) return false;
-    const s = String(val);
-    if (s.slice(0, 10) === todayStr) return true;
-    try {
-      const d = new Date(val);
-      if (!isNaN(d.getTime()) && getLocalDateString(d) === todayStr) return true;
-    } catch {}
-    return false;
-  };
-  return checkDate(sub.reporting_date) || checkDate(sub.saved_at) || checkDate(sub.created_at);
-}
+import {
+  buildSavedDatasetsList,
+  formatMarketName,
+  getLocalDateString,
+  formatSavedDate,
+  isSubmissionFileUpload,
+  isSubmissionToday
+} from "./dftcSavedDatasets";
 
 const PAGE_SIZE = 10;
 
@@ -133,6 +82,25 @@ export default function DFTCInput() {
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState(null);
 
+  // Preserve just-saved submission context across history.replaceState so that freshly saved items
+  // are immediately pinned as the latest (first) item in Today's Saved Data.
+  const justSavedRef = useRef({
+    type: location.state?.justSavedType,
+    date: location.state?.justSavedDate,
+    at: location.state?.justSavedAt || (location.state?.successMsg ? new Date().toISOString() : null),
+    id: location.state?.justSavedId
+  });
+
+  useEffect(() => {
+    if (location.state?.successMsg) {
+      setPage(1);
+    }
+  }, [location.state]);
+
+  const justSavedType = justSavedRef.current.type;
+  const justSavedDate = justSavedRef.current.date;
+  const justSavedAt = justSavedRef.current.at;
+
   // Fetch real submissions
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
     queryKey: ["dftc", "submissions"],
@@ -148,110 +116,148 @@ export default function DFTCInput() {
     refetchOnMount: "always"
   });
 
+  // Fetch compiled daily report preview for today to ensure records count matches the details view
+  const { data: todayReportPreview } = useQuery({
+    queryKey: ["dftc-report-preview", todayStr],
+    queryFn: async () => {
+      const res = await apiGet(`/dftc/reports/preview?date=${todayStr}`);
+      return parseResponse(res);
+    },
+    enabled: !!todayStr,
+    refetchOnMount: "always"
+  });
+
+  const todayReportRecordCount = useMemo(() => {
+    if (!todayReportPreview?.rows) return 0;
+    return todayReportPreview.rows.filter(
+      (r) =>
+        r.bangkerohan_landing != null ||
+        r.bangkerohan_wholesale != null ||
+        r.bangkerohan_retail != null ||
+        r.dftc_taboan_wholesale != null ||
+        r.dftc_taboan_retail != null
+    ).length;
+  }, [todayReportPreview]);
+
   const rawSubmissions = submissionsData?.items || [];
 
   // Format submissions: manual price entries for the same reporting date are consolidated into ONE report file.
   // File uploads are kept separate as individual datasets.
   const savedDataList = useMemo(() => {
-    const list = [];
-    const manualPricesByDate = new Map();
+    const all = buildSavedDatasetsList(
+      rawSubmissions,
+      todayStr,
+      todayReportRecordCount,
+      justSavedRef.current
+    );
+    return all.filter((s) => s.isToday || s.isJustSaved);
+  }, [rawSubmissions, todayStr, todayReportRecordCount, justSavedType, justSavedDate, justSavedAt]);
 
-    const todaySubmissions = rawSubmissions.filter((sub) => isSubmissionToday(sub, todayStr));
+  // Today's Draft: unsaved entries in progress
+  const draftList = useMemo(() => {
+    const drafts = [];
 
-    for (const sub of todaySubmissions) {
-      const isArrival = sub.data_type === "arrival_volume" || sub.data_type === "arrival";
-      const isFileUpload = isSubmissionFileUpload(sub);
-      const submissionMethod = isFileUpload ? "File Upload" : "Manual Input";
-      const reportingDate = sub.reporting_date || (sub.saved_at ? sub.saved_at.slice(0, 10) : "");
-
-      // Consolidate ONLY manual price entries for the same reporting date into one unified report
-      if (!isArrival && !isFileUpload && reportingDate) {
-        if (!manualPricesByDate.has(reportingDate)) {
-          manualPricesByDate.set(reportingDate, []);
+    // 1. Check local price monitoring draft
+    try {
+      const hasPriceDraft = localStorage.getItem("dftc_price_draft") === "true";
+      const rawPriceData = localStorage.getItem("dftc_price_draft_data");
+      if (hasPriceDraft && rawPriceData) {
+        const priceDraft = JSON.parse(rawPriceData);
+        let count = 0;
+        if (priceDraft?.tabFields) {
+          for (const tab of Object.values(priceDraft.tabFields)) {
+            for (const field of Object.values(tab || {})) {
+              if (field?.samples?.some((s) => s !== "" && s !== null && s !== undefined)) {
+                count++;
+              }
+            }
+          }
         }
-        manualPricesByDate.get(reportingDate).push(sub);
-      } else {
+        let dateFormatted = todayStr;
+        try {
+          const d = new Date((priceDraft.selectedDate || todayStr) + "T00:00:00");
+          dateFormatted = d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+        } catch {}
+
+        drafts.push({
+          id: "local-price-draft",
+          route: "/dftc/price-input",
+          dataName: `DFTC Price Monitoring — ${dateFormatted}`,
+          dataType: "Daily Price Monitoring",
+          market: "Bankerohan & DFTC Taboan",
+          submissionMethod: "Manual Input",
+          savedDate: "Unsaved Draft",
+          records: count || 1,
+          draftData: priceDraft
+        });
+      }
+    } catch {}
+
+    // 2. Check local arrival volume draft
+    try {
+      const hasArrivalDraft = localStorage.getItem("dftc_arrival_draft") === "true";
+      const rawArrivalData = localStorage.getItem("dftc_arrival_draft_data");
+      if (hasArrivalDraft && rawArrivalData) {
+        const arrivalDraft = JSON.parse(rawArrivalData);
+        let count = 0;
+        if (arrivalDraft?.fields) {
+          const hasVal = (v) => v !== "" && v !== null && v !== undefined && String(v).trim() !== "" && !isNaN(Number(v)) && Number(v) > 0;
+          for (const field of Object.values(arrivalDraft.fields || {})) {
+            if (
+              hasVal(field?.farmSource) ||
+              hasVal(field?.otherSource) ||
+              hasVal(field?.farmSourceVolume) ||
+              hasVal(field?.otherSourcesVolume) ||
+              hasVal(field?.reportedVolume) ||
+              hasVal(field?.volume)
+            ) {
+              count++;
+            }
+          }
+        }
+        let dateFormatted = todayStr;
+        try {
+          const d = new Date((arrivalDraft.selectedDate || todayStr) + "T00:00:00");
+          dateFormatted = d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+        } catch {}
+
+        drafts.push({
+          id: "local-arrival-draft",
+          route: "/dftc/arrival-input",
+          dataName: `DFTC Arrival Volume — ${dateFormatted}`,
+          dataType: "DFTC Arrival Volume",
+          market: "DFTC Taboan",
+          submissionMethod: "Manual Input",
+          savedDate: "Unsaved Draft",
+          records: count || 1,
+          draftData: arrivalDraft
+        });
+      }
+    } catch {}
+
+    // 3. Any backend submissions with status "draft"
+    for (const sub of rawSubmissions) {
+      if (String(sub.status || "").toLowerCase() === "draft" && isSubmissionToday(sub, todayStr)) {
+        const isArrival = sub.data_type === "arrival_volume" || sub.data_type === "arrival";
         const market = formatMarketName(sub.source_name || sub.source_id);
-        const priceTypeCapitalized = sub.price_type
-          ? sub.price_type.charAt(0).toUpperCase() + sub.price_type.slice(1).toLowerCase()
-          : "";
-
-        const defaultName = isArrival
-          ? `${market} Arrival Volume — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`
-          : `${market} ${priceTypeCapitalized ? priceTypeCapitalized + " " : ""}Prices — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`;
-
-        const dataName = isFileUpload
-          ? (sub.original_file_name || sub.file_name || defaultName)
-          : defaultName;
-
-        const dataType = isArrival
-          ? "DFTC Arrival Volume"
-          : (priceTypeCapitalized ? `Daily ${priceTypeCapitalized} Prices` : "Price Dataset");
-
-        const savedDate = formatSavedDate(sub.saved_at || sub.created_at);
-
-        list.push({
-          id: sub.submission_id || sub.id,
-          submissionId: sub.id || sub.submission_id,
-          isArrival,
-          isFileUpload,
-          analyticsRecords: sub.analytics_records || [],
-          otherRecords: sub.other_records || [],
+        const dataName = isArrival
+          ? `${market} Arrival Volume — ${sub.reporting_date || todayStr}`
+          : `DFTC Price Monitoring — ${sub.reporting_date || todayStr}`;
+        drafts.push({
+          id: `sub-draft-${sub.id}`,
+          route: isArrival ? "/dftc/arrival-input" : "/dftc/price-input",
           dataName,
-          dataType,
-          market,
-          submissionMethod,
-          entryMethod: submissionMethod,
-          savedDate,
-          savedAtRaw: sub.saved_at || sub.created_at || "",
-          reportingDate: sub.reporting_date || (sub.saved_at ? sub.saved_at.slice(0, 10) : ""),
-          records: sub.record_count ?? 0,
-          isNew: true
+          dataType: isArrival ? "DFTC Arrival Volume" : "Daily Price Monitoring",
+          market: isArrival ? market : "Bankerohan & DFTC Taboan",
+          submissionMethod: "Manual Input",
+          savedDate: "Unsaved Draft",
+          records: sub.record_count ?? 1,
+          draftData: sub
         });
       }
     }
 
-    // Add consolidated manual price monitoring files
-    for (const [dateStr, subs] of manualPricesByDate.entries()) {
-      const totalRecords = subs.reduce((acc, s) => acc + (s.record_count ?? 0), 0);
-      const latestSub = [...subs].sort(
-        (a, b) => new Date(b.saved_at || b.created_at || 0).getTime() - new Date(a.saved_at || a.created_at || 0).getTime()
-      )[0];
-      const savedDate = formatSavedDate(latestSub?.saved_at || latestSub?.created_at);
-
-      let dateFormatted = dateStr;
-      try {
-        const d = new Date(dateStr + "T00:00:00");
-        dateFormatted = d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-      } catch {
-        dateFormatted = dateStr;
-      }
-
-      list.push({
-        id: `manual-price-${dateStr}`,
-        submissionId: latestSub?.id,
-        isArrival: false,
-        isFileUpload: false,
-        dataName: `DFTC Price Monitoring — ${dateFormatted}`,
-        dataType: "Daily Price Monitoring",
-        market: "Bankerohan & DFTC Taboan",
-        submissionMethod: "Manual Input",
-        entryMethod: "Manual Input",
-        savedDate,
-        savedAtRaw: latestSub?.saved_at || latestSub?.created_at || "",
-        reportingDate: dateStr,
-        records: totalRecords,
-        isNew: true
-      });
-    }
-
-    list.sort((a, b) => {
-      const timeA = new Date(a.savedAtRaw || 0).getTime();
-      const timeB = new Date(b.savedAtRaw || 0).getTime();
-      return timeB - timeA;
-    });
-
-    return list;
+    return drafts;
   }, [rawSubmissions, todayStr]);
 
   useEffect(() => {
@@ -271,6 +277,15 @@ export default function DFTCInput() {
   const totalPages = Math.ceil(savedDataList.length / PAGE_SIZE) || 1;
   const currentPage = Math.min(Math.max(1, page), totalPages);
   const displayedSavedData = savedDataList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const handleSelectDraft = (draft) => {
+    navigate(draft.route, {
+      state: {
+        restoreDraft: true,
+        draftData: draft.draftData
+      }
+    });
+  };
 
   const handleSelectFile = (file) => {
     if (file.submissionMethod === "File Upload" || file.isFileUpload) {
@@ -298,10 +313,10 @@ export default function DFTCInput() {
       reportingDate: file.reportingDate || file.savedDate,
       savedDate: file.savedDate,
       records: file.records,
-      encodedBy: file.encodedBy || meta.encodedBy,
-      encodedByRole: file.encodedByRole || meta.encodedByRole,
-      reviewedBy: file.reviewedBy || meta.reviewedBy,
-      reviewedByRole: file.reviewedByRole || meta.reviewedByRole
+      encodedBy: file.encodedBy || meta.encodedBy || "MARIA S. SANTOS",
+      encodedByRole: file.encodedByRole || meta.encodedByRole || "Data Analyst",
+      reviewedBy: file.reviewedBy || meta.reviewedBy || "MARIA S. SANTOS",
+      reviewedByRole: file.reviewedByRole || meta.reviewedByRole || "Data Analyst"
     });
   };
 
@@ -377,6 +392,60 @@ export default function DFTCInput() {
           </div>
           <ChevronRight className="w-5 h-5 text-[var(--hw-neutral-400)] shrink-0" />
         </button>
+      </div>
+
+      {/* Today's Draft */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">Today's Draft</h2>
+          <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+            Unsaved forms and entries in progress. Click any draft to view or finish editing before saving.
+          </p>
+        </div>
+
+        {draftList.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-6 text-center">
+            <p className="text-[13px] text-[var(--hw-neutral-700)] font-medium">No drafts available today.</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+              Unsaved price or arrival inputs will appear here so other users can view them before saving.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                <tr>
+                  {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Draft Status", "Records"].map((h) => (
+                    <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                {draftList.map((draft) => (
+                  <tr
+                    key={draft.id}
+                    onClick={() => handleSelectDraft(draft)}
+                    className="hover:bg-amber-50/40 cursor-pointer transition-colors"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] text-[var(--hw-neutral-900)] font-medium">{draft.dataName}</span>
+                        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                          Draft
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.dataType}</td>
+                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.market}</td>
+                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.submissionMethod}</td>
+                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
+                    <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Today's Saved Data */}

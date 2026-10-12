@@ -360,5 +360,51 @@ describe('DFTCHome KPI Overhaul', () => {
     expect(scrollContainer).toBeInTheDocument();
     expect(scrollContainer.className).toContain('overflow-y-auto');
   });
+
+  it('sorts recently saved manual input to the top of Recent Saved Data as the latest item', async () => {
+    const olderISO = new Date(Date.now() - 3600000).toISOString();
+    const newestISO = new Date().toISOString();
+
+    const submissions = [
+      {
+        id: 'SUB-FILE-01',
+        data_type: 'daily_price',
+        price_type: 'Retail',
+        source_name: 'DFTC Taboan',
+        status: 'Saved',
+        saved_at: olderISO,
+        submission_method: 'File Upload',
+        original_file_name: 'DFTC-Retail-AugSept-2026.xlsx'
+      },
+      {
+        id: 'SUB-MANUAL-NEWEST',
+        data_type: 'price',
+        price_type: 'Retail',
+        source_name: 'Bangkerohan',
+        status: 'Saved',
+        saved_at: newestISO,
+        submission_method: 'Manual Input'
+      }
+    ];
+
+    const fetchFn = mockFetchByUrl([
+      { path: '/dftc/home', response: { ok: true, status: 200, body: HOME_DATA } },
+      { path: '/dftc/submissions', response: { ok: true, status: 200, body: { items: submissions } } },
+      { path: '/dftc/requirements', response: { ok: true, status: 200, body: { items: [] } } },
+    ]);
+    vi.stubGlobal('fetch', fetchFn);
+
+    const { container } = renderDFTCHome();
+
+    await screen.findByText('SUB-MANUAL-NEWEST');
+    const scrollContainer = container.querySelector('.max-h-\\[345px\\]');
+    expect(scrollContainer).toBeInTheDocument();
+
+    const items = scrollContainer.querySelectorAll('button');
+    // First item must be the newest manual entry
+    expect(items[0]).toHaveTextContent('DFTC Price Monitoring');
+    expect(items[0]).toHaveTextContent('Manual Input');
+    expect(items[0]).toHaveTextContent('SUB-MANUAL-NEWEST');
+  });
 });
 

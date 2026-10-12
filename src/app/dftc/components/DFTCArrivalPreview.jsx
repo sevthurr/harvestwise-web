@@ -36,11 +36,18 @@ function formatDisplayDate(dateStr) {
 
 function formatDisplayDateShort(dateStr) {
   if (!dateStr) return "";
+  const match = String(dateStr).match(/\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
   try {
-    return new Date(dateStr).toISOString().split("T")[0];
-  } catch {
-    return dateStr;
-  }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+  } catch {}
+  return String(dateStr);
 }
 
 function triggerDownload(url, filename) {

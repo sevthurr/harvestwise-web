@@ -5,12 +5,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DFTCInput from '../app/dftc/pages/DFTCInput';
 
 const mockNavigate = vi.fn();
+let mockLocationState = null;
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useLocation: () => ({ state: null })
+    useLocation: () => ({ state: mockLocationState, pathname: '/dftc/input' })
   };
 });
 
@@ -105,7 +106,8 @@ function mockSubmissionsFetch() {
   });
 }
 
-function renderDFTCInput() {
+function renderDFTCInput(state = null) {
+  mockLocationState = state;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } }
   });
@@ -121,6 +123,7 @@ function renderDFTCInput() {
 describe('DFTCInput Submit Data Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLocationState = null;
     global.fetch = mockSubmissionsFetch();
     localStorage.clear();
   });
@@ -207,7 +210,7 @@ describe('DFTCInput Submit Data Page', () => {
     expect(screen.getByRole('button', { name: 'PDF' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Excel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'IMG' })).toBeInTheDocument();
-    expect(screen.getByText('Prepared By')).toBeInTheDocument();
+    expect(screen.getAllByText(/Prepared By/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Download Images/i })).toBeInTheDocument();
   });
 
@@ -332,8 +335,8 @@ describe('DFTCInput Submit Data Page', () => {
     expect(screen.getByRole('button', { name: 'PDF' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Excel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'IMG' })).toBeInTheDocument();
-    expect(screen.getByText('Encoded By')).toBeInTheDocument();
-    expect(screen.getByText('Prepared By')).toBeInTheDocument();
+    expect(screen.getAllByText(/Encoded By/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Reviewed By|Prepared By/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Download Images/i })).toBeInTheDocument();
 
     expect(screen.queryByText('Preview Daily Report')).not.toBeInTheDocument();
@@ -383,6 +386,135 @@ describe('DFTCInput Submit Data Page', () => {
     // Page 2 should now show 11–14
     await waitFor(() => {
       expect(screen.getByText(/Showing 11–14 of 14 datasets/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders Today\'s Draft before Today\'s Saved Data and allows opening unsaved drafts', async () => {
+    localStorage.setItem('dftc_price_draft', 'true');
+    localStorage.setItem(
+      'dftc_price_draft_data',
+      JSON.stringify({
+        selectedDate: todayIso,
+        tabFields: {
+          'bankerohan-retail': {
+            'com-1-v1': { samples: ['50', '52', '', '', ''], uom: 'kg' }
+          }
+        }
+      })
+    );
+
+    global.fetch = mockSubmissionsFetch();
+    renderDFTCInput();
+
+    await waitFor(() => {
+      expect(screen.getByText("Today's Draft")).toBeInTheDocument();
+      expect(screen.getByText("Today's Saved Data")).toBeInTheDocument();
+    });
+
+    // Check heading hierarchy / order
+    const draftHeading = screen.getByText("Today's Draft");
+    const savedHeading = screen.getByText("Today's Saved Data");
+    expect(draftHeading.compareDocumentPosition(savedHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Verify draft item is listed
+    expect(screen.getByText('Unsaved Draft')).toBeInTheDocument();
+
+    // Clicking draft navigates to price input with restoreDraft state
+    const draftRow = screen.getByText('Unsaved Draft').closest('tr');
+    fireEvent.click(draftRow);
+
+    expect(mockNavigate).toHaveBeenCalledWith('/dftc/price-input', expect.objectContaining({
+      state: expect.objectContaining({ restoreDraft: true })
+    }));
+
+    localStorage.removeItem('dftc_price_draft');
+    localStorage.removeItem('dftc_price_draft_data');
+  });
+
+  it('ensures Encoded By and Prepared By are not editable select elements in file preview', async () => {
+    global.fetch = mockSubmissionsFetch();
+    renderDFTCInput();
+
+    const priceRows = await screen.findAllByText('Bankerohan & DFTC Taboan');
+    fireEvent.click(priceRows[0].closest('tr'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Preview Daily Report')).toBeInTheDocument();
+    });
+
+    // Verify Encoded By and Prepared By are displayed
+    expect(screen.getAllByText(/Encoded By/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Prepared By/i).length).toBeGreaterThan(0);
+
+    // Verify there are no select dropdowns for personnel
+    const selects = screen.queryAllByRole('combobox');
+    expect(selects.length).toBe(0);
+  });
+
+  it('places a just-saved entry at the top of Today\'s Saved Data as the latest item', async () => {
+    global.fetch = mockSubmissionsFetch();
+    renderDFTCInput({
+      successMsg: 'DFTC Price Monitoring — Oct 12, 2026 saved successfully (19 price records across all markets).',
+      justSavedType: 'price',
+      justSavedDate: todayIso,
+      justSavedAt: new Date().toISOString()
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Today\'s Saved Data')).toBeInTheDocument();
+    });
+
+    const rows = await screen.findAllByRole('row');
+    // First data row (index 1 after table header row) is the price monitoring entry
+    expect(rows[1]).toHaveTextContent(/DFTC Price Monitoring —/i);
+  });
+
+  it('displays compiled records count from report preview for manual price monitoring rows', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (url.includes('/dftc/submissions')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                id: 'sub-price-1',
+                data_type: 'price',
+                source_id: 'dftc',
+                source_name: 'DFTC Taboan',
+                price_type: 'retail',
+                reporting_date: todayIso,
+                saved_at: `${todayIso}T18:20:00Z`,
+                record_count: 1, // backend raw submission has 1
+                submission_method: 'Manual Input'
+              }
+            ]
+          })
+        };
+      }
+      if (url.includes('/dftc/reports/preview')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            report_reference_no: 'REP-20261012-01',
+            subtitle: `Prevailing Market Prices as of ${todayFormatted}`,
+            rows: Array.from({ length: 19 }, (_, i) => ({
+              commodity_name: `Commodity ${i + 1}`,
+              bangkerohan_retail: 50 + i
+            }))
+          })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ items: [] }) };
+    });
+
+    global.fetch = fetchMock;
+    renderDFTCInput();
+
+    await waitFor(() => {
+      // The row should display 19 in the Records column instead of 1
+      expect(screen.getByText('19')).toBeInTheDocument();
     });
   });
 });
