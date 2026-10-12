@@ -388,6 +388,7 @@ function AdminImport() {
   const [currentStep, setCurrentStep] = useState(0);
   const [parsing, setParsing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [importProgress, setImportProgress] = useState(15);
   const [uploadError, setUploadError] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [ingestionStatus, setIngestionStatus] = useState("idle"); // "idle" | "processing" | "success" | "failed"
@@ -532,6 +533,7 @@ function AdminImport() {
         initialProgress: 10,
         importId,
       });
+      setImportProgress(15);
       updateProgress(15, "File uploaded, processing in background...");
 
       if (importId) {
@@ -559,6 +561,7 @@ function AdminImport() {
                 fileFormat: file?.name ? ("." + file.name.split(".").pop().toLowerCase()) : ".xlsx",
                 finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
               });
+              setImportProgress(100);
               setUploadMessage(`Import completed successfully! Stored ${statusRes.records_imported || 0} records.`);
               finishProcess(`Stored ${statusRes.records_imported || 0} records`);
               setStep("stored");
@@ -576,6 +579,7 @@ function AdminImport() {
               queryClient.refetchQueries();
             } else {
               const pct = Math.min(90, 20 + attempts * 3);
+              setImportProgress(pct);
               updateProgress(pct, `Processing records... (${attempts * 2}s)`);
             }
           } catch (statusErr) {
@@ -991,13 +995,21 @@ function AdminImport() {
             )}
 
             {step === "importing" && (
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
-                <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
-                <div>
-                  <p className="text-[13px] font-bold text-blue-950">Standardizing & Storing Records…</p>
-                  <p className="text-[12px] text-blue-800 mt-0.5">
-                    {uploadMessage || "Uploading and processing dataset in the background…"}
-                  </p>
+              <div className="p-5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[14px] font-bold text-blue-950">Standardizing & Storing Records…</p>
+                    <p className="text-[12px] text-blue-800 mt-0.5">
+                      {uploadMessage || "Uploading and processing dataset in the background…"}
+                    </p>
+                  </div>
+                  <span className="text-[14px] font-bold text-blue-700 shrink-0">{importProgress}%</span>
+                </div>
+                <div className="w-full bg-blue-200/70 h-2.5 rounded-full overflow-hidden border border-blue-200">
+                  <div
+                    className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${importProgress}%` }}
+                  />
                 </div>
               </div>
             )}

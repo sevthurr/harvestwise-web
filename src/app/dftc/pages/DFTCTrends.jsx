@@ -782,6 +782,35 @@ function DFTCTrends() {
     return "price";
   });
 
+  const resolveCommodityParam = (paramVal) => {
+    if (!paramVal) return null;
+    const lower = paramVal.toLowerCase();
+    const allCommodities = PRICE_CATEGORIES.flatMap((c) => c.commodities);
+    return (
+      allCommodities.find(
+        (c) => c.toLowerCase() === lower || getCommoditySlug(c) === lower
+      ) || paramVal
+    );
+  };
+
+  const [activeAlertModal, setActiveAlertModal] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const alert = params.get("alert");
+      if (alert === "volatility" || alert === "oversupply") return alert;
+    }
+    return null;
+  });
+
+  const { data: homeData, isLoading: isHomeLoading } = useQuery({
+    queryKey: ["dftc", "home"],
+    queryFn: async () => {
+      const res = await apiGet("/dftc/home");
+      return parseResponse(res);
+    },
+    staleTime: 60 * 1000,
+  });
+
   useEffect(() => {
     if (typeof window !== "undefined" && window.location) {
       const params = new URLSearchParams(window.location.search);
@@ -789,8 +818,79 @@ function DFTCTrends() {
       if (urlTab === "arrival" || urlTab === "price") {
         setActiveTab(urlTab);
       }
+      const rawComm = params.get("commodity");
+      if (rawComm) {
+        const resolved = resolveCommodityParam(rawComm);
+        if (urlTab === "arrival") {
+          setACommodity(resolved);
+        } else {
+          setPCommodity(resolved);
+        }
+      }
+      const urlAlert = params.get("alert");
+      if (urlAlert === "volatility" || urlAlert === "oversupply") {
+        setActiveAlertModal(urlAlert);
+      }
     }
   }, []);
+
+  const closeAlertModal = () => {
+    setActiveAlertModal(null);
+    if (typeof window !== "undefined" && window.location && window.history) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("alert");
+        window.history.replaceState({}, "", url.toString());
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const selectAlertCommodity = (commName) => {
+    if (activeAlertModal === "volatility") {
+      setPCommodity(commName);
+      if (typeof window !== "undefined" && window.location && window.history) {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set("tab", "price");
+          url.searchParams.set("commodity", commName);
+          url.searchParams.delete("alert");
+          window.history.replaceState({}, "", url.toString());
+        } catch {}
+      }
+    } else {
+      setACommodity(commName);
+      if (typeof window !== "undefined" && window.location && window.history) {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set("tab", "arrival");
+          url.searchParams.set("commodity", commName);
+          url.searchParams.delete("alert");
+          window.history.replaceState({}, "", url.toString());
+        } catch {}
+      }
+    }
+    closeAlertModal();
+  };
+
+  const alertCommoditiesList = useMemo(() => {
+    if (activeAlertModal === "volatility") {
+      if (homeData?.kpis?.volatile_commodities?.length) {
+        return homeData.kpis.volatile_commodities;
+      }
+      return (homeData?.price_movement || []).filter(
+        (p) => p.change_pct != null && Math.abs(p.change_pct) >= 10.0
+      );
+    }
+    if (activeAlertModal === "oversupply") {
+      if (homeData?.kpis?.oversupply_commodities?.length) {
+        return homeData.kpis.oversupply_commodities;
+      }
+      return [];
+    }
+    return [];
+  }, [activeAlertModal, homeData]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -806,7 +906,16 @@ function DFTCTrends() {
   };
 
   // Price Trend state
-  const [pCommodity, setPCommodity] = useState("Kamatis");
+  const [pCommodity, setPCommodity] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const rawComm = params.get("commodity");
+      if (rawComm && params.get("tab") !== "arrival") {
+        return resolveCommodityParam(rawComm) || "Kamatis";
+      }
+    }
+    return "Kamatis";
+  });
   const [pVariety, setPVariety] = useState(null);
   const [pMarket, setPMarket] = useState("Bankerohan Public Market");
   const [pPriceType, setPPriceType] = useState("Retail");
@@ -818,7 +927,16 @@ function DFTCTrends() {
   const [pShowAll, setPShowAll] = useState(false);
 
   // Arrival Volume Trend state
-  const [aCommodity, setACommodity] = useState("Carrots");
+  const [aCommodity, setACommodity] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const rawComm = params.get("commodity");
+      if (rawComm && params.get("tab") === "arrival") {
+        return resolveCommodityParam(rawComm) || "Carrots";
+      }
+    }
+    return "Carrots";
+  });
   const [aVolumeType, setAVolumeType] = useState("Combined Total");
   const [aDatePreset, setADatePreset] = useState("all");
   const [aCustomFrom, setACustomFrom] = useState("");
@@ -1623,6 +1741,149 @@ function DFTCTrends() {
           <TabNav tab={activeTab} onChange={handleTabChange} />
         </div>
         {activeTab === "price" ? priceTrendsTab : arrivalTrendsTab}
+
+        {/* ── Alert Commodities Modal ── */}
+        {activeAlertModal && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={closeAlertModal}
+          >
+            <div
+              className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-[var(--hw-neutral-100)] flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${
+                        activeAlertModal === "volatility"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-rose-100 text-rose-700"
+                      }`}
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                    </span>
+                    <h3 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+                      {activeAlertModal === "volatility"
+                        ? "Price Volatility Alerts"
+                        : "Oversupply Commodities"}
+                    </h3>
+                  </div>
+                  <p className="text-[13px] text-[var(--hw-neutral-600)]">
+                    {activeAlertModal === "volatility"
+                      ? "Check the trend for these commodities experiencing sharp price swings (>10%)."
+                      : "Check the trend for these commodities currently in an oversupply state (≥Q3)."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAlertModal}
+                  className="p-1 rounded-lg text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal List Body */}
+              <div className="p-4 max-h-[360px] overflow-y-auto divide-y divide-[var(--hw-neutral-100)]">
+                {isHomeLoading ? (
+                  <div className="py-8 text-center text-[13px] text-[var(--hw-neutral-500)] animate-pulse">
+                    Loading alert commodities…
+                  </div>
+                ) : alertCommoditiesList.length === 0 ? (
+                  <div className="py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                    No commodities found for this alert.
+                  </div>
+                ) : (
+                  alertCommoditiesList.map((comm) => {
+                    const commName = comm.crop_name || comm.name || comm.commodity_name;
+                    return (
+                      <button
+                        key={comm.commodity_id || commName}
+                        type="button"
+                        onClick={() => selectAlertCommodity(commName)}
+                        className="w-full flex items-center justify-between gap-3 p-3 rounded-xl hover:bg-[var(--hw-neutral-50)] text-left transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <CommodityIllustration
+                            commodityId={comm.commodity_id}
+                            commodityName={commName}
+                            className="w-9 h-9 shrink-0 object-contain rounded-lg bg-[var(--hw-neutral-50)] p-1 border border-[var(--hw-neutral-100)]"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] group-hover:text-[var(--hw-green-800)] truncate">
+                              {commName}
+                              {comm.variety ? ` · ${comm.variety}` : ""}
+                            </p>
+                            <p className="text-[12px] text-[var(--hw-neutral-500)] truncate">
+                              {activeAlertModal === "volatility"
+                                ? `${comm.market || "Davao Market"} · ${comm.price_type || "Retail"}`
+                                : "High Arrival Pressure (≥Q3)"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          {activeAlertModal === "volatility" ? (
+                            <>
+                              {comm.current_price != null && (
+                                <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
+                                  ₱{Number(comm.current_price).toFixed(2)}/{comm.unit || "kg"}
+                                </p>
+                              )}
+                              <p
+                                className={`text-[12px] font-bold ${
+                                  comm.direction === "down"
+                                    ? "text-rose-600"
+                                    : "text-emerald-700"
+                                }`}
+                              >
+                                {comm.change_pct != null
+                                  ? `${comm.direction === "down" ? "↓" : "↑"} ${Math.abs(
+                                      comm.change_pct
+                                    )}%`
+                                  : "Volatile"}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              {comm.volume_kg != null && (
+                                <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
+                                  {Number(comm.volume_kg).toLocaleString("en-US")} kg
+                                </p>
+                              )}
+                              <span className="inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                Oversupply
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3.5 bg-[var(--hw-neutral-50)] border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
+                <span className="text-[12px] text-[var(--hw-neutral-500)]">
+                  Select a commodity to view its trend chart
+                </span>
+                <button
+                  type="button"
+                  onClick={closeAlertModal}
+                  className="px-4 py-2 text-[13px] font-semibold text-[var(--hw-neutral-700)] bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:bg-[var(--hw-neutral-100)] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
  * DFTC Trends Price Trends — prices API wiring (no XGBoost in React).
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DFTCTrends from "../app/dftc/pages/DFTCTrends";
 import * as pricesApi from "../services/api/pricesApi";
@@ -31,6 +31,9 @@ vi.mock("recharts", () => {
     ResponsiveContainer: ({ children }) => <div data-testid="dftc-chart">{children}</div>,
     LineChart: Passthrough,
     ComposedChart: Passthrough,
+    PieChart: Passthrough,
+    Pie: Passthrough,
+    Cell: () => null,
     Line: () => null,
     Area: () => null,
     XAxis: () => null,
@@ -356,3 +359,134 @@ describe("DFTC Trends page prices API integration", () => {
     expect(pricesApi).not.toHaveProperty("getForecastCatalog");
   });
 });
+
+describe("DFTC Trends Alert Commodities Modal", () => {
+  const MOCK_HOME_WITH_ALERTS = {
+    kpis: {
+      price_volatility_alerts_count: 2,
+      oversupply_commodities_count: 2,
+      volatile_commodities: [
+        {
+          commodity_id: "COM-KAM-DIAM",
+          crop_name: "Kamatis",
+          variety: "Diamante Big",
+          change_pct: 14.5,
+          direction: "up",
+          current_price: 72.0,
+          unit: "kg",
+        },
+        {
+          commodity_id: "COM-CAR-KURO",
+          crop_name: "Carrots",
+          variety: "Kuroda",
+          change_pct: -12.0,
+          direction: "down",
+          current_price: 85.0,
+          unit: "kg",
+        },
+      ],
+      oversupply_commodities: [
+        {
+          commodity_id: "COM-CAR-KURO",
+          crop_name: "Carrots",
+          variety: "Kuroda",
+          volume_kg: 2500,
+          classification: "High",
+        },
+        {
+          commodity_id: "COM-PECH",
+          crop_name: "Chinese Pechay",
+          variety: null,
+          volume_kg: 3200,
+          classification: "High",
+        },
+      ],
+    },
+  };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/dftc/trends");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        if (String(url).includes("/dftc/home")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => MOCK_HOME_WITH_ALERTS,
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [] }),
+        };
+      })
+    );
+    vi.spyOn(pricesApi, "getPriceList").mockResolvedValue(CATALOG);
+    vi.spyOn(pricesApi, "getPriceDetail").mockImplementation(async (commodityId, params = {}) => {
+      return detailBody({
+        commodityId,
+        priceType: params.price_type || "bangkerohan_retail",
+        horizon: Number(params.horizon || 7),
+      });
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/dftc/trends");
+  });
+
+  it("displays Price Volatility Alerts modal when alert=volatility in URL", async () => {
+    window.history.replaceState({}, "", "/dftc/trends?tab=price&alert=volatility");
+    renderTrends(<DFTCTrends />);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Price Volatility Alerts" })).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Check the trend for these commodities experiencing sharp price swings/i)
+    ).toBeInTheDocument();
+
+    // Renders list of volatile commodities once home data loads
+    expect(await within(dialog).findByText(/Kamatis/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Diamante Big/)).toBeInTheDocument();
+    const carrotsBtn = within(dialog).getByText(/Carrots/);
+    expect(carrotsBtn).toBeInTheDocument();
+
+    // Selecting a commodity updates selection and closes modal
+    fireEvent.click(carrotsBtn);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+
+  it("displays Oversupply Commodities modal when alert=oversupply in URL", async () => {
+    window.history.replaceState({}, "", "/dftc/trends?tab=arrival&alert=oversupply");
+    renderTrends(<DFTCTrends />);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Oversupply Commodities" })).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Check the trend for these commodities currently in an oversupply state/i)
+    ).toBeInTheDocument();
+
+    // Renders list of oversupply commodities once home data loads
+    expect(await within(dialog).findByText(/Carrots/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/Chinese Pechay/)).toBeInTheDocument();
+    expect(within(dialog).getByText("2,500 kg")).toBeInTheDocument();
+
+    // Clicking Close dismisses modal
+    const closeBtns = within(dialog).getAllByRole("button", { name: /close/i });
+    fireEvent.click(closeBtns[0]);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  });
+});
+
+

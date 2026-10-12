@@ -23,6 +23,12 @@ export function DFTCKpiCard({
   const Component = onClick && !loading ? "button" : "div";
   const displayValue = value !== undefined && value !== null && value !== "" && value !== "—" ? value : 0;
   const isRatio = typeof displayValue === "string" && displayValue.includes("/");
+  const isText = typeof displayValue === "string" && isNaN(Number(displayValue)) && !isRatio;
+  const textSize = isText
+    ? "text-[20px] sm:text-[24px]"
+    : isRatio
+    ? "text-[22px] sm:text-[26px]"
+    : "text-[28px] sm:text-[32px]";
 
   return (
     <Component
@@ -40,16 +46,19 @@ export function DFTCKpiCard({
           {label}
         </span>
       </div>
-      <div className="flex items-end justify-end mt-auto">
+      <div className="flex items-end justify-end mt-auto min-w-0">
         {loading ? (
           <div className="h-8 w-14 bg-[var(--hw-neutral-200)] animate-pulse rounded-md ml-auto" />
         ) : (
-          <div className="text-right">
-            <p className={`${isRatio ? "text-[22px] sm:text-[26px]" : "text-[28px] sm:text-[32px]"} font-bold ${valueColor} leading-none text-right`}>
+          <div className="text-right min-w-0 max-w-full">
+            <p
+              className={`${textSize} font-bold ${valueColor} leading-none text-right truncate`}
+              title={typeof displayValue === "string" ? displayValue : undefined}
+            >
               {displayValue}
             </p>
             {sub && (
-              <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] mt-1.5 leading-tight">
+              <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] mt-1.5 leading-tight truncate">
                 {sub}
               </p>
             )}

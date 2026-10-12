@@ -285,9 +285,9 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     fireEvent.click(encodedByTrigger);
 
     await waitFor(() => {
-      expect(screen.getByText('MARIA SANTOS')).toBeInTheDocument();
+      expect(screen.getAllByText(/MARIA SANTOS/i).length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByText('MARIA SANTOS'));
+    fireEvent.click(screen.getAllByText(/MARIA SANTOS/i)[0]);
 
     // Click Save DFTC Arrival Volume
     const saveBtn = screen.getByRole('button', { name: /Save DFTC Arrival Volume/i });
@@ -356,9 +356,9 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     const encodedByTrigger = document.getElementById('encoded-by-select');
     fireEvent.click(encodedByTrigger);
     await waitFor(() => {
-      expect(screen.getByText('MARIA SANTOS')).toBeInTheDocument();
+      expect(screen.getAllByText(/MARIA SANTOS/i).length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByText('MARIA SANTOS'));
+    fireEvent.click(screen.getAllByText(/MARIA SANTOS/i)[0]);
 
     // The previous test's success path navigates on a 600ms timer that outlives
     // its assertions; clear the spy so this test only sees its own navigation.
