@@ -335,6 +335,7 @@ export const ceb = {
     },
 
     phases: {
+      draft: "Draft",
       planning: "Pagplano",
       on_hold: "Gipugngan",
       planted: "Natanom",

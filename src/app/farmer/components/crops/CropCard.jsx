@@ -5,8 +5,16 @@ import { formatCropLabel } from "../../utils/formatters";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
-const PhasePill = ({ phase, isOnHold }) => {
+const PhasePill = ({ phase, isOnHold, status }) => {
   const { t } = useLanguage();
+  if (status === "Draft") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200">
+        <PauseCircle className="w-3 h-3" />
+        {t("farmer.phases.draft")}
+      </span>
+    );
+  }
   const phaseCode = normalizePhaseCode(phase);
   if (isOnHold || phaseCode === PHASE_CODES.ON_HOLD) {
     return (
@@ -67,7 +75,7 @@ const CropCard = ({ crop, onView }) => {
         <p className="font-bold text-[var(--hw-neutral-900)] flex-1 leading-tight">
           {formatCropLabel(crop.commodityName, crop.variety ?? crop.variant)}
         </p>
-        <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
+        <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} status={crop.status} />
       </div>
 
       {/* Data rows */}

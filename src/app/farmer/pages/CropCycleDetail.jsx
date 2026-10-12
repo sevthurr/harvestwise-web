@@ -113,7 +113,7 @@ function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
   const { t, langCode } = useLanguage();
-  const { crops, updateCrop, updateCropStatusApi, addCostApi, logHarvestApi, refreshCrops } = useCrops();
+  const { crops, updateCrop, updateCropStatusApi, promoteCropApi, addCostApi, logHarvestApi, refreshCrops } = useCrops();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addCostOpen, setAddCostOpen] = useState(false);
   const [additionalCost, setAdditionalCost] = useState("");
@@ -159,7 +159,11 @@ function CropCycleDetailPage() {
           const harvestDate = action.fields.actualHarvestDate || new Date().toISOString().split('T')[0];
           await logHarvestApi(crop.id, harvestDate, action.fields.finalQtySold, action.fields.avgSellingPrice);
         } else {
-          await updateCropStatusApi(crop.id, targetStatus);
+          if (crop.status === "Draft" && (targetStatus === "Planning" || targetStatus === "Planted")) {
+            await promoteCropApi(crop.id, targetStatus);
+          } else {
+            await updateCropStatusApi(crop.id, targetStatus);
+          }
         }
         updateCrop(crop.id, {
           phase: action.phase,
@@ -178,7 +182,11 @@ function CropCycleDetailPage() {
           lastUpdated: "Just now"
         });
       } else if (action.kind === "resume") {
-        await updateCropStatusApi(crop.id, "Planning");
+        if (crop.status === "Draft") {
+          await promoteCropApi(crop.id, "Planning");
+        } else {
+          await updateCropStatusApi(crop.id, "Planning");
+        }
         updateCrop(crop.id, {
           isOnHold: false,
           lastUpdated: "Just now"
@@ -320,7 +328,7 @@ function CropCycleDetailPage() {
                   <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
                     {crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName}
                   </h1>
-                  <div className="mt-1"><PhasePill phase={crop.phase} isOnHold={crop.isOnHold} /></div>
+                  <div className="mt-1"><PhasePill phase={crop.phase} isOnHold={crop.isOnHold} status={crop.status} /></div>
                 </div>
                 <button
     onClick={() => setDrawerOpen(true)}

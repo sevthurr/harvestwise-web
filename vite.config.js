@@ -81,6 +81,12 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
+            // Admin analytics outputs are real-time computed data — never serve
+            // from cache or the year picker and classification values will be stale.
+            urlPattern: /\/api\/v1\/admin\/analytics\//i,
+            handler: 'NetworkOnly',
+          },
+          {
             // Cache all other API GET responses with NetworkFirst strategy
             // (try network, fall back to cache when offline)
             // Match any origin with /api/v1/ path — works for localhost, production domains, etc.

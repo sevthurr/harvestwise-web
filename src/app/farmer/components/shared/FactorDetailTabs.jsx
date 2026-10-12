@@ -403,6 +403,7 @@ const ArrivalTab = ({ data, commodityId, commodityName }) => {
             varietyKeys={showRealChart ? ["Volume"] : dftcVarietyKeys}
             sourceType={showRealChart ? "Actual Arrivals" : "Combined Total"}
             height={260}
+            year={realChartData?.length > 0 ? new Date(realChartData[0].date || realChartData[0].arrival_date).getFullYear() : undefined}
           />
         </div>
       )}

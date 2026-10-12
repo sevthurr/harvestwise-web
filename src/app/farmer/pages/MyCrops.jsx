@@ -48,7 +48,7 @@ function nextActionText(crop) {
   };
   return map[crop.phase] ?? "";
 }
-const MyCropCard = ({ crop, onView }) => {
+export const MyCropCard = ({ crop, onView }) => {
   const { t } = useLanguage();
   const currentPrice = crop.currentPrice;
   const profit = profitRange(crop);
@@ -63,7 +63,7 @@ const MyCropCard = ({ crop, onView }) => {
             {displayName}
           </p>
         </div>
-        <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
+        <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} status={crop.status} />
       </div>
 
       {/* Details */}

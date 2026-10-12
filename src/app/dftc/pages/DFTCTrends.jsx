@@ -96,7 +96,8 @@ function formatCustomDateLabel(from, to) {
     if (parts.length < 2) return d;
     return `${months[parseInt(parts[1], 10) - 1]} ${parts[2] ? parseInt(parts[2], 10) : ""}`.trim();
   };
-  return `${fmt(from)}–${fmt(to)}, 2026`;
+  const year = from && from.includes("-") ? parseInt(from.split("-")[0], 10) : new Date().getFullYear();
+  return `${fmt(from)}–${fmt(to)}, ${year}`;
 }
 
 const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]";
@@ -1519,6 +1520,7 @@ function DFTCTrends() {
                 varietyKeys={aVarietyKeys}
                 sourceType={aVolumeType}
                 height={300}
+                year={rawArrivalRecords.length > 0 ? new Date(rawArrivalRecords[0].arrival_date || rawArrivalRecords[0].date).getFullYear() : undefined}
               />
             )}
           </div>

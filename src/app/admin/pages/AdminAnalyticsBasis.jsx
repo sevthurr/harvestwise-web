@@ -852,8 +852,14 @@ function AdminAnalyticsBasis() {
   const [arrivalGranularity, setArrivalGranularity] = useState("monthly");
   const [arrivalYear, setArrivalYear] = useState(null);
 
-  const arrivalRecords = arrivalSummary?.records || [];
+  // history_records contains all records on file (unbounded); records is
+  // scoped to the 90-day classification window. Use history_records for the
+  // trend chart and year picker so they span every year on record.
+  const arrivalRecords = arrivalSummary?.history_records || arrivalSummary?.records || [];
   const arrivalYears = useMemo(() => availableArrivalYears(arrivalRecords), [arrivalRecords]);
+  // Resolve the active year: use the user's selection if it exists in the data,
+  // otherwise fall back to the most recent year. Client-side filtering only —
+  // no refetch needed per year because the initial fetch returns all records.
   const arrivalActiveYear = arrivalYears.includes(arrivalYear) ? arrivalYear : arrivalYears[0] ?? null;
 
   const arrivalSeries = useMemo(
@@ -863,16 +869,35 @@ function AdminAnalyticsBasis() {
 
   // Monthly keeps a full Jan-Dec axis so a year with a few recorded months
   // still reads as a yearly trend. Daily only has the days that recorded.
+  // When the 90-day window has fewer than 4 records the API withholds
+  // quartile_thresholds (classification is unreliable with too few points).
+  // For the trend chart we fall back to computing quartiles from the full
+  // history so bars still show colours instead of all-grey.
+  const arrivalChartQuartiles = useMemo(() => {
+    if (arrivalSummary?.quartile_thresholds) return arrivalSummary.quartile_thresholds;
+    const vols = arrivalRecords
+      .map((r) => Number(r.volume_kg))
+      .filter((v) => Number.isFinite(v) && v > 0)
+      .sort((a, b) => a - b);
+    if (vols.length < 4) return null;
+    const q = (p) => {
+      const idx = p * (vols.length - 1);
+      const lo = Math.floor(idx), hi = Math.ceil(idx);
+      return lo === hi ? vols[lo] : vols[lo] + (vols[hi] - vols[lo]) * (idx - lo);
+    };
+    return { q1: q(0.25), q2: q(0.5), q3: q(0.75) };
+  }, [arrivalSummary?.quartile_thresholds, arrivalRecords]);
+
   const arrivalChartData = useMemo(() => {
     const withLabels = arrivalSeries.map((bucket) => ({
       ...bucket,
       tipLabel: `${bucket.label} ${bucket.year}`,
-      classification: classifyArrival(bucket.total_kg, arrivalSummary?.quartile_thresholds)
+      classification: classifyArrival(bucket.total_kg, arrivalChartQuartiles)
     }));
     return arrivalGranularity === "monthly"
       ? monthlyAxisForYear(arrivalActiveYear, withLabels)
       : withLabels;
-  }, [arrivalSeries, arrivalGranularity, arrivalActiveYear, arrivalSummary]);
+  }, [arrivalSeries, arrivalGranularity, arrivalActiveYear, arrivalChartQuartiles]);
 
   const arrivalSourceOption =
     ARRIVAL_SOURCE_OPTIONS.find((o) => o.value === arrivalSource) || ARRIVAL_SOURCE_OPTIONS[0];

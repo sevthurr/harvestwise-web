@@ -10,11 +10,12 @@ import {
   Brush
 } from "recharts";
 import { HW_GREEN_SHADES } from "./trendChartData";
-function ArrivalTooltip({ active, payload, label, commodity, sourceType }) {
+function ArrivalTooltip({ active, payload, label, commodity, sourceType, year }) {
   if (!active || !payload?.length) return null;
   const dirInfo = payload[0]?.payload?._dirInfo ?? {};
+  const displayYear = year || new Date().getFullYear();
   return <div className="bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3 min-w-[180px]">
-      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-2 pb-1.5 border-b border-[var(--hw-neutral-100)]">{label} 2026</div>
+      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-2 pb-1.5 border-b border-[var(--hw-neutral-100)]">{label} {displayYear}</div>
       <div className="text-[12px] text-[var(--hw-neutral-800)] mb-1.5">{commodity} · {sourceType} · kg</div>
       {payload.map((entry) => {
     if (entry.value == null) return null;
@@ -40,7 +41,8 @@ function ArrivalVolumeTrendChart({
   sourceType,
   colors,
   height = 300,
-  xDataKey = "month"
+  xDataKey = "month",
+  year
 }) {
   const palette = colors ?? HW_GREEN_SHADES;
   const containerRef = useRef(null);
@@ -114,7 +116,7 @@ function ArrivalVolumeTrendChart({
     tickFormatter={(v) => v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v)}
     width={45}
   />
-          <Tooltip content={<ArrivalTooltip commodity={commodity} sourceType={sourceType} />} />
+          <Tooltip content={<ArrivalTooltip commodity={commodity} sourceType={sourceType} year={year} />} />
           {varietyKeys.map((key, idx) => <Bar
     key={key}
     dataKey={key}

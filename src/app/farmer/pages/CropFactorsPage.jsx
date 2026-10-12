@@ -169,7 +169,7 @@ function CropFactorsPage() {
     : null;
 
   const phaseConfig = crop.phase ? getPhaseConfig(crop.phase) : null;
-  const phaseLabel = phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null;
+  const phaseLabel = crop.status === "Draft" ? t("farmer.phases.draft") : (phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null);
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
