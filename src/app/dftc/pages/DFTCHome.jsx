@@ -52,6 +52,15 @@ function formatDatasetTitle(dataType, priceType) {
   return "Daily Prices";
 }
 
+function isSubmissionFileUpload(sub) {
+  if (!sub) return false;
+  const m = String(sub.submission_method || "").toLowerCase();
+  if (m.includes("upload") || m.includes("file") || m.includes("excel") || m.includes("csv")) {
+    return true;
+  }
+  return Boolean(sub.original_file_name || sub.file_name);
+}
+
 function getLocalDateString(d = new Date()) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -295,20 +304,25 @@ function DFTCHome() {
     return isWithin7Days && isSaved;
   });
 
-  const recentSaved = recentSavedSubmissions.slice(0, 5).map((sub) => {
+  const recentSaved = recentSavedSubmissions.map((sub) => {
     const savedTimeDisplay = formatSavedDate(sub.saved_at || sub.created_at || sub.reporting_date);
     const isToday =
       sub.reporting_date === todayStr ||
       (sub.saved_at && getLocalDateString(new Date(sub.saved_at)) === todayStr) ||
       (sub.created_at && getLocalDateString(new Date(sub.created_at)) === todayStr);
 
+    const isFileUpload = isSubmissionFileUpload(sub);
+    const name = isFileUpload
+      ? (sub.original_file_name || sub.file_name || formatDatasetTitle(sub.data_type, sub.price_type))
+      : formatDatasetTitle(sub.data_type, sub.price_type);
+
     return {
       id: sub.id,
-      name: formatDatasetTitle(sub.data_type, sub.price_type),
+      name,
       market: formatMarketName(sub.source_name || sub.source_id),
-      entryMethod: sub.submission_method || "Manual Input",
+      entryMethod: isFileUpload ? "File Upload" : "Manual Input",
       savedAt: savedTimeDisplay,
-      records: "—",
+      records: sub.record_count ?? "—",
       status: sub.status || "Saved",
       isToday: Boolean(isToday)
     };
@@ -509,7 +523,7 @@ function DFTCHome() {
             No saved datasets from the last 7 days. Encoded or uploaded datasets will appear here.
           </div>
         ) : (
-          <div className="divide-y divide-[var(--hw-neutral-100)]">
+          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[345px] overflow-y-auto">
             {recentSaved.map((row) => (
               <button
                 key={row.id}

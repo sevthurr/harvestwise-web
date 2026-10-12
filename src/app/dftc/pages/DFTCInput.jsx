@@ -50,6 +50,77 @@ function formatSavedDate(dateStr) {
   }
 }
 
+function isSubmissionFileUpload(sub) {
+  if (!sub) return false;
+  const m = String(sub.submission_method || "").toLowerCase();
+  if (m.includes("upload") || m.includes("file") || m.includes("excel") || m.includes("csv")) {
+    return true;
+  }
+  return Boolean(sub.file_name || sub.original_file_name);
+}
+
+function isSubmissionToday(sub, todayStr) {
+  if (!sub) return false;
+  const checkDate = (val) => {
+    if (!val) return false;
+    const s = String(val);
+    if (s.slice(0, 10) === todayStr) return true;
+    try {
+      const d = new Date(val);
+      if (!isNaN(d.getTime()) && getLocalDateString(d) === todayStr) return true;
+    } catch {}
+    return false;
+  };
+  return checkDate(sub.reporting_date) || checkDate(sub.saved_at) || checkDate(sub.created_at);
+}
+
+const PAGE_SIZE = 10;
+
+function Pagination({ page, total, pageSize = PAGE_SIZE, onChange }) {
+  const pages = Math.ceil(total / pageSize);
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-3.5 border-t border-[var(--hw-neutral-100)]">
+      <p className="text-[13px] text-[var(--hw-neutral-800)]">
+        Showing {start}–{end} of {total} datasets
+      </p>
+      {pages > 1 && (
+        <div className="flex gap-1.5 items-center">
+          <button
+            disabled={page === 1}
+            onClick={() => onChange(page - 1)}
+            className="px-3 py-1.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            Prev
+          </button>
+          {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={`px-3 py-1.5 text-[13px] border rounded-lg transition-colors cursor-pointer ${
+                p === page
+                  ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white font-semibold"
+                  : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+          <button
+            disabled={page === pages}
+            onClick={() => onChange(page + 1)}
+            className="px-3 py-1.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DFTCInput() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,7 +130,7 @@ export default function DFTCInput() {
     const state = location.state;
     return state?.successMsg ?? "";
   });
-  const [showAllSaved, setShowAllSaved] = useState(false);
+  const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState(null);
 
   // Fetch real submissions
@@ -79,17 +150,21 @@ export default function DFTCInput() {
 
   const rawSubmissions = submissionsData?.items || [];
 
-  // Format submissions: manual price entries for the same reporting date are consolidated into ONE report file
+  // Format submissions: manual price entries for the same reporting date are consolidated into ONE report file.
+  // File uploads are kept separate as individual datasets.
   const savedDataList = useMemo(() => {
     const list = [];
     const manualPricesByDate = new Map();
 
-    for (const sub of rawSubmissions) {
+    const todaySubmissions = rawSubmissions.filter((sub) => isSubmissionToday(sub, todayStr));
+
+    for (const sub of todaySubmissions) {
       const isArrival = sub.data_type === "arrival_volume" || sub.data_type === "arrival";
-      const isFileUpload = sub.submission_method === "File Upload" || !!sub.file_name;
+      const isFileUpload = isSubmissionFileUpload(sub);
+      const submissionMethod = isFileUpload ? "File Upload" : "Manual Input";
       const reportingDate = sub.reporting_date || (sub.saved_at ? sub.saved_at.slice(0, 10) : "");
 
-      // Consolidate manual price entries for the same reporting date into one unified report
+      // Consolidate ONLY manual price entries for the same reporting date into one unified report
       if (!isArrival && !isFileUpload && reportingDate) {
         if (!manualPricesByDate.has(reportingDate)) {
           manualPricesByDate.set(reportingDate, []);
@@ -101,32 +176,37 @@ export default function DFTCInput() {
           ? sub.price_type.charAt(0).toUpperCase() + sub.price_type.slice(1).toLowerCase()
           : "";
 
-        const dataName = isArrival
+        const defaultName = isArrival
           ? `${market} Arrival Volume — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`
-          : (sub.file_name || `${market} ${priceTypeCapitalized} Prices — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`);
+          : `${market} ${priceTypeCapitalized ? priceTypeCapitalized + " " : ""}Prices — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`;
+
+        const dataName = isFileUpload
+          ? (sub.original_file_name || sub.file_name || defaultName)
+          : defaultName;
 
         const dataType = isArrival
           ? "DFTC Arrival Volume"
-          : (isFileUpload ? "Price Dataset (File)" : `Daily ${priceTypeCapitalized} Prices`);
-        const entryMethod = isFileUpload ? "File Upload" : (sub.submission_method || "Manual Input");
+          : (priceTypeCapitalized ? `Daily ${priceTypeCapitalized} Prices` : "Price Dataset");
+
         const savedDate = formatSavedDate(sub.saved_at || sub.created_at);
-        const isNew = sub.saved_at?.slice(0, 10) === todayStr || sub.created_at?.slice(0, 10) === todayStr || sub.reporting_date === todayStr;
 
         list.push({
           id: sub.submission_id || sub.id,
           submissionId: sub.id || sub.submission_id,
           isArrival,
+          isFileUpload,
           analyticsRecords: sub.analytics_records || [],
           otherRecords: sub.other_records || [],
           dataName,
           dataType,
           market,
-          entryMethod,
+          submissionMethod,
+          entryMethod: submissionMethod,
           savedDate,
           savedAtRaw: sub.saved_at || sub.created_at || "",
           reportingDate: sub.reporting_date || (sub.saved_at ? sub.saved_at.slice(0, 10) : ""),
           records: sub.record_count ?? 0,
-          isNew
+          isNew: true
         });
       }
     }
@@ -138,7 +218,6 @@ export default function DFTCInput() {
         (a, b) => new Date(b.saved_at || b.created_at || 0).getTime() - new Date(a.saved_at || a.created_at || 0).getTime()
       )[0];
       const savedDate = formatSavedDate(latestSub?.saved_at || latestSub?.created_at);
-      const isNew = latestSub?.saved_at?.slice(0, 10) === todayStr || latestSub?.created_at?.slice(0, 10) === todayStr || dateStr === todayStr;
 
       let dateFormatted = dateStr;
       try {
@@ -150,15 +229,19 @@ export default function DFTCInput() {
 
       list.push({
         id: `manual-price-${dateStr}`,
+        submissionId: latestSub?.id,
+        isArrival: false,
+        isFileUpload: false,
         dataName: `DFTC Price Monitoring — ${dateFormatted}`,
         dataType: "Daily Price Monitoring",
         market: "Bankerohan & DFTC Taboan",
+        submissionMethod: "Manual Input",
         entryMethod: "Manual Input",
         savedDate,
         savedAtRaw: latestSub?.saved_at || latestSub?.created_at || "",
         reportingDate: dateStr,
         records: totalRecords,
-        isNew
+        isNew: true
       });
     }
 
@@ -185,9 +268,16 @@ export default function DFTCInput() {
     if (location.state) window.history.replaceState({}, "");
   }, []);
 
-  const displayedSavedData = showAllSaved ? savedDataList : savedDataList.slice(0, 10);
+  const totalPages = Math.ceil(savedDataList.length / PAGE_SIZE) || 1;
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const displayedSavedData = savedDataList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleSelectFile = (file) => {
+    if (file.submissionMethod === "File Upload" || file.isFileUpload) {
+      navigate(`/dftc/submissions/${file.submissionId || file.id}`);
+      return;
+    }
+
     let meta = {};
     try {
       const stored = localStorage.getItem(`dftc_report_personnel_${file.reportingDate}`);
@@ -203,7 +293,8 @@ export default function DFTCInput() {
       dataName: file.dataName,
       dataType: file.dataType,
       market: file.market,
-      entryMethod: file.entryMethod,
+      submissionMethod: file.submissionMethod,
+      entryMethod: file.submissionMethod,
       reportingDate: file.reportingDate || file.savedDate,
       savedDate: file.savedDate,
       records: file.records,
@@ -288,12 +379,12 @@ export default function DFTCInput() {
         </button>
       </div>
 
-      {/* Recent Saved Data */}
+      {/* Today's Saved Data */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">Recent Saved Data</h2>
+          <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">Today's Saved Data</h2>
           <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
-            Recent datasets saved or imported. All records are securely retained.
+            Datasets saved or imported today. All records are securely retained.
           </p>
         </div>
 
@@ -312,8 +403,8 @@ export default function DFTCInput() {
         ) : savedDataList.length === 0 ? (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-12 text-center">
             <FileText className="w-9 h-9 text-[var(--hw-neutral-300)] mx-auto mb-2" />
-            <p className="text-[14px] text-[var(--hw-neutral-700)] font-medium">No saved data yet.</p>
-            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">Datasets will appear here after you save or upload data.</p>
+            <p className="text-[14px] text-[var(--hw-neutral-700)] font-medium">No saved data today.</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">Datasets saved or uploaded today will appear here.</p>
           </div>
         ) : (
           <>
@@ -322,7 +413,7 @@ export default function DFTCInput() {
               <table className="w-full">
                 <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                   <tr>
-                    {["Data Name", "Data Type", "Market or Facility", "Entry Method", "Saved Date", "Records"].map((h) => (
+                    {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Saved Date", "Records"].map((h) => (
                       <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -346,13 +437,14 @@ export default function DFTCInput() {
                       </td>
                       <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.dataType}</td>
                       <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.market}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.entryMethod}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.submissionMethod || file.entryMethod}</td>
                       <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.savedDate}</td>
                       <td className="px-5 py-4 text-[13px] font-medium text-[var(--hw-neutral-900)]">{file.records ?? 0}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <Pagination page={currentPage} total={savedDataList.length} pageSize={PAGE_SIZE} onChange={setPage} />
             </div>
 
             {/* Mobile cards */}
@@ -374,7 +466,7 @@ export default function DFTCInput() {
                     <span>•</span>
                     <span>{file.market}</span>
                     <span>•</span>
-                    <span>{file.entryMethod}</span>
+                    <span>{file.submissionMethod || file.entryMethod}</span>
                   </div>
                   <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[12px]">
                     <span className="text-[var(--hw-neutral-500)]">{file.savedDate}</span>
@@ -382,15 +474,29 @@ export default function DFTCInput() {
                   </div>
                 </button>
               ))}
-            </div>
 
-            {savedDataList.length > 10 && !showAllSaved && (
-              <div className="mt-3 text-center">
-                <button onClick={() => setShowAllSaved(true)} className="text-[13px] font-medium text-[var(--hw-green-700)] hover:underline cursor-pointer">
-                  View All Recent Data ({savedDataList.length} total)
-                </button>
-              </div>
-            )}
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setPage((p) => p - 1)}
+                    className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-3 py-1.5 text-[13px] text-[var(--hw-neutral-800)] font-medium">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

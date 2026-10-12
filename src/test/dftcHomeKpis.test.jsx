@@ -326,5 +326,39 @@ describe('DFTCHome KPI Overhaul', () => {
     const kamoteSvg = kamoteBtn.querySelector('svg.lucide-leaf');
     expect(kamoteSvg).toBeInTheDocument();
   });
+
+  it('renders all Recent Saved Data entries from the last 7 days (including >5) with scrollable container and displays original file names for file uploads', async () => {
+    const todayISO = new Date().toISOString();
+    // 8 submissions from today
+    const submissions = Array.from({ length: 8 }, (_, idx) => ({
+      id: `SUB-2026-0${idx + 1}`,
+      data_type: 'daily_price',
+      price_type: 'Retail',
+      source_name: 'Bangkerohan',
+      status: 'Saved',
+      saved_at: todayISO,
+      submission_method: 'File Upload',
+      original_file_name: `Dataset_Upload_${idx + 1}.xlsx`
+    }));
+
+    const fetchFn = mockFetchByUrl([
+      { path: '/dftc/home', response: { ok: true, status: 200, body: HOME_DATA } },
+      { path: '/dftc/submissions', response: { ok: true, status: 200, body: { items: submissions } } },
+      { path: '/dftc/requirements', response: { ok: true, status: 200, body: { items: [] } } },
+    ]);
+    vi.stubGlobal('fetch', fetchFn);
+
+    const { container } = renderDFTCHome();
+
+    // Verify all 8 original file names are rendered (not just 5)
+    for (let i = 1; i <= 8; i++) {
+      expect(await screen.findByText(`Dataset_Upload_${i}.xlsx`)).toBeInTheDocument();
+    }
+
+    // Verify the container has max-h and overflow-y-auto for scrollability
+    const scrollContainer = container.querySelector('.max-h-\\[345px\\]');
+    expect(scrollContainer).toBeInTheDocument();
+    expect(scrollContainer.className).toContain('overflow-y-auto');
+  });
 });
 

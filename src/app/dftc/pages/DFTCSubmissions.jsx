@@ -297,6 +297,7 @@ function DFTCHistory() {
 
         return {
           datasetId: item.id,
+          fileName: item.original_file_name || item.file_name || null,
           datasetType: dType,
           savedBy: submitterFullName,
           savedDateTime: formatDateTime(item.saved_at || item.created_at),
@@ -482,7 +483,16 @@ function DFTCHistory() {
                       className="cursor-pointer hover:bg-[var(--hw-neutral-50)] transition-colors"
                     >
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] font-medium text-[var(--hw-neutral-900)]">{r.datasetId}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.datasetType}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">
+                        {r.fileName ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium text-[var(--hw-neutral-900)]">{r.fileName}</span>
+                            <span className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</span>
+                          </div>
+                        ) : (
+                          r.datasetType
+                        )}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedBy}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedDateTime}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.totalRecords}</td>
@@ -521,7 +531,8 @@ function DFTCHistory() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{r.datasetId}</p>
-                    <p className="text-[14px] text-[var(--hw-neutral-800)] mt-0.5">{r.datasetType}</p>
+                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] mt-0.5">{r.fileName || r.datasetType}</p>
+                    {r.fileName && <p className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</p>}
                   </div>
                   <span
                     className={`text-[12px] font-semibold shrink-0 ${
