@@ -1732,9 +1732,3 @@ function AdminAnalytics() {
 }
 
 export { AdminAnalytics as default };
-      </div >
-    </>
-  );
-}
-
-export { AdminAnalytics as default };

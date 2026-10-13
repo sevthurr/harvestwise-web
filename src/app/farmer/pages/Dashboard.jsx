@@ -33,26 +33,6 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
-function formatForecastPeriod(forecast) {
-  const forecastDates = (forecast?.points ?? [])
-    .map((point) => point.forecast_date)
-    .filter((date) => typeof date === "string" && !Number.isNaN(Date.parse(`${date}T00:00:00`)))
-    .sort();
-  const endDate = forecast?.forecast_date || forecastDates.at(-1);
-  if (!endDate || Number.isNaN(Date.parse(`${endDate}T00:00:00`))) return null;
-
-  const startDate = forecastDates[0] || endDate;
-  const formatDate = (date) => new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${date}T00:00:00Z`));
-  const start = formatDate(startDate);
-  const end = formatDate(endDate);
-  return startDate === endDate ? end : `${start} – ${end}`;
-}
-
 /**
  * Tracks whether a scroll region actually overflows, so the "scroll for more"
  * affordance is only rendered when there is something hidden below the fold.
@@ -275,7 +255,9 @@ function DashboardPage() {
       });
       return Array.from(baseMap.values());
     },
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const farmerProfile = profileQuery.data;
@@ -290,7 +272,8 @@ function DashboardPage() {
       }),
       enabled: Boolean(item.id && item.priceType),
       staleTime: 60 * 1000,
-      refetchOnMount: true,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
     })),
   });
   const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading;
@@ -398,7 +381,6 @@ function DashboardPage() {
                         const trendDetail = trendQuery?.data;
                         const forecast = trendDetail?.forecast;
                         const direction = forecast?.trend;
-                        const forecastPeriod = formatForecastPeriod(forecast);
                         const hasForecast = item.price != null
                           && (trendDetail?.recent_records?.length ?? 0) > 0
                           && forecast?.forecast_midpoint != null
@@ -429,21 +411,14 @@ function DashboardPage() {
                             </div>
                             <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
                               {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-                              <span className="flex flex-col items-end text-[13px] font-medium">
-                                <span>
-                                  {item.id && item.priceType && (trendQuery?.isPending || trendQuery?.isFetching)
-                                  ? t("farmer.prices.trend_loading", {}, "Loading trend")
-                                  : hasForecast
-                                    ? t(cfg.key, {}, cfg.label)
-                                    : trendQuery?.isError
-                                      ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
-                                      : t("farmer.prices.trend_no_data", {}, "No trend data")}
-                                </span>
-                                {hasForecast && forecastPeriod && (
-                                  <span className="text-[10px] font-normal text-[var(--hw-neutral-500)]">
-                                    {t("farmer.prices.forecast_period", { period: forecastPeriod }, `Forecast period ${forecastPeriod}:`)}
-                                  </span>
-                                )}
+                              <span className="text-[13px] font-medium">
+                                {item.id && item.priceType && (trendQuery?.isPending || trendQuery?.isFetching)
+                                ? t("farmer.prices.trend_loading", {}, "Loading trend")
+                                : hasForecast
+                                  ? t(cfg.key, {}, cfg.label)
+                                  : trendQuery?.isError
+                                    ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
+                                    : t("farmer.prices.trend_no_data", {}, "No trend data")}
                               </span>
                             </div>
                           </button>

@@ -4,31 +4,27 @@ import { TrendingUp, TrendingDown, Minus, ChevronDown, AlertCircle, CheckCircle2
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { ForecastPriceTrendChart } from "../../../global/components/shared/ForecastPriceTrendChart";
 import {
-  HW_ID_TO_NAME,
   HW_GREEN_SHADES
 } from "../../../global/components/shared/trendChartData";
 import {
   toPriceTypeKey,
   catalogPairsFromPriceList,
-  catalogPairsForCommodity,
   findCommodityId,
   buildHistoricalChartData,
   buildForecastChartData,
   buildUnifiedPriceTrendData,
-  recentAveragePrice,
-  forecastChangePercent,
   formatChartDate,
   getAvailableVarietiesForCommodity,
   pickDefaultVariety
 } from "../../../global/utils/priceChartTransforms";
 import { getVariants } from "../../../global/data/commodities";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
-import { composePriceOutlook, renderComposedMessage } from "../../utils/advisoryMessageComposer";
 import * as pricesApi from "../../../../services/api/pricesApi";
+import * as analyticsApi from "../../../../services/api/analyticsApi";
 import { Skeleton } from "./FarmerSkeletons";
 import { HistoricalAveragePriceSection } from "../../../global/components/shared/HistoricalAveragePriceSection";
 
-const MARKETS = ["Bankerohan Public Market", "DFTC"];
+const MARKETS = ["Bangkerohan Public Market", "DFTC"];
 
 const PTYPES = ["Retail", "Wholesale"];
 const HORIZONS = ["7d", "14d", "21d", "28d"];
@@ -149,17 +145,16 @@ function StatCard({
 function PriceDetailView({
   commodityId,
   commodityName,
-  baseCurrentPrice,
   showHeading = false
 }) {
-  const { t, langCode } = useLanguage();
-  const [market, setMarket] = useState("Bankerohan Public Market");
+  const { t } = useLanguage();
+  const [market, setMarket] = useState("Bangkerohan Public Market");
   const [priceType, setPriceType] = useState("Retail");
-  const [historicalRange, setHistoricalRange] = useState("7d");
-  const [horizon, setHorizon] = useState("7d");
+  const [historicalRange, setHistoricalRange] = useState("14d");
+  const [horizon, setHorizon] = useState("14d");
   const [variety, setVariety] = useState(null);
 
-  const days = HDAYS[horizon] || 7;
+  const days = HDAYS[horizon] || 14;
   const pPriceTypeKey = toPriceTypeKey(market, priceType);
 
   // 1. Fetch top-10 catalog list to resolve commodity IDs & catalog varieties
@@ -210,75 +205,66 @@ function PriceDetailView({
 
   // 2. Fetch authoritative price detail using the exact same API pipeline as DFTC
   const {
-    data: priceDetailData,
-    isLoading: isPriceDetailLoading,
-    isFetching: isPriceDetailFetching,
-    isError: isPriceDetailError,
+    data: priceOutlookData,
+    isLoading: isPriceOutlookLoading,
+    isFetching: isPriceOutlookFetching,
   } = useQuery({
-    queryKey: ["farmer-price-detail", resolvedCommodityId, pPriceTypeKey, days],
-    queryFn: () =>
-      pricesApi.getPriceDetail(resolvedCommodityId, {
-        price_type: pPriceTypeKey,
-        horizon: days,
-        records_limit: 100,
-      }),
+    queryKey: ["farmer", "admin-price-outlook", resolvedCommodityId, pPriceTypeKey, days],
+    queryFn: () => analyticsApi.getPriceOutlook(resolvedCommodityId, pPriceTypeKey, days),
     enabled: Boolean(resolvedCommodityId),
     staleTime: 60 * 1000,
   });
 
-  // Strict loading state that catches filter transitions to prevent stale/default data leaks
+  const priceDetailData = useMemo(() => {
+    if (!priceOutlookData) return null;
+    return {
+      recent_records: priceOutlookData.price_records || [],
+      forecast: { points: priceOutlookData.forecast_points || [] },
+    };
+  }, [priceOutlookData]);
+
   const isDataLoading =
     isCatalogLoading ||
-    (Boolean(resolvedCommodityId) && (isPriceDetailLoading || isPriceDetailFetching));
+    (Boolean(resolvedCommodityId) && (isPriceOutlookLoading || isPriceOutlookFetching));
 
   const displayCropName = selectedVariety ? `${commodityName} (${selectedVariety})` : commodityName;
   const seriesKey = commodityName || "Price";
 
   // 3. Single authoritative Price Outlook model (shares data between summary, chart, banner, and range)
   const priceOutlookModel = useMemo(() => {
-    if (isDataLoading || !priceDetailData) return null;
-    const recentRecords = priceDetailData.recent_records || [];
-    const forecast = priceDetailData.forecast || null;
-
-    const recentAvg = recentAveragePrice(recentRecords, days);
-    const midpoint = forecast?.forecast_midpoint != null ? Number(forecast.forecast_midpoint) : null;
-    const lower = forecast?.lower_forecast != null ? Number(forecast.lower_forecast) : null;
-    const upper = forecast?.upper_forecast != null ? Number(forecast.upper_forecast) : null;
-
-    if (recentAvg == null || midpoint == null) {
+    if (isDataLoading || priceOutlookData?.status !== "processed") {
       return null;
     }
 
-    const absoluteChange = midpoint - recentAvg;
-    const percentChange = forecastChangePercent(midpoint, recentAvg);
-
-    // Canonical Price Outlook threshold: > 5% favorable, < -5% unfavorable, -5%..5% neutral
-    const classification =
-      percentChange > 5 ? "favorable" : percentChange < -5 ? "unfavorable" : "neutral";
-
-    const composed = composePriceOutlook(
-      {
-        price_outlook: classification,
-        forecast_midpoint: midpoint,
-        recent_average_price: recentAvg,
-        lower_forecast_price: lower,
-        upper_forecast_price: upper,
-      },
-      displayCropName,
-      days
-    );
+    const recentAvg = priceOutlookData.recent_average_price;
+    const midpoint = priceOutlookData.forecast_midpoint;
+    const lower = priceOutlookData.lower_forecast;
+    const upper = priceOutlookData.upper_forecast;
+    const comparisonPrice = priceOutlookData.current_prevailing_price ?? recentAvg;
+    const percentChange = priceOutlookData.forecast_price_change_pct;
+    const classification = String(priceOutlookData.classification || "").toLowerCase();
+    if (
+      !["favorable", "neutral", "unfavorable"].includes(classification)
+      || recentAvg == null
+      || midpoint == null
+      || comparisonPrice == null
+      || percentChange == null
+    ) {
+      return null;
+    }
 
     return {
       recentAverage: recentAvg,
+      comparisonPrice,
       forecastMidpoint: midpoint,
+      absoluteChange: midpoint - comparisonPrice,
       lowerForecast: lower,
       upperForecast: upper,
-      absoluteChange,
       percentChange,
       classification,
-      composed,
+      explanation: priceOutlookData.explanation || "",
     };
-  }, [priceDetailData, isDataLoading, days, displayCropName]);
+  }, [priceOutlookData, isDataLoading]);
 
   const varietyDetails = useMemo(() => {
     if (!priceDetailData) return [];
@@ -315,9 +301,7 @@ function PriceDetailView({
   // Status config and explanation
   const statusCfg = (priceOutlookModel && STATUS_CFG[priceOutlookModel.classification]) || STATUS_CFG.neutral;
   const StatusIcon = statusCfg.Icon;
-  const composedExplanation = priceOutlookModel
-    ? renderComposedMessage(priceOutlookModel.composed, langCode)
-    : "";
+  const composedExplanation = priceOutlookModel?.explanation || "";
 
   const marketLabel = market;
   const priceTypeLabel = priceType === "Wholesale" ? t("farmer.factors.price.wholesale", {}, "Wholesale") : t("farmer.factors.price.retail", {}, "Retail");
@@ -479,7 +463,7 @@ function PriceDetailView({
         <StatCard
           label={t("farmer.factors.price.expected_price_change_label", {}, "Expected Price Change")}
           value={changeDisplay}
-          sub={t("farmer.factors.price.compared_with_recent_avg_sub", { days }, `Compared with the recent ${days}-day average`)}
+          sub={t("farmer.factors.price.compared_with_current_price_sub", {}, "Compared with the current prevailing price")}
           valueColor={changeColor}
           isLoading={isDataLoading}
         />

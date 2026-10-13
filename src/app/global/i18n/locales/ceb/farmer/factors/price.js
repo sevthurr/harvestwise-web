@@ -13,6 +13,7 @@ export const price = {
   "price_unavailable_crop": "Walay datos sa presyo sa {crop_name} karon.",
   "price_unavailable_generic": "Walay datos sa presyo karon.",
   "page_title": "Tantiya sa Presyo",
+  "compared_with_current_price_sub": "Kung itandi sa kasamtangang presyo",
   "forecast_horizon_label": "Panahon sa Tantiya",
   "forecast_prefix": "Tantiya:",
   "forecast_updated_today": "Na-update ang tantiya karon sa 6:00 sa buntag",

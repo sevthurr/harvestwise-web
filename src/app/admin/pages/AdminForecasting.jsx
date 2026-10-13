@@ -851,8 +851,8 @@ function AdminForecasting() {
           <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
           </div>
-          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
-            <div className="py-4 space-y-1.5 max-w-sm mx-auto">
+          <div className="p-6 flex-1 flex flex-col justify-center">
+            <div className="py-4 space-y-1.5 w-full">
               {loading ? (
                 <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Loading result explanation...</p>
               ) : error ? (
@@ -865,7 +865,7 @@ function AdminForecasting() {
                   <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
                 </>
               ) : null}
-              {!loading && !error ? <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">{resultExplanation}</p> : null}
+              {!loading && !error ? <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">{resultExplanation}</p> : null}
             </div>
           </div>
         </div>

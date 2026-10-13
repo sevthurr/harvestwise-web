@@ -6,6 +6,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DFTCTrends from "../app/dftc/pages/DFTCTrends";
 import * as pricesApi from "../services/api/pricesApi";
+import * as analyticsApi from "../services/api/analyticsApi";
 import {
   buildForecastChartData,
   buildForecastSummaries,
@@ -31,7 +32,12 @@ vi.mock("recharts", () => {
     ResponsiveContainer: ({ children }) => <div data-testid="dftc-chart">{children}</div>,
     LineChart: Passthrough,
     ComposedChart: Passthrough,
+    BarChart: Passthrough,
+    PieChart: Passthrough,
     Line: () => null,
+    Bar: ({ children }) => <div>{children}</div>,
+    Cell: () => null,
+    Pie: ({ children }) => <div>{children}</div>,
     Area: () => null,
     XAxis: () => null,
     YAxis: () => null,
@@ -39,8 +45,17 @@ vi.mock("recharts", () => {
     Tooltip: () => null,
     Brush: () => null,
     ReferenceLine: () => null,
+    Legend: () => null,
   };
 });
+
+vi.mock("../app/global/components/shared/ArrivalVolumeTrendChart", () => ({
+  ArrivalVolumeTrendChart: ({ chartData }) => (
+    <div data-testid="arrival-chart-dates">
+      {chartData.map((point) => point.month).join("|")}
+    </div>
+  ),
+}));
 
 function dailyPoints(horizon, origin = "2026-07-31") {
   const [y, m, d] = origin.split("-").map(Number);
@@ -135,6 +150,17 @@ const CATALOG = {
       name: "Kamatis",
       variety: "Diamante Big",
       category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      updated_at: "2026-07-31",
+      prices: {},
+      forecast: null,
+    },
+    {
+      commodity_id: "COM-CAR",
+      name: "Carrots",
+      variety: null,
+      category: "Highland Vegetables",
       unit_of_measure: "kg",
       is_top10: true,
       updated_at: "2026-07-31",
@@ -261,6 +287,68 @@ describe("DFTC Trends page prices API integration", () => {
         horizon: Number(params.horizon || 7),
       });
     });
+    vi.spyOn(analyticsApi, "getArrivalPressure").mockResolvedValue({
+      status: "processed",
+      classification: "High",
+      commodity_id: "COM-CAR",
+      commodity_name: "Carrots",
+      current_arrival_kg: 2400,
+      average_arrival_kg: 1200,
+      source_breakdown: {
+        farm_source_volume_kg: 9000,
+        other_source_volume_kg: 6000,
+      },
+      records: [
+        {
+          arrival_date: "2025-03-31",
+          volume_kg: 600,
+          farm_source_volume_kg: 250,
+          other_source_volume_kg: 350,
+          commodity_name: "Carrots",
+        },
+        {
+          arrival_date: "2025-09-30",
+          volume_kg: 800,
+          farm_source_volume_kg: 400,
+          other_source_volume_kg: 400,
+          commodity_name: "Carrots",
+        },
+        {
+          arrival_date: "2026-10-02",
+          volume_kg: 2400,
+          farm_source_volume_kg: 1000,
+          other_source_volume_kg: 1400,
+          commodity_name: "Carrots",
+        },
+      ],
+    });
+    vi.spyOn(analyticsApi, "getHistoricalSeasonalProduction").mockImplementation(async (commodityId) => ({
+      status: "processed",
+      source: "PSA OpenSTAT",
+      commodity_id: commodityId,
+      commodity_name: "Kamatis",
+      years_covered: "2020–2025",
+      grand_average_quarterly_mt: 100,
+      source_areas: [
+        { name: "Bukidnon", total_production_mt: 45 },
+        { name: "City of Davao", total_production_mt: 30 },
+        { name: "Davao del Sur", total_production_mt: 50 },
+      ],
+      quarterly_profiles: [
+        { quarter: "Q1", average_production_mt: 80, classification: "Low", years_available: 6 },
+        { quarter: "Q2", average_production_mt: 90, classification: "Moderate", years_available: 6 },
+        { quarter: "Q3", average_production_mt: 110, classification: "Moderate", years_available: 6 },
+        { quarter: "Q4", average_production_mt: 120, classification: "High", years_available: 6 },
+      ],
+      records: [
+        { reference_year: 2025, reference_quarter: "Q4", volume_produced: 125 },
+      ],
+      geo_records: [
+        { reference_year: 2025, reference_quarter: "Q4", location: "Bukidnon", volume_produced: 45 },
+        { reference_year: 2025, reference_quarter: "Q4", location: "City of Davao", volume_produced: 30 },
+        { reference_year: 2025, reference_quarter: "Q4", location: "Davao del Sur", volume_produced: 50 },
+      ],
+    }));
     return detailCalls;
   }
 
@@ -354,5 +442,47 @@ describe("DFTC Trends page prices API integration", () => {
     expect(pricesApi.getPriceDetail).toBeTypeOf("function");
     expect(pricesApi).not.toHaveProperty("getForecastChart");
     expect(pricesApi).not.toHaveProperty("getForecastCatalog");
+  });
+
+  it("uses Admin arrival-pressure output and its history for the DFTC arrival tab", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
+
+    await waitFor(() => {
+      expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith("COM-CAR");
+    });
+    expect(await screen.findByText("Admin Arrival Pressure Classification")).toBeInTheDocument();
+    expect(screen.getAllByText("High").length).toBeGreaterThan(0);
+    expect(screen.getByText("Admin Average Arrival")).toBeInTheDocument();
+    expect(await screen.findByTestId("arrival-chart-dates")).toHaveTextContent(
+      "Mar 31, 2025|Sep 30, 2025|Oct 2, 2026"
+    );
+  });
+
+  it("loads and displays the Admin seasonal-production classification in DFTC Trends", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Seasonal Production/ }));
+
+    await waitFor(() => {
+      expect(analyticsApi.getHistoricalSeasonalProduction).toHaveBeenCalledWith(
+        "COM-KAM-DIAM",
+        expect.stringMatching(/^Q[1-4]$/)
+      );
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Q4" }));
+    expect(await screen.findByText("Historical seasonal average")).toBeInTheDocument();
+    expect(screen.getByText("Production level")).toBeInTheDocument();
+    expect(screen.getAllByText("High").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Admin analytics · PSA OpenSTAT/)).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Bukidnon" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "City of Davao" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Davao del Sur" })).toBeInTheDocument();
+    expect(screen.getByText("45.00 MT")).toBeInTheDocument();
+    expect(screen.getByText("30.00 MT")).toBeInTheDocument();
+    expect(screen.getByText("50.00 MT")).toBeInTheDocument();
   });
 });

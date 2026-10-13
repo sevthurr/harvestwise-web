@@ -13,6 +13,7 @@ export const price = {
   "price_unavailable_crop": "Price information for {crop_name} is not available right now.",
   "price_unavailable_generic": "Price information is not available right now.",
   "page_title": "Price Forecast",
+  "compared_with_current_price_sub": "Compared with the current prevailing price",
   "forecast_horizon_label": "Forecast Horizon",
   "forecast_prefix": "Forecast:",
   "forecast_updated_today": "Forecast updated today at 6:00 AM",

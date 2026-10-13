@@ -7,14 +7,15 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Brush
+  Brush,
+  ReferenceLine
 } from "recharts";
 import { HW_GREEN_SHADES } from "./trendChartData";
 function ArrivalTooltip({ active, payload, label, commodity, sourceType }) {
   if (!active || !payload?.length) return null;
   const dirInfo = payload[0]?.payload?._dirInfo ?? {};
   return <div className="bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3 min-w-[180px]">
-      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-2 pb-1.5 border-b border-[var(--hw-neutral-100)]">{label} 2026</div>
+      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-2 pb-1.5 border-b border-[var(--hw-neutral-100)]">{label}</div>
       <div className="text-[12px] text-[var(--hw-neutral-800)] mb-1.5">{commodity} · {sourceType} · kg</div>
       {payload.map((entry) => {
     if (entry.value == null) return null;
@@ -40,7 +41,8 @@ function ArrivalVolumeTrendChart({
   sourceType,
   colors,
   height = 300,
-  xDataKey = "month"
+  xDataKey = "month",
+  referenceValue = null
 }) {
   const palette = colors ?? HW_GREEN_SHADES;
   const containerRef = useRef(null);
@@ -115,6 +117,14 @@ function ArrivalVolumeTrendChart({
     width={45}
   />
           <Tooltip content={<ArrivalTooltip commodity={commodity} sourceType={sourceType} />} />
+          {Number.isFinite(referenceValue) && (
+            <ReferenceLine
+              y={referenceValue}
+              stroke="#64748b"
+              strokeDasharray="4 4"
+              label={{ value: "Historical average", position: "insideTopRight", fill: "#475569", fontSize: 10 }}
+            />
+          )}
           {varietyKeys.map((key, idx) => <Bar
     key={key}
     dataKey={key}

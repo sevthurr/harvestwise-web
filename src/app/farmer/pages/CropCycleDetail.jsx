@@ -13,6 +13,8 @@ import {
   Plus,
   Check,
   ExternalLink,
+  Package,
+  Leaf,
   PauseCircle,
   Droplets,
   Tractor,
@@ -210,6 +212,7 @@ function CropCycleDetailPage() {
 
   // Real backend advisory query from existing POST /api/v1/advisory/plan
   const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
+  const commodityIdentifier = crop.commodityId || crop.commodity;
   const { data: planAdvisoryData } = useQuery({
     queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty],
     queryFn: async () => {
@@ -428,66 +431,6 @@ function CropCycleDetailPage() {
           </div>}
 
 
-        {/* ── 5. Price and weather summary ── */}
-        {isActive && (() => {
-          const rawWeatherRisk = planAdvisoryData?.module_results?.weather_risk || crop.weatherRisk || null;
-          const weatherRiskCode = normalizeWeatherSuitability(rawWeatherRisk);
-          const weatherRiskLabel = weatherRiskCode
-            ? t(`farmer.factors.weather.suitability_${weatherRiskCode}`, {}, weatherRiskCode)
-            : (crop.weatherCondition || t("farmer.factors.weather.unavailable", {}, "Not available"));
-          const weatherRiskAction = planAdvisoryData?.module_results?.weather_advisory || crop.weatherAction || null;
-
-          return (
-            <div className="space-y-3">
-              <WeatherLocationBanner />
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                    <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-                      {t("farmer.factors.price.factor_title", {}, "Price")}
-                    </p>
-                  </div>
-                  <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
-                    {currentPrice != null ? `\u20B1${currentPrice}/kg` : t("farmer.advisory.not_available")}
-                  </p>
-                  <p className="text-[12px] text-[var(--hw-neutral-900)]">
-                    {forecastLo != null && forecastHi != null
-                      ? `${t("farmer.factors.price.forecast_prefix", {}, "Forecast:")} \u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg`
-                      : `${t("farmer.factors.price.forecast_prefix", {}, "Forecast:")} ${t("farmer.advisory.not_available")}`}
-                  </p>
-                  <button
-                    onClick={() => navigate(`/farmer/prices/${crop.commodity}`)}
-                    className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-                  >
-                    {t("farmer.cropCycle.view_prices", {}, "View prices")} <ExternalLink className="w-3 h-3" />
-                  </button>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <CloudRain className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                    <p className="text-[11px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-                      {t("farmer.factors.weather.factor_title", {}, "Weather")}
-                    </p>
-                  </div>
-                  <p className="text-[13px] font-semibold text-blue-700 leading-snug">
-                    {weatherRiskLabel}
-                  </p>
-                  <p className="text-[12px] text-[var(--hw-neutral-900)] line-clamp-2">
-                    {weatherRiskAction || "-"}
-                  </p>
-                  <button
-                    onClick={() => navigate("/farmer/market/weather")}
-                    className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-                  >
-                    {t("farmer.cropCycle.view_weather", {}, "View weather")} <ExternalLink className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
 
         {/* ── 6. Crop progress ── */}
         {isPlanted && (

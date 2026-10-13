@@ -7,7 +7,8 @@ import {
   CartesianGrid,
   Tooltip,
   Cell,
-  ResponsiveContainer
+  ResponsiveContainer,
+  ReferenceLine
 } from "recharts";
 import {
   TrendingUp,
@@ -32,12 +33,6 @@ import { ArrivalVolumeTrendChart } from "../../../global/components/shared/Arriv
 import { ProductionSourcePieChart } from "../../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../../global/components/shared/ArrivalSourcePieChart";
 import { CostBreakdownPieChart } from "../../../global/components/shared/CostBreakdownPieChart";
-import {
-  HW_ID_TO_NAME,
-  getArrivalSeries,
-  buildArrivalChartData,
-  ARRIVAL_ALL_MONTHS
-} from "../../../global/components/shared/trendChartData";
 import {
   PRICE_TREND_CODES,
   WEATHER_SUITABILITY_CODES,
@@ -307,61 +302,63 @@ function WeatherIconEl({ icon, cls = "w-5 h-5" }) {
   return <Cloud className={`${cls} text-slate-400`} />;
 }
 
-const PriceTab = ({
-  data,
-  commodityId,
-  commodityName
-}) => {
-  const match = data?.forecastRange?.match(/₱(\d+)–₱(\d+)/);
-  const hasCurrentPrice = data && data.currentPrice > 0;
-  const baseFLo = match ? parseInt(match[1], 10) : (hasCurrentPrice ? Math.round(data.currentPrice * 0.95) : 0);
-  const baseFHi = match ? parseInt(match[2], 10) : (hasCurrentPrice ? Math.round(data.currentPrice * 1.07) : 0);
-  const actualPoints = (data?.points || []).filter((p) => p.actual !== void 0).map((p) => ({ label: p.label, price: p.actual }));
-
-  // PriceDetailView owns the Favorable / Neutral / Unfavorable classification banner.
-  // It derives the banner classification from its own live API query (priceOutlookModel),
-  // so we do NOT duplicate the banner here regardless of whether data.currentPrice is available.
+const PriceTab = ({ commodityId, commodityName }) => {
   return (
     <PriceDetailView
       commodityId={commodityId}
       commodityName={commodityName ?? "this crop"}
-      baseCurrentPrice={hasCurrentPrice ? data.currentPrice : 0}
-      basePreviousPrice={hasCurrentPrice ? data.previousPrice : 0}
-      direction={data?.direction ?? "none"}
-      baseForecastLow={baseFLo}
-      baseForecastHigh={baseFHi}
-      baseActualPoints={actualPoints}
       showHeading={false}
     />
   );
 };
 
 
-const ArrivalTab = ({ data, commodityId, commodityName }) => {
+const ArrivalTab = ({ data, commodityName }) => {
   const { t } = useLanguage();
-  const dftcName = commodityId ? HW_ID_TO_NAME[commodityId] : void 0;
-  const dftcSeries = useMemo(() => (dftcName ? getArrivalSeries(dftcName) : null), [dftcName]);
-  const dftcVarietyKeys = useMemo(
-    () => (dftcSeries ? dftcSeries.map((s) => s.variety || (dftcName ?? "Volume")) : []),
-    [dftcSeries, dftcName]
-  );
-  const dftcChartData = useMemo(
-    () => (dftcSeries && dftcName ? buildArrivalChartData(dftcName, dftcSeries, ARRIVAL_ALL_MONTHS, "Combined Total") : null),
-    [dftcSeries, dftcName]
-  );
+  const farmSourceLabel = t("farmer.cropCycle.farm_source", {}, "Farm source");
+  const otherSourcesLabel = t("farmer.cropCycle.other_sources", {}, "Other sources");
   const realChartData = useMemo(() => {
-    if (!data?.volumesByDate || data.volumesByDate.length === 0) return null;
-    return data.volumesByDate.map((v) => ({
-      month: v.date,
-      Volume: v.volume_kg,
-    }));
-  }, [data?.volumesByDate]);
+    if (!data?.records || data.records.length === 0) return null;
+    return [...data.records]
+      .filter((record) => record.arrival_date && record.volume_kg != null)
+      .sort((a, b) => a.arrival_date.localeCompare(b.arrival_date))
+      .map((record) => ({
+        month: record.arrival_date,
+        Volume: Number(record.volume_kg),
+        [farmSourceLabel]: record.farm_source_volume_kg != null
+          ? Number(record.farm_source_volume_kg)
+          : null,
+        [otherSourcesLabel]: record.other_source_volume_kg != null
+          ? Number(record.other_source_volume_kg)
+          : null,
+      }));
+  }, [data?.records, farmSourceLabel, otherSourcesLabel]);
 
   const showRealChart = Boolean(realChartData && realChartData.length > 0);
+  const arrivalSeries = [
+    { key: "Volume", color: "#15803d" },
+    ...(realChartData?.some((record) => record[farmSourceLabel] != null)
+      ? [{ key: farmSourceLabel, color: "#65a30d" }]
+      : []),
+    ...(realChartData?.some((record) => record[otherSourcesLabel] != null)
+      ? [{ key: otherSourcesLabel, color: "#f59e0b" }]
+      : []),
+  ];
   const normPressure = normalizeArrivalPressure(data?.arrivalPressure || data?.trend);
   const banner = normPressure ? ARRIVAL_PRESSURE_CFG[normPressure] : null;
   const BannerIcon = banner?.Icon;
-  const hasData = Boolean(normPressure || showRealChart || (dftcChartData && dftcChartData.length > 0));
+  const hasData = Boolean(normPressure || showRealChart);
+  const currentVolume = data?.currentVolumeKg != null && Number.isFinite(Number(data.currentVolumeKg))
+    ? Number(data.currentVolumeKg)
+    : null;
+  const averageVolume = data?.averageArrivalKg != null && Number.isFinite(Number(data.averageArrivalKg))
+    ? Number(data.averageArrivalKg)
+    : null;
+  const sourceBreakdown = [
+    { name: t("farmer.cropCycle.farm_source", {}, "Farm source"), volumeKg: Number(data?.sourceBreakdown?.farm_source_volume_kg) || 0 },
+    { name: t("farmer.cropCycle.other_sources", {}, "Other sources"), volumeKg: Number(data?.sourceBreakdown?.other_source_volume_kg) || 0 },
+  ].map((source) => ({ ...source, value: source.volumeKg }))
+    .filter((source) => source.volumeKg > 0);
 
   if (!hasData) {
     return (
@@ -387,33 +384,52 @@ const ArrivalTab = ({ data, commodityId, commodityName }) => {
         </div>
       )}
 
-      {(showRealChart || (dftcChartData && dftcChartData.length > 0)) && (
+      {showRealChart && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
           <div className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mb-0.5">
-            {dftcName ?? commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
+            {commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
           </div>
           <div className="text-[12px] text-[var(--hw-neutral-800)] mb-4">
-            {showRealChart
-              ? t("farmer.factors.arrival.chart_subtitle_actual", {}, "Actual arrivals · Last 6 months · kg")
-              : t("farmer.factors.arrival.chart_subtitle_combined", {}, "Combined Total by variety · Last 7 months · kg")}
+            {data?.dataIsStale
+              ? t("farmer.cropCycle.arrival_stale_notice", {}, "The latest available arrival records are older than 90 days.")
+              : t("farmer.factors.arrival.chart_subtitle_actual", {}, "Actual arrivals · Last 90 days · kg")}
           </div>
           <ArrivalVolumeTrendChart
-            commodity={dftcName ?? commodityName ?? ""}
-            chartData={showRealChart ? realChartData : dftcChartData}
-            varietyKeys={showRealChart ? ["Volume"] : dftcVarietyKeys}
-            sourceType={showRealChart ? "Actual Arrivals" : "Combined Total"}
+            commodity={commodityName ?? ""}
+            chartData={realChartData}
+            varietyKeys={arrivalSeries.map((series) => series.key)}
+            colors={arrivalSeries.map((series) => series.color)}
+            sourceType="Actual Arrivals"
+            referenceValue={averageVolume}
             height={260}
           />
         </div>
       )}
 
-      {data?.sources && data.sources.length > 0 && (
+      {(currentVolume != null || averageVolume != null) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {currentVolume != null && (
+            <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.latest_arrival", {}, "Latest arrival")}</p>
+              <p className="mt-1 text-[18px] font-bold text-[var(--hw-neutral-900)]">{currentVolume.toLocaleString()} kg</p>
+            </div>
+          )}
+          {averageVolume != null && (
+            <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.historical_average", {}, "Historical average")}</p>
+              <p className="mt-1 text-[18px] font-bold text-[var(--hw-neutral-900)]">{averageVolume.toLocaleString()} kg</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sourceBreakdown.length > 0 && (
         <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
           <div>
             <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.arrival.source_breakdown_title", {}, "Arrival Volume by Source")}</p>
             <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.arrival.source_breakdown_subtitle", {}, "DFTC registered farms vs other supplying sources.")}</p>
           </div>
-          <ArrivalSourcePieChart data={data.sources} height={190} />
+          <ArrivalSourcePieChart data={sourceBreakdown} height={190} />
         </div>
       )}
 
@@ -427,57 +443,47 @@ const ArrivalTab = ({ data, commodityId, commodityName }) => {
   );
 };
 
-const QUARTER_SHORT = ["Q1", "Q2", "Q3", "Q4"];
-const QUARTER_TO_IDX = {
-  Quarter1: 0, Q1: 0,
-  Quarter2: 1, Q2: 1,
-  Quarter3: 2, Q3: 2,
-  Quarter4: 3, Q4: 3,
-};
-
-function buildQuarterlyFromRecords(records) {
-  const byQ = [[], [], [], []];
-  for (const r of records || []) {
-    const idx = QUARTER_TO_IDX[r.reference_quarter];
-    if (idx === undefined || r.volume_produced == null || Number(r.volume_produced) <= 0) continue;
-    byQ[idx].push(Number(r.volume_produced));
-  }
-  if (!byQ.some((arr) => arr.length > 0)) return [];
-  const avgs = byQ.map((arr) =>
-    arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0
-  );
-  const positives = avgs.filter((v) => v > 0);
-  const min = Math.min(...positives);
-  const span = Math.max(...positives) - min || 1;
-  return avgs.map((avg, idx) => ({
-    quarter: QUARTER_SHORT[idx],
-    level: avg > 0 ? 1 + Math.round(((avg - min) / span) * 8) : 0,
-  }));
-}
-
 const ProductionTab = ({ data }) => {
   const { t } = useLanguage();
-  const normLevel = normalizeProductionLevel(data?.productionLevel || data?.level);
+  const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
+  const selectedProfile = profiles.find((profile) => profile.quarter === data?.selectedQuarter);
+  const normLevel = normalizeProductionLevel(selectedProfile?.classification || data?.productionLevel);
   const banner = normLevel ? PRODUCTION_BANNER_CFG[normLevel] : null;
   const LevelIcon = banner?.Icon;
 
-  const currentQuarterIdx = Math.floor((data?.currentMonthIdx ?? new Date().getMonth()) / 3);
-  const hasRecords = Boolean(data?.records && data.records.length > 0);
-  const hasMonthly = Boolean(data?.monthlyData && data.monthlyData.some((m) => m.level > 0));
-  const hasChartData = hasRecords || hasMonthly;
-
   const quarterlyData = useMemo(() => {
-    if (hasMonthly && data.monthlyData) {
-      return [0, 1, 2, 3].map((qIdx) => {
-        const qMonths = data.monthlyData.slice(qIdx * 3, qIdx * 3 + 3);
-        const avgLevel = Math.round(qMonths.reduce((acc, m) => acc + (m.level || 0), 0) / (qMonths.length || 1));
-        return { quarter: QUARTER_SHORT[qIdx], level: avgLevel };
-      });
-    }
-    return buildQuarterlyFromRecords(data?.records);
-  }, [hasMonthly, data]);
+    return profiles
+      .filter((profile) => Number(profile.years_available) > 0)
+      .map((profile) => ({
+        quarter: profile.quarter,
+        production: Number(profile.average_production_mt),
+        classification: profile.classification,
+      }));
+  }, [profiles]);
 
-  const hasData = Boolean(normLevel || hasChartData);
+  const hasData = quarterlyData.length > 0;
+  const historicalAverage = data?.grandAverageQuarterlyMt != null
+    && Number.isFinite(Number(data.grandAverageQuarterlyMt))
+    ? Number(data.grandAverageQuarterlyMt)
+    : null;
+  const selectedProduction = selectedProfile
+    && selectedProfile.average_production_mt != null
+    && Number.isFinite(Number(selectedProfile.average_production_mt))
+    ? Number(selectedProfile.average_production_mt)
+    : null;
+  const productionDifference = selectedProduction != null && historicalAverage != null
+    ? selectedProduction - historicalAverage
+    : null;
+  const productionDifferencePct = productionDifference != null && historicalAverage > 0
+    ? (productionDifference / historicalAverage) * 100
+    : null;
+  const selectedQuarterIndex = quarterlyData.findIndex((profile) => profile.quarter === data?.selectedQuarter);
+  const levelColor = (classification) => {
+    const level = normalizeProductionLevel(classification);
+    if (level === "high") return "#ef4444";
+    if (level === "upper_middle") return "#f59e0b";
+    return "#16a34a";
+  };
 
   if (!hasData) {
     return (
@@ -519,17 +525,38 @@ const ProductionTab = ({ data }) => {
               <BarChart data={quarterlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={32}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: "#1f2937" }} tickLine={false} axisLine={false} />
-                <YAxis hide domain={[0, 10]} />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={52}
+                  tickFormatter={(value) => `${Number(value).toLocaleString()} MT`}
+                />
                 <Tooltip
-                  formatter={(value) => [value <= 4 ? t("farmer.factors.production.level_low_banner", {}, "Low") : value <= 7 ? t("farmer.factors.production.level_lower_middle_banner", {}, "Moderate") : t("farmer.factors.production.level_high_banner", {}, "High"), t("farmer.factors.production.factor_title", {}, "Production")]}
+                  formatter={(value, _name, item) => [
+                    `${Number(value).toLocaleString()} MT · ${t(
+                      `farmer.factors.production.level_${normalizeProductionLevel(item.payload.classification)}`,
+                      {},
+                      item.payload.classification
+                    )}`,
+                    t("farmer.factors.production.factor_title", {}, "Average production"),
+                  ]}
                   contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb", fontSize: 12 }}
                 />
-                <Bar dataKey="level" radius={[4, 4, 0, 0]}>
+                {historicalAverage != null && (
+                  <ReferenceLine
+                    y={historicalAverage}
+                    stroke="#64748b"
+                    strokeDasharray="4 4"
+                    label={t("farmer.cropCycle.historical_average_reference_line", {}, "Historical average")}
+                  />
+                )}
+                <Bar dataKey="production" radius={[4, 4, 0, 0]}>
                   {quarterlyData.map((entry, index) => (
                     <Cell
-                      key={index}
-                      fill={index === currentQuarterIdx ? (entry.level <= 4 ? "#16a34a" : entry.level <= 7 ? "#f59e0b" : "#ef4444") : "#bfdbfe"}
-                      opacity={index === currentQuarterIdx ? 1 : 0.55}
+                      key={entry.quarter}
+                      fill={levelColor(entry.classification)}
+                      opacity={index === selectedQuarterIndex ? 1 : 0.55}
                     />
                   ))}
                 </Bar>
@@ -539,6 +566,30 @@ const ProductionTab = ({ data }) => {
               <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" /><span>{t("farmer.factors.arrival.level_low", {}, "Low")}</span></div>
               <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /><span>{t("farmer.factors.arrival.level_lower_middle", {}, "Moderate")}</span></div>
               <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400 inline-block" /><span>{t("farmer.factors.arrival.level_high", {}, "High")}</span></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.historical_seasonal_average", {}, "Historical seasonal average")}</p>
+                <p className="mt-1 text-[16px] font-bold text-[var(--hw-neutral-900)]">
+                  {historicalAverage == null ? "—" : `${historicalAverage.toLocaleString()} MT`}
+                </p>
+              </div>
+              <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">
+                  {t("farmer.cropCycle.selected_season_level", { quarter: data?.selectedQuarter || "" }, `${data?.selectedQuarter || "Selected"} season level`)}
+                </p>
+                <p className="mt-1 text-[16px] font-bold text-[var(--hw-neutral-900)]">
+                  {selectedProduction == null ? "—" : `${selectedProduction.toLocaleString()} MT`}
+                </p>
+              </div>
+              <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.difference_from_average", {}, "Difference from average")}</p>
+                <p className="mt-1 text-[16px] font-bold text-[var(--hw-neutral-900)]">
+                  {productionDifference == null
+                    ? "—"
+                    : `${productionDifference > 0 ? "+" : ""}${productionDifference.toLocaleString()} MT${productionDifferencePct == null ? "" : ` (${productionDifferencePct > 0 ? "+" : ""}${productionDifferencePct.toFixed(1)}%)`}`}
+                </p>
+              </div>
             </div>
           </>
         ) : (
@@ -830,7 +881,6 @@ const TAB_CONFIG = [
 ];
 
 const FactorDetailTabs = ({
-  price,
   arrival,
   production,
   weather,
@@ -872,7 +922,7 @@ const FactorDetailTabs = ({
 
       {/* Tab content */}
       <div className="p-4">
-        {safeTab === "price" && <PriceTab data={price} commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
+        {safeTab === "price" && <PriceTab commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "arrival" && <ArrivalTab data={arrival} commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "production" && <ProductionTab data={production} />}
         {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}

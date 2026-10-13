@@ -27,6 +27,8 @@ import DftcArrivalDetailsPage from "./farmer/pages/DftcArrivalDetails";
 import SeasonalProductionDetailsPage from "./farmer/pages/SeasonalProductionDetails";
 import MyCropsPage from "./farmer/pages/MyCrops";
 import CropCycleDetailPage from "./farmer/pages/CropCycleDetail";
+import CropArrivalPressureDetailsPage from "./farmer/pages/CropArrivalPressureDetails";
+import CropSeasonalProductionDetailsPage from "./farmer/pages/CropSeasonalProductionDetails";
 import PriceTrendDetailPage from "./farmer/pages/PriceTrendDetail";
 import CropFactorsPage from "./farmer/pages/CropFactorsPage";
 import FactorDetailPage from "./farmer/pages/FactorDetailPage";
@@ -132,6 +134,8 @@ export const router = createBrowserRouter([
 
       { path: "crops",                Component: MyCropsPage },
       { path: "crops/:cropId",       Component: CropCycleDetailPage },
+      { path: "crops/:cropId/arrival-pressure", Component: CropArrivalPressureDetailsPage },
+      { path: "crops/:cropId/seasonal-production", Component: CropSeasonalProductionDetailsPage },
       { path: "crops/:cropId/factors", Component: CropFactorsPage },
       { path: "assess",              Component: AssessPage },
       { path: "assess/factors",      Component: FactorDetailPage },
