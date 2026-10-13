@@ -1,69 +1,53 @@
 import { useNavigate, useLocation } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
-import { apiGet, parseResponse } from "../../global/api";
-import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
+import * as analyticsApi from "../../../services/api/analyticsApi";
+import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
+
+function quarterForDate(value) {
+  const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
+  const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return `Q${Math.floor(validDate.getMonth() / 3) + 1}`;
+}
 
 function FactorDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  const queryClient = useQueryClient();
   const state = location.state;
 
   const commodityId = state?.commodityId || null;
   const commodityName = state?.commodityName || null;
-  const moduleResults = state?.moduleResults || {};
-
-  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
-  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
-  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
-
-  const { data: productionFactorData } = useQuery({
-    queryKey: ["factors", "production", commodityId],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/market/factors/production/${commodityId}`);
-        if (!res.ok) return null;
-        return await parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
+  const selectedQuarter = state?.selectedQuarter || quarterForDate(
+    state?.resultData?.harvestDate
+      || state?.resultData?.expected_harvest_date
+      || state?.resultData?.expectedHarvestDate
+  );
+  const arrivalPressureQuery = useQuery({
+    queryKey: ["farmer", "arrival-pressure", commodityId],
+    queryFn: () => analyticsApi.getArrivalPressure(commodityId),
+    enabled: Boolean(commodityId),
+    staleTime: 1000 * 60 * 5,
+  });
+  const seasonalProductionQuery = useQuery({
+    queryKey: ["farmer", "seasonal-production", commodityId, selectedQuarter],
+    queryFn: () => analyticsApi.getHistoricalSeasonalProduction(commodityId, selectedQuarter),
     enabled: Boolean(commodityId),
     staleTime: 1000 * 60 * 30,
   });
-
-  const { data: arrivalFactorData } = useQuery({
-    queryKey: ["factors", "arrival", commodityId],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/market/factors/arrival/${commodityId}?days=180`);
-        if (!res.ok) return null;
-        return await parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
-    enabled: Boolean(commodityId),
+  const weatherForecastQuery = useQuery({
+    queryKey: ["farmer", "admin-weather-forecast", 14],
+    queryFn: () => analyticsApi.getWeatherForecast(14),
+    enabled: Boolean(state),
     staleTime: 1000 * 60 * 30,
   });
-
-  const { data: weatherAdvisoryData } = useQuery({
-    queryKey: ["weather", "advisory", weatherLat, weatherLon],
-    enabled: true,
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
-        if (!res.ok) return null;
-        return await parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
+  const weatherRulesQuery = useQuery({
+    queryKey: ["farmer", "weather-rules", commodityId],
+    queryFn: () => analyticsApi.listWeatherRules(commodityId),
+    enabled: Boolean(commodityId),
     staleTime: 1000 * 60 * 30,
   });
 
@@ -80,51 +64,61 @@ function FactorDetailPage() {
     title,
     subtitle,
     breadcrumbs,
-    price,
-    arrival,
-    production,
-    weather,
     profitability,
     advisoryCode,
     advisoryLabel,
   } = state;
 
-  const cropWeatherAdv = (weatherAdvisoryData?.advisories || []).find(
-    (a) => a.commodity_name?.toLowerCase() === commodityName?.toLowerCase() || a.commodity_id === commodityId
-  );
-
-  const productionTab = {
-    productionLevel:
-      moduleResults.historical_seasonal_production_level ||
-      production?.productionLevel ||
-      production?.level ||
-      null,
-    records: production?.records?.length ? production.records : (productionFactorData?.records || []),
-    commodityId,
-    commodityName,
-  };
-
+  const arrivalSummary = arrivalPressureQuery.data;
   const arrivalTab = {
-    arrivalPressure: moduleResults.arrival_pressure || arrival?.arrivalPressure || arrival?.trend || null,
-    currentVolumeKg: moduleResults.current_arrival_kg ?? arrival?.currentVolumeKg ?? null,
+    arrivalPressure: arrivalSummary?.status === "processed" ? arrivalSummary.classification : null,
+    currentVolumeKg: arrivalSummary?.current_arrival_kg ?? null,
+    records: arrivalSummary?.records || [],
+    averageArrivalKg: arrivalSummary?.average_arrival_kg ?? null,
+    quartileThresholds: arrivalSummary?.quartile_thresholds || null,
+    sourceBreakdown: arrivalSummary?.source_breakdown || {},
+    summary: arrivalSummary?.status === "processed"
+      ? `The latest recorded arrival volume is ${arrivalSummary.current_arrival_kg?.toLocaleString?.() ?? "—"} kg; the historical average is ${arrivalSummary.average_arrival_kg?.toLocaleString?.() ?? "—"} kg.`
+      : arrivalSummary?.message,
+    dataIsStale: arrivalSummary?.data_is_stale === true,
     commodityId,
     commodityName,
-    volumesByDate: arrival?.volumesByDate?.length
-      ? arrival.volumesByDate
-      : (arrivalFactorData?.volumes_by_date || []),
   };
 
-  const weatherTab = {
-    risk: moduleResults.weather_risk || weather?.risk || cropWeatherAdv?.suitability || null,
-    forecast_14d: weather?.forecast_14d?.length
-      ? weather.forecast_14d
-      : (weatherAdvisoryData?.daily_forecasts || weather?.forecast || []),
+  const productionSummary = seasonalProductionQuery.data;
+  const selectedProductionProfile = productionSummary?.quarterly_profiles?.find(
+    (profile) => profile.quarter === selectedQuarter
+  );
+  const productionTab = {
+    productionLevel: productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null,
+    quarterlyProfiles: productionSummary?.quarterly_profiles || [],
+    selectedQuarter,
+    grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
+    records: productionSummary?.records || [],
+    sources: (productionSummary?.source_areas || []).map((area) => ({
+      name: area.name,
+      value: Number(area.value),
+      volumeKg: Number(area.total_production_mt),
+    })),
+    commodityId,
     commodityName,
-    actions: cropWeatherAdv?.recommended_actions?.length
-      ? cropWeatherAdv.recommended_actions
-      : (weather?.actions || []),
-    why: cropWeatherAdv?.explanation || weather?.why || "",
-    summary: weather?.summary || cropWeatherAdv?.explanation || "",
+    dataSource: productionSummary?.record_count > 0 ? { name: productionSummary.commodity_name } : null,
+  };
+
+  const weatherAnalysis = buildWeatherRiskAnalysis({
+    weatherForecast: weatherForecastQuery.data,
+    weatherRules: weatherRulesQuery.data?.items || [],
+    commodityName: commodityName || "selected crop",
+    weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
+    weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+  });
+  const weatherTab = {
+    risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
+    forecast_14d: weatherAnalysis.forecast_14d,
+    commodityName,
+    actions: [],
+    why: weatherAnalysis.resultExplanation,
+    summary: weatherAnalysis.resultExplanation,
   };
 
   const displayTitle = title || `${commodityName || "Crop"} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`;
@@ -215,7 +209,6 @@ function FactorDetailPage() {
 
       {/* Factor tabs */}
       <FactorDetailTabs
-        price={price}
         arrival={arrivalTab}
         production={productionTab}
         weather={weatherTab}

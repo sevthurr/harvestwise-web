@@ -2001,8 +2001,4 @@ function AdminAnalytics() {
   );
 }
 
-export {
-  AdminAnalytics as default,
-  EditWeightModal,
-  EditPriceOutlookModal,
-};
+export { AdminAnalytics as default };

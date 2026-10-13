@@ -16,12 +16,15 @@ function formatKgValue(kg) {
 }
 
 export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false }) {
-  const chartData = data && data.length > 0 && !showEmpty
+  const sourceData = data && data.length > 0 && !showEmpty
     ? data
     : EMPTY_ARRIVAL_SOURCES;
+  const chartData = sourceData.map((source) => ({
+    ...source,
+    value: Number.isFinite(Number(source.value)) ? Number(source.value) : 0,
+  }));
 
   const total = chartData.reduce((acc, curr) => acc + (curr.value || 0), 0);
-  const totalKg = chartData.reduce((acc, curr) => acc + (curr.volumeKg || 0), 0);
   const isEmpty = total === 0;
 
   const renderData = isEmpty
@@ -60,8 +63,9 @@ export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false })
           {!isEmpty && (
             <Tooltip
               formatter={(val, name, entry) => {
+                const percentage = total > 0 ? (Number(val) / total) * 100 : 0;
                 const kgText = entry.payload.volumeKg != null ? ` · ${formatKgValue(entry.payload.volumeKg)}` : "";
-                return [`${val}% (${((val / total) * 100).toFixed(0)}%)${kgText}`, name];
+                return [`${Number(percentage.toFixed(1))}%${kgText}`, name];
               }}
               contentStyle={{
                 backgroundColor: "white",
@@ -77,20 +81,19 @@ export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false })
 
       {/* Legend / Breakdown List */}
       <div className="flex flex-wrap items-center justify-center gap-2.5 mt-2 text-[11px] text-[var(--hw-neutral-800)]">
-        {DEFAULT_ARRIVAL_SOURCES.map((s) => {
-          const item = chartData.find((d) => d.name === s.name);
-          const val = item ? item.value : 0;
-          const kg = item?.volumeKg;
+        {chartData.map((item, index) => {
+          const percentage = total > 0 ? (item.value / total) * 100 : 0;
+          const color = item.color || DEFAULT_ARRIVAL_SOURCES[index % DEFAULT_ARRIVAL_SOURCES.length].color;
           return (
-            <div key={s.name} className="flex items-center gap-1.5 bg-[var(--hw-neutral-50)] px-3 py-1.5 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-              <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: s.color }} />
-              <span className="font-medium text-[var(--hw-neutral-700)]">{s.name}:</span>
+            <div key={item.name} className="flex items-center gap-1.5 bg-[var(--hw-neutral-50)] px-3 py-1.5 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+              <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: color }} />
+              <span className="font-medium text-[var(--hw-neutral-700)]">{item.name}:</span>
               <span className="font-bold text-[var(--hw-neutral-900)]">
-                {isEmpty ? "0%" : `${val}%`}
+                {isEmpty ? "0%" : `${Number(percentage.toFixed(1))}%`}
               </span>
-              {kg != null && !isEmpty && (
+              {item.volumeKg != null && !isEmpty && (
                 <span className="text-[var(--hw-neutral-500)] font-medium">
-                  ({formatKgValue(kg)})
+                  ({formatKgValue(item.volumeKg)})
                 </span>
               )}
             </div>

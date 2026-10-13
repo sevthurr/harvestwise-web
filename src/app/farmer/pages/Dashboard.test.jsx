@@ -37,13 +37,13 @@ vi.mock("../../global/components/shared/CommodityIllustrations", () => ({
 
 import DashboardPage from "./Dashboard.jsx";
 
-function renderDashboard() {
-  const queryClient = new QueryClient({
+function renderDashboard(queryClient) {
+  const client = queryClient ?? new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <DashboardPage />
       </MemoryRouter>
@@ -98,9 +98,48 @@ describe("Farmer dashboard price trends", () => {
     renderDashboard();
 
     expect(await screen.findByText("Falling")).toBeInTheDocument();
-    expect(screen.getByText(/Forecast period .*2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/Forecast period/)).not.toBeInTheDocument();
     expect(screen.getByText("No trend data")).toBeInTheDocument();
     expect(screen.getByText("₱150/kg")).toBeInTheDocument();
+    expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", {
+      price_type: "bangkerohan_retail",
+      horizon: 7,
+      records_limit: 100,
+    });
+  });
+
+  it("refreshes cached price and trend data when the dashboard opens", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(["dashboard", "prices"], [
+      {
+        id: "COM-0025",
+        name: "Lettuce",
+        baseName: "Lettuce",
+        price: 150,
+        priceType: "bangkerohan_retail",
+        uom: "kg",
+      },
+    ]);
+    queryClient.setQueryData(
+      ["farmer-price-card-trend", "COM-0025", "bangkerohan_retail", 7],
+      { recent_records: [], forecast: null },
+    );
+    getPriceDetailMock.mockResolvedValue({
+      recent_records: [{ prevail_price: 150 }],
+      forecast: {
+        trend: "Falling",
+        forecast_midpoint: 141.39,
+        forecast_date: "2026-08-07",
+        points: [{ forecast_date: "2026-08-07" }],
+      },
+    });
+
+    renderDashboard(queryClient);
+
+    expect(await screen.findByText("Falling")).toBeInTheDocument();
+    expect(getPriceListMock).toHaveBeenCalled();
     expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", {
       price_type: "bangkerohan_retail",
       horizon: 7,

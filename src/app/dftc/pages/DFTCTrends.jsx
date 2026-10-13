@@ -8,8 +8,9 @@ import { ForecastPriceTrendChart } from "../../global/components/shared/Forecast
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
-import { apiGet, parseResponse } from "../../global/api";
+import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
+import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
 
 import {
   buildForecastChartData,
@@ -18,6 +19,7 @@ import {
   buildTableRows,
   catalogPairsForCommodity,
   catalogPairsFromPriceList,
+  findCommodityId,
   isApiBackedPriceSeries,
   toPriceTypeKey,
   varietyDisplayKey,
@@ -40,11 +42,6 @@ const HW_GREEN_SHADES = [
 function formatVol(v) {
   if (v == null || isNaN(v)) return "—";
   return Number(v).toLocaleString("en-US");
-}
-
-function getCommoditySlug(name) {
-  if (!name) return "";
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 function getPriceTypeKey(market, priceType) {
@@ -676,7 +673,8 @@ function TabNav({ tab, onChange }) {
     <div className="flex border-b border-[var(--hw-neutral-200)]">
       {[
         { id: "price", label: "Price Trends", icon: TrendingUp },
-        { id: "arrival", label: "Arrival Volume Trends", icon: BarChart3 }
+        { id: "arrival", label: "Arrival Volume Trends", icon: BarChart3 },
+        { id: "production", label: "Seasonal Production", icon: Leaf }
       ].map((t) => {
         const Icon = t.icon;
         const active = tab === t.id;
@@ -702,7 +700,7 @@ function TabNav({ tab, onChange }) {
 function SummaryStripSkeleton({ columns = 5 }) {
   return (
     <div className={`${cardCls} p-5 md:p-6`}>
-      <div className={`grid grid-cols-1 sm:grid-cols-2 ${columns === 5 ? "lg:grid-cols-5" : "lg:grid-cols-3"} gap-6`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${columns === 5 ? "lg:grid-cols-5" : columns === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-6`}>
         {Array.from({ length: columns }).map((_, i) => (
           <div key={i} className={`${i !== 0 ? "lg:border-l-2 lg:border-[var(--hw-neutral-200)] lg:pl-5" : "lg:pl-0"} space-y-3`}>
             <div className="h-3 w-28 bg-[var(--hw-neutral-200)] rounded animate-pulse" />
@@ -777,7 +775,8 @@ function DFTCTrends() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined" && window.location) {
       const params = new URLSearchParams(window.location.search);
-      return params.get("tab") === "arrival" ? "arrival" : "price";
+      const tab = params.get("tab");
+      return ["arrival", "production"].includes(tab) ? tab : "price";
     }
     return "price";
   });
@@ -815,7 +814,7 @@ function DFTCTrends() {
     if (typeof window !== "undefined" && window.location) {
       const params = new URLSearchParams(window.location.search);
       const urlTab = params.get("tab");
-      if (urlTab === "arrival" || urlTab === "price") {
+      if (urlTab === "arrival" || urlTab === "production" || urlTab === "price") {
         setActiveTab(urlTab);
       }
       const rawComm = params.get("commodity");
@@ -944,6 +943,7 @@ function DFTCTrends() {
   const [aPage, setAPage] = useState(1);
   const [aShowAll, setAShowAll] = useState(false);
   const [showVolumeTypeInfo, setShowVolumeTypeInfo] = useState(false);
+  const [sCommodity, setSCommodity] = useState("Kamatis");
 
   useEffect(() => {
     setPPage(1);
@@ -1104,60 +1104,77 @@ function DFTCTrends() {
   const pPageRows = pTableRows.slice((pPage - 1) * PAGE_SIZE, pPage * PAGE_SIZE);
 
   // Live Arrival Volume Query
-  const aCommodityId = useMemo(() => getCommoditySlug(aCommodity), [aCommodity]);
-  const { data: arrivalQueryData, isLoading: isArrivalLoading } = useQuery({
+  const aCommodityId = useMemo(
+    () => findCommodityId(catalogPairs, aCommodity, "") || aCommodity,
+    [catalogPairs, aCommodity]
+  );
+  const {
+    data: arrivalQueryData,
+    isLoading: isArrivalLoading,
+    isError: isArrivalError,
+  } = useQuery({
     queryKey: ["dftc-trends-arrivals", aCommodityId],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/market/factors/arrival/${aCommodityId}?days=180`);
-        return parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
+    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId),
+    enabled: activeTab === "arrival" && Boolean(aCommodityId),
     staleTime: 60 * 1000,
   });
 
-  // 2. Process Arrival Volume Data from Database Response Only
+  // Use the same live 90-day arrival records and classification as Admin analytics.
   const rawArrivalRecords = useMemo(() => {
-    if (Array.isArray(arrivalQueryData?.volumes)) return arrivalQueryData.volumes;
-    if (Array.isArray(arrivalQueryData?.items)) return arrivalQueryData.items;
-    if (Array.isArray(arrivalQueryData)) return arrivalQueryData;
-    return [];
+    return Array.isArray(arrivalQueryData?.records) ? arrivalQueryData.records : [];
   }, [arrivalQueryData]);
+
+  const filteredArrivalRecords = useMemo(() => {
+    let startDate = null;
+    let endDate = null;
+    const today = new Date();
+    if (["2m", "3m", "6m"].includes(aDatePreset)) {
+      startDate = new Date(today);
+      startDate.setMonth(today.getMonth() - Number(aDatePreset.slice(0, -1)));
+    } else if (aDatePreset === "custom") {
+      startDate = aCustomFrom ? new Date(`${aCustomFrom.slice(0, 10)}T00:00:00`) : null;
+      endDate = aCustomTo ? new Date(`${aCustomTo.slice(0, 10)}T23:59:59`) : null;
+    }
+    return rawArrivalRecords.filter((record) => {
+      const recordDate = new Date(`${String(record.arrival_date || "").slice(0, 10)}T12:00:00`);
+      if (Number.isNaN(recordDate.getTime())) return false;
+      return (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
+    });
+  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo]);
 
   const aVarietyKeys = useMemo(() => [aCommodity], [aCommodity]);
 
   const aChartData = useMemo(() => {
-    if (!rawArrivalRecords.length) return [];
-    const grouped = {};
-    rawArrivalRecords.forEach((r) => {
+    if (!filteredArrivalRecords.length) return [];
+    const grouped = new Map();
+    filteredArrivalRecords.forEach((r) => {
       const dStr = r.arrival_date || r.date;
-      const dObj = new Date(dStr);
-      const monthLabel = isNaN(dObj.getTime()) ? dStr : dObj.toLocaleDateString("en-US", { month: "short" });
+      if (!dStr) return;
+      const dateKey = String(dStr).slice(0, 10);
       const val = aVolumeType === "Farm Source"
-        ? (r.farm_source_volume_kg ?? 0)
+        ? r.farm_source_volume_kg
         : aVolumeType === "Other Source"
-        ? (r.other_source_volume_kg ?? 0)
-        : (r.volume_kg ?? (r.farm_source_volume_kg ?? 0) + (r.other_source_volume_kg ?? 0));
+        ? r.other_source_volume_kg
+        : r.volume_kg;
+      if (val == null) return;
 
-      grouped[monthLabel] = (grouped[monthLabel] || 0) + val;
+      grouped.set(dateKey, (grouped.get(dateKey) || 0) + Number(val));
     });
 
-    return Object.entries(grouped).map(([month, val]) => ({
-      month,
-      [aCommodity]: val
-    }));
-  }, [rawArrivalRecords, aVolumeType, aCommodity]);
+    return [...grouped.entries()]
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([date, val]) => {
+        const dObj = new Date(`${date}T12:00:00`);
+        const month = Number.isNaN(dObj.getTime())
+          ? date
+          : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        return { month, [aCommodity]: val };
+      });
+  }, [filteredArrivalRecords, aVolumeType, aCommodity]);
 
   const aSourcesBreakdown = useMemo(() => {
-    if (!rawArrivalRecords.length) return [];
-    let totalFarm = 0;
-    let totalOther = 0;
-    rawArrivalRecords.forEach((r) => {
-      totalFarm += Number(r.farm_source_volume_kg || 0);
-      totalOther += Number(r.other_source_volume_kg || 0);
-    });
+    const totalFarm = Number(arrivalQueryData?.source_breakdown?.farm_source_volume_kg || 0);
+    const totalOther = Number(arrivalQueryData?.source_breakdown?.other_source_volume_kg || 0);
     const combined = totalFarm + totalOther;
     if (combined === 0) return [];
     const farmPct = Math.round((totalFarm / combined) * 100);
@@ -1166,14 +1183,13 @@ function DFTCTrends() {
       { name: "Farm Source", value: farmPct, volumeKg: totalFarm, color: "#15803d" },
       { name: "Other Sources", value: otherPct, volumeKg: totalOther, color: "#f59e0b" }
     ];
-  }, [rawArrivalRecords]);
+  }, [arrivalQueryData]);
 
   const aVarietySummaries = useMemo(() => {
     if (!rawArrivalRecords.length) return [];
-    const latest = rawArrivalRecords[0];
-    const farm = latest?.farm_source_volume_kg ?? null;
-    const other = latest?.other_source_volume_kg ?? null;
-    const combined = latest?.volume_kg ?? (farm != null || other != null ? (farm || 0) + (other || 0) : null);
+    const farm = arrivalQueryData?.source_breakdown?.farm_source_volume_kg ?? null;
+    const other = arrivalQueryData?.source_breakdown?.other_source_volume_kg ?? null;
+    const combined = arrivalQueryData?.current_arrival_kg ?? null;
     return [{
       variety: aCommodity,
       farm,
@@ -1181,10 +1197,10 @@ function DFTCTrends() {
       combined,
       records: rawArrivalRecords.length
     }];
-  }, [rawArrivalRecords, aCommodity]);
+  }, [arrivalQueryData, aCommodity]);
 
   const aTableRows = useMemo(() => {
-    return rawArrivalRecords.map((r) => {
+    return filteredArrivalRecords.map((r) => {
       const dStr = r.arrival_date || r.date;
       const dObj = new Date(dStr);
       const monthLabel = isNaN(dObj.getTime()) ? dStr : dObj.toLocaleDateString("en-US", { month: "short", year: "numeric" });
@@ -1203,10 +1219,15 @@ function DFTCTrends() {
         inconsistent
       };
     });
-  }, [rawArrivalRecords]);
+  }, [filteredArrivalRecords]);
 
   const aTotalPages = Math.max(1, Math.ceil(aTableRows.length / PAGE_SIZE));
   const aPageRows = aTableRows.slice((aPage - 1) * PAGE_SIZE, aPage * PAGE_SIZE);
+  const aPeriodLabel = aDatePreset === "all"
+    ? arrivalQueryData?.data_is_stale
+      ? "Historical fallback records"
+      : `Admin ${arrivalQueryData?.lookback_days ?? 90}-day window`
+    : getPeriodLabel(aDatePreset, aCustomFrom, aCustomTo);
 
   function priceSummaryRows(items, renderValue, showAll, setShowAll) {
     if (!items || items.length === 0) {
@@ -1563,15 +1584,34 @@ function DFTCTrends() {
         </div>
       </div>
 
+      {isArrivalError && (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Arrival analytics could not be loaded. Please try again later.
+        </div>
+      )}
+
       {/* 2. Arrival Volume Summary Metrics Strip */}
       {isArrivalLoading ? (
-        <SummaryStripSkeleton columns={3} />
+        <SummaryStripSkeleton columns={4} />
       ) : (
-        <div className={`${cardCls} p-5 md:p-6`}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className={`${cardCls} p-5 md:p-6 space-y-5`}>
+          {arrivalQueryData?.classification && (
+            <div>
+              <div className="text-[11px] font-bold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+                Admin Arrival Pressure Classification
+              </div>
+              <div className="mt-1 text-lg font-bold text-[var(--hw-green-800)]">
+                {arrivalQueryData.classification}
+                {arrivalQueryData.data_is_stale && (
+                  <span className="ml-2 text-xs font-medium text-amber-700">Historical data</span>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
-                title: "Latest Combined Volume",
+                title: "Latest Arrival Volume (Admin)",
                 renderVal: (v) => (
                   <span className={`text-[13px] font-bold ${v.combined != null ? "text-[var(--hw-neutral-900)]" : "text-[var(--hw-neutral-400)]"}`}>
                     {formatVol(v.combined)}
@@ -1579,7 +1619,7 @@ function DFTCTrends() {
                 )
               },
               {
-                title: "Latest Farm Source Volume",
+                title: "Arrival-Window Farm Source Total",
                 renderVal: (v) => (
                   <span className={`text-[13px] font-bold ${v.farm != null ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`}>
                     {formatVol(v.farm)}
@@ -1587,10 +1627,18 @@ function DFTCTrends() {
                 )
               },
               {
-                title: "Latest Other Source Volume",
+                title: "Arrival-Window Other Source Total",
                 renderVal: (v) => (
                   <span className={`text-[13px] font-bold ${v.other != null ? "text-amber-700" : "text-[var(--hw-neutral-400)]"}`}>
                     {formatVol(v.other)}
+                  </span>
+                )
+              },
+              {
+                title: "Admin Average Arrival",
+                renderVal: () => (
+                  <span className={`text-[13px] font-bold ${arrivalQueryData?.average_arrival_kg != null ? "text-[var(--hw-neutral-900)]" : "text-[var(--hw-neutral-400)]"}`}>
+                    {formatVol(arrivalQueryData?.average_arrival_kg)}
                   </span>
                 )
               }
@@ -1617,7 +1665,7 @@ function DFTCTrends() {
             <div>
               <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)] mb-0.5">Arrival Volume Trend</h3>
               <p className="text-[12px] text-[var(--hw-neutral-500)] mb-4">
-                {aCommodity} · {aVolumeType} by variety · {getPeriodLabel(aDatePreset, aCustomFrom, aCustomTo)} · kg
+                {aCommodity} · {aVolumeType} · {aPeriodLabel} · kg
               </p>
             </div>
 
@@ -1628,7 +1676,7 @@ function DFTCTrends() {
                 </div>
                 <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No arrival volume data available</p>
                 <p className="text-[12px] text-[var(--hw-neutral-500)] max-w-xs mt-1">
-                  No arrival-volume records for {aCommodity} within the selected date range.
+                  {arrivalQueryData?.message || `No arrival-volume records for ${aCommodity} within the selected date range.`}
                 </p>
               </div>
             ) : (
@@ -1638,7 +1686,7 @@ function DFTCTrends() {
                 varietyKeys={aVarietyKeys}
                 sourceType={aVolumeType}
                 height={300}
-                year={rawArrivalRecords.length > 0 ? new Date(rawArrivalRecords[0].arrival_date || rawArrivalRecords[0].date).getFullYear() : undefined}
+                referenceValue={aVolumeType === "Combined Total" ? arrivalQueryData?.average_arrival_kg ?? null : null}
               />
             )}
           </div>
@@ -1653,11 +1701,16 @@ function DFTCTrends() {
             </div>
 
             <div className="w-full flex-1 flex flex-col justify-center">
-              <ArrivalSourcePieChart
-                showEmpty={!aSourcesBreakdown || aSourcesBreakdown.length === 0}
-                data={aSourcesBreakdown}
-                height={300}
-              />
+              {aSourcesBreakdown.length > 0 ? (
+                <ArrivalSourcePieChart
+                  data={aSourcesBreakdown}
+                  height={300}
+                />
+              ) : (
+                <p className="py-16 text-center text-sm text-[var(--hw-neutral-500)]">
+                  No arrival source data available.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1734,13 +1787,24 @@ function DFTCTrends() {
       <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8">
         <PageHeader
           title="Market Trends"
-          description="Explore commodity price trends and arrival volume trends at DFTC markets."
+          description="Explore Admin-backed price, arrival-volume, and seasonal-production trends at DFTC markets."
           className="mb-6"
         />
         <div className={`${cardCls} mb-6 overflow-hidden`}>
           <TabNav tab={activeTab} onChange={handleTabChange} />
         </div>
-        {activeTab === "price" ? priceTrendsTab : arrivalTrendsTab}
+        {activeTab === "price"
+          ? priceTrendsTab
+          : activeTab === "arrival"
+            ? arrivalTrendsTab
+            : (
+              <SeasonalProductionTrends
+                commodity={sCommodity}
+                commodityId={findCommodityId(catalogPairs, sCommodity, "") || sCommodity}
+                categories={PRICE_CATEGORIES}
+                onCommodityChange={setSCommodity}
+              />
+            )}
 
         {/* ── Alert Commodities Modal ── */}
         {activeAlertModal && (

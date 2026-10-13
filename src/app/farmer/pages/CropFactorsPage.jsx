@@ -1,21 +1,26 @@
 import { useParams, useNavigate } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCrops } from "../components/crops/CropsContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
-import { FactorDetailTabs, buildPricePoints } from "../components/shared/FactorDetailTabs";
+import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { getPhaseConfig } from "../components/crops/types";
-import { normalizePhaseCode, PHASE_CODES, normalizePriceTrendCode } from "../utils/farmerCodes";
-import { apiGet, apiPost, parseResponse } from "../../global/api";
-import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
+import { normalizePhaseCode, PHASE_CODES } from "../utils/farmerCodes";
+import { apiPost, parseResponse } from "../../global/api";
+import * as analyticsApi from "../../../services/api/analyticsApi";
+import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+
+function quarterForDate(value) {
+  const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
+  const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return `Q${Math.floor(validDate.getMonth() / 3) + 1}`;
+}
 
 function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { crops } = useCrops();
-  const queryClient = useQueryClient();
-
   const crop = crops.find((c) => c.id === cropId);
   if (!crop) {
     return (
@@ -58,37 +63,28 @@ function CropFactorsPage() {
     staleTime: 1000 * 60 * 15,
   });
 
-  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
-  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
-  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
-
-  const { data: weatherAdvisoryData } = useQuery({
-    queryKey: ["weather", "advisory", weatherLat, weatherLon],
-    enabled: true,
-    queryFn: async () => {
-      try {
-        const response = await apiGet(`/weather/advisory?latitude=${weatherLat}&longitude=${weatherLon}`);
-        if (!response.ok) return null;
-        return await parseResponse(response);
-      } catch {
-        return null;
-      }
-    },
+  const commodityIdentifier = crop.commodityId || crop.commodity;
+  const selectedQuarter = quarterForDate(crop.harvestDate || crop.plantingDate);
+  const arrivalPressureQuery = useQuery({
+    queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
+    queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 5,
+  });
+  const seasonalProductionQuery = useQuery({
+    queryKey: ["farmer", "seasonal-production", commodityIdentifier, selectedQuarter],
+    queryFn: () => analyticsApi.getHistoricalSeasonalProduction(commodityIdentifier, selectedQuarter),
+    enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 30,
   });
-
-  const commodityIdentifier = crop.commodityId || crop.commodity;
-  const { data: productionFactorData } = useQuery({
-    queryKey: ["factors", "production", commodityIdentifier],
-    queryFn: async () => {
-      try {
-        const res = await apiGet(`/market/factors/production/${commodityIdentifier}`);
-        if (!res.ok) return null;
-        return await parseResponse(res);
-      } catch {
-        return null;
-      }
-    },
+  const weatherForecastQuery = useQuery({
+    queryKey: ["farmer", "admin-weather-forecast", 14],
+    queryFn: () => analyticsApi.getWeatherForecast(14),
+    staleTime: 1000 * 60 * 30,
+  });
+  const weatherRulesQuery = useQuery({
+    queryKey: ["farmer", "weather-rules", commodityIdentifier],
+    queryFn: () => analyticsApi.listWeatherRules(commodityIdentifier),
     enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 30,
   });
@@ -104,55 +100,56 @@ function CropFactorsPage() {
   const farmgatePrice = crop.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : null;
   const sellingBasis = farmgatePrice ?? basePrice;
   const margin = sellingBasis != null && costToRecover != null ? sellingBasis - costToRecover : null;
-  const priceDir = planAdvisoryData?.module_results?.price_outlook
-    ? normalizePriceTrendCode(planAdvisoryData.module_results.price_outlook)
-    : margin != null && margin > 15
-    ? "rising"
-    : margin != null && margin > 0
-    ? "stable"
-    : "falling";
-
-  const priceTabData = {
-    currentPrice: basePrice,
-    previousPrice: currentPrice || basePrice,
-    market: useForecast ? t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference") : "Bangkerohan Retail",
-    direction: priceDir,
-    forecastLow: fLo,
-    forecastHigh: fHi,
-    forecastRange: fLo != null && fHi != null ? `₱${fLo}–₱${fHi}/kg` : null,
-    points: basePrice ? buildPricePoints([], basePrice, priceDir, fLo || basePrice, fHi || basePrice, 7) : [],
-  };
-
+  const arrivalData = arrivalPressureQuery.data;
   const arrivalTabData = {
-    arrivalPressure: planAdvisoryData?.module_results?.arrival_pressure || null,
-    currentVolumeKg: planAdvisoryData?.module_results?.current_arrival_kg || null,
+    arrivalPressure: arrivalData?.status === "processed" ? arrivalData.classification : null,
+    currentVolumeKg: arrivalData?.current_arrival_kg ?? null,
+    records: arrivalData?.records || [],
+    averageArrivalKg: arrivalData?.average_arrival_kg ?? null,
+    quartileThresholds: arrivalData?.quartile_thresholds || null,
+    sourceBreakdown: arrivalData?.source_breakdown || {},
+    summary: arrivalData?.status === "processed"
+      ? `The latest recorded arrival volume is ${arrivalData.current_arrival_kg?.toLocaleString?.() ?? "—"} kg; the historical average is ${arrivalData.average_arrival_kg?.toLocaleString?.() ?? "—"} kg.`
+      : arrivalData?.message,
+    dataIsStale: arrivalData?.data_is_stale === true,
     commodityId: commodityIdentifier,
     commodityName: crop.commodityName,
   };
 
-  const productionTabData = {
-    productionLevel: planAdvisoryData?.module_results?.historical_seasonal_production_level || null,
-    records: productionFactorData?.records || [],
-    commodityId: commodityIdentifier,
-    commodityName: crop.commodityName,
-    dataSource: productionFactorData?.record_count > 0
-      ? {
-          name: productionFactorData.commodity_name,
-          variety: productionFactorData.variety || null,
-        }
-      : null,
-  };
-
-  const cropWeatherAdv = (weatherAdvisoryData?.advisories || []).find(
-    (a) => a.commodity_name?.toLowerCase() === crop.commodityName?.toLowerCase() || a.commodity_id === commodityIdentifier
+  const productionSummary = seasonalProductionQuery.data;
+  const selectedProductionProfile = productionSummary?.quarterly_profiles?.find(
+    (profile) => profile.quarter === selectedQuarter
   );
-  const weatherRisk = planAdvisoryData?.module_results?.weather_risk || cropWeatherAdv?.suitability || null;
-  const weatherTabData = {
-    risk: weatherRisk,
-    forecast_14d: weatherAdvisoryData?.daily_forecasts || [],
+  const productionTabData = {
+    productionLevel: productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null,
+    quarterlyProfiles: productionSummary?.quarterly_profiles || [],
+    selectedQuarter,
+    grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
+    records: productionSummary?.records || [],
+    sources: (productionSummary?.source_areas || []).map((area) => ({
+      name: area.name,
+      value: Number(area.value),
+      volumeKg: Number(area.total_production_mt),
+    })),
+    commodityId: commodityIdentifier,
     commodityName: crop.commodityName,
-    actions: cropWeatherAdv?.recommended_actions || (planAdvisoryData?.module_results?.weather_advisory ? [planAdvisoryData.module_results.weather_advisory] : []),
-    why: cropWeatherAdv?.explanation || "",
+    dataSource: productionSummary?.record_count > 0 ? { name: productionSummary.commodity_name } : null,
+  };
+
+  const weatherAnalysis = buildWeatherRiskAnalysis({
+    weatherForecast: weatherForecastQuery.data,
+    weatherRules: weatherRulesQuery.data?.items || [],
+    commodityName: crop.commodityName,
+    weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
+    weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+  });
+  const weatherTabData = {
+    risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
+    forecast_14d: weatherAnalysis.forecast_14d,
+    commodityName: crop.commodityName,
+    actions: [],
+    why: weatherAnalysis.resultExplanation,
+    summary: weatherAnalysis.resultExplanation,
   };
 
   const hasProfitabilityData = Boolean(costToRecover != null && costToRecover > 0 && sellingBasis != null && sellingBasis > 0 && qty > 0);
@@ -195,7 +192,6 @@ function CropFactorsPage() {
 
       {/* Factor tabs */}
       <FactorDetailTabs
-        price={priceTabData}
         arrival={arrivalTabData}
         production={productionTabData}
         weather={weatherTabData}
@@ -217,4 +213,3 @@ function CropFactorsPage() {
 }
 
 export default CropFactorsPage;
-

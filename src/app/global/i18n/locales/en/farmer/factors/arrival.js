@@ -25,7 +25,7 @@ export const arrival = {
   "arrival_unavailable_crop": "DFTC arrival information for {crop_name} is not available right now.",
   "arrival_unavailable_generic": "DFTC arrival information is not available right now.",
   "page_title": "DFTC Arrival Details",
-  "chart_subtitle_actual": "Actual arrivals · Last 6 months · kg",
+  "chart_subtitle_actual": "Actual arrivals · Last 90 days · kg",
   "arrival_action_high": "Based on recent DFTC arrivals, consider comparing current prices and reviewing your selling schedule.",
   "arrival_action_low": "Based on recent DFTC arrivals, lower volumes may support prices. Confirm the current market price before selling.",
   "arrival_action_normal": "Based on recent DFTC arrivals, no strong arrival warning is present. Continue checking current prices before harvesting or selling.",
