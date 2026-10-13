@@ -28,6 +28,7 @@ import { FarmLocationFields } from "../../global/components/location/FarmLocatio
 import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
 import { queryClient } from "../../global/lib/queryClient";
+import { useRemovalRequest } from "../../global/hooks/useRemovalRequest";
 import { loadFarmerOfflineData, fetchFarmerProfile, fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
 
 const TABS = [
@@ -55,7 +56,8 @@ const LANGUAGE_OPTIONS = [
 /* -------------------------------------------------------------------------- */
 const AccountTab = ({ showToast, onDeleteAccount }) => {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, formatDate } = useLanguage();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -67,6 +69,48 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [removalReason, setRemovalReason] = useState("");
+  const [removalError, setRemovalError] = useState("");
+  const [submittingRemoval, setSubmittingRemoval] = useState(false);
+  const [cancellingRemoval, setCancellingRemoval] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+
+  // The farmer's own removal requests. Rejected requests may be re-submitted,
+  // so only an open/approved one blocks a new request; `fulfilled_at` marks a
+  // fulfilled request as terminal even if its stored status still reads
+  // "approved".
+  const {
+    current: removalCurrent,
+    status: removalStatus,
+    blocked: removalBlocked,
+    refetch: refetchRemoval,
+    cancel: cancelRemoval,
+  } = useRemovalRequest(["farmer", "removalRequests"]);
+  const removalFulfilledAt = removalCurrent?.fulfilled_at || null;
+  const removalGraceDueAt = removalCurrent?.fulfillment_due_at || null;
+  // Approved but not yet fulfilled: the account is disabled and the farmer can
+  // still cancel before the grace period ends.
+  const removalInGrace = removalStatus === "approved" && !removalFulfilledAt;
+
+  const removalStatusLabel =
+    removalStatus === "approved"
+      ? t("farmer.settings.removal_status_approved", {}, "Approved")
+      : removalStatus === "rejected"
+        ? t("farmer.settings.removal_status_rejected", {}, "Rejected")
+        : removalStatus === "fulfilled"
+          ? t("farmer.settings.removal_status_fulfilled", {}, "Fulfilled")
+          : removalStatus === "cancelled"
+            ? t("farmer.settings.removal_status_cancelled", {}, "Cancelled")
+            : t("farmer.settings.removal_status_pending", {}, "Pending");
+
+  const removalStatusColor =
+    removalStatus === "rejected"
+      ? "text-red-600"
+      : removalStatus === "approved" || removalStatus === "fulfilled"
+        ? "text-[var(--hw-green-800)]"
+        : removalStatus === "cancelled"
+          ? "text-[var(--hw-neutral-500)]"
+          : "text-amber-600";
 
 
   // Load account and profile data from the shared cached profile
@@ -127,6 +171,73 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   };
 
 
+
+  const closeRemovalModal = () => {
+    setShowDeleteModal(false);
+    setRemovalError("");
+  };
+
+  const handleRemovalSubmit = async () => {
+    setSubmittingRemoval(true);
+    setRemovalError("");
+    try {
+      await parseResponse(
+        await apiPost("/dftc/removal-requests", { reason: removalReason.trim() || null })
+      );
+      setShowDeleteModal(false);
+      setRemovalReason("");
+      showToast(t("farmer.settings.removal_success", {}, "Account removal request submitted. Our team will review it."));
+      queryClient.invalidateQueries({ queryKey: ["farmer", "removalRequests"] });
+    } catch (err) {
+      // 409 means a request is already open — surface the exact reason rather
+      // than the generic failure, and refresh so the button disables itself.
+      if (err?.status === 409) {
+        setRemovalError(t("farmer.settings.removal_already_pending", {}, "You already have a pending removal request."));
+        queryClient.invalidateQueries({ queryKey: ["farmer", "removalRequests"] });
+      } else {
+        setRemovalError(err?.message || t("farmer.settings.removal_error", {}, "Could not send the removal request. Please try again."));
+      }
+    } finally {
+      setSubmittingRemoval(false);
+    }
+  };
+
+  const handleCancelRemoval = async () => {
+    setCancellingRemoval(true);
+    try {
+      await cancelRemoval();
+      showToast(t("farmer.settings.removal_cancel_success", {}, "Account removal request cancelled."));
+      await refetchRemoval();
+    } catch (err) {
+      showToast(
+        err?.message || t("farmer.settings.removal_cancel_error", {}, "Could not cancel the request. Please try again."),
+        "error"
+      );
+    } finally {
+      setCancellingRemoval(false);
+    }
+  };
+
+  /** GET /dftc/data-export — download the caller's own data as a JSON file. */
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const data = await parseResponse(await apiGet("/dftc/data-export"));
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "harvestwise-data-export.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast(t("farmer.settings.removal_export_error", {}, "Could not download your data. Please try again."), "error");
+    } finally {
+      setExportingData(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -226,17 +337,66 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 
       <Card>
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">Danger Zone</p>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.request_deletion_title", {}, "Request Account Deletion")}</p>
-            <p className="text-[13px] text-black">{t("farmer.settings.request_deletion_desc", {}, "Account deletion is processed after verification. Requests are handled by the HarvestWise team.")}</p>
+            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.request_deletion_title", {}, "Request account removal")}</p>
+            <p className="text-[13px] text-black">{t("farmer.settings.request_deletion_desc", {}, "Account removal is processed after verification. Requests are reviewed by the HarvestWise team.")}</p>
+            {removalStatus && (
+              <p className="text-[13px] text-black mt-1">
+                {t("farmer.settings.removal_status_label", {}, "Request status")}:{" "}
+                <span className={`font-semibold ${removalStatusColor}`}>
+                  {removalStatusLabel}
+                </span>
+              </p>
+            )}
+            {removalInGrace && (
+              <p className="text-[13px] text-amber-700 mt-1">
+                {t(
+                  "farmer.settings.removal_grace_note",
+                  { date: removalGraceDueAt ? formatDate(removalGraceDueAt) : "—" },
+                  "Your account is disabled and will be erased after the grace period on {date}. You can cancel this request before then to restore your account."
+                )}
+              </p>
+            )}
+            {removalFulfilledAt && (
+              <p className="text-[13px] text-[var(--hw-neutral-500)] mt-1">
+                {t("farmer.settings.removal_completed_note", {}, "Your account removal request has been fulfilled.")}
+              </p>
+            )}
           </div>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            {removalInGrace && (
+              <button
+                type="button"
+                onClick={handleCancelRemoval}
+                disabled={cancellingRemoval}
+                className="h-8 px-3 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {cancellingRemoval
+                  ? t("common.saving", {}, "Saving…")
+                  : t("farmer.settings.removal_cancel_btn", {}, "Cancel request")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              disabled={removalBlocked}
+              className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+            >
+              {t("farmer.settings.request_deletion_btn", {}, "Request removal")}
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 pt-3 border-t border-[var(--hw-neutral-100)]">
           <button
             type="button"
-            onClick={() => setShowDeleteModal(true)}
-            className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
+            onClick={handleExportData}
+            disabled={exportingData}
+            className="h-8 px-3 text-[13px] font-medium text-[var(--hw-green-800)] border border-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {t("farmer.settings.request_deletion_btn", {}, "Request Deletion")}
+            {exportingData
+              ? t("common.saving", {}, "Saving…")
+              : t("farmer.settings.removal_export_btn", {}, "Export my data")}
           </button>
         </div>
       </Card>
@@ -253,28 +413,48 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 
       {showDeleteModal && (
         <Modal
-          title={t("farmer.settings.request_deletion_title", {}, "Request Account Deletion")}
-          onClose={() => setShowDeleteModal(false)}
+          title={t("farmer.settings.request_deletion_title", {}, "Request account removal")}
+          onClose={closeRemovalModal}
         >
           <p className="text-[14px] text-black mb-4 leading-relaxed">
             {t("farmer.settings.request_deletion_modal_body", {}, "To protect your account and records from unauthorized deletion, HarvestWise verifies all requests before processing. Please send a deletion request to harvestwise.app@gmail.com from your registered email address. Once verified, identifying account information, contact information, and precise farm-location coordinates will be permanently removed or irreversibly anonymized in accordance with our Privacy Policy.")}
           </p>
+
+          <div className="space-y-1.5 mb-5">
+            <label htmlFor="removal-reason" className="block text-[14px] font-semibold text-black">
+              {t("farmer.settings.removal_reason_label", {}, "Reason (optional)")}
+            </label>
+            <textarea
+              id="removal-reason"
+              rows={4}
+              maxLength={1000}
+              value={removalReason}
+              onChange={(e) => {
+                setRemovalReason(e.target.value);
+                setRemovalError("");
+              }}
+              placeholder={t("farmer.settings.removal_reason_placeholder", {}, "Tell us why you are requesting account removal…")}
+              className="w-full px-3.5 py-3 text-[14px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)] resize-none"
+            />
+            {removalError && <p className="text-[13px] text-red-600">{removalError}</p>}
+          </div>
+
           <div className="bg-[var(--hw-neutral-50)] p-3.5 rounded-xl border border-[var(--hw-neutral-200)] mb-5 text-sm space-y-1">
             <p className="font-semibold text-black">Contact:</p>
-            <a href="mailto:harvestwise.app@gmail.com?subject=Account%20Deletion%20Request" className="text-[var(--hw-green-800)] font-medium hover:underline block">
+            <a href="mailto:harvestwise.app@gmail.com?subject=Account%20Removal%20Request" className="text-[var(--hw-green-800)] font-medium hover:underline block">
               harvestwise.app@gmail.com
             </a>
           </div>
+
           <div className="flex gap-2 justify-end">
-            <GhostBtn onClick={() => setShowDeleteModal(false)}>
-              {t("common.close", {}, "Close")}
+            <GhostBtn onClick={closeRemovalModal}>
+              {t("common.cancel", {}, "Cancel")}
             </GhostBtn>
-            <a
-              href="mailto:harvestwise.app@gmail.com?subject=Account%20Deletion%20Request"
-              className="h-10 px-4 flex items-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-            >
-              Email harvestwise.app@gmail.com
-            </a>
+            <GreenBtn onClick={handleRemovalSubmit} disabled={submittingRemoval}>
+              {submittingRemoval
+                ? t("common.saving", {}, "Saving…")
+                : t("farmer.settings.request_deletion_btn", {}, "Request removal")}
+            </GreenBtn>
           </div>
         </Modal>
       )}

@@ -21,6 +21,7 @@ import { adminApi } from "../../../services/api";
 
 const TABS = [
   { id: "users", label: "User Accounts" },
+  { id: "removal-requests", label: "Account Requests" },
   { id: "security", label: "System Security" },
   { id: "health", label: "System Health" }
 ];
@@ -374,6 +375,285 @@ const UsersTab = ({ showToast }) => {
           onClose={() => setShowAddModal(false)}
           onAdd={createUser}
         />
+      )}
+    </div>
+  );
+};
+
+const REMOVAL_STATUS_STYLES = {
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
+  submitted: "bg-amber-50 text-amber-700 border-amber-200",
+  approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  rejected: "bg-red-50 text-red-700 border-red-200",
+  cancelled: "bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-600)] border-[var(--hw-neutral-200)]",
+  fulfilled: "bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-600)] border-[var(--hw-neutral-200)]"
+};
+
+const REMOVAL_STATUS_LABELS = {
+  pending: "Pending",
+  submitted: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  fulfilled: "Fulfilled"
+};
+
+const removalStatusBadge = (status) => (
+  <span
+    className={`inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full border ${
+      REMOVAL_STATUS_STYLES[status] || REMOVAL_STATUS_STYLES.pending
+    }`}
+  >
+    {REMOVAL_STATUS_LABELS[status] || status || "-"}
+  </span>
+);
+
+function formatRemovalDate(value) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Account removal requests awaiting SuperAdmin review. A request is a *request*:
+ * approving it marks the review outcome, the team still performs the removal.
+ */
+const AccountRequestsTab = ({ showToast }) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState("pending");
+  // { request, status } for the confirm dialog, or null when closed.
+  const [confirm, setConfirm] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const { data: requestsRes, isLoading } = useQuery({
+    queryKey: ["adminRemovalRequests", filter],
+    queryFn: () =>
+      adminApi.listRemovalRequests({
+        status: filter === "all" ? undefined : filter,
+        page_size: 100
+      })
+  });
+
+  // Shares the UsersTab cache, so requester names resolve without a second route.
+  const { data: usersRes } = useQuery({
+    queryKey: ["adminUsers"],
+    queryFn: () => adminApi.listUsers({ page_size: 100 }),
+    staleTime: 1000 * 60 * 5
+  });
+
+  const requests = requestsRes?.items || [];
+  const usersById = new Map((usersRes?.items || []).map((u) => [u.id, u]));
+
+  const displayUser = (userId) => {
+    if (!userId) return "-";
+    const u = usersById.get(userId);
+    if (!u) return userId;
+    return `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email || userId;
+  };
+
+  const roleOf = (userId) => usersById.get(userId)?.role?.role_name || "-";
+
+  const isOpen = (status) => status === "pending" || status === "submitted";
+
+  const review = async () => {
+    if (!confirm) return;
+    setSubmitting(true);
+    try {
+      await adminApi.reviewRemovalRequest(confirm.request.id, { status: confirm.status });
+      await queryClient.invalidateQueries({ queryKey: ["adminRemovalRequests"] });
+      showToast(
+        confirm.status === "approved"
+          ? "Account removal request approved."
+          : "Account removal request rejected."
+      );
+      setConfirm(null);
+    } catch (err) {
+      showToast(err?.message || "Could not update the removal request. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reviewButtons = (r) => (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        disabled={!isOpen(r.status)}
+        onClick={() => setConfirm({ request: r, status: "approved" })}
+        className="h-8 px-3 text-[12px] font-semibold text-[var(--hw-green-800)] border border-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        Approve
+      </button>
+      <button
+        type="button"
+        disabled={!isOpen(r.status)}
+        onClick={() => setConfirm({ request: r, status: "rejected" })}
+        className="h-8 px-3 text-[12px] font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        Reject
+      </button>
+    </div>
+  );
+
+  const emptyMessage = isLoading ? "Loading requests..." : "No account removal requests.";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {[
+          { id: "pending", label: "Pending" },
+          { id: "approved", label: "Approved" },
+          { id: "rejected", label: "Rejected" },
+          { id: "cancelled", label: "Cancelled" },
+          // `fulfilled` is deliberately absent from this filter: the API filters
+          // on `status`, which stays "approved" after the erasure runs — the done
+          // marker is `fulfilled_at`, so a "fulfilled" filter would always return
+          // nothing. The Fulfilled badge is still rendered.
+          { id: "all", label: "All" }
+        ].map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFilter(f.id)}
+            className={`h-9 px-3.5 text-[13px] font-medium rounded-xl border transition-colors cursor-pointer ${
+              filter === f.id
+                ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)]"
+                : "bg-white text-black border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-3 md:hidden">
+        {requests.map((r) => (
+          <div
+            key={r.id}
+            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-2"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  disabled={!r.user_id}
+                  onClick={() => navigate(`/admin/system/user/${r.user_id}`)}
+                  className="text-[15px] font-semibold text-black truncate disabled:text-[var(--hw-neutral-500)]"
+                >
+                  {displayUser(r.user_id)}
+                </button>
+                <p className="text-[12px] text-[var(--hw-neutral-600)]">{roleOf(r.user_id)}</p>
+              </div>
+              {removalStatusBadge(r.status)}
+            </div>
+            <p className="text-[13px] text-black">{r.reason || "-"}</p>
+            <p className="text-[12px] text-[var(--hw-neutral-600)]">Requested {formatRemovalDate(r.requested_at)}</p>
+            {r.reviewed_at && (
+              <p className="text-[12px] text-[var(--hw-neutral-600)]">
+                Reviewed by {displayUser(r.reviewed_by_user_id)} on {formatRemovalDate(r.reviewed_at)}
+              </p>
+            )}
+            {reviewButtons(r)}
+          </div>
+        ))}
+        {requests.length === 0 && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-8 text-center space-y-1.5">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center text-[var(--hw-neutral-400)] mx-auto mb-2">
+              <Inbox className="w-5 h-5" />
+            </div>
+            <p className="text-[14px] font-semibold text-black">{emptyMessage}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] overflow-hidden">
+        <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
+                {["Requester", "Role", "Reason", "Requested", "Status", "Reviewed By", "Reviewed At", "Actions"].map((h) => (
+                  <th key={h} className="px-5 py-3.5 text-[12px] font-semibold text-black uppercase tracking-wide whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+              {requests.map((r) => (
+                <tr key={r.id} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                  <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">
+                    {r.user_id ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/admin/system/user/${r.user_id}`)}
+                        className="text-black hover:text-[var(--hw-green-700)] hover:underline cursor-pointer"
+                      >
+                        {displayUser(r.user_id)}
+                      </button>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{roleOf(r.user_id)}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black max-w-[260px]">{r.reason || "-"}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{formatRemovalDate(r.requested_at)}</td>
+                  <td className="px-5 py-3.5 whitespace-nowrap">{removalStatusBadge(r.status)}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{displayUser(r.reviewed_by_user_id)}</td>
+                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{formatRemovalDate(r.reviewed_at)}</td>
+                  <td className="px-5 py-3.5 whitespace-nowrap">{reviewButtons(r)}</td>
+                </tr>
+              ))}
+              {requests.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-1.5 max-w-sm mx-auto">
+                      <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] flex items-center justify-center text-[var(--hw-neutral-400)]">
+                        <Inbox className="w-5 h-5" />
+                      </div>
+                      <p className="text-[14px] font-semibold text-black">{emptyMessage}</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {confirm && (
+        <Modal
+          title={confirm.status === "approved" ? "Approve removal request?" : "Reject removal request?"}
+          onClose={() => {
+            if (!submitting) setConfirm(null);
+          }}
+        >
+          <p className="text-[14px] text-black mb-5 leading-relaxed">
+            {confirm.status === "approved"
+              ? `The account removal request from ${displayUser(confirm.request.user_id)} will be marked as approved. The HarvestWise team still carries out the removal.`
+              : `The account removal request from ${displayUser(confirm.request.user_id)} will be marked as rejected. The account stays active.`}
+          </p>
+          <div className="flex gap-2 justify-end">
+            <GhostBtn onClick={() => setConfirm(null)}>Cancel</GhostBtn>
+            {confirm.status === "approved" ? (
+              <GreenBtn disabled={submitting} onClick={review}>
+                {submitting ? "Updating..." : "Approve request"}
+              </GreenBtn>
+            ) : (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={review}
+                className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 disabled:opacity-60 transition-colors"
+              >
+                {submitting ? "Updating..." : "Reject request"}
+              </button>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -829,10 +1109,11 @@ function AdminSystemManagement() {
 
       {/* Tab content */}
       {activeTab === "users" && <UsersTab showToast={showToast} />}
+      {activeTab === "removal-requests" && <AccountRequestsTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
       {activeTab === "health" && <HealthTab showToast={showToast} />}
 
-      {toastMsg && <Toast msg={toastMsg} onDismiss={() => setToastMsg(null)} />}
+      {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
     </div>
   );
 }

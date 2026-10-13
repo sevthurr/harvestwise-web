@@ -540,7 +540,7 @@ function DashboardPage() {
                   // The API stores the status as an English string
                   // ("Pre-Harvest", "On Hold", …). Resolve it through the same
                   // phase codes the crop cards use so it renders localized.
-                  const phase = item.status === "Draft" ? null : getPhaseConfig(item.status);
+                  const phase = getPhaseConfig(item.status);
                   return (
                     <button
                       key={item.id}
@@ -553,7 +553,7 @@ function DashboardPage() {
                           {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
                         </p>
                         <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
-                          {t("common.status", {}, "Status")}: {item.status === "Draft" ? t("farmer.phases.draft") : t(phase.labelKey, {}, phase.label)}
+                          {t("common.status", {}, "Status")}: {t(phase.labelKey, {}, phase.label)}
                         </p>
                         {item.notes && <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug mt-0.5">{item.notes}</p>}
                       </div>

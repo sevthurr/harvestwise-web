@@ -193,16 +193,6 @@ const CropsProvider = ({ children }) => {
     [refreshCrops]
   );
 
-  const promoteCropApi = useCallback(
-    async (planId, targetStatus) => {
-      const res = await apiPost(`/crop-plans/${planId}/promote`, { target_status: targetStatus });
-      const data = await parseResponse(res);
-      await refreshCrops();
-      return data;
-    },
-    [refreshCrops]
-  );
-
   const updateCropStatusApi = useCallback(
     async (planId, targetStatus, holdReason = null) => {
       const body = { target_status: targetStatus };
@@ -230,7 +220,7 @@ const CropsProvider = ({ children }) => {
   );
 
   return (
-    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, promoteCropApi, updateCropStatusApi, logHarvestApi }}>
+    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi }}>
       {children}
     </CropsContext.Provider>
   );

@@ -43,7 +43,12 @@ const ARRIVAL_SOURCE_OPTIONS = [
 // Arrival rows are stored at a month's last day by design, so a day bucket is
 // always one point per month wearing a day label. Monthly is the only
 // granularity the DFTC workbook can actually supply.
-const ARRIVAL_GRANULARITY_OPTIONS = [{ value: "monthly", label: "Monthly" }];
+const ARRIVAL_GRANULARITY_OPTIONS = [
+  { value: "weekly",    label: "Weekly" },
+  { value: "monthly",   label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annually",  label: "Annually" },
+];
 const ARRIVAL_CLASSIFICATION_TONES = {
   Low: "bg-blue-100 border-blue-200 text-blue-700",
   "Lower Middle": "bg-emerald-100 border-emerald-200 text-emerald-700",
@@ -863,7 +868,15 @@ function AdminAnalyticsBasis() {
   const arrivalActiveYear = arrivalYears.includes(arrivalYear) ? arrivalYear : arrivalYears[0] ?? null;
 
   const arrivalSeries = useMemo(
-    () => bucketArrivals(arrivalRecords, { granularity: arrivalGranularity, year: arrivalActiveYear }),
+    () => {
+      // Quarterly and annually naturally span all years; year filter only applies
+      // to monthly and weekly where a single-year view is meaningful.
+      const yearFilter =
+        arrivalGranularity === "quarterly" || arrivalGranularity === "annually"
+          ? null
+          : arrivalActiveYear;
+      return bucketArrivals(arrivalRecords, { granularity: arrivalGranularity, year: yearFilter });
+    },
     [arrivalRecords, arrivalGranularity, arrivalActiveYear]
   );
 
@@ -924,7 +937,8 @@ function AdminAnalyticsBasis() {
       { name: "Other Sources", value: 100 - farmPercent, volumeKg: totals.other }
     ];
   }, [arrivalChartData]);
-  const arrivalSubtitle = `DFTC ${arrivalGranularity} arrivals · ${arrivalSourceOption.subtitle} · kilograms${arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
+  const arrivalGranularityLabel = ARRIVAL_GRANULARITY_OPTIONS.find((o) => o.value === arrivalGranularity)?.label ?? arrivalGranularity;
+  const arrivalSubtitle = `DFTC ${arrivalGranularityLabel} arrivals · ${arrivalSourceOption.subtitle} · kilograms${arrivalGranularity === "monthly" && arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
     }`;
 
   // Load the threshold rules for the current module from the admin API
@@ -1583,7 +1597,7 @@ function AdminAnalyticsBasis() {
                     onChange={setArrivalGranularity}
                     options={ARRIVAL_GRANULARITY_OPTIONS}
                   />
-                  {arrivalYears.length > 0 && (
+                  {arrivalYears.length > 0 && (arrivalGranularity === "monthly" || arrivalGranularity === "weekly") && (
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
                       <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
                       <select

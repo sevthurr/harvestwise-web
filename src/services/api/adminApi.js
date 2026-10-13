@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../app/global/api";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, parseResponse } from "../../app/global/api";
 
 export async function getDashboard(params = {}) {
   const qs = new URLSearchParams(params).toString();
@@ -47,5 +47,21 @@ export async function deactivateUser(userId) {
 export async function getSystemHealth(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return parseResponse(await apiGet(`/admin/system/health${qs ? `?${qs}` : ""}`));
+}
+
+/**
+ * Account removal requests. A non-SuperAdmin caller only receives their own
+ * rows from the backend.
+ */
+export async function listRemovalRequests(params = {}) {
+  // Drop null/undefined entries: URLSearchParams would serialise an absent
+  // status filter as the literal string "status=undefined".
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
+  const qs = new URLSearchParams(entries).toString();
+  return parseResponse(await apiGet(`/dftc/removal-requests${qs ? `?${qs}` : ""}`));
+}
+
+export async function reviewRemovalRequest(requestId, payload) {
+  return parseResponse(await apiPatch(`/dftc/removal-requests/${requestId}`, payload));
 }
 

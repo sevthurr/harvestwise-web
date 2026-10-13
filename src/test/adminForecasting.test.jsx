@@ -324,7 +324,7 @@ describe('AdminForecasting graph', () => {
   function mountWithApi() {
     const fetchFn = mockFetchByUrl([
       {
-        match: (url) => url.includes('/prices?') || url.includes('/prices/?') || /\/prices\/?$/.test(url.split('?')[0]),
+        match: (url) => url.includes('/prices?') || /\/prices$/.test(url.split('?')[0]),
         response: (url) => {
           if (/\/prices\/COM-/.test(url)) return { ok: true, body: detailBody() };
           return { ok: true, body: LIST };

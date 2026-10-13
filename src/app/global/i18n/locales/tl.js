@@ -335,7 +335,6 @@ export const tl = {
     },
 
     phases: {
-      draft: "Draft",
       planning: "Pagpaplano",
       on_hold: "Naka-hold",
       planted: "Natanim Na",

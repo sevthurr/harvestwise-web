@@ -336,7 +336,6 @@ export const en = {
     },
 
     phases: {
-      draft: "Draft",
       planning: "Planning",
       on_hold: "On Hold",
       planted: "Planted",

@@ -210,6 +210,15 @@ export async function apiPut(url, body, options = {}) {
   });
 }
 
+export async function apiPatch(url, body, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  return apiFetch(url, {
+    ...options,
+    method: 'PATCH',
+    body: isFormData ? body : JSON.stringify(body),
+  });
+}
+
 export async function apiDelete(url, options = {}) {
   return apiFetch(url, { ...options, method: 'DELETE' });
 }
