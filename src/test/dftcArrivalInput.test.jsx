@@ -111,15 +111,21 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     expect(screen.getByText('Period:')).toBeInTheDocument();
   });
 
-  it('supports selecting week number of month (e.g. Week 1 of September 2026)', async () => {
+  it('supports selecting week number of month', async () => {
     renderDFTCArrivalInput();
 
     const weeklyBtn = screen.getByRole('button', { name: /Weekly/i });
     fireEvent.click(weeklyBtn);
 
+    // The week options are generated for the currently selected month, which
+    // defaults to the real current month — derive the expected label.
+    const shortMonth = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'][new Date().getMonth()]
+      .slice(0, 3);
+
     // Week select dropdown should be available with week options
     const weekSelect = screen.getByLabelText(/Select week of month/i);
-    expect(screen.getByText(/Week 1 \(Sep 1 – 7\)/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Week 1 \\(${shortMonth} 1 – 7\\)`, 'i'))).toBeInTheDocument();
     fireEvent.change(weekSelect, { target: { value: '1' } });
     expect(weekSelect.value).toBe('1');
   });

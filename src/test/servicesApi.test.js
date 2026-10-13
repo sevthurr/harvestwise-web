@@ -42,6 +42,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('authApi', () => {
@@ -58,6 +59,47 @@ describe('authApi', () => {
     expect(opts.body).toBeInstanceOf(FormData);
     expect([...opts.body.entries()].find(([k]) => k === 'file')[1]).toBe(file);
     expect(res.profile_picture_path).toBe('/pic.png');
+  });
+
+  // `fetchWithTimeout` strips `timeoutMs` before handing options to fetch, so
+  // `opts.timeoutMs` is not observable here. Assert the behaviour instead: the
+  // per-call override must keep the request alive past the shared 15s default
+  // and abort it at 45s, which is exactly what the old code failed to do.
+  it('uploadProfilePicture outlives the shared 15s default and aborts at 45s', async () => {
+    vi.useFakeTimers();
+
+    // Mirrors real fetch: stays pending until its signal aborts.
+    const fetchFn = vi.fn(
+      (url, { signal }) =>
+        new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchFn);
+
+    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    const outcome = authApi
+      .uploadProfilePicture(file)
+      .then(() => 'resolved', (err) => `rejected:${err.name}:${err.message}`);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [, opts] = fetchFn.mock.calls[0];
+    expect(opts.signal.aborted).toBe(false);
+
+    // The shared 15s default must no longer kill the avatar upload.
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(opts.signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(29000);
+    expect(opts.signal.aborted).toBe(false);
+
+    // ...and the override still aborts at 45s, so a hung upload cannot hang the UI.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(opts.signal.aborted).toBe(true);
+    expect(opts.signal.reason).toBeInstanceOf(DOMException);
+    expect(opts.signal.reason.name).toBe('TimeoutError');
+    expect(opts.signal.reason.message).toBe('Request timed out');
+    await expect(outcome).resolves.toBe('rejected:TimeoutError:Request timed out');
   });
 });
 

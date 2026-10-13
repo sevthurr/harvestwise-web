@@ -62,4 +62,39 @@ describe('AdminAuditLogs', () => {
     const detailsButtons = screen.getAllByTitle('Imported Bankerohan-Retail-2025.xlsx (bankerohan_daily_retail) — 2772 records.');
     expect(detailsButtons.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('exposes only the namespaces the backend actually writes', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AdminAuditLogs />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const select = await screen.findByLabelText('Action category');
+    const labels = Array.from(select.options).map((o) => o.textContent);
+
+    expect(labels).toEqual([
+      'All Actions',
+      'Auth',
+      'Import',
+      'Config',
+      'Analytics',
+      'System Management',
+      'DFTC',
+      'Farmer',
+      'User Management',
+    ]);
+
+    // Each option's value is the namespace the backend matches via ilike.
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toEqual([
+      '', 'auth', 'import', 'config', 'analytics', 'system', 'dftc', 'farmer', 'user',
+    ]);
+  });
 });

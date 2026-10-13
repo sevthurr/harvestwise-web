@@ -1,8 +1,12 @@
 import { farmer as modularFarmer } from './ceb/farmer/index.js';
 import { settings as dftcSettings } from './ceb/dftc/settings.js';
 import { settings as adminSettings } from './ceb/admin/settings.js';
+import { about } from './ceb/about.js';
+import { privacy as privacyLegal } from './ceb/legal/privacy.js';
+import { terms as termsLegal } from './ceb/legal/terms.js';
 
 function deepMerge(target, source) {
+
   const result = { ...target };
   for (const key of Object.keys(source || {})) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -55,7 +59,24 @@ export const ceb = {
     change: "Usba",
     or: "o",
     use_custom: "Gamita ang",
-    clear: "Hawani"
+    clear: "Hawani",
+    pw_current: "Kasalukuyang password",
+    pw_new: "Bagong password",
+    pw_confirm: "Kumpirmaha ang bagong password",
+    pw_update: "I-update ang password",
+    pw_updating: "Gina-update...",
+    pw_cancel: "I-kansela",
+    pw_req_min_chars: "Atleast 8 ka karakter",
+    pw_req_uppercase: "Atleast 1 ka uppercase",
+    pw_req_number: "Atleast 1 ka numero",
+    pw_req_special: "Atleast 1 ka espesyal nga karakter",
+    pw_err_required: "Punoa tanan nga fields.",
+    pw_err_mismatch: "Dili magkatugma ang duha ka password.",
+    pw_err_requirements: "Wala nga password nga naka-satisfy sa requirements.",
+    pw_err_generic: "Wala nga na-update ang password. Susiha ang imong kasalukuyang password ug try usab.",
+    pw_panel_title: "Palita ang imong temporary password",
+    pw_panel_body: "Arong safe ang imong account, palita ang temporary password nga natanggap nimo ng password nga ikaw lang ang nakamakat.",
+    pw_panel_restricted: "Temporary password pa gikan ang imong account, kaya dili pa available ang uban nga parte sa app hangtod sa matapos nimo niini."
   },
   nav: {
     home: "Home",
@@ -117,7 +138,11 @@ export const ceb = {
     no_farmer_account: "Wala pa kay Farmer account?",
     create_one: "Maghimo og usa",
     already_have_farmer_account: "Naa na kay account?",
+    registration_agreement: "Paghimo nimo og account, mouyon ka sa {terms} ug nagpamatuod nga nabasa nimo ang {privacy}.",
+    terms_and_conditions: "Mga Termino ug Kondisyon",
+    privacy_policy: "Patakaran sa Privacy",
     sign_in_link: "Mag-sign in",
+
     install_pwa: "I-install ang HarvestWise app",
     installing_pwa: "Nag-install…",
     or: "o",
@@ -143,8 +168,7 @@ export const ceb = {
       account_inactive: "Dili aktibo ang imong account. Kontaka ang suporta.",
       account_locked: "Naka-lock ang account. Palihug sulayi pag-usab unya.",
       general: "Adunay sayop nga nahitabo. Palihug sulayi pag-usab.",
-      email_registered: "Kini nga email narehistro na.",
-      phone_registered: "Kini nga numero sa telepono narehistro na.",
+      contact_unavailable: "Wala kami mahimong muban og account nga kaniya. Kon naa ka na nga account, login na lang.",
       need_login_for_2fa: "Ang imong account nanginahanglan og two-factor authentication. Palihug mag-sign in sa login page.",
     },
     requirements: {
@@ -680,5 +704,11 @@ export const ceb = {
   },
   admin: {
     settings: adminSettings
+  },
+  about,
+  legal: {
+    privacy: privacyLegal,
+    terms: termsLegal,
   }
 };
+

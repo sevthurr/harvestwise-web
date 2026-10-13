@@ -19,6 +19,10 @@ import {
 } from "../../../global/utils/priceChartTransforms";
 import { getVariants } from "../../../global/data/commodities";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import {
+  fetchPricesList,
+  STALE_TIME,
+} from "../../../global/hooks/useFarmerPrefetch";
 import * as pricesApi from "../../../../services/api/pricesApi";
 import * as analyticsApi from "../../../../services/api/analyticsApi";
 import { Skeleton } from "./FarmerSkeletons";
@@ -157,11 +161,16 @@ function PriceDetailView({
   const days = HDAYS[horizon] || 14;
   const pPriceTypeKey = toPriceTypeKey(market, priceType);
 
-  // 1. Fetch top-10 catalog list to resolve commodity IDs & catalog varieties
+  // 1. Top-10 catalog, to resolve commodity IDs & catalog varieties.
+  // Shares the ["prices","list"] key rather than its own "prices-catalog": the
+  // endpoint is the same call and the bundle already seeds this key, so a private
+  // key meant a duplicate request on every open and no offline value. page_size is
+  // irrelevant — there are 14 top-10 rows and every page_size from 50 up returns
+  // all of them, which is what the variety dropdown needs.
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
-    queryKey: ["prices-catalog"],
-    queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 100 }),
-    staleTime: 5 * 60 * 1000,
+    queryKey: ["prices", "list"],
+    queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 50 }),
+    staleTime: STALE_TIME,
   });
 
   const catalogPairs = useMemo(
@@ -203,7 +212,10 @@ function PriceDetailView({
     return findCommodityId(catalogPairs, commodityName) || commodityId || null;
   }, [availableVarieties, activeVariety, catalogPairs, commodityName, commodityId]);
 
-  // 2. Fetch authoritative price detail using the exact same API pipeline as DFTC
+  // 2. Fetch authoritative price detail using the exact same API pipeline as DFTC.
+  // The key is the bundle's priceTrendKey, so a commodity the login bundle seeded
+  // opens with zero requests. staleTime matches the bundle's STALE_TIME so the
+  // seeded entry is still considered fresh on arrival.
   const {
     data: priceOutlookData,
     isLoading: isPriceOutlookLoading,
@@ -212,7 +224,7 @@ function PriceDetailView({
     queryKey: ["farmer", "admin-price-outlook", resolvedCommodityId, pPriceTypeKey, days],
     queryFn: () => analyticsApi.getPriceOutlook(resolvedCommodityId, pPriceTypeKey, days),
     enabled: Boolean(resolvedCommodityId),
-    staleTime: 60 * 1000,
+    staleTime: STALE_TIME,
   });
 
   const priceDetailData = useMemo(() => {

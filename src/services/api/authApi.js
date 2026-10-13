@@ -41,12 +41,19 @@ export function unlinkAuthLink(accountId) {
   return apiDelete(`/auth-links/${accountId}`);
 }
 
+// The avatar endpoint runs several *sequential* Cloudinary round-trips
+// server-side before it answers, so it legitimately exceeds the shared 15s
+// request default and used to fail with "Request timed out" while the upload
+// was still in flight. Override the timeout per call instead of raising the
+// global FETCH_TIMEOUT_MS — that default deliberately catches genuinely hung
+// requests, and every other endpoint is expected to stay under it.
 export async function uploadProfilePicture(file) {
   const form = new FormData();
   form.append("file", file);
   return parseResponse(await apiFetch("/auth/profile/picture", {
     method: "POST",
     body: form,
+    timeoutMs: 45000,
   }));
 }
 

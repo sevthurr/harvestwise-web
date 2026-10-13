@@ -72,14 +72,14 @@ describe('AdminAnalyticsBasis Weather Risk Basis', () => {
     // 1. Verify the live "Result Explanation" IS present on weather risk basis
     expect(screen.getAllByText('Result Explanation').length).toBeGreaterThanOrEqual(1);
 
-    // 2. Verify "DATASETS USED" IS present on weather risk basis (per-day weather records)
-    expect(screen.getAllByText(/DATASETS USED/i).length).toBeGreaterThanOrEqual(1);
+    // 2. Verify "DATASETS USED" is REMOVED for weather risk basis
+    expect(screen.queryByText(/DATASETS USED/i)).toBeNull();
 
-    // 3. Verify "Threshold Applied" section heading is present
-    expect(screen.getByText('Threshold Applied')).toBeDefined();
+    // 3. Verify redundant "Threshold Applied" section heading is REMOVED for weather risk basis
+    expect(screen.queryByText('Threshold Applied')).toBeNull();
 
-    // 4. Verify "Reference Thresholds" table heading is present
-    expect(screen.getByText('Reference Thresholds · Top 10 Commodities')).toBeDefined();
+    // 4. Verify "Weather Threshold" table heading is present (renamed from Reference Thresholds)
+    expect(screen.getByText('Weather Threshold · Top 10 Commodities')).toBeDefined();
 
     // 5. Verify the live classification explanation renders after the forecast resolves
     await waitFor(() => {

@@ -302,136 +302,152 @@ export function composeAdvisoryReasons({ moduleResults, contributions, vetoes, c
   }));
 }
 
+// ---------------------------------------------------------------------------
+// Factor-Driven Action Guidance Selection
+// ---------------------------------------------------------------------------
+
+const STAGE_ACTION_PREFIX = {
+  planning: 'planning',
+  growing: 'growing',
+  pre_harvest: 'preharvest',
+  harvest: 'harvest',
+};
+
+const STAGE_MAINTENANCE_KEYS = {
+  planning: [
+    'farmer.monitoring.action_planning_1',
+    'farmer.monitoring.action_planning_2',
+    'farmer.monitoring.action_planning_3',
+  ],
+  growing: [
+    'farmer.monitoring.action_growing_1',
+    'farmer.monitoring.action_growing_2',
+    'farmer.monitoring.action_growing_3',
+  ],
+  pre_harvest: [
+    'farmer.monitoring.action_pre_harvest_1',
+    'farmer.monitoring.action_pre_harvest_2',
+    'farmer.monitoring.action_pre_harvest_3',
+  ],
+  harvest: [
+    'farmer.monitoring.action_harvested_1',
+    'farmer.monitoring.action_harvested_2',
+    'farmer.monitoring.action_harvested_3',
+  ],
+};
+
 /**
- * Deterministically selects stage-specific primary action.
+ * Resolves factor-driven immediate actions (up to 2) from backend action guidance.
+ *
+ * Target architecture:
+ * The backend computes all factor importance, hard vetoes, floors, and analytical priorities,
+ * returning ordered action items in `actionGuidance.immediate_actions`.
+ * The frontend NEVER independently performs analytical ranking or factor comparison.
+ * If `actionGuidance` is unexpectedly missing, a safe stage default action is used.
  */
-export function composeAdvisoryAction(advisoryCode, cropStage, moduleResults, cropName) {
+export function composeImmediateActions({
+  cropStage,
+  cropName = '',
+  actionGuidance = null,
+} = {}) {
+  // If backend provided immediate actions, consume them directly in backend-specified order
+  if (actionGuidance?.immediate_actions?.length > 0) {
+    return actionGuidance.immediate_actions.slice(0, 2).map((item) => {
+      const fullKey = item.code.startsWith('farmer.')
+        ? item.code
+        : `farmer.actions.monitoring.${item.code}`;
+      return {
+        key: fullKey,
+        code: item.code,
+        params: { crop_name: cropName, ...(item.params || {}) },
+        factor: item.factor,
+      };
+    });
+  }
+
+  // Safe stage/default fallback when backend action guidance is missing.
+  // Frontend does not perform independent analytical factor ranking.
   const stage = normalizeLifecycleStage(cropStage);
-  const adv = String(advisoryCode || '').toLowerCase().trim();
-  const weatherRisk = String(moduleResults?.weather_risk || '').toLowerCase();
-  const prof = String(moduleResults?.profitability || '').toLowerCase();
-  const price = String(moduleResults?.price_outlook || '').toLowerCase();
-  const arrival = String(moduleResults?.arrival_pressure || '').toLowerCase().replace(/\s+/g, '_');
-  const prod = String(moduleResults?.historical_seasonal_production_level || '').toLowerCase().replace(/\s+/g, '_');
-
-  // 1. Planning Actions
-  if (stage === 'planning') {
-    if (weatherRisk === 'severe') {
-      return { key: 'farmer.actions.monitoring.action_planning_severe_weather', params: {} };
-    }
-    if (arrival === 'high' && prod === 'high' && price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_planning_supply_price', params: {} };
-    }
-    if (prof === 'unfavorable' && price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_planning_profit_price', params: {} };
-    }
-    if (arrival === 'high' && prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_planning_supply_combined', params: {} };
-    }
-    if (arrival === 'high') {
-      return { key: 'farmer.actions.monitoring.action_planning_high_arrival', params: {} };
-    }
-    if (prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_planning_high_production', params: {} };
-    }
-    if (weatherRisk === 'caution') {
-      return { key: 'farmer.actions.monitoring.action_planning_weather', params: {} };
-    }
-    if (prof === 'marginal') {
-      return { key: 'farmer.actions.monitoring.action_planning_profit', params: {} };
-    }
-    if (price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_planning_price', params: {} };
-    }
-    return { key: 'farmer.actions.monitoring.action_planning_recommended', params: { crop_name: cropName } };
-  }
-
-  // 2. Growing Actions
-  if (stage === 'growing') {
-    if (weatherRisk === 'severe') {
-      return { key: 'farmer.actions.monitoring.action_growing_severe_weather', params: {} };
-    }
-    if ((arrival === 'high' || prod === 'high') && price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_growing_supply_price', params: {} };
-    }
-    if (prof === 'unfavorable' && price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_growing_profit_price', params: {} };
-    }
-    if (arrival === 'high') {
-      return { key: 'farmer.actions.monitoring.action_growing_high_arrival', params: {} };
-    }
-    if (prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_growing_high_production', params: {} };
-    }
-    if (weatherRisk === 'caution') {
-      return { key: 'farmer.actions.monitoring.action_growing_weather', params: {} };
-    }
-    if (prof === 'marginal') {
-      return { key: 'farmer.actions.monitoring.action_growing_profit', params: {} };
-    }
-    if (price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_growing_price', params: {} };
-    }
-    return { key: 'farmer.actions.monitoring.action_growing_recommended', params: { crop_name: cropName } };
-  }
-
-  // 3. Pre-Harvest Actions
-  if (stage === 'pre_harvest') {
-    if (weatherRisk === 'severe') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_severe_weather', params: {} };
-    }
-    if ((arrival === 'high' || prod === 'high') && price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_supply_price', params: {} };
-    }
-    if (arrival === 'high' && prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_supply_combined', params: {} };
-    }
-    if (arrival === 'high') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_high_arrival', params: {} };
-    }
-    if (prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_high_production', params: {} };
-    }
-    if (weatherRisk === 'caution') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_weather', params: {} };
-    }
-    if (prof === 'marginal') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_profit', params: {} };
-    }
-    if (price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_preharvest_price', params: {} };
-    }
-    return { key: 'farmer.actions.monitoring.action_preharvest_recommended', params: {} };
-  }
-
-  // 4. Harvest Actions
-  if (stage === 'harvest') {
-    if (weatherRisk === 'severe') {
-      return { key: 'farmer.actions.monitoring.action_harvest_severe_weather', params: {} };
-    }
-    if ((arrival === 'high' || prod === 'high') && price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_harvest_supply_price', params: {} };
-    }
-    if (arrival === 'high' && prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_harvest_supply_combined', params: {} };
-    }
-    if (arrival === 'high') {
-      return { key: 'farmer.actions.monitoring.action_harvest_high_arrival', params: {} };
-    }
-    if (prod === 'high') {
-      return { key: 'farmer.actions.monitoring.action_harvest_high_production', params: {} };
-    }
-    if (weatherRisk === 'caution') {
-      return { key: 'farmer.actions.monitoring.action_harvest_weather', params: {} };
-    }
-    if (prof === 'marginal') {
-      return { key: 'farmer.actions.monitoring.action_harvest_profit', params: {} };
-    }
-    if (price === 'unfavorable') {
-      return { key: 'farmer.actions.monitoring.action_harvest_price', params: {} };
-    }
-    return { key: 'farmer.actions.monitoring.action_harvest_recommended', params: {} };
-  }
-
-  return null;
+  const stagePrefix = STAGE_ACTION_PREFIX[stage] || 'planning';
+  const defaultCode = `action_${stagePrefix}_recommended`;
+  return [
+    {
+      key: `farmer.actions.monitoring.${defaultCode}`,
+      code: defaultCode,
+      params: { crop_name: cropName },
+      factor: 'recommended',
+    },
+  ];
 }
+
+/**
+ * Returns the primary immediate action (backwards-compatible drop-in).
+ */
+export function composeAdvisoryAction(advisoryCode, cropStage, moduleResults, cropName, options = {}) {
+  const actions = composeImmediateActions({
+    cropStage,
+    cropName,
+    actionGuidance: options.actionGuidance || options.action_guidance || null,
+  });
+  return actions[0] || null;
+}
+
+/**
+ * Resolves factor-driven weekly actions (up to 3) from backend action guidance.
+ *
+ * Target architecture:
+ * The backend computes all factor-driven weekly actions, their priorities, and non-duplicative follow-ups.
+ * The frontend NEVER independently performs analytical ranking or factor comparison.
+ * If `actionGuidance` is unexpectedly missing, safe stage-specific maintenance actions are used.
+ */
+export function composeWeeklyActions({
+  cropStage,
+  phaseCode,
+  cropName = '',
+  actionGuidance = null,
+  isOnHold = false,
+} = {}) {
+  // If crop is On Hold, return authoritative on-hold checklist
+  if (isOnHold) {
+    return [
+      { key: 'farmer.monitoring.action_on_hold_1', factor: 'maintenance', text: 'Reassess market conditions before resuming.' },
+      { key: 'farmer.monitoring.action_on_hold_2', factor: 'price_outlook', text: 'Check if the current price has improved.' },
+      { key: 'farmer.monitoring.action_on_hold_3', factor: 'profitability', text: 'Update your expected cost if input prices changed.' },
+    ];
+  }
+
+  if (phaseCode === 'completed') {
+    return [
+      { key: 'farmer.monitoring.action_completed_1', factor: 'maintenance', text: 'Record final harvest volume and selling price.' },
+      { key: 'farmer.monitoring.action_completed_2', factor: 'profitability', text: 'Review your profit or loss for this cycle.' },
+      { key: 'farmer.monitoring.action_completed_3', factor: 'maintenance', text: 'Save notes for your next planting cycle.' },
+    ];
+  }
+
+  // If backend provided weekly_actions in actionGuidance, consume them directly in backend-specified order
+  if (actionGuidance?.weekly_actions?.length > 0) {
+    return actionGuidance.weekly_actions.slice(0, 3).map((item) => {
+      const fullKey = item.code.startsWith('farmer.')
+        ? item.code
+        : `farmer.actions.monitoring.${item.code}`;
+      return {
+        key: fullKey,
+        code: item.code,
+        params: { crop_name: cropName, ...(item.params || {}) },
+        factor: item.factor,
+      };
+    });
+  }
+
+  // Safe stage maintenance fallback when backend action guidance is missing.
+  // Frontend does not perform independent analytical factor ranking.
+  const stage = normalizeLifecycleStage(cropStage || phaseCode);
+  const stageMaintenance = STAGE_MAINTENANCE_KEYS[stage] || STAGE_MAINTENANCE_KEYS.planning;
+  return stageMaintenance.slice(0, 3).map((key) => ({
+    key,
+    code: key,
+    params: { crop_name: cropName },
+    factor: 'maintenance',
+  }));
+}
+

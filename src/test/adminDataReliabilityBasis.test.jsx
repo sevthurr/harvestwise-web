@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminAnalyticsBasis from '../app/admin/pages/AdminAnalyticsBasis';
+import { analyticsApi } from '../services/api';
 
 // The reliability layer owns the factor and the band cutoffs; the page must
 // render them as-is. Values are inlined in the mock factory because vi.mock
@@ -18,10 +19,10 @@ vi.mock('../services/api', () => ({
       price_outlook: 'Favorable',
       basis_inputs: {
         reliability_bands: [
-          { label: 'High', min: 0.85, max: 1.0 },
-          { label: 'Moderate', min: 0.65, max: 0.84 },
-          { label: 'Limited', min: 0.4, max: 0.64 },
-          { label: 'Low', min: 0.0, max: 0.39 },
+          { label: 'High', min: 0.85, max: 1.0, description: 'Fully trustworthy source records.' },
+          { label: 'Moderate', min: 0.65, max: 0.84, description: 'Usable but somewhat stale or thin.' },
+          { label: 'Limited', min: 0.4, max: 0.64, description: 'Indicative only; weight is dampened.' },
+          { label: 'Low', min: 0.0, max: 0.39, description: 'Too little usable data.' },
         ],
         price_outlook: {
           recent_average_price: 78.5,
@@ -93,5 +94,43 @@ describe('AdminAnalyticsBasis Data Reliability', () => {
 
     // Module warnings still render underneath.
     expect(screen.getByText('Price: latest price record is 3 days old.')).toBeDefined();
+  });
+
+  it('explains each band through the server-supplied description', async () => {
+    renderPage();
+
+    // The band chip carries the explanation the scoring layer supplied, so the
+    // tooltip copy cannot drift from the cutoffs. `title` is what makes it
+    // readable on hover and on touch.
+    await waitFor(() => {
+      expect(screen.getByTitle('Fully trustworthy source records.')).toBeDefined();
+    });
+    expect(screen.getByTitle('Usable but somewhat stale or thin.')).toBeDefined();
+    expect(screen.getByTitle('Indicative only; weight is dampened.')).toBeDefined();
+    expect(screen.getByTitle('Too little usable data.')).toBeDefined();
+
+    // Keyboard reachable: the tooltip has to open without a pointer.
+    expect(screen.getByTitle('Fully trustworthy source records.').getAttribute('tabindex')).toBe('0');
+  });
+
+  it('renders a band without a tooltip when the server sends no description', async () => {
+    analyticsApi.getModuleOutputDetail.mockResolvedValueOnce({
+      id: 'OUT-0002',
+      commodity_name: 'Ampalaya',
+      generated_at: '2026-09-27T08:00:00Z',
+      price_outlook: 'Favorable',
+      basis_inputs: {
+        reliability_bands: [{ label: 'High', min: 0.85, max: 1.0 }],
+        price_outlook: { reliability_factor: 0.9, reliability_status: 'High' },
+      },
+    });
+
+    renderPage();
+
+    // The chip still shows its range; it just has no popover to open.
+    await waitFor(() => {
+      expect(screen.getByText('High 0.85–1.00')).toBeDefined();
+    });
+    expect(screen.getByText('High 0.85–1.00').getAttribute('title')).toBeNull();
   });
 });

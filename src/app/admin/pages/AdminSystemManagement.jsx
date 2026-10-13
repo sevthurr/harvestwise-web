@@ -519,6 +519,13 @@ function getStatusStyle(status) {
       label: "Healthy"
     };
   }
+  if (["Attention Required", "Warning", "Degraded"].includes(status)) {
+    return {
+      text: "text-amber-700 font-medium",
+      dot: "bg-amber-500",
+      label: status
+    };
+  }
   return {
     text: "text-rose-600 font-medium",
     dot: "bg-rose-500",
@@ -558,6 +565,7 @@ const DEFAULT_CORE_SERVICES = [
 ];
 
 const HealthTab = ({ showToast }) => {
+  const navigate = useNavigate();
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -630,95 +638,160 @@ const HealthTab = ({ showToast }) => {
     ];
   }
 
+  const attentionSources = healthData?.sources_requiring_attention || [];
+
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <SectionLabel>System Status</SectionLabel>
-        <span className="text-[12px] text-[var(--hw-neutral-500)]">
-          Last refreshed: {lastRefreshed}
-        </span>
-      </div>
+    <div className="space-y-5">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <SectionLabel>System Status</SectionLabel>
+          <span className="text-[12px] text-[var(--hw-neutral-500)]">
+            Last refreshed: {lastRefreshed}
+          </span>
+        </div>
 
-      {services.length > 0 ? (
-        <>
-          {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-[var(--hw-neutral-200)]">
-                  <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Service / Dependency</th>
-                  <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Status</th>
-                  <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Last Updated</th>
-                  <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                {services.map((s) => {
-                  const isChecking = isLoading && !healthData && !isError;
-                  const style = isChecking
-                    ? { text: "text-[var(--hw-neutral-500)] font-medium", dot: "bg-amber-400 animate-pulse", label: "Checking..." }
-                    : getStatusStyle(s.status);
-                  return (
-                    <tr key={s.id}>
-                      <td className="py-3.5 text-[14px] font-medium text-black">{s.label}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-2 text-[13px] ${style.text}`}>
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
-                          {style.label}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-[13px] text-black whitespace-nowrap">{s.last_updated || s.lastChecked || "-"}</td>
-                      <td className="py-3.5 text-[13px] text-[var(--hw-neutral-600)]">{s.notes}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {services.length > 0 ? (
+          <>
+            {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-[var(--hw-neutral-200)]">
+                    <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Service / Dependency</th>
+                    <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Status</th>
+                    <th className="py-3 px-4 text-[12px] font-semibold text-black uppercase tracking-wide">Last Updated</th>
+                    <th className="py-3 text-[12px] font-semibold text-black uppercase tracking-wide">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                  {services.map((s) => {
+                    const isChecking = isLoading && !healthData && !isError;
+                    const style = isChecking
+                      ? { text: "text-[var(--hw-neutral-500)] font-medium", dot: "bg-amber-400 animate-pulse", label: "Checking..." }
+                      : getStatusStyle(s.status);
+                    return (
+                      <tr key={s.id}>
+                        <td className="py-3.5 text-[14px] font-medium text-black">{s.label}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`inline-flex items-center gap-2 text-[13px] ${style.text}`}>
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
+                            {style.label}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-[13px] text-black whitespace-nowrap">{s.last_updated || s.lastChecked || "-"}</td>
+                        <td className="py-3.5 text-[13px] text-[var(--hw-neutral-600)]">{s.notes}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile list */}
+            <div className="sm:hidden divide-y divide-[var(--hw-neutral-100)]">
+              {services.map((s) => {
+                const isChecking = isLoading && !healthData && !isError;
+                const style = isChecking
+                  ? { text: "text-[var(--hw-neutral-500)] font-medium", dot: "bg-amber-400 animate-pulse", label: "Checking..." }
+                  : getStatusStyle(s.status);
+                return (
+                  <div key={s.id} className="py-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[14px] font-medium text-black">{s.label}</p>
+                      <span className={`inline-flex items-center gap-1.5 text-[12px] ${style.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
+                        {style.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)]">
+                      <span className="pr-2">{s.notes}</span>
+                      <span className="whitespace-nowrap flex-shrink-0">{s.last_updated || s.lastChecked || "-"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="py-12 text-center text-[14px] text-black">
+            No health checks are configured.
           </div>
+        )}
 
-          {/* Mobile list */}
-          <div className="sm:hidden divide-y divide-[var(--hw-neutral-100)]">
-            {services.map((s) => {
-              const isChecking = isLoading && !healthData && !isError;
-              const style = isChecking
-                ? { text: "text-[var(--hw-neutral-500)] font-medium", dot: "bg-amber-400 animate-pulse", label: "Checking..." }
-                : getStatusStyle(s.status);
-              return (
-                <div key={s.id} className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[14px] font-medium text-black">{s.label}</p>
-                    <span className={`inline-flex items-center gap-1.5 text-[12px] ${style.text}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
-                      {style.label}
+        <div className="pt-4 border-t border-[var(--hw-neutral-100)] mt-4">
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={handleRefresh}
+            className="inline-flex items-center gap-2 h-10 px-4 text-[13px] font-semibold text-black bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${isBusy ? "animate-spin" : ""}`} />
+            {isBusy ? "Refreshing status..." : "Refresh status"}
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <SectionLabel>Sources Requiring Attention</SectionLabel>
+            {attentionSources.length > 0 && (
+              <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                {attentionSources.length} {attentionSources.length === 1 ? "alert" : "alerts"}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/data-sources")}
+            className="text-[12px] font-medium text-[var(--hw-green-700)] hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+          >
+            Data Sources Catalog →
+          </button>
+        </div>
+
+        {attentionSources.length === 0 ? (
+          <div className="py-5 px-4 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
+            <div>
+              <p className="text-[13px] font-semibold text-emerald-900">All data sources and feeds are healthy</p>
+              <p className="text-[12px] text-emerald-700">No active sync failures, connection timeouts, or pending reviews detected.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
+            {attentionSources.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => navigate(s.id ? `/admin/data-sources/${s.id}` : "/admin/data-sources")}
+                className="p-4 flex items-center justify-between gap-3 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" />
+                    <p className="text-[13px] font-semibold text-black">{s.source_name}</p>
+                    <span className="text-[11px] text-[var(--hw-neutral-600)] px-1.5 py-0.5 rounded bg-[var(--hw-neutral-100)]">
+                      {s.source_type || s.ingestion_method}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)]">
-                    <span className="pr-2">{s.notes}</span>
-                    <span className="whitespace-nowrap flex-shrink-0">{s.last_updated || s.lastChecked || "-"}</span>
-                  </div>
+                  <p className="text-[12px] text-rose-700 mt-1 pl-4">{s.reason}</p>
                 </div>
-              );
-            })}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(s.id ? `/admin/data-sources/${s.id}` : "/admin/data-sources");
+                  }}
+                  className="text-[12px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] px-3 py-1.5 rounded-lg border border-[var(--hw-neutral-200)] bg-white whitespace-nowrap flex-shrink-0 cursor-pointer"
+                >
+                  Inspect →
+                </button>
+              </div>
+            ))}
           </div>
-        </>
-      ) : (
-        <div className="py-12 text-center text-[14px] text-black">
-          No health checks are configured.
-        </div>
-      )}
-
-      <div className="pt-4 border-t border-[var(--hw-neutral-100)] mt-4">
-        <button
-          type="button"
-          disabled={isBusy}
-          onClick={handleRefresh}
-          className="inline-flex items-center gap-2 h-10 px-4 text-[13px] font-semibold text-black bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 transition-colors cursor-pointer"
-        >
-          <RefreshCw className={`w-4 h-4 ${isBusy ? "animate-spin" : ""}`} />
-          {isBusy ? "Refreshing status..." : "Refresh status"}
-        </button>
-      </div>
-    </Card>
+        )}
+      </Card>
+    </div>
   );
 };
 

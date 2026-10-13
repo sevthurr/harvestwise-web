@@ -12,7 +12,7 @@ export const dashboard = {
   nearest_harvest_caption: "Pinakaduol nga ani sa imong mga tanom.",
   estimate_income_notice: "Tantiya ra kini. Puwedeng mausab ang aktuwal nga kita.",
   todays_prices: "Mga presyo karong adlawa",
-  good_crops_title: "Maayong mga tanom nga itanom",
+  good_crops_title: "Maayong gulay nga itanom karong {month}",
   my_preferred_crops_title: "Akong mga paboritong tanom",
   good_option_badge: "Maayong kapilian",
   good_variety_prefix: "Maayong barayti: {variety}",

@@ -1,8 +1,12 @@
 import { farmer as modularFarmer } from './en/farmer/index.js';
 import { settings as dftcSettings } from './en/dftc/settings.js';
 import { settings as adminSettings } from './en/admin/settings.js';
+import { about } from './en/about.js';
+import { privacy as privacyLegal } from './en/legal/privacy.js';
+import { terms as termsLegal } from './en/legal/terms.js';
 
 function deepMerge(target, source) {
+
   const result = { ...target };
   for (const key of Object.keys(source || {})) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -55,7 +59,24 @@ export const en = {
     change: "Change",
     or: "or",
     use_custom: "Use",
-    clear: "Clear"
+    clear: "Clear",
+    pw_current: "Current password",
+    pw_new: "New password",
+    pw_confirm: "Confirm new password",
+    pw_update: "Update password",
+    pw_updating: "Updating...",
+    pw_cancel: "Cancel",
+    pw_req_min_chars: "At least 8 characters",
+    pw_req_uppercase: "At least 1 uppercase letter",
+    pw_req_number: "At least 1 number",
+    pw_req_special: "At least 1 special character",
+    pw_err_required: "Please fill in all fields.",
+    pw_err_mismatch: "Passwords do not match.",
+    pw_err_requirements: "Password does not meet all requirements.",
+    pw_err_generic: "Could not update password. Check your current password and try again.",
+    pw_panel_title: "Change your temporary password",
+    pw_panel_body: "To keep your account secure, please replace the temporary password you received with a password only you know.",
+    pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step."
   },
   nav: {
     home: "Home",
@@ -117,7 +138,11 @@ export const en = {
     no_farmer_account: "Don't have a Farmer account?",
     create_one: "Create one",
     already_have_farmer_account: "Already have an account?",
+    registration_agreement: "By creating an account, you agree to the {terms} and acknowledge the {privacy}.",
+    terms_and_conditions: "Terms and Conditions",
+    privacy_policy: "Privacy Policy",
     sign_in_link: "Sign in",
+
     install_pwa: "Install HarvestWise app",
     installing_pwa: "Installing…",
     or: "or",
@@ -143,8 +168,7 @@ export const en = {
       account_inactive: "Your account is inactive. Contact support.",
       account_locked: "Account locked. Please try again later.",
       general: "Something went wrong. Please try again.",
-      email_registered: "This email is already registered.",
-      phone_registered: "This phone number is already registered.",
+      contact_unavailable: "We could not create an account with those details. If you already have an account, sign in instead.",
       need_login_for_2fa: "Your account requires two-factor authentication. Please sign in from the login page.",
     },
     requirements: {
@@ -722,5 +746,11 @@ export const en = {
   },
   admin: {
     settings: adminSettings
+  },
+  about,
+  legal: {
+    privacy: privacyLegal,
+    terms: termsLegal,
   }
 };
+

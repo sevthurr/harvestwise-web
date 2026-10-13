@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
+import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   Home,
   FileInput,
@@ -15,7 +17,8 @@ import {
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
-import { ChangePasswordPrompt } from "../settings/ChangePasswordPrompt";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
+import { UserAvatar } from "../profile/UserAvatar";
 
 
 import { useAuth } from "../../contexts/AuthContext";
@@ -49,7 +52,6 @@ function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
-  const [showChangePw, setShowChangePw] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
   const active = getActive(location.pathname);
@@ -113,16 +115,49 @@ function DFTCLayoutInner() {
     navigate("/login", { replace: true });
   };
 
-  // Suggest a password change while the account is still on a temporary
-  // password (set by admin user creation). Dismissible — a suggestion, not a lock.
-  const pendingChangePassword = user?.must_change_password === true;
-  useEffect(() => {
-    setShowChangePw(pendingChangePassword);
-  }, [pendingChangePassword]);
+  // Replace the workspace content while the account is still on an
+  // admin-provisioned temporary password. `rotated` is cleared the moment the
+  // POST succeeds: change_password() revokes every session and purges the
+  // cached snapshot before returning, so the next /auth/me can come back 401
+  // and null out `user` — and with no dismiss affordance, a gate derived from
+  // the flag alone would strand the user. The rotation already committed
+  // server-side; refreshUser() only reconciles the cache, so it is best-effort.
+  const [rotated, setRotated] = useState(false);
+  const pendingChangePassword = user?.must_change_password === true && !rotated;
 
-  const handlePasswordChanged = async () => {
-    await refreshUser();
-    setShowChangePw(false);
+  const { data: unreadData, refetch: refreshUnread } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      try {
+        const res = await getUnreadCount();
+        return res?.unread_count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+  }, [location.pathname, queryClient]);
+
+  useNotificationEvent("NOTIFICATION_CREATED", () => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc-unread-notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+    refreshUnread();
+  });
+
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
   };
 
   return (
@@ -150,14 +185,22 @@ function DFTCLayoutInner() {
           {/* Resync */}
           <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
-
-
           <button
             onClick={() => navigate("/dftc/notifications")}
-            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0 cursor-pointer"
-            aria-label="Notifications"
+            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+              location?.pathname?.includes("/notifications")
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
           >
             <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {
@@ -168,9 +211,13 @@ function DFTCLayoutInner() {
     onClick={() => setAvatarOpen((v) => !v)}
     className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
   >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[11px] font-bold">
-                {initials}
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={name}
+                className="w-7 h-7"
+                textClassName="text-[11px]"
+              />
               <span className="hidden sm:block text-[13px] font-medium text-[var(--hw-neutral-700)] max-w-[100px] truncate">{name}</span>
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
@@ -184,9 +231,13 @@ function DFTCLayoutInner() {
     onClick={() => go("/dftc/profile")}
     className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={name}
+                    className="w-9 h-9"
+                    textClassName="text-[13px]"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{name}</p>
                     <p className="text-[12px] text-black">{roleName}</p>
@@ -246,8 +297,14 @@ function DFTCLayoutInner() {
     /* ── Main content ── */
   }
       <DFTCMain>
-        <Outlet />
-        <Footer className="mt-6 mb-2" />
+        {pendingChangePassword ? (
+          <ChangePasswordPanel onRotated={handlePasswordRotated} />
+        ) : (
+          <>
+            <Outlet />
+            <Footer className="mt-6 mb-2" />
+          </>
+        )}
       </DFTCMain>
 
       {
@@ -268,13 +325,6 @@ function DFTCLayoutInner() {
   })}
         </div>
       </nav>
-
-      {showChangePw && (
-        <ChangePasswordPrompt
-          onClose={() => setShowChangePw(false)}
-          onChanged={handlePasswordChanged}
-        />
-      )}
     </div>
   );
 }

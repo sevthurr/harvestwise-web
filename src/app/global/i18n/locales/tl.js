@@ -1,8 +1,12 @@
 import { farmer as modularFarmer } from './tl/farmer/index.js';
 import { settings as dftcSettings } from './tl/dftc/settings.js';
 import { settings as adminSettings } from './tl/admin/settings.js';
+import { about } from './tl/about.js';
+import { privacy as privacyLegal } from './tl/legal/privacy.js';
+import { terms as termsLegal } from './tl/legal/terms.js';
 
 function deepMerge(target, source) {
+
   const result = { ...target };
   for (const key of Object.keys(source || {})) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -55,7 +59,24 @@ export const tl = {
     change: "Palitan",
     or: "o",
     use_custom: "Gamitin ang",
-    clear: "Alisin"
+    clear: "Alisin",
+    pw_current: "Kasalukuyang password",
+    pw_new: "Bagong password",
+    pw_confirm: "Kumpirmahin ang bagong password",
+    pw_update: "I-update ang password",
+    pw_updating: "Ina-update...",
+    pw_cancel: "Kanselahin",
+    pw_req_min_chars: "Kahit 8 na karakter",
+    pw_req_uppercase: "Kahit 1 malaking titik",
+    pw_req_number: "Kahit 1 numero",
+    pw_req_special: "Kahit 1 espesyal na karakter",
+    pw_err_required: "Pupunan ang lahat ng mga field.",
+    pw_err_mismatch: "Hindi magkatugma ang mga password.",
+    pw_err_requirements: "Hindi natutugunan ng password ang lahat ng mga kinakailangan.",
+    pw_err_generic: "Hindi na-update ang password. Suriin ang iyong kasalukuyang password at pakisubukan muli.",
+    pw_panel_title: "Palitan ang iyong pansamantalang password",
+    pw_panel_body: "Para sa kaligtasan ng iyong account, palitan ang pansamantalang password na natanggap mo ng password na alam mo lamang.",
+    pw_panel_restricted: "Nasa pansamantalang password pa ang iyong account, kaya hindi pa available ang iba pang bahagi ng app hangga't hindi mo ito natatapos."
   },
   nav: {
     home: "Home",
@@ -117,7 +138,11 @@ export const tl = {
     no_farmer_account: "Wala ka pang Farmer account?",
     create_one: "Gumawa ng isa",
     already_have_farmer_account: "May account ka na?",
+    registration_agreement: "Sa paggawa ng account, sumasang-ayon ka sa {terms} at kinikilala mong nabasa mo ang {privacy}.",
+    terms_and_conditions: "Mga Tuntunin at Kundisyon",
+    privacy_policy: "Patakaran sa Privacy",
     sign_in_link: "Mag-sign in",
+
     install_pwa: "I-install ang HarvestWise app",
     installing_pwa: "Nag-i-install…",
     or: "o",
@@ -143,8 +168,7 @@ export const tl = {
       account_inactive: "Hindi aktibo ang iyong account. Makipag-ugnayan sa suporta.",
       account_locked: "Naka-lock ang account. Subukang muli mamaya.",
       general: "May nangyaring mali. Subukang muli.",
-      email_registered: "Ang email na ito ay nakarehistro na.",
-      phone_registered: "Ang numerong ito ay nakarehistro na.",
+      contact_unavailable: "Hindi ka namin magawa ng account gamit ang mga detalyeng iyon. Kung mayroon ka nang account, mag-sign in sa halip.",
       need_login_for_2fa: "Ang iyong account ay nangangailangan ng two-factor authentication. Mangyaring mag-sign in mula sa login page.",
     },
     requirements: {
@@ -680,5 +704,11 @@ export const tl = {
   },
   admin: {
     settings: adminSettings
+  },
+  about,
+  legal: {
+    privacy: privacyLegal,
+    terms: termsLegal,
   }
 };
+

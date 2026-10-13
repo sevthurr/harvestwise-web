@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
-import { ChevronDown, Check, Send } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { CanonicalAboutContent } from "../../global/components/about/CanonicalAboutContent";
 
 const FAQS = [
   {
@@ -27,27 +28,8 @@ const FAQS = [
   }
 ];
 
-
-
 const AboutContent = () => (
-  <div className="space-y-3 text-[15px] text-black leading-relaxed">
-    <p>HarvestWise helps Davao City vegetable farmers view market prices, weather context, crop schedules, and planting advisories in one place.</p>
-    <p>The platform is designed for highland vegetable farmers in Marilog, Calinan, and nearby barangays who sell at Bangkerohan and other Davao City markets.</p>
-    <div className="pt-1 space-y-1.5">
-      {[
-        ["Version", "1.0.0 (prototype)"],
-        ["Region", "Davao City, Philippines"],
-        ["Data source", "Davao City Farmers Market Authority (DFTC)"],
-        ["Location data", "OpenStreetMap contributors (ODbL)"],
-        ["Weather data", "Open-Meteo"]
-      ].map(([label, val]) => (
-        <div key={label} className="flex gap-2">
-          <span className="text-[14px] font-semibold text-black min-w-[100px]">{label}:</span>
-          <span className="text-[14px] text-black">{val}</span>
-        </div>
-      ))}
-    </div>
-  </div>
+  <CanonicalAboutContent showStandaloneLink={true} />
 );
 
 const FAQsContent = () => {
@@ -75,81 +57,9 @@ const FAQsContent = () => {
   );
 };
 
-const SupportContent = () => {
-  const { t } = useLanguage();
-  const [form, setForm] = useState({ subject: "", message: "" });
-  const [sent, setSent] = useState(false);
-
-  if (sent) {
-    return (
-      <div className="flex flex-col items-center py-6 gap-3">
-        <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-          <Check className="w-6 h-6 text-emerald-600" />
-        </div>
-        <p className="text-[15px] font-semibold text-black">{t("farmer.about.message_sent", {}, "Message sent")}</p>
-        <p className="text-[14px] text-black text-center">Your message has been sent. The HarvestWise team will get back to you.</p>
-        <button
-          type="button"
-          onClick={() => {
-            setSent(false);
-            setForm({ subject: "", message: "" });
-          }}
-          className="mt-2 h-9 px-4 border border-[var(--hw-neutral-200)] text-[14px] font-medium text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
-        >
-          {t("farmer.about.send_another", {}, "Send another")}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-[15px] text-black">For questions or support, contact the HarvestWise team.</p>
-      <div className="space-y-3">
-        <div>
-          <label htmlFor="ab-subject" className="block text-[14px] font-semibold text-black mb-1.5">
-            {t("farmer.about.form_subject", {}, "Subject")}
-          </label>
-          <input
-            id="ab-subject"
-            type="text"
-            value={form.subject}
-            onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-            placeholder="e.g. Issue with my farm profile"
-            className="w-full h-11 px-3.5 text-[14px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
-          />
-        </div>
-        <div>
-          <label htmlFor="ab-msg" className="block text-[14px] font-semibold text-black mb-1.5">
-            {t("farmer.about.form_message", {}, "Message")}
-          </label>
-          <textarea
-            id="ab-msg"
-            rows={4}
-            value={form.message}
-            onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-            placeholder="Describe your question or issue…"
-            className="w-full px-3.5 py-3 text-[14px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)] resize-none"
-          />
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => setSent(true)}
-        disabled={!form.subject.trim() || !form.message.trim()}
-        className="h-11 px-5 flex items-center gap-2 bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
-      >
-        <Send className="w-4 h-4" />
-        {t("farmer.about.form_send", {}, "Send message")}
-      </button>
-    </div>
-  );
-};
-
 const SECTION_CONTENT = {
   about: AboutContent,
-  faqs: FAQsContent,
-  support: SupportContent
+  faqs: FAQsContent
 };
 
 const AccordionItem = ({ id, title, isOpen, onToggle, scrollRef }) => {
@@ -179,15 +89,14 @@ function AboutPage() {
   const { t } = useLanguage();
   const [params] = useSearchParams();
   const sectionParam = params.get("section");
-  const validSections = ["about", "faqs", "support"];
+  const validSections = ["about", "faqs"];
   const initialOpen = validSections.includes(sectionParam) ? sectionParam : "about";
   const [openId, setOpenId] = useState(initialOpen);
   const scrollRef = useRef(null);
 
   const sections = [
     { id: "about", title: t("farmer.about.title", {}, "About HarvestWise") },
-    { id: "faqs", title: t("farmer.about.help_faqs", {}, "Help / FAQs") },
-    { id: "support", title: t("farmer.about.contact_support", {}, "Contact Support") }
+    { id: "faqs", title: t("farmer.about.help_faqs", {}, "Help / FAQs") }
   ];
 
   useEffect(() => {
@@ -205,7 +114,7 @@ function AboutPage() {
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
       <PageHeader
         title={t("farmer.about.title", {}, "About")}
-        description="Information, support, and legal details."
+        description="Information and frequently asked questions."
       />
 
       {sections.map((sec) => (

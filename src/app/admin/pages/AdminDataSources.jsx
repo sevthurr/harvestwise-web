@@ -129,17 +129,33 @@ const EMPTY_FORM = {
 const RESYNC_POLL_ATTEMPTS = 10;
 const RESYNC_POLL_INTERVAL_MS = 3000;
 
+// Tab ids double as ?tab= URL values, so the initial-tab guard above and the
+// tab bar below stay in sync from one list.
+const DATA_SOURCE_TABS = [
+  ["sources", "Data Sources"],
+  ["api-sync", "API Sync"],
+  ["history", "Processing History"],
+  ["calendar", "Calendar & Events"],
+];
+
 function AdminDataSources() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTabState] = useState(() => (searchParams.get("tab") === "history" ? "history" : "sources"));
+  // Every tab id is a valid ?tab= value. Admin notifications deep-link here
+  // (?tab=api-sync for a weather sync), and any id outside this set falls back
+  // to "sources" rather than rendering a blank page.
+  const [tab, setTabState] = useState(() =>
+    DATA_SOURCE_TABS.some(([id]) => id === searchParams.get("tab"))
+      ? searchParams.get("tab")
+      : "sources",
+  );
   const setTab = (id) => {
     setTabState(id);
-    if (id === "history") {
-      setSearchParams({ tab: "history" }, { replace: true });
-    } else {
+    if (id === "sources") {
       setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab: id }, { replace: true });
     }
   };
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -734,7 +750,7 @@ function AdminDataSources() {
 
         {/* Tabs */}
         {<div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto">
-            {[["sources", "Data Sources"], ["api-sync", "API Sync"], ["history", "Processing History"], ["calendar", "Calendar & Events"]].map(([id, label]) => <button key={id} onClick={() => {
+            {DATA_SOURCE_TABS.map(([id, label]) => <button key={id} onClick={() => {
     setTab(id);
     setShowConfiguredEvents(false);
   }} className={tabCls(id)}>{label}</button>)}
@@ -764,13 +780,13 @@ function AdminDataSources() {
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                      {["Source", "Type", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+                      {["Source", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                     {dataSources.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                        <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
                           No data sources configured.
                         </td>
                       </tr>
@@ -783,7 +799,6 @@ function AdminDataSources() {
                         <td className="px-4 py-3">
                           <p className="font-medium text-[var(--hw-neutral-800)]">{SOURCE_DISPLAY_NAMES[s.name] || s.name}</p>
                         </td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.type}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
                         <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
                           {s.records != null ? s.records.toLocaleString() : "—"}

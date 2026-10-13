@@ -8,6 +8,7 @@ import { AuthProvider } from './global/contexts/AuthContext';
 import { LanguageProvider } from './global/contexts/LanguageContext';
 
 import { BackgroundProcessProvider } from './global/contexts/BackgroundProcessContext';
+import { NotificationStreamProvider } from './global/contexts/NotificationStreamContext';
 
 export default function App() {
   return (
@@ -19,9 +20,11 @@ export default function App() {
         <LanguageProvider>
           <DisplayModeProvider>
             <CropsProvider>
-              <BackgroundProcessProvider>
-                <RouterProvider router={router} />
-              </BackgroundProcessProvider>
+              <NotificationStreamProvider>
+                <BackgroundProcessProvider>
+                  <RouterProvider router={router} />
+                </BackgroundProcessProvider>
+              </NotificationStreamProvider>
             </CropsProvider>
           </DisplayModeProvider>
         </LanguageProvider>

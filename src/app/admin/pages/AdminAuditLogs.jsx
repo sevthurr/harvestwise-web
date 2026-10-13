@@ -5,8 +5,12 @@
  *
  * DB schema (logs):
  *   id          VARCHAR(15)   LOG-xxxx
- *   user_id     VARCHAR(15)   FK to users.id
- *   action      VARCHAR(100)  dot-notation, e.g. "user.login", "import.file_upload"
+ *   user_id     VARCHAR(15)   FK to users.id, NULLABLE — NULL means a
+ *                             system-initiated event (API sync, cron, weather
+ *                             backfill) with no human actor
+ *   action      VARCHAR(100)  dot-notation, namespaced by resource:
+ *                             auth.*, import.*, config.*, analytics.*,
+ *                             system.*, dftc.*, farmer.*, user.*
  *   details     TEXT nullable  free-form description
  *   ip_address  VARCHAR(45) nullable
  *   created_at  DATETIME
@@ -16,9 +20,9 @@
  *   ?user_id=&action=&date_from=&date_to=&page=1&page_size=20
  *   Returns: { items: LogResponse[], total, page, page_size }
  *
- * NOTE: actor display name is resolved from user_id by the backend;
- * the response item should include a resolved `actor_name` field once
- * the backend endpoint is wired up.
+ * NOTE: `actor_name` is resolved from `user_id` by the backend join in
+ * audit/repository.py; both it and the raw `user_id` are rendered together
+ * by formatActorLabel() so an actor is never ambiguous in an export.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +42,10 @@ import {
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { adminApi } from "../../../services/api";
 import { createAuditLogsPdf } from "../utils/auditLogsPdf";
+import { formatActorLabel } from "../utils/auditActor";
+// Optional, not useAuth(): this page renders in unit tests without an
+// AuthProvider, and useAuth() throws in that case.
+import { useOptionalAuth } from "../../global/contexts/AuthContext";
 
 import {
   Tooltip,
@@ -149,17 +157,19 @@ function EmptyState({ filtered }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-// Action filter options based on known dot-notation resource prefixes
+// Action filter options based on the dot-notation namespaces actually written
+// to the logs table. Each value is matched as a substring by the backend, so
+// "auth" covers auth.login, auth.totp_*, auth.otp_*, etc.
 const ACTION_FILTER_OPTIONS = [
-  { value: "",           label: "All Actions"   },
-  { value: "user",       label: "User"          },
-  { value: "auth",       label: "Auth"          },
-  { value: "import",     label: "Import"        },
-  { value: "advisory",   label: "Advisory"      },
-  { value: "config",     label: "Config"        },
-  { value: "processing", label: "Processing"    },
-  { value: "data",       label: "Data"          },
-  { value: "system",     label: "System"        },
+  { value: "",           label: "All Actions"         },
+  { value: "auth",       label: "Auth"                },
+  { value: "import",     label: "Import"              },
+  { value: "config",     label: "Config"              },
+  { value: "analytics",  label: "Analytics"           },
+  { value: "system",     label: "System Management"   },
+  { value: "dftc",       label: "DFTC"                },
+  { value: "farmer",     label: "Farmer"              },
+  { value: "user",       label: "User Management"     },
 ];
 
 const PAGE_SIZE = 20;
@@ -185,6 +195,8 @@ function AdminAuditLogs() {
   const [page, setPage]             = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting]   = useState(null); // null | "preview" | "download"
+  const auth = useOptionalAuth();
+  const user = auth?.user;
   const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
     queryKey: ["adminAuditLogs", actionPrefix, search, dateFrom, dateTo, page],
     queryFn: () =>
@@ -246,6 +258,16 @@ function AdminAuditLogs() {
     return parts.length ? parts.join("  |  ") : "All logs";
   };
 
+  // Attribution printed on the export: "<Full Name> (<USER-ID>)".
+  const buildGeneratedBy = () => {
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const label = fullName || user?.email || "Unknown Admin";
+    return user?.id ? `${label} (${user.id})` : label;
+  };
+
   // Build a pixel-perfect PDF and either open it for preview or download it.
   const generatePdf = async (mode) => {
     if (exporting) return;
@@ -265,6 +287,7 @@ function AdminAuditLogs() {
         total,
         filterLabel: buildFilterLabel(),
         generatedAt,
+        generatedBy: buildGeneratedBy(),
       });
 
       const slug = new Date().toISOString().slice(0, 10);
@@ -320,7 +343,7 @@ function AdminAuditLogs() {
             <input
               id="audit-search"
               type="text"
-              placeholder="Search action (e.g. user.login)…"
+              placeholder="Search action (e.g. import.completed)…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
@@ -457,8 +480,7 @@ function AdminAuditLogs() {
                       {fmtDatetime(row.created_at)}
                     </td>
                     <td className="px-5 py-3 font-medium text-[var(--hw-neutral-800)] whitespace-nowrap">
-                      {/* actor_name resolved by backend join with users table */}
-                      {row.actor_name || row.user_id || "—"}
+                      {formatActorLabel(row)}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">
                       <ActionText action={row.action} />
@@ -505,7 +527,7 @@ function AdminAuditLogs() {
                     {fmtDatetime(row.created_at)}
                   </p>
                   <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                    {row.actor_name || row.user_id || "—"}
+                    {formatActorLabel(row)}
                   </p>
                   {row.details && (
                     <MobileDetails details={row.details} />

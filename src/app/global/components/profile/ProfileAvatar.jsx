@@ -2,11 +2,14 @@ import { useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import { authApi } from "../../../../services/api";
 import { resolveMediaUrl } from "../../api";
+import { useAuth } from "../../contexts/AuthContext";
 import { AvatarCropper } from "./AvatarCropper";
+import { UserAvatar } from "./UserAvatar";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
 const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
+  const { refreshUser, patchUser } = useAuth();
   const fileRef = useRef(null);
   const [avatarSrc, setAvatarSrc] = useState(() => resolveMediaUrl(src));
   const [uploading, setUploading] = useState(false);
@@ -42,8 +45,28 @@ const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
     setError("");
     try {
       const res = await authApi.uploadProfilePicture(cropped);
-      // Backend returns the stored location (Cloudinary URL or /media path).
-      setAvatarSrc(resolveMediaUrl(res?.profile_picture_path));
+      // Cloudinary is the only backend, so this is always an absolute HTTPS URL.
+      const stored = res?.profile_picture_path ?? null;
+      setAvatarSrc(resolveMediaUrl(stored));
+
+      // Write the path into the shared user object directly. The upload
+      // response already carries it, and every avatar in the app — the topnav
+      // circle in all three role layouts included — reads it from there, so
+      // making them wait on the refreshUser() round-trip below meant the new
+      // picture stayed invisible everywhere except this circle whenever that
+      // request was slow, failed, or answered from a stale cache.
+      if (stored) await patchUser({ profile_picture_path: stored });
+
+      // Still refresh, so the session snapshot, IndexedDB cache, and anything
+      // the server derived line up with what was just stored. This is
+      // reconciliation, not the update path: failure here is not an upload
+      // failure — the picture is already stored — so it must not surface an
+      // error over a successful save.
+      try {
+        await refreshUser();
+      } catch {
+        /* keep the locally-set avatar; the next sign-in picks it up */
+      }
     } catch (err) {
       setError(err.message || "Upload failed.");
     } finally {
@@ -52,11 +75,13 @@ const ProfileAvatar = ({ initials, src, alt = "Profile" }) => {
   };
 
   return <div className="relative flex-shrink-0 group">
-      <div className="w-16 h-16 rounded-full overflow-hidden bg-[var(--hw-green-700)] flex items-center justify-center">
-        {avatarSrc
-          ? <img src={avatarSrc} alt={alt} className="w-full h-full object-cover" />
-          : <span className="text-white text-[22px] font-bold select-none">{initials}</span>}
-      </div>
+      <UserAvatar
+        src={avatarSrc}
+        initials={initials}
+        alt={alt}
+        className="w-16 h-16"
+        textClassName="text-[22px]"
+      />
       <button
     type="button"
     onClick={() => fileRef.current?.click()}

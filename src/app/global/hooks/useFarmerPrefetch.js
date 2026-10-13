@@ -13,11 +13,20 @@ export const FARMER_PROFILE_KEY = ["farmer", "profile"];
 export const DEFAULT_WEATHER_LAT = DAVAO_CITY_FALLBACK_COORDINATES.latitude;
 export const DEFAULT_WEATHER_LON = DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
-const STALE_TIME = 1000 * 60 * 30; // 30 mins
+// Shared with PriceDetailView so the trend page's freshness matches what the
+// bundle seeds. Mirrors queryClient.js's 30-min default.
+export const STALE_TIME = 1000 * 60 * 30; // 30 mins
 
 // The horizon the server bundles price detail for. Must match the server's
 // BUNDLE_DETAIL_HORIZON and the page's default period chip.
 export const BUNDLE_DETAIL_PERIOD = 7;
+
+// Chart-grade detail for the Price Trend Details page. These must match the
+// server's BUNDLE_TREND_* constants — they are what the page requests and what
+// the bundle seeds, so drift here means a silent cache miss on every open.
+export const BUNDLE_TREND_RECORDS_LIMIT = 40;
+export const BUNDLE_TREND_PERIOD = 7;
+export const BUNDLE_TREND_PRICE_TYPE = "bangkerohan_retail";
 
 export function weatherAdvisoryKey(lat, lon) {
   return ["weather", "advisory", lat, lon];
@@ -123,9 +132,28 @@ export function priceDetailKey(commodityId, priceTypeKey, period = 7) {
   return ["prices", "detail", commodityId, priceTypeKey, period];
 }
 
+// Key shape PriceDetailView.jsx reads:
+//   ["prices", "trend", commodityId, priceTypeKey, period, recordsLimit]
+// records_limit is part of the key on purpose. Without it a 40-record bundle entry
+// satisfies a page asking for 100 and the chart silently renders a truncated
+// history as if it were complete — the worst failure mode here, because nothing
+// errors. The server's own cache key (prices_detail_key) includes it too.
+export function priceTrendKey(
+  commodityId,
+  priceTypeKey,
+  period = BUNDLE_TREND_PERIOD,
+  recordsLimit = BUNDLE_TREND_RECORDS_LIMIT
+) {
+  return ["prices", "trend", commodityId, priceTypeKey, period, recordsLimit];
+}
+
 // Single round-trip: the /farmer/daily-snapshot bundle covers every top-level
 // dataset used by the farmer workspace. Write each section into its matching
 // cache key so the persister pushes it to IndexedDB on login and sync.
+//
+// Every section here is defensive: a missing or malformed section is skipped, so a
+// degraded server response (a budget-exhausted section arrives as null) still
+// seeds everything else rather than throwing away the whole bundle.
 export async function seedFarmerOfflineBundle(queryClient) {
   const res = await apiGet("/farmer/daily-snapshot");
   if (!res.ok) throw new Error(`snapshot failed: ${res.status}`);
@@ -161,6 +189,25 @@ export async function seedFarmerOfflineBundle(queryClient) {
       queryClient.setQueryData(
         priceDetailKey(camel.commodityId, camel.selectedPriceType, BUNDLE_DETAIL_PERIOD),
         camel
+      );
+    });
+  }
+
+  if (Array.isArray(bundle.price_trend)) {
+    bundle.price_trend.forEach((entry) => {
+      // Raw, NOT toCamelCase: PriceDetailView reads recent_records and
+      // forecast.forecast_midpoint, because pricesApi.getPriceDetail returns the
+      // untransformed response. The price_detail section above camelCases only
+      // because CommodityDetail.jsx camelCases inside its own queryFn.
+      const commodityId = entry.commodity_id;
+      const priceTypeKey = entry.selected_price_type;
+      if (!commodityId || !priceTypeKey) return;
+      // Selected price type, not BUNDLE_TREND_PRICE_TYPE: the server builds this
+      // section from get_price_detail, which echoes back the type it was asked
+      // for, and keying off the echo keeps the two sides from drifting.
+      queryClient.setQueryData(
+        priceTrendKey(commodityId, priceTypeKey, BUNDLE_TREND_PERIOD),
+        entry
       );
     });
   }

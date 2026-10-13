@@ -145,19 +145,29 @@ function RegisterPage() {
 
       const res = await apiPost("/api/v1/auth/register", payload);
       const tokens = await parseResponse(res);
-      await login(tokens);
+      // The register endpoint answers 201 with a well-formed but unusable token
+      // pair when the identifier is already taken, so this endpoint cannot be
+      // used to discover which email addresses have accounts. That also means
+      // a duplicate surfaces as a failure of the follow-up /auth/me call rather
+      // than a distinct 409, so it is handled here in one uniform message
+      // instead of the previous "email already registered" / "phone already
+      // registered" pair.
+      try {
+        await login(tokens);
+      } catch {
+        setErrors({
+          contact: t(
+            "auth.errors.contact_unavailable",
+            {},
+            "We could not create an account with those details. If you already have an account, sign in instead."
+          ),
+        });
+        return;
+      }
       navigate("/onboarding", { replace: true });
     } catch (err) {
       const msg = err.message ?? "";
-      if (err.status === 409) {
-        if (msg.toLowerCase().includes("email")) {
-          setErrors({ contact: t("auth.errors.email_registered", {}, "This email is already registered.") });
-        } else if (msg.toLowerCase().includes("phone")) {
-          setErrors({ contact: t("auth.errors.phone_registered", {}, "This phone number is already registered.") });
-        } else {
-          setErrors({ general: msg });
-        }
-      } else if (err.status === 422) {
+      if (err.status === 422) {
         setErrors({ general: t("auth.errors.general", {}, "Something went wrong. Please try again.") });
       } else {
         setErrors({ general: msg || t("auth.errors.general", {}, "Something went wrong. Please try again.") });
@@ -425,12 +435,51 @@ function RegisterPage() {
             )}
           </div>
 
+          {/* Registration Agreement Notice */}
+          <div className="pt-1 text-[12px] text-[var(--hw-neutral-600)] text-center leading-relaxed">
+            {authLang === "ceb" ? (
+              <p>
+                Paghimo nimo og account, mouyon ka sa{" "}
+                <Link to="/terms" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
+                  Mga Termino ug Kondisyon
+                </Link>{" "}
+                ug nagpamatuod nga nabasa nimo ang{" "}
+                <Link to="/privacy" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
+                  Patakaran sa Privacy
+                </Link>.
+              </p>
+            ) : authLang === "tl" ? (
+              <p>
+                Sa paggawa ng account, sumasang-ayon ka sa{" "}
+                <Link to="/terms" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
+                  Mga Tuntunin at Kundisyon
+                </Link>{" "}
+                at kinikilala mong nabasa mo ang{" "}
+                <Link to="/privacy" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
+                  Patakaran sa Privacy
+                </Link>.
+              </p>
+            ) : (
+              <p>
+                By creating an account, you agree to the{" "}
+                <Link to="/terms" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
+                  Terms and Conditions
+                </Link>{" "}
+                and acknowledge the{" "}
+                <Link to="/privacy" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
+                  Privacy Policy
+                </Link>.
+              </p>
+            )}
+          </div>
+
           {/* Submit */}
           <button
             type="submit"
             disabled={loading}
             className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
           >
+
             {loading
               ? t("auth.sign_up_loading", {}, "Creating account…")
               : t("auth.sign_up", {}, "Create account")}

@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Check, Navigation, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Check, Navigation, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { PageHeader } from "../../global/components/shared/PageHeader";
+import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import {
   inputCls,
   SUFFIX_OPTIONS,
-  PW_REQS,
   Card,
   SectionLabel,
   FieldLabel,
@@ -67,7 +67,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
+
 
   // Load account and profile data from the shared cached profile
   const { data: rawProfile, isLoading: loading } = useQuery({
@@ -126,11 +126,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     }
   };
 
-  const handleDelete = () => {
-    if (deleteConfirm !== "DELETE") return;
-    setShowDeleteModal(false);
-    onDeleteAccount();
-  };
+
 
   return (
     <div className="space-y-4">
@@ -232,15 +228,15 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">Danger Zone</p>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.delete_account", {}, "Delete account")}</p>
-            <p className="text-[13px] text-black">{t("farmer.settings.delete_warning", {}, "Permanently remove your account and all data.")}</p>
+            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.request_deletion_title", {}, "Request Account Deletion")}</p>
+            <p className="text-[13px] text-black">{t("farmer.settings.request_deletion_desc", {}, "Account deletion is processed after verification. Requests are handled by the HarvestWise team.")}</p>
           </div>
           <button
             type="button"
             onClick={() => setShowDeleteModal(true)}
             className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
           >
-            {t("common.delete", {}, "Delete")}
+            {t("farmer.settings.request_deletion_btn", {}, "Request Deletion")}
           </button>
         </div>
       </Card>
@@ -257,44 +253,28 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 
       {showDeleteModal && (
         <Modal
-          title={t("farmer.settings.delete_account", {}, "Delete account")}
-          onClose={() => {
-            setShowDeleteModal(false);
-            setDeleteConfirm("");
-          }}
+          title={t("farmer.settings.request_deletion_title", {}, "Request Account Deletion")}
+          onClose={() => setShowDeleteModal(false)}
         >
-          <p className="text-[14px] text-black mb-4">
-            {t("farmer.settings.delete_warning", {}, "This will permanently delete your HarvestWise account, saved farm profile, crop preferences, and crop plans. This action cannot be undone.")}
+          <p className="text-[14px] text-black mb-4 leading-relaxed">
+            {t("farmer.settings.request_deletion_modal_body", {}, "To protect your account and records from unauthorized deletion, HarvestWise verifies all requests before processing. Please send a deletion request to harvestwise.app@gmail.com from your registered email address. Once verified, identifying account information, contact information, and precise farm-location coordinates will be permanently removed or irreversibly anonymized in accordance with our Privacy Policy.")}
           </p>
-          <div className="space-y-1.5 mb-5">
-            <label className="block text-[14px] font-semibold text-black">
-              Type <span className="font-mono text-red-600">DELETE</span> to confirm
-            </label>
-            <input
-              type="text"
-              value={deleteConfirm}
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="DELETE"
-              className={inputCls}
-            />
+          <div className="bg-[var(--hw-neutral-50)] p-3.5 rounded-xl border border-[var(--hw-neutral-200)] mb-5 text-sm space-y-1">
+            <p className="font-semibold text-black">Contact:</p>
+            <a href="mailto:harvestwise.app@gmail.com?subject=Account%20Deletion%20Request" className="text-[var(--hw-green-800)] font-medium hover:underline block">
+              harvestwise.app@gmail.com
+            </a>
           </div>
           <div className="flex gap-2 justify-end">
-            <GhostBtn
-              onClick={() => {
-                setShowDeleteModal(false);
-                setDeleteConfirm("");
-              }}
-            >
-              {t("common.cancel", {}, "Cancel")}
+            <GhostBtn onClick={() => setShowDeleteModal(false)}>
+              {t("common.close", {}, "Close")}
             </GhostBtn>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleteConfirm !== "DELETE"}
-              className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 disabled:opacity-40 transition-colors"
+            <a
+              href="mailto:harvestwise.app@gmail.com?subject=Account%20Deletion%20Request"
+              className="h-10 px-4 flex items-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
             >
-              {t("farmer.settings.delete_account", {}, "Delete account")}
-            </button>
+              Email harvestwise.app@gmail.com
+            </a>
           </div>
         </Modal>
       )}
@@ -302,140 +282,28 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   );
 };
 
+
 /* -------------------------------------------------------------------------- */
 /* 2. Security Tab                                                            */
 /* -------------------------------------------------------------------------- */
 const SecurityTab = ({ showToast }) => {
   const { t } = useLanguage();
-  const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
-  const [showCur, setShowCur] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showCfm, setShowCfm] = useState(false);
   const [pwError, setPwError] = useState("");
   const googleLink = useGoogleLink({
     redirectTo: `${window.location.origin}/farmer/settings?tab=security`,
     onResult: () => showToast(t("farmer.settings.toast_google_connected", {}, "Google account connected.")),
   });
 
-  const handlePasswordSave = async () => {
-    if (!pw.current || !pw.newPw || !pw.confirm) {
-      setPwError("Please fill in all fields.");
-      return;
-    }
-    if (pw.newPw !== pw.confirm) {
-      setPwError("Passwords do not match.");
-      return;
-    }
-    if (!PW_REQS.every((r) => r.test(pw.newPw))) {
-      setPwError("Password does not meet all requirements.");
-      return;
-    }
-    setPwError("");
-    try {
-      await parseResponse(
-        await apiPost("/auth/change-password", {
-          current_password: pw.current,
-          new_password: pw.newPw,
-        })
-      );
-      setPw({ current: "", newPw: "", confirm: "" });
-      showToast(t("farmer.settings.toast_pw_success", {}, "Password updated successfully."));
-    } catch {
-      setPwError(t("farmer.settings.toast_pw_error", {}, "Could not update password. Check your current password and try again."));
-    }
-  };
-
-  const handlePasswordCancel = () => {
-    setPw({ current: "", newPw: "", confirm: "" });
-    setPwError("");
-  };
-
   return (
     <div className="space-y-4">
       <Card>
         <SectionLabel>{t("farmer.settings.change_password", {}, "Change Password")}</SectionLabel>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-cur">{t("farmer.settings.current_password", {}, "Current password")}</FieldLabel>
-            <div className="relative">
-              <input
-                id="f-cpw-cur"
-                type={showCur ? "text" : "password"}
-                value={pw.current}
-                onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
-                placeholder="••••••••"
-                className={`${inputCls} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowCur((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-              >
-                {showCur ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-new">{t("farmer.settings.new_password", {}, "New password")}</FieldLabel>
-            <div className="relative">
-              <input
-                id="f-cpw-new"
-                type={showNew ? "text" : "password"}
-                value={pw.newPw}
-                onChange={(e) => setPw((p) => ({ ...p, newPw: e.target.value }))}
-                placeholder="New password"
-                className={`${inputCls} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-              >
-                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {pw.newPw && (
-              <ul className="space-y-1 mt-1">
-                {PW_REQS.map((r) => {
-                  const ok = r.test(pw.newPw);
-                  return (
-                    <li key={r.label} className={`flex items-center gap-1.5 text-[12px] ${ok ? "text-emerald-600" : "text-black"}`}>
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border ${ok ? "bg-emerald-500 border-emerald-500" : "border-[var(--hw-neutral-300)]"}`}>
-                        {ok && <Check className="w-2.5 h-2.5 text-white" />}
-                      </div>
-                      {r.label}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="f-cpw-cfm">{t("farmer.settings.confirm_new_password", {}, "Confirm new password")}</FieldLabel>
-            <div className="relative">
-              <input
-                id="f-cpw-cfm"
-                type={showCfm ? "text" : "password"}
-                value={pw.confirm}
-                onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))}
-                placeholder="Repeat new password"
-                className={`${inputCls} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowCfm((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-              >
-                {showCfm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          {pwError && <p className="text-[13px] text-red-600">{pwError}</p>}
-          <div className="flex gap-2 pt-1">
-            <GhostBtn onClick={handlePasswordCancel}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
-            <GreenBtn onClick={handlePasswordSave}>{t("farmer.settings.update_password", {}, "Update password")}</GreenBtn>
-          </div>
-        </div>
+        <PasswordChangeForm
+          idPrefix="f-cpw"
+          onSuccess={() => showToast(t("farmer.settings.toast_pw_success", {}, "Password updated successfully."))}
+          onError={() => setPwError(t("farmer.settings.toast_pw_error", {}, "Could not update password. Check your current password and try again."))}
+        />
+        {pwError && <p className="mt-3 text-[13px] text-red-600">{pwError}</p>}
       </Card>
 
       <Card>
@@ -938,10 +806,6 @@ function FarmerSettings() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   useEffect(() => {
     const bar = tabBarRef.current;
@@ -982,7 +846,7 @@ function FarmerSettings() {
         ))}
       </div>
 
-      {activeTab === "account" && <AccountTab showToast={showToast} onDeleteAccount={handleDeleteAccount} />}
+      {activeTab === "account" && <AccountTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
       {activeTab === "farm" && <FarmTab showToast={showToast} />}
       {activeTab === "preferences" && <PreferencesTab showToast={showToast} />}

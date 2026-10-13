@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
+import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   LayoutDashboard,
   Database,
@@ -18,6 +20,7 @@ import {
 } from "lucide-react";
 import { Footer } from "../Footer";
 import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { UserAvatar } from "../profile/UserAvatar";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -126,6 +129,32 @@ const AdminLayoutInner = () => {
     }
   };
 
+  const { data: unreadData, refetch: refreshUnread } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      try {
+        const res = await getUnreadCount();
+        return res?.unread_count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+  }, [location.pathname, queryClient]);
+
+  useNotificationEvent("NOTIFICATION_CREATED", () => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-unread-notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    refreshUnread();
+  });
+
   const handleLogout = () => {
     setAvatarOpen(false);
     logout();
@@ -158,16 +187,23 @@ const AdminLayoutInner = () => {
           <BackgroundProcessBadge />
           <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
-
-
-
           {/* Bell */}
           <button
             onClick={() => navigate("/admin/notifications")}
-            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0 cursor-pointer"
-            aria-label="Notifications"
+            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+              location?.pathname?.includes("/notifications")
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
           >
             <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
 
@@ -177,9 +213,13 @@ const AdminLayoutInner = () => {
               onClick={() => setAvatarOpen((v) => !v)}
               className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
             >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center">
-                <span className="text-white text-[11px] font-bold select-none">{initials}</span>
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={displayName}
+                className="w-7 h-7"
+                textClassName="text-[11px]"
+              />
               <span className="hidden sm:block text-[13px] font-medium text-black">{displayName}</span>
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
@@ -195,9 +235,13 @@ const AdminLayoutInner = () => {
     onClick={() => go("/admin/profile")}
     className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-[13px] font-bold select-none">{initials}</span>
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={displayName}
+                    className="w-9 h-9"
+                    textClassName="text-[13px]"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">Admin</p>

@@ -1,88 +1,16 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Bell,
-  CheckCheck,
-  ChevronRight,
-  Info,
-  AlertTriangle,
-  AlertOctagon,
-  TrendingUp,
-  CloudRain,
-  X,
-} from "lucide-react";
+import { Bell, CheckCheck, ChevronRight } from "lucide-react";
 import { Card } from "../../global/components/ui/hw-ui";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { listNotifications, markRead, markAllRead } from "../../../services/api/notificationsApi";
-
-// ─── Category → urgency + icon mapping ────────────────────────────────────
-const CATEGORY_CONFIG = {
-  price_change: {
-    urgency: "attention",
-    Icon: TrendingUp,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-    labelKey: "farmer.notifications.category_price",
-    defaultLabel: "Price Change",
-  },
-  weather_alert: {
-    urgency: "urgent",
-    Icon: CloudRain,
-    color: "text-red-600",
-    bg: "bg-red-50",
-    labelKey: "farmer.notifications.category_weather",
-    defaultLabel: "Weather Alert",
-  },
-  harvest_reminder: {
-    urgency: "information",
-    Icon: Bell,
-    color: "text-blue-500",
-    bg: "bg-blue-50",
-    labelKey: "farmer.notifications.category_harvest",
-    defaultLabel: "Harvest",
-  },
-  price_update: {
-    urgency: "information",
-    Icon: Info,
-    color: "text-blue-500",
-    bg: "bg-blue-50",
-    labelKey: "farmer.notifications.category_price_update",
-    defaultLabel: "New Prices",
-  },
-};
-
-const URGENCY_CONFIG = {
-  urgent: {
-    labelKey: "farmer.notifications.tag_urgent",
-    label: "Urgent",
-    Icon: AlertOctagon,
-    color: "text-red-600",
-    bg: "bg-red-50",
-  },
-  attention: {
-    labelKey: "farmer.notifications.tag_attention",
-    label: "Attention",
-    Icon: AlertTriangle,
-    color: "text-amber-600",
-    bg: "bg-amber-50",
-  },
-  information: {
-    labelKey: "farmer.notifications.tag_info",
-    label: "Information",
-    Icon: Info,
-    color: "text-blue-500",
-    bg: "bg-blue-50",
-  },
-};
-
-// ─── Action routes by category ─────────────────────────────────────────────
-const CATEGORY_ROUTE = {
-  price_change: "/farmer/prices",
-  price_update: "/farmer/prices",
-  weather_alert: "/farmer/market-weather",
-  harvest_reminder: "/farmer/crops",
-};
+import { NotificationIcon } from "../../global/components/shared/NotificationIcon";
+import { localizeFarmerNotification } from "../utils/farmerNotificationLocalizer";
+import { resolveNotificationRoute } from "../../global/utils/notificationRoutes";
+import { useNotificationEvent } from "../../global/contexts/NotificationStreamContext";
+import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
+import { useOptionalAuth } from "../../global/contexts/AuthContext";
 
 function formatTimestamp(iso) {
   if (!iso) return "";
@@ -102,118 +30,78 @@ function formatTimestamp(iso) {
   }
 }
 
-// ─── Detail drawer ─────────────────────────────────────────────────────────
-const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate, t }) => {
-  if (!alert) return null;
-  const cat = CATEGORY_CONFIG[alert.category] || CATEGORY_CONFIG.harvest_reminder;
-  const urgency = URGENCY_CONFIG[cat.urgency] || URGENCY_CONFIG.information;
-  const UrgencyIcon = urgency.Icon;
-  const actionRoute = CATEGORY_ROUTE[alert.category];
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[85vh] md:max-h-none">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${urgency.bg} ${urgency.color}`}>
-              <UrgencyIcon className="w-3.5 h-3.5" />
-              {t(urgency.labelKey, {}, urgency.label)}
-            </span>
-            <span className="text-[12px] text-[var(--hw-neutral-500)]">
-              {formatTimestamp(alert.created_at)}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)]"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-          <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)] leading-snug">
-            {alert.title}
-          </h2>
-          <p className="text-[14px] text-[var(--hw-neutral-700)] leading-relaxed">{alert.body}</p>
-
-          {alert.payload && Object.keys(alert.payload).length > 0 && (
-            <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)]">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)] mb-1">
-                {t("farmer.notifications.details", {}, "Details")}
-              </p>
-              {alert.payload.commodity_name && (
-                <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">
-                  {alert.payload.commodity_name}
-                  {alert.payload.variety_name ? ` — ${alert.payload.variety_name}` : ""}
-                </p>
-              )}
-              {alert.payload.change_pct != null && (
-                <p className="text-[13px] text-[var(--hw-neutral-700)]">
-                  {alert.payload.change_pct > 0 ? "+" : ""}
-                  {(alert.payload.change_pct * 100).toFixed(1)}%{" "}
-                  {t("farmer.notifications.price_change_label", {}, "price change")}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-2">
-          {!alert.read && (
-            <button
-              onClick={() => {
-                onMarkRead(alert.id);
-                onClose();
-              }}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-            >
-              {t("farmer.notifications.mark_as_read", {}, "Mark as read")}
-            </button>
-          )}
-          {actionRoute && (
-            <button
-              onClick={() => {
-                onClose();
-                onNavigate(actionRoute);
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
-            >
-              {t("farmer.notifications.view_details", {}, "View Details")}
-            </button>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
-
-// ─── Main page ─────────────────────────────────────────────────────────────
 function NotificationsPage() {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, langCode, effectiveLanguage } = useLanguage();
+  const currentLang = langCode || effectiveLanguage || "ceb";
   const queryClient = useQueryClient();
-  const [selectedAlert, setSelectedAlert] = useState(null);
+  const auth = useOptionalAuth();
+  const { readIds, isRead, markReadLocally } = useNotificationReadState(auth?.user?.id);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["farmer-notifications"],
     queryFn: () => listNotifications(1, 50),
-    staleTime: 30_000,
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 
   const notifications = data?.items ?? [];
-  const unreadCount = data?.unread_count ?? 0;
+  const serverUnreadCount = data?.unread_count ?? 0;
+
+  // Locally-acknowledged items the server has not caught up with yet must not
+  // keep the badge lit while offline.
+  const pendingLocal = notifications.filter(
+    (item) => readIds.has(item.id) && !item.read && !item.read_at,
+  ).length;
+  const unreadCount = Math.max(0, serverUnreadCount - pendingLocal);
+
+  // Real-time live updates on the shared app-wide notification stream
+  useNotificationEvent("NOTIFICATION_CREATED", () => {
+    queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+  });
+
+  useEffect(() => {
+    if (typeof data?.unread_count === "number") {
+      queryClient.setQueryData(["notifications", "unread-count"], data.unread_count);
+    }
+  }, [data?.unread_count, queryClient]);
 
   const markReadMutation = useMutation({
     mutationFn: markRead,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] }),
+    // Optimistic: show it as read immediately, even if the request fails.
+    onMutate: (id) => markReadLocally(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    },
   });
 
   const markAllMutation = useMutation({
     mutationFn: markAllRead,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] }),
+    onMutate: () => markReadLocally(notifications.map((item) => item.id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    },
   });
+
+  const handleCardClick = (item) => {
+    if (!isRead(item)) {
+      markReadMutation.mutate(item.id);
+    }
+    let targetRoute = null;
+    try {
+      targetRoute = resolveNotificationRoute(item, "Farmer");
+    } catch {
+      targetRoute = null;
+    }
+    if (targetRoute) {
+      navigate(targetRoute);
+    } else {
+      navigate("/farmer/prices");
+    }
+  };
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -236,7 +124,7 @@ function NotificationsPage() {
             type="button"
             onClick={() => markAllMutation.mutate()}
             disabled={markAllMutation.isPending}
-            className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] flex-shrink-0 disabled:opacity-50"
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] flex-shrink-0 disabled:opacity-50 cursor-pointer"
           >
             <CheckCheck className="w-4 h-4" />
             {t("farmer.notifications.mark_all_read", {}, "Mark all read")}
@@ -252,7 +140,7 @@ function NotificationsPage() {
               key={i}
               className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-[var(--hw-neutral-200)] animate-pulse"
             >
-              <div className="w-8 h-8 rounded-full bg-[var(--hw-neutral-200)] flex-shrink-0 mt-0.5" />
+              <div className="w-9 h-9 rounded-xl bg-[var(--hw-neutral-200)] flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="h-4 bg-[var(--hw-neutral-200)] rounded w-1/3" />
@@ -286,40 +174,58 @@ function NotificationsPage() {
       ) : (
         <div className="space-y-2.5">
           {notifications.map((item) => {
-            const cat = CATEGORY_CONFIG[item.category] || CATEGORY_CONFIG.harvest_reminder;
-            const CatIcon = cat.Icon;
+            let localizedTitle = item.title || "";
+            let localizedBody = item.body || "";
+            try {
+              const localized = localizeFarmerNotification(
+                item,
+                t,
+                currentLang
+              );
+              if (localized?.title) localizedTitle = localized.title;
+              if (localized?.body) localizedBody = localized.body;
+            } catch {
+              localizedTitle = item.title || "";
+              localizedBody = item.body || "";
+            }
+
             return (
               <div
                 key={item.id}
-                onClick={() => setSelectedAlert(item)}
+                onClick={() => handleCardClick(item)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
-                  item.read
-                    ? "bg-white border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
-                    : "bg-white border-l-4 border-l-[var(--hw-green-700)] border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
+                  isRead(item)
+                    ? "bg-white border-[var(--hw-neutral-200)] opacity-80 hover:opacity-100 hover:border-[var(--hw-neutral-300)]"
+                    : "bg-white border-[var(--hw-neutral-300)] shadow-[var(--shadow-xs)] hover:border-[var(--hw-neutral-400)]"
                 }`}
               >
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${cat.bg}`}
-                >
-                  <CatIcon className={`w-4 h-4 ${cat.color}`} />
-                </div>
+                <NotificationIcon
+                  category={item.category}
+                  metadata={item.metadata || item.payload}
+                  fallbackTitle={item.title}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={`text-[14px] leading-snug ${
-                        item.read
-                          ? "font-medium text-[var(--hw-neutral-900)]"
-                          : "font-bold text-[var(--hw-neutral-900)]"
-                      }`}
-                    >
-                      {item.title}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`text-[14px] leading-snug ${
+                          isRead(item)
+                            ? "font-medium text-[var(--hw-neutral-700)]"
+                            : "font-bold text-[var(--hw-neutral-900)]"
+                        }`}
+                      >
+                        {localizedTitle}
+                      </p>
+                      {!isRead(item) && (
+                        <span className="w-2 h-2 rounded-full bg-[var(--hw-green-600)] flex-shrink-0" />
+                      )}
+                    </div>
                     <span className="text-[11px] text-[var(--hw-neutral-500)] flex-shrink-0">
                       {formatTimestamp(item.created_at)}
                     </span>
                   </div>
                   <p className="text-[13px] text-[var(--hw-neutral-600)] mt-1 line-clamp-2 leading-relaxed">
-                    {item.body}
+                    {localizedBody}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0 self-center" />
@@ -328,15 +234,6 @@ function NotificationsPage() {
           })}
         </div>
       )}
-
-      {/* Detail Drawer */}
-      <AlertDetailDrawer
-        alert={selectedAlert}
-        onClose={() => setSelectedAlert(null)}
-        onMarkRead={(id) => markReadMutation.mutate(id)}
-        onNavigate={(route) => navigate(route)}
-        t={t}
-      />
     </div>
   );
 }

@@ -1,12 +1,18 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { ChevronDown, Info, X, Edit2, Sliders } from "lucide-react";
+import { ChevronDown, Info, X, Edit2, Sliders, ArrowRight } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
-import { useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
+import { useArrivalPressure, useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
+import {
+  arrivalBoundaryRows,
+  arrivalSeriesTotals,
+  bucketArrivals,
+  latestArrivalBucket
+} from "../components/analytics/arrivalVolumeSeries";
 import {
   MODULES,
   CLASSIFICATIONS,
@@ -19,6 +25,16 @@ const RELIABILITY_TONES = {
   Moderate: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
   Limited: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
   Low: "text-[var(--hw-error)] bg-[var(--hw-error)]/10"
+};
+// The Arrival Pressure card reads as a supply scale: Low (deficit) through
+// High (surplus). This is deliberately not CLASSIFICATION_COLORS, which maps
+// Low to emerald and Lower Middle to blue because it is shared with Price
+// Outlook, where those labels mean something different.
+const ARRIVAL_PRESSURE_TONES = {
+  Low: "text-blue-600",
+  "Lower Middle": "text-emerald-600",
+  "Upper Middle": "text-amber-600",
+  High: "text-red-600"
 };
 const MODULE_CARD_DATA = {
   "price-outlook": { label: "days", required: 14, key: "days_available" },
@@ -122,17 +138,34 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
     );
   });
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const total = WEIGHT_MODULES.reduce((sum, m) => sum + (parseFloat(values[m]) || 0), 0);
   const totalOk = Math.abs(total - 100) < 0.01;
   const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
 
-  const handleSave = () => {
+  // `onSave` resolves to null on success or the failure message. It must be
+  // awaited: setting "Saved!" before the write resolves is what let a rejected
+  // save look identical to a successful one.
+  const handleSave = async () => {
     if (!totalOk) return;
     const formatted = Object.fromEntries(
       WEIGHT_MODULES.map((m) => [m, parseFloat(values[m]) || 0])
     );
-    onSave(phase, formatted);
+    setSaveError("");
+    setSaving(true);
+    let failure;
+    try {
+      failure = await onSave(phase, formatted);
+    } catch (err) {
+      failure = err.message || "Failed to save weights.";
+    }
+    setSaving(false);
+    if (failure) {
+      setSaveError(`${failure} Nothing was changed.`);
+      return;
+    }
     setSaved(true);
     setTimeout(onClose, 600);
   };
@@ -170,19 +203,23 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
           </div>
           {!totalOk && <p className="text-[12px] text-red-600">Weights must total 100%.</p>}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            disabled={!totalOk}
+            disabled={!totalOk || saving || saved}
             onClick={handleSave}
             className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {saved ? "Saved!" : "Save Changes"}
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -195,15 +232,29 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
   const [favMin, setFavMin] = useState(currentRules?.favMin !== undefined ? String(currentRules.favMin) : "");
   const [unfavMax, setUnfavMax] = useState(currentRules?.unfavMax !== undefined ? String(currentRules.unfavMax) : "");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const favNum = parseFloat(favMin);
   const unfavNum = parseFloat(unfavMax);
   const isValid = !isNaN(favNum) && !isNaN(unfavNum) && unfavNum < favNum;
   const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!isValid) return;
-    onSave({ favMin: favNum, unfavMax: unfavNum });
+    setSaveError("");
+    setSaving(true);
+    let failure;
+    try {
+      failure = await onSave({ favMin: favNum, unfavMax: unfavNum });
+    } catch (err) {
+      failure = err.message || "Failed to save threshold rules.";
+    }
+    setSaving(false);
+    if (failure) {
+      setSaveError(`${failure} Nothing was changed.`);
+      return;
+    }
     setSaved(true);
     setTimeout(onClose, 600);
   };
@@ -248,19 +299,23 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
             <p className="text-[12px] text-red-600">Unfavorable cutoff must be strictly less than Favorable cutoff.</p>
           )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            disabled={!isValid}
+            disabled={!isValid || saving || saved}
             onClick={handleSave}
             className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {saved ? "Saved!" : "Save Changes"}
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -557,6 +612,65 @@ const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder 
   );
 };
 
+// Commodity + variety scope control. Both tabs drive the same `scopedCommodity`
+// / `scopedVariety` state, so this renders on each of them rather than being
+// duplicated inline -- the threshold cards read that scope, and without a
+// control on the Weights & Thresholds tab the card had no way to change
+// commodity and silently kept whatever the other tab had selected.
+const ScopeSelector = ({
+  commodity,
+  variety,
+  commodities = [],
+  variants = [],
+  selectCls = "",
+  onCommodityChange,
+  onVarietyChange
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+    <div className="flex items-center gap-3">
+      {commodity && (
+        <CommodityIllustration
+          commodityId={getCommodityIconKey(null, null, commodity)}
+          className="w-8 h-8 flex-shrink-0"
+        />
+      )}
+      <span className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+        {commodity ? `${commodity} · ${variety || "Standard"}` : "Select a commodity and variety"}
+      </span>
+    </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Commodity</label>
+        <TextOnlyCommodityDropdown
+          value={commodity}
+          options={commodities}
+          onChange={onCommodityChange}
+          placeholder="Select Commodity"
+        />
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Variety</label>
+        <select
+          value={variety}
+          onChange={(e) => onVarietyChange(e.target.value)}
+          disabled={!commodity || variants.length === 0}
+          className={`${selectCls} min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {variants.length === 0 ? (
+            <option value="Standard">Standard</option>
+          ) : (
+            variants.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    </div>
+  </div>
+);
+
 function AdminAnalytics() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -722,16 +836,66 @@ function AdminAnalytics() {
     return getVariants(scopedCommodity);
   }, [scopedCommodity]);
 
+  // Wait for the commodity list before defaulting the variety. Setting
+  // "Standard" while the list was still in flight made the scope briefly
+  // ("Kalabasa" + "Standard") look complete, so `reloadAnalytics` computed and
+  // persisted a second set of module outputs for a variety nobody selected.
   useEffect(() => {
+    if (loadingCommodities) return;
     if (scopedVariants.length > 0) {
       setScopedVariety(scopedVariants[0]);
     } else {
       setScopedVariety("Standard");
     }
-  }, [scopedCommodity, scopedVariants]);
+  }, [scopedCommodity, scopedVariants, loadingCommodities]);
 
-  // Compute + persist module outputs and load the Processed Results history
-  // whenever the scoped commodity/variety changes.
+  // Load the persisted module-output history.
+  //
+  // Refreshes whenever the commodity or variety scope changes, so the table
+  // always reflects the commodity currently selected in Module Outputs. It also
+  // runs on mount, before any scope exists, so the table is populated on open
+  // rather than waiting for a commodity to be picked.
+  const loadProcessedResults = useCallback(async () => {
+    try {
+      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
+      const rows = (data?.items || []).flatMap((r) =>
+        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
+          id: r.id,
+          basisId: key,
+          module,
+          commodity: r.commodity_name,
+          // `variant`, not `variety` — the row shape uses `variant` and the
+          // filter below reads it. Reading `variety` here left it undefined,
+          // which made every non-Standard variety match nothing.
+          variant: r.variety || "Standard",
+          classification: r[field] || "Not available",
+          inputPeriod: r.reference_month,
+          processedAt: r.generated_at
+        }))
+      );
+      setProcessedResults(rows);
+    } catch {
+      setProcessedResults([]);
+    }
+  }, []);
+
+  // Mount only. Once a scope exists, `reloadAnalytics` owns the refresh: it
+  // awaits the compute before reloading, so the table never shows pre-compute
+  // rows. Listing the scope here as well raced that and fetched the same
+  // unfiltered page twice on every scope change.
+  useEffect(() => {
+    loadProcessedResults();
+  }, [loadProcessedResults]);
+
+  // A module or classification chosen for the previous commodity can mask the
+  // new one entirely, leaving an empty table that looks like missing records.
+  // Reset both whenever the scope changes so the table starts from "All".
+  useEffect(() => {
+    setFModule("All");
+    setFClassification("All");
+  }, [scopedCommodity, scopedVariety]);
+
+  // Compute + persist module outputs for the scoped commodity/variety.
   const reloadAnalytics = useCallback(async () => {
     if (!scopedCommodity || !scopedVariety) return;
     setAnalyticsLoading(true);
@@ -750,29 +914,13 @@ function AdminAnalytics() {
     } catch (err) {
       setAnalyticsError(err.message || "Failed to compute module outputs.");
       setModuleOutputs(null);
-    }
-
-    try {
-      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
-      const rows = (data?.items || []).flatMap((r) =>
-        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
-          id: r.id,
-          basisId: key,
-          module,
-          commodity: r.commodity_name,
-          variant: r.variety || "Standard",
-          classification: r[field] || "Not available",
-          inputPeriod: r.reference_month,
-          processedAt: r.generated_at
-        }))
-      );
-      setProcessedResults(rows);
-    } catch {
-      setProcessedResults([]);
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [scopedCommodity, scopedVariety]);
+
+    // A compute rewrites rows, so refresh the history it feeds.
+    await loadProcessedResults();
+  }, [scopedCommodity, scopedVariety, loadProcessedResults]);
 
   useEffect(() => {
     reloadAnalytics();
@@ -815,6 +963,34 @@ function AdminAnalytics() {
     scopedCommodityRecord?.id
   );
 
+  // Live arrival volume behind the Arrival Pressure card. The backend withholds
+  // the classification and quartiles below four records rather than publishing a
+  // zero-padded reading, so this card can legitimately show "—" for the
+  // thresholds while still reporting the volumes it does have.
+  const { data: arrivalSummary, loading: arrivalLoading, error: arrivalError } = useArrivalPressure(
+    !!scopedCommodityRecord?.id,
+    scopedCommodityRecord?.id
+  );
+
+  const arrivalQuartiles = arrivalSummary?.quartile_thresholds || null;
+  const arrivalClassification = arrivalSummary?.classification || null;
+  const arrivalSeries = useMemo(
+    () => bucketArrivals(arrivalSummary?.records || [], { granularity: "monthly" }),
+    [arrivalSummary]
+  );
+  const arrivalTotals = useMemo(() => arrivalSeriesTotals(arrivalSeries), [arrivalSeries]);
+  const arrivalCurrentKg = useMemo(() => {
+    const bucket = latestArrivalBucket(arrivalSeries);
+    return bucket ? bucket.total_kg : null;
+  }, [arrivalSeries]);
+  const arrivalBoundary = useMemo(() => arrivalBoundaryRows(arrivalQuartiles), [arrivalQuartiles]);
+  const arrivalBasisParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (scopedCommodity) params.set("commodity", scopedCommodity);
+    if (scopedVariety) params.set("variety", scopedVariety);
+    return params.toString();
+  }, [scopedCommodity, scopedVariety]);
+
   useEffect(() => {
     if (!showTooltip) return;
     const h = (e) => {
@@ -829,15 +1005,28 @@ function AdminAnalytics() {
   // Filter processed results using the top scope (scopedCommodity + scopedVariety) + module & classification
   const filteredResults = processedResults.filter((r) => {
     const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
+    // Rows carry `variant`; "Standard" in the selector means the commodity's
+    // plain (null-variety) row. Comparing against `r.variety` here silently
+    // matched nothing for every named variety.
+    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
     const matchVar =
-      !scopedVariety ||
-      (r.variant || "Standard") === (scopedVariety || "Standard");
+      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
     const matchMod = fModule === "All" || r.module === fModule;
     const matchClass = fClassification === "All" || r.classification === fClassification;
     return matchComm && matchVar && matchMod && matchClass;
   });
 
   const visibleResults = showAll ? filteredResults : filteredResults.slice(0, DEFAULT_ROWS);
+
+  // True when rows exist for the scope but the module/classification filters are
+  // hiding them. Distinguishes "no records" from "filtered everything away".
+  const scopeHasFiltered = processedResults.some((r) => {
+    const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
+    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
+    const matchVar =
+      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
+    return matchComm && matchVar;
+  });
 
   // 4 Module cards built from the latest computed outputs for the current scope.
   const withCardData = (key, moduleOutput) => {
@@ -950,8 +1139,13 @@ function AdminAnalytics() {
         : await analyticsApi.createWeight({ crop_stage: phase, ...payload });
       setWeightIds((prev) => ({ ...prev, [phase]: saved.id }));
       setPhaseWeights((prev) => ({ ...prev, [phase]: updated }));
+      return null;
     } catch (err) {
-      setWeightsError(err.message || "Failed to save weights.");
+      const message = err.message || "Failed to save weights.";
+      setWeightsError(message);
+      // Returned so the modal can refuse to claim success. Without this the
+      // modal closed showing "Saved!" even when the write was rejected.
+      return message;
     }
   };
 
@@ -1006,8 +1200,13 @@ function AdminAnalytics() {
       await ensureRule(unfav, "Unfavorable", "<", unfavVal, `< ${unfavPct}%`);
 
       await refreshPriceOutlook();
+      return null;
     } catch (err) {
-      setThresholdsError(err.message || "Failed to save threshold rules.");
+      const message = err.message || "Failed to save threshold rules.";
+      setThresholdsError(message);
+      // Returned so the modal can refuse to claim success. Without this the
+      // modal closed showing "Saved!" even when the write was rejected.
+      return message;
     }
   };
 
@@ -1072,49 +1271,15 @@ function AdminAnalytics() {
         {tab === "outputs" && (
           <div className="space-y-6">
             {/* Scoped Variety Selector */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-              <div className="flex items-center gap-3">
-                {scopedCommodity && (
-                  <CommodityIllustration
-                    commodityId={getCommodityIconKey(null, null, scopedCommodity)}
-                    className="w-8 h-8 flex-shrink-0"
-                  />
-                )}
-                <span className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
-                  {scopedCommodity ? `${scopedCommodity} · ${scopedVariety || "Standard"}` : "Select a commodity and variety"}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex flex-col gap-0.5">
-                  <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Commodity</label>
-                  <TextOnlyCommodityDropdown
-                    value={scopedCommodity}
-                    options={commodities}
-                    onChange={setScopedCommodity}
-                    placeholder="Select Commodity"
-                  />
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Variety</label>
-                  <select
-                    value={scopedVariety}
-                    onChange={(e) => setScopedVariety(e.target.value)}
-                    disabled={!scopedCommodity || scopedVariants.length === 0}
-                    className={`${selectCls} min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed`}
-                  >
-                    {scopedVariants.length === 0 ? (
-                      <option value="Standard">Standard</option>
-                    ) : (
-                      scopedVariants.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-              </div>
-            </div>
+            <ScopeSelector
+              commodity={scopedCommodity}
+              variety={scopedVariety}
+              commodities={commodities}
+              variants={scopedVariants}
+              selectCls={selectCls}
+              onCommodityChange={setScopedCommodity}
+              onVarietyChange={setScopedVariety}
+            />
 
             {/* 4 Module Output Cards (Clickable & Empty State) */}
             {analyticsError && (
@@ -1147,26 +1312,10 @@ function AdminAnalytics() {
                             {card.source}
                           </span>
                         </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Processed</span>
-                          <span className="text-[12px] text-[var(--hw-neutral-800)]">{card.processed}</span>
-                        </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[12px] text-[var(--hw-neutral-700)]">Reliability</span>
                           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${RELIABILITY_TONES[card.reliability] ?? "text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)]"}`}>
                             {card.reliability}
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Data</span>
-                          <span
-                            className={`text-[12px] font-medium ${card.dataAvailable !== null &&
-                              card.dataAvailable < card.dataRequired
-                              ? "text-[var(--hw-error)]"
-                              : "text-[var(--hw-neutral-800)]"
-                              }`}
-                          >
-                            {card.dataLabel}
                           </span>
                         </div>
                       </div>
@@ -1283,7 +1432,22 @@ function AdminAnalytics() {
                       {filteredResults.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-4 py-10 text-center text-[var(--hw-neutral-500)] text-[13px]">
-                            No processed results found for the selected commodity, variety, and filters.
+                            {scopeHasFiltered ? (
+                              "No processed results match the selected module and classification."
+                            ) : scopedCommodity ? (
+                              <>
+                                No processed results for{" "}
+                                <span className="font-medium text-[var(--hw-neutral-800)]">
+                                  {scopedCommodity}
+                                  {scopedVariety && scopedVariety !== "Standard"
+                                    ? ` · ${scopedVariety}`
+                                    : ""}
+                                </span>
+                                . Run the module outputs for this commodity to create them.
+                              </>
+                            ) : (
+                              "No processed results yet. Run the module outputs for a commodity to create them."
+                            )}
                           </td>
                         </tr>
                       ) : (
@@ -1291,7 +1455,7 @@ function AdminAnalytics() {
                           const cc = CLASSIFICATION_COLORS[r.classification] ?? "text-[var(--hw-neutral-700)]";
                           return (
                             <tr
-                              key={r.id}
+                              key={`${r.id}::${r.basisId}`}
                               onClick={() => handleRowClick(r)}
                               className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                             >
@@ -1339,6 +1503,18 @@ function AdminAnalytics() {
         {/* ══ WEIGHTS & THRESHOLDS TAB ══ */}
         {tab === "weights" && (
           <div className="space-y-8">
+            {/* The threshold cards below read this scope, so the control has to
+                be reachable from this tab too. */}
+            <ScopeSelector
+              commodity={scopedCommodity}
+              variety={scopedVariety}
+              commodities={commodities}
+              variants={scopedVariants}
+              selectCls={selectCls}
+              onCommodityChange={setScopedCommodity}
+              onVarietyChange={setScopedVariety}
+            />
+
             {/* Section 1: Adaptive Weights */}
             <section className="space-y-4">
               <div>
@@ -1483,29 +1659,108 @@ function AdminAnalytics() {
                       <div>
                         <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Arrival Pressure</h3>
                         <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
-                          Source: DFTC Arrival Volume records · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
+                          Source: DFTC Arrival Volume · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
-                        <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q1 Threshold</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">- MT/week</p>
+                        {[
+                          { label: "Q1 Threshold", value: arrivalQuartiles?.q1 },
+                          { label: "Q2 (Median)", value: arrivalQuartiles?.q2 },
+                          { label: "Q3 Threshold", value: arrivalQuartiles?.q3 }
+                        ].map((q) => (
+                          <div key={q.label}>
+                            <p className="text-[11px] text-[var(--hw-neutral-500)]">{q.label}</p>
+                            {/* Number bold, unit lighter -- as the design sets it. */}
+                            <p className="text-[13px] mt-0.5">
+                              {q.value == null ? (
+                                <span className="font-bold text-[var(--hw-neutral-400)]">— kg/mo</span>
+                              ) : (
+                                <>
+                                  <span className="font-bold text-[var(--hw-neutral-800)]">
+                                    {q.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                  </span>{" "}
+                                  <span className="text-[11px] text-[var(--hw-neutral-500)]">kg/mo</span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-blue-700">Current Month Volume</p>
+                          <p className="mt-0.5 flex items-center justify-center gap-1.5">
+                            <span className="text-[15px] font-bold text-blue-800">
+                              {arrivalCurrentKg == null
+                                ? "—"
+                                : `${arrivalCurrentKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`}
+                            </span>
+                            {arrivalClassification && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-[10px] font-bold text-blue-700">
+                                {arrivalClassification}
+                              </span>
+                            )}
+                          </p>
                         </div>
-                        <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q2 (Median)</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">- MT/week</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q3 Threshold</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">- MT/week</p>
+                        <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Annual Recorded Total</p>
+                          <p className="mt-0.5 text-[15px] font-bold text-[var(--hw-neutral-800)]">
+                            {arrivalTotals.total_kg == null ? (
+                              "—"
+                            ) : (
+                              <>
+                                {arrivalTotals.total_kg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg{" "}
+                                <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+                                  ({arrivalTotals.months} mo)
+                                </span>
+                              </>
+                            )}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
-                        Insufficient arrival history to calculate quartiles for this variety.
-                      </p>
+
+                      {arrivalBoundary.length > 0 ? (
+                        <div className="border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
+                          <div className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)] text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-500)]">
+                            <span>Classification</span>
+                            <span>Monthly Boundary</span>
+                            <span className="text-right">Supply Pressure</span>
+                          </div>
+                          {arrivalBoundary.map((row) => (
+                            <div
+                              key={row.classification}
+                              className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 border-b border-[var(--hw-neutral-100)] last:border-b-0 text-[11px]"
+                            >
+                              <span className={`font-bold ${ARRIVAL_PRESSURE_TONES[row.classification]}`}>
+                                {row.classification}
+                              </span>
+                              <span className="text-[var(--hw-neutral-700)]">{row.boundary}</span>
+                              <span className="text-right text-[var(--hw-neutral-600)]">{row.supply}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                          {arrivalLoading
+                            ? "Loading arrival volume…"
+                            : arrivalError || "Insufficient arrival history to calculate quartiles for this variety."}
+                        </p>
+                      )}
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/modules/basis/arrival-pressure?${arrivalBasisParams}`)}
+                          className="text-[13px] font-bold text-[var(--hw-green-700)] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          View Basis
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1731,4 +1986,8 @@ function AdminAnalytics() {
   );
 }
 
-export { AdminAnalytics as default };
+export {
+  AdminAnalytics as default,
+  EditWeightModal,
+  EditPriceOutlookModal,
+};

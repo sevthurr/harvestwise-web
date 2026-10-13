@@ -90,15 +90,31 @@ export function AuthProvider({ children }) {
   // api.js only dispatches this when the 401'd request actually carried a
   // token, so an anonymous 401 must never reach here. clearQueryPersistedCache
   // uses resetQueries() (not clear()) so mounted observers are not stranded.
+  //
+  // Also clears on the browser 'storage' event, which fires when ANOTHER tab
+  // logs out or logs in as someone else. Without it, tab A stays logged in with
+  // user A's tokens while tab B has already switched to user B, and both tabs
+  // read and write the same shared caches. Shared handsets are the norm here,
+  // and this is the path that leaks one farmer's data to the next.
   // ------------------------------------------------------------------
   useEffect(() => {
-    const handle = () => {
+    const purge = () => {
       setUser(null);
       clearQueryPersistedCache();
       try { del(USER_CACHE_KEY); } catch {}
     };
-    window.addEventListener('hw:auth:expired', handle);
-    return () => window.removeEventListener('hw:auth:expired', handle);
+    const handleExpiry = () => purge();
+    // A token key changing value in another tab means the session identity
+    // changed underneath us.
+    const handleStorage = (e) => {
+      if (e.key === 'hw_access_token' || e.key === 'hw_refresh_token') purge();
+    };
+    window.addEventListener('hw:auth:expired', handleExpiry);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('hw:auth:expired', handleExpiry);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   // ------------------------------------------------------------------
@@ -141,8 +157,30 @@ export function AuthProvider({ children }) {
     return me;
   };
 
+  // ------------------------------------------------------------------
+  // Apply an already-known field change, without a network round-trip.
+  //
+  // refreshUser() is the right call when the server may have derived a value,
+  // but it is the wrong tool for a response the caller is already holding: it
+  // re-reads state the client was just told, so it can only ever be as fresh as
+  // the request survives. `profile_picture_path` is the case that matters — the
+  // upload response carries the stored URL, and every avatar in the app reads it
+  // from this object, so making the topnav wait on a second request meant a slow
+  // or failed /auth/me left the freshly uploaded picture invisible everywhere
+  // except the page that uploaded it. refreshUser() still runs afterwards to
+  // reconcile with the server and IndexedDB; this only removes the round-trip
+  // from the path that has to succeed.
+  // ------------------------------------------------------------------
+  const patchUser = async (partial) => {
+    if (!user) return null;
+    const next = { ...user, ...partial };
+    setUser(next);
+    await set(USER_CACHE_KEY, next);
+    return next;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, login, logout, refreshUser, patchUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -152,4 +190,14 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+/**
+ * Same as `useAuth` but returns null instead of throwing when there is no
+ * provider. For components that can degrade gracefully outside an auth tree —
+ * per-user local read state, for example, which simply starts empty rather
+ * than taking the whole page down.
+ */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
 }

@@ -167,7 +167,7 @@ const FORECAST_TABLE_PAGE_SIZE = 7;
  * - the table-only field normalization below never runs when the table isn't rendered;
  * - pagination state is scoped to the table and resets when the forecast changes.
  */
-function ForecastDataTable({ items }) {
+function ForecastDataTable({ items, commodityName = null }) {
   const [page, setPage] = useState(1);
 
   // Table-only fields (humidity / wind / condition) are normalized here rather than
@@ -235,7 +235,13 @@ function ForecastDataTable({ items }) {
           </thead>
           <tbody className="divide-y divide-[var(--hw-neutral-100)]">
             {pageRows.map((day) => {
-              const suitCfg = day.suitability ? SUITABILITY_STYLES[day.suitability] : null;
+              const suitKey =
+                day.suitability ||
+                evaluateSuitability(day, commodityName) ||
+                "Suitable";
+              const suitCfg = SUITABILITY_STYLES[suitKey] || SUITABILITY_STYLES.Suitable;
+              const label = suitCfg.labelEn || suitKey;
+
               return (
                 <tr key={day.key} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -255,16 +261,10 @@ function ForecastDataTable({ items }) {
                     {day.windSpeed != null ? `${day.windSpeed} km/h` : "-"}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {day.condition ? (
-                      <span className="text-[var(--hw-neutral-800)] font-medium">{day.condition}</span>
-                    ) : suitCfg ? (
-                      <span className={`inline-flex items-center gap-1.5 font-semibold ${suitCfg.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${suitCfg.dot}`} />
-                        {suitCfg.label}
-                      </span>
-                    ) : (
-                      "-"
-                    )}
+                    <span className={`inline-flex items-center gap-1.5 font-semibold ${suitCfg.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${suitCfg.dot}`} />
+                      {label}
+                    </span>
                   </td>
                 </tr>
               );
@@ -691,7 +691,9 @@ export function WeatherForecastOutlook({
 
       {/* Forecast Data Table — full per-day detail behind the card overview.
           Opt-in (showForecastTable) so the farmer view keeps its card-only layout. */}
-      {showForecastTable && items.length > 0 && <ForecastDataTable items={items} />}
+      {showForecastTable && items.length > 0 && (
+        <ForecastDataTable items={items} commodityName={commodityName} />
+      )}
     </div>
   );
 }

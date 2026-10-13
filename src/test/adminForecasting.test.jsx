@@ -20,6 +20,7 @@ import AdminForecasting, {
   parseHorizonDays,
   priceOutlookFromChange,
   recentAveragePrice,
+  resultExplanationFromForecast,
   toPriceTypeKey,
 } from '../app/admin/pages/AdminForecasting';
 import * as pricesApi from '../services/api/pricesApi';
@@ -230,6 +231,64 @@ describe('forecast graph mapping helpers', () => {
     expect(priceOutlookFromChange(-5.1)).toBe('Unfavorable');
     expect(priceOutlookFromChange(null)).toBeNull();
   });
+
+  it('generates Result Explanation using official text template library with actual values', () => {
+    // Unfavorable case with change percent
+    expect(
+      resultExplanationFromForecast({
+        forecast: { forecast_midpoint: 66.43 },
+        recentAverage: 70,
+        changePercent: -5.1,
+        outlook: 'Unfavorable',
+      })
+    ).toBe(
+      'The forecast midpoint (₱66.43/kg) is below the recent average price (₱70.00/kg) with a forecast change of -5.10%, so the Price Outlook is classified as Unfavorable.'
+    );
+
+    // Favorable case with change percent
+    expect(
+      resultExplanationFromForecast({
+        forecast: { forecast_midpoint: 85.0 },
+        recentAverage: 70,
+        changePercent: 21.43,
+        outlook: 'Favorable',
+      })
+    ).toBe(
+      'The forecast midpoint (₱85.00/kg) is above the recent average price (₱70.00/kg) with a forecast change of +21.43%, so the Price Outlook is classified as Favorable.'
+    );
+
+    // Neutral case with change percent
+    expect(
+      resultExplanationFromForecast({
+        forecast: { forecast_midpoint: 70.0 },
+        recentAverage: 70,
+        changePercent: 0,
+        outlook: 'Neutral',
+      })
+    ).toBe(
+      'The forecast midpoint (₱70.00/kg) is equal to the recent average price (₱70.00/kg) with a forecast change of 0.00%, so the Price Outlook is classified as Neutral.'
+    );
+
+    // Without change percent
+    expect(
+      resultExplanationFromForecast({
+        forecast: { forecast_midpoint: 85.0 },
+        recentAverage: 70,
+        outlook: 'Favorable',
+      })
+    ).toBe(
+      'The forecast midpoint (₱85.00/kg) is above the recent average price (₱70.00/kg), so the Price Outlook is classified as Favorable.'
+    );
+
+    // Missing forecast/baseline returns official fallback
+    expect(
+      resultExplanationFromForecast({
+        forecast: null,
+        recentAverage: null,
+        outlook: null,
+      })
+    ).toBe('Price Outlook could not be calculated for this forecast.');
+  });
 });
 
 describe('pricesApi', () => {
@@ -405,8 +464,13 @@ describe('AdminForecasting graph', () => {
     expect(screen.getByText('Recent Average').parentElement).toHaveTextContent('₱70/kg');
     expect(screen.getByText('Lower Forecast').parentElement).toHaveTextContent('₱71.25/kg');
     expect(screen.getByText('Upper Forecast').parentElement).toHaveTextContent('₱91.25/kg');
-    expect(screen.getByText('Forecast Change').parentElement).toHaveTextContent('+20.0%');
+    expect(screen.getByText('Forecast Change').parentElement).toHaveTextContent('+20.00%');
     expect(screen.getByText('Price Outlook').parentElement).toHaveTextContent('Favorable');
+    expect(
+      screen.getByText(
+        'The forecast midpoint (₱84.00/kg) is above the recent average price (₱70.00/kg) with a forecast change of +20.00%, so the Price Outlook is classified as Favorable.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('still plots historical recent_records from the prices detail payload', async () => {

@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { UserAvatar } from "../profile/UserAvatar";
 
 const TopBar = ({
   logo,
@@ -15,6 +16,8 @@ const TopBar = ({
   notificationCount = 0
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isNotificationOpen = Boolean(location?.pathname?.includes("/notifications"));
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
@@ -106,11 +109,20 @@ const TopBar = ({
 
           <button
             onClick={onNotificationClick}
-            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
-            aria-label="Notifications"
+            className={`relative p-2 rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
+              isNotificationOpen
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={notificationCount > 0 ? `Notifications, ${notificationCount} unread` : "Notifications"}
+            aria-current={isNotificationOpen ? "page" : undefined}
           >
             <Bell className="w-5 h-5" />
-            {notificationCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--hw-error)] rounded-full" />}
+            {notificationCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {notificationCount > 9 ? "9+" : notificationCount}
+              </span>
+            )}
           </button>
 
           {/* Avatar + dropdown */}
@@ -120,9 +132,13 @@ const TopBar = ({
               className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
               aria-label="Account menu"
             >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-xs font-bold select-none">
-                {initials}
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={displayName}
+                className="w-7 h-7"
+                textClassName="text-xs"
+              />
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
 
@@ -133,9 +149,13 @@ const TopBar = ({
                   onClick={() => go("profile")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left border-b border-[var(--hw-neutral-100)]"
                 >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-sm font-bold select-none flex-shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={displayName}
+                    className="w-9 h-9"
+                    textClassName="text-sm"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">{t("auth.role_farmer", {}, "Farmer")}</p>
