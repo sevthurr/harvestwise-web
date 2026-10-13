@@ -101,6 +101,7 @@ export const router = createBrowserRouter([
   { path: "/onboarding", element: <OnboardingPage /> },
   { path: "/privacy",    element: <PrivacyPolicyPage /> },
   { path: "/terms",      element: <TermsPage /> },
+  { path: "/about",      element: <Navigate to="/" replace /> },
 
 
   // ── Farmer workspace ─────────────────────────────────────────────────────────

@@ -347,4 +347,44 @@ describe("advisoryReasons — degraded payloads", () => {
     expect(out[0].key).toBe("farmer.advisory.reasons.reason_arrival_high");
     expect(out[0].params).toEqual({ current_volume: "8,400", unit: "kg" });
   });
+
+  it("populates production parameters with volume, quarter, and percentage", () => {
+    const out = composeAdvisoryReasons({
+      moduleResults: {
+        historical_seasonal_production_level: "Lower Middle",
+        seasonal_production_ratio: 0.85,
+      },
+      contributions: [contrib("historical_seasonal_production_level", "Lower Middle", 2, BEFORE_PLANTING_WEIGHTS)],
+      vetoes: [],
+      cropName: "Carrots (Big)",
+      extra: {
+        commodityId: "carrots",
+        harvestDate: "2026-08-15",
+      },
+    });
+    const prod = out.find((r) => r.module === "historical_seasonal_production_level");
+    expect(prod).toBeDefined();
+    expect(prod.key).toBe("farmer.factors.production.production_lower_middle_basic");
+    expect(prod.params.quarter_label).toBe("Q3");
+    expect(prod.params.pct).toBe(85);
+    expect(prod.params.volume).toBe("697");
+  });
+
+  it("provides descriptive non-numerical weather keys for caution and suitable", () => {
+    const outCaution = composeAdvisoryReasons({
+      moduleResults: { weather_risk: "Caution" },
+      contributions: [contrib("weather_risk", "Caution", 1, BEFORE_PLANTING_WEIGHTS)],
+      vetoes: [],
+      cropName: "Carrots (Big)",
+    });
+    expect(outCaution[0].key).toBe("farmer.factors.weather.weather_caution_basic");
+
+    const outSuitable = composeAdvisoryReasons({
+      moduleResults: { weather_risk: "Suitable" },
+      contributions: [contrib("weather_risk", "Suitable", 0, BEFORE_PLANTING_WEIGHTS)],
+      vetoes: [],
+      cropName: "Carrots (Big)",
+    });
+    expect(outSuitable[0].key).toBe("farmer.factors.weather.weather_suitable");
+  });
 });

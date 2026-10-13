@@ -141,6 +141,10 @@ export const tl = {
     registration_agreement: "Sa paggawa ng account, sumasang-ayon ka sa {terms} at kinikilala mong nabasa mo ang {privacy}.",
     terms_and_conditions: "Mga Tuntunin at Kundisyon",
     privacy_policy: "Patakaran sa Privacy",
+    agree_and_continue: "Sumang-ayon at Magpatuloy",
+    continue: "Magpatuloy",
+    back: "Bumalik",
+    cancel: "Kanselahin",
     sign_in_link: "Mag-sign in",
 
     install_pwa: "I-install ang HarvestWise app",

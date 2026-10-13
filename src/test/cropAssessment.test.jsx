@@ -161,7 +161,7 @@ describe("Crop Assessment Updates", () => {
 
     // Farmgate price input should NOT exist in Step 3
     expect(screen.queryByPlaceholderText("e.g. 70")).toBeNull();
-    expect(screen.queryByLabelText(/Estimated farmgate price|Tantiya sa Presyong Farmgate/i)).toBeNull();
+    expect(screen.queryByLabelText(/Estimated farmgate price|Tansya sa Presyong Farmgate/i)).toBeNull();
   });
 
   it("renders farmgate price input in Step 4 before Pagbawi sa Gasto with comparison", () => {

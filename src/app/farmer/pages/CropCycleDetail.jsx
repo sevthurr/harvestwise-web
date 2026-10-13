@@ -368,8 +368,9 @@ function CropCycleDetailPage() {
               ) : null;
             })}
             <button
+              type="button"
               onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
-              className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
+              className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
             >
               {t("farmer.advisory.view_basis", {}, "View basis →")}
             </button>

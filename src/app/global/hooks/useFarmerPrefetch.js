@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, parseResponse } from "../api";
-import { toCamelCase } from "../utils/apiTransforms";
-import { normalizeCropPlan } from "../../farmer/components/crops/CropsContext";
+import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
@@ -87,12 +86,12 @@ export function fetchFarmerProfile() {
   return apiGet("/farmer/profile").then(parseResponse);
 }
 
-export function fetchCropPlans() {
+export function fetchCropPlans(pricesMap) {
   return apiGet("/crop-plans").then(async (res) => {
     if (!res.ok) return [];
     const data = await parseResponse(res);
     const rawItems = data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
-    return rawItems.map(normalizeCropPlan).filter(Boolean);
+    return rawItems.map((p) => normalizeCropPlan(p, pricesMap)).filter(Boolean);
   });
 }
 
@@ -163,9 +162,10 @@ export async function seedFarmerOfflineBundle(queryClient) {
   if (profile) queryClient.setQueryData(FARMER_PROFILE_KEY, profile);
 
   if (Array.isArray(bundle.crop_plans)) {
+    const pricesMap = Array.isArray(bundle.price_trends) ? buildPricesMap(bundle.price_trends) : new Map();
     queryClient.setQueryData(
       ["farmer", "crops"],
-      bundle.crop_plans.map(normalizeCropPlan).filter(Boolean)
+      bundle.crop_plans.map((p) => normalizeCropPlan(p, pricesMap)).filter(Boolean)
     );
   }
 

@@ -117,13 +117,31 @@ const COMMODITY_REGISTRY = {
   pechay: { name: "Chinese Pechay", SVG: ChinesePechaySVG }
 };
 
+const COMMODITY_ID_MAP = {
+  'com-0001': 'ampalaya',
+  'com-0003': 'kalabasa',
+  'com-0004': 'kamatis',
+  'com-0008': 'pipino',
+  'com-0010': 'talong',
+  'com-0023': 'pechay',
+  'com-0024': 'lettuce',
+  'com-0025': 'lettuce',
+  'com-0026': 'repolyo',
+  'com-0027': 'carrots',
+  'com-0028': 'carrots',
+  'com-0029': 'carrots',
+  'com-0036': 'atsal',
+  'com-0037': 'atsal',
+  'com-0095': 'repolyo',
+};
+
 /**
  * Map database commodity IDs (or base names) to icon keys
  * This handles variants like "Kamatis - Diamante Big" → "kamatis"
  */
 function getCommodityIconKey(commodityId, baseName, commodityName) {
   const idStr = typeof commodityId === 'object' && commodityId !== null ? (commodityId.name || commodityId.id || '') : (commodityId || '');
-  const lowerId = String(idStr).toLowerCase();
+  const lowerId = String(idStr).toLowerCase().trim();
   const nameLower = String(commodityName || '').toLowerCase();
   const baseNameLower = String(baseName || '').toLowerCase();
   const combined = `${lowerId} ${nameLower} ${baseNameLower}`;
@@ -138,6 +156,10 @@ function getCommodityIconKey(commodityId, baseName, commodityName) {
   if (combined.includes('repolyo') || combined.includes('cabbage')) return 'repolyo';
   if (combined.includes('carrot')) return 'carrots';
   if (combined.includes('atsal') || combined.includes('bell pepper') || combined.includes('bell-pepper')) return 'atsal';
+
+  if (COMMODITY_ID_MAP[lowerId]) {
+    return COMMODITY_ID_MAP[lowerId];
+  }
 
   for (const key of Object.keys(COMMODITY_REGISTRY)) {
     if (combined.includes(key)) {

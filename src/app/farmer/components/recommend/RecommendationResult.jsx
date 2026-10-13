@@ -12,7 +12,10 @@ import {
   Sprout,
   RefreshCw,
   AlertCircle,
-  Check
+  Check,
+  Package,
+  Leaf,
+  Cloud
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { getTotalCost, formatPeso, COMMODITY_OPTIONS } from "./types";
@@ -39,6 +42,27 @@ import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
 import { apiPost, parseResponse } from "../../../global/api";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
+import { resolveFactorCondition } from "../../utils/factorColors";
+
+function renderFactorIcon(iconType, colorClass) {
+  if (iconType === "price") {
+    return (
+      <span className={`w-5 h-5 flex items-center justify-center font-bold text-[17px] leading-none flex-shrink-0 mt-0.5 ${colorClass}`}>
+        ₱
+      </span>
+    );
+  }
+  if (iconType === "supply") {
+    return <Package className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  }
+  if (iconType === "production") {
+    return <Leaf className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  }
+  if (iconType === "weather") {
+    return <Cloud className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  }
+  return <TrendingUp className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+}
 
 // Presentation config for each advisory badge state: icon, text colour and card
 // border. The `type` values come from `composeAdvisoryBadge`.
@@ -212,6 +236,11 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
     vetoes: advisoryMeta.hard_vetoes,
     cropName: displayName,
     horizonDays,
+    extra: {
+      commodityId: data.commodity,
+      harvestDate: data.harvestDate || advisoryResponse?.expected_harvest_date || data.plantingDate,
+      plantingDate: data.plantingDate,
+    },
   });
   const hasFarmgate = data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0;
   const immediateActions = composeImmediateActions({
@@ -419,35 +448,36 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
                   {summaryText}
                 </p>
                 <button
-        onClick={() => {
-          const pageState = {
-            title: `${displayName} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`,
-            subtitle: `${t("farmer.advisory.assessment_result_title", {}, "Assessment result")} · ${advisoryLabel}`,
-            breadcrumbs: [
-              { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/farmer/assess" },
-              { label: t("farmer.assess.result", {}, "Result") },
-              { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
-            ],
-            backPath: "/farmer/assess",
-            backLabel: t("farmer.assess.result", {}, "Assessment Result"),
-            price: priceTabData,
-            arrival: arrivalTabData,
-            production: productionTabData,
-            weather: weatherTabData,
-            profitability: profitabilityData,
-            commodityId: data.commodity,
-            commodityName,
-            cropStage,
-            moduleResults,
-            advisoryCode,
-            advisoryLabel,
-            resultData: data,
-            advisoryPayload: advisoryResponse,
-          };
-          navigate("/farmer/assess/factors", { state: pageState });
-        }}
-        className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-      >
+                  type="button"
+                  onClick={() => {
+                    const pageState = {
+                      title: `${displayName} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`,
+                      subtitle: `${t("farmer.advisory.assessment_result_title", {}, "Assessment result")} · ${advisoryLabel}`,
+                      breadcrumbs: [
+                        { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/farmer/assess" },
+                        { label: t("farmer.assess.result", {}, "Result") },
+                        { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
+                      ],
+                      backPath: "/farmer/assess",
+                      backLabel: t("farmer.assess.result", {}, "Assessment Result"),
+                      price: priceTabData,
+                      arrival: arrivalTabData,
+                      production: productionTabData,
+                      weather: weatherTabData,
+                      profitability: profitabilityData,
+                      commodityId: data.commodity,
+                      commodityName,
+                      cropStage,
+                      moduleResults,
+                      advisoryCode,
+                      advisoryLabel,
+                      resultData: data,
+                      advisoryPayload: advisoryResponse,
+                    };
+                    navigate("/farmer/assess/factors", { state: pageState });
+                  }}
+                  className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
+                >
                   {t("farmer.advisory.view_basis", {}, "View basis →")}
                 </button>
               </div>
@@ -488,17 +518,29 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
             {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
           </p>
           <div className="space-y-2.5">
-            {composedReasons.map((r, idx) => (
-              <div key={r.module || idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
-                <TrendingUp className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-neutral-900)]" />
-                <div className="min-w-0">
-                  {r.labelKey && <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-                    {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
-                  </p>}
-                  <p className="text-[12px] text-[var(--hw-neutral-700)]">{renderComposedMessage(r, langCode)}</p>
+            {composedReasons.map((r, idx) => {
+              const reasonText = renderComposedMessage(r, langCode);
+              const factorCond = resolveFactorCondition(
+                r.module,
+                moduleResults?.[r.module],
+                r.key,
+                reasonText
+              );
+
+              return (
+                <div key={r.module || idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
+                  {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
+                  <div className="min-w-0 flex-1">
+                    {r.labelKey && (
+                      <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
+                        {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
+                      </p>
+                    )}
+                    <p className="text-[12px] text-black leading-snug mt-0.5">{reasonText}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

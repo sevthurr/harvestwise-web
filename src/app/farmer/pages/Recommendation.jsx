@@ -29,6 +29,7 @@ import { useCrops } from "../components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 import { explainRainfall } from "../../global/components/shared/weatherExplanations";
+import { resolveFactorCondition } from "../utils/factorColors";
 
 const TwoToneStormIcon = ({ className }) => (
   <svg
@@ -780,6 +781,14 @@ function RecommendationPage() {
             profit: "Favorable margin compared to estimated production costs.",
           };
 
+      const factorLevels = {
+        price: rec.price_outlook || "favorable",
+        supply: rec.arrival_pressure || "favorable",
+        production: rec.historical_seasonal_production_level || "upper_middle",
+        weather: rec.weather_risk_level || "favorable",
+        profit: rec.profitability || "favorable",
+      };
+
       result.push({
         id: cid,
         name: cname,
@@ -789,6 +798,7 @@ function RecommendationPage() {
         plantWindow: plantWindowStr,
         harvestWindow: harvestWindowStr,
         factors,
+        factorLevels,
       });
     }
 
@@ -809,6 +819,13 @@ function RecommendationPage() {
           plantWindow: p.plantWindow(localizedMonth),
           harvestWindow: p.harvestWindow(rawMonthName, t),
           factors: p.factors(rawMonthName, rawMonthShort, t),
+          factorLevels: {
+            price: "favorable",
+            supply: "favorable",
+            production: "upper_middle",
+            weather: "favorable",
+            profit: "favorable",
+          },
         });
       });
     }
@@ -1020,70 +1037,78 @@ function RecommendationPage() {
                     )}
                   </button>
 
-                  {isExpanded && (
-                    <div className="mt-3.5 space-y-2.5 pt-1 text-[13px] text-[var(--hw-neutral-700)]">
-                      <div className="flex items-start gap-2.5">
-                        <span className="font-bold text-[var(--hw-green-700)] flex-shrink-0 leading-tight">₱</span>
-                        <p className="leading-snug">
-                          <span className="font-semibold text-[var(--hw-green-700)]">
-                            {t("farmer.calendar.factor_price", {}, "Price")}
-                          </span>{" "}
-                          · {crop.factors.price}
-                        </p>
-                      </div>
+                  {isExpanded && (() => {
+                    const priceCond = resolveFactorCondition("price", crop.factorLevels?.price, "", crop.factors?.price);
+                    const supplyCond = resolveFactorCondition("supply", crop.factorLevels?.supply, "", crop.factors?.supply);
+                    const productionCond = resolveFactorCondition("production", crop.factorLevels?.production, "", crop.factors?.production);
+                    const weatherCond = resolveFactorCondition("weather", crop.factorLevels?.weather, "", crop.factors?.weather);
+                    const profitCond = resolveFactorCondition("profit", crop.factorLevels?.profit, "", crop.factors?.profit);
 
-                      <div className="flex items-start gap-2.5">
-                        <Package className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                        <p className="leading-snug">
-                          <span className="font-semibold text-blue-500">
-                            {t("farmer.calendar.factor_supply", {}, "Supply")}
-                          </span>{" "}
-                          · {crop.factors.supply}
-                        </p>
-                      </div>
+                    return (
+                      <div className="mt-3.5 space-y-2.5 pt-1 text-[13px]">
+                        <div className="flex items-start gap-2.5">
+                          <span className={`font-bold flex-shrink-0 leading-tight ${priceCond.colorClass}`}>₱</span>
+                          <p className="leading-snug text-black">
+                            <span className={`font-semibold ${priceCond.colorClass}`}>
+                              {t("farmer.calendar.factor_price", {}, "Price")}
+                            </span>{" "}
+                            · {crop.factors?.price}
+                          </p>
+                        </div>
 
-                      <div className="flex items-start gap-2.5">
-                        <Leaf className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                        <p className="leading-snug">
-                          <span className="font-semibold text-emerald-600">
-                            {t("farmer.calendar.factor_production", {}, "Production")}
-                          </span>{" "}
-                          · {crop.factors.production}
-                        </p>
-                      </div>
+                        <div className="flex items-start gap-2.5">
+                          <Package className={`w-4 h-4 flex-shrink-0 mt-0.5 ${supplyCond.colorClass}`} />
+                          <p className="leading-snug text-black">
+                            <span className={`font-semibold ${supplyCond.colorClass}`}>
+                              {t("farmer.calendar.factor_supply", {}, "Supply")}
+                            </span>{" "}
+                            · {crop.factors?.supply}
+                          </p>
+                        </div>
 
-                      <div className="flex items-start gap-2.5">
-                        <Cloud className="w-4 h-4 text-sky-500 flex-shrink-0 mt-0.5" />
-                        <p className="leading-snug">
-                          <span className="font-semibold text-sky-500">
-                            {t("farmer.calendar.factor_weather", {}, "Weather")}
-                          </span>{" "}
-                          · {crop.factors.weather}
-                        </p>
-                      </div>
+                        <div className="flex items-start gap-2.5">
+                          <Leaf className={`w-4 h-4 flex-shrink-0 mt-0.5 ${productionCond.colorClass}`} />
+                          <p className="leading-snug text-black">
+                            <span className={`font-semibold ${productionCond.colorClass}`}>
+                              {t("farmer.calendar.factor_production", {}, "Production")}
+                            </span>{" "}
+                            · {crop.factors?.production}
+                          </p>
+                        </div>
 
-                      <div className="flex items-start gap-2.5">
-                        <TrendingUp className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                        <p className="leading-snug">
-                          <span className="font-semibold text-amber-500">
-                            {t("farmer.calendar.factor_profit", {}, "Profit")}
-                          </span>{" "}
-                          · {crop.factors.profit}
-                        </p>
-                      </div>
+                        <div className="flex items-start gap-2.5">
+                          <Cloud className={`w-4 h-4 flex-shrink-0 mt-0.5 ${weatherCond.colorClass}`} />
+                          <p className="leading-snug text-black">
+                            <span className={`font-semibold ${weatherCond.colorClass}`}>
+                              {t("farmer.calendar.factor_weather", {}, "Weather")}
+                            </span>{" "}
+                            · {crop.factors?.weather}
+                          </p>
+                        </div>
 
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => navigate("/farmer/market/factors", { state: { commodityId: crop.id, commodityName: crop.name } })}
-                          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-                        >
-                          {t("farmer.calendar.view_detailed_factors", {}, "View detailed factors")}
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-start gap-2.5">
+                          <TrendingUp className={`w-4 h-4 flex-shrink-0 mt-0.5 ${profitCond.colorClass}`} />
+                          <p className="leading-snug text-black">
+                            <span className={`font-semibold ${profitCond.colorClass}`}>
+                              {t("farmer.calendar.factor_profit", {}, "Profit")}
+                            </span>{" "}
+                            · {crop.factors?.profit}
+                          </p>
+                        </div>
+
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate("/farmer/market/factors", { state: { commodityId: crop.id, commodityName: crop.name } })}
+                            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+                          >
+                            {t("farmer.calendar.view_detailed_factors", {}, "View detailed factors")}
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             );
