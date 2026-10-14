@@ -66,10 +66,42 @@ export function resolveNotificationRoute(item, role = "Farmer") {
   const meta = item.metadata || item.payload || {};
   const cat = item.category || "";
 
-  // 1. Farmer Routes
+  // 1. Respect valid persisted route if already explicit and non-generic
+  if (item.route) {
+    const r = item.route;
+    // Normalize legacy redirects
+    if (r === "/admin/analytics") return "/admin/modules";
+    if (r === "/admin/history") return "/admin/data-sources?tab=history";
+    if (r === "/admin/import" && meta.import_id) return `/admin/history/${meta.import_id}`;
+    if (r === "/admin/configuration") {
+      const action = String(meta.action || "");
+      if (action.startsWith("config.threshold")) return "/admin/modules/thresholds";
+      if (action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
+      return "/admin/modules";
+    }
+    // Return specific persisted routes directly
+    if (
+      r.startsWith("/farmer/prices/COM-") ||
+      r.startsWith("/farmer/crops/") ||
+      r.startsWith("/dftc/submissions/") ||
+      r.startsWith("/dftc/trends") ||
+      r.startsWith("/admin/") ||
+      r === "/farmer/market/weather" ||
+      r.startsWith("/farmer/market/factors") ||
+      r === "/farmer/market/dftc-arrivals" ||
+      r === "/farmer/market/seasonal-production" ||
+      r.startsWith("/farmer/market")
+    ) {
+      return r;
+    }
+  }
+
+  // 2. Farmer Routes
   if (
     role.toLowerCase() === "farmer" ||
     cat.startsWith("price_") ||
+    cat === "arrival_update" ||
+    cat === "production_update" ||
     cat === "weather_alert" ||
     cat === "harvest_reminder" ||
     cat === "planting_advisory"
@@ -79,33 +111,51 @@ export function resolveNotificationRoute(item, role = "Farmer") {
 
     if (cat === "price_change" || cat === "price_update") {
       if (commId) return `/farmer/prices/${commId}`;
-      if (item.route && item.route !== "/farmer/prices") return item.route;
-      return "/farmer/prices";
+      return item.route || "/farmer/prices";
+    }
+    if (cat === "arrival_update") {
+      if (cropPlanId) return `/farmer/crops/${cropPlanId}/factors?tab=arrival`;
+      if (commId) return `/farmer/market/factors?commodity=${commId}&tab=arrival`;
+      return item.route || "/farmer/crops";
+    }
+    if (cat === "production_update") {
+      if (cropPlanId) return `/farmer/crops/${cropPlanId}/factors?tab=production`;
+      if (commId) return `/farmer/market/factors?commodity=${commId}&tab=production`;
+      return item.route || "/farmer/crops";
     }
     if (cat === "weather_alert") {
       return item.route || "/farmer/market/weather";
     }
     if (cat === "harvest_reminder") {
       if (cropPlanId) return `/farmer/crops/${cropPlanId}`;
-      if (item.route && item.route !== "/farmer/crops") return item.route;
-      return "/farmer/crops";
-    }
-    if (cat === "planting_advisory") {
       return item.route || "/farmer/crops";
     }
-    if (commId && (item.route?.includes("/prices") || !item.route)) {
+    if (cat === "planting_advisory") {
+      const targetCommId = commId || meta.commodity_id || meta.commodityId;
+      if (targetCommId) return `/farmer/market?highlight=${targetCommId}`;
+      return item.route || "/farmer/market";
+    }
+    if (commId) {
       return `/farmer/prices/${commId}`;
     }
     return item.route || "/farmer/prices";
   }
 
-  // 2. DFTC Routes
+  // 3. DFTC Routes
   if (
     role.toLowerCase() === "dftc" ||
+    cat === "price_volatility" ||
+    cat === "oversupply_alert" ||
     cat.startsWith("submission_") ||
     cat === "records_need_correction" ||
     cat === "upload_validation_completed"
   ) {
+    if (cat === "price_volatility") {
+      return item.route || "/dftc/trends?tab=price&alert=volatility";
+    }
+    if (cat === "oversupply_alert") {
+      return item.route || "/dftc/trends?tab=arrival&alert=oversupply";
+    }
     const subId = meta.submission_id || meta.submissionId || item.dedupe_key?.split(":")?.[2];
     if (subId) {
       return `/dftc/submissions/${subId}`;
@@ -113,54 +163,24 @@ export function resolveNotificationRoute(item, role = "Farmer") {
     return item.route || "/dftc/submissions";
   }
 
-  // 3. Admin Routes
-  //
-  // The backend picks the destination per audit action and always sends a
-  // route (see api/src/modules/notifications/events.py `_resolve_admin_route`),
-  // so the category switch below is only a fallback for rows written before
-  // that resolver existed, or by a producer that sends no route at all. Both
-  // paths must name real pages: /admin/configuration is an orphan mock whose
-  // buttons do nothing, so config work lands on the modules page instead.
-  if (item.route) {
-    // Avoid legacy redirects
-    if (item.route === "/admin/analytics") return "/admin/modules";
-    // Mirrors the router redirect in app/routes.jsx — import history lives
-    // under Data Sources, not Import & Validate.
-    // /admin/history/:id is a real detail page and must pass through — only the
-    // bare list path is the legacy redirect.
-    if (item.route === "/admin/history") return "/admin/data-sources?tab=history";
-    // Pre-fix import rows carry /admin/import and no import_id. New rows land on
-    // the history entry directly, so only repair those that still point at the
-    // form and can be resolved from their audit action.
-    if (item.route === "/admin/import" && meta.import_id) {
-      return `/admin/history/${meta.import_id}`;
-    }
-    // Written by the pre-resolver fan-out. The audit action is still in
-    // metadata, so route it the same way the backend does now.
-    if (item.route === "/admin/configuration") {
-      const action = String(meta.action || "");
-      if (action.startsWith("config.threshold")) return "/admin/modules/thresholds";
-      if (action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
-      return "/admin/modules";
-    }
-    return item.route;
-  }
-
+  // 4. Admin / SuperAdmin Routes
   switch (cat) {
-    case "import_event":
-      // An import alert is about a finished upload. The backend supplies
-      // metadata.import_id for new rows so this opens that upload's own history
-      // entry; /admin/import is only the form that starts one.
-      if (meta.import_id) return `/admin/history/${meta.import_id}`;
-      return "/admin/import";
+    case "pipeline_failed":
     case "processing_event":
     case "advisory_event":
       return "/admin/modules";
+    case "ingestion_failed":
+      if (meta.import_id) return `/admin/history/${meta.import_id}`;
+      return "/admin/data-sources";
+    case "security_alert":
+    case "auth_event":
+      return "/admin/audit-logs";
+    case "import_event":
+      if (meta.import_id) return `/admin/history/${meta.import_id}`;
+      return "/admin/import";
     case "data_event":
       return "/admin/data-sources";
     case "system_event":
-      // Weather syncs are driven from the API Sync tab; anything else under
-      // system.* is a platform-health concern.
       if (String(meta.action || "").startsWith("system.weather")) {
         return "/admin/data-sources?tab=api-sync";
       }
@@ -172,11 +192,10 @@ export function resolveNotificationRoute(item, role = "Farmer") {
       return "/admin/modules";
     }
     case "user_event":
+      if (meta.target_user_id) return `/admin/system/user/${meta.target_user_id}`;
       if (meta.user_id) return `/admin/system/user/${meta.user_id}`;
       return "/admin/system?tab=users";
-    case "auth_event":
-      return "/admin/audit-logs";
     default:
-      return "/admin/audit-logs";
+      return item.route || "/admin/audit-logs";
   }
 }

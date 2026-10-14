@@ -21,6 +21,7 @@ import {
   AlertOctagon,
   AlertTriangle,
   Bell,
+  Boxes,
   CalendarDays,
   CheckCircle2,
   CircleCheck,
@@ -29,14 +30,17 @@ import {
   CloudSun,
   Database,
   Info,
+  Layers,
   Lightbulb,
   PhilippinePeso,
   Server,
+  ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   Sprout,
   TriangleAlert,
   TrendingUp,
+  TrendingUpDown,
   Upload,
   Users,
 } from "lucide-react";
@@ -85,6 +89,18 @@ export const NOTIFICATION_CATEGORIES = {
     bg: "bg-blue-50",
     urgency: "information",
   },
+  arrival_update: {
+    Icon: Boxes,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+    urgency: "attention",
+  },
+  production_update: {
+    Icon: Layers,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+    urgency: "information",
+  },
   weather_alert: {
     Icon: CloudSun,
     color: "text-sky-600",
@@ -104,8 +120,19 @@ export const NOTIFICATION_CATEGORIES = {
     urgency: "information",
   },
 
-  // DFTC — these four are exactly what
-  // notifications.service.notify_dftc_submission_event persists.
+  // DFTC
+  price_volatility: {
+    Icon: TrendingUpDown,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+    urgency: "attention",
+  },
+  oversupply_alert: {
+    Icon: Boxes,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+    urgency: "attention",
+  },
   submission_accepted: {
     Icon: CircleCheck,
     color: "text-emerald-600",
@@ -137,6 +164,26 @@ export const NOTIFICATION_CATEGORIES = {
     urgency: "information",
     actionLabel: "View Summary",
     reason: "Validation finished for your uploaded file.",
+  },
+
+  // SuperAdmin / Admin
+  pipeline_failed: {
+    Icon: AlertOctagon,
+    color: "text-red-600",
+    bg: "bg-red-50",
+    urgency: "urgent",
+  },
+  ingestion_failed: {
+    Icon: Upload,
+    color: "text-red-600",
+    bg: "bg-red-50",
+    urgency: "urgent",
+  },
+  security_alert: {
+    Icon: ShieldAlert,
+    color: "text-rose-600",
+    bg: "bg-rose-50",
+    urgency: "urgent",
   },
 
   // Admin
