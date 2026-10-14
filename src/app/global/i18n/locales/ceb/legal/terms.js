@@ -60,7 +60,7 @@ export const terms = {
     s7: {
       title: "7. LIMITASYON SA PRICE FORECAST",
       p1: "Naghatag ang HarvestWise og short-term Price Outlook para sa supported 7-, 14-, 21-, ug 28-day horizons.",
-      p2: "Ang price forecast usa ka tantiya base sa available historical data ug analytical models.",
+      p2: "Ang price forecast usa ka tansya base sa available historical data ug analytical models.",
       p3: "Mahimong mausab ang aktuwal nga presyo tungod sa supply disruption, buyer behavior, transport conditions, weather events, kalit nga pagdaghan sa market arrivals, policy changes, ug ubang panghitabo nga dili hingpit nga matagna.",
       p4: "Dili garantiya sa HarvestWise ang umaabot nga presyo sa pagbaligya."
     },

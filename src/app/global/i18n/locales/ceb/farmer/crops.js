@@ -6,7 +6,7 @@ export const crops = {
   harvest_date: "Gilaom nga petsa sa ani",
   current_price: "Presyo karon",
   sold_at: "Gibaligya sa",
-  estimated_profit: "Tantiya sa Kita",
+  estimated_profit: "Tansya sa Kita",
   days_to_harvest: "{days} ka adlaw bago moani",
   ready_to_harvest: "Andam na anihon",
   harvested: "Na-ani na",

@@ -23,16 +23,21 @@ function matchesStage(crop, tab) {
 }
 function profitRange(crop) {
   if (crop.phase === "completed") return null;
-  if (crop.profitLower != null && crop.profitUpper != null) {
-    return `\u20B1${Number(crop.profitLower).toLocaleString("en-PH")}\u2013\u20B1${Number(crop.profitUpper).toLocaleString("en-PH")}`;
+  const pLow = Number(crop.profitLower || 0);
+  const pHigh = Number(crop.profitUpper || 0);
+  if (pLow > 0 && pHigh > 0) {
+    return `\u20B1${pLow.toLocaleString("en-PH")}\u2013\u20B1${pHigh.toLocaleString("en-PH")}`;
   }
-  if (crop.currentPrice != null && crop.breakEvenPrice != null && crop.harvestQuantity != null) {
-    const margin = crop.currentPrice - crop.breakEvenPrice;
-    const midProfit = margin * crop.harvestQuantity;
-    if (midProfit <= 0) return null;
-    const lo = Math.floor(midProfit * 0.85 / 1e3) * 1e3;
-    const hi = Math.ceil(midProfit * 1.15 / 1e3) * 1e3;
-    return `\u20B1${lo.toLocaleString("en-PH")}\u2013\u20B1${hi.toLocaleString("en-PH")}`;
+  const sellingBasis = crop.farmgatePrice != null ? crop.farmgatePrice : crop.currentPrice;
+  const qty = crop.expectedHarvestQty != null ? crop.expectedHarvestQty : crop.harvestQuantity;
+  const cost = crop.breakEvenPrice != null ? crop.breakEvenPrice : crop.breakevenPricePerKg;
+  if (sellingBasis != null && cost != null && qty != null && qty > 0) {
+    const margin = sellingBasis - cost;
+    if (margin > 0) {
+      const lo = Math.floor(margin * qty * 0.85 / 1e3) * 1e3;
+      const hi = Math.ceil(margin * qty * 1.1 / 1e3) * 1e3;
+      return `\u20B1${lo.toLocaleString("en-PH")}\u2013\u20B1${hi.toLocaleString("en-PH")}`;
+    }
   }
   return null;
 }
@@ -74,7 +79,11 @@ const MyCropCard = ({ crop, onView }) => {
         </div>
         <div className="flex items-center justify-between text-[13px]">
           <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.current_price", {}, "Current price")}</span>
-          <span className="font-medium text-[var(--hw-neutral-900)]">{currentPrice != null ? `₱${currentPrice}/kg` : "-/kg"}</span>
+          <span className="font-medium text-[var(--hw-neutral-900)]">
+            {currentPrice != null
+              ? `₱${Number(currentPrice).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg`
+              : "-/kg"}
+          </span>
         </div>
         {crop.phase === "completed" && crop.actualSellingPrice ? (
           <div className="flex items-center justify-between text-[13px]">

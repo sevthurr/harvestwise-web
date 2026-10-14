@@ -76,8 +76,8 @@ export function localizeFarmerNotification(item, t, lang = "en") {
   if (category === "price_change") {
     let direction = metadata.direction;
     if (!direction && fallbackTitle) {
-      if (/rose|increased|up|Misaka|Tumaas/i.test(fallbackTitle)) direction = "rose";
-      else if (/dropped|decreased|down|Mius-os|Bumaba/i.test(fallbackTitle)) direction = "dropped";
+      if (/rose|increased|up|Misaka|Musaka|Tumaas/i.test(fallbackTitle)) direction = "rose";
+      else if (/dropped|decreased|down|Mius-os|Nius-os|Nibaba|Bumaba/i.test(fallbackTitle)) direction = "dropped";
     }
     direction = direction || "rose";
 

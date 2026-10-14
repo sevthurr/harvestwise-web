@@ -143,7 +143,7 @@ const SUITABILITY_STYLES = {
     text: "text-red-600",
     iconColor: "text-red-600",
     labelEn: "Severe",
-    labelCeb: "Taas ang Risgo",
+    labelCeb: "Taas ang Risk",
     shortCeb: "Delikado",
     labelTl: "Mataas ang Panganib",
     shortTl: "Mapanganib",

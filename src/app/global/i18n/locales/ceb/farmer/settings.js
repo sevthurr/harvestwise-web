@@ -62,7 +62,7 @@ export const settings = {
   schedule_reminders: "Pahinumdom sa iskedyul sa pagtanom",
   schedule_reminders_desc: "Pahinumdom sa giplanong petsa sa pagtanom ug mga sunod nga yugto.",
   price_alerts: "Alerto sa lihok sa presyo",
-  price_alerts_desc: "Pahibalo kung ang presyo sa merkado sa imong mga tanom mosaka o moubos og dako.",
+  price_alerts_desc: "Pahibalo kung ang presyo sa palengke sa imong mga tanom musaka o moubos og dako.",
   offline_sync_alerts: "Pahinumdom sa offline sync",
   offline_sync_alerts_desc: "Pahinumdom sa pag-sync sa imong datos inig balik sa koneksyon sa internet.",
   change_password: "Usba ang Password",

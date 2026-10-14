@@ -4,13 +4,37 @@ import { useLanguage } from "../../contexts/LanguageContext";
 
 export function LegalModal({
   title,
-  effectiveDate = "October 9, 2026",
+  docType,
+  effectiveDate,
   version = "1.0",
   onClose,
+  footer,
   children,
 }) {
-  const { langCode, setLanguage } = useLanguage();
+  const { langCode, setLanguage, t } = useLanguage();
   const modalRef = useRef(null);
+
+  const resolvedTitle =
+    title ||
+    (docType === "terms"
+      ? t("legal.terms.title", {}, "Terms and Conditions")
+      : docType === "privacy"
+      ? t("legal.privacy.title", {}, "Privacy Policy")
+      : "");
+  const resolvedDate =
+    effectiveDate ||
+    (docType === "terms"
+      ? t("legal.terms.effective_date", {}, "October 9, 2026")
+      : docType === "privacy"
+      ? t("legal.privacy.effective_date", {}, "October 9, 2026")
+      : "October 9, 2026");
+  const resolvedVersion =
+    version ||
+    (docType === "terms"
+      ? t("legal.terms.version", {}, "1.0")
+      : docType === "privacy"
+      ? t("legal.privacy.version", {}, "1.0")
+      : "1.0");
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -30,7 +54,7 @@ export function LegalModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label={resolvedTitle}
     >
       <div
         ref={modalRef}
@@ -40,10 +64,10 @@ export function LegalModal({
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--hw-neutral-100,#f3f4f6)] bg-[var(--hw-neutral-50,#f9fafb)] flex-shrink-0">
           <div className="min-w-0 pr-2">
             <h2 className="text-[14px] font-bold text-black truncate">
-              {title}
+              {resolvedTitle}
             </h2>
             <p className="text-[10px] text-[var(--hw-neutral-500,#6b7280)] leading-none mt-0.5">
-              Effective: {effectiveDate} · Version {version}
+              Effective: {resolvedDate} · Version {resolvedVersion}
             </p>
           </div>
 
@@ -83,14 +107,20 @@ export function LegalModal({
         </div>
 
         {/* Minimal Footer */}
-        <div className="flex items-center justify-end px-4 py-2 border-t border-[var(--hw-neutral-100,#f3f4f6)] bg-[var(--hw-neutral-50,#f9fafb)] flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-7 px-3 text-[11px] font-medium text-[var(--hw-neutral-700,#374151)] bg-white border border-[var(--hw-neutral-200,#e5e7eb)] hover:bg-[var(--hw-neutral-100,#f3f4f6)] rounded transition-colors"
-          >
-            Close
-          </button>
+        <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--hw-neutral-100,#f3f4f6)] bg-[var(--hw-neutral-50,#f9fafb)] flex-shrink-0">
+          {footer ? (
+            footer
+          ) : (
+            <div className="w-full flex justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-7 px-3 text-[11px] font-medium text-[var(--hw-neutral-700,#374151)] bg-white border border-[var(--hw-neutral-200,#e5e7eb)] hover:bg-[var(--hw-neutral-100,#f3f4f6)] rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

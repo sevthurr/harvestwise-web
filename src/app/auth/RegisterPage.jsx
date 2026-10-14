@@ -3,11 +3,16 @@ import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff, Check, Download } from "lucide-react";
 import VerticalLogo from "../../imports/logo";
 import { useAuth, roleHome } from "../global/contexts/AuthContext";
+import { useLanguage } from "../global/contexts/LanguageContext";
 import { Footer } from "../global/components/Footer";
 import { apiPost, parseResponse } from "../global/api";
 import { usePWAInstall } from "../global/hooks/usePWAInstall";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
 import { useGoogleAuth } from "./useGoogleAuth";
+import { supabase } from "../../services/supabaseClient";
+import { LegalModal } from "../global/components/legal/LegalModal";
+import { TermsContent } from "../global/components/legal/TermsContent";
+import { PrivacyPolicyContent } from "../global/components/legal/PrivacyPolicyContent";
 import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
 import { ContactInput } from "./components/ContactInput";
 import {
@@ -15,6 +20,48 @@ import {
   PASSWORD_REQUIREMENTS,
   validatePasswordStrength,
 } from "./authValidation";
+
+function GoogleConsentFooter({ step, onCancel, onBack, onProceed, isSubmitting }) {
+  const { t } = useLanguage();
+  return (
+    <div className="w-full flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={onCancel}
+        className="h-8 px-3 text-[12px] font-medium text-[var(--hw-neutral-700,#374151)] bg-white border border-[var(--hw-neutral-200,#e5e7eb)] hover:bg-[var(--hw-neutral-100,#f3f4f6)] rounded-lg transition-colors cursor-pointer"
+      >
+        {t("auth.cancel", {}, t("common.cancel", {}, "Cancel"))}
+      </button>
+      <button
+        type="button"
+        onClick={onBack}
+        className="h-8 px-3 text-[12px] font-medium text-[var(--hw-neutral-700,#374151)] bg-white border border-[var(--hw-neutral-200,#e5e7eb)] hover:bg-[var(--hw-neutral-100,#f3f4f6)] rounded-lg transition-colors cursor-pointer"
+      >
+        {t("auth.back", {}, t("common.back", {}, "Back"))}
+      </button>
+      {step === "terms" ? (
+        <button
+          type="button"
+          onClick={onProceed}
+          className="h-8 px-3.5 text-[12px] font-semibold text-white bg-[var(--hw-green-700,#15803d)] hover:bg-[var(--hw-green-800,#166534)] rounded-lg transition-colors cursor-pointer shadow-sm"
+        >
+          {t("auth.agree_and_continue", {}, "Agree and Continue")}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onProceed}
+          disabled={isSubmitting}
+          className="h-8 px-3.5 text-[12px] font-semibold text-white bg-[var(--hw-green-700,#15803d)] hover:bg-[var(--hw-green-800,#166534)] rounded-lg transition-colors cursor-pointer shadow-sm disabled:opacity-60"
+        >
+          {isSubmitting
+            ? t("auth.sign_in_loading", {}, "Signing in…")
+            : t("auth.continue", {}, t("common.continue", {}, "Continue"))}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const SCALE = 0.85;
 const LOGO_W = Math.round(494 * SCALE);
@@ -73,6 +120,11 @@ function RegisterPage() {
   const [showCfm, setShowCfm] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [viewLegalModal, setViewLegalModal] = useState(null);
+  const [googleConsentStep, setGoogleConsentStep] = useState(null);
+  const [pendingGoogleAuth, setPendingGoogleAuth] = useState(null);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   const capitalizeWords = (v) => v.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -124,6 +176,8 @@ function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!agreed) return;
+
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
@@ -145,13 +199,6 @@ function RegisterPage() {
 
       const res = await apiPost("/api/v1/auth/register", payload);
       const tokens = await parseResponse(res);
-      // The register endpoint answers 201 with a well-formed but unusable token
-      // pair when the identifier is already taken, so this endpoint cannot be
-      // used to discover which email addresses have accounts. That also means
-      // a duplicate surfaces as a failure of the follow-up /auth/me call rather
-      // than a distinct 409, so it is handled here in one uniform message
-      // instead of the previous "email already registered" / "phone already
-      // registered" pair.
       try {
         await login(tokens);
       } catch {
@@ -193,10 +240,41 @@ function RegisterPage() {
         });
         return;
       }
-      const me = await login(data);
-      navigate(roleHome(me.role.role_name), { replace: true });
+      // Hold auth data and require reviewing Terms and Conditions then Privacy Policy
+      setPendingGoogleAuth(data);
+      setGoogleConsentStep("terms");
     },
   });
+
+  const handleCancelGoogleAuth = async () => {
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      // Ignore cleanup error
+    }
+    setPendingGoogleAuth(null);
+    setGoogleConsentStep(null);
+  };
+
+  const handleCompleteGoogleAuth = async () => {
+    if (!pendingGoogleAuth) return;
+    setGoogleSubmitting(true);
+    try {
+      const me = await login(pendingGoogleAuth);
+      setGoogleConsentStep(null);
+      setPendingGoogleAuth(null);
+      navigate(roleHome(me.role?.role_name || "Farmer"), { replace: true });
+    } catch (err) {
+      setGoogleConsentStep(null);
+      setErrors({
+        general: err.message || t("auth.errors.general", {}, "Something went wrong. Please try again."),
+      });
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  };
 
   const handleInstall = async () => {
     setInstalling(true);
@@ -435,51 +513,107 @@ function RegisterPage() {
             )}
           </div>
 
-          {/* Registration Agreement Notice */}
-          <div className="pt-1 text-[12px] text-[var(--hw-neutral-600)] text-center leading-relaxed">
-            {authLang === "ceb" ? (
-              <p>
-                Paghimo nimo og account, mouyon ka sa{" "}
-                <Link to="/terms" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
-                  Mga Termino ug Kondisyon
-                </Link>{" "}
-                ug nagpamatuod nga nabasa nimo ang{" "}
-                <Link to="/privacy" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
-                  Patakaran sa Privacy
-                </Link>.
-              </p>
-            ) : authLang === "tl" ? (
-              <p>
-                Sa paggawa ng account, sumasang-ayon ka sa{" "}
-                <Link to="/terms" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
-                  Mga Tuntunin at Kundisyon
-                </Link>{" "}
-                at kinikilala mong nabasa mo ang{" "}
-                <Link to="/privacy" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
-                  Patakaran sa Privacy
-                </Link>.
-              </p>
-            ) : (
-              <p>
-                By creating an account, you agree to the{" "}
-                <Link to="/terms" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
-                  Terms and Conditions
-                </Link>{" "}
-                and acknowledge the{" "}
-                <Link to="/privacy" className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)]">
-                  Privacy Policy
-                </Link>.
-              </p>
-            )}
+          {/* Registration Agreement Notice with Checkbox */}
+          <div className="pt-1 flex items-start gap-2.5 text-[12px] text-[var(--hw-neutral-600)] leading-relaxed">
+            <input
+              id="agreeTerms"
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-[var(--hw-neutral-300)] text-[var(--hw-green-700)] focus:ring-[var(--hw-green-700)] accent-[var(--hw-green-700)] cursor-pointer flex-shrink-0"
+            />
+            <label htmlFor="agreeTerms" className="cursor-pointer select-none">
+              {authLang === "ceb" ? (
+                <span>
+                  Paghimo nimo og account, mouyon ka sa{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setViewLegalModal("terms");
+                    }}
+                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                  >
+                    Mga Termino ug Kondisyon
+                  </button>{" "}
+                  ug nagpamatuod nga nabasa nimo ang{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setViewLegalModal("privacy");
+                    }}
+                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                  >
+                    Patakaran sa Privacy
+                  </button>.
+                </span>
+              ) : authLang === "tl" ? (
+                <span>
+                  Sa paggawa ng account, sumasang-ayon ka sa{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setViewLegalModal("terms");
+                    }}
+                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                  >
+                    Mga Tuntunin at Kundisyon
+                  </button>{" "}
+                  at kinikilala mong nabasa mo ang{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setViewLegalModal("privacy");
+                    }}
+                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                  >
+                    Patakaran sa Privacy
+                  </button>.
+                </span>
+              ) : (
+                <span>
+                  By creating an account, you agree to the{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setViewLegalModal("terms");
+                    }}
+                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                  >
+                    Terms and Conditions
+                  </button>{" "}
+                  and acknowledge the{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setViewLegalModal("privacy");
+                    }}
+                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                  >
+                    Privacy Policy
+                  </button>.
+                </span>
+              )}
+            </label>
           </div>
 
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors"
+            disabled={loading || !agreed}
+            className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-
             {loading
               ? t("auth.sign_up_loading", {}, "Creating account…")
               : t("auth.sign_up", {}, "Create account")}
@@ -499,8 +633,8 @@ function RegisterPage() {
         <button
           type="button"
           onClick={handleGoogle}
-          disabled={loading || googleLoading}
-          className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
+          disabled={loading || googleLoading || !agreed}
+          className="w-full h-11 flex items-center justify-center gap-2.5 bg-white border border-[var(--hw-neutral-200)] text-[15px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -543,6 +677,51 @@ function RegisterPage() {
       </div>
 
       <Footer lang={authLang} className="mt-2" />
+
+      {/* Informational Legal Modal on link click */}
+      {viewLegalModal === "terms" && (
+        <LegalModal
+          docType="terms"
+          onClose={() => setViewLegalModal(null)}
+        >
+          <TermsContent />
+        </LegalModal>
+      )}
+      {viewLegalModal === "privacy" && (
+        <LegalModal
+          docType="privacy"
+          onClose={() => setViewLegalModal(null)}
+        >
+          <PrivacyPolicyContent />
+        </LegalModal>
+      )}
+
+      {/* Google Sign-up Post-Auth Consent Flow Modal */}
+      {googleConsentStep && (
+        <LegalModal
+          docType={googleConsentStep}
+          onClose={handleCancelGoogleAuth}
+          footer={
+            <GoogleConsentFooter
+              step={googleConsentStep}
+              onCancel={handleCancelGoogleAuth}
+              onBack={
+                googleConsentStep === "privacy"
+                  ? () => setGoogleConsentStep("terms")
+                  : handleCancelGoogleAuth
+              }
+              onProceed={
+                googleConsentStep === "terms"
+                  ? () => setGoogleConsentStep("privacy")
+                  : handleCompleteGoogleAuth
+              }
+              isSubmitting={googleSubmitting}
+            />
+          }
+        >
+          {googleConsentStep === "terms" ? <TermsContent /> : <PrivacyPolicyContent />}
+        </LegalModal>
+      )}
     </div>
   );
 }

@@ -228,7 +228,7 @@ describe("Standalone Public Pages & Routing Behavior", () => {
 });
 
 describe("Farmer Registration & Account Alignment", () => {
-  it("renders registration agreement with links to /terms and /privacy in RegisterPage", async () => {
+  it("renders registration agreement checkbox and disables buttons until agreed, opening modals on click", async () => {
     const { default: RegisterPage } = await import("../app/auth/RegisterPage");
     render(
       <MemoryRouter initialEntries={["/register"]}>
@@ -238,14 +238,107 @@ describe("Farmer Registration & Account Alignment", () => {
       </MemoryRouter>
     );
 
-    const termsLinks = screen.getAllByRole("link", { name: /Terms and Conditions|Mga Termino ug Kondisyon|Mga Tuntunin at Kundisyon/i });
-    const privacyLinks = screen.getAllByRole("link", { name: /Privacy Policy|Patakaran sa Privacy/i });
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).not.toBeChecked();
 
-    expect(termsLinks.length).toBeGreaterThanOrEqual(1);
-    termsLinks.forEach((link) => expect(link).toHaveAttribute("href", "/terms"));
+    const submitBtn = screen.getByRole("button", { name: /Create account|Paghimo og account|Gumawa ng account/i });
+    const googleBtn = screen.getByRole("button", { name: /Sign up with Google|Mag-sign up gamit ang Google/i });
 
-    expect(privacyLinks.length).toBeGreaterThanOrEqual(1);
-    privacyLinks.forEach((link) => expect(link).toHaveAttribute("href", "/privacy"));
+    expect(submitBtn).toBeDisabled();
+    expect(googleBtn).toBeDisabled();
+
+    // Checkbox toggling enables buttons
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(submitBtn).not.toBeDisabled();
+    expect(googleBtn).not.toBeDisabled();
+
+    // Clicking Terms button opens the LegalModal
+    const termsBtns = screen.getAllByRole("button", { name: /Terms and Conditions|Mga Termino ug Kondisyon|Mga Tuntunin at Kundisyon/i });
+    fireEvent.click(termsBtns[0]);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /Terms and Conditions|Mga Termino ug Kondisyon|Mga Tuntunin at Kundisyon/i })).toBeInTheDocument();
+
+    // Close the modal
+    const closeBtns = screen.getAllByRole("button", { name: /close/i });
+    fireEvent.click(closeBtns[0]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Clicking Privacy Policy opens LegalModal
+    const privacyBtns = screen.getAllByRole("button", { name: /Privacy Policy|Patakaran sa Privacy/i });
+    fireEvent.click(privacyBtns[0]);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /Privacy Policy|Patakaran sa Privacy/i })).toBeInTheDocument();
+  });
+
+  it("handles Google sign-up consent flow: Terms with Agree and Continue, Back, and Cancel, then Privacy with Continue", async () => {
+    const { LegalModal } = await import("../app/global/components/legal/LegalModal");
+    const { TermsContent } = await import("../app/global/components/legal/TermsContent");
+    const { PrivacyPolicyContent } = await import("../app/global/components/legal/PrivacyPolicyContent");
+
+    const onCancel = vi.fn();
+    const onBack = vi.fn();
+    const onProceed = vi.fn();
+
+    // Render step 1 (Terms)
+    const { rerender } = render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <LegalModal
+            docType="terms"
+            onClose={onCancel}
+            footer={
+              <div className="w-full flex items-center justify-end gap-2">
+                <button type="button" onClick={onCancel}>Cancel</button>
+                <button type="button" onClick={onBack}>Back</button>
+                <button type="button" onClick={onProceed}>Agree and Continue</button>
+              </div>
+            }
+          >
+            <TermsContent />
+          </LegalModal>
+        </LanguageProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Agree and Continue" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Agree and Continue" }));
+    expect(onProceed).toHaveBeenCalledTimes(1);
+
+    // Rerender step 2 (Privacy)
+    rerender(
+      <MemoryRouter>
+        <LanguageProvider>
+          <LegalModal
+            docType="privacy"
+            onClose={onCancel}
+            footer={
+              <div className="w-full flex items-center justify-end gap-2">
+                <button type="button" onClick={onCancel}>Cancel</button>
+                <button type="button" onClick={onBack}>Back</button>
+                <button type="button" onClick={onProceed}>Continue</button>
+              </div>
+            }
+          >
+            <PrivacyPolicyContent />
+          </LegalModal>
+        </LanguageProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
 

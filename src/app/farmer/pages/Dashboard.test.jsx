@@ -98,7 +98,7 @@ describe("Farmer dashboard price trends", () => {
     renderDashboard();
 
     expect(await screen.findByText("Falling")).toBeInTheDocument();
-    expect(screen.queryByText(/Forecast period/)).not.toBeInTheDocument();
+    expect(screen.getByText("-₱9")).toBeInTheDocument();
     expect(screen.getByText("No trend data")).toBeInTheDocument();
     expect(screen.getByText("₱150/kg")).toBeInTheDocument();
     expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", {

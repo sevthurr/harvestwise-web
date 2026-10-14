@@ -6,7 +6,7 @@ export const about = {
   sections: {
     purpose: {
       title: "Among Tumong",
-      p1: "Gihimo ang HarvestWise aron makatabang sa mga problema sama sa parehas o dili koordinadong panahon sa pagtanom, sobra nga suplay sa gulay, mausab-usab nga presyo sa palengke, risgo sa produksyon, ug kakulang sa tukma sa panahon nga impormasyon para sa pagdesisyon.",
+      p1: "Gihimo ang HarvestWise aron makatabang sa mga problema sama sa parehas o dili koordinadong panahon sa pagtanom, sobra nga suplay sa gulay, mausab-usab nga presyo sa palengke, risk sa produksyon, ug kakulang sa tukma sa panahon nga impormasyon para sa pagdesisyon.",
       p2: "Gihiusa sa sistema ang datos sa presyo ug palengke, produksyon, panahon, ug impormasyon nga gi-input sa mag-uuma aron mas masabtan niya ang posibleng kahimtang sa usa ka tanom sa dili pa magtanom ug samtang nagpadayon ang crop cycle."
     },
     provides: {
@@ -24,7 +24,7 @@ export const about = {
     price_market: {
       title: "Presyo ug Impormasyon sa Palengke",
       p1: "Ang HarvestWise adunay short-term Price Outlook para sa 7, 14, 21, ug 28 ka adlaw.",
-      p2: "Sa matag supported horizon, ang tantiya sa umaabot nga presyo ikumpara sa kasagarang presyo sa parehas nga gidaghanon sa miaging mga adlaw. Pananglitan, ang 14-day forecast ikumpara sa kasagarang presyo sa miaging 14 ka adlaw.",
+      p2: "Sa matag supported horizon, ang tansya sa umaabot nga presyo ikumpara sa kasagarang presyo sa parehas nga gidaghanon sa miaging mga adlaw. Pananglitan, ang 14-day forecast ikumpara sa kasagarang presyo sa miaging 14 ka adlaw.",
       p3: "Gigamit usab ang DFTC arrival information aron makatabang sa pagpakita sa kasamtangang pressure sa suplay sa palengke."
     },
     weather: {
@@ -48,7 +48,7 @@ export const about = {
     },
     limitations: {
       title: "Importante nga mga Limitasyon",
-      p1: "Ang forecast ug advisory mga tantiya ug impormasyon para makatabang sa pagdesisyon. Dili kini garantiya sa resulta.",
+      p1: "Ang forecast ug advisory mga tansya ug impormasyon para makatabang sa pagdesisyon. Dili kini garantiya sa resulta.",
       p2: "Ang aktuwal nga presyo, ani, kahimtang sa panahon, performance sa tanom, suplay, ug kita mahimong lahi sa estimate sa sistema tungod sa mga panghitabo nga dili matagna o makontrol sa HarvestWise.",
       p3: "Ang mag-uuma gihapon ang adunay katapusang responsibilidad sa desisyon bahin sa pagtanom, pag-atiman, pag-ani, paggasto, ug pagbaligya.",
       p4: "Kung adunay grabeng panahon, emergency, o opisyal nga agricultural instruction, sundon usab ang advisory sa tukmang ahensya sa gobyerno."

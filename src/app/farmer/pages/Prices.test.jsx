@@ -84,12 +84,9 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     expect(await screen.findByText("Falling")).toBeInTheDocument();
+    expect(screen.getByText("Price may drop soon.")).toBeInTheDocument();
     expect(screen.getByText("₱150/kg")).toBeInTheDocument();
     expect(screen.getByText("₱130/kg")).toBeInTheDocument();
-    expect(screen.queryByText(/Possible range/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Forecast period/)).not.toBeInTheDocument();
-    expect(screen.queryByText("₱141.39/kg")).not.toBeInTheDocument();
-    expect(screen.queryByText("Bankerohan Retail")).not.toBeInTheDocument();
     expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", {
       price_type: "bangkerohan_retail",
       horizon: 7,

@@ -141,6 +141,10 @@ export const en = {
     registration_agreement: "By creating an account, you agree to the {terms} and acknowledge the {privacy}.",
     terms_and_conditions: "Terms and Conditions",
     privacy_policy: "Privacy Policy",
+    agree_and_continue: "Agree and Continue",
+    continue: "Continue",
+    back: "Back",
+    cancel: "Cancel",
     sign_in_link: "Sign in",
 
     install_pwa: "Install HarvestWise app",

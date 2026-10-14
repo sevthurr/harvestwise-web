@@ -28,7 +28,11 @@ describe('Farmer Notification Dynamic Localization & Fallback', () => {
     const tCeb = (key, params, fallback) => t(key, params, 'ceb') || fallback;
     const { title, body } = localizeFarmerNotification(priceItem, tCeb, 'ceb');
     expect(title).toBe('Misaka ang presyo sa Kamatis');
-    expect(body).toBe('Ang pinakaulahing presyo sa merkado alang sa Kamatis kay 55.00 PHP/kg, mas taas gikan sa 50.00 PHP/kg.');
+    expect(body).toBe('Ang pinakaulahing presyo sa palengke alang sa Kamatis kay 55.00 PHP/kg, mas taas gikan sa 50.00 PHP/kg.');
+
+    const droppedItem = { ...priceItem, metadata: { ...priceItem.metadata, direction: 'dropped' } };
+    const droppedCeb = localizeFarmerNotification(droppedItem, tCeb, 'ceb');
+    expect(droppedCeb.title).toBe('Nibaba ang presyo sa Kamatis');
   });
 
   it('localizes into Filipino (tl)', () => {
@@ -71,7 +75,7 @@ describe('Farmer Notification Dynamic Localization & Fallback', () => {
     // CEB: Title and Body must be Davao Bisaya
     const ceb = localizeFarmerNotification(atsalUpdate, tCeb, 'ceb');
     expect(ceb.title).toBe('Bag-ong presyo alang sa Atsal (Sultan)');
-    expect(ceb.body).toBe('Ang gi-update nga presyo sa merkado alang sa Atsal (Sultan) anaa na karon sugod 2026-09-19.');
+    expect(ceb.body).toBe('Ang gi-update nga presyo sa palengke alang sa Atsal (Sultan) anaa na karon sugod 2026-09-19.');
 
     // TL: Title and Body must be Filipino
     const tl = localizeFarmerNotification(atsalUpdate, tTl, 'tl');

@@ -21,11 +21,13 @@ import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
 import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
-  Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
-  Falling: { color: "text-red-500", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
-  Stable: { color: "text-blue-500", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
-  default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
+  Rising: { color: "text-emerald-700", bg: "bg-emerald-50/60", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
+  Falling: { color: "text-red-700", bg: "bg-red-50/60", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
+  Stable: { color: "text-blue-700", bg: "bg-blue-50/60", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  default: { color: "text-[var(--hw-neutral-500)]", bg: "bg-[var(--hw-neutral-50)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
+
+
 
 const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
 
@@ -143,6 +145,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
     && forecastPrice != null;
   const direction = hasForecast ? forecast.trend : null;
   const horizonDays = hasForecast ? forecast.horizon_days : 7;
+
   const cfg = direction ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const outlook = hasForecast
@@ -156,9 +159,6 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
     const clean = typeof value === 'string' ? value.replace(/^₱+/, '') : value;
     return `₱${clean}/${unit}`;
   };
-  const forecastRange = forecast?.lower_forecast != null && forecast?.upper_forecast != null
-    ? `₱${Number(forecast.lower_forecast).toFixed(2)}–₱${Number(forecast.upper_forecast).toFixed(2)}/${unit}`
-    : null;
 
   return (
     <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
@@ -222,42 +222,17 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
       </div>
 
       {/* Outlook summary */}
-      <div className="rounded-xl bg-[var(--hw-neutral-50)] px-3.5 py-3 space-y-0.5">
-        <p className={`text-[13px] font-medium ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+      <div className={`rounded-xl px-3.5 py-2.5 ${hasForecast ? (cfg.bg || 'bg-[var(--hw-neutral-50)]') : 'bg-[var(--hw-neutral-50)]'}`}>
+        <p className={`text-[13px] font-medium leading-snug ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
           {data.trendLoading ? t("farmer.prices.trend_loading", {}, "Loading trend") : outlook}
         </p>
       </div>
 
       {/* Action footer */}
-      <div className="flex items-center justify-between gap-3 pt-0.5">
-        <p className="text-[12px] text-[var(--hw-neutral-500)] truncate">
-          {(() => {
-            const name = commodity.baseName || commodity.name || '';
-            const range = forecastRange || (forecastPrice != null ? formatPriceValue(forecastPrice) : null);
-            const days = horizonDays;
-            if (!hasForecast) {
-              return data.trendError
-                ? t('farmer.prices.trend_unavailable_for_crop', { commodity: name }, `Price trend is unavailable for ${name}.`)
-                : t('farmer.prices.no_trend_for_crop', { commodity: name }, `No price trend data is available for ${name}.`);
-            }
-            if (direction === 'Rising') {
-              return range
-                ? t('farmer.prices.advisory_rising', { commodity: name, range, days }, `Prices for ${name} are expected to rise to ${range} over the next ${days} days.`)
-                : t('farmer.prices.advisory_rising_no_range', { commodity: name }, `Prices for ${name} are expected to rise in the coming days.`);
-            }
-            if (direction === 'Falling') {
-              return range
-                ? t('farmer.prices.advisory_falling', { commodity: name, range, days }, `Prices for ${name} are expected to drop to ${range} over the next ${days} days.`)
-                : t('farmer.prices.advisory_falling_no_range', { commodity: name }, `Prices for ${name} are expected to drop in the coming days.`);
-            }
-            return range
-              ? t('farmer.prices.advisory_stable', { commodity: name, range }, `Prices for ${name} are expected to remain stable around ${range}.`)
-              : t('farmer.prices.advisory_stable_no_range', { commodity: name }, `Prices for ${name} are expected to remain stable.`);
-          })()}
-        </p>
+      <div className="flex items-center justify-end pt-0.5">
         <button
           onClick={() => onViewDetails(commodity.id)}
-          className="flex-shrink-0 inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
+          className="inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
         >
           {t("common.see_details", {}, "View details")}
           <ChevronRight className="w-4 h-4" />
