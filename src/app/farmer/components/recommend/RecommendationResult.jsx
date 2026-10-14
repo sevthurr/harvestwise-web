@@ -465,7 +465,13 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
                       production: productionTabData,
                       weather: weatherTabData,
                       profitability: profitabilityData,
-                      commodityId: data.commodity,
+                      // The wizard stores the picked crop as a catalog icon key
+                      // (data.commodity, e.g. "lettuce"); the real commodity id
+                      // (e.g. "COM-0025") lives in data.commodityId. The factors
+                      // page queries the analytics endpoints, which resolve only
+                      // exact ids — an icon key 404s and the arrival/production
+                      // tabs stay empty. Same fallback as buildCropPlanPayload.
+                      commodityId: data.commodityId || data.commodity,
                       commodityName,
                       cropStage,
                       moduleResults,

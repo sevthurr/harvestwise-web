@@ -5,7 +5,8 @@ import './styles/index.css';
 import { initPWAUpdate } from './app/global/lib/pwaUpdate';
 
 // Register the service worker and expose the "update available" signal to the
-// rest of the app (currently consumed by the Update card in Menu.jsx).
+// rest of the app (consumed by the global PwaUpdatePrompt and the farmer Menu
+// Update card).
 initPWAUpdate();
 
 createRoot(document.getElementById('root')).render(<App />);

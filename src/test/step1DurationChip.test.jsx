@@ -10,12 +10,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("./useCommodityCatalog", () => ({
+vi.mock("../app/farmer/components/recommend/useCommodityCatalog.js", () => ({
   useCommodityCatalog: vi.fn(),
   durationForOption: vi.fn(),
 }));
 
-vi.mock("../../../global/contexts/LanguageContext", () => ({
+vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   useLanguage: () => ({
     langCode: "en",
     t: (key, params, fallback) => {
@@ -30,12 +30,12 @@ vi.mock("../../../global/contexts/LanguageContext", () => ({
   }),
 }));
 
-vi.mock("./PlantingActivityContext", () => ({
+vi.mock("../app/farmer/components/recommend/PlantingActivityContext.jsx", () => ({
   PlantingActivityContext: () => null,
 }));
 
-const { durationForOption, useCommodityCatalog } = await import("./useCommodityCatalog.js");
-const { Step1CropSchedule } = await import("./Step1CropSchedule.jsx");
+const { durationForOption, useCommodityCatalog } = await import("../app/farmer/components/recommend/useCommodityCatalog.js");
+const { Step1CropSchedule } = await import("../app/farmer/components/recommend/Step1CropSchedule.jsx");
 
 const BASE = {
   commodity: "",

@@ -2,6 +2,7 @@ import { RouterProvider } from 'react-router';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { router } from './routes';
 import { queryClient, persister } from './global/lib/queryClient';
+import { PwaUpdatePrompt } from './global/components/shared/PwaUpdatePrompt';
 import { CropsProvider } from './farmer/components/crops/CropsContext';
 import { DisplayModeProvider } from './global/contexts/DisplayModeContext';
 import { AuthProvider } from './global/contexts/AuthContext';
@@ -23,6 +24,9 @@ export default function App() {
               <NotificationStreamProvider>
                 <BackgroundProcessProvider>
                   <RouterProvider router={router} />
+                  {/* Rendered outside the router so every workspace (farmer,
+                      DFTC, admin) can activate a waiting service worker. */}
+                  <PwaUpdatePrompt />
                 </BackgroundProcessProvider>
               </NotificationStreamProvider>
             </CropsProvider>

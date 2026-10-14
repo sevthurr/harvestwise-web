@@ -8,26 +8,26 @@ const { getPriceDetailMock, priceListResponse } = vi.hoisted(() => ({
   priceListResponse: { current: { items: [] } },
 }));
 
-vi.mock("../../global/api", () => ({
+vi.mock("../app/global/api.js", () => ({
   apiGet: vi.fn(async () => ({ ok: true })),
   parseResponse: vi.fn(async () => priceListResponse.current),
 }));
 
-vi.mock("../../../services/api/pricesApi", () => ({
+vi.mock("../services/api/pricesApi.js", () => ({
   getPriceDetail: getPriceDetailMock,
 }));
 
-vi.mock("../../global/contexts/LanguageContext", () => ({
+vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   useLanguage: () => ({
     t: (_key, _params, fallback) => fallback,
   }),
 }));
 
-vi.mock("../../global/components/shared/CommodityIllustrations", () => ({
+vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", () => ({
   CommodityIllustration: () => <span data-testid="commodity-art" />,
 }));
 
-import PricesPage from "./Prices.jsx";
+import PricesPage from "../app/farmer/pages/Prices.jsx";
 
 function renderPricesPage() {
   const queryClient = new QueryClient({

@@ -24,14 +24,14 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigate };
 });
 
-vi.mock("../../global/api", () => ({
+vi.mock("../app/global/api.js", () => ({
   apiGet: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
   apiPost: vi.fn(async () => ({ ok: true })),
   apiPut: vi.fn(async () => ({ ok: true })),
   parseResponse: vi.fn(async () => ({})),
 }));
 
-vi.mock("../../global/contexts/LanguageContext", () => ({
+vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   // Mirrors the real signature, including {param} interpolation, so assertions
   // can match rendered copy.
   useLanguage: () => ({
@@ -43,19 +43,19 @@ vi.mock("../../global/contexts/LanguageContext", () => ({
   }),
 }));
 
-vi.mock("../components/crops/CropsContext", () => ({
+vi.mock("../app/farmer/components/crops/CropsContext.jsx", () => ({
   useCrops: () => ({ crops: [], loading: false }),
 }));
 
-vi.mock("../../global/components/shared/CommodityIllustrations", () => ({
+vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", () => ({
   CommodityIllustration: () => <span data-testid="art" />,
 }));
 
-vi.mock("../../global/hooks/useFarmerPrefetch", () => ({
+vi.mock("../app/global/hooks/useFarmerPrefetch.js", () => ({
   fetchFarmerProfile: vi.fn(),
 }));
 
-vi.mock("../../global/contexts/AuthContext", () => ({
+vi.mock("../app/global/contexts/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { first_name: "Test" } }),
 }));
 
@@ -74,12 +74,12 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("RecommendationPage mounts", () => {
   it("renders without a ReferenceError", async () => {
-    const { default: RecommendationPage } = await import("./Recommendation.jsx");
+    const { default: RecommendationPage } = await import("../app/farmer/pages/Recommendation.jsx");
     expect(() => renderPage(<RecommendationPage />)).not.toThrow();
   });
 
   it("shows the calendar page title", async () => {
-    const { default: RecommendationPage } = await import("./Recommendation.jsx");
+    const { default: RecommendationPage } = await import("../app/farmer/pages/Recommendation.jsx");
     renderPage(<RecommendationPage />);
     expect(await screen.findByText("Crop Calendar")).toBeTruthy();
   });
@@ -87,7 +87,7 @@ describe("RecommendationPage mounts", () => {
 
 describe("DashboardPage mounts", () => {
   it("renders without a ReferenceError", async () => {
-    const { default: DashboardPage } = await import("./Dashboard.jsx");
+    const { default: DashboardPage } = await import("../app/farmer/pages/Dashboard.jsx");
     expect(() => renderPage(<DashboardPage />)).not.toThrow();
   });
 });
@@ -95,7 +95,7 @@ describe("DashboardPage mounts", () => {
 describe("calendar components mount", () => {
   it("CalendarGrid renders a full month", async () => {
     const { default: CalendarGrid } = await import(
-      "../components/calendar/CalendarGrid.jsx"
+      "../app/farmer/components/calendar/CalendarGrid.jsx"
     );
     // October 2026: 31 days, starts on a Thursday => 4 leading blanks, 35 cells.
     renderPage(
@@ -113,7 +113,7 @@ describe("calendar components mount", () => {
 
   it("DayDetailCard renders only present data", async () => {
     const { default: DayDetailCard } = await import(
-      "../components/calendar/DayDetailCard.jsx"
+      "../app/farmer/components/calendar/DayDetailCard.jsx"
     );
     const { container } = renderPage(
       <DayDetailCard
@@ -130,7 +130,7 @@ describe("calendar components mount", () => {
 
   it("DayDetailCard returns null for an unmarked day", async () => {
     const { default: DayDetailCard } = await import(
-      "../components/calendar/DayDetailCard.jsx"
+      "../app/farmer/components/calendar/DayDetailCard.jsx"
     );
     const { container } = renderPage(
       <DayDetailCard year={2026} month={10} day={15} marker={null} />,
@@ -140,7 +140,7 @@ describe("calendar components mount", () => {
 
   it("CalendarLegend renders nothing for an empty month", async () => {
     const { default: CalendarLegend } = await import(
-      "../components/calendar/CalendarLegend.jsx"
+      "../app/farmer/components/calendar/CalendarLegend.jsx"
     );
     const { container } = renderPage(<CalendarLegend markers={{}} />);
     expect(container.firstChild).toBeNull();

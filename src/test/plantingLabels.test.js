@@ -13,14 +13,14 @@
  *    unknown category is no longer silently styled as "avoid"
  */
 import { describe, it, expect } from "vitest";
-import { t } from "../../global/i18n/index.js";
+import { t } from "../app/global/i18n/index.js";
 import {
   advisoryCategoryLabel,
   localizedRefText,
   recommendationLine,
   toneClasses,
   weatherRiskLabel,
-} from "./plantingLabels";
+} from "../app/farmer/utils/plantingLabels.js";
 
 const tr = (lang) => (key, params = {}) => t(key, params, lang);
 

@@ -14,7 +14,7 @@ import {
   MAX_CELL_ICONS,
   legendKindsFor,
   selectCellMarkers,
-} from "./calendarIcons";
+} from "../app/farmer/components/calendar/calendarIcons.js";
 
 const crop = (id = "COM-1", type = "plant") => ({
   id,

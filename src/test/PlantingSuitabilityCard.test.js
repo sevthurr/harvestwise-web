@@ -11,7 +11,7 @@
  * ever renames a field.
  */
 import { describe, it, expect } from "vitest";
-import { normalizeCrop } from "./PlantingSuitabilityCard.jsx";
+import { normalizeCrop } from "../app/farmer/components/crops/PlantingSuitabilityCard.jsx";
 
 // Shape captured from GET /api/v1/farmer/planting-suitability (v2).
 const API_CROP = {

@@ -7,7 +7,7 @@
  * same record.
  */
 import { describe, it, expect } from "vitest";
-import { parseLocalDate, formatMonthShort } from "./formatters";
+import { parseLocalDate, formatMonthShort } from "../app/farmer/utils/formatters.js";
 
 describe("parseLocalDate", () => {
   it("parses a bare ISO date to local midnight", () => {

@@ -20,12 +20,12 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-vi.mock("../../../services/api/analyticsApi", () => ({
+vi.mock("../services/api/analyticsApi.js", () => ({
   getArrivalPressure: getArrivalPressureMock,
   getHistoricalSeasonalProduction: getSeasonalProductionMock,
 }));
 
-vi.mock("../components/crops/CropsContext", () => ({
+vi.mock("../app/farmer/components/crops/CropsContext.jsx", () => ({
   useCrops: () => ({
     crops: cropState.current ? [cropState.current] : [],
     loading: false,
@@ -37,7 +37,7 @@ vi.mock("../components/crops/CropsContext", () => ({
   }),
 }));
 
-vi.mock("../../global/contexts/LanguageContext", () => ({
+vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   useLanguage: () => ({
     langCode: "en",
     t: (key, params = {}, fallback = key) =>
@@ -45,25 +45,25 @@ vi.mock("../../global/contexts/LanguageContext", () => ({
   }),
 }));
 
-vi.mock("../../global/api", () => ({
+vi.mock("../app/global/api.js", () => ({
   apiPost: vi.fn(async () => ({ ok: true })),
   apiPut: vi.fn(async () => ({ ok: true })),
   parseResponse: vi.fn(async () => ({})),
 }));
 
-vi.mock("../components/crops/CropCard", () => ({
+vi.mock("../app/farmer/components/crops/CropCard.jsx", () => ({
   PhasePill: ({ phase }) => <span>{phase}</span>,
 }));
 
-vi.mock("../components/crops/UpdatePhaseDrawer", () => ({
+vi.mock("../app/farmer/components/crops/UpdatePhaseDrawer.jsx", () => ({
   UpdatePhaseDrawer: () => null,
 }));
 
-vi.mock("../components/shared/WeatherLocationBanner", () => ({
+vi.mock("../app/farmer/components/shared/WeatherLocationBanner.jsx", () => ({
   WeatherLocationBanner: () => null,
 }));
 
-import CropCycleDetailPage from "./CropCycleDetail.jsx";
+import CropCycleDetailPage from "../app/farmer/pages/CropCycleDetail.jsx";
 
 const crop = {
   id: "CRP-0001",
