@@ -120,9 +120,13 @@ export async function updateWeatherRule(ruleId, payload) {
 // `commodityRef` must be a commodity id (e.g. "COM-0001"). A bare crop name is
 // only accepted by the API when the crop has a name-level (variety IS NULL) row,
 // so names alone 404 for crops that exist solely per variety.
-export async function getHistoricalSeasonalProduction(commodityRef) {
+export async function getHistoricalSeasonalProduction(commodityRef, quarter = null) {
+  const query = new URLSearchParams({
+    commodity_id: commodityRef,
+  });
+  if (quarter) query.set("quarter", quarter);
   return parseResponse(
-    await apiGet(`/admin/analytics/outputs/historical-seasonal-production?commodity_id=${encodeURIComponent(commodityRef)}`)
+    await apiGet(`/admin/analytics/outputs/historical-seasonal-production?${query.toString()}`)
   );
 }
 
@@ -148,4 +152,3 @@ export async function getWeatherForecast(days = 14) {
     await apiGet(`/admin/analytics/outputs/weather-forecast?days=${encodeURIComponent(days)}`)
   );
 }
-

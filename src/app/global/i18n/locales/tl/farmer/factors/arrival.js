@@ -25,7 +25,7 @@ export const arrival = {
   "arrival_unavailable_crop": "Walang datos ng arrival ng {crop_name} mula sa DFTC ngayon.",
   "arrival_unavailable_generic": "Walang datos ng mga dumating mula sa DFTC ngayon.",
   "page_title": "Detalye ng Dumating sa DFTC",
-  "chart_subtitle_actual": "Aktuwal na dumating · Nakaraang 6 na buwan · kg",
+  "chart_subtitle_actual": "Aktuwal na dating ani · Nakaraang 90 araw · kg",
   "arrival_action_high": "Batay sa kamakailang dumating sa DFTC, ihambing ang kasalukuyang presyo at suriin ang iyong iskedyul ng pagbebenta.",
   "arrival_action_low": "Batay sa kamakailang dumating sa DFTC, posibleng tumulong ang mababang dami sa presyo. Kumpirmahin ang kasalukuyang presyo sa merkado bago magbenta.",
   "arrival_action_normal": "Batay sa kamakailang dumating sa DFTC, walang matinding banta sa dami. Patuloy na suriin ang kasalukuyang presyo bago mag-ani o magbenta.",

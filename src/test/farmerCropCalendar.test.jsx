@@ -186,7 +186,7 @@ describe("Farmer Crop Calendar Page", () => {
     expect(screen.getAllByText(/Supply|Suplay/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Production|Produksyon/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Weather|Panahon/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/Profit|Ganansya/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Profit|Ginansya/i).length).toBeGreaterThanOrEqual(1);
     expect(
       screen.getByText(/View detailed factors|Tan-awa ang detalyadong mga hinungdan/i)
     ).toBeInTheDocument();
@@ -230,7 +230,7 @@ describe("Farmer Crop Calendar Page", () => {
       screen.getAllByText(/Crop Schedule|Iskedyul sa Tanom/i).length
     ).toBeGreaterThanOrEqual(1);
     expect(
-      screen.getAllByText(/Market Note|Pahinumdom sa merkado|Panahon sa sweldo/i).length
+      screen.getAllByText(/Market Note|Pahinumdom sa (?:palengke|merkado)|Panahon sa sweldo/i).length
     ).toBeGreaterThanOrEqual(1);
   });
 });

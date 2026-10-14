@@ -59,11 +59,26 @@ function availableArrivalYears(records) {
   return [...years].sort((a, b) => b - a);
 }
 
+// ISO week number for a Date object (Mon–Sun weeks, ISO 8601).
+function isoWeek(d) {
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil(((tmp - yearStart) / 86400000 + 1) / 7);
+}
+
 // Group records into a chronological series for the given granularity.
 //
 // `year` filters to a single calendar year; pass null to take every year.
 // Buckets with no data are omitted, so the axis only shows periods that
 // actually recorded arrivals.
+//
+// Supported granularity values:
+//   "weekly"    — ISO week buckets, labelled "Wk N YYYY"
+//   "monthly"   — calendar month (default, existing behaviour)
+//   "quarterly" — Q1–Q4 buckets
+//   "annually"  — calendar year buckets
+//   "daily"     — one point per date (legacy, retained for compat)
 function bucketArrivals(records, { granularity = "monthly", year = null } = {}) {
   const buckets = new Map();
 
@@ -76,24 +91,50 @@ function bucketArrivals(records, { granularity = "monthly", year = null } = {}) 
     if (!Number.isFinite(rowYear)) continue;
     if (year != null && rowYear !== year) continue;
 
-    const month = parts[1];
-    const key = granularity === "daily" ? date : `${rowYear}-${month}`;
-    const label =
-      granularity === "daily"
-        ? `${MONTH_LABELS[parseInt(month, 10) - 1] || month} ${parseInt(parts[2], 10)}`
-        : MONTH_LABELS[parseInt(month, 10) - 1] || month;
+    const month = parseInt(parts[1], 10);
+    const day   = parseInt(parts[2], 10);
+
+    let key, label, period;
+
+    if (granularity === "weekly") {
+      const d = new Date(rowYear, month - 1, day);
+      const wk = isoWeek(d);
+      // ISO week can roll into the next/prev year; use the date's year for the key
+      key    = `${rowYear}-W${String(wk).padStart(2, "0")}`;
+      label  = `Wk ${wk}`;
+      period = key;
+    } else if (granularity === "quarterly") {
+      const q = Math.ceil(month / 3);
+      key    = `${rowYear}-Q${q}`;
+      label  = `Q${q} ${rowYear}`;
+      period = key;
+    } else if (granularity === "annually") {
+      key    = `${rowYear}`;
+      label  = `${rowYear}`;
+      period = key;
+    } else if (granularity === "daily") {
+      key    = date;
+      label  = `${MONTH_LABELS[month - 1] || parts[1]} ${day}`;
+      period = date;
+    } else {
+      // monthly (default)
+      const monthStr = String(month).padStart(2, "0");
+      key    = `${rowYear}-${monthStr}`;
+      label  = MONTH_LABELS[month - 1] || parts[1];
+      period = key;
+    }
 
     const bucket = buckets.get(key) || {
       key,
       label,
-      period: granularity === "daily" ? date : `${rowYear}-${month}`,
+      period,
       year: rowYear,
       farm_kg: 0,
       other_kg: 0,
       total_kg: 0
     };
 
-    bucket.farm_kg = round2(bucket.farm_kg + num(row.farm_source_volume_kg));
+    bucket.farm_kg  = round2(bucket.farm_kg  + num(row.farm_source_volume_kg));
     bucket.other_kg = round2(bucket.other_kg + num(row.other_source_volume_kg));
     bucket.total_kg = round2(bucket.total_kg + num(row.volume_kg));
     buckets.set(key, bucket);

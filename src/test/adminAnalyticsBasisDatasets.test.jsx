@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
-import AdminAnalyticsBasis from '../app/admin/pages/AdminAnalyticsBasis';
+import AdminAnalyticsBasis, { sortArrivalRecordsAscending } from '../app/admin/pages/AdminAnalyticsBasis';
 
 // Regression cover for the "Datasets Used" panel. Price Outlook and Arrival
 // Pressure both hard-coded / never populated `records`, so the table always
@@ -109,6 +109,20 @@ describe('AdminAnalyticsBasis Datasets Used', () => {
       unobserve() {}
       disconnect() {}
     };
+  });
+
+  it('sorts Admin arrival chart records oldest to newest', () => {
+    const sorted = sortArrivalRecordsAscending([
+      { arrival_date: '2025-12-31', volume_kg: 12000 },
+      { arrival_date: '2024-12-31', volume_kg: 18000 },
+      { arrival_date: '2026-01-01', volume_kg: 9000 },
+    ]);
+
+    expect(sorted.map((row) => row.arrival_date)).toEqual([
+      '2024-12-31',
+      '2025-12-31',
+      '2026-01-01',
+    ]);
   });
 
   it('lists the price_record rows behind the Price Outlook result', async () => {

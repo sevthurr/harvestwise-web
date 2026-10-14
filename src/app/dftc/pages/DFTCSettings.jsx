@@ -22,14 +22,15 @@ import {
   Modal
 } from "../../global/components/ui/hw-ui";
 import { EmailOtp2FACard } from "../components/settings/EmailOtp2FACard";
+import { useRemovalRequest } from "../../global/hooks/useRemovalRequest";
 const TABS = [
   { id: "account", label: "Account" },
   { id: "security", label: "Security" }
 ];
 
-const AccountTab = ({ showToast, onRemovalRequest }) => {
+const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked, removalCurrent, onCancelRemoval }) => {
   const { user, refreshUser } = useAuth();
-  const { t } = useLanguage();
+  const { t, formatDate } = useLanguage();
   const queryClient = useQueryClient();
   const staff = user?.staff_profile || user?.staffProfile || {};
   const firstName = staff.first_name || user?.first_name || (user?.name ? user.name.split(" ")[0] : "") || "";
@@ -65,6 +66,36 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
   const [removeReasonErr, setRemoveReasonErr] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const removalFulfilledAt = removalCurrent?.fulfilled_at || null;
+  const removalGraceDueAt = removalCurrent?.fulfillment_due_at || null;
+  const removalInGrace = removalStatus === "approved" && !removalFulfilledAt;
+  const removalStatusLabel =
+    removalStatus === "cancelled"
+      ? t("dftc.settings.removal_status_cancelled", {}, "Cancelled")
+      : removalStatus === "fulfilled"
+        ? t("dftc.settings.removal_status_fulfilled", {}, "Fulfilled")
+        : removalStatus === "approved"
+          ? t("dftc.settings.removal_status_approved", {}, "Approved")
+          : removalStatus === "rejected"
+            ? t("dftc.settings.removal_status_rejected", {}, "Rejected")
+            : t("dftc.settings.removal_status_pending", {}, "Pending");
+  const removalStatusColor =
+    removalStatus === "rejected"
+      ? "text-red-600"
+      : removalStatus === "approved" || removalStatus === "fulfilled"
+        ? "text-[var(--hw-green-800)]"
+        : removalStatus === "cancelled"
+          ? "text-[var(--hw-neutral-500)]"
+          : "text-amber-600";
+  const handleCancel = async () => {
+    setCancelling(true);
+    try {
+      await onCancelRemoval();
+    } finally {
+      setCancelling(false);
+    }
+  };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const handleSave = async () => {
     setShowSaveModal(false);
@@ -92,7 +123,7 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
   };
   const handleRemoveSubmit = () => {
     if (!removeReason.trim()) {
-      setRemoveReasonErr("Please enter a reason for the request.");
+      setRemoveReasonErr(t("dftc.settings.removal_reason_required", {}, "Please enter a reason for the request."));
       return;
     }
     setRemoveReasonErr("");
@@ -157,19 +188,54 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
       </Card>
 
       <Card>
-        <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">Danger Zone</p>
-        <div className="flex items-center justify-between">
+        <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">{t("dftc.settings.danger_zone", {}, "Danger Zone")}</p>
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[14px] font-semibold text-black">Request account removal</p>
-            <p className="text-[13px] text-black">Submit a request to remove your DFTC account.</p>
+            <p className="text-[14px] font-semibold text-black">{t("dftc.settings.request_deletion_title", {}, "Request account removal")}</p>
+            <p className="text-[13px] text-black">{t("dftc.settings.request_deletion_desc", {}, "Submit a request to remove your DFTC account. The HarvestWise team will review it.")}</p>
+            {removalStatus && (
+              <p className="text-[13px] text-black mt-1">
+                {t("dftc.settings.removal_status_label", {}, "Request status")}:{" "}
+                <span className={`font-semibold ${removalStatusColor}`}>
+                  {removalStatusLabel}
+                </span>
+              </p>
+            )}
+            {removalInGrace && (
+              <p className="text-[13px] text-amber-700 mt-1">
+                {t(
+                  "dftc.settings.removal_grace_note",
+                  { date: removalGraceDueAt ? formatDate(removalGraceDueAt) : "—" },
+                  "Your account is disabled and will be erased after the grace period on {date}. You can cancel this request before then to restore your account."
+                )}
+              </p>
+            )}
+            {removalFulfilledAt && (
+              <p className="text-[13px] text-[var(--hw-neutral-500)] mt-1">
+                {t("dftc.settings.removal_completed_note", {}, "Your account removal request has been fulfilled.")}
+              </p>
+            )}
           </div>
-          <button
-    type="button"
-    onClick={() => setShowRemoveModal(true)}
-    className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 ml-3"
-  >
-            Request
-          </button>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            {removalInGrace && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="h-8 px-3 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {cancelling ? t("common.saving", {}, "Saving…") : t("dftc.settings.removal_cancel_btn", {}, "Cancel request")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowRemoveModal(true)}
+              disabled={removalBlocked}
+              className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+            >
+              {t("dftc.settings.request_deletion_btn", {}, "Request")}
+            </button>
+          </div>
         </div>
       </Card>
 
@@ -181,14 +247,14 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
           </div>
         </Modal>}
 
-      {showRemoveModal && <Modal title="Request account removal?" onClose={() => {
+      {showRemoveModal && <Modal title={t("dftc.settings.request_deletion_modal_title", {}, "Request account removal?")} onClose={() => {
     setShowRemoveModal(false);
     setRemoveReason("");
     setRemoveReasonErr("");
   }}>
-          <p className="text-[14px] text-black mb-4">Please describe the reason for your account removal request. The HarvestWise team will review and follow up with you.</p>
+          <p className="text-[14px] text-black mb-4 leading-relaxed">{t("dftc.settings.request_deletion_modal_body", {}, "To protect your account and records from unauthorized deletion, HarvestWise verifies all requests before processing. Please describe the reason for your request. Once verified, identifying account information and contact information will be permanently removed or irreversibly anonymized in accordance with our Privacy Policy. Agricultural, crop, cost, or harvest information may be retained only after it is anonymised so it can no longer be linked to you, per our Privacy Policy §8. You may also send a request to harvestwise.app@gmail.com from your registered email address.")}</p>
           <div className="space-y-1.5 mb-5">
-            <label htmlFor="remove-reason" className="block text-[14px] font-semibold text-black">Reason</label>
+            <label htmlFor="remove-reason" className="block text-[14px] font-semibold text-black">{t("dftc.settings.removal_reason_label", {}, "Reason")}</label>
             <textarea
     id="remove-reason"
     rows={4}
@@ -197,7 +263,7 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
       setRemoveReason(e.target.value);
       setRemoveReasonErr("");
     }}
-    placeholder="Describe why you want your account removed…"
+    placeholder={t("dftc.settings.removal_reason_placeholder", {}, "Describe why you want your account removed…")}
     className="w-full px-3.5 py-3 text-[14px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)] resize-none"
   />
             {removeReasonErr && <p className="text-[13px] text-red-600">{removeReasonErr}</p>}
@@ -207,13 +273,13 @@ const AccountTab = ({ showToast, onRemovalRequest }) => {
     setShowRemoveModal(false);
     setRemoveReason("");
     setRemoveReasonErr("");
-  }}>Cancel</GhostBtn>
+  }}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
             <button
     type="button"
     onClick={handleRemoveSubmit}
     className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 transition-colors"
   >
-              Submit request
+              {t("dftc.settings.removal_submit_btn", {}, "Submit request")}
             </button>
           </div>
         </Modal>}
@@ -272,11 +338,19 @@ const SecurityTab = ({ showToast }) => {
 };
 
 function DFTCSettings() {
+  const { t } = useLanguage();
   const [params, setSearchParams] = useSearchParams();
   const tabBarRef = useRef(null);
   const tabFromUrl = params.get("tab") || "account";
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [toast, setToast] = useState("");
+  const {
+    status: removalStatus,
+    blocked: removalBlocked,
+    refetch: refetchRemoval,
+    current: removalCurrent,
+    cancel: cancelRemoval,
+  } = useRemovalRequest(["dftc", "removalRequests"]);
 
   useEffect(() => {
     const t = params.get("tab") || "account";
@@ -300,9 +374,31 @@ function DFTCSettings() {
       await parseResponse(
         await apiPost("/dftc/removal-requests", { reason: reason || null })
       );
-      showToast("Account removal request sent.");
-    } catch {
-      showToast("Could not send removal request. Please try again.");
+      showToast(t("dftc.settings.removal_success", {}, "Account removal request sent. The HarvestWise team will review it."));
+      refetchRemoval();
+    } catch (err) {
+      // 409: a request is already open. Say so instead of the generic failure,
+      // and refresh so the Request button reflects it.
+      if (err?.status === 409) {
+        showToast(t("dftc.settings.removal_already_pending", {}, "You already have a pending removal request."));
+        refetchRemoval();
+      } else {
+        showToast(t("dftc.settings.removal_error", {}, "Could not send removal request. Please try again."));
+      }
+    }
+  };
+
+  /** POST /dftc/removal-requests/{id}/cancel — restores an approved, unfulfilled request. */
+  const handleCancelRemoval = async () => {
+    try {
+      await cancelRemoval();
+      showToast(t("dftc.settings.removal_cancel_success", {}, "Account removal request cancelled."));
+      await refetchRemoval();
+    } catch (err) {
+      showToast({
+        message: err?.message || t("dftc.settings.removal_cancel_error", {}, "Could not cancel the request. Please try again."),
+        type: "error",
+      });
     }
   };
 
@@ -331,7 +427,7 @@ function DFTCSettings() {
           </button>)}
       </div>
 
-      {activeTab === "account" && <AccountTab showToast={showToast} onRemovalRequest={handleRemovalRequest} />}
+      {activeTab === "account" && <AccountTab showToast={showToast} onRemovalRequest={handleRemovalRequest} removalStatus={removalStatus} removalBlocked={removalBlocked} removalCurrent={removalCurrent} onCancelRemoval={handleCancelRemoval} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
 
       <Toast message={toast} />

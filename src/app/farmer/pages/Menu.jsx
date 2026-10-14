@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { applyUpdate, subscribeUpdateAvailable } from "../../global/lib/pwaUpdate";
 import {
   User,
   MapPin,
@@ -120,6 +121,13 @@ function MenuPage() {
   const [syncStatus, setSyncStatus] = useState("updated");
   const [installStatus, setInstallStatus] = useState("not-installed");
   const [showSignOut, setShowSignOut] = useState(false);
+
+  useEffect(() => {
+    // A newly downloaded service-worker version surfaces the Update card.
+    return subscribeUpdateAvailable((available) => {
+      if (available) setInstallStatus("update-available");
+    });
+  }, []);
 
   const [showClearData, setShowClearData] = useState(false);
   const [toast, setToast] = useState(null);
@@ -364,6 +372,7 @@ function MenuPage() {
                   </div>
                   <button
     onClick={() => {
+      applyUpdate();
       setInstallStatus("installed");
       showToast("HarvestWise updated successfully.");
     }}

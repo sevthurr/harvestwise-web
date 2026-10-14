@@ -327,7 +327,9 @@ describe('Admin arrival volume trend', () => {
     expect(screen.getByRole('button', { name: 'Farm Source' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Other Sources' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Monthly' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Daily' })).toBeInTheDocument();
+    // Daily was deliberately dropped from the toggle: the DFTC workbook stores
+    // one point per month, so a day bucket would always be one point per month.
+    expect(screen.queryByRole('button', { name: 'Daily' })).not.toBeInTheDocument();
 
     const yearSelect = screen.getByLabelText('Arrival year');
     expect([...yearSelect.options].map((o) => o.value)).toEqual(['2025', '2024']);
@@ -389,7 +391,10 @@ describe('Admin arrival volume trend', () => {
     );
   });
 
-  it('falls back to daily granularity buckets', async () => {
+  it('folds daily-dated records into their month on the monthly axis', async () => {
+    // The DFTC workbook records one point per month, so the granularity toggle
+    // no longer offers Daily — non-month-end rows must still bucket into their
+    // calendar month rather than vanish from the series.
     analyticsApi.getArrivalPressure.mockResolvedValue({
       ...PROCESSED,
       records: [
@@ -400,10 +405,10 @@ describe('Admin arrival volume trend', () => {
     renderBasis();
 
     await settleTrend();
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }));
+    expect(screen.queryByRole('button', { name: 'Daily' })).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.getByText('DFTC daily arrivals · Overall (Farm + Other) · kilograms · 2025')
+        screen.getByText('DFTC monthly arrivals · Overall (Farm + Other) · kilograms · 2025')
       ).toBeInTheDocument()
     );
   });

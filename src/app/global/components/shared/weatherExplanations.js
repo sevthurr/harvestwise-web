@@ -258,7 +258,7 @@ export function explainRainfall(rainfallMm, rainPct, lang = "ceb") {
 
   // mm > 15.0
   if (lang === "ceb") {
-    return `Kusog nga ulan (${mm.toFixed(1)} mm). Taas ang risgo sa pagbaha ug pagkadaut sa mga gamot. Likayi una ang pag-abono ug susiha dayon ang drainage sa kaumahan.`;
+    return `Kusog nga ulan (${mm.toFixed(1)} mm). Taas ang risk sa pagbaha ug pagkadaut sa mga gamot. Likayi una ang pag-abono ug susiha dayon ang drainage sa kaumahan.`;
   }
   if (lang === "tl") {
     return `Malakas na pag-ulan (${mm.toFixed(1)} mm). Mataas ang banta ng pagbabaha at pagkababad ng ugat. Ipagpaliban muna ang pagpapataba at linisin agad ang drainage.`;
@@ -352,7 +352,7 @@ export function explainGuidance(day, commodityName = null, suitability = null, l
     const s = suitability || evaluateSuitability(day, commodityName);
     if (s === "Suitable") {
       if (lang === "ceb") {
-        return `Maayo (Suitable): Walay nakitang risgo sa panahon para sa ${commodityName}. Paborable ang kondisyon sa pagpatubo, pag-abono, ug pag-atiman.`;
+        return `Maayo (Suitable): Walay nakitang risk sa panahon para sa ${commodityName}. Paborable ang kondisyon sa pagpatubo, pag-abono, ug pag-atiman.`;
       }
       if (lang === "tl") {
         return `Maganda (Suitable): Walang nakitang banta sa panahon para sa ${commodityName}. Paborable ang kondisyon sa pagpapatubo, pagpapataba, at pag-aalaga.`;
@@ -370,7 +370,7 @@ export function explainGuidance(day, commodityName = null, suitability = null, l
     }
     // Severe
     if (lang === "ceb") {
-      return `Taas ang Risgo (Severe): Taas ang risgo sa grabeng ulan o kainit nga posibleng makadaot sa ${commodityName}. Paghimo dayon og lakang sama sa paghawan sa mga kanal aron dili malapukan ang tanom.`;
+      return `Taas ang Risk (Severe): Taas ang risk sa grabeng ulan o kainit nga posibleng makadaot sa ${commodityName}. Paghimo dayon og lakang sama sa paghawan sa mga kanal aron dili malapukan ang tanom.`;
     }
     if (lang === "tl") {
       return `Mataas ang Panganib (Severe): Mataas ang banta ng matinding ulan o init na maaaring makapinsala sa ${commodityName}. Magsagawa agad ng proteksyon tulad ng paglilinis ng drainage.`;

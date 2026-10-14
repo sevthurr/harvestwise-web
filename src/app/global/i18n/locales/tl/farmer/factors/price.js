@@ -13,6 +13,7 @@ export const price = {
   "price_unavailable_crop": "Walang datos ng presyo ng {crop_name} ngayon.",
   "price_unavailable_generic": "Walang datos ng presyo ngayon.",
   "page_title": "Tinantyang Presyo",
+  "compared_with_current_price_sub": "Kung ihahambing sa kasalukuyang presyo",
   "forecast_horizon_label": "Horizon ng Tantiya",
   "forecast_prefix": "Tinantya:",
   "forecast_updated_today": "Na-update ang tantinya ngayon at 6:00 ng umaga",

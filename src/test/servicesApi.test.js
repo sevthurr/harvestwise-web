@@ -128,6 +128,42 @@ describe('adminApi', () => {
     expect(url).toContain('page=2');
     expect(url).toContain('page_size=20');
   });
+
+  it('listRemovalRequests GETs with status and page_size', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0, page: 1, page_size: 100 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await adminApi.listRemovalRequests({ status: 'pending', page_size: 100 });
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/dftc/removal-requests?status=pending&page_size=100`);
+    expect(opts.method).toBe('GET');
+  });
+
+  // URLSearchParams would otherwise serialise an absent filter as "status=undefined".
+  it('listRemovalRequests omits an undefined status filter', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await adminApi.listRemovalRequests({ status: undefined, page_size: 100 });
+    const [url] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/dftc/removal-requests?page_size=100`);
+    expect(url).not.toContain('status=');
+  });
+
+  it('reviewRemovalRequest PATCHes the decision', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { id: 'REQ-1', status: 'approved' } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await adminApi.reviewRemovalRequest('REQ-1', { status: 'approved' });
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/dftc/removal-requests/REQ-1`);
+    expect(opts.method).toBe('PATCH');
+    expect(JSON.parse(opts.body)).toEqual({ status: 'approved' });
+    expect(res.status).toBe('approved');
+  });
 });
 
 describe('ingestionApi', () => {

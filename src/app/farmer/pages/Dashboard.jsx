@@ -53,6 +53,28 @@ function formatForecastPeriod(forecast) {
   return startDate === endDate ? end : `${start} – ${end}`;
 }
 
+function formatPriceChange(forecast, currentPrice) {
+  if (!forecast || forecast.forecast_midpoint == null) return null;
+  const midpoint = Number(forecast.forecast_midpoint);
+  const current = currentPrice != null ? Number(currentPrice) : null;
+  if (current == null || current <= 0) return null;
+
+  const diff = midpoint - current;
+  const absDiff = Math.abs(diff);
+  const formattedVal = absDiff < 1 && absDiff > 0.05
+    ? absDiff.toFixed(2)
+    : Math.round(absDiff).toString();
+
+  const direction = forecast.trend;
+  if (direction === "Rising" || (direction !== "Falling" && diff > 0.05)) {
+    return `+₱${formattedVal}`;
+  }
+  if (direction === "Falling" || (direction !== "Rising" && diff < -0.05)) {
+    return `-₱${formattedVal}`;
+  }
+  return `₱${formattedVal}`;
+}
+
 /**
  * Tracks whether a scroll region actually overflows, so the "scroll for more"
  * affordance is only rendered when there is something hidden below the fold.
@@ -143,8 +165,10 @@ function ProfitCard({ cropPlans, loading }) {
 
   // Find nearest harvest crop
   const nearestCrop = cropPlans
-    .filter(c => c.expectedHarvestDate)
-    .sort((a, b) => new Date(a.expectedHarvestDate) - new Date(b.expectedHarvestDate))[0];
+    .filter(c => (c.expectedHarvestDate || c.rawHarvestDate || c.harvestDate) && c.phase !== 'completed' && c.status !== 'Completed')
+    .sort((a, b) => new Date(a.expectedHarvestDate || a.rawHarvestDate || a.harvestDate) - new Date(b.expectedHarvestDate || b.rawHarvestDate || b.harvestDate))[0]
+    || cropPlans.find(c => c.expectedHarvestDate || c.rawHarvestDate || c.harvestDate)
+    || cropPlans[0];
   
   if (!nearestCrop) {
     return (
@@ -169,11 +193,21 @@ function ProfitCard({ cropPlans, loading }) {
     );
   }
 
-  const harvestDate = nearestCrop.expectedHarvestDate
-    ? new Date(nearestCrop.expectedHarvestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : '-';
-  const profitLow = nearestCrop.profitLower || 0;
-  const profitHigh = nearestCrop.profitUpper || 0;
+  const rawDate = nearestCrop.expectedHarvestDate || nearestCrop.rawHarvestDate;
+  const harvestDate = rawDate
+    ? new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : (nearestCrop.harvestDate || '-');
+  let profitLow = nearestCrop.profitLower || 0;
+  let profitHigh = nearestCrop.profitUpper || 0;
+  if ((profitLow <= 0 || profitHigh <= 0) && (nearestCrop.currentPrice || nearestCrop.farmgatePrice) && nearestCrop.breakEvenPrice && (nearestCrop.expectedHarvestQty || nearestCrop.harvestQuantity)) {
+    const basis = nearestCrop.farmgatePrice || nearestCrop.currentPrice;
+    const qty = nearestCrop.expectedHarvestQty || nearestCrop.harvestQuantity;
+    const margin = basis - nearestCrop.breakEvenPrice;
+    if (margin > 0) {
+      profitLow = Math.floor(margin * qty * 0.85 / 1e3) * 1e3;
+      profitHigh = Math.ceil(margin * qty * 1.1 / 1e3) * 1e3;
+    }
+  }
 
   return (
     <section>
@@ -190,7 +224,12 @@ function ProfitCard({ cropPlans, loading }) {
 
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
         <div className="flex items-center gap-3 mb-3">
-          <CommodityIllustration commodityId={nearestCrop.commodityId} className="w-10 h-10 flex-shrink-0" />
+          <CommodityIllustration
+            commodityId={nearestCrop.commodityId || nearestCrop.commodity}
+            commodityName={nearestCrop.commodityName}
+            baseName={nearestCrop.commodityName}
+            className="w-10 h-10 flex-shrink-0"
+          />
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
               {nearestCrop.variety ? `${nearestCrop.commodityName || '–'} (${nearestCrop.variety})` : (nearestCrop.commodityName || '–')}
@@ -282,13 +321,17 @@ function DashboardPage() {
       // Populate real increasing / decreasing trend for commodities from their price detail endpoint
       await Promise.all(
         itemsList.map(async (item) => {
-          if (!item.direction && item.id) {
+          if (item.id) {
             try {
-              const dRes = await apiGet(`/prices/${item.id}?price_type=bangkerohan_retail&horizon=7&records_limit=1`);
+              const dRes = await apiGet(`/prices/${item.id}?price_type=${item.priceType || 'bangkerohan_retail'}&horizon=7&records_limit=5`);
               if (dRes.ok) {
                 const detail = await parseResponse(dRes);
-                if (detail?.forecast?.trend) {
+                if (detail?.forecast) {
+                  item.forecast = detail.forecast;
                   item.direction = detail.forecast.trend;
+                }
+                if (detail?.recent_records) {
+                  item.recent_records = detail.recent_records;
                 }
               }
             } catch {
@@ -299,22 +342,25 @@ function DashboardPage() {
       );
       return itemsList;
     },
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const farmerProfile = profileQuery.data;
   const prices = pricesQuery.data ?? [];
   const priceTrendQueries = useQueries({
     queries: prices.map((item) => ({
-      queryKey: ["farmer-price-card-trend", item.id, item.priceType, 7],
+      queryKey: ["farmer-price-card-trend", item.id, item.priceType || "bangkerohan_retail", 7],
       queryFn: () => pricesApi.getPriceDetail(item.id, {
-        price_type: item.priceType,
+        price_type: item.priceType || "bangkerohan_retail",
         horizon: 7,
         records_limit: 100,
       }),
-      enabled: Boolean(item.id && item.priceType),
+      enabled: Boolean(item.id),
       staleTime: 60 * 1000,
-      refetchOnMount: true,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
     })),
   });
   const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading;
@@ -425,18 +471,22 @@ function DashboardPage() {
                     >
                       {prices.map((item, index) => {
                         const trendQuery = priceTrendQueries[index];
-                        const trendDetail = trendQuery?.data;
-                        const forecast = trendDetail?.forecast;
-                        const direction = forecast?.trend;
+                        const trendDetail = trendQuery?.data || (item.forecast ? { forecast: item.forecast, recent_records: item.recent_records || [] } : null);
+                        const forecast = trendDetail?.forecast || item.forecast;
+                        const direction = forecast?.trend || item.direction;
                         const forecastPeriod = formatForecastPeriod(forecast);
-                        const hasForecast = item.price != null
-                          && (trendDetail?.recent_records?.length ?? 0) > 0
-                          && forecast?.forecast_midpoint != null
-                          && direction != null;
+                        const hasForecast = Boolean(forecast?.forecast_midpoint != null && direction != null);
                         const cfg = hasForecast ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
                         const DirIcon = cfg.Icon;
                         const count = getVariants(item.name).length;
                         const formattedPrice = item.price != null && item.price !== '' ? `₱${item.price}/${item.uom || 'kg'}` : `-/${item.uom || 'kg'}`;
+                        const currentPrice = item.price != null
+                          ? Number(item.price)
+                          : (trendDetail?.recent_records?.[0]?.prevail_price != null
+                            ? Number(trendDetail.recent_records[0].prevail_price)
+                            : null);
+                        const priceChange = hasForecast ? formatPriceChange(forecast, currentPrice) : null;
+                        const isQueryLoading = !item.forecast && item.id && (trendQuery?.isPending || trendQuery?.isFetching);
 
                         return (
                           <button
@@ -457,21 +507,21 @@ function DashboardPage() {
                               </p>
                               <p className="text-[12px] text-[var(--hw-neutral-900)] leading-tight mt-0.5">{formattedPrice}</p>
                             </div>
-                            <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+                            <div className={`flex items-center gap-1.5 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
                               {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-                              <span className="flex flex-col items-end text-[13px] font-medium">
-                                <span>
-                                  {item.id && item.priceType && (trendQuery?.isPending || trendQuery?.isFetching)
+                              <span className="flex flex-col items-end text-[13px] font-medium leading-tight">
+                                <span className={hasForecast && priceChange ? "font-bold text-[14px]" : ""}>
+                                  {isQueryLoading
                                   ? t("farmer.prices.trend_loading", {}, "Loading trend")
                                   : hasForecast
-                                    ? t(cfg.key, {}, cfg.label)
+                                    ? (priceChange || t(cfg.key, {}, cfg.label))
                                     : trendQuery?.isError
                                       ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
                                       : t("farmer.prices.trend_no_data", {}, "No trend data")}
                                 </span>
-                                {hasForecast && forecastPeriod && (
-                                  <span className="text-[10px] font-normal text-[var(--hw-neutral-500)]">
-                                    {t("farmer.prices.forecast_period", { period: forecastPeriod }, `Forecast period ${forecastPeriod}:`)}
+                                {hasForecast && priceChange && (
+                                  <span className="text-[11px] font-normal opacity-85 mt-0.5">
+                                    {t(cfg.key, {}, cfg.label)}
                                   </span>
                                 )}
                               </span>

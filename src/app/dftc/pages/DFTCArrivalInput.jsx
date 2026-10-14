@@ -718,18 +718,17 @@ export default function DFTCArrivalInput() {
   const [reviewFilter, setReviewFilter] = useState("all");
   const [dataName, setDataName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState(0);
+  const [saveProgressStage, setSaveProgressStage] = useState("Validating arrival records...");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
 
-  // DFTC Personnel from database (with standard staff fallbacks)
-  const [staffList, setStaffList] = useState([
-    { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker I" },
-    { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" }
-  ]);
-  const [encodedBy, setEncodedBy] = useState("IVY JOYCE P. BOLODO");
-  const [encodedByRole, setEncodedByRole] = useState("Agri-Service & Related Worker I");
-  const [reviewedBy, setReviewedBy] = useState("CHRISTIAN JOEY PAUL M. HERMOSO");
-  const [reviewedByRole, setReviewedByRole] = useState("Agricultural Technologist");
+  // DFTC Personnel from database
+  const [staffList, setStaffList] = useState([]);
+  const [encodedBy, setEncodedBy] = useState("");
+  const [encodedByRole, setEncodedByRole] = useState("");
+  const [reviewedBy, setReviewedBy] = useState("");
+  const [reviewedByRole, setReviewedByRole] = useState("");
   const [enteredTime, setEnteredTime] = useState(() => {
     return new Date().toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   });
@@ -797,20 +796,33 @@ export default function DFTCArrivalInput() {
             const name = parts.join(" ").toUpperCase();
             return { name, role: s.position_title || "DFTC Staff" };
           });
-          const existingNames = new Set(list.map((l) => l.name));
-          const defaults = [
-            { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker I" },
-            { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" }
-          ];
-          defaults.forEach((d) => {
-            if (!existingNames.has(d.name)) list.push(d);
-          });
           setStaffList(list);
+
+          // Restore previously selected personnel if they exist in DB staff list
+          let restoredEncoded = null;
+          let restoredReviewed = null;
+          try {
+            const stored = JSON.parse(localStorage.getItem(`dftc_arrival_personnel_${effectivePeriodInfo.iso}`));
+            if (stored?.encodedBy && list.some((s) => s.name === stored.encodedBy)) {
+              restoredEncoded = list.find((s) => s.name === stored.encodedBy);
+            }
+            if (stored?.reviewedBy && list.some((s) => s.name === stored.reviewedBy)) {
+              restoredReviewed = list.find((s) => s.name === stored.reviewedBy);
+            }
+          } catch {}
+
+          const defaultEncoder = restoredEncoded || list[0];
+          const defaultReviewer = restoredReviewed || (list.length > 1 ? list[1] : list[0]);
+
+          setEncodedBy(defaultEncoder.name);
+          setEncodedByRole(defaultEncoder.role);
+          setReviewedBy(defaultReviewer.name);
+          setReviewedByRole(defaultReviewer.role);
         }
       } catch { }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [effectivePeriodInfo.iso]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
@@ -893,6 +905,12 @@ export default function DFTCArrivalInput() {
     } catch { }
     setDraftDismissed(true);
   }
+
+  useEffect(() => {
+    if (location.state?.restoreDraft) {
+      restoreDraft();
+    }
+  }, [location.state]);
 
   function discardDraft() {
     setDraftDismissed(true);
@@ -1026,13 +1044,16 @@ export default function DFTCArrivalInput() {
 
   function resolveCommodityId(com, v) {
     const map = catalogRef.current;
-    if (!map) return com.id;
-    const baseName = COMMODITY_NAME_OVERRIDES[com.name] ?? com.name;
+    const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
     const baseKey = nameSlug(baseName);
     const variantKey = v && v.name && v.name !== "Base"
       ? `${baseKey}-${nameSlug(v.name)}`
       : baseKey;
-    return map.get(variantKey) ?? map.get(baseKey) ?? null;
+    if (map) {
+      const found = map.get(variantKey) ?? map.get(baseKey);
+      if (found) return found;
+    }
+    return com?.id ?? null;
   }
 
   async function registerCommodity(body) {
@@ -1125,11 +1146,13 @@ export default function DFTCArrivalInput() {
   async function handleSave() {
     if (reportingDateError) return;
     setIsSaving(true);
+    setSaveProgress(20);
+    setSaveProgressStage("Validating arrival records...");
     let totalSaved = 0;
 
     const records = [];
     for (const r of enteredRows) {
-      const commodity_id = resolveCommodityId(r.com, r.v);
+      let commodity_id = resolveCommodityId(r.com, r.v);
       const base = {
         variety: r.v.name,
         uom: r.uom || "kg",
@@ -1138,6 +1161,10 @@ export default function DFTCArrivalInput() {
         reported_combined_volume_kg: r.combined > 0 ? Number(r.combined.toFixed(2)) : null,
         observation_status: "Reported value"
       };
+
+      if (!commodity_id) {
+        commodity_id = catalogRef.current?.get(nameSlug(r.com.name)) ?? r.com.id;
+      }
 
       if (commodity_id) {
         records.push({ commodity_id, ...base });
@@ -1151,9 +1178,14 @@ export default function DFTCArrivalInput() {
         if (registered?.id) {
           try { catalogRef.current?.set(nameSlug(r.com.name), registered.id); } catch { }
           records.push({ commodity_id: registered.id, ...base });
+        } else if (r.com.id) {
+          records.push({ commodity_id: r.com.id, ...base });
         }
       }
     }
+
+    setSaveProgress(55);
+    setSaveProgressStage("Standardizing volume figures...");
 
     const payload = {
       data_type: "arrival_volume",
@@ -1168,6 +1200,9 @@ export default function DFTCArrivalInput() {
       records
     };
 
+    setSaveProgress(75);
+    setSaveProgressStage("Saving records to database...");
+
     try {
       await parseResponse(await apiPost("/dftc/submissions/manual", payload));
       totalSaved = records.length;
@@ -1180,6 +1215,9 @@ export default function DFTCArrivalInput() {
       setIsSaving(false);
       return;
     }
+
+    setSaveProgress(95);
+    setSaveProgressStage("Consolidating arrival volume records...");
 
     try {
       localStorage.setItem(
@@ -1196,14 +1234,21 @@ export default function DFTCArrivalInput() {
     } catch { }
 
     setHasDraft(false);
+    setSaveProgress(100);
+    setSaveProgressStage("Arrival volume data saved successfully!");
     queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
 
     navTimer.current = setTimeout(() => {
       setIsSaving(false);
       navigate("/dftc/input", {
         state: {
+          successMsg: `${dataName} saved successfully (${totalSaved} arrival records recorded).`,
+          justSavedType: "arrival",
+          justSavedDate: effectivePeriodInfo.iso,
+          justSavedAt: new Date().toISOString(),
           savedData: {
             title: dataName,
             recordsCount: totalSaved,
@@ -1363,15 +1408,41 @@ export default function DFTCArrivalInput() {
                   <th rowSpan={2} style={{ background: EXCEL_HEADER_BG, border: EXCEL_BORDER, padding: "6px 8px", width: 44, textAlign: "center", fontWeight: "bold" }}>No.</th>
                   <th rowSpan={2} style={{ background: EXCEL_HEADER_BG, border: EXCEL_BORDER, padding: "6px 8px", minWidth: 160, textAlign: "left", fontWeight: "bold" }}>Commodity</th>
                   <th rowSpan={2} style={{ background: EXCEL_HEADER_BG, border: EXCEL_BORDER, padding: "6px 8px", width: 64, textAlign: "center", fontWeight: "bold" }}>Unit</th>
-                  <th colSpan={2} style={{ background: EXCEL_FARM_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "center", fontWeight: "bold", color: "#000" }}>FARM SOURCE</th>
-                  <th colSpan={2} style={{ background: EXCEL_OTHER_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "center", fontWeight: "bold", color: "#000" }}>OTHER SOURCES</th>
+                  <th
+                    colSpan={2}
+                    style={{
+                      background: EXCEL_FARM_BG,
+                      border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER,
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      color: "#000",
+                      opacity: reviewFilter === "other" ? 0.45 : 1
+                    }}
+                  >
+                    FARM SOURCE {reviewFilter === "farm" && "✓"}
+                  </th>
+                  <th
+                    colSpan={2}
+                    style={{
+                      background: EXCEL_OTHER_BG,
+                      border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER,
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      color: "#000",
+                      opacity: reviewFilter === "farm" ? 0.45 : 1
+                    }}
+                  >
+                    OTHER SOURCES {reviewFilter === "other" && "✓"}
+                  </th>
                   <th rowSpan={2} style={{ background: EXCEL_TOTAL_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "right", fontWeight: "bold", width: 130, color: "#000" }}>OVERALL TOTAL</th>
                 </tr>
                 <tr>
-                  <th style={{ background: EXCEL_FARM_BG, border: EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 110, color: "#000" }}>Volume</th>
-                  <th style={{ background: EXCEL_FARM_BG, border: EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 75, color: "#000" }}>Percentage (%)</th>
-                  <th style={{ background: EXCEL_OTHER_BG, border: EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 110, color: "#000" }}>Volume</th>
-                  <th style={{ background: EXCEL_OTHER_BG, border: EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 75, color: "#000" }}>Percentage (%)</th>
+                  <th style={{ background: EXCEL_FARM_BG, border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 110, color: "#000", opacity: reviewFilter === "other" ? 0.45 : 1 }}>Volume</th>
+                  <th style={{ background: EXCEL_FARM_BG, border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 75, color: "#000", opacity: reviewFilter === "other" ? 0.45 : 1 }}>Percentage (%)</th>
+                  <th style={{ background: EXCEL_OTHER_BG, border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 110, color: "#000", opacity: reviewFilter === "farm" ? 0.45 : 1 }}>Volume</th>
+                  <th style={{ background: EXCEL_OTHER_BG, border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER, padding: "5px 8px", textAlign: "right", fontSize: 11, fontWeight: "600", width: 75, color: "#000", opacity: reviewFilter === "farm" ? 0.45 : 1 }}>Percentage (%)</th>
                 </tr>
               </thead>
               <tbody>
@@ -1404,6 +1475,23 @@ export default function DFTCArrivalInput() {
                         {rows.map((r, ri) => {
                           const farmPct = r.combined > 0 ? ((r.farmVal / r.combined) * 100).toFixed(1) : "0.0";
                           const otherPct = r.combined > 0 ? ((r.otherVal / r.combined) * 100).toFixed(1) : "0.0";
+                          const isFarmActive = reviewFilter === "all" || reviewFilter === "farm";
+                          const isOtherActive = reviewFilter === "all" || reviewFilter === "other";
+
+                          const displayFarmVal = isFarmActive && r.farmVal > 0 ? fmtKg(r.farmVal) : "";
+                          const displayFarmPct = isFarmActive && r.farmVal > 0 ? (reviewFilter === "farm" ? "100.0%" : `${farmPct}%`) : "";
+                          const displayOtherVal = isOtherActive && r.otherVal > 0 ? fmtKg(r.otherVal) : "";
+                          const displayOtherPct = isOtherActive && r.otherVal > 0 ? (reviewFilter === "other" ? "100.0%" : `${otherPct}%`) : "";
+
+                          let displayTotal = "";
+                          if (reviewFilter === "farm") {
+                            displayTotal = r.farmVal > 0 ? fmtKg(r.farmVal) : "";
+                          } else if (reviewFilter === "other") {
+                            displayTotal = r.otherVal > 0 ? fmtKg(r.otherVal) : "";
+                          } else {
+                            displayTotal = r.combined > 0 ? fmtKg(r.combined) : "";
+                          }
+
                           return (
                             <tr key={`${cat.id}-${r.com.id}-${r.v.id}-${ri}`}>
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "center" }}>
@@ -1419,20 +1507,20 @@ export default function DFTCArrivalInput() {
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "center" }}>
                                 {r.uom}
                               </td>
-                              <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontWeight: r.farmVal > 0 ? "bold" : "normal" }}>
-                                {r.farmVal > 0 ? fmtKg(r.farmVal) : ""}
+                              <td style={{ background: "#ffffff", border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontWeight: r.farmVal > 0 ? "bold" : "normal", opacity: isFarmActive ? 1 : 0.35 }}>
+                                {displayFarmVal}
                               </td>
-                              <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontSize: 11, color: "#333" }}>
-                                {r.farmVal > 0 ? `${farmPct}%` : ""}
+                              <td style={{ background: "#ffffff", border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontSize: 11, color: "#333", opacity: isFarmActive ? 1 : 0.35 }}>
+                                {displayFarmPct}
                               </td>
-                              <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontWeight: r.otherVal > 0 ? "bold" : "normal" }}>
-                                {r.otherVal > 0 ? fmtKg(r.otherVal) : ""}
+                              <td style={{ background: "#ffffff", border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontWeight: r.otherVal > 0 ? "bold" : "normal", opacity: isOtherActive ? 1 : 0.35 }}>
+                                {displayOtherVal}
                               </td>
-                              <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontSize: 11, color: "#333" }}>
-                                {r.otherVal > 0 ? `${otherPct}%` : ""}
+                              <td style={{ background: "#ffffff", border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontSize: 11, color: "#333", opacity: isOtherActive ? 1 : 0.35 }}>
+                                {displayOtherPct}
                               </td>
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "right", fontWeight: "bold" }}>
-                                {r.combined > 0 ? fmtKg(r.combined) : ""}
+                                {displayTotal}
                               </td>
                             </tr>
                           );
@@ -1451,20 +1539,20 @@ export default function DFTCArrivalInput() {
                     >
                       TOTAL
                     </td>
-                    <td style={{ background: EXCEL_FARM_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000" }}>
-                      {fmtKg(totalFarmVolume)}
+                    <td style={{ background: EXCEL_FARM_BG, border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000", opacity: reviewFilter === "other" ? 0.35 : 1 }}>
+                      {reviewFilter !== "other" ? fmtKg(totalFarmVolume) : ""}
                     </td>
-                    <td style={{ background: EXCEL_FARM_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000" }}>
-                      {farmPercentage}%
+                    <td style={{ background: EXCEL_FARM_BG, border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000", opacity: reviewFilter === "other" ? 0.35 : 1 }}>
+                      {reviewFilter === "farm" ? "100.0%" : (reviewFilter !== "other" ? `${farmPercentage}%` : "")}
                     </td>
-                    <td style={{ background: EXCEL_OTHER_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000" }}>
-                      {fmtKg(totalOtherVolume)}
+                    <td style={{ background: EXCEL_OTHER_BG, border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000", opacity: reviewFilter === "farm" ? 0.35 : 1 }}>
+                      {reviewFilter !== "farm" ? fmtKg(totalOtherVolume) : ""}
                     </td>
-                    <td style={{ background: EXCEL_OTHER_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000" }}>
-                      {otherPercentage}%
+                    <td style={{ background: EXCEL_OTHER_BG, border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000", opacity: reviewFilter === "farm" ? 0.35 : 1 }}>
+                      {reviewFilter === "other" ? "100.0%" : (reviewFilter !== "farm" ? `${otherPercentage}%` : "")}
                     </td>
                     <td style={{ background: EXCEL_TOTAL_BG, border: EXCEL_BORDER, padding: "6px 8px", textAlign: "right", color: "#000" }}>
-                      {fmtKg(totalCombinedVolume)}
+                      {reviewFilter === "farm" ? fmtKg(totalFarmVolume) : (reviewFilter === "other" ? fmtKg(totalOtherVolume) : fmtKg(totalCombinedVolume))}
                     </td>
                   </tr>
                 )}
@@ -1558,15 +1646,35 @@ export default function DFTCArrivalInput() {
             </button>
           </div>
 
-          {/* Centered Loading Modal Overlay while saving */}
+          {/* Centered Loading Modal Overlay while saving (Progress Bar) */}
           {isSaving && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-              <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full text-center shadow-xl border border-[var(--hw-neutral-200)] flex flex-col items-center">
-                <Loader2 className="w-10 h-10 text-[var(--hw-green-700)] animate-spin mb-4" />
+              <div className="bg-white rounded-2xl p-6 sm:p-7 max-w-sm w-full text-center shadow-xl border border-[var(--hw-neutral-200)] flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] flex items-center justify-center text-[var(--hw-green-700)] mb-3">
+                  {saveProgress === 100 ? (
+                    <Check className="w-6 h-6 text-[var(--hw-green-700)]" />
+                  ) : (
+                    <Truck className="w-6 h-6 text-[var(--hw-green-700)]" />
+                  )}
+                </div>
                 <h3 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Saving Arrival Volume Data</h3>
-                <p className="text-[13px] text-[var(--hw-neutral-600)] mt-1.5 leading-relaxed">
+                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-1 leading-relaxed">
                   Please wait while your arrival records are being validated and recorded...
                 </p>
+
+                {/* Progress Bar */}
+                <div className="w-full mt-5">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-[var(--hw-neutral-600)] mb-1.5">
+                    <span className="truncate pr-2">{saveProgressStage}</span>
+                    <span className="font-bold text-[var(--hw-green-700)] shrink-0">{saveProgress}%</span>
+                  </div>
+                  <div className="w-full bg-[var(--hw-neutral-100)] h-2.5 rounded-full overflow-hidden border border-[var(--hw-neutral-200)]">
+                    <div
+                      className="bg-[var(--hw-green-700)] h-full rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${saveProgress}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}

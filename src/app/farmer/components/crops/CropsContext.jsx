@@ -35,7 +35,7 @@ const STATUS_TO_PHASE = {
   Cancelled: "completed",
 };
 
-export function normalizeCropPlan(raw) {
+export function normalizeCropPlan(raw, pricesMap) {
   if (!raw) return null;
   const item = toCamelCase(raw);
   const rawStatus = item.status || "Planning";
@@ -77,6 +77,30 @@ export function normalizeCropPlan(raw) {
       ? Number(item.actualSellingPrice)
       : null;
 
+  const pMap = pricesMap instanceof Map ? pricesMap : null;
+  const priceEntry = pMap
+    ? (pMap.get(commodityId)
+       || pMap.get(`${(commodityName || "").toLowerCase().trim()}_${(variant || "").toLowerCase().trim()}`)
+       || pMap.get((commodityName || "").toLowerCase().trim())
+       || pMap.get((item.baseName || "").toLowerCase().trim()))
+    : null;
+  const currentPrice = item.currentPrice != null
+    ? Number(item.currentPrice)
+    : (priceEntry?.price != null ? Number(priceEntry.price) : null);
+
+  let profitLower = Number(item.profitLower || 0);
+  let profitUpper = Number(item.profitUpper || 0);
+
+  // If user did not enter a farmgate price (or profit is 0), estimate profit from benchmark market price
+  const sellingBasis = farmgatePrice != null ? farmgatePrice : currentPrice;
+  if ((profitLower <= 0 || profitUpper <= 0) && sellingBasis != null && breakEven != null && qty != null && qty > 0) {
+    const margin = sellingBasis - breakEven;
+    if (margin > 0) {
+      profitLower = Math.floor(margin * qty * 0.85 / 1e3) * 1e3;
+      profitUpper = Math.ceil(margin * qty * 1.1 / 1e3) * 1e3;
+    }
+  }
+
   return {
     id: item.id,
     commodity: commodityId,
@@ -91,6 +115,7 @@ export function normalizeCropPlan(raw) {
     holdDate: formatLocalDate(item.updatedAt),
     plantingDate: formatLocalDate(item.actualPlantingDate || item.plannedPlantingDate),
     harvestDate: formatLocalDate(item.expectedHarvestDate),
+    expectedHarvestDate: item.expectedHarvestDate || null,
     rawPlantingDate: item.actualPlantingDate || item.plannedPlantingDate || null,
     rawHarvestDate: item.expectedHarvestDate || null,
     farmArea: item.farmArea || null,
@@ -110,11 +135,11 @@ export function normalizeCropPlan(raw) {
     productionCost: totalCost,
     breakEvenPrice: breakEven,
     breakevenPricePerKg: breakEven,
-    currentPrice: item.currentPrice || null,
+    currentPrice,
     forecastLower: item.forecastLower || null,
     forecastUpper: item.forecastUpper || null,
-    profitLower: item.profitLower || 0,
-    profitUpper: item.profitUpper || 0,
+    profitLower,
+    profitUpper,
     nextMilestone:
       rawStatus === "Completed"
         ? "Crop cycle completed"
@@ -133,8 +158,38 @@ export function normalizeCropPlan(raw) {
   };
 }
 
-function transformCropItems(rawItems) {
-  return rawItems.map(normalizeCropPlan).filter(Boolean);
+export function buildPricesMap(priceItems = []) {
+  const map = new Map();
+  priceItems.forEach(rawItem => {
+    const item = toCamelCase(rawItem);
+    const p = item.prices || {};
+    const price = p.bangkerohanRetail ?? p.dftcRetail ?? p.bangkerohanWholesale ?? p.dftcWholesale ?? null;
+    if (price == null) return;
+
+    if (item.commodityId) {
+      map.set(item.commodityId, { price: Number(price), uom: item.unitOfMeasure || 'kg' });
+    }
+    const name = (item.name || "").toLowerCase().trim();
+    const baseName = (item.baseName || "").toLowerCase().trim();
+    const variety = (item.variety || "").toLowerCase().trim();
+    if (name && variety) {
+      map.set(`${name}_${variety}`, { price: Number(price), uom: item.unitOfMeasure || 'kg' });
+    }
+    if (baseName && variety) {
+      map.set(`${baseName}_${variety}`, { price: Number(price), uom: item.unitOfMeasure || 'kg' });
+    }
+    if (name && !map.has(name)) {
+      map.set(name, { price: Number(price), uom: item.unitOfMeasure || 'kg' });
+    }
+    if (baseName && !map.has(baseName)) {
+      map.set(baseName, { price: Number(price), uom: item.unitOfMeasure || 'kg' });
+    }
+  });
+  return map;
+}
+
+export function transformCropItems(rawItems, pricesMap = new Map()) {
+  return rawItems.map(item => normalizeCropPlan(item, pricesMap)).filter(Boolean);
 }
 
 const CropsProvider = ({ children }) => {
@@ -144,11 +199,16 @@ const CropsProvider = ({ children }) => {
   const { data: crops = [], isLoading: loading } = useQuery({
     queryKey: ["farmer", "crops"],
     queryFn: async () => {
-      const res = await apiGet("/crop-plans");
+      const [res, pricesRes] = await Promise.all([
+        apiGet("/crop-plans"),
+        apiGet("/prices?page_size=100").catch(() => null),
+      ]);
       if (!res.ok) return [];
       const data = await parseResponse(res);
       const rawItems = data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
-      return transformCropItems(rawItems);
+      const pricesData = pricesRes && pricesRes.ok ? await parseResponse(pricesRes) : null;
+      const pricesMap = buildPricesMap(pricesData?.items || []);
+      return transformCropItems(rawItems, pricesMap);
     },
     // This provider is mounted above the router, so it runs on /login too.
     // Without a session the request is a guaranteed 401; gating on the user

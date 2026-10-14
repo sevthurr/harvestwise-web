@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
@@ -10,8 +10,7 @@ const BANK_BG = "#ffeb9c";
 const DFTC_BG = "#dae8fc";
 
 const USER_ID_TO_NAME = {
-  "USR-HERMOSO-001": "CHRISTIAN JOEY PAUL M. HERMOSO",
-  "USR-BOLODO-002": "IVY JOYCE P. BOLODO"
+  "USR-0001": "MARIA S. SANTOS"
 };
 
 function formatDisplayDate(dateStr) {
@@ -37,14 +36,20 @@ function formatDisplayDate(dateStr) {
 function formatDisplayDateShort(dateStr) {
   if (!dateStr) {
     const d = new Date();
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
+  const match = String(dateStr).match(/\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
   try {
     const d = new Date(dateStr);
-    return d.toISOString().split("T")[0];
-  } catch {
-    return dateStr;
-  }
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+  } catch {}
+  return String(dateStr);
 }
 
 function getEncodedByName(file) {
@@ -52,7 +57,7 @@ function getEncodedByName(file) {
   if (file.encodedUserId && USER_ID_TO_NAME[file.encodedUserId]) {
     return USER_ID_TO_NAME[file.encodedUserId];
   }
-  return file.encodedUserId || "CHRISTIAN JOEY PAUL M. HERMOSO";
+  return file.encodedUserId || "MARIA S. SANTOS";
 }
 
 // ── Real-data lookup helpers (preview prices come from the API, not mock rows) ──
@@ -301,7 +306,12 @@ function DFTCFilePreview({ file, onClose }) {
   const [format, setFormat] = useState("IMG");
   const [imgPage, setImgPage] = useState(0);
   const [dlState, setDlState] = useState("idle");
-  const [personnel, setPersonnel] = useState(DEFAULT_PERSONNEL);
+  const [personnel, setPersonnel] = useState(() => ({
+    encodedBy: file.encodedBy || DEFAULT_PERSONNEL.encodedBy,
+    encodedByRole: file.encodedByRole || DEFAULT_PERSONNEL.encodedByRole,
+    preparedBy: file.reviewedBy || file.preparedBy || DEFAULT_PERSONNEL.preparedBy,
+    preparedByRole: file.reviewedByRole || file.preparedByRole || DEFAULT_PERSONNEL.preparedByRole
+  }));
   const pageRefs = useRef([]);
   const total = PAGE_CATEGORY_GROUPS.length;
 
@@ -315,6 +325,22 @@ function DFTCFilePreview({ file, onClose }) {
     },
     enabled: !!reportingDateShort
   });
+
+  const backendEncodedBy = reportPreviewData?.encoded_by && reportPreviewData.encoded_by !== "DFTC Encoder"
+    ? reportPreviewData.encoded_by
+    : null;
+  const backendPreparedBy = reportPreviewData?.prepared_by && reportPreviewData.prepared_by !== "DFTC Officer"
+    ? reportPreviewData.prepared_by
+    : null;
+
+  useEffect(() => {
+    setPersonnel((prev) => ({
+      encodedBy: file.encodedBy || backendEncodedBy || prev.encodedBy || DEFAULT_PERSONNEL.encodedBy,
+      encodedByRole: file.encodedByRole || prev.encodedByRole || DEFAULT_PERSONNEL.encodedByRole,
+      preparedBy: file.reviewedBy || file.preparedBy || backendPreparedBy || prev.preparedBy || DEFAULT_PERSONNEL.preparedBy,
+      preparedByRole: file.reviewedByRole || file.preparedByRole || prev.preparedByRole || DEFAULT_PERSONNEL.preparedByRole
+    }));
+  }, [file, backendEncodedBy, backendPreparedBy]);
 
   // Build price cells from the real API rows; missing data renders as "—"
   // (never falls back to the static mock rows in DFTC_REPORT_CATEGORIES).
@@ -343,7 +369,7 @@ function DFTCFilePreview({ file, onClose }) {
     ? reportPreviewData.subtitle.replace("Prevailing Market Prices as of ", "")
     : formatDisplayDate(file.reportingDate || file.savedDate);
   const reportReference = reportPreviewData?.report_reference_no || file.reportId || file.reportReferenceNo || file.fileId || "—";
-  const encodedByName = reportPreviewData?.encoded_by || getEncodedByName(file);
+  const encodedByName = file.encodedBy || backendEncodedBy || getEncodedByName(file);
 
   async function downloadImages() {
     setDlState("generating-img");
@@ -565,6 +591,25 @@ function DFTCFilePreview({ file, onClose }) {
     ? "Download Excel"
     : "Download Images";
 
+  const countPopulatedPriceRows = useMemo(() => {
+    let count = 0;
+    for (const cat of resolvedCategories) {
+      for (const com of cat.commodities) {
+        for (const v of com.variants) {
+          if (v.bankLanding || v.bankWholesale || v.bankRetail || v.dftcWholesale || v.dftcRetail) {
+            count++;
+          }
+        }
+      }
+    }
+    return count;
+  }, [resolvedCategories]);
+
+  const recordsIncluded = Math.max(
+    countPopulatedPriceRows,
+    Number(file.records) || 0
+  );
+
   return (
     <DFTCReportShell
       title="Preview Daily Report"
@@ -574,7 +619,7 @@ function DFTCFilePreview({ file, onClose }) {
         ["Report ID", reportReference],
         ["Reporting Date", reportingDate],
         ["Class", "A"],
-        ["Records Included", String(file.records ?? 0)],
+        ["Records Included", String(recordsIncluded || 1)],
         ["Saved Date", file.savedDate || "—"],
         ["Encoded By", encodedByName]
       ]}

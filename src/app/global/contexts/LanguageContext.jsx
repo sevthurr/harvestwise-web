@@ -112,6 +112,7 @@ export function LanguageProvider({ children }) {
     } catch {
       // Ignore storage failures and keep in-memory preference.
     }
+    window.dispatchEvent(new CustomEvent('hw:public_auth_lang_changed', { detail: code }));
   }, []);
 
   const clearLanguagePreference = useCallback(() => {

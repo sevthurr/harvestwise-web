@@ -12,7 +12,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       devOptions: {
         enabled: true,
         type: 'module'
@@ -78,6 +78,12 @@ export default defineConfig({
             // IndexedDB (HARVESTWISE_USER_CACHE_V1) when /auth/me is
             // unreachable, which is the intended offline path, not this cache.
             urlPattern: /\/api\/v1\/auth\//i,
+            handler: 'NetworkOnly',
+          },
+          {
+            // Admin analytics outputs are real-time computed data — never serve
+            // from cache or the year picker and classification values will be stale.
+            urlPattern: /\/api\/v1\/admin\/analytics\//i,
             handler: 'NetworkOnly',
           },
           {

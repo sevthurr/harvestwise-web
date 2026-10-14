@@ -2,15 +2,14 @@ import React, { useEffect, useRef, useState } from "react";
 import { Download, ArrowLeft, AlertCircle, Check } from "lucide-react";
 
 export const DFTC_PERSONNEL_LIST = [
-  { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" },
-  { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker" }
+  { name: "MARIA S. SANTOS", role: "Data Analyst" }
 ];
 
 export const DEFAULT_PERSONNEL = {
   encodedBy: DFTC_PERSONNEL_LIST[0].name,
   encodedByRole: DFTC_PERSONNEL_LIST[0].role,
-  preparedBy: DFTC_PERSONNEL_LIST[1].name,
-  preparedByRole: DFTC_PERSONNEL_LIST[1].role
+  preparedBy: DFTC_PERSONNEL_LIST[0].name,
+  preparedByRole: DFTC_PERSONNEL_LIST[0].role
 };
 
 /**
@@ -104,39 +103,6 @@ function DFTCReportShell({
       {/* Preview body */}
       <div className="p-3 md:p-6 bg-[var(--hw-neutral-50)]">{children}</div>
 
-      {/* Report personnel */}
-      <div className="px-4 md:px-6 py-4 border-t border-[var(--hw-neutral-100)] bg-white">
-        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-          <div className="flex flex-col flex-1 min-w-0">
-            <label className="text-[12px] font-semibold text-[var(--hw-neutral-800)] mb-1">Encoded By</label>
-            <select
-              value={personnel.encodedBy}
-              onChange={(e) => updatePersonnel("encodedBy", e.target.value)}
-              className="text-[12px] border border-[var(--hw-neutral-200)] rounded-xl px-3 py-2 bg-white text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)] w-full"
-            >
-              {personnelList.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-            </select>
-            <span className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5">{personnel.encodedByRole}</span>
-          </div>
-          <div className="flex flex-col flex-1 min-w-0">
-            <label className="text-[12px] font-semibold text-[var(--hw-neutral-800)] mb-1">Prepared By</label>
-            <select
-              value={personnel.preparedBy}
-              onChange={(e) => updatePersonnel("preparedBy", e.target.value)}
-              className="text-[12px] border border-[var(--hw-neutral-200)] rounded-xl px-3 py-2 bg-white text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)] w-full"
-            >
-              {personnelList.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-            </select>
-            <span className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5">{personnel.preparedByRole}</span>
-          </div>
-          {personnelUpdated && (
-            <div className="flex items-center gap-1.5 self-end pb-2">
-              <Check className="w-4 h-4 text-emerald-600" />
-              <span className="text-[12px] text-emerald-700 font-medium">Report personnel updated</span>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Error state */}
       {isError && (

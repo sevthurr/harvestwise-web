@@ -2,6 +2,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ChevronDown, Info, X, Edit2, Sliders, ArrowRight } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../global/components/ui/tooltip";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
@@ -1735,9 +1736,23 @@ function AdminAnalytics() {
                               key={row.classification}
                               className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 border-b border-[var(--hw-neutral-100)] last:border-b-0 text-[11px]"
                             >
-                              <span className={`font-bold ${ARRIVAL_PRESSURE_TONES[row.classification]}`}>
-                                {row.classification}
-                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span
+                                    tabIndex={0}
+                                    title={row.supply}
+                                    className={`font-bold cursor-help ${ARRIVAL_PRESSURE_TONES[row.classification]}`}
+                                  >
+                                    {row.classification}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="top"
+                                  className="max-w-xs bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed z-50"
+                                >
+                                  <p>{row.supply}</p>
+                                </TooltipContent>
+                              </Tooltip>
                               <span className="text-[var(--hw-neutral-700)]">{row.boundary}</span>
                               <span className="text-right text-[var(--hw-neutral-600)]">{row.supply}</span>
                             </div>
@@ -1986,8 +2001,4 @@ function AdminAnalytics() {
   );
 }
 
-export {
-  AdminAnalytics as default,
-  EditWeightModal,
-  EditPriceOutlookModal,
-};
+export { AdminAnalytics as default };

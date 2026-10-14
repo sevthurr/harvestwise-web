@@ -227,13 +227,14 @@ function DFTCSubmissionDetail() {
       needsCorrection: apiSubmission.needs_correction_count ?? 0,
       duplicate: apiSubmission.duplicate_count ?? 0,
       status: formattedStatus,
-      fileName: apiSubmission.submission_method === "Manual Input" ? "—" : (apiSubmission.original_file_name || "DFTC-Uploaded-Dataset.xlsx"),
-      fileType: apiSubmission.submission_method === "Manual Input" ? "—" : (apiSubmission.file_format || "xlsx"),
+      fileName: apiSubmission.submission_method === "Manual Input" ? "—" : (apiSubmission.original_file_name || apiSubmission.file_name || "—"),
+      fileType: apiSubmission.submission_method === "Manual Input" ? "—" : (apiSubmission.file_format || (apiSubmission.original_file_name ? apiSubmission.original_file_name.split('.').pop() : "xlsx")),
       market: apiSubmission.source_name || "Bankerohan Public Market",
       priceType: isArrival ? "—" : (apiSubmission.price_type ? apiSubmission.price_type.charAt(0).toUpperCase() + apiSubmission.price_type.slice(1) : "Retail"),
       reportingDate: apiSubmission.reporting_date ? formatDateTime(apiSubmission.reporting_date) : "—",
       validationCompletedDate: formatDateTime(apiSubmission.validation_completed_at || apiSubmission.saved_at),
-      entryMethod: apiSubmission.submission_method || "Excel/CSV Upload",
+      entryMethod: (apiSubmission.submission_method === "Manual Input") ? "Manual Input" : "File Upload",
+      submissionMethod: (apiSubmission.submission_method === "Manual Input") ? "Manual Input" : "File Upload",
       failureReason: apiSubmission.failure_reason || null,
       analyticsRecords: Array.isArray(apiSubmission.analytics_records) ? apiSubmission.analytics_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => r.is_top10) : [],
       otherRecords: Array.isArray(apiSubmission.other_records) ? apiSubmission.other_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => !r.is_top10) : [],
@@ -314,7 +315,7 @@ function DFTCSubmissionDetail() {
     ["Market / Facility", ds.market],
     ...(!isArrival && ds.priceType !== "—" ? [["Price Type", ds.priceType]] : []),
     ["Reporting Date", ds.reportingDate],
-    ["Entry Method", ds.entryMethod],
+    ["Submission Method", ds.submissionMethod || ds.entryMethod],
     ["Saved By", ds.savedBy],
     ["Saved Date and Time", ds.savedDateTime],
     ["Validation Completed", ds.validationCompletedDate],
@@ -339,7 +340,12 @@ function DFTCSubmissionDetail() {
       {/* Header */}
       <div className="space-y-1">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{ds.datasetId}</h1>
+          <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
+            {ds.fileName && ds.fileName !== "—" ? ds.fileName : ds.datasetId}
+          </h1>
+          {ds.fileName && ds.fileName !== "—" && (
+            <span className="text-[13px] text-[var(--hw-neutral-500)] font-medium">({ds.datasetId})</span>
+          )}
           <span
             className={`text-[15px] font-semibold ${
               effectiveStatus === "Saved"
