@@ -42,6 +42,7 @@ import {
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { WeatherLocationBanner } from "./WeatherLocationBanner";
 import { WeatherForecastOutlook } from "../../../global/components/shared/WeatherForecastOutlook";
+import { CropWeatherCard } from "./CropWeatherCard";
 
 function buildPricePoints(actualData, currentPrice, direction, forecastLow, forecastHigh, days = 7) {
   const forecastMid = (forecastLow + forecastHigh) / 2;
@@ -621,7 +622,8 @@ const ProductionTab = ({ data }) => {
 };
 
 const WeatherTab = ({ data, commodityName }) => {
-  const { t } = useLanguage();
+  const { t, effectiveLanguage, langCode } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
   const carouselRef = useRef(null);
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 90, behavior: "smooth" });
 
@@ -650,6 +652,26 @@ const WeatherTab = ({ data, commodityName }) => {
       </div>
     );
   }
+
+  const defaultCropName = commodityName || data?.commodityName || (currentLang === "ceb" ? "Tanom" : currentLang === "tl" ? "Pananim" : "Crop");
+  const defaultCautionTemp = (commodityName || "").toLowerCase().includes("kamatis")
+    ? "24"
+    : (commodityName || "").toLowerCase().includes("carrots")
+    ? "21"
+    : (commodityName || "").toLowerCase().includes("pechay")
+    ? "20"
+    : "30";
+
+  const defaultHeadline = data?.riskHeadline ||
+    (riskCode === WEATHER_SUITABILITY_CODES.SEVERE || riskCode === "combined_severe"
+      ? (currentLang === "ceb" ? `Taas ang risk sa panahon alang sa ${defaultCropName}` : currentLang === "tl" ? `Mataas ang panganib sa panahon para sa ${defaultCropName}` : `Severe weather risk for ${defaultCropName}`)
+      : riskCode === WEATHER_SUITABILITY_CODES.CAUTION
+      ? (currentLang === "ceb"
+          ? `Ang gitagnang temperatura alang sa ${defaultCropName} kay >${defaultCautionTemp}°C`
+          : currentLang === "tl"
+          ? `Ang tinatayang temperatura para sa ${defaultCropName} ay >${defaultCautionTemp}°C`
+          : `Forecast temperature for ${defaultCropName} is >${defaultCautionTemp}°C`)
+      : (currentLang === "ceb" ? `Paborable ang kahimtang sa panahon alang sa ${defaultCropName}` : currentLang === "tl" ? `Maganda ang kondisyon ng panahon para sa ${defaultCropName}` : `Suitable weather conditions for ${defaultCropName}`));
 
   return (
     <div className="space-y-4">
@@ -687,52 +709,35 @@ const WeatherTab = ({ data, commodityName }) => {
         emptyMessage={t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.")}
       />
 
-      {/* General weather insight */}
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
+      {/* ── 3. Crop-specific advisory section (strictly for this single commodity) ── */}
+      <section className="space-y-3 pt-1">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-          {t("farmer.factors.weather.insight_crop_title", { crop_name: (commodityName || "YOUR FARM").toUpperCase() })}
+          {t("farmer.factors.weather.crop_advisories_title")}
         </p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {riskCode === WEATHER_SUITABILITY_CODES.SEVERE || riskCode === "combined_severe"
-            ? t("farmer.factors.weather.insight_severe", { crop_name: commodityName || "this crop" })
-            : riskCode === WEATHER_SUITABILITY_CODES.CAUTION
-            ? t("farmer.factors.weather.insight_caution", { crop_name: commodityName || "this crop" })
-            : riskCode === WEATHER_SUITABILITY_CODES.SUITABLE
-            ? t("farmer.factors.weather.insight_suitable", { crop_name: commodityName || "this crop" })
-            : t("farmer.empty.no_weather_data", {}, "No weather data available.")}
-        </p>
-      </div>
+        <CropWeatherCard
+          crop={{
+            crop_id: data?.commodityId || (typeof commodityName === "string" ? commodityName : "crop"),
+            crop_name: commodityName || data?.commodityName || "Crop",
+            variety: data?.variety || null,
+            status: currentLang === "ceb" ? "Pagbantay" : currentLang === "tl" ? "Binabantayan" : "Monitoring",
+            risk_level:
+              riskCode === WEATHER_SUITABILITY_CODES.SEVERE || riskCode === "combined_severe"
+                ? "Severe"
+                : riskCode === WEATHER_SUITABILITY_CODES.CAUTION
+                ? "Caution"
+                : "Suitable",
+            headline: defaultHeadline,
+            date_range: currentLang === "ceb" ? "Sunod 7 ka Adlaw" : currentLang === "tl" ? "Susunod na 7 Araw" : "Next 7 Days",
+            recommended_actions: actions && actions.length > 0 ? actions : [],
+            crop_sensitivity: why || summary || null,
+          }}
+        />
+      </section>
 
-      {/* Recommended actions */}
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-          {t("farmer.factors.weather.recommended_actions_title", {}, "Recommended Actions")}
-        </p>
-        {actions.length > 0 ? (
-          <div className="space-y-1.5">
-            {actions.map((action, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
-                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{action}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[13px] text-[var(--hw-neutral-900)]">
-            {t("farmer.factors.weather.no_weather_guidance", {}, "No weather guidance available.")}
-          </p>
-        )}
-        {why && <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-0.5">"{why}"</p>}
-      </div>
-
-      {/* What this means */}
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means", {}, "What this means")}</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {summary || (banner ? t(banner.titleKey, {}, banner.fallback) : t("farmer.empty.no_weather_data", {}, "No weather data available."))}
-        </p>
-        <p className="text-[11px] text-[var(--hw-neutral-900)] italic mt-1">
-          {t("farmer.factors.weather.source_open_meteo_notice", {}, "Source: Open-Meteo · Forecast is a guide only.")}
+      {/* ── 4. Notes ── */}
+      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3">
+        <p className="text-[11px] text-[var(--hw-neutral-900)] italic">
+          {t("farmer.factors.weather.source_open_meteo_notice")}
         </p>
       </div>
     </div>

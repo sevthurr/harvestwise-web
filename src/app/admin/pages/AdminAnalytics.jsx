@@ -675,7 +675,24 @@ const ScopeSelector = ({
 function AdminAnalytics() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTabState] = useState(() => (searchParams.get("tab") === "weights" ? "weights" : "outputs"));
+  const highlightParam = searchParams.get("highlight");
+  const [tab, setTabState] = useState(() => {
+    const t = searchParams.get("tab");
+    if (t === "weights") return "weights";
+    if (t === "outputs") return "outputs";
+    const hl = (searchParams.get("highlight") || "").toLowerCase();
+    if (
+      hl.includes("weight") ||
+      hl.includes("threshold") ||
+      hl.includes("q1") ||
+      hl.includes("q2") ||
+      hl.includes("q3") ||
+      hl.includes("ratio")
+    ) {
+      return "weights";
+    }
+    return "outputs";
+  });
   const setTab = (id) => {
     setTabState(id);
     if (id === "weights") {
@@ -684,6 +701,7 @@ function AdminAnalytics() {
       setSearchParams({}, { replace: true });
     }
   };
+
   const [commodities, setCommodities] = useState([]);
   const [loadingCommodities, setLoadingCommodities] = useState(true);
 
@@ -714,6 +732,55 @@ function AdminAnalytics() {
   const [processedResults, setProcessedResults] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState("");
+
+  const [highlightedCard, setHighlightedCard] = useState(highlightParam);
+
+  // 3-second temporary highlight timer (matching DFTC highlight pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedCard(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedCard(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+
+  const isCardHighlighted = useCallback((key) => {
+    if (!highlightedCard) return false;
+    const hl = highlightedCard.toLowerCase();
+    if (key === "price" && (hl.includes("price") || hl.includes("forecast"))) return true;
+    if (key === "arrival" && hl.includes("arrival")) return true;
+    if (key === "production" && (hl.includes("production") || hl.includes("seasonal"))) return true;
+    if (key === "weather" && hl.includes("weather")) return true;
+    if (key === "profitability" && hl.includes("profit")) return true;
+    if (key === "advisory" && hl.includes("advisory")) return true;
+    return hl.includes(key);
+  }, [highlightedCard]);
+
+  // Smooth scroll to highlighted card (works for both Module Outputs and Weights & Thresholds)
+  useEffect(() => {
+    if (!highlightedCard) return;
+    const t = setTimeout(() => {
+      const hl = highlightedCard.toLowerCase();
+      const el =
+        document.getElementById(`threshold-${hl}`) ||
+        document.getElementById(`threshold-${hl.replace(/_/g, "-")}`) ||
+        (hl.includes("arrival") ? document.getElementById("threshold-arrival-pressure") : null) ||
+        (hl.includes("price") ? document.getElementById("threshold-price-outlook") : null) ||
+        (hl.includes("weather") ? document.getElementById("threshold-weather-risk") : null) ||
+        (hl.includes("production") || hl.includes("seasonal") ? document.getElementById("threshold-seasonal-production") : null) ||
+        (hl.includes("profit") ? document.getElementById("threshold-profitability") : null) ||
+        (hl.includes("advisory") ? document.getElementById("threshold-final-advisory") : null) ||
+        (hl.includes("weight") ? document.querySelector('[id^="weight-phase-"]') : null) ||
+        document.querySelector(`[data-threshold-card*="${hl}"]`) ||
+        document.getElementById(`module-card-${hl}`) ||
+        document.querySelector(`[data-module-card*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightedCard, analyticsLoading, tab]);
 
   // Weather rules per commodity (loaded from API for the summary card)
   const [weatherRulesByCommodity, setWeatherRulesByCommodity] = useState({});
@@ -1295,11 +1362,30 @@ function AdminAnalytics() {
               <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${analyticsLoading ? "opacity-60 pointer-events-none" : ""}`}>
                 {moduleCards.map((card) => {
                   const cc = CLASSIFICATION_COLORS[card.classification] ?? "text-[var(--hw-neutral-500)]";
+                  const modSlug = card.module.toLowerCase().replace(/[^a-z0-9]/g, "-");
+                  const hl = (highlightedCard || "").toLowerCase();
+                  const isHighlighted = Boolean(
+                    hl &&
+                    (card.module.toLowerCase().includes(hl) ||
+                     hl.includes(modSlug) ||
+                     (hl.includes("forecast") && card.module === "Price Outlook") ||
+                     (hl.includes("price") && card.module === "Price Outlook") ||
+                     (hl.includes("arrival") && card.module === "Arrival Pressure") ||
+                     (hl.includes("weather") && card.module === "Weather Risk") ||
+                     (hl.includes("production") && card.module === "Historical Seasonal Production Level"))
+                  );
+
                   return (
                     <div
                       key={card.module}
+                      id={`module-card-${modSlug}`}
+                      data-module-card={`${modSlug} ${card.module.toLowerCase()}`}
                       onClick={() => handleCardClick(card)}
-                      className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3 hover:bg-[var(--hw-neutral-50)] hover:border-[var(--hw-neutral-300)] transition-colors cursor-pointer"
+                      className={`rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3 hover:border-[var(--hw-neutral-300)] transition-colors duration-500 cursor-pointer ${
+                        isHighlighted
+                          ? "bg-emerald-50/70 font-medium"
+                          : "bg-white hover:bg-[var(--hw-neutral-50)]"
+                      }`}
                     >
                       <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] leading-snug">{card.module}</p>
                       <div className="space-y-1.5 flex-1">
@@ -1541,10 +1627,20 @@ function AdminAnalytics() {
                   const total = Object.values(effectiveWeights).reduce((a, b) => a + (Number(b) || 0), 0);
                   const resilient = RESILIENT_STAGE_WEIGHTS[phase] || {};
 
+                  const isPhaseHighlighted = Boolean(
+                    highlightedCard &&
+                    (highlightedCard.toLowerCase().includes(phase.toLowerCase()) ||
+                     (highlightedCard.toLowerCase().includes("weight") && phase === "planning"))
+                  );
+
                   return (
                     <div
                       key={phase}
-                      className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between"
+                      id={`weight-phase-${phase.toLowerCase()}`}
+                      data-threshold-card={`weights ${phase.toLowerCase()}`}
+                      className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                        isPhaseHighlighted ? "bg-emerald-50/70" : "bg-white"
+                      }`}
                     >
                       <div>
                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
@@ -1614,7 +1710,13 @@ function AdminAnalytics() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Price Outlook (Global Admin Configured) */}
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between">
+                <div
+                  id="threshold-price-outlook"
+                  data-threshold-card="price price-outlook"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("price") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
@@ -1654,7 +1756,13 @@ function AdminAnalytics() {
                 </div>
 
                 {/* 2. Arrival Pressure (Derived per Commodity + Variety — Read-Only) */}
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between">
+                <div
+                  id="threshold-arrival-pressure"
+                  data-threshold-card="arrival arrival-pressure arrival_pressure_q3"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("arrival") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
@@ -1781,7 +1889,13 @@ function AdminAnalytics() {
                 </div>
 
                 {/* 3. Historical Seasonal Production Level (Derived per Commodity + Variety — Read-Only) */}
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between">
+                <div
+                  id="threshold-seasonal-production"
+                  data-threshold-card="production seasonal seasonal-production"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("production") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
@@ -1883,7 +1997,13 @@ function AdminAnalytics() {
                 </div>
 
                 {/* 4. Weather Risk (Configured per Commodity + Variety) */}
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between">
+                <div
+                  id="threshold-weather-risk"
+                  data-threshold-card="weather weather-risk"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("weather") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
@@ -1928,7 +2048,13 @@ function AdminAnalytics() {
                 </div>
 
                 {/* 5. Profitability (Global Farmer Assessment Rule) */}
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between">
+                <div
+                  id="threshold-profitability"
+                  data-threshold-card="profit profitability"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("profitability") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
@@ -1958,7 +2084,13 @@ function AdminAnalytics() {
                 </div>
 
                 {/* 6. Final Advisory Cutoffs (Global Rule) */}
-                <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between">
+                <div
+                  id="threshold-final-advisory"
+                  data-threshold-card="advisory final-advisory"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("advisory") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
@@ -2001,4 +2133,4 @@ function AdminAnalytics() {
   );
 }
 
-export { AdminAnalytics as default };
+export { AdminAnalytics as default, EditPriceOutlookModal, EditWeightModal };

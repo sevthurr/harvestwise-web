@@ -237,8 +237,6 @@ function AdminDataSources() {
     refetchOnWindowFocus: true,
   });
 
-
-
   const events = useMemo(() => {
     if (eventsData?.items && eventsData.items.length > 0) {
       return eventsData.items.map(mapEvent);
@@ -252,6 +250,33 @@ function AdminDataSources() {
   const apiSyncSources = apiSyncRes?.items || [];
   const dataSourcesError = dsErr ? (dsErr.message || "Failed to load data sources.") : null;
   const apiSyncError = syncErr ? (syncErr.message || "Failed to load API sync sources.") : null;
+
+  const highlightParam = searchParams.get("highlight");
+  const [highlightedSource, setHighlightedSource] = useState(highlightParam);
+
+  // 3-second temporary highlight timer (matching DFTC highlight pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedSource(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedSource(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+
+  // Smooth scroll to highlighted data source row
+  useEffect(() => {
+    if (!highlightedSource || dataSourcesLoading) return;
+    const t = setTimeout(() => {
+      const hl = highlightedSource.toLowerCase();
+      const el =
+        document.getElementById(`source-row-${hl}`) ||
+        document.querySelector(`[data-source-match*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+  }, [highlightedSource, dataSourcesLoading, dataSources]);
 
   const calGrid = useMemo(() => buildGrid(calYear, calMonth), [calYear, calMonth]);
   const filteredEvents = useMemo(() => {
@@ -791,20 +816,40 @@ function AdminDataSources() {
                         </td>
                       </tr>
                     ) : (
-                      dataSources.map((s) => <tr
-                        key={s.id}
-                        onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-                        className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-                      >
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-[var(--hw-neutral-800)]">{SOURCE_DISPLAY_NAMES[s.name] || s.name}</p>
-                        </td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
-                          {s.records != null ? s.records.toLocaleString() : "—"}
-                        </td>
-                        <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
-                      </tr>)
+                      dataSources.map((s) => {
+                        const hl = (highlightedSource || "").toLowerCase();
+                        const displayName = SOURCE_DISPLAY_NAMES[s.name] || s.name || "";
+                        const matcher = `${s.id} ${s.name} ${displayName}`.toLowerCase();
+                        const isHighlighted = Boolean(
+                          hl &&
+                          (matcher.includes(hl) ||
+                           hl.includes(s.name.toLowerCase()) ||
+                           (hl.includes("dftc") && s.name.toLowerCase().includes("dftc")) ||
+                           (hl.includes("openstat") && s.name.toLowerCase().includes("openstat")) ||
+                           (hl.includes("meteo") && s.name.toLowerCase().includes("meteo")))
+                        );
+
+                        return (
+                          <tr
+                            key={s.id}
+                            id={`source-row-${s.id.toLowerCase()}`}
+                            data-source-match={matcher}
+                            onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                            className={`hover:bg-[var(--hw-neutral-50)] transition-colors duration-500 cursor-pointer ${
+                              isHighlighted ? "bg-emerald-50/70 font-medium" : ""
+                            }`}
+                          >
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-[var(--hw-neutral-800)]">{displayName}</p>
+                            </td>
+                            <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
+                            <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
+                              {s.records != null ? s.records.toLocaleString() : "—"}
+                            </td>
+                            <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

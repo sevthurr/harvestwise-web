@@ -28,15 +28,10 @@ export default function CalendarLegend({ markers = {} }) {
           return (
             <span key="crop" className="flex items-center gap-1.5">
               <span className={slot} aria-hidden="true">
-                <CommodityIllustration
-                  commodityId="demo"
-                  commodityName="Tomato"
-                  baseName="Tomato"
-                  className={CELL_ICON_ART}
-                />
+                <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="crop schedule">🌱</span>
               </span>
               <span className={label}>
-                {t("farmer.calendar.legend.crop", {}, "Your crop")}
+                {t("farmer.calendar.legend.crop_schedule", {}, "Iskedyul sa tanom")}
               </span>
             </span>
           );
@@ -57,10 +52,10 @@ export default function CalendarLegend({ markers = {} }) {
           return (
             <span key="event" className="flex items-center gap-1.5">
               <span className={slot} aria-hidden="true">
-                <CalendarClock className={`${CELL_ICON_STROKE} text-emerald-600`} />
+                <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="events">📅</span>
               </span>
               <span className={label}>
-                {t("farmer.calendar.legend.events", {}, "Events")}
+                {t("farmer.calendar.legend.events", {}, "Mga Events")}
               </span>
             </span>
           );

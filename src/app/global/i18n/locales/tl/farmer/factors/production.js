@@ -18,7 +18,7 @@ export const production = {
   "production_harvest_period_notice": "Ang antas ng produksyon na ito ay nakabase sa {quarter_label} ({quarter_range}), ang inaasahang quarter ng ani ng {crop_name}.",
   "production_history_notice": "Gumagamit ito ng {years} taon ng nakaraang datos ng produksyon kada quarter.",
   "production_historical_notice": "Nakabase ito sa mga nakaraang datos ng produksyon. Hindi ito eksaktong tantiya ng produksyon sa oras ng ani.",
-  "production_scope_notice": "Ipinapakita nito ang datos ng produksyon sa {location}, hindi ang eksaktong dami na nasa merkado.",
+  "production_scope_notice": "Ipinapakita nito ang datos ng produksyon sa {location}, hindi ang eksaktong dami na nasa palengke.",
   "production_low_basic": "Mababa ang nakaraang produksyon ng {crop_name} (tinatayang {volume} MT sa {quarter_label}), nasa {pct}% lamang ng karaniwang dami mula sa 3 pinagmulang lugar (Davao City, Davao del Sur, at Bukidnon).",
   "production_lower_middle_basic": "Katamtamang mababa ang nakaraang produksyon ng {crop_name} (tinatayang {volume} MT sa {quarter_label}), nasa {pct}% ng karaniwang dami mula sa 3 pinagmulang lugar (Davao City, Davao del Sur, at Bukidnon).",
   "production_upper_middle_basic": "Katamtamang mataas ang nakaraang produksyon ng {crop_name} (tinatayang {volume} MT sa {quarter_label}), nasa {pct}% ng karaniwang dami mula sa 3 pinagmulang lugar (Davao City, Davao del Sur, at Bukidnon).",

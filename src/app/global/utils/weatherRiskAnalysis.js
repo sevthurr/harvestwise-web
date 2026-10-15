@@ -4,7 +4,24 @@ export function buildWeatherRiskAnalysis({
   commodityName = "selected crop",
   weatherError = "",
   weatherLoading = false,
+  lang = "ceb",
 }) {
+  const normLang = String(lang || "ceb").toLowerCase();
+  const isCeb = normLang.includes("ceb") || normLang.includes("bisaya");
+  const isTl = normLang.includes("tl") || normLang.includes("tagalog") || normLang.includes("filipino");
+
+  const MONTHS_SHORT = isCeb || isTl
+    ? ["Ene", "Peb", "Mar", "Abr", "May", "Hun", "Hul", "Ago", "Set", "Okt", "Nob", "Dis"]
+    : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function formatShortDate(dateStr) {
+    if (!dateStr) return isCeb ? "Karon" : isTl ? "Ngayon" : "Today";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    const m = MONTHS_SHORT[d.getMonth()] || "";
+    return `${m} ${d.getDate()}`;
+  }
+
   const days = weatherForecast?.status === "ok" && Array.isArray(weatherForecast.days)
     ? weatherForecast.days
     : [];
@@ -65,12 +82,10 @@ export function buildWeatherRiskAnalysis({
   const classification = isProcessed
     ? severeCount >= 2 ? "Severe" : cautionCount > 0 || severeCount > 0 ? "Caution" : "Suitable"
     : "Not processed";
-  const firstDate = days[0]?.date
-    ? new Date(days[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : "Today";
-  const lastDate = days.at(-1)?.date
-    ? new Date(days.at(-1).date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : "+14d";
+
+  const firstDate = days[0]?.date ? formatShortDate(days[0].date) : (isCeb ? "Karon" : isTl ? "Ngayon" : "Today");
+  const lastDate = days.at(-1)?.date ? formatShortDate(days.at(-1).date) : "+14d";
+
   const forecast14d = days.map((day) => {
     const severe =
       (day.rainfall_mm ?? 0) >= sevRainMin ||
@@ -99,36 +114,96 @@ export function buildWeatherRiskAnalysis({
     };
   });
 
-  const resultExplanation = isProcessed
-    ? `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${avgMin >= suitTempMin && avgMax <= suitTempMax
-      ? `${commodityName} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
-      : "Temperatures fluctuate slightly outside optimal bounds."
-    } ${cautionCount > 0 || severeCount > 0
-      ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
-      : "Favorable meteorological conditions expected throughout the forecast window."
-    }`
-    : weatherError || (weatherLoading ? "Loading weather forecast data…" : "No weather forecast data is available for this scope.");
+  let resultExplanation = "";
+  if (isProcessed) {
+    if (isCeb) {
+      const tempNote = avgMin >= suitTempMin && avgMax <= suitTempMax
+        ? `Ang ${commodityName} anaa sa husto ug maayong temperatura (${suitTempMin}–${suitTempMax}°C).`
+        : "Ang temperatura medyo lapas sa naandang gikinahanglan sa tanom.";
+      const riskNote = cautionCount > 0 || severeCount > 0
+        ? `Adunay mas taas nga kaumog o ulan sa ${cautionCount + severeCount} ka adlaw sa forecast; bantayi kanunay ang drainage ug mga sakit sa tanom.`
+        : "Gilaoman ang maayo ug paborable nga panahon sa tibuok forecast window.";
+      resultExplanation = `Ang 14-adlaw nga tagna sa panahon nagpakita og kasarangang temperatura nga ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C ug kasarangang pag-ulan nga ${avgRain.toFixed(1)} mm/adlaw. ${tempNote} ${riskNote}`;
+    } else if (isTl) {
+      const tempNote = avgMin >= suitTempMin && avgMax <= suitTempMax
+        ? `Ang ${commodityName} ay nasa tamang antas ng temperatura (${suitTempMin}–${suitTempMax}°C).`
+        : "Bahagyang lumilihis ang temperatura sa angkop na saklaw ng pananim.";
+      const riskNote = cautionCount > 0 || severeCount > 0
+        ? `May mataas na halumigmig o ulan sa ${cautionCount + severeCount} araw ng forecast; bantayan ang daloy ng tubig at banta ng mga sakit sa pananim.`
+        : "Inaasahan ang maganda at paborableng panahon sa buong forecast window.";
+      resultExplanation = `Ipinapakita ng 14-araw na ulat sa panahon ang karaniwang temperatura na ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C at karaniwang ulan na ${avgRain.toFixed(1)} mm/araw. ${tempNote} ${riskNote}`;
+    } else {
+      const tempNote = avgMin >= suitTempMin && avgMax <= suitTempMax
+        ? `${commodityName} is within its optimal thermal range (${suitTempMin}–${suitTempMax}°C).`
+        : "Temperatures fluctuate slightly outside optimal bounds.";
+      const riskNote = cautionCount > 0 || severeCount > 0
+        ? `Elevated humidity or rainfall detected on ${cautionCount + severeCount} forecast days; monitor bed drainage and disease pressure.`
+        : "Favorable meteorological conditions expected throughout the forecast window.";
+      resultExplanation = `14-day weather forecast indicates an average temperature range of ${avgMin.toFixed(1)}°C–${avgMax.toFixed(1)}°C with ${avgRain.toFixed(1)} mm/day average rainfall. ${tempNote} ${riskNote}`;
+    }
+  } else {
+    resultExplanation = weatherError || (weatherLoading
+      ? (isCeb ? "Gikarga ang datos sa tagna sa panahon…" : isTl ? "Kinakarga ang datos ng ulat panahon…" : "Loading weather forecast data…")
+      : (isCeb ? "Walay datos sa tagna sa panahon nga magamit alang niini." : isTl ? "Walang datos ng ulat panahon na magamit para dito." : "No weather forecast data is available for this scope."));
+  }
+
+  const periodLabel = isProcessed
+    ? (isCeb ? `${days.length} ka adlaw (${firstDate} – ${lastDate})` : isTl ? `${days.length} araw (${firstDate} – ${lastDate})` : `${days.length} days (${firstDate} – ${lastDate})`)
+    : (isCeb ? "14 ka adlaw" : isTl ? "14 araw" : "14 days");
+
+  const locationLabel = isCeb
+    ? "Davao City ug mga Tanoman"
+    : isTl
+    ? "Davao City at mga Sakahan"
+    : "Davao City & Production Areas";
+
+  const cropThresholdLabel = isCeb
+    ? `Maayo: ${suitTempMin}–${suitTempMax}°C, <${suitRainMax} mm/adlaw`
+    : isTl
+    ? `Angkop: ${suitTempMin}–${suitTempMax}°C, <${suitRainMax} mm/araw`
+    : `Suitable: ${suitTempMin}–${suitTempMax}°C, <${suitRainMax} mm/day`;
 
   return {
     basisSource: "Open-Meteo 14-day Forecast",
-    inputPeriod: isProcessed ? `${days.length} days (${firstDate} – ${lastDate})` : "14 days",
+    inputPeriod: periodLabel,
     processedAt: weatherForecast?.fetched_at
       ? new Date(weatherForecast.fetched_at).toLocaleString()
       : new Date().toLocaleDateString(),
     classification,
     basisInputs: {
-      Location: "Davao City & Production Areas",
-      "Forecast period": isProcessed ? `${days.length} days (${firstDate} – ${lastDate})` : "14 days",
+      Location: locationLabel,
+      "Forecast period": periodLabel,
       "Average rainfall": isProcessed ? `${avgRain.toFixed(1)} mm/day` : "- mm/day",
       "Average rain probability": isProcessed ? `${Math.round(avgProb)}%` : "-%",
       "Temperature Range": isProcessed ? `${avgMin.toFixed(1)}°C – ${avgMax.toFixed(1)}°C` : "-°C",
       Humidity: isProcessed ? `${avgHum.toFixed(1)}%` : "-%",
-      "Crop threshold": `Suitable: ${suitTempMin}–${suitTempMax}°C, <${suitRainMax} mm/day`,
+      "Crop threshold": cropThresholdLabel,
     },
     thresholds: [
-      { classification: "Suitable", rule: `Rainfall < ${suitRainMax} mm/day; temp ${suitTempMin}–${suitTempMax}°C` },
-      { classification: "Caution", rule: `Rainfall ${suitRainMax}–${sevRainMin} mm/day; temp ${suitTempMax}–${sevTempMax}°C` },
-      { classification: "Severe", rule: `Rainfall > ${sevRainMin} mm/day; temp > ${sevTempMax}°C or < ${sevTempMin}°C; wind > ${sevWind} km/h` },
+      {
+        classification: isCeb ? "Maayo" : isTl ? "Angkop" : "Suitable",
+        rule: isCeb
+          ? `Ulan < ${suitRainMax} mm/adlaw; temperatura ${suitTempMin}–${suitTempMax}°C`
+          : isTl
+          ? `Ulan < ${suitRainMax} mm/araw; temperatura ${suitTempMin}–${suitTempMax}°C`
+          : `Rainfall < ${suitRainMax} mm/day; temp ${suitTempMin}–${suitTempMax}°C`,
+      },
+      {
+        classification: isCeb ? "Kinahanglan Bantayan" : isTl ? "Kailangang Bantayan" : "Caution",
+        rule: isCeb
+          ? `Ulan ${suitRainMax}–${sevRainMin} mm/adlaw; temperatura ${suitTempMax}–${sevTempMax}°C`
+          : isTl
+          ? `Ulan ${suitRainMax}–${sevRainMin} mm/araw; temperatura ${suitTempMax}–${sevTempMax}°C`
+          : `Rainfall ${suitRainMax}–${sevRainMin} mm/day; temp ${suitTempMax}–${sevTempMax}°C`,
+      },
+      {
+        classification: isCeb ? "Taas ang Risk" : isTl ? "Mataas ang Panganib" : "Severe",
+        rule: isCeb
+          ? `Ulan > ${sevRainMin} mm/adlaw; temperatura > ${sevTempMax}°C o < ${sevTempMin}°C; hangin > ${sevWind} km/h`
+          : isTl
+          ? `Ulan > ${sevRainMin} mm/araw; temperatura > ${sevTempMax}°C o < ${sevTempMin}°C; hangin > ${sevWind} km/h`
+          : `Rainfall > ${sevRainMin} mm/day; temp > ${sevTempMax}°C or < ${sevTempMin}°C; wind > ${sevWind} km/h`,
+      },
     ],
     forecast_14d: forecast14d,
     records: days.map((day) => ({

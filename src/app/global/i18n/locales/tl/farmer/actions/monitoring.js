@@ -31,7 +31,7 @@ export const monitoringActions = {
   "action_harvest_recommended": "Ipagpatuloy ang pag-aani o pagbebenta at ihambing ang presyo ng mga mamimili. Itala ang aktuwal na dami ng ani at presyo ng bentahan.",
   "action_harvest_high_arrival": "Mataas ang kasalukuyang suplay sa DFTC. Ihambing ang mga mamimili at pagpipilian sa pagbebenta bago magbenta ng malaking dami nang sabay-sabay.",
   "action_harvest_high_production": "Mataas ang nakaraang produksyon para sa quarter na ito ng ani. Tingnan ang mga pagpipilian sa pagbebenta at pangangailangan ng mga mamimili.",
-  "action_harvest_supply_combined": "Mataas ang mga palatandaan ng suplay. Ihambing ang mga mamimili, oras ng pagbebenta, at mga mapagpipiliang merkado.",
+  "action_harvest_supply_combined": "Mataas ang mga palatandaan ng suplay. Ihambing ang mga mamimili, oras ng pagbebenta, at mga mapagpipiliang palengke.",
   "action_harvest_weather": "Protektahan ang naaning produkto sa panahon at planuhin ang trabaho sa bukid sa mas ligtas na kondisyon.",
   "action_harvest_profit": "Ihambing ang aktuwal na presyo ng mamimili sa presyong kailangan para mabawi ang gastos bago tapusin ang bentahan.",
   "action_harvest_price": "Ihambing ang presyo ng mga mamimili bago magbenta. Itala ang aktuwal na presyong natanggap mo.",

@@ -27,7 +27,7 @@ export const calendar = {
   legend: {
     crop: "Imong tanom",
     weather: "Panahon",
-    events: "Mga Hitabo",
+    events: "Mga Events",
     payday: "Payday",
     light_rain: "Gamay nga ulan",
     heavy_rain: "Kusog nga ulan",
