@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -6,7 +6,6 @@ import {
   CheckCheck,
   ChevronRight,
   AlertTriangle,
-  X,
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card } from "../../global/components/ui/hw-ui";
@@ -17,89 +16,9 @@ import {
 } from "../../../services/api/notificationsApi";
 import { NotificationIcon } from "../../global/components/shared/NotificationIcon";
 import { resolveNotificationRoute } from "../../global/utils/notificationRoutes";
-import {
-  URGENCY_LEVELS,
-  getCategoryUrgency,
-  getCategoryActionLabel,
-  getCategoryReason,
-} from "../../global/utils/notificationCategories";
 import { useNotificationEvent } from "../../global/contexts/NotificationStreamContext";
 import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
-
-const AlertDetailDrawer = ({ alert, onClose, onMarkRead, onNavigate }) => {
-  if (!alert) return null;
-  const urgency = URGENCY_LEVELS[alert.urgency] || URGENCY_LEVELS.information;
-  const UrgencyIcon = urgency.Icon;
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[85vh] md:max-h-none">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${urgency.bg} ${urgency.color}`}>
-              <UrgencyIcon className="w-3.5 h-3.5" />
-              {urgency.label}
-            </span>
-            <span className="text-[12px] text-[var(--hw-neutral-500)]">{alert.timestamp}</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] cursor-pointer"
-            aria-label="Close drawer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-          <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)] leading-snug">{alert.title}</h2>
-          <p className="text-[14px] text-[var(--hw-neutral-700)] leading-relaxed">{alert.detail || alert.summary}</p>
-
-          {alert.relatedTo && (
-            <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)]">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)] mb-0.5">Related Dataset</p>
-              <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{alert.relatedTo}</p>
-            </div>
-          )}
-
-          {alert.reason && (
-            <div className="space-y-1">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Notification Type</p>
-              <p className="text-[13px] text-[var(--hw-neutral-600)] leading-relaxed">{alert.reason}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-2">
-          {!alert.read && (
-            <button
-              onClick={() => {
-                onMarkRead(alert.id);
-                onClose();
-              }}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-            >
-              Mark as read
-            </button>
-          )}
-          {alert.action && alert.action.route && (
-            <button
-              onClick={() => {
-                onClose();
-                onNavigate(alert.action.route);
-              }}
-              className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors text-center cursor-pointer"
-            >
-              {alert.action.label}
-            </button>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
 
 function fmtTimestamp(isoStr) {
   if (!isoStr) return "";
@@ -130,7 +49,6 @@ function DFTCNotifications() {
 
   const markReadMutation = useMutation({
     mutationFn: (id) => apiMarkRead(id),
-    // Optimistic: show it as read immediately, even if the request fails.
     onMutate: (id) => markReadLocally(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
@@ -147,34 +65,14 @@ function DFTCNotifications() {
     },
   });
 
-  // Real-time live updates on the shared app-wide notification stream.
-  //
-  // Both subscriptions are needed and both are correct: a genuine upload
-  // completion arrives as `DATASET_INGESTED`, but a notification broadcast for
-  // many users at once rides that same data channel and arrives as
-  // `DATASET_INGESTED` carrying `type: "NOTIFICATION_CREATED"` — which the
-  // shared stream dispatches under both names, handing over the *same* payload
-  // object each time.
-  //
-  // Comparing payload identity collapses exactly that duplicate and nothing
-  // else. Measured before the fix: a bulk broadcast refetched the feed twice,
-  // a plain ingestion event once. A time-based window would also have worked,
-  // but it would silently swallow a genuinely distinct event arriving moments
-  // later; identity comparison cannot.
-  const lastPayloadRef = useRef(null);
   const invalidateFeed = useCallback(
-    (payload) => {
-      if (payload && payload === lastPayloadRef.current) return;
-      lastPayloadRef.current = payload ?? null;
+    () => {
       queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
     [queryClient],
   );
   useNotificationEvent("NOTIFICATION_CREATED", invalidateFeed);
-  // DATASET_INGESTED fires on the shared data channel when a DFTC upload
-  // completes, so an accepted/rejected submission lands in this feed without
-  // a manual reload.
   useNotificationEvent("DATASET_INGESTED", invalidateFeed);
 
   useEffect(() => {
@@ -188,8 +86,6 @@ function DFTCNotifications() {
 
     return notificationsData.items.map((item) => {
       const metadata = item.metadata || item.payload || {};
-      const submissionId = metadata.submission_id || null;
-      const actionLabel = getCategoryActionLabel(item.category);
       return {
         id: item.id,
         category: item.category,
@@ -199,22 +95,12 @@ function DFTCNotifications() {
         read: isRead(item),
         metadata,
         route: item.route,
-        urgency: getCategoryUrgency(item.category),
-        reason: getCategoryReason(item.category),
-        relatedTo: submissionId,
-        action:
-          submissionId && actionLabel
-            ? { route: resolveNotificationRoute(item, "DFTC"), label: actionLabel }
-            : null,
         rawItem: item,
       };
     });
   }, [notificationsData, isRead]);
 
-  const [selectedAlert, setSelectedAlert] = useState(null);
-
-  // Locally-acknowledged items the server has not caught up with yet must not
-  // keep the badge lit while offline.
+  // Locally-acknowledged items the server has not caught up with yet
   const pendingLocal = notifications.filter(
     (n) => readIds.has(n.id) && !(n.rawItem.read_at || n.rawItem.read === true),
   ).length;
@@ -224,9 +110,12 @@ function DFTCNotifications() {
   );
 
   const handleCardClick = (alert) => {
-    setSelectedAlert(alert);
     if (!alert.read) {
       markReadMutation.mutate(alert.id);
+    }
+    const targetRoute = resolveNotificationRoute(alert.rawItem || alert, "DFTC");
+    if (targetRoute) {
+      navigate(targetRoute);
     }
   };
 
@@ -238,7 +127,7 @@ function DFTCNotifications() {
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
       <PageHeader
         title="Notifications"
-        description="Stay updated on data submissions, validation outcomes, and system alerts."
+        description="Stay updated on data submissions, validation outcomes, and market trends."
         action={
           unreadCount > 0 ? (
             <button
@@ -352,15 +241,6 @@ function DFTCNotifications() {
             </div>
           ))}
         </div>
-      )}
-
-      {selectedAlert && (
-        <AlertDetailDrawer
-          alert={selectedAlert}
-          onClose={() => setSelectedAlert(null)}
-          onMarkRead={(id) => markReadMutation.mutate(id)}
-          onNavigate={(route) => navigate(route)}
-        />
       )}
     </div>
   );

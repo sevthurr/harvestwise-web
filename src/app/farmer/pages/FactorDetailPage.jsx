@@ -1,10 +1,11 @@
 import { useMemo } from "react";
-import { useNavigate, useLocation } from "react-router";
+import { useNavigate, useLocation, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import * as analyticsApi from "../../../services/api/analyticsApi";
+import * as pricesApi from "../../../services/api/pricesApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { catalogPairsFromPriceList, findCommodityId } from "../../global/utils/priceChartTransforms";
 import { fetchPricesList, STALE_TIME } from "../../global/hooks/useFarmerPrefetch";
@@ -19,11 +20,27 @@ function quarterForDate(value) {
 function FactorDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const state = location.state;
 
-  const commodityId = state?.commodityId || null;
-  const commodityName = state?.commodityName || null;
+  const paramCommodity = searchParams.get("commodity") || searchParams.get("commodityId");
+  const commodityId = state?.commodityId || paramCommodity || null;
+  const defaultTab = searchParams.get("tab") || state?.defaultTab || "price";
+
+  const priceDetailQuery = useQuery({
+    queryKey: ["price-detail", commodityId],
+    queryFn: () => pricesApi.getPriceDetail(commodityId),
+    enabled: Boolean(commodityId && !state?.commodityName),
+    staleTime: 1000 * 60 * 15,
+  });
+
+  const commodityName =
+    state?.commodityName ||
+    priceDetailQuery.data?.commodity_name ||
+    priceDetailQuery.data?.name ||
+    (commodityId && !commodityId.startsWith("COM-") ? commodityId : null);
+
   const selectedQuarter = state?.selectedQuarter || quarterForDate(
     state?.resultData?.harvestDate
       || state?.resultData?.expected_harvest_date
@@ -78,7 +95,7 @@ function FactorDetailPage() {
   const weatherForecastQuery = useQuery({
     queryKey: ["farmer", "admin-weather-forecast", 14],
     queryFn: () => analyticsApi.getWeatherForecast(14),
-    enabled: Boolean(state),
+    enabled: Boolean(commodityId || state),
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesQuery = useQuery({
@@ -88,7 +105,7 @@ function FactorDetailPage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  if (!state) {
+  if (!state && !commodityId) {
     return (
       <div className="px-4 py-8 text-center space-y-3">
         <p className="text-[var(--hw-neutral-900)]">Detailed factors not available.</p>
@@ -104,7 +121,7 @@ function FactorDetailPage() {
     profitability,
     advisoryCode,
     advisoryLabel,
-  } = state;
+  } = state || {};
 
   const arrivalSummary = arrivalPressureQuery.data;
   const arrivalTab = {
@@ -250,7 +267,7 @@ function FactorDetailPage() {
         production={productionTab}
         weather={weatherTab}
         profitability={profitability}
-        defaultTab="price"
+        defaultTab={defaultTab}
         commodityId={commodityId}
         commodityName={commodityName}
       />

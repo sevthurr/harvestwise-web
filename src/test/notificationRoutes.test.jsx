@@ -77,13 +77,21 @@ describe('Direct Navigation Route Resolution', () => {
       }, 'Farmer')
     ).toBe('/farmer/crops');
 
-    // Planting advisory
+    // Planting advisory with commodity highlight
     expect(
       resolveNotificationRoute({
         category: 'planting_advisory',
-        metadata: { commodity_id: 'COM-0037' },
+        metadata: { commodity_id: 'COM-0004' },
       }, 'Farmer')
-    ).toBe('/farmer/crops');
+    ).toBe('/farmer/market?highlight=COM-0004');
+
+    // Planting advisory fallback without commodity
+    expect(
+      resolveNotificationRoute({
+        category: 'planting_advisory',
+        metadata: {},
+      }, 'Farmer')
+    ).toBe('/farmer/market');
   });
 
   it('resolves DFTC submission notifications correctly', () => {

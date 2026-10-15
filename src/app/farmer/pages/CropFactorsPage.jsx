@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCrops } from "../components/crops/CropsContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -19,6 +19,8 @@ function quarterForDate(value) {
 function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") || "price";
   const { t } = useLanguage();
   const { crops } = useCrops();
   const crop = crops.find((c) => c.id === cropId);
@@ -196,7 +198,7 @@ function CropFactorsPage() {
         production={productionTabData}
         weather={weatherTabData}
         profitability={profitabilityData}
-        defaultTab="price"
+        defaultTab={defaultTab}
         commodityId={commodityIdentifier}
         commodityName={crop.commodityName}
       />

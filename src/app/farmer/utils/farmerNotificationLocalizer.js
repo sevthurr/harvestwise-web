@@ -2,6 +2,15 @@
  * Localizes Farmer notification title and body based on current language,
  * notification category, and structured metadata.
  *
+ * Supports canonical categories:
+ *   - price_change
+ *   - price_update
+ *   - arrival_update
+ *   - production_update
+ *   - harvest_reminder (T-7 and T-0)
+ *   - weather_alert (Caution, Severe, Severe - Combined Risk)
+ *   - planting_advisory (Recommended)
+ *
  * Falls back safely to stored title/body if metadata is insufficient or
  * for older legacy records.
  */
@@ -51,17 +60,23 @@ export function localizeFarmerNotification(item, t, lang = "en") {
     } else if (category === "price_update") {
       const match = fallbackTitle.match(/^(?:New prices available for|New price update for|Bag-ong presyo alang sa|Bagong presyo para sa)\s+(.*)$/i);
       if (match) commodity = match[1];
+    } else if (category === "arrival_update") {
+      const match = fallbackTitle.match(/^(?:High market arrival for|Taas nga abot sa merkado alang sa|Mataas na suplay sa merkado para sa)\s+(.*)$/i);
+      if (match) commodity = match[1];
+    } else if (category === "production_update") {
+      const match = fallbackTitle.match(/^(?:High seasonal production period for|Panahon sa taas nga produksiyon alang sa|Panahon ng mataas na produksyon para sa)\s+(.*)$/i);
+      if (match) commodity = match[1];
     } else if (category === "weather_alert") {
-      const match = fallbackTitle.match(/^(?:Weather\s+(?:caution|severe|favorable)\s+for|Alerto sa panahon.*?alang sa|Alerto sa panahon.*?para sa)\s+(.*)$/i);
+      const match = fallbackTitle.match(/^(?:Weather\s+(?:Caution|Severe|Severe - Combined Risk|caution|severe|favorable)\s+for|Alerto sa panahon.*?alang sa|Alerto sa panahon.*?para sa)\s+(.*)$/i);
       if (match) commodity = match[1];
     } else if (category === "harvest_reminder") {
-      const match1 = fallbackTitle.match(/^(.*?)\s+(?:ready for harvest|Andam na alang sa pag-ani|Handa na para sa pag-aani)$/i);
+      const match1 = fallbackTitle.match(/^(.*?)\s+(?:ready for harvest|harvest in 7 days|expected harvest date today|Andam na alang sa pag-ani|Handa na para sa pag-aani|sulod sa 7 ka adlaw|sa loob ng 7 araw|ngayon|karon)/i);
       const match2 = fallbackTitle.match(/^(?:Harvest logged for|Narekord na ang pag-ani sa|Naitala na ang pag-aani ng)\s+(.*)$/i);
       if (match1) commodity = match1[1];
       else if (match2) commodity = match2[1];
     } else if (category === "planting_advisory") {
       const match = fallbackTitle.match(
-        /^(?:Planting advisory(?:\s+for|:)|Planting window open for|Conditions easing for|Hold off planting|Pahibalo sa pagtanom alang sa|Abli na ang panahon sa pagtanom alang sa|Payo sa pagtatanim para sa|Bukas na ang panahon ng pagtatanim para sa)\s+(.*?)(?:\s+for now|\s+sa pagkakaron|\s+sa ngayon)?$/i
+        /^(?:Recommended to plant(?:\s*:|\s+for|\s+)|Planting advisory(?:\s+for|:)|Planting window open for|Conditions easing for|Hold off planting|Girekomenda nga itanom(?:\s*:|\s+)|Inirerekomendang itanim(?:\s*:|\s+)|Pahibalo sa pagtanom alang sa|Abli na ang panahon sa pagtanom alang sa|Payo sa pagtatanim para sa|Bukas na ang panahon ng pagtatanim para sa)\s+(.*?)(?:\s+for now|\s+sa pagkakaron|\s+sa ngayon)?$/i
       );
       if (match) commodity = match[1];
     }
@@ -81,8 +96,8 @@ export function localizeFarmerNotification(item, t, lang = "en") {
     }
     direction = direction || "rose";
 
-    let latest = metadata.latest;
-    let prev = metadata.prev;
+    let latest = metadata.latest ?? metadata.current_price;
+    let prev = metadata.prev ?? metadata.previous_price;
     if ((latest == null || prev == null) && fallbackBody) {
       const match = fallbackBody.match(/is\s+([\d\.]+)\s+PHP\/kg,\s+(?:up|down)\s+from\s+([\d\.]+)\s+PHP\/kg/i);
       if (match) {
@@ -115,7 +130,7 @@ export function localizeFarmerNotification(item, t, lang = "en") {
 
   // 2. PRICE UPDATE
   if (category === "price_update") {
-    let price = metadata.price != null ? metadata.price : (metadata.prevail_price ?? metadata.latest);
+    let price = metadata.price != null ? metadata.price : (metadata.prevail_price ?? metadata.latest ?? metadata.current_price);
     if (price == null && fallbackBody) {
       const match = fallbackBody.match(/(?:is|kay|ay)\s+([\d\.]+)\s+PHP\/kg/i);
       if (match) price = match[1];
@@ -140,38 +155,49 @@ export function localizeFarmerNotification(item, t, lang = "en") {
     return { title, body };
   }
 
-  // 3. WEATHER ALERT
-  if (category === "weather_alert") {
-    let risk = (metadata.risk || "").toLowerCase();
-    if (!risk && fallbackTitle) {
-      const match = fallbackTitle.match(/Weather\s+(caution|severe|favorable)/i);
-      if (match) risk = match[1].toLowerCase();
-    }
-    if (!risk && fallbackTitle) {
-      if (/severe|peligro|panganib/i.test(fallbackTitle)) risk = "severe";
-      else if (/favorable|paborable/i.test(fallbackTitle)) risk = "favorable";
-      else risk = "caution";
-    }
-    risk = risk || "caution";
+  // 3. ARRIVAL UPDATE
+  if (category === "arrival_update") {
+    const volume = metadata.volume_tons ?? (metadata.volume_kg ? (metadata.volume_kg / 1000).toFixed(1) : "16.4");
+    const date = metadata.arrival_date || metadata.date || new Date().toISOString().slice(0, 10);
 
+    const title = t("farmer.notifications.arrival_high_title", { commodity }, fallbackTitle) || fallbackTitle;
+    const body = t("farmer.notifications.arrival_high_body", { commodity, volume, date }, fallbackBody) || fallbackBody;
+    return { title, body };
+  }
+
+  // 4. PRODUCTION UPDATE
+  if (category === "production_update") {
+    const quarter = metadata.quarter || "Q3";
+    const title = t("farmer.notifications.production_high_title", { commodity }, fallbackTitle) || fallbackTitle;
+    const body = t("farmer.notifications.production_high_body", { commodity, quarter }, fallbackBody) || fallbackBody;
+    return { title, body };
+  }
+
+  // 5. WEATHER ALERT
+  if (category === "weather_alert") {
+    let rawVerdict = (metadata.verdict || metadata.risk || "").toLowerCase();
     let riskKey = "farmer.notifications.risk_caution";
     let defaultRiskLabel = "Caution";
-    if (risk === "severe") {
+
+    if (rawVerdict.includes("combined")) {
+      riskKey = "farmer.notifications.risk_severe_combined";
+      defaultRiskLabel = "Severe - Combined Risk";
+    } else if (rawVerdict.includes("severe") || /severe|peligro|panganib/i.test(fallbackTitle)) {
       riskKey = "farmer.notifications.risk_severe";
       defaultRiskLabel = "Severe";
-    } else if (risk === "favorable") {
+    } else if (rawVerdict.includes("favorable") || /favorable|paborable/i.test(fallbackTitle)) {
       riskKey = "farmer.notifications.risk_favorable";
       defaultRiskLabel = "Favorable";
     }
-    const riskLabel = t(riskKey, {}, defaultRiskLabel);
 
+    const riskLabel = t(riskKey, {}, defaultRiskLabel);
     const title = t("farmer.notifications.weather_alert_title", { commodity, risk: riskLabel }, fallbackTitle) || fallbackTitle;
     const body = t("farmer.notifications.weather_alert_body", { commodity, risk: riskLabel }, fallbackBody) || fallbackBody;
 
     return { title, body };
   }
 
-  // 4. HARVEST REMINDER
+  // 6. HARVEST REMINDER
   if (category === "harvest_reminder") {
     const isLogged = metadata.type === "logged" || /Harvest logged|Narekord na|Naitala na/i.test(fallbackTitle);
     if (isLogged) {
@@ -180,10 +206,19 @@ export function localizeFarmerNotification(item, t, lang = "en") {
       return { title, body };
     }
 
-    let date = metadata.expected_harvest_date || metadata.date;
-    if (!date && fallbackBody) {
-      const match = fallbackBody.match(/(?:on|sa)\s+(\d{4}-\d{2}-\d{2})/);
-      if (match) date = match[1];
+    const milestone = metadata.milestone || (fallbackTitle.includes("7 days") || fallbackTitle.includes("7 ka adlaw") || fallbackTitle.includes("7 araw") ? "T-7" : (fallbackTitle.includes("today") || fallbackTitle.includes("karon") || fallbackTitle.includes("ngayon") ? "T-0" : null));
+    const date = metadata.expected_harvest_date || metadata.date || "";
+
+    if (milestone === "T-7") {
+      const title = t("farmer.notifications.harvest_t7_title", { commodity, date }, fallbackTitle) || fallbackTitle;
+      const body = t("farmer.notifications.harvest_t7_body", { commodity, date }, fallbackBody) || fallbackBody;
+      return { title, body };
+    }
+
+    if (milestone === "T-0") {
+      const title = t("farmer.notifications.harvest_t0_title", { commodity, date }, fallbackTitle) || fallbackTitle;
+      const body = t("farmer.notifications.harvest_t0_body", { commodity, date }, fallbackBody) || fallbackBody;
+      return { title, body };
     }
 
     const title = t("farmer.notifications.harvest_ready_title", { commodity }, fallbackTitle) || fallbackTitle;
@@ -194,31 +229,20 @@ export function localizeFarmerNotification(item, t, lang = "en") {
     return { title, body };
   }
 
-  // 5. PLANTING ADVISORY
+  // 7. PLANTING ADVISORY
   if (category === "planting_advisory") {
-    let verdict = (metadata.verdict || "").toLowerCase();
-    if (!verdict && fallbackTitle) {
-      if (/open|abli|bukas/i.test(fallbackTitle)) verdict = "suitable";
-      else if (/easing|nagnindot|bumubuti/i.test(fallbackTitle)) verdict = "caution";
-      else if (/hold|ayaw|huwag/i.test(fallbackTitle)) verdict = "severe";
+    const verdict = (metadata.verdict || "").toLowerCase();
+    const isRecommended = verdict === "recommended" || /Recommended|Girekomenda|Inirerekomenda/i.test(fallbackTitle);
+    const isOpen = verdict === "suitable" || /window open|abli na ang panahon|bukas na ang panahon/i.test(fallbackTitle);
+
+    if (isOpen && !isRecommended) {
+      const title = t("farmer.notifications.planting_open_title", { commodity }, fallbackTitle) || fallbackTitle;
+      const body = t("farmer.notifications.planting_suitable_body", { commodity }, fallbackBody) || fallbackBody;
+      return { title, body };
     }
 
-    let titleKey = "farmer.notifications.planting_advisory_title";
-    let bodyKey = "farmer.notifications.planting_advisory_body";
-
-    if (verdict === "suitable") {
-      titleKey = "farmer.notifications.planting_open_title";
-      bodyKey = "farmer.notifications.planting_suitable_body";
-    } else if (verdict === "caution") {
-      titleKey = "farmer.notifications.planting_easing_title";
-      bodyKey = "farmer.notifications.planting_caution_body";
-    } else if (verdict === "severe") {
-      titleKey = "farmer.notifications.planting_hold_title";
-      bodyKey = "farmer.notifications.planting_severe_body";
-    }
-
-    const title = t(titleKey, { commodity }, fallbackTitle) || fallbackTitle;
-    const body = t(bodyKey, { commodity }, fallbackBody) || fallbackBody;
+    const title = t("farmer.notifications.planting_recommended_title", { commodity }, fallbackTitle) || fallbackTitle;
+    const body = t("farmer.notifications.planting_recommended_body", { commodity }, fallbackBody) || fallbackBody;
     return { title, body };
   }
 
