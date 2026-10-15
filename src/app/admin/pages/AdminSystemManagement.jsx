@@ -806,6 +806,13 @@ function getStatusStyle(status) {
       label: status
     };
   }
+  if (status === "Unknown") {
+    return {
+      text: "text-slate-600 font-medium",
+      dot: "bg-slate-400",
+      label: "Unknown"
+    };
+  }
   return {
     text: "text-rose-600 font-medium",
     dot: "bg-rose-500",
@@ -904,16 +911,16 @@ const HealthTab = ({ showToast }) => {
       {
         id: "open_meteo",
         label: "Open-Meteo Weather API",
-        status: "Disconnected",
+        status: "Unknown",
         last_updated: "Unavailable",
-        notes: "Cannot verify external weather API while backend API is unreachable."
+        notes: "Upstream could not be verified: the backend API was unreachable, so no verdict was obtained."
       },
       {
         id: "psa_openstat",
         label: "PSA OpenStat API",
-        status: "Disconnected",
+        status: "Unknown",
         last_updated: "Unavailable",
-        notes: "Cannot verify PSA OpenStat endpoint while backend API is unreachable."
+        notes: "Upstream could not be verified: the backend API was unreachable, so no verdict was obtained."
       }
     ];
   }

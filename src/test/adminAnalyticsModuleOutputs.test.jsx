@@ -131,7 +131,7 @@ describe('AdminAnalytics module outputs table', () => {
     // Regression: the filter compared `r.variety`, which the mapped row never
     // set, so every named variety matched nothing and the table looked empty.
     analyticsApi.listModuleOutputs.mockResolvedValue({
-      items: [RECORD, { ...RECORD, id: 'MO-2', variety: 'Malagkit' }],
+      items: [RECORD, { ...RECORD, id: 'MO-2', variety: 'Unscoped' }],
     });
 
     renderPage();

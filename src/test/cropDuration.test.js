@@ -13,8 +13,8 @@
  * when both exist — that priority is what this file guards.
  */
 import { describe, it, expect } from "vitest";
-import { CROP_DURATIONS, formatDurationLabel, getCropDuration, suggestHarvestDate } from "./types.js";
-import { buildCatalog, durationForOption } from "./useCommodityCatalog.js";
+import { CROP_DURATIONS, formatDurationLabel, getCropDuration, suggestHarvestDate } from "../app/farmer/components/recommend/types.js";
+import { buildCatalog, durationForOption } from "../app/farmer/components/recommend/useCommodityCatalog.js";
 
 // Trimmed from GET /api/v1/prices?is_top10=true
 const PRICES_ITEMS = [

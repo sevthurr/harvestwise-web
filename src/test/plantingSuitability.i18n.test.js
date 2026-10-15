@@ -7,8 +7,8 @@
  * the PlantingSuitabilityCard actually uses, through the real i18n module.
  */
 import { describe, it, expect } from "vitest";
-import { t, getDictionary } from "../index.js";
-import { en } from "./en.js";
+import { t, getDictionary } from "../app/global/i18n/index.js";
+import { en } from "../app/global/i18n/locales/en.js";
 
 // key -> interpolation params used in the component
 const KEYS = {

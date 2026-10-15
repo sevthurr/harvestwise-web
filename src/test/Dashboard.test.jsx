@@ -8,34 +8,34 @@ const { getPriceListMock, getPriceDetailMock } = vi.hoisted(() => ({
   getPriceDetailMock: vi.fn(),
 }));
 
-vi.mock("../../../services/api/pricesApi", () => ({
+vi.mock("../services/api/pricesApi.js", () => ({
   getPriceList: getPriceListMock,
   getPriceDetail: getPriceDetailMock,
 }));
 
-vi.mock("../../global/contexts/LanguageContext", () => ({
+vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   useLanguage: () => ({
     t: (_key, _params, fallback) => fallback,
   }),
 }));
 
-vi.mock("../../global/contexts/AuthContext", () => ({
+vi.mock("../app/global/contexts/AuthContext.jsx", () => ({
   useAuth: () => ({ user: { id: "farmer-1", first_name: "Test" } }),
 }));
 
-vi.mock("../../global/hooks/useFarmerPrefetch", () => ({
+vi.mock("../app/global/hooks/useFarmerPrefetch.js", () => ({
   fetchFarmerProfile: vi.fn(async () => ({})),
 }));
 
-vi.mock("../components/crops/CropsContext", () => ({
+vi.mock("../app/farmer/components/crops/CropsContext.jsx", () => ({
   useCrops: () => ({ crops: [], loading: false }),
 }));
 
-vi.mock("../../global/components/shared/CommodityIllustrations", () => ({
+vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", () => ({
   CommodityIllustration: () => <span data-testid="commodity-art" />,
 }));
 
-import DashboardPage from "./Dashboard.jsx";
+import DashboardPage from "../app/farmer/pages/Dashboard.jsx";
 
 function renderDashboard(queryClient) {
   const client = queryClient ?? new QueryClient({

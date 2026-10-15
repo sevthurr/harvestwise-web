@@ -1,10 +1,14 @@
-import { useNavigate, useLocation } from "react-router";
+import { useMemo } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import * as analyticsApi from "../../../services/api/analyticsApi";
+import * as pricesApi from "../../../services/api/pricesApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { catalogPairsFromPriceList, findCommodityId } from "../../global/utils/priceChartTransforms";
+import { fetchPricesList, STALE_TIME } from "../../global/hooks/useFarmerPrefetch";
 import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
 
 function quarterForDate(value) {
@@ -16,42 +20,92 @@ function quarterForDate(value) {
 function FactorDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const state = location.state;
 
-  const commodityId = state?.commodityId || null;
-  const commodityName = state?.commodityName || null;
+  const paramCommodity = searchParams.get("commodity") || searchParams.get("commodityId");
+  const commodityId = state?.commodityId || paramCommodity || null;
+  const defaultTab = searchParams.get("tab") || state?.defaultTab || "price";
+
+  const priceDetailQuery = useQuery({
+    queryKey: ["price-detail", commodityId],
+    queryFn: () => pricesApi.getPriceDetail(commodityId),
+    enabled: Boolean(commodityId && !state?.commodityName),
+    staleTime: 1000 * 60 * 15,
+  });
+
+  const commodityName =
+    state?.commodityName ||
+    priceDetailQuery.data?.commodity_name ||
+    priceDetailQuery.data?.name ||
+    (commodityId && !commodityId.startsWith("COM-") ? commodityId : null);
+
   const selectedQuarter = state?.selectedQuarter || quarterForDate(
     state?.resultData?.harvestDate
       || state?.resultData?.expected_harvest_date
       || state?.resultData?.expectedHarvestDate
   );
+
+  // The factors page is reached from several screens (assessment result, market
+  // calendar, planting suitability). Some hand over a catalog icon key such as
+  // "lettuce" instead of a commodity id: the analytics endpoints resolve only
+  // exact ids, so the key 404s and the arrival/production tabs render their
+  // "not available" empty states while the price tab still loads (it resolves
+  // the real id from this same catalog on its own). Resolve once here, through
+  // the shared ["prices","list"] key, so every entry path queries a real id on
+  // the first open — and shares the cache with the crop-plan basis page.
+  const { data: catalogData } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: fetchPricesList,
+    staleTime: STALE_TIME,
+  });
+  const catalogPairs = useMemo(
+    () => catalogPairsFromPriceList(catalogData?.items),
+    [catalogData]
+  );
+  const resolvedCommodityId = useMemo(() => {
+    if (!commodityId) return null;
+    if (String(commodityId).startsWith("COM-")) return commodityId;
+    // Not a commodity id — a catalog icon key such as "lettuce", which the
+    // analytics endpoints cannot resolve (they match exact ids and exact names
+    // only, and no top-10 crop has a name-level row). Wait for the shared
+    // catalog and resolve to a real id instead of firing a doomed request;
+    // if the crop is not in the catalog, try its exact name, which still
+    // resolves for name-level rows such as "Chinese Pechay".
+    if (catalogPairs.length === 0) return null;
+    return findCommodityId(catalogPairs, commodityName || "", null)
+      || findCommodityId(catalogPairs, commodityId, null)
+      || commodityName
+      || commodityId;
+  }, [catalogPairs, commodityId, commodityName]);
+
   const arrivalPressureQuery = useQuery({
-    queryKey: ["farmer", "arrival-pressure", commodityId],
-    queryFn: () => analyticsApi.getArrivalPressure(commodityId),
-    enabled: Boolean(commodityId),
+    queryKey: ["farmer", "arrival-pressure", resolvedCommodityId],
+    queryFn: () => analyticsApi.getArrivalPressure(resolvedCommodityId),
+    enabled: Boolean(resolvedCommodityId),
     staleTime: 1000 * 60 * 5,
   });
   const seasonalProductionQuery = useQuery({
-    queryKey: ["farmer", "seasonal-production", commodityId, selectedQuarter],
-    queryFn: () => analyticsApi.getHistoricalSeasonalProduction(commodityId, selectedQuarter),
-    enabled: Boolean(commodityId),
+    queryKey: ["farmer", "seasonal-production", resolvedCommodityId, selectedQuarter],
+    queryFn: () => analyticsApi.getHistoricalSeasonalProduction(resolvedCommodityId, selectedQuarter),
+    enabled: Boolean(resolvedCommodityId),
     staleTime: 1000 * 60 * 30,
   });
   const weatherForecastQuery = useQuery({
     queryKey: ["farmer", "admin-weather-forecast", 14],
     queryFn: () => analyticsApi.getWeatherForecast(14),
-    enabled: Boolean(state),
+    enabled: Boolean(commodityId || state),
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesQuery = useQuery({
-    queryKey: ["farmer", "weather-rules", commodityId],
-    queryFn: () => analyticsApi.listWeatherRules(commodityId),
-    enabled: Boolean(commodityId),
+    queryKey: ["farmer", "weather-rules", resolvedCommodityId],
+    queryFn: () => analyticsApi.listWeatherRules(resolvedCommodityId),
+    enabled: Boolean(resolvedCommodityId),
     staleTime: 1000 * 60 * 30,
   });
 
-  if (!state) {
+  if (!state && !commodityId) {
     return (
       <div className="px-4 py-8 text-center space-y-3">
         <p className="text-[var(--hw-neutral-900)]">Detailed factors not available.</p>
@@ -67,7 +121,7 @@ function FactorDetailPage() {
     profitability,
     advisoryCode,
     advisoryLabel,
-  } = state;
+  } = state || {};
 
   const arrivalSummary = arrivalPressureQuery.data;
   const arrivalTab = {
@@ -213,7 +267,7 @@ function FactorDetailPage() {
         production={productionTab}
         weather={weatherTab}
         profitability={profitability}
-        defaultTab="price"
+        defaultTab={defaultTab}
         commodityId={commodityId}
         commodityName={commodityName}
       />

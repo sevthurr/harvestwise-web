@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
@@ -659,14 +659,32 @@ const SelectedDateDetails = ({ year, month, day, markers = {}, onClose }) => {
 
 function RecommendationPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { t, langCode } = useLanguage();
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(null);
 
+  // Highlight requested crop briefly (e.g. from notification click)
+  const highlightParam =
+    searchParams.get("highlight") ||
+    searchParams.get("commodity") ||
+    searchParams.get("commodity_id");
+  const [highlightedCropId, setHighlightedCropId] = useState(highlightParam);
+
   // Accordion state for Good crops: first item expanded by default (matching Image 3)
-  const [expandedCropId, setExpandedCropId] = useState("COM-0004");
+  const [expandedCropId, setExpandedCropId] = useState(highlightParam || "COM-0004");
+
+  // 3-second temporary highlight timer
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedCropId(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedCropId(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
 
   // Farmer profile coordinates reused by the weather advisory query (defaults to Davao City center)
   const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
@@ -833,6 +851,24 @@ function RecommendationPage() {
     return result;
   }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, t]);
 
+  // Auto-scroll and expand accordion for highlighted crop
+  useEffect(() => {
+    if (!highlightedCropId || recommendedCrops.length === 0) return;
+    const targetCrop = recommendedCrops.find(
+      (c) =>
+        c.id === highlightedCropId ||
+        c.name.toLowerCase() === highlightedCropId.toLowerCase() ||
+        highlightedCropId.toLowerCase().includes(c.name.toLowerCase())
+    );
+    if (targetCrop) {
+      setExpandedCropId(targetCrop.id);
+      const el = document.getElementById(`recommended-crop-${targetCrop.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, [highlightedCropId, recommendedCrops]);
+
   const prevMonth = () => {
     if (viewMonth === 1) {
       setViewYear((y) => y - 1);
@@ -982,10 +1018,21 @@ function RecommendationPage() {
         <div className="space-y-3">
           {recommendedCrops.map((crop) => {
             const isExpanded = expandedCropId === crop.id;
+            const isHighlighted = Boolean(
+              highlightedCropId &&
+                (crop.id === highlightedCropId ||
+                  crop.name.toLowerCase() === highlightedCropId.toLowerCase() ||
+                  highlightedCropId.toLowerCase().includes(crop.name.toLowerCase()))
+            );
             return (
               <div
                 key={crop.id}
-                className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4"
+                id={`recommended-crop-${crop.id}`}
+                className={`bg-white rounded-2xl border p-5 space-y-4 transition-all duration-700 ease-out ${
+                  isHighlighted
+                    ? "ring-4 ring-[var(--hw-green-600)] ring-offset-2 border-[var(--hw-green-600)] bg-emerald-50/70 shadow-lg scale-[1.01]"
+                    : "border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
+                }`}
               >
                 {/* Crop Top Info */}
                 <div className="flex items-start gap-4">

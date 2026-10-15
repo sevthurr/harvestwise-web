@@ -9,16 +9,16 @@ const { getArrivalPressureMock, getSeasonalProductionMock, cropState } = vi.hois
   cropState: { current: null },
 }));
 
-vi.mock("../../../services/api/analyticsApi", () => ({
+vi.mock("../services/api/analyticsApi.js", () => ({
   getArrivalPressure: getArrivalPressureMock,
   getHistoricalSeasonalProduction: getSeasonalProductionMock,
 }));
 
-vi.mock("../components/crops/CropsContext", () => ({
+vi.mock("../app/farmer/components/crops/CropsContext.jsx", () => ({
   useCrops: () => ({ crops: cropState.current ? [cropState.current] : [], loading: false }),
 }));
 
-vi.mock("../../global/contexts/LanguageContext", () => ({
+vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   useLanguage: () => ({
     t: (key, params = {}, fallback = key) =>
       fallback.replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? `{${name}}`)),
@@ -42,8 +42,8 @@ vi.mock("recharts", () => {
   };
 });
 
-import CropArrivalPressureDetailsPage, { ArrivalVolumeTooltip } from "./CropArrivalPressureDetails.jsx";
-import CropSeasonalProductionDetailsPage from "./CropSeasonalProductionDetails.jsx";
+import CropArrivalPressureDetailsPage, { ArrivalVolumeTooltip } from "../app/farmer/pages/CropArrivalPressureDetails.jsx";
+import CropSeasonalProductionDetailsPage from "../app/farmer/pages/CropSeasonalProductionDetails.jsx";
 
 const crop = {
   id: "CRP-0001",

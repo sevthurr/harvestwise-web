@@ -10,7 +10,7 @@ const COMMODITY_CATEGORIES = [
     items: [
       item("Ampalaya", ["Galaxy"], true),
       item("Batong", ["Negrostar"]),
-      item("Kalabasa", ["Suprema", "Malagkit"], true),
+      item("Kalabasa", ["Suprema"], true),
       item("Kamatis", ["Diamante Big"], true),
       item("Native Pechay", ["Condor"]),
       item("Okra", ["Smooth Green"]),

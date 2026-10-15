@@ -84,19 +84,39 @@ export function getNotificationIconConfig(category, metadata = {}) {
     return { Icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50", label: "Price movement" };
   }
 
-  // 2. Weather alert: severity-based icon (severe -> CloudLightning, caution -> CloudRain, general -> CloudSun)
+  // 2. Price volatility: TrendingUp or TrendingDown based on direction / change_pct, fallback to TrendingUpDown
+  if (category === "price_volatility") {
+    let changePct = null;
+    if (metadata.change_pct != null) changePct = Number(metadata.change_pct);
+    else if (metadata.changePct != null) changePct = Number(metadata.changePct);
+
+    if (changePct !== null && !isNaN(changePct)) {
+      if (changePct > 0) return { Icon: TrendingUp, color: "text-amber-600", bg: "bg-amber-50", label: "Price volatility increase" };
+      if (changePct < 0) return { Icon: TrendingDown, color: "text-amber-600", bg: "bg-amber-50", label: "Price volatility decrease" };
+    }
+    const direction = (metadata.direction || "").toLowerCase();
+    if (direction === "rose" || direction === "up" || direction === "increased") {
+      return { Icon: TrendingUp, color: "text-amber-600", bg: "bg-amber-50", label: "Price volatility increase" };
+    }
+    if (direction === "dropped" || direction === "down" || direction === "decreased") {
+      return { Icon: TrendingDown, color: "text-amber-600", bg: "bg-amber-50", label: "Price volatility decrease" };
+    }
+    return getCategoryConfig(category);
+  }
+
+  // 3. Weather alert: severity-based icon (severe -> CloudLightning, caution -> CloudRain, general -> CloudSun)
   if (category === "weather_alert") {
-    const risk = (metadata.risk || metadata.severity || metadata.level || "").toLowerCase();
-    if (risk === "severe" || risk === "danger" || risk === "high") {
+    const risk = (metadata.risk || metadata.severity || metadata.level || metadata.verdict || "").toLowerCase();
+    if (risk.includes("severe") || risk.includes("danger") || risk.includes("high")) {
       return { Icon: CloudLightning, color: "text-red-600", bg: "bg-red-50", label: "Severe weather" };
     }
-    if (risk === "caution" || risk === "warning" || risk === "moderate") {
+    if (risk.includes("caution") || risk.includes("warning") || risk.includes("moderate")) {
       return { Icon: CloudRain, color: "text-amber-600", bg: "bg-amber-50", label: "Weather caution" };
     }
     return { Icon: CloudSun, color: "text-sky-600", bg: "bg-sky-50", label: "Weather alert" };
   }
 
-  // 3. Fallback to category map
+  // 4. Fallback to category map
   return getCategoryConfig(category);
 }
 
@@ -107,36 +127,47 @@ export function NotificationIcon({
   className = "w-4 h-4",
   containerClassName = "w-9 h-9 rounded-xl",
 }) {
-  // Top 10 commodity illustrations are ONLY used for harvest_reminder (crop plan)
-  // or planting_advisory (updated planting / recommended crop)
-  if (category === "harvest_reminder" || category === "planting_advisory") {
-    const commodityKey = resolveTop10CommodityKey(metadata);
-    if (commodityKey) {
-      return (
-        <div
-          className={`${containerClassName} bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5 overflow-hidden shadow-xs`}
-          title={`Commodity: ${commodityKey}`}
-          data-testid={`commodity-icon-${commodityKey}`}
-        >
-          <CommodityIllustration commodityId={commodityKey} className="w-6 h-6 object-contain" />
-        </div>
-      );
+  try {
+    // Top 10 commodity illustrations are ONLY used for harvest_reminder (crop plan)
+    // or planting_advisory (updated planting / recommended crop)
+    if (category === "harvest_reminder" || category === "planting_advisory") {
+      const commodityKey = resolveTop10CommodityKey(metadata);
+      if (commodityKey) {
+        return (
+          <div
+            className={`${containerClassName} bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5 overflow-hidden shadow-xs`}
+            title={`Commodity: ${commodityKey}`}
+            data-testid={`commodity-icon-${commodityKey}`}
+          >
+            <CommodityIllustration commodityId={commodityKey} className="w-6 h-6 object-contain" />
+          </div>
+        );
+      }
     }
+
+    // All other categories represent the notification EVENT itself
+    const conf = getNotificationIconConfig(category, metadata);
+    const { Icon, color, bg, label } = conf;
+
+    return (
+      <div
+        className={`${containerClassName} flex items-center justify-center flex-shrink-0 mt-0.5 ${bg} ${color}`}
+        title={label || category}
+        data-testid={`category-icon-${category}`}
+      >
+        <Icon className={className} />
+      </div>
+    );
+  } catch {
+    return (
+      <div
+        className={`${containerClassName} flex items-center justify-center flex-shrink-0 mt-0.5 bg-blue-50 text-blue-600`}
+        data-testid={`category-icon-${category}`}
+      >
+        <TrendingUp className={className} />
+      </div>
+    );
   }
-
-  // All other categories represent the notification EVENT itself
-  const conf = getNotificationIconConfig(category, metadata);
-  const { Icon, color, bg, label } = conf;
-
-  return (
-    <div
-      className={`${containerClassName} flex items-center justify-center flex-shrink-0 mt-0.5 ${bg} ${color}`}
-      title={label || category}
-      data-testid={`category-icon-${category}`}
-    >
-      <Icon className={className} />
-    </div>
-  );
 }
 
 export { CATEGORY_MAP, resolveTop10CommodityKey };

@@ -3,9 +3,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminSystemManagement from '../app/admin/pages/AdminSystemManagement';
+import { apiGet } from '../app/global/api';
 
-vi.mock('../app/global/api', () => ({
-  apiGet: vi.fn((url) => {
+// Hoisted so the error-state test can restore the default implementation
+// without duplicating the whole fixture.
+const { defaultApiGet } = vi.hoisted(() => ({
+  defaultApiGet: (url) => {
     if (url.includes('/admin/system/health')) {
       return Promise.resolve({
         items: [
@@ -45,7 +48,11 @@ vi.mock('../app/global/api', () => ({
       return Promise.resolve({ items: [], total: 0 });
     }
     return Promise.resolve({});
-  }),
+  },
+}));
+
+vi.mock('../app/global/api', () => ({
+  apiGet: vi.fn((url) => defaultApiGet(url)),
   apiPost: vi.fn().mockResolvedValue({}),
   apiPut: vi.fn().mockResolvedValue({}),
   apiDelete: vi.fn().mockResolvedValue({}),
@@ -55,6 +62,7 @@ vi.mock('../app/global/api', () => ({
 describe('AdminSystemManagement System Health Tab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiGet.mockImplementation(defaultApiGet);
   });
 
   it('renders live health statuses, Last Updated header, and clear details without "Not checked"', async () => {
@@ -94,5 +102,52 @@ describe('AdminSystemManagement System Health Tab', () => {
 
     // Refresh status button is present
     expect(screen.getByRole('button', { name: /Refresh status/i })).toBeDefined();
+  });
+
+  it('reports upstream services as "Unknown", not "Disconnected", when the backend health request itself fails', async () => {
+    // The backend's own health call failed (401/5xx/timeout). We never received a
+    // verdict for the external upstreams, so they must not be reported as down.
+    apiGet.mockImplementation((url) => {
+      if (url.includes('/admin/system/health')) {
+        return Promise.reject(new Error('Request failed with status code 401'));
+      }
+      return Promise.resolve({ items: [], total: 0 });
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/admin/system?tab=health']}>
+          <AdminSystemManagement />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const statusOf = (label) => {
+      const row = [...container.querySelectorAll('tbody tr')].find(
+        (tr) => tr.cells[0]?.textContent?.includes(label)
+      );
+      return row ? row.cells[1].textContent.trim() : null;
+    };
+
+    await waitFor(() => {
+      expect(statusOf('Open-Meteo Weather API')).toBe('Unknown');
+    });
+
+    // External upstreams: unverifiable, never a false "Disconnected".
+    expect(statusOf('PSA OpenStat API')).toBe('Unknown');
+    expect(screen.getAllByText('Unknown').length).toBe(4); // 2 rows x desktop + mobile layout
+    // Only the two backend-owned core services may claim "Disconnected".
+    expect(screen.getAllByText('Disconnected').length).toBe(4); // postgres + fastapi x 2 layouts
+
+    // Notes must not claim the upstream is down.
+    expect(screen.getAllByText(/Upstream could not be verified/).length).toBeGreaterThanOrEqual(1);
+
+    // Core services the backend owns still report a real verdict.
+    expect(statusOf('PostgreSQL Database')).toBe('Disconnected');
+    expect(statusOf('FastAPI Backend Service')).toBe('Disconnected');
   });
 });

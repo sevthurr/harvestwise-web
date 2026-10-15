@@ -13,7 +13,7 @@ import {
   firstWeekday,
   monthKey,
   hasAnyMarker,
-} from "./calendarMarkers";
+} from "../app/farmer/utils/calendarMarkers.js";
 
 const YEAR = 2026;
 const MONTH = 10; // October

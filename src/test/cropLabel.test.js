@@ -7,7 +7,7 @@
  * must therefore carry the variety when one exists.
  */
 import { describe, it, expect } from "vitest";
-import { cropLabelOf, formatCropLabel } from "./formatters";
+import { cropLabelOf, formatCropLabel } from "../app/farmer/utils/formatters.js";
 
 describe("formatCropLabel", () => {
   it("appends the variety in parentheses", () => {

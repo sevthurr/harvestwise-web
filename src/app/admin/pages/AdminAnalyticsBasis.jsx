@@ -945,8 +945,7 @@ function AdminAnalyticsBasis() {
       { name: "Other Sources", value: 100 - farmPercent, volumeKg: totals.other }
     ];
   }, [arrivalChartData]);
-  const arrivalGranularityLabel = ARRIVAL_GRANULARITY_OPTIONS.find((o) => o.value === arrivalGranularity)?.label ?? arrivalGranularity;
-  const arrivalSubtitle = `DFTC ${arrivalGranularityLabel} arrivals · ${arrivalSourceOption.subtitle} · kilograms${arrivalGranularity === "monthly" && arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
+  const arrivalSubtitle = `DFTC ${arrivalGranularity} arrivals · ${arrivalSourceOption.subtitle} · kilograms${arrivalGranularity === "monthly" && arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""
     }`;
 
   // Load the threshold rules for the current module from the admin API
@@ -1124,12 +1123,6 @@ function AdminAnalyticsBasis() {
               ? "Upper Middle"
               : "High"
       })),
-      arrivalSources: farmTotal > 0
-        ? [
-          { name: "Farm Source", value: Math.round(((Number(farmKg) || 0) / farmTotal) * 100), volumeKg: Number(farmKg) || 0 },
-          { name: "Other Sources", value: Math.round(((Number(otherKg) || 0) / farmTotal) * 100), volumeKg: Number(otherKg) || 0 }
-        ].filter((slice) => slice.volumeKg > 0)
-        : [],
       records: (arrivalSummary?.records || []).map((row) => ({
         Date: row.arrival_date ? formatForecastDate(row.arrival_date) : "-",
         Commodity: row.commodity_name || selectedCommodity,
