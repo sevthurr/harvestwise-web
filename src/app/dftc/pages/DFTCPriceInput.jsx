@@ -43,8 +43,11 @@ function hasHWIcon(name) {
 }
 
 // Display name -> canonical DB commodity name for composite/market-listed items.
+// Targets must match `commodity.name` exactly: a name that misses is
+// auto-registered by the API as a NEW commodity, so a stale spelling here
+// silently creates a duplicate instead of reusing the row.
 const COMMODITY_NAME_OVERRIDES = {
-  "Pak choi / Bok choy": "Pakchoy/Bukchoy",
+  "Pak choi / Bok choy": "Pakchoy/Bokchoy",
   "Kangkong / Tinangkong": "Kangkong",
   "Kamote tops / Galay": "Kamote Tops"
 };

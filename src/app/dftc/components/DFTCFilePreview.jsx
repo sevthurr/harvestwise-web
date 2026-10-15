@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
-import { DFTC_REPORT_CATEGORIES, PAGE_CATEGORY_GROUPS } from "./dftcReportCategories";
+import { PAGE_CATEGORY_GROUPS } from "./dftcReportCategories";
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -63,7 +63,16 @@ function getEncodedByName(file) {
 // ── Real-data lookup helpers (preview prices come from the API, not mock rows) ──
 
 function normalizeKey(str) {
-  return (str || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // Fold diacritics before stripping them: the workbook spells a Saging variety
+  // "señorita" and the seeded row spells it "Senorita", and a bare [^a-z0-9]
+  // strip turns the first into "se orita" but the second into "senorita" — two
+  // different keys for one variety, so the row silently lost its price.
+  return (str || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function priceStr(value) {
@@ -83,17 +92,26 @@ function buildRowsLookup(rows) {
   return lookup;
 }
 
-function resolvePriceRow(commodity, variant, lookup) {
+// `variety` is the raw seeded name, exactly as the preview payload carries it.
+// It is deliberately NOT a display descriptor: a descriptor like "(Wakamini)" only
+// normalises back to the same key by accident, and reading the wrong property here
+// blanked every named variety and left the NULL-variety rows as the only survivors.
+function resolvePriceRow(commodity, variety, lookup) {
   const rows = lookup.get(normalizeKey(commodity.name));
   if (!rows || rows.length === 0) return null;
-  const vKey = normalizeKey(variant.descriptor);
+  const vKey = normalizeKey(variety);
   if (vKey) {
     const exact = rows.find((r) => vKey === normalizeKey(r.variety));
     if (exact) return exact;
+    // A descriptor with no matching variety resolves to nothing. It used to fall
+    // back to the first variety row, which printed another variety's price under
+    // this row's label — Repolyo green and red cabbage both showed Wakamini,
+    // Ampalaya (white/pale) showed Galaxy. A blank is honest; a borrowed number
+    // is not.
+    return null;
   }
-  const withVariety = rows.filter((r) => normalizeKey(r.variety));
-  const base = rows.find((r) => !normalizeKey(r.variety));
-  return withVariety[0] || base || rows[0];
+  // No descriptor: the commodity-level row is the only correct answer.
+  return rows.find((r) => !normalizeKey(r.variety)) ?? null;
 }
 
 function triggerDownload(url, filename) {
@@ -162,7 +180,7 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
               </tr>
               {cat.commodities.map((com) =>
                 com.variants.map((v, vi) => (
-                  <tr key={`${com.no}-${vi}`}>
+                  <tr key={`${cat.name}-${com.name}-${vi}`}>
                     <td style={cellL({ textAlign: "center", width: 36 })}>{vi === 0 ? com.no : ""}</td>
                     <td style={cellL()}>
                       {vi === 0 ? (
@@ -342,18 +360,21 @@ function DFTCFilePreview({ file, onClose }) {
     }));
   }, [file, backendEncodedBy, backendPreparedBy]);
 
-  // Build price cells from the real API rows; missing data renders as "—"
-  // (never falls back to the static mock rows in DFTC_REPORT_CATEGORIES).
+  // The catalogue comes from the API (commodity master, ordered by
+  // display_order); prices come from the same payload. A commodity or variety
+  // with no price record renders as an em dash — never a neighbour's number.
   const resolvedCategories = useMemo(() => {
     const lookup = buildRowsLookup(reportPreviewData?.rows);
-    return DFTC_REPORT_CATEGORIES.map((cat) => ({
-      ...cat,
+    return (reportPreviewData?.categories ?? []).map((cat) => ({
+      name: cat.name,
       commodities: cat.commodities.map((com) => ({
-        ...com,
+        no: com.no,
+        name: com.name,
         variants: com.variants.map((v) => {
-          const row = resolvePriceRow(com, v, lookup);
+          const row = resolvePriceRow(com, v.variety, lookup);
           return {
-            ...v,
+            descriptor: v.variety ? `(${v.variety})` : "",
+            uom: v.uom || com.uom || "kg",
             bankLanding: row ? priceStr(row.bangkerohan_landing) : "",
             bankWholesale: row ? priceStr(row.bangkerohan_wholesale) : "",
             bankRetail: row ? priceStr(row.bangkerohan_retail) : "",
@@ -667,4 +688,6 @@ function DFTCFilePreview({ file, onClose }) {
   );
 }
 
-export { DFTCFilePreview };
+// normalizeKey / buildRowsLookup / resolvePriceRow are exported for the
+// regression test in src/test/dftcPriceCellResolution.test.js.
+export { DFTCFilePreview, buildRowsLookup, normalizeKey, resolvePriceRow };

@@ -83,6 +83,7 @@ vi.mock("@tanstack/react-query", () => ({
 // neither half of a blob download.
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 const createdAnchors = [];
+const createdBlobs = [];
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -90,8 +91,12 @@ beforeEach(() => {
   h.refetches = 0;
   h.invalidated = [];
   createdAnchors.length = 0;
+  createdBlobs.length = 0;
   window.fetch = vi.fn();
-  globalThis.URL.createObjectURL = vi.fn(() => "blob:harvestwise");
+  globalThis.URL.createObjectURL = vi.fn((blob) => {
+    createdBlobs.push(blob);
+    return "blob:harvestwise";
+  });
   globalThis.URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function patched() {
     createdAnchors.push(this);
@@ -181,8 +186,13 @@ describe("FarmerSettings account-erasure Danger Zone", () => {
     expect(screen.getByRole("button", { name: "Request removal" })).toBeEnabled();
   });
 
-  it("downloads the caller's own data as harvestwise-data-export.json", async () => {
-    window.fetch = jsonFetch({ farmer: { first_name: "Juan" } });
+  it("downloads the caller's own data as a readable harvestwise-data-export.html", async () => {
+    window.fetch = jsonFetch({
+      exported_at: "2026-10-01T00:00:00Z",
+      profile: { email: "juan@example.com", role_name: "Farmer" },
+      farmers: [{ first_name: "Juan", last_name: "Dela Cruz" }],
+      crop_plans: [],
+    });
     renderSettings();
 
     await userEvent.click(screen.getByRole("button", { name: "Export my data" }));
@@ -192,9 +202,18 @@ describe("FarmerSettings account-erasure Danger Zone", () => {
     expect(globalThis.URL.createObjectURL).toHaveBeenCalledTimes(1);
     expect(createdAnchors).toHaveLength(1);
     expect(createdAnchors[0].getAttribute("download")).toBe(
-      "harvestwise-data-export.json"
+      "harvestwise-data-export.html"
     );
     expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith("blob:harvestwise");
+
+    // The downloaded file is a human-readable HTML document, not raw JSON.
+    expect(createdBlobs).toHaveLength(1);
+    expect(createdBlobs[0].type).toBe("text/html");
+    const html = await createdBlobs[0].text();
+    expect(html).toContain("<!DOCTYPE html>");
+    expect(html).toContain("My HarvestWise Data");
+    expect(html).toContain("Juan Dela Cruz");
+    expect(html).toContain("juan@example.com");
   });
 
   it("toasts an error when the export download fails", async () => {

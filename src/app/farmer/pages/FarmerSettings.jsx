@@ -30,6 +30,7 @@ import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
 import { queryClient } from "../../global/lib/queryClient";
 import { useRemovalRequest } from "../../global/hooks/useRemovalRequest";
 import { loadFarmerOfflineData, fetchFarmerProfile, fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
+import { buildFarmerExportHtml } from "../utils/farmerExportHtml";
 
 const TABS = [
   { id: "account", label: "Account", key: "farmer.settings.tab_account" },
@@ -56,7 +57,7 @@ const LANGUAGE_OPTIONS = [
 /* -------------------------------------------------------------------------- */
 const AccountTab = ({ showToast, onDeleteAccount }) => {
   const { user } = useAuth();
-  const { t, formatDate } = useLanguage();
+  const { t, formatDate, langCode } = useLanguage();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     firstName: "",
@@ -218,16 +219,17 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     }
   };
 
-  /** GET /dftc/data-export — download the caller's own data as a JSON file. */
+  /** GET /dftc/data-export — download the caller's own data as a readable HTML file. */
   const handleExportData = async () => {
     setExportingData(true);
     try {
       const data = await parseResponse(await apiGet("/dftc/data-export"));
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const html = buildFarmerExportHtml(data, langCode);
+      const blob = new Blob([html], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "harvestwise-data-export.json";
+      link.download = "harvestwise-data-export.html";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -521,7 +523,7 @@ const SecurityTab = ({ showToast }) => {
 /* -------------------------------------------------------------------------- */
 /* 3. Farm Profile Tab                                                        */
 /* -------------------------------------------------------------------------- */
-const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops, sellingOptions, showToast, onSaved }) => {
+const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops, sellingOptions, sellingMethods, showToast, onSaved }) => {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [crops, setCrops] = useState(initialCrops || {});
@@ -557,13 +559,26 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
       // Build preferred_crops from the crops grid
       // crops = { [commodityName]: varietyLabel }
       // availableCrops = [{ id, name, baseName }]
+      //
+      // Same rule as selling_method_ids below: the backend reads an explicit []
+      // as "clear these", so an unresolved grid must send nothing at all.
+      // availableCrops comes from `/prices?is_top10=true&page_size=50`, which is
+      // paginated, Redis-cached and market-driven — it can be empty on a failed
+      // fetch and it can legitimately omit a crop the farmer already saved.
       const nameToId = Object.fromEntries(availableCrops.map((c) => [c.name, c.id]));
-      const preferred_crops = Object.entries(crops)
-        .filter(([name]) => nameToId[name])
-        .map(([name, variety]) => ({
-          commodity_id: nameToId[name],
-          ...(variety ? { preferred_variety_name: variety } : {}),
-        }));
+      const resolvedCrops = Object.entries(crops).filter(([name]) => nameToId[name]);
+      // Sending the list is only safe when every saved crop survived the lookup.
+      // One dropped name would otherwise be deleted from the database.
+      const cropsResolved =
+        availableCrops.length > 0 && resolvedCrops.length === Object.keys(crops).length;
+
+      // The API stores selling methods by id; the UI works in labels.
+      // Without a complete lookup we cannot resolve, so leave the key out
+      // entirely rather than clearing the farmer's saved methods. An empty
+      // selection is a real deselect and must still clear.
+      const selectedMethod = sellingMethods.find((m) => m.label === selling.method);
+      const methodResolved =
+        sellingMethods.length > 0 && (selling.method === "" || Boolean(selectedMethod));
 
       const payload = {
         city: locationState.city || "Davao City",
@@ -575,7 +590,15 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
         latitude: locationState.latitude != null ? locationState.latitude : null,
         longitude: locationState.longitude != null ? locationState.longitude : null,
         usual_selling_area_or_buyer: selling.area ? selling.area.trim() : null,
-        preferred_crops,
+        ...(cropsResolved && {
+          preferred_crops: resolvedCrops.map(([name, variety]) => ({
+            commodity_id: nameToId[name],
+            ...(variety ? { preferred_variety_name: variety } : {}),
+          })),
+        }),
+        ...(methodResolved && {
+          selling_method_ids: selectedMethod ? [selectedMethod.id] : [],
+        }),
       };
       const res = await apiPut("/farmer/profile", payload);
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -665,6 +688,14 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
 
       <Card>
         <SectionLabel>{t("farmer.settings.selling_method", {}, "Selling Method")}</SectionLabel>
+        {sellingMethods.length === 0 && (
+          // The fallback labels below are placeholders, not real rows in
+          // selling_method, so nothing picked here can be saved. Say so instead
+          // of letting a successful save report a write that never happened.
+          <p className="mb-3 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            {t("farmer.settings.selling_options_unavailable", {}, "Selling method options could not be loaded. Your current choice is saved and unchanged, but you cannot change it until the list loads.")}
+          </p>
+        )}
         <div className="space-y-2 mb-3">
           {sellingOptions.map((opt) => {
             const isSelected = selling.method === opt;
@@ -724,6 +755,8 @@ const FarmTab = ({ showToast }) => {
   const [initialData, setInitialData] = useState(null);
   const [availableCrops, setAvailableCrops] = useState([]);
   const [sellingOptions, setSellingOptions] = useState(DEFAULT_SELLING_OPTIONS);
+  // [{ id, label }] — needed to turn the selected label into the id the API stores.
+  const [sellingMethods, setSellingMethods] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -792,7 +825,9 @@ const FarmTab = ({ showToast }) => {
         if (smRes.status === "fulfilled" && smRes.value.ok && active) {
           const smData = await parseResponse(smRes.value);
           if (Array.isArray(smData) && smData.length > 0) {
-            setSellingOptions(smData.map((sm) => sm.label));
+            const methods = smData.map((sm) => ({ id: sm.id, label: sm.label }));
+            setSellingMethods(methods);
+            setSellingOptions(methods.map((sm) => sm.label));
           }
         }
       } catch (err) {
@@ -842,6 +877,7 @@ const FarmTab = ({ showToast }) => {
       initialSelling={initialData.selling}
       availableCrops={availableCrops}
       sellingOptions={sellingOptions}
+      sellingMethods={sellingMethods}
       showToast={showToast}
       onSaved={handleSaved}
     />
