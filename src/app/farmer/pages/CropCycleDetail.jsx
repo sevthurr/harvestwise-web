@@ -199,8 +199,16 @@ function CropCycleDetailPage() {
   // Real backend advisory query from existing POST /api/v1/advisory/plan
   const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
   const commodityIdentifier = crop.commodityId || crop.commodity;
+  const phaseCode = normalizePhaseCode(crop.phase);
+  const explicitStage = crop.phase ? (
+    crop.phase.toLowerCase().includes("plan") ? "before_planting" :
+    crop.phase.toLowerCase().includes("grow") || crop.phase.toLowerCase().includes("plant") ? "during_planting" :
+    crop.phase.toLowerCase().includes("pre") ? "near_harvest" :
+    crop.phase.toLowerCase().includes("harvest") ? "harvest" : null
+  ) : null;
+
   const { data: planAdvisoryData } = useQuery({
-    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty],
+    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
     queryFn: async () => {
       try {
         const pDate = new Date(crop.plantingDate);
@@ -213,6 +221,7 @@ function CropCycleDetailPage() {
           expected_harvest_date: hDateStr,
           total_production_cost: updatedTotalCost,
           expected_yield_kg: qty,
+          crop_stage: explicitStage,
         };
         const res = await apiPost("/advisory/plan", payload);
         if (!res.ok) return null;
@@ -229,22 +238,36 @@ function CropCycleDetailPage() {
   const forecastLo = crop.forecastLower || planAdvisoryData?.module_results?.lower_forecast_price || null;
   const forecastHi = crop.forecastUpper || planAdvisoryData?.module_results?.upper_forecast_price || null;
   const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : (planAdvisoryData?.module_results?.forecast_midpoint || null);
+  const stageRef = planAdvisoryData?.module_results?.reference_price;
   const hasFarmgate = typeof farmgatePrice === "number" && farmgatePrice > 0;
-  const phaseCode = normalizePhaseCode(crop.phase);
-  const useForecast = [PHASE_CODES.PLANNING, PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
-  const basePrice = hasFarmgate ? farmgatePrice : (useForecast ? (forecastMid || currentPrice) : currentPrice);
+  const currentCropStage = explicitStage || planAdvisoryData?.crop_stage || "before_planting";
+  const isPlanning = currentCropStage === "before_planting" || phaseCode === PHASE_CODES.PLANNING;
+  const useForecast = !isPlanning && [PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
+  const basePrice = hasFarmgate
+    ? farmgatePrice
+    : (isPlanning
+        ? (stageRef || currentPrice)
+        : (useForecast ? (stageRef || forecastMid || currentPrice) : currentPrice));
   const sellingBasis = basePrice;
-  const priceBasisLabel = useForecast
-    ? (hasFarmgate ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price") : t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price"))
-    : (hasFarmgate ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price") : t("farmer.factors.profitability.based_on_current_market", {}, "Based on current market price"));
-  const priceBasisDetail = useForecast
-    ? (hasFarmgate ? `${t("farmer.factors.profitability.estimated_farmgate", {}, "Farmgate price")}: \u20B1${farmgatePrice}/kg` : (forecastLo != null && forecastHi != null ? `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: \u20B1${forecastLo}\u2013\u20B1${forecastHi}/kg` : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: ${t("farmer.advisory.not_available", {}, "Not available")}`))
-    : (hasFarmgate ? `${t("farmer.factors.profitability.estimated_farmgate", {}, "Farmgate price")}: \u20B1${farmgatePrice}/kg` : (currentPrice != null ? `${t("farmer.factors.profitability.price_basis", {}, "Price basis")}: \u20B1${currentPrice}/kg` : `${t("farmer.factors.profitability.price_basis", {}, "Price basis")}: ${t("farmer.advisory.not_available", {}, "Not available")}`));
+  const priceBasisLabel = hasFarmgate
+    ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price")
+    : isPlanning
+    ? t("farmer.factors.profitability.based_on_seasonal", {}, "Based on historical seasonal price")
+    : useForecast
+    ? t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price")
+    : t("farmer.factors.profitability.based_on_current_market", {}, "Based on current market price");
+  const priceBasisDetail = hasFarmgate
+    ? `${t("farmer.factors.profitability.estimated_farmgate", {}, "Farmgate price")}: ₱${farmgatePrice}/kg`
+    : (stageRef != null)
+    ? `${t("farmer.factors.price.reference_price_label", {}, "Reference price")}: ₱${stageRef.toFixed(2)}/kg`
+    : (forecastLo != null && forecastHi != null
+        ? `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: ₱${forecastLo}–₱${forecastHi}/kg`
+        : (currentPrice != null
+            ? `${t("farmer.factors.profitability.price_basis", {}, "Price basis")}: ₱${currentPrice}/kg`
+            : `${t("farmer.factors.profitability.price_basis", {}, "Price basis")}: ${t("farmer.advisory.not_available", {}, "Not available")}`));
   const margin = sellingBasis != null && costToRecover > 0 ? sellingBasis - costToRecover : null;
   const profitLo = margin != null ? Math.max(0, Math.floor(margin * qty * 0.85 / 1e3) * 1e3) : 0;
   const profitHi = margin != null ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
-
-  const currentCropStage = planAdvisoryData?.crop_stage || crop.phase || "growing";
   const rawAdvisory = planAdvisoryData?.advisory?.advisory || crop.advisoryCategory;
   const advisoryCode = normalizeAdvisoryCode(rawAdvisory) || ADVISORY_CODES.RECOMMENDED;
   const badge = composeAdvisoryBadge(advisoryCode, currentCropStage);
@@ -371,7 +394,19 @@ function CropCycleDetailPage() {
               ) : null;
             })}
             <button
-              onClick={() => navigate(`/farmer/crops/${crop.id}/factors`)}
+              onClick={() =>
+                navigate(`/farmer/crops/${crop.id}/factors`, {
+                  state: {
+                    cropStage: currentCropStage,
+                    plantingDate: crop.rawPlantingDate || crop.plantingDate,
+                    expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
+                    moduleResults: planAdvisoryData?.module_results,
+                    plantingWindowStart: planAdvisoryData?.planting_window_start,
+                    plantingWindowEnd: planAdvisoryData?.planting_window_end,
+                    plantingWindowLabel: planAdvisoryData?.planting_window_label,
+                  },
+                })
+              }
               className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
             >
               {t("farmer.advisory.view_basis", {}, "View basis →")}

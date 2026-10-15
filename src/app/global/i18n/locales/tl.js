@@ -476,13 +476,14 @@ export const tl = {
         historical_avg_frequency: "Dalas",
         historical_avg_weekly: "Lingguhan",
         historical_avg_monthly: "Buwanan",
-        historical_avg_explanation: "Ipinapakita ng chart na ito ang karaniwang naitalang presyo bawat linggo o buwan. Karagdagang impormasyon lamang ito at hindi kasama sa pagkalkula ng rekomendasyon sa pagtatanim.",
+        historical_avg_explanation: "Ipinapakita ng tsart na ito ang lingguhan o buwanang karaniwang naitalang presyo noong mga nakaraang panahon upang magbigay ng konteksto sa iskedyul ng iyong pananim.",
         historical_avg_dynamic: "Ang karaniwang naitalang presyo noong {period} ay ₱{price}/kg.",
         historical_avg_empty: "Walang available na datos ng karaniwang presyo sa mga nakaraang panahon para sa pagpiling ito.",
         historical_avg_error: "Hindi ma-load ang datos ng karaniwang presyo sa mga nakaraang panahon. Subukan muli.",
         historical_avg_limited: "Limitado pa ang available na historical na datos para sa pagpiling ito.",
         historical_avg_tooltip_price: "Karaniwang presyo",
-        historical_avg_tooltip_observations: "Mga naitalang obserbasyon"
+        historical_avg_tooltip_observations: "Mga naitalang obserbasyon",
+        previous_year: "Nakaraang Taon"
       },
 
 

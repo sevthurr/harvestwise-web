@@ -15,7 +15,7 @@ import {
   Check
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { getTotalCost, formatPeso, COMMODITY_OPTIONS } from "./types";
+import { getTotalCost, formatPeso, COMMODITY_OPTIONS, suggestHarvestDate } from "./types";
 import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import {
@@ -359,7 +359,22 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planting_date", {}, "Actual planting date")}</label>
-              <input type="date" value={plantedForm.actualPlantingDate} onChange={(e) => setPlantedForm((f) => ({ ...f, actualPlantingDate: e.target.value }))} className={inputCls} />
+              <input
+                type="date"
+                value={plantedForm.actualPlantingDate}
+                onChange={(e) => {
+                  const newPlantingDate = e.target.value;
+                  const suggestion = newPlantingDate
+                    ? suggestHarvestDate(newPlantingDate, data.commodityId || data.commodity, data.variant)
+                    : null;
+                  setPlantedForm((f) => ({
+                    ...f,
+                    actualPlantingDate: newPlantingDate,
+                    ...(suggestion?.minDate ? { updatedHarvestDate: suggestion.minDate } : {}),
+                  }));
+                }}
+                className={inputCls}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planted_area", {}, "Actual planted area (sq m)")}</label>

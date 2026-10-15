@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronDown, Calendar, Info } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import * as pricesApi from "../../../../services/api/pricesApi";
+import { suggestHarvestDate } from "../../../farmer/components/recommend/types";
 
 const {
   LineChart,
@@ -15,6 +16,8 @@ const {
   ResponsiveContainer,
   Brush,
 } = RechartsModule;
+const ReferenceArea = RechartsModule.ReferenceArea || (() => null);
+const ReferenceLine = RechartsModule.ReferenceLine || (() => null);
 
 const HISTORICAL_AVG_COLOR = "#2563eb";
 const HISTORICAL_AVG_DOT_FILL = "#ffffff";
@@ -85,11 +88,14 @@ function CustomTooltip({
   variety,
   priceLabel,
   observationsLabel,
+  highlightIndices = null,
+  highlightLabel = "🌱 Planting Window",
 }) {
   if (!active || !payload?.length) return null;
   const point = payload[0]?.payload;
   if (!point || point.average_price == null) return null;
 
+  const isInsideWindow = highlightIndices && highlightIndices.has(point.index);
   const titleVariety = variety ? ` (${variety})` : "";
   const title = `${commodity || "Crop"}${titleVariety}`;
   const periodLabel =
@@ -98,9 +104,14 @@ function CustomTooltip({
       : formatMonthlyTooltip(point.period_start);
 
   return (
-    <div className="bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3 min-w-[210px] z-50 pointer-events-none">
-      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-1 pb-1 border-b border-[var(--hw-neutral-100)]">
-        {periodLabel}
+    <div className="bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3 min-w-[210px] z-50 pointer-events-none space-y-1.5">
+      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-1 pb-1 border-b border-[var(--hw-neutral-100)] flex items-center justify-between gap-2">
+        <span>{periodLabel}</span>
+        {isInsideWindow && (
+          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300 shrink-0">
+            {highlightLabel}
+          </span>
+        )}
       </div>
       <div className="text-[11px] font-medium text-[var(--hw-neutral-500)] mb-2">
         {title} · Historical Average · ₱/kg
@@ -139,6 +150,14 @@ export function HistoricalAveragePriceSection({
   priceTypeKey = "bangkerohan_retail",
   height = 380,
   className = "",
+  plantingDate = null,
+  expectedHarvestDate = null,
+  harvestDate = null,
+  plantingWindowStart = null,
+  plantingWindowEnd = null,
+  plantingWindowLabel = null,
+  cropStage = null,
+  plantingSeason = null,
 }) {
   const { t } = useLanguage();
   const [frequency, setFrequency] = useState("weekly");
@@ -195,7 +214,8 @@ export function HistoricalAveragePriceSection({
   }, [hasData, validDataPoints]);
 
   // Context subtitle components
-  const varietyLabel = variety ? ` (${variety})` : "";
+  const hasVarietyInName = variety && commodityName && commodityName.toLowerCase().includes(variety.toLowerCase());
+  const varietyLabel = variety && !hasVarietyInName ? ` (${variety})` : "";
   const fullCropName = commodityName ? `${commodityName}${varietyLabel}` : "Crop";
   const marketName = market || (priceTypeKey.includes("dftc") ? "DFTC" : "Bankerohan Public Market");
   const priceTypeName = priceType || (priceTypeKey.includes("wholesale") ? "Wholesale" : "Retail");
@@ -211,7 +231,7 @@ export function HistoricalAveragePriceSection({
   const genericExplanation = t(
     "farmer.factors.price.historical_avg_explanation",
     {},
-    "This chart shows the average recorded price for each week or month. It provides additional historical context and does not affect the planting advisory."
+    "This chart shows weekly or monthly average recorded prices during past seasons to provide context for your crop timeline."
   );
 
   const emptyMessage = t(
@@ -232,9 +252,191 @@ export function HistoricalAveragePriceSection({
     "Limited historical data is available for this selection."
   );
 
+  // Compute plant-to-harvest or planting window highlight on historical series (aligned to previous year)
+  const plantingHighlight = useMemo(() => {
+    const rawStart = plantingDate || plantingWindowStart;
+    const explicitHarvestDate = expectedHarvestDate || harvestDate;
+
+    let derivedHarvestDate = null;
+    if (!explicitHarvestDate && !plantingWindowEnd && rawStart) {
+      const suggestion = suggestHarvestDate(rawStart, commodityId || commodityName, variety);
+      if (suggestion) {
+        derivedHarvestDate = suggestion.maxDate || suggestion.minDate;
+      }
+    }
+
+    const isPlantToHarvest = Boolean(explicitHarvestDate || derivedHarvestDate);
+    const rawEnd = explicitHarvestDate || derivedHarvestDate || plantingWindowEnd || rawStart;
+
+    // Do not display planting-window highlight for Stage 3 (Near Harvest) or Stage 4 (Harvest)
+    const normStage = String(cropStage || "").toLowerCase().trim();
+    if (["near_harvest", "pre_harvest", "pre-harvest", "preharvest", "harvest", "harvesting", "harvested"].includes(normStage)) {
+      return null;
+    }
+
+    // Do not fabricate a window if no planting date or window was selected (Rule 7)
+    if (!rawStart && !plantingSeason) {
+      return null;
+    }
+
+    if (!chartData || chartData.length === 0) {
+      return null;
+    }
+
+    const dStart = rawStart ? parseDateOnly(rawStart) : null;
+    let dEnd = rawEnd ? parseDateOnly(rawEnd) : null;
+
+    if (!dStart) {
+      return null;
+    }
+
+    if (dEnd && dEnd < dStart) {
+      dEnd = new Date(dStart.getTime());
+    }
+
+    const plannedYear = dStart.getFullYear();
+    const yearSpan = dEnd ? dEnd.getFullYear() - dStart.getFullYear() : 0;
+
+    // Determine available historical years in chartData strictly prior to the planned year
+    const availablePriorYears = Array.from(
+      new Set(
+        chartData
+          .map((item) => parseDateOnly(item.period_start)?.getFullYear())
+          .filter((y) => y != null && y < plannedYear)
+      )
+    ).sort((a, b) => b - a);
+
+    let matchingRecords = [];
+    let targetYear = plannedYear;
+    let isPriorYear = false;
+
+    // Prioritize matching seasonal timeline on prior years (starting with immediately preceding year)
+    if (availablePriorYears.length > 0) {
+      for (const candidateYear of availablePriorYears) {
+        const projStart = new Date(candidateYear, dStart.getMonth(), dStart.getDate());
+        const projEnd = dEnd
+          ? new Date(candidateYear + yearSpan, dEnd.getMonth(), dEnd.getDate(), 23, 59, 59)
+          : new Date(candidateYear, dStart.getMonth(), dStart.getDate(), 23, 59, 59);
+
+        const candidateMatches = chartData.filter((item) => {
+          const recStart = parseDateOnly(item.period_start);
+          const recEnd = parseDateOnly(item.period_end || item.period_start);
+          if (!recStart || !recEnd) return false;
+          return recStart <= projEnd && recEnd >= projStart;
+        });
+
+        if (candidateMatches.length > 0) {
+          matchingRecords = candidateMatches;
+          targetYear = candidateYear;
+          isPriorYear = true;
+          break;
+        }
+      }
+    }
+
+    // Fallback: If no prior-year data exists in chartData (e.g. mock test fixture with only current year),
+    // match direct calendar dates in available data
+    if (matchingRecords.length === 0) {
+      matchingRecords = chartData.filter((item) => {
+        const recStart = parseDateOnly(item.period_start);
+        const recEnd = parseDateOnly(item.period_end || item.period_start);
+        if (!recStart || !recEnd) return false;
+        return recStart <= (dEnd || dStart) && recEnd >= dStart;
+      });
+      targetYear = plannedYear;
+      isPriorYear = false;
+    }
+
+    if (matchingRecords.length === 0) {
+      return null;
+    }
+
+    const firstMatch = matchingRecords[0];
+    const lastMatch = matchingRecords[matchingRecords.length - 1];
+    const indicesSet = new Set(matchingRecords.map((r) => r.index));
+
+    const finalStart = isPriorYear ? new Date(targetYear, dStart.getMonth(), dStart.getDate()) : dStart;
+    const finalEnd = isPriorYear
+      ? (dEnd ? new Date(targetYear + yearSpan, dEnd.getMonth(), dEnd.getDate()) : finalStart)
+      : (dEnd || dStart);
+
+    const formattedLabel =
+      (!isPlantToHarvest && plantingWindowLabel && !isPriorYear)
+        ? plantingWindowLabel
+        : (finalStart && finalEnd
+            ? `${finalStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${finalEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : (finalStart ? finalStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Planned Window"));
+
+    const isImmediatePrevYear = targetYear === plannedYear - 1;
+    const yearTag = isImmediatePrevYear
+      ? t("farmer.factors.price.previous_year", {}, "Previous Year")
+      : `${targetYear}`;
+
+    const badgeTitle = isPlantToHarvest
+      ? (isPriorYear
+          ? `${t("farmer.factors.price.plant_to_harvest_period", {}, "Plant-to-Harvest Period")} (${yearTag})`
+          : t("farmer.factors.price.plant_to_harvest_period", {}, "Plant-to-Harvest Period"))
+      : (isPriorYear
+          ? `${t("farmer.factors.price.your_planting_window", {}, "Your Planned Planting Window")} (${yearTag})`
+          : t("farmer.factors.price.your_planting_window", {}, "Your Planned Planting Window"));
+
+    const lineLabel = isPlantToHarvest
+      ? (isPriorYear ? `🌱 Plant-to-Harvest (${yearTag})` : "🌱 Plant-to-Harvest Period")
+      : (isPriorYear ? `🌱 Planting Window (${yearTag})` : "🌱 Planned Planting Window");
+
+    const tooltipLabel = isPlantToHarvest
+      ? (isPriorYear ? `🌱 Plant-to-Harvest (${yearTag})` : "🌱 Plant-to-Harvest")
+      : (isPriorYear ? `🌱 Planting Window (${yearTag})` : "🌱 Planting Window");
+
+    const validMatchingPrices = matchingRecords
+      .map((r) => r.average_price)
+      .filter((p) => p != null && Number.isFinite(p));
+
+    return {
+      x1: firstMatch.tickLabel,
+      x2: lastMatch.tickLabel,
+      indices: indicesSet,
+      label: formattedLabel,
+      badgeTitle,
+      lineLabel,
+      tooltipLabel,
+      isPlantToHarvest,
+      isPriorYear,
+      targetYear,
+      count: matchingRecords.length,
+      validMatchingPrices,
+    };
+  }, [
+    chartData,
+    plantingWindowStart,
+    plantingWindowEnd,
+    plantingDate,
+    expectedHarvestDate,
+    harvestDate,
+    commodityId,
+    commodityName,
+    variety,
+    plantingSeason,
+    plantingWindowLabel,
+    cropStage,
+    t,
+  ]);
+
   // Dynamic real-data statement (rendered only on success with data)
   const dynamicExplanation = useMemo(() => {
     if (!hasData || validDataPoints.length === 0) return null;
+
+    if (plantingHighlight?.validMatchingPrices?.length > 0) {
+      const avg =
+        plantingHighlight.validMatchingPrices.reduce((a, b) => a + b, 0) /
+        plantingHighlight.validMatchingPrices.length;
+      return t(
+        "farmer.factors.price.historical_avg_dynamic",
+        { period: plantingHighlight.label, price: avg.toFixed(2) },
+        `The average recorded price for ${plantingHighlight.label} was ₱${avg.toFixed(2)}/kg.`
+      );
+    }
+
     const latest = validDataPoints[validDataPoints.length - 1];
     const periodStr =
       frequency === "weekly"
@@ -245,7 +447,7 @@ export function HistoricalAveragePriceSection({
       { period: periodStr, price: latest.average_price.toFixed(2) },
       `The average recorded price for ${periodStr} was ₱${latest.average_price.toFixed(2)}/kg.`
     );
-  }, [hasData, validDataPoints, frequency, t]);
+  }, [hasData, validDataPoints, frequency, plantingHighlight, t]);
 
   return (
     <section className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 md:p-6 space-y-4 ${className}`}>
@@ -278,6 +480,31 @@ export function HistoricalAveragePriceSection({
           </div>
         </div>
       </div>
+
+      {/* Planting Window Legend Badge or Unselected Prompt */}
+      {plantingHighlight ? (
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-[12px] font-semibold text-emerald-800 self-start shadow-xs">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0"></span>
+          <span>
+            {plantingHighlight.badgeTitle}: {plantingHighlight.label}
+          </span>
+        </div>
+      ) : (
+        !["near_harvest", "pre_harvest", "pre-harvest", "preharvest", "harvest", "harvesting", "harvested"].includes(String(cropStage || "").toLowerCase().trim()) &&
+        !plantingDate &&
+        !plantingWindowStart && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] text-[11px] text-[var(--hw-neutral-600)] self-start">
+            <Info className="w-3.5 h-3.5 shrink-0 text-[var(--hw-neutral-400)]" />
+            <span>
+              {t(
+                "farmer.factors.price.no_planting_window_prompt",
+                {},
+                "Select a planned planting date in Crop Assessment to see your planting window highlighted on this historical timeline."
+              )}
+            </span>
+          </div>
+        )
+      )}
 
       {/* Plotting Region — Permanent container height matching ForecastPriceTrendChart (380px) across all states */}
       <div className="w-full flex flex-col justify-center" style={{ minHeight: `${height}px` }}>
@@ -351,6 +578,8 @@ export function HistoricalAveragePriceSection({
                         variety={variety}
                         priceLabel={priceLabel}
                         observationsLabel={observationsLabel}
+                        highlightIndices={plantingHighlight?.indices}
+                        highlightLabel={plantingHighlight?.tooltipLabel}
                       />
                     }
                   />
@@ -361,6 +590,35 @@ export function HistoricalAveragePriceSection({
                       stroke="#94a3b8"
                       fill="#f8fafc"
                       travellerWidth={8}
+                    />
+                  )}
+                  {/* Visually highlighted planting-season window (Section 4) */}
+                  {plantingHighlight && ReferenceArea && (
+                    <ReferenceArea
+                      x1={plantingHighlight.x1}
+                      x2={plantingHighlight.x2}
+                      yAxisId={0}
+                      fill="#86efac"
+                      fillOpacity={0.35}
+                      stroke="#16a34a"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                    />
+                  )}
+                  {plantingHighlight && ReferenceLine && (
+                    <ReferenceLine
+                      x={plantingHighlight.x1}
+                      stroke="#16a34a"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      label={{
+                        value: plantingHighlight.lineLabel,
+                        position: "insideTopLeft",
+                        fill: "#15803d",
+                        fontSize: 11,
+                        fontWeight: "bold",
+                        offset: 4,
+                      }}
                     />
                   )}
                   {/* Straight line graph with breaks for missing periods (type="linear", connectNulls={false}) */}

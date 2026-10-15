@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCrops } from "../components/crops/CropsContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -19,6 +19,8 @@ function quarterForDate(value) {
 function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state;
   const { t } = useLanguage();
   const { crops } = useCrops();
   const crop = crops.find((c) => c.id === cropId);
@@ -33,12 +35,19 @@ function CropFactorsPage() {
     );
   }
 
+  const explicitStage = crop?.phase ? (
+    crop.phase.toLowerCase().includes("plan") ? "before_planting" :
+    crop.phase.toLowerCase().includes("grow") || crop.phase.toLowerCase().includes("plant") ? "during_planting" :
+    crop.phase.toLowerCase().includes("pre") ? "near_harvest" :
+    crop.phase.toLowerCase().includes("harvest") ? "harvest" : null
+  ) : null;
+
   const updatedTotalCost = crop.totalCost || 0;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
   const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
 
   const { data: planAdvisoryData } = useQuery({
-    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty],
+    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
     queryFn: async () => {
       try {
         const pDate = new Date(crop.plantingDate);
@@ -51,6 +60,7 @@ function CropFactorsPage() {
           expected_harvest_date: hDateStr,
           total_production_cost: updatedTotalCost,
           expected_yield_kg: qty,
+          crop_stage: explicitStage,
         };
         const res = await apiPost("/advisory/plan", payload);
         if (!res.ok) return null;
@@ -93,9 +103,20 @@ function CropFactorsPage() {
   const fLo = crop.forecastLower || planAdvisoryData?.module_results?.lower_forecast_price || null;
   const fHi = crop.forecastUpper || planAdvisoryData?.module_results?.upper_forecast_price || null;
   const forecastMid = fLo != null && fHi != null ? (fLo + fHi) / 2 : (planAdvisoryData?.module_results?.forecast_midpoint || null);
+  const stageRef = planAdvisoryData?.module_results?.reference_price;
   const phaseCode = normalizePhaseCode(crop.phase);
-  const useForecast = [PHASE_CODES.PLANNING, PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
-  const basePrice = useForecast ? (forecastMid || currentPrice) : currentPrice;
+  const resolvedCropStage =
+    state?.cropStage ||
+    crop.cropStage ||
+    crop.stage ||
+    explicitStage ||
+    planAdvisoryData?.crop_stage ||
+    "before_planting";
+  const isPlanning = resolvedCropStage === "before_planting" || phaseCode === PHASE_CODES.PLANNING;
+  const useForecast = !isPlanning && [PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
+  const basePrice = isPlanning
+    ? (stageRef || currentPrice)
+    : (useForecast ? (stageRef || forecastMid || currentPrice) : currentPrice);
   const costToRecover = qty > 0 && updatedTotalCost > 0 ? Math.ceil(updatedTotalCost / qty) : null;
   const farmgatePrice = crop.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : null;
   const sellingBasis = farmgatePrice ?? basePrice;
@@ -168,6 +189,7 @@ function CropFactorsPage() {
   const phaseConfig = crop.phase ? getPhaseConfig(crop.phase) : null;
   const phaseLabel = phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null;
 
+
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
       {/* Breadcrumb */}
@@ -199,6 +221,13 @@ function CropFactorsPage() {
         defaultTab="price"
         commodityId={commodityIdentifier}
         commodityName={crop.commodityName}
+        cropStage={resolvedCropStage}
+        plantingDate={state?.plantingDate || crop.rawPlantingDate || crop.plantingDate || planAdvisoryData?.planting_date}
+        expectedHarvestDate={state?.expectedHarvestDate || crop.rawHarvestDate || crop.harvestDate || planAdvisoryData?.expected_harvest_date}
+        moduleResults={state?.moduleResults || planAdvisoryData?.module_results}
+        plantingWindowStart={state?.plantingWindowStart || planAdvisoryData?.planting_window_start}
+        plantingWindowEnd={state?.plantingWindowEnd || planAdvisoryData?.planting_window_end}
+        plantingWindowLabel={state?.plantingWindowLabel || planAdvisoryData?.planting_window_label}
       />
 
       {/* Bottom action */}
