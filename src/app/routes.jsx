@@ -4,6 +4,7 @@ import { Layout } from "./global/components/layout/Layout";
 import { AdminLayout } from "./global/components/layout/AdminLayout";
 import { ProtectedRoute } from "./global/components/ProtectedRoute";
 import { roleHome, useAuth } from "./global/contexts/AuthContext";
+import { RouteErrorElement } from "./global/components/RouteError";
 import LoginPage from "./auth/LoginPage";
 import RegisterPage from "./auth/RegisterPage";
 import OnboardingPage from "./auth/OnboardingPage";
@@ -106,19 +107,20 @@ function LegacyThresholdsRedirect() {
 
 export const router = createBrowserRouter([
   // ── Auth & Legal pages (unprotected) ──────────────────────────────────────────
-  { path: "/", element: <SmartRedirect /> },
-  { path: "/login", element: <SmartRedirect fallback={<LoginPage />} /> },
-  { path: "/register",   element: <RegisterPage /> },
-  { path: "/onboarding", element: <OnboardingPage /> },
-  { path: "/privacy",    element: <PrivacyPolicyPage /> },
-  { path: "/terms",      element: <TermsPage /> },
-  { path: "/about",      element: <Navigate to="/" replace /> },
+  { path: "/", element: <SmartRedirect />, errorElement: <RouteErrorElement /> },
+  { path: "/login", element: <SmartRedirect fallback={<LoginPage />} />, errorElement: <RouteErrorElement /> },
+  { path: "/register",   element: <RegisterPage />, errorElement: <RouteErrorElement /> },
+  { path: "/onboarding", element: <OnboardingPage />, errorElement: <RouteErrorElement /> },
+  { path: "/privacy",    element: <PrivacyPolicyPage />, errorElement: <RouteErrorElement /> },
+  { path: "/terms",      element: <TermsPage />, errorElement: <RouteErrorElement /> },
+  { path: "/about",      element: <Navigate to="/" replace />, errorElement: <RouteErrorElement /> },
 
 
   // ── Farmer workspace ─────────────────────────────────────────────────────────
   {
     path: "/farmer",
     element: <ProtectedRoute requiredRole="Farmer"><Layout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true, Component: DashboardPage },
 
@@ -172,6 +174,7 @@ export const router = createBrowserRouter([
   {
     path: "/dftc",
     element: <ProtectedRoute requiredRole={["DFTC"]}><DFTCLayout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true,               Component: DFTCHome         },
       { path: "input",             Component: DFTCInput        },
@@ -195,6 +198,7 @@ export const router = createBrowserRouter([
   {
     path: "/admin",
     element: <ProtectedRoute requiredRole={["Admin", "SuperAdmin"]}><AdminLayout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true,             Component: AdminDashboard   },
       { path: "data-sources",             Component: AdminDataSources      },

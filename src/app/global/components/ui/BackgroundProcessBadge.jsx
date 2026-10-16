@@ -1,7 +1,6 @@
 import React from "react";
 import { Clock, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
-import { useIsFetching } from "@tanstack/react-query";
 import { useLanguage } from "../../contexts/LanguageContext";
 
 /**
@@ -61,8 +60,11 @@ export const BackgroundProcessBadge = () => {
  */
 export const LastUpdatedButton = ({ onClick, isSyncing = false, lastUpdatedTime }) => {
   const { t } = useLanguage();
-  const isFetching = useIsFetching();
-  const activeSync = isSyncing || isFetching > 0;
+  // The isSyncing prop is authoritative. React-query fetching state is
+  // deliberately not consulted here: parents scope what counts as a sync
+  // (manual resync, background process) instead of the badge reacting to
+  // every in-flight query in the app.
+  const activeSync = isSyncing;
   const timeDisplay = lastUpdatedTime || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (

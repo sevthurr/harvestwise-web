@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
-import { useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -22,7 +22,6 @@ const TopBar = ({
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
   const queryClient = useQueryClient();
-  const isFetching = useIsFetching();
 
   const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -33,7 +32,12 @@ const TopBar = ({
   const ref = useRef(null);
   const { processState } = useBackgroundProcess();
 
-  const isSyncing = isManualSyncing || isFetching > 0;
+  // Scoped on purpose: only the manual resync and an active background
+  // process count as "syncing". An unfiltered useIsFetching() here made the
+  // badge flash "Syncing..." on every route change, because Dashboard,
+  // Prices, Profile and Notifications opt back into refetchOnMount:"always"
+  // even though the login bundle seeded their cache.
+  const isSyncing = isManualSyncing || processState.active;
 
   // Keep the "Last updated" timestamp in sync when a background process
   // completes and triggers an automatic live resync.
@@ -193,9 +197,9 @@ const TopBar = ({
                 {/* Log out */}
                 <div className="py-1 border-t border-[var(--hw-neutral-100)]">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setOpen(false);
-                      logout();
+                      await logout();
                       navigate("/login", { replace: true });
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-red-600 hover:bg-red-50 transition-colors text-left"

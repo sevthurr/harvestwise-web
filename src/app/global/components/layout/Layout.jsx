@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { TopBar } from "./TopBar";
 import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
@@ -149,7 +150,15 @@ const Layout = () => {
             <ChangePasswordPanel onRotated={handlePasswordRotated} />
           ) : (
             <>
-              <Outlet />
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center w-full h-[50vh]">
+                    <Loader2 className="w-6 h-6 text-[var(--hw-green-700)] animate-spin" />
+                  </div>
+                }
+              >
+                <Outlet />
+              </Suspense>
               <Footer className="mt-4 mb-1" />
             </>
           )}

@@ -77,7 +77,11 @@ export const en = {
     pw_err_generic: "Could not update password. Check your current password and try again.",
     pw_panel_title: "Change your temporary password",
     pw_panel_body: "To keep your account secure, please replace the temporary password you received with a password only you know.",
-    pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step."
+    pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step.",
+    error_title: "Something went wrong",
+    error_body: "An unexpected error stopped this page from loading.",
+    error_reload: "Reload",
+    error_home: "Go home"
   },
   nav: {
     home: "Home",

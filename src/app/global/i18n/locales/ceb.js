@@ -77,7 +77,11 @@ export const ceb = {
     pw_err_generic: "Wala nga na-update ang password. Susiha ang imong kasalukuyang password ug try usab.",
     pw_panel_title: "Palita ang imong temporary password",
     pw_panel_body: "Arong safe ang imong account, palita ang temporary password nga natanggap nimo ng password nga ikaw lang ang nakamakat.",
-    pw_panel_restricted: "Temporary password pa gikan ang imong account, kaya dili pa available ang uban nga parte sa app hangtod sa matapos nimo niini."
+    pw_panel_restricted: "Temporary password pa gikan ang imong account, kaya dili pa available ang uban nga parte sa app hangtod sa matapos nimo niini.",
+    error_title: "Naay nasayop",
+    error_body: "Naundang ang pag-load niini nga panid tungod sa wala damha nga sayop.",
+    error_reload: "I-reload",
+    error_home: "Balik sa home"
   },
   nav: {
     home: "Home",

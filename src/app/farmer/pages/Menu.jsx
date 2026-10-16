@@ -445,9 +445,9 @@ function MenuPage() {
     message="You will be signed out of HarvestWise. Your saved crop records and preferences will remain on this device."
     confirmLabel="Sign out"
     danger
-    onConfirm={() => {
+    onConfirm={async () => {
       setShowSignOut(false);
-      logout();
+      await logout();
       navigate("/login", { replace: true });
     }}
     onCancel={() => setShowSignOut(false)}

@@ -77,7 +77,11 @@ export const tl = {
     pw_err_generic: "Hindi na-update ang password. Suriin ang iyong kasalukuyang password at pakisubukan muli.",
     pw_panel_title: "Palitan ang iyong pansamantalang password",
     pw_panel_body: "Para sa kaligtasan ng iyong account, palitan ang pansamantalang password na natanggap mo ng password na alam mo lamang.",
-    pw_panel_restricted: "Nasa pansamantalang password pa ang iyong account, kaya hindi pa available ang iba pang bahagi ng app hangga't hindi mo ito natatapos."
+    pw_panel_restricted: "Nasa pansamantalang password pa ang iyong account, kaya hindi pa available ang iba pang bahagi ng app hangga't hindi mo ito natatapos.",
+    error_title: "May problema",
+    error_body: "Hindi natuloy ang pag-load ng page na ito dahil sa hindi inaasahang error.",
+    error_reload: "I-reload",
+    error_home: "Bumalik sa home"
   },
   nav: {
     home: "Home",

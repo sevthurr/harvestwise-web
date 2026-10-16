@@ -2,11 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   apiGet,
   apiPost,
-  clearTokens,
-  getAccessToken,
-  getRefreshToken,
   parseResponse,
-  storeTokens,
 } from '../api';
 import { get, set, del } from 'idb-keyval';
 import { clearQueryPersistedCache, queryClient } from '../lib/queryClient';
@@ -44,37 +40,37 @@ export function AuthProvider({ children }) {
 
   // ------------------------------------------------------------------
   // Restore session on mount
-  // - If online: fetch /auth/me, cache user in IndexedDB
-  // - If offline but tokens exist: restore user from IndexedDB cache
-  // - If no tokens: not logged in
+  // - If online: fetch /auth/me (browser sends cookies automatically),
+  //   cache user in IndexedDB
+  // - If offline but cached user exists: restore user from IndexedDB cache
+  // - If not authenticated: not logged in
   // ------------------------------------------------------------------
   useEffect(() => {
     const restore = async () => {
-      const token = getAccessToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const me = await apiGet('/api/v1/auth/me').then(parseResponse);
         setUser(me);
         // Cache user profile for offline restoration
         await set(USER_CACHE_KEY, me);
         seedFarmerOffline(me);
-      } catch {
-        // Network failure (not 401) — try to restore from IndexedDB cache
+      } catch (err) {
+        if (err?.status === 401) {
+          setUser(null);
+          try { await del(USER_CACHE_KEY); } catch {}
+          await clearQueryPersistedCache();
+          return;
+        }
+
+        // Network failure — try to restore from IndexedDB cache
         try {
           const cachedUser = await get(USER_CACHE_KEY);
           if (cachedUser) {
             setUser(cachedUser);
-            // Don't clear tokens — farmer is still "logged in", just offline
+            // Farmer is still "logged in", just offline
           } else {
-            clearTokens();
             setUser(null);
           }
         } catch {
-          clearTokens();
           setUser(null);
         }
       } finally {
@@ -86,16 +82,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ------------------------------------------------------------------
-  // Listen for forced-logout event from the API client.
-  // api.js only dispatches this when the 401'd request actually carried a
-  // token, so an anonymous 401 must never reach here. clearQueryPersistedCache
-  // uses resetQueries() (not clear()) so mounted observers are not stranded.
-  //
-  // Also clears on the browser 'storage' event, which fires when ANOTHER tab
-  // logs out or logs in as someone else. Without it, tab A stays logged in with
-  // user A's tokens while tab B has already switched to user B, and both tabs
-  // read and write the same shared caches. Shared handsets are the norm here,
-  // and this is the path that leaks one farmer's data to the next.
+  // Listen for forced-logout event from the API client (refresh failed).
+  // Also listens on a BroadcastChannel so that logging out in one tab
+  // logs out all other tabs — without it, tab A stays logged in while
+  // tab B has already logged out, and both tabs read/write the same
+  // shared caches. Shared handsets are the norm here.
   // ------------------------------------------------------------------
   useEffect(() => {
     const purge = () => {
@@ -104,25 +95,29 @@ export function AuthProvider({ children }) {
       try { del(USER_CACHE_KEY); } catch {}
     };
     const handleExpiry = () => purge();
-    // A token key changing value in another tab means the session identity
-    // changed underneath us.
-    const handleStorage = (e) => {
-      if (e.key === 'hw_access_token' || e.key === 'hw_refresh_token') purge();
-    };
+
+    let channel;
+    try {
+      channel = new BroadcastChannel('harvestwise-auth');
+      channel.onmessage = (e) => {
+        if (e.data === 'logout') purge();
+      };
+    } catch {
+      // BroadcastChannel not supported — single-tab only
+    }
+
     window.addEventListener('hw:auth:expired', handleExpiry);
-    window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('hw:auth:expired', handleExpiry);
-      window.removeEventListener('storage', handleStorage);
+      if (channel) channel.close();
     };
   }, []);
 
   // ------------------------------------------------------------------
-  // Login: clear prior cache, store tokens, then fetch /me
+  // Login: clear prior cache, fetch /me (cookies already set by backend)
   // ------------------------------------------------------------------
-  const login = async (tokens) => {
+  const login = async () => {
     await clearQueryPersistedCache();
-    storeTokens(tokens);
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
     setUser(me);
     await set(USER_CACHE_KEY, me);
@@ -131,19 +126,26 @@ export function AuthProvider({ children }) {
   };
 
   // ------------------------------------------------------------------
-  // Logout: tell backend, then clear local state regardless of outcome
+  // Logout: tell backend (it clears cookies), clear local state, and
+  // notify other tabs via BroadcastChannel
   // ------------------------------------------------------------------
   const logout = async () => {
-    const refreshToken = getRefreshToken();
     try {
-      await apiPost('/api/v1/auth/logout', { refresh_token: refreshToken });
+      await apiPost('/api/v1/auth/logout', {});
     } catch {
-      // Best-effort — clear tokens locally even if the request fails
+      // Best-effort — clear local state even if the request fails
     } finally {
-      clearTokens();
       setUser(null);
       await clearQueryPersistedCache();
       try { await del(USER_CACHE_KEY); } catch {}
+      // Notify other tabs
+      try {
+        const bc = new BroadcastChannel('harvestwise-auth');
+        bc.postMessage('logout');
+        bc.close();
+      } catch {
+        // BroadcastChannel not supported
+      }
     }
   };
 
