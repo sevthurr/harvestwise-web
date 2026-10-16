@@ -9,6 +9,7 @@ import { normalizePhaseCode, PHASE_CODES } from "../utils/farmerCodes";
 import { apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
@@ -20,8 +21,8 @@ function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const defaultTab = searchParams.get("tab") || "price";
-  const { t } = useLanguage();
+  const { t, effectiveLanguage, langCode } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
   const { crops } = useCrops();
   const crop = crops.find((c) => c.id === cropId);
   if (!crop) {
@@ -144,6 +145,7 @@ function CropFactorsPage() {
     commodityName: crop.commodityName,
     weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
     weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+    lang: currentLang,
   });
   const weatherTabData = {
     risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
@@ -182,14 +184,22 @@ function CropFactorsPage() {
       />
 
       {/* Page title */}
-      <div>
-        <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">
-          {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
-        </h1>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-          {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
-          {phaseLabel ? ` · ${phaseLabel}` : ""}
-        </p>
+      <div className="flex items-center gap-3">
+        <CommodityIllustration
+          commodityId={commodityIdentifier}
+          commodityName={crop.commodityName}
+          baseName={crop.commodityName}
+          className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0"
+        />
+        <div className="min-w-0">
+          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">
+            {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
+          </h1>
+          <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
+            {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
+            {phaseLabel ? ` · ${phaseLabel}` : ""}
+          </p>
+        </div>
       </div>
 
       {/* Factor tabs */}

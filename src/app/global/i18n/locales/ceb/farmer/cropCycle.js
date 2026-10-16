@@ -21,7 +21,7 @@ export const cropCycle = {
   factor_unavailable: "Dili makuha ang datos",
   factor_unavailable_desc: "Dili makarga kini nga impormasyon.",
   factor_loading_desc: "Gisusi ang pinakabag-ong mga rekord.",
-  arrival_high_explanation: "Ang daghang pag-abot karon nagbutang og paubos nga presyur sa presyo sa merkado.",
+  arrival_high_explanation: "Ang daghang pag-abot karon nagbutang og paubos nga presyur sa presyo sa palengke.",
   arrival_stale_explanation: "Gibase kini nga klasipikasyon sa daang mga rekord sa pag-abot; walay datos para sa kasamtangang panahon.",
   arrival_stale_notice: "Kapin na sa 90 ka adlaw ang pinakabag-ong mga rekord sa pag-abot.",
   arrival_moderate_explanation: "Duol sa kasagarang lebel ang bag-ong mga pag-abot.",

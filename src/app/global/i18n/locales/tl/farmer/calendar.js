@@ -43,12 +43,12 @@ export const calendar = {
   selected_date: {
     title: "Arawang Detalye ng Kalendaryo at Pagsasaka",
     weather_note: "Paalala sa panahon",
-    market_note: "Paalala sa merkado",
+    market_note: "Paalala sa palengke",
     expected_harvest: "Inaasahang ani",
     expected_harvest_date: "Inaasahang petsa ng pag-ani",
     check_crop: "Suriin ang pananim na ito",
     payday: "Panahon ng sahod",
-    payday_note: "Panahon ng sahod. Inaasahang mas malakas ang paggastos ng mga konsyumer at ang pangangailangan sa merkado.",
+    payday_note: "Panahon ng sahod. Inaasahang mas malakas ang paggastos ng mga konsyumer at ang pangangailangan sa palengke.",
     no_crop_schedule: "Walang iskedyul ng pananim sa petsang ito.",
     no_weather_note: "Wala pang available na taya ng panahon para sa petsang ito (available para sa susunod na 14 na araw).",
     no_event_note: "Karaniwang araw ng kalakalan. Walang espesyal na kaganapan o holiday.",
@@ -176,7 +176,7 @@ export const calendar = {
     "calendar_refresh_notice": "Maaaring magbago ang kondisyon. Suriin muli ang {crop_name} kapag malapit na ang {planting_month} para sa bagong datos ng presyo, panahon, at personal na kalkulasyon ng kita.",
     "calendar_event_notice": "Ang {event_name} ay sa {date}. Ipinapakita lamang ito para makatulong sa pagpaplano at hindi nito binabago ang rekomendasyon sa pananim.",
     "calendar_holiday_notice": "Ang {holiday_name} ay sa {date}. Para sa impormasyon lamang ito.",
-    "calendar_payday_notice": "Panahon ng sahod: {date}. Ipinapakita lamang ito para makatulong sa pagpaplano sa merkado.",
+    "calendar_payday_notice": "Panahon ng sahod: {date}. Ipinapakita lamang ito para makatulong sa pagpaplano sa palengke.",
     "calendar_info_disclaimer": "Para sa impormasyon lamang ang nasa kalendaryo. Hindi ito nakaaapekto sa rekomendasyon sa pananim."
   },
   "fallbacks": {

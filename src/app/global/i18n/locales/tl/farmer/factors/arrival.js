@@ -27,6 +27,6 @@ export const arrival = {
   "page_title": "Detalye ng Dumating sa DFTC",
   "chart_subtitle_actual": "Aktuwal na dating ani · Nakaraang 90 araw · kg",
   "arrival_action_high": "Batay sa kamakailang dumating sa DFTC, ihambing ang kasalukuyang presyo at suriin ang iyong iskedyul ng pagbebenta.",
-  "arrival_action_low": "Batay sa kamakailang dumating sa DFTC, posibleng tumulong ang mababang dami sa presyo. Kumpirmahin ang kasalukuyang presyo sa merkado bago magbenta.",
+  "arrival_action_low": "Batay sa kamakailang dumating sa DFTC, posibleng tumulong ang mababang dami sa presyo. Kumpirmahin ang kasalukuyang presyo sa palengke bago magbenta.",
   "arrival_action_normal": "Batay sa kamakailang dumating sa DFTC, walang matinding banta sa dami. Patuloy na suriin ang kasalukuyang presyo bago mag-ani o magbenta.",
 };

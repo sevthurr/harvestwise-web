@@ -45,7 +45,9 @@ function AdminNotifications() {
   const { data: notificationsData, isLoading: loading, error: queryErr, refetch } = useQuery({
     queryKey: ["admin-notifications"],
     queryFn: () => listNotifications(1, 50),
-    staleTime: 30 * 1000,
+    refetchOnMount: "always",
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const markReadMutation = useMutation({
@@ -60,7 +62,10 @@ function AdminNotifications() {
 
   const markAllMutation = useMutation({
     mutationFn: () => apiMarkAllRead(),
-    onMutate: () => markReadLocally((notificationsData?.items ?? []).map((item) => item.id)),
+    onMutate: () => {
+      markReadLocally((notificationsData?.items ?? []).map((item) => item.id));
+      queryClient.setQueryData(["notifications", "unread-count"], 0);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
@@ -72,12 +77,6 @@ function AdminNotifications() {
     queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
   });
-
-  useEffect(() => {
-    if (typeof notificationsData?.unread_count === "number") {
-      queryClient.setQueryData(["notifications", "unread-count"], notificationsData.unread_count);
-    }
-  }, [notificationsData?.unread_count, queryClient]);
 
   const notifications = useMemo(() => {
     if (!notificationsData?.items) return [];
@@ -104,10 +103,20 @@ function AdminNotifications() {
     0,
     (notificationsData?.unread_count ?? notifications.filter((n) => !n.read).length) - pendingLocal,
   );
+  const serverUnreadCount = notificationsData?.unread_count ?? 0;
+  const hasUnread = unreadCount > 0 || serverUnreadCount > 0 || notifications.some((n) => !n.read);
+
+  useEffect(() => {
+    if (typeof notificationsData?.unread_count === "number") {
+      const effectiveUnread = Math.max(0, notificationsData.unread_count - pendingLocal);
+      queryClient.setQueryData(["notifications", "unread-count"], effectiveUnread);
+    }
+  }, [notificationsData?.unread_count, pendingLocal, queryClient]);
+
   const error = queryErr ? (queryErr.message || "Could not load notifications.") : "";
 
   const handleCardClick = (alert) => {
-    if (!alert.read) {
+    if (!alert.rawItem?.read_at && !alert.rawItem?.read) {
       markReadMutation.mutate(alert.id);
     }
     const targetRoute = resolveNotificationRoute(alert.rawItem || alert, "Admin");
@@ -126,7 +135,7 @@ function AdminNotifications() {
         title="Notifications"
         description="Stay updated on data submissions, pipeline status, and system alerts."
         action={
-          unreadCount > 0 ? (
+          hasUnread ? (
             <button
               type="button"
               onClick={handleMarkAllRead}

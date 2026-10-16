@@ -2,7 +2,9 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect, useMemo } from "react";
 import {
   ChevronDown,
-  Info
+  Info,
+  AlertCircle,
+  X
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -510,14 +512,22 @@ const ForecastChart = ({
   );
 };
 
+function getUrlParam(key) {
+  if (typeof window === "undefined" || !window.location || !window.location.search) return null;
+  return new URLSearchParams(window.location.search).get(key);
+}
+
 function AdminForecasting() {
+  const alertParam = getUrlParam("alert") || getUrlParam("error");
+  const [dismissedAlert, setDismissedAlert] = useState(false);
+
   const [pairs, setPairs] = useState(FALLBACK_PAIRS);
   const [markets, setMarkets] = useState(FALLBACK_MARKETS);
   const [priceTypes, setPriceTypes] = useState(FALLBACK_PRICE_TYPES);
   const [horizonOptions, setHorizonOptions] = useState(HORIZON_LABELS);
 
-  const [commodity, setCommodity] = useState("Ampalaya");
-  const [variety, setVariety] = useState("Galaxy");
+  const [commodity, setCommodity] = useState(() => getUrlParam("commodity") || "Ampalaya");
+  const [variety, setVariety] = useState(() => getUrlParam("variety") || "Galaxy");
   const [market, setMarket] = useState("Bankerohan");
   const [priceType, setPriceType] = useState("Retail");
   const [historicalRange, setHistoricalRange] = useState("7 days");
@@ -682,6 +692,25 @@ function AdminForecasting() {
         title="Forecasting"
         description="Review automatically generated short-term vegetable price forecasts used for Price Outlook."
       />
+
+      {alertParam && !dismissedAlert && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 flex items-center justify-between shadow-[var(--shadow-xs)]">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-900">Pipeline Alert: Forecasting</p>
+              <p className="text-[12px] text-amber-800 mt-0.5">{alertParam}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDismissedAlert(true)}
+            className="text-amber-700 hover:text-amber-900 p-1 rounded-lg hover:bg-amber-100/60 transition-colors cursor-pointer"
+            title="Dismiss alert"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">

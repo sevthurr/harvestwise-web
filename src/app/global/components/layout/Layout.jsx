@@ -83,6 +83,9 @@ const Layout = () => {
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    if (location.pathname.includes("/notifications")) {
+      queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
+    }
   }, [location.pathname, queryClient]);
 
   // ── SSE: react to NOTIFICATION_CREATED events ──────────────────────────

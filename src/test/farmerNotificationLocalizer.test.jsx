@@ -39,7 +39,7 @@ describe('Farmer Notification Dynamic Localization & Fallback', () => {
     const tTl = (key, params, fallback) => t(key, params, 'tl') || fallback;
     const { title, body } = localizeFarmerNotification(priceItem, tTl, 'tl');
     expect(title).toBe('Tumaas ang presyo ng Kamatis');
-    expect(body).toBe('Ang pinakahuling presyo sa merkado para sa Kamatis ay 55.00 PHP/kg, tumaas mula 50.00 PHP/kg.');
+    expect(body).toBe('Ang pinakahuling presyo sa palengke para sa Kamatis ay 55.00 PHP/kg, tumaas mula 50.00 PHP/kg.');
   });
 
   it('runtime language switch re-renders existing notification without database change', () => {
@@ -80,7 +80,7 @@ describe('Farmer Notification Dynamic Localization & Fallback', () => {
     // TL: Title and Body must be Filipino
     const tl = localizeFarmerNotification(atsalUpdate, tTl, 'tl');
     expect(tl.title).toBe('Bagong presyo para sa Atsal (Sultan)');
-    expect(tl.body).toBe('Ang na-update na presyo sa merkado para sa Atsal (Sultan) ay available na simula 2026-09-19.');
+    expect(tl.body).toBe('Ang na-update na presyo sa palengke para sa Atsal (Sultan) ay available na simula 2026-09-19.');
   });
 
   it('localizes weather_alert, harvest_reminder, and planting_advisory in EN, CEB, and TL', () => {

@@ -158,7 +158,7 @@ describe("Farmer Crop Calendar Page", () => {
     expect(await screen.findByText(/Light rain|Gamay nga ulan/i)).toBeInTheDocument();
     expect(screen.getByText(/Heavy rain|Kusog nga ulan/i)).toBeInTheDocument();
     expect(screen.getByText(/Hot days|Init nga mga adlaw/i)).toBeInTheDocument();
-    expect(screen.getByText(/Events|Mga Hitabo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Events|Mga Events/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^Crop schedule$|^Iskedyul sa tanom$/i).length).toBeGreaterThanOrEqual(1);
   });
 

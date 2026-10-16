@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useLocation } from "react-router";
+import { useNavigate, useLocation, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   PenLine,
@@ -73,7 +73,35 @@ function Pagination({ page, total, pageSize = PAGE_SIZE, onChange }) {
 export default function DFTCInput() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const todayStr = getLocalDateString();
+
+  const highlightParam = searchParams.get("highlight");
+  const [highlightedDraftId, setHighlightedDraftId] = useState(highlightParam);
+
+  // 3-second temporary highlight timer (matching Good crops to plant pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedDraftId(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedDraftId(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+
+  // Smooth scroll to highlighted draft or section
+  useEffect(() => {
+    if (!highlightedDraftId) return;
+    const timer = setTimeout(() => {
+      const el =
+        document.getElementById(`draft-row-${highlightedDraftId}`) ||
+        document.getElementById("dftc-drafts-section");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [highlightedDraftId]);
 
   const [successMessage, setSuccessMessage] = useState(() => {
     const state = location.state;
@@ -257,8 +285,72 @@ export default function DFTCInput() {
       }
     }
 
+    // 4. Fallback if navigated with highlight parameter and draft not yet present
+    const highlightLower = (highlightParam || "").toLowerCase();
+    const hasPriceDraft = drafts.some(
+      (d) => d.id === "local-price-draft" || d.dataType.toLowerCase().includes("price")
+    );
+    if (
+      !hasPriceDraft &&
+      (highlightLower === "price" ||
+        highlightLower === "local-price-draft" ||
+        highlightLower.includes("price"))
+    ) {
+      let dateFormatted = todayStr;
+      try {
+        const d = new Date(todayStr + "T00:00:00");
+        dateFormatted = d.toLocaleDateString("en-PH", {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        });
+      } catch {}
+      drafts.push({
+        id: "local-price-draft",
+        route: "/dftc/price-input",
+        dataName: `DFTC Price Monitoring — ${dateFormatted}`,
+        dataType: "Daily Price Monitoring",
+        market: "Bankerohan & DFTC Taboan",
+        submissionMethod: "Manual Input",
+        savedDate: "Unsaved Draft",
+        records: todayReportRecordCount || 10,
+        draftData: null
+      });
+    }
+
+    const hasArrivalDraft = drafts.some(
+      (d) => d.id === "local-arrival-draft" || d.dataType.toLowerCase().includes("arrival")
+    );
+    if (
+      !hasArrivalDraft &&
+      (highlightLower === "arrival" ||
+        highlightLower === "local-arrival-draft" ||
+        highlightLower.includes("arrival"))
+    ) {
+      let dateFormatted = todayStr;
+      try {
+        const d = new Date(todayStr + "T00:00:00");
+        dateFormatted = d.toLocaleDateString("en-PH", {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        });
+      } catch {}
+      drafts.push({
+        id: "local-arrival-draft",
+        route: "/dftc/arrival-input",
+        dataName: `DFTC Arrival Volume — ${dateFormatted}`,
+        dataType: "DFTC Arrival Volume",
+        market: "DFTC Taboan",
+        submissionMethod: "Manual Input",
+        savedDate: "Unsaved Draft",
+        records: 10,
+        draftData: null
+      });
+    }
+
     return drafts;
-  }, [rawSubmissions, todayStr]);
+  }, [rawSubmissions, todayStr, todayReportRecordCount, highlightParam]);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -395,7 +487,7 @@ export default function DFTCInput() {
       </div>
 
       {/* Today's Draft */}
-      <div className="space-y-4">
+      <div className="space-y-4" id="dftc-drafts-section">
         <div>
           <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">Today's Draft</h2>
           <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
@@ -421,27 +513,47 @@ export default function DFTCInput() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                {draftList.map((draft) => (
-                  <tr
-                    key={draft.id}
-                    onClick={() => handleSelectDraft(draft)}
-                    className="hover:bg-amber-50/40 cursor-pointer transition-colors"
-                  >
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] text-[var(--hw-neutral-900)] font-medium">{draft.dataName}</span>
-                        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
-                          Draft
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.dataType}</td>
-                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.market}</td>
-                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.submissionMethod}</td>
-                    <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
-                    <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
-                  </tr>
-                ))}
+                {draftList.map((draft) => {
+                  const param = (highlightedDraftId || "").toLowerCase();
+                  const draftId = (draft.id || "").toLowerCase();
+                  const dataType = (draft.dataType || "").toLowerCase();
+                  const isHighlighted = Boolean(
+                    highlightedDraftId &&
+                    (draftId === param ||
+                      (param.includes("price") && (draftId.includes("price") || dataType.includes("price"))) ||
+                      (param.includes("arrival") && (draftId.includes("arrival") || dataType.includes("arrival"))) ||
+                      draftId.includes(param))
+                  );
+
+                  return (
+                    <tr
+                      key={draft.id}
+                      id={`draft-row-${draft.id}`}
+                      onClick={() => handleSelectDraft(draft)}
+                      className={`cursor-pointer transition-all duration-700 ease-out ${
+                        isHighlighted
+                          ? "bg-emerald-50/90 font-medium"
+                          : "hover:bg-amber-50/40"
+                      }`}
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[13px] ${isHighlighted ? "text-[var(--hw-green-800)] font-bold" : "text-[var(--hw-neutral-900)] font-medium"}`}>
+                            {draft.dataName}
+                          </span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                            Draft
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.dataType}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.market}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.submissionMethod}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
+                      <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

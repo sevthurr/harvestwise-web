@@ -133,6 +133,22 @@ export const NOTIFICATION_CATEGORIES = {
     bg: "bg-amber-50",
     urgency: "attention",
   },
+  manual_price_entry: {
+    Icon: PhilippinePeso,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+    urgency: "information",
+    actionLabel: "View Draft",
+    reason: "A manual price entry was submitted today.",
+  },
+  manual_arrival_entry: {
+    Icon: Boxes,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    urgency: "information",
+    actionLabel: "View Draft",
+    reason: "A manual arrival volume entry was submitted today.",
+  },
   submission_accepted: {
     Icon: CircleCheck,
     color: "text-emerald-600",

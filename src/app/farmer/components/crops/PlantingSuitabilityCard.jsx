@@ -121,8 +121,14 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
       seen.add(cname);
 
       const profile = DEFAULT_RECOMMENDED_PROFILES[cid] || {};
+      const startMonthIndex = rec.planting_window_start ? new Date(rec.planting_window_start).getMonth() : null;
+      const startMonthName = startMonthIndex != null ? monthNames[startMonthIndex] : null;
+      const startMonthLocalized = startMonthName ? t(`farmer.calendar.months.${startMonthName}`, {}, rawMonthNames[startMonthIndex]) : localizedMonth;
+      const startDay = rec.planting_window_start ? new Date(rec.planting_window_start).getDate() : 1;
+      const endDay = rec.planting_window_end ? new Date(rec.planting_window_end).getDate() : 20;
+
       const plantWindowStr = rec.planting_window_start && rec.planting_window_end
-        ? `${new Date(rec.planting_window_start).toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${new Date(rec.planting_window_end).getDate()}`
+        ? `${startMonthLocalized} ${startDay}–${endDay}`
         : profile.plantWindow
         ? profile.plantWindow(localizedMonth)
         : `${localizedMonth} 1–20`;

@@ -142,6 +142,9 @@ function DFTCLayoutInner() {
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    if (location.pathname.includes("/notifications")) {
+      queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+    }
   }, [location.pathname, queryClient]);
 
   useNotificationEvent("NOTIFICATION_CREATED", () => {

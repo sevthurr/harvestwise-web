@@ -44,7 +44,9 @@ function DFTCNotifications() {
   const { data: notificationsData, isLoading, error, refetch } = useQuery({
     queryKey: ["dftc-notifications"],
     queryFn: () => listNotifications(1, 50),
-    staleTime: 30 * 1000,
+    refetchOnMount: "always",
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const markReadMutation = useMutation({
@@ -58,7 +60,10 @@ function DFTCNotifications() {
 
   const markAllMutation = useMutation({
     mutationFn: () => apiMarkAllRead(),
-    onMutate: () => markReadLocally((notificationsData?.items ?? []).map((item) => item.id)),
+    onMutate: () => {
+      markReadLocally((notificationsData?.items ?? []).map((item) => item.id));
+      queryClient.setQueryData(["notifications", "unread-count"], 0);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
@@ -74,12 +79,6 @@ function DFTCNotifications() {
   );
   useNotificationEvent("NOTIFICATION_CREATED", invalidateFeed);
   useNotificationEvent("DATASET_INGESTED", invalidateFeed);
-
-  useEffect(() => {
-    if (typeof notificationsData?.unread_count === "number") {
-      queryClient.setQueryData(["notifications", "unread-count"], notificationsData.unread_count);
-    }
-  }, [notificationsData?.unread_count, queryClient]);
 
   const notifications = useMemo(() => {
     if (!notificationsData?.items) return [];
@@ -108,9 +107,18 @@ function DFTCNotifications() {
     0,
     (notificationsData?.unread_count ?? notifications.filter((n) => !n.read).length) - pendingLocal,
   );
+  const serverUnreadCount = notificationsData?.unread_count ?? 0;
+  const hasUnread = unreadCount > 0 || serverUnreadCount > 0 || notifications.some((n) => !n.read);
+
+  useEffect(() => {
+    if (typeof notificationsData?.unread_count === "number") {
+      const effectiveUnread = Math.max(0, notificationsData.unread_count - pendingLocal);
+      queryClient.setQueryData(["notifications", "unread-count"], effectiveUnread);
+    }
+  }, [notificationsData?.unread_count, pendingLocal, queryClient]);
 
   const handleCardClick = (alert) => {
-    if (!alert.read) {
+    if (!alert.rawItem?.read_at && !alert.rawItem?.read) {
       markReadMutation.mutate(alert.id);
     }
     const targetRoute = resolveNotificationRoute(alert.rawItem || alert, "DFTC");
@@ -129,7 +137,7 @@ function DFTCNotifications() {
         title="Notifications"
         description="Stay updated on data submissions, validation outcomes, and market trends."
         action={
-          unreadCount > 0 ? (
+          hasUnread ? (
             <button
               type="button"
               onClick={handleMarkAllRead}

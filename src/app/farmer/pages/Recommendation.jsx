@@ -59,13 +59,22 @@ function forecastMarkerType(f) {
     condition.includes("lightning") ||
     condition.includes("thunder") ||
     condition.includes("severe") ||
-    rainfall >= 15 ||
+    rainfall >= 10 ||
     condition.includes("heavy rain")
   ) {
     return "storm";
   }
 
-  // 2. Light rain / passing showers
+  // 2. Hot days (Above normal temperature: tempMax >= 31°C with low precipitation)
+  if (
+    condition.includes("heat") ||
+    condition.includes("hot") ||
+    (tempMax >= 31 && rainfall < 3.0)
+  ) {
+    return "heat";
+  }
+
+  // 3. Light rain / passing showers
   if (
     rainfall >= 1.0 ||
     rainProb >= 50 ||
@@ -74,15 +83,6 @@ function forecastMarkerType(f) {
     condition.includes("shower")
   ) {
     return "rain";
-  }
-
-  // 3. Hot days
-  if (
-    condition.includes("heat") ||
-    condition.includes("hot") ||
-    tempMax >= 32
-  ) {
-    return "heat";
   }
 
   // Normal weather displays no marker icon on calendar cells
@@ -310,11 +310,11 @@ function hasAnyMarker(m) {
   return !!(m.crop || m.weather || m.hasEvent || m.event || m.payday);
 }
 
-const WIcon = ({ type, cls }) => {
-  if (type === "storm") return <TwoToneStormIcon className={cls} />;
-  if (type === "rain") return <CloudRain className={cls} />;
-  if (type === "heat") return <Sun className={cls} />;
-  return <CloudSun className={cls} />;
+const WIcon = ({ type }) => {
+  if (type === "storm") return <span className="text-[14px] leading-none select-none" role="img" aria-label="heavy rain">⛈️</span>;
+  if (type === "rain") return <span className="text-[14px] leading-none select-none" role="img" aria-label="light rain">🌦️</span>;
+  if (type === "heat") return <span className="text-[14px] leading-none select-none" role="img" aria-label="hot day">☀️</span>;
+  return <span className="text-[14px] leading-none select-none" role="img" aria-label="weather">⛅</span>;
 };
 
 const weatherColor = (type, selected = false) => {
@@ -432,12 +432,13 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
               {marked && (
                 <div className="flex items-center justify-center gap-1 sm:gap-1.5 px-0.5">
                   {m.crop && (
-                    <CommodityIllustration
-                      commodityId={m.crop.id}
-                      commodityName={m.crop.name}
-                      baseName={m.crop.name}
-                      className={`w-5.5 h-5.5 flex-shrink-0 transition-transform ${isSelected ? "brightness-110 drop-shadow-sm" : ""}`}
-                    />
+                    <span
+                      className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0"
+                      role="img"
+                      aria-label="crop schedule"
+                    >
+                      🌱
+                    </span>
                   )}
                   {m.weather && (
                     <WIcon
@@ -446,9 +447,13 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
                     />
                   )}
                   {m.hasEvent && (
-                    <CalendarClock
-                      className={`w-4 h-4 flex-shrink-0 ${isSelected ? "text-white/90" : "text-emerald-600"}`}
-                    />
+                    <span
+                      className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0"
+                      role="img"
+                      aria-label="events"
+                    >
+                      📅
+                    </span>
                   )}
                 </div>
               )}
@@ -777,26 +782,42 @@ function RecommendationPage() {
       seen.add(cname);
 
       const profile = DEFAULT_RECOMMENDED_PROFILES[cid] || {};
+      const startMonthIndex = rec.planting_window_start ? new Date(rec.planting_window_start).getMonth() : null;
+      const startMonthName = startMonthIndex != null ? MONTH_NAMES[startMonthIndex] : null;
+      const startMonthLocalized = startMonthName ? t(`farmer.calendar.months.${startMonthName.toLowerCase()}`, {}, startMonthName) : localizedMonth;
+      const startDay = rec.planting_window_start ? new Date(rec.planting_window_start).getDate() : 1;
+      const endDay = rec.planting_window_end ? new Date(rec.planting_window_end).getDate() : 20;
+
       const plantWindowStr = rec.planting_window_start && rec.planting_window_end
-        ? `${new Date(rec.planting_window_start).toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${new Date(rec.planting_window_end).getDate()}`
+        ? `${startMonthLocalized} ${startDay}–${endDay}`
         : profile.plantWindow
         ? profile.plantWindow(localizedMonth)
         : `${localizedMonth} 1–20`;
 
-      const harvestWindowStr = rec.harvest_window_start
-        ? new Date(rec.harvest_window_start).toLocaleDateString("en-US", { month: "long" })
+      const harvestMonthIndex = rec.harvest_window_start ? new Date(rec.harvest_window_start).getMonth() : null;
+      const harvestMonthName = harvestMonthIndex != null ? MONTH_NAMES[harvestMonthIndex] : null;
+      const harvestMonthLocalized = harvestMonthName
+        ? t(`farmer.calendar.months.${harvestMonthName.toLowerCase()}`, {}, harvestMonthName)
         : profile.harvestWindow
         ? profile.harvestWindow(rawMonthName, t)
         : t("farmer.calendar.months.november", {}, "November");
 
+      const harvestWindowStr = harvestMonthLocalized;
+
+      const fallbackWeatherNote = rec.weather_risk_level === "severe"
+        ? t("farmer.factors.weather.insight_severe", { crop_name: cname }, "Severe weather conditions expected; postpone planting.")
+        : rec.weather_risk_level === "caution"
+        ? t("farmer.factors.weather.insight_caution", { crop_name: cname }, "Mixed conditions; monitor weather carefully.")
+        : t("farmer.factors.weather.insight_suitable", { crop_name: cname }, "Conditions suitable for planting.");
+
       const factors = profile.factors
         ? profile.factors(rawMonthName, rawMonthShort, t)
         : {
-            price: rec.price_outlook ? `Price outlook is classified as ${rec.price_outlook}.` : "Stable market price trend.",
-            supply: rec.arrival_pressure ? `Arrival pressure is ${rec.arrival_pressure}.` : "Moderate supply pressure.",
-            production: rec.historical_seasonal_production_level ? `${harvestWindowStr} supply expected to be ${rec.historical_seasonal_production_level}.` : "Moderate seasonal production.",
-            weather: rec.weather_risk_level ? `Weather conditions evaluated as ${rec.weather_risk_level}.` : "Conditions suitable for planting.",
-            profit: rec.profitability ? `Estimated profitability is ${rec.profitability}.` : "Favorable margin compared to estimated production costs.",
+            price: rec.price_outlook ? `Price outlook: ${rec.price_outlook}.` : "Stable market price trend.",
+            supply: rec.arrival_pressure ? `Arrival pressure: ${rec.arrival_pressure}.` : "Moderate supply pressure.",
+            production: `${harvestWindowStr}: ${rec.historical_seasonal_production_level || "moderate"}.`,
+            weather: fallbackWeatherNote,
+            profit: rec.profitability ? `Profitability: ${rec.profitability}.` : "Favorable margin compared to costs.",
           };
 
       const factorLevels = {
@@ -966,24 +987,24 @@ function RecommendationPage() {
           {/* Legend matching weather cards, events, and crop milestones */}
           <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-5 pt-3.5 border-t border-[var(--hw-neutral-100)] text-[12px] text-[var(--hw-neutral-700)]">
             <div className="flex items-center gap-1.5">
-              <CloudRain className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="light rain">🌦️</span>
               <span>{t("farmer.calendar.legend.light_rain", {}, "Light rain")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <TwoToneStormIcon className="w-4 h-4 flex-shrink-0" />
+              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="heavy rain">⛈️</span>
               <span>{t("farmer.calendar.legend.heavy_rain", {}, "Heavy rain")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Sun className="w-4 h-4 text-orange-500 flex-shrink-0" />
+              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="hot days">☀️</span>
               <span>{t("farmer.calendar.legend.hot_days", {}, "Hot days")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CalendarClock className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>{t("farmer.calendar.legend.events", {}, "Events")}</span>
+              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="events">📅</span>
+              <span>{t("farmer.calendar.legend.events", {}, "Mga Events")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Sprout className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>{t("farmer.calendar.legend.crop_schedule", {}, "Crop schedule")}</span>
+              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="crop schedule">🌱</span>
+              <span>{t("farmer.calendar.legend.crop_schedule", {}, "Iskedyul sa tanom")}</span>
             </div>
           </div>
         </div>
@@ -1030,7 +1051,7 @@ function RecommendationPage() {
                 id={`recommended-crop-${crop.id}`}
                 className={`bg-white rounded-2xl border p-5 space-y-4 transition-all duration-700 ease-out ${
                   isHighlighted
-                    ? "ring-4 ring-[var(--hw-green-600)] ring-offset-2 border-[var(--hw-green-600)] bg-emerald-50/70 shadow-lg scale-[1.01]"
+                    ? "bg-emerald-50/70 border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
                     : "border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
                 }`}
               >
@@ -1146,7 +1167,21 @@ function RecommendationPage() {
                         <div className="pt-2">
                           <button
                             type="button"
-                            onClick={() => navigate("/farmer/market/factors", { state: { commodityId: crop.id, commodityName: crop.name } })}
+                            onClick={() =>
+                              navigate("/farmer/market/factors", {
+                                state: {
+                                  commodityId: crop.id,
+                                  commodityName: crop.name,
+                                  backPath: "/farmer/market",
+                                  backLabel: t("nav.market", {}, "Market"),
+                                  breadcrumbs: [
+                                    { label: t("nav.market", {}, "Market"), path: "/farmer/market" },
+                                    { label: crop.name },
+                                    { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") },
+                                  ],
+                                },
+                              })
+                            }
                             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
                           >
                             {t("farmer.calendar.view_detailed_factors", {}, "View detailed factors")}

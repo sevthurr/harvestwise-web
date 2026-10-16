@@ -41,9 +41,32 @@ const TwoToneStormIcon = ({ className }) => (
 );
 
 export function WeatherGlyph({ type, className = "" }) {
-  if (type === "rain") return <CloudRain className={className} />;
-  if (type === "storm") return <TwoToneStormIcon className={className} />;
-  return <Sun className={className} />;
+  if (type === "storm") {
+    return (
+      <span className={`text-[14px] leading-none select-none inline-flex items-center justify-center ${className}`} role="img" aria-label="heavy rain">
+        ⛈️
+      </span>
+    );
+  }
+  if (type === "rain") {
+    return (
+      <span className={`text-[14px] leading-none select-none inline-flex items-center justify-center ${className}`} role="img" aria-label="light rain">
+        🌦️
+      </span>
+    );
+  }
+  if (type === "heat" || type === "sun") {
+    return (
+      <span className={`text-[14px] leading-none select-none inline-flex items-center justify-center ${className}`} role="img" aria-label="hot day">
+        ☀️
+      </span>
+    );
+  }
+  return (
+    <span className={`text-[14px] leading-none select-none inline-flex items-center justify-center ${className}`} role="img" aria-label="weather">
+      ⛅
+    </span>
+  );
 }
 
 const WEATHER_TONE = {
@@ -60,12 +83,13 @@ function MarkerIcon({ icon, selected }) {
   if (icon.kind === "crop") {
     return (
       <span className={slot} aria-hidden="true">
-        <CommodityIllustration
-          commodityId={icon.id}
-          commodityName={icon.name}
-          baseName={icon.name}
-          className={`${CELL_ICON_ART} ${selected ? "opacity-90" : ""}`}
-        />
+        <span
+          className="text-[13px] leading-none select-none inline-flex items-center justify-center"
+          role="img"
+          aria-label="crop schedule"
+        >
+          🌱
+        </span>
       </span>
     );
   }
@@ -84,9 +108,13 @@ function MarkerIcon({ icon, selected }) {
   if (icon.kind === "event") {
     return (
       <span className={slot} aria-hidden="true">
-        <CalendarClock
-          className={`${stroke} ${selected ? "text-white/85" : "text-emerald-600"}`}
-        />
+        <span
+          className="text-[13px] leading-none select-none inline-flex items-center justify-center"
+          role="img"
+          aria-label="event"
+        >
+          📅
+        </span>
       </span>
     );
   }
