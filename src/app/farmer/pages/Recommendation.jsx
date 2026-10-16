@@ -713,7 +713,7 @@ function RecommendationPage() {
 
   // Monthly crop recommendations
   const formattedRefMonth = `${viewYear}-${String(viewMonth).padStart(2, "0")}-01`;
-  const { data: recommendationsData } = useQuery({
+  const { data: recommendationsData, isLoading: recommendationsLoading } = useQuery({
     queryKey: ["monthly-recommendations", formattedRefMonth],
     queryFn: async () => {
       const res = await apiGet(`/market/monthly-recommendations?reference_month=${formattedRefMonth}`);
@@ -810,15 +810,26 @@ function RecommendationPage() {
         ? t("farmer.factors.weather.insight_caution", { crop_name: cname }, "Mixed conditions; monitor weather carefully.")
         : t("farmer.factors.weather.insight_suitable", { crop_name: cname }, "Conditions suitable for planting.");
 
-      const factors = profile.factors
-        ? profile.factors(rawMonthName, rawMonthShort, t)
-        : {
-            price: rec.price_outlook ? `Price outlook: ${rec.price_outlook}.` : "Stable market price trend.",
-            supply: rec.arrival_pressure ? `Arrival pressure: ${rec.arrival_pressure}.` : "Moderate supply pressure.",
-            production: `${harvestWindowStr}: ${rec.historical_seasonal_production_level || "moderate"}.`,
-            weather: fallbackWeatherNote,
-            profit: rec.profitability ? `Profitability: ${rec.profitability}.` : "Favorable margin compared to costs.",
-          };
+      // Factor text always comes from the stored recommendation row so the
+      // calendar shows the current factors. The old hardcoded per-crop copy
+      // (DEFAULT_RECOMMENDED_PROFILES.factors) must never override real data.
+      const factors = {
+        price: rec.price_outlook
+          ? t("farmer.calendar.factor_price_outlook", { level: rec.price_outlook }, `Price outlook: ${rec.price_outlook}.`)
+          : t("farmer.calendar.factor_price_stable", {}, "Stable market price trend."),
+        supply: rec.arrival_pressure
+          ? t("farmer.calendar.factor_arrival_pressure", { level: rec.arrival_pressure }, `Arrival pressure: ${rec.arrival_pressure}.`)
+          : t("farmer.calendar.factor_arrival_moderate", {}, "Moderate supply pressure."),
+        production: t(
+          "farmer.calendar.factor_production_level",
+          { harvest_month: harvestWindowStr, level: rec.historical_seasonal_production_level || "moderate" },
+          `Seasonal production around ${harvestWindowStr}: ${rec.historical_seasonal_production_level || "moderate"}.`
+        ),
+        weather: fallbackWeatherNote,
+        profit: rec.profitability
+          ? t("farmer.calendar.factor_profitability", { level: rec.profitability }, `Profitability: ${rec.profitability}.`)
+          : t("farmer.calendar.factor_profit_favorable", {}, "Favorable margin compared to costs."),
+      };
 
       const factorLevels = {
         price: rec.price_outlook || "favorable",
@@ -841,8 +852,12 @@ function RecommendationPage() {
       });
     }
 
-    // If no recommended crops exist in the database for this month, fallback to the curated list
-    if (result.length === 0) {
+    // Fallback to the curated list only when the API has finished loading and
+    // returned no rows at all. It must NOT fire just because no crop is
+    // "Recommended" (the stored advisory is the authority), and it must NOT
+    // fire while the request is still in flight — that flash renders fabricated
+    // "good crops" with invented factors before the real data arrives.
+    if (!recommendationsLoading && rawRecommendations.length === 0) {
       const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
       defaultIds.forEach((cid) => {
         const p = DEFAULT_RECOMMENDED_PROFILES[cid];
@@ -870,7 +885,7 @@ function RecommendationPage() {
     }
 
     return result;
-  }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, t]);
+  }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, recommendationsLoading, t]);
 
   // Auto-scroll and expand accordion for highlighted crop
   useEffect(() => {
@@ -1037,6 +1052,21 @@ function RecommendationPage() {
         </div>
 
         <div className="space-y-3">
+          {recommendationsLoading ? (
+            <>
+              <Skeleton className="h-28 rounded-2xl" />
+              <Skeleton className="h-28 rounded-2xl" />
+            </>
+          ) : recommendedCrops.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 text-center space-y-1">
+              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                {t("farmer.calendar.empty_recommendations_title", {}, "No crop recommendations available yet.")}
+              </p>
+              <p className="text-[13px] text-[var(--hw-neutral-700)]">
+                {t("farmer.calendar.empty_recommendations_helper", {}, "There is not enough data yet to provide a recommendation for this month.")}
+              </p>
+            </div>
+          ) : null}
           {recommendedCrops.map((crop) => {
             const isExpanded = expandedCropId === crop.id;
             const isHighlighted = Boolean(

@@ -142,8 +142,10 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
       });
     }
 
-    // Fallback if none in database for this month (same as Market Calendar)
-    if (result.length === 0) {
+    // Fallback only when the API returned no rows at all. It must NOT fire just
+    // because no crop is "Recommended" — that would surface an "Avoid for Now"
+    // crop as a good one (same defect as the Market Calendar page).
+    if (rawRecommendations.length === 0) {
       const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
       defaultIds.forEach((cid) => {
         const p = DEFAULT_RECOMMENDED_PROFILES[cid];

@@ -21,6 +21,7 @@ function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") || "price";
   const { t, effectiveLanguage, langCode } = useLanguage();
   const currentLang = effectiveLanguage || langCode || "ceb";
   const { crops } = useCrops();
