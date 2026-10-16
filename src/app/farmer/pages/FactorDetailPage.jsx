@@ -82,6 +82,68 @@ function FactorDetailPage() {
       || commodityId;
   }, [catalogPairs, commodityId, commodityName]);
 
+  const cropStage =
+    state?.cropStage ||
+    state?.crop_stage ||
+    state?.stage ||
+    state?.phase ||
+    state?.advisoryPayload?.crop_stage ||
+    state?.resultData?.cropStage ||
+    state?.resultData?.crop_stage ||
+    state?.resultData?.phase ||
+    state?.resultData?.stage ||
+    null;
+
+  const plantingDate =
+    state?.plantingDate ||
+    state?.planting_date ||
+    state?.resultData?.plantingDate ||
+    state?.resultData?.planting_date ||
+    state?.advisoryPayload?.planting_date ||
+    null;
+
+  const expectedHarvestDate =
+    state?.expectedHarvestDate ||
+    state?.expected_harvest_date ||
+    state?.resultData?.harvestDate ||
+    state?.resultData?.expectedHarvestDate ||
+    state?.resultData?.expected_harvest_date ||
+    state?.advisoryPayload?.expected_harvest_date ||
+    null;
+
+  const plantingSeason =
+    state?.plantingSeason ||
+    state?.planting_season ||
+    state?.resultData?.plantingSeason ||
+    state?.resultData?.season ||
+    null;
+
+  const moduleResults =
+    state?.moduleResults ||
+    state?.module_results ||
+    state?.advisoryPayload?.module_results ||
+    null;
+
+  const plantingWindowStart =
+    state?.plantingWindowStart ||
+    state?.planting_window_start ||
+    state?.advisoryPayload?.planting_window_start ||
+    moduleResults?.planting_window_start ||
+    null;
+
+  const plantingWindowEnd =
+    state?.plantingWindowEnd ||
+    state?.planting_window_end ||
+    state?.advisoryPayload?.planting_window_end ||
+    moduleResults?.planting_window_end ||
+    null;
+
+  const plantingWindowLabel =
+    state?.plantingWindowLabel ||
+    state?.planting_window_label ||
+    state?.advisoryPayload?.planting_window_label ||
+    moduleResults?.planting_window_label ||
+    null;
   const arrivalPressureQuery = useQuery({
     queryKey: ["farmer", "arrival-pressure", resolvedCommodityId],
     queryFn: () => analyticsApi.getArrivalPressure(resolvedCommodityId),
@@ -334,6 +396,14 @@ function FactorDetailPage() {
         defaultTab={defaultTab}
         commodityId={commodityId}
         commodityName={commodityName}
+        cropStage={cropStage}
+        plantingDate={plantingDate}
+        expectedHarvestDate={expectedHarvestDate}
+        plantingSeason={plantingSeason}
+        moduleResults={moduleResults}
+        plantingWindowStart={plantingWindowStart}
+        plantingWindowEnd={plantingWindowEnd}
+        plantingWindowLabel={plantingWindowLabel}
       />
     </div>
   );

@@ -45,10 +45,10 @@ const ARRIVAL_SOURCE_OPTIONS = [
 // always one point per month wearing a day label. Monthly is the only
 // granularity the DFTC workbook can actually supply.
 const ARRIVAL_GRANULARITY_OPTIONS = [
-  { value: "weekly",    label: "Weekly" },
-  { value: "monthly",   label: "Monthly" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
-  { value: "annually",  label: "Annually" },
+  { value: "annually", label: "Annually" },
 ];
 const ARRIVAL_CLASSIFICATION_TONES = {
   Low: "bg-blue-100 border-blue-200 text-blue-700",
@@ -1112,17 +1112,9 @@ function AdminAnalyticsBasis() {
         "Q2 threshold": quartiles ? kg(quartiles.q2) : "-",
         "Q3 threshold": quartiles ? kg(quartiles.q3) : "-"
       },
-      arrivalVolumes: sortArrivalRecordsAscending(arrivalSummary?.records).map((row) => ({
-        label: formatForecastDate(row.arrival_date),
-        volume_kg: row.volume_kg,
-        classification: row.volume_kg <= (quartiles?.q1 ?? Infinity)
-          ? "Low"
-          : row.volume_kg <= (quartiles?.q2 ?? Infinity)
-            ? "Lower Middle"
-            : row.volume_kg <= (quartiles?.q3 ?? Infinity)
-              ? "Upper Middle"
-              : "High"
-      })),
+      // The trend card buckets `arrivalSummary.records` through
+      // `arrivalVolumeSeries`, so no pre-bucketed copy is kept here. The
+      // source split it needs comes from the same records.
       records: (arrivalSummary?.records || []).map((row) => ({
         Date: row.arrival_date ? formatForecastDate(row.arrival_date) : "-",
         Commodity: row.commodity_name || selectedCommodity,

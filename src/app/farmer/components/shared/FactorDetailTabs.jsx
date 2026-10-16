@@ -303,12 +303,31 @@ function WeatherIconEl({ icon, cls = "w-5 h-5" }) {
   return <Cloud className={`${cls} text-slate-400`} />;
 }
 
-const PriceTab = ({ commodityId, commodityName }) => {
+const PriceTab = ({
+  commodityId,
+  commodityName,
+  cropStage,
+  plantingDate,
+  expectedHarvestDate,
+  plantingSeason,
+  moduleResults,
+  plantingWindowStart,
+  plantingWindowEnd,
+  plantingWindowLabel,
+}) => {
   return (
     <PriceDetailView
       commodityId={commodityId}
       commodityName={commodityName ?? "this crop"}
       showHeading={false}
+      cropStage={cropStage}
+      plantingDate={plantingDate}
+      expectedHarvestDate={expectedHarvestDate}
+      plantingSeason={plantingSeason}
+      moduleResults={moduleResults}
+      plantingWindowStart={plantingWindowStart}
+      plantingWindowEnd={plantingWindowEnd}
+      plantingWindowLabel={plantingWindowLabel}
     />
   );
 };
@@ -445,7 +464,7 @@ const ArrivalTab = ({ data, commodityName }) => {
   );
 };
 
-const ProductionTab = ({ data }) => {
+const ProductionTab = ({ data, commodityName }) => {
   const { t } = useLanguage();
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
   const selectedProfile = profiles.find((profile) => profile.quarter === data?.selectedQuarter);
@@ -602,19 +621,19 @@ const ProductionTab = ({ data }) => {
       </div>
 
       {data?.sources && data.sources.length > 0 && (
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
+        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 sm:p-5 space-y-3">
           <div>
-            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.major_sources_title", {}, "Major Production Sources")}</p>
-            <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.production.major_sources_subtitle", {}, "Production volume distribution across Davao City, Davao Del Sur, and Bukidnon.")}</p>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.major_sources_title", {}, "Major Production Sources")}</p>
+            <p className="text-[12px] text-[var(--hw-neutral-600)]">{t("farmer.factors.production.major_sources_subtitle", {}, "Production volume distribution across Davao City, Davao Del Sur, and Bukidnon.")}</p>
           </div>
-          <ProductionSourcePieChart data={data.sources} height={190} />
+          <ProductionSourcePieChart data={data.sources} height={280} />
         </div>
       )}
 
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
         <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means", {}, "What this means")}</p>
         <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {data?.summary || (banner ? t(banner.descKey, {}, banner.fallbackDesc) : t("farmer.empty.no_production_data", {}, "Production data not available"))}
+          {data?.summary || (banner ? t(banner.descKey, { name: commodityName || data?.commodityName || "this crop" }, banner.fallbackDesc) : t("farmer.empty.no_production_data", {}, "Production data not available"))}
         </p>
       </div>
     </div>
@@ -893,7 +912,15 @@ const FactorDetailTabs = ({
   profitability,
   defaultTab = "price",
   commodityId,
-  commodityName
+  commodityName,
+  cropStage,
+  plantingDate,
+  expectedHarvestDate,
+  plantingSeason,
+  moduleResults,
+  plantingWindowStart,
+  plantingWindowEnd,
+  plantingWindowLabel,
 }) => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -928,9 +955,22 @@ const FactorDetailTabs = ({
 
       {/* Tab content */}
       <div className="p-4">
-        {safeTab === "price" && <PriceTab commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
+        {safeTab === "price" && (
+          <PriceTab
+            commodityId={commodityId}
+            commodityName={commodityName ?? weather?.cropName}
+            cropStage={cropStage}
+            plantingDate={plantingDate}
+            expectedHarvestDate={expectedHarvestDate}
+            plantingSeason={plantingSeason}
+            moduleResults={moduleResults}
+            plantingWindowStart={plantingWindowStart}
+            plantingWindowEnd={plantingWindowEnd}
+            plantingWindowLabel={plantingWindowLabel}
+          />
+        )}
         {safeTab === "arrival" && <ArrivalTab data={arrival} commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
-        {safeTab === "production" && <ProductionTab data={production} />}
+        {safeTab === "production" && <ProductionTab data={production} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "profitability" && profitability && <ProfitabilityTab data={profitability} />}
       </div>

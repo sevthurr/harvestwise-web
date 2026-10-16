@@ -20,12 +20,9 @@ import {
 import { getVariants } from "../../../global/data/commodities";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import {
-  BUNDLE_TREND_RECORDS_LIMIT,
   fetchPricesList,
-  priceTrendKey,
   STALE_TIME,
 } from "../../../global/hooks/useFarmerPrefetch";
-import { composePriceOutlook, renderComposedMessage } from "../../utils/advisoryMessageComposer";
 import * as pricesApi from "../../../../services/api/pricesApi";
 import * as analyticsApi from "../../../../services/api/analyticsApi";
 import { Skeleton } from "./FarmerSkeletons";
@@ -57,6 +54,12 @@ const STATUS_CFG = {
     color: "text-red-600",
     labelKey: "farmer.calendar.factors.price_level_unfavorable",
     fallback: "Unfavorable"
+  },
+  insufficient_data: {
+    Icon: AlertCircle,
+    color: "text-slate-600",
+    labelKey: "farmer.calendar.factors.price_level_insufficient",
+    fallback: "Insufficient Data"
   }
 };
 
@@ -91,6 +94,16 @@ const PRICE_CLASSIFICATION_BANNER = {
     descKey: "farmer.factors.price.unfavorable_banner_desc",
     fallbackTitle: "Unfavorable Price",
     fallbackDesc: "Prices are trending downward — consider timing your sale carefully."
+  },
+  insufficient_data: {
+    Icon: AlertCircle,
+    color: "text-slate-700",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+    titleKey: "farmer.factors.price.insufficient_banner_title",
+    descKey: "farmer.factors.price.insufficient_banner_desc",
+    fallbackTitle: "Insufficient Data",
+    fallbackDesc: "Required price reference or baseline data is unavailable for this crop stage."
   }
 };
 
@@ -149,10 +162,40 @@ function StatCard({
   );
 }
 
+function ClassificationBadge({ classification, labelPrefix = "" }) {
+  const norm = String(classification || "").toLowerCase().replace(/[\s-]/g, "_");
+  const cfg = STATUS_CFG[norm] || STATUS_CFG.neutral;
+  const Icon = cfg.Icon;
+  const label = cfg.fallback;
+  const badgeClasses =
+    norm === "favorable"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : norm === "unfavorable"
+      ? "bg-red-50 text-red-700 border-red-200"
+      : norm === "insufficient_data"
+      ? "bg-slate-50 text-slate-700 border-slate-200"
+      : "bg-blue-50 text-blue-700 border-blue-200";
+
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold border ${badgeClasses}`}>
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span>{labelPrefix ? `${labelPrefix}: ` : ""}{label}</span>
+    </div>
+  );
+}
+
 function PriceDetailView({
   commodityId,
   commodityName,
-  showHeading = false
+  showHeading = false,
+  cropStage = null,
+  plantingDate = null,
+  expectedHarvestDate = null,
+  plantingSeason = null,
+  moduleResults = null,
+  plantingWindowStart = null,
+  plantingWindowEnd = null,
+  plantingWindowLabel = null,
 }) {
   const { t } = useLanguage();
   const [market, setMarket] = useState("Bangkerohan Public Market");
@@ -165,14 +208,9 @@ function PriceDetailView({
   const pPriceTypeKey = toPriceTypeKey(market, priceType);
 
   // 1. Top-10 catalog, to resolve commodity IDs & catalog varieties.
-  // Shares the ["prices","list"] key rather than its own "prices-catalog": the
-  // endpoint is the same call and the bundle already seeds this key, so a private
-  // key meant a duplicate request on every open and no offline value. page_size is
-  // irrelevant — there are 14 top-10 rows and every page_size from 50 up returns
-  // all of them, which is what the variety dropdown needs.
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
     queryKey: ["prices", "list"],
-    queryFn: fetchPricesList,
+    queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 50 }),
     staleTime: STALE_TIME,
   });
 
@@ -215,17 +253,45 @@ function PriceDetailView({
     return findCommodityId(catalogPairs, commodityName) || commodityId || null;
   }, [availableVarieties, activeVariety, catalogPairs, commodityName, commodityId]);
 
-  // 2. Fetch authoritative price detail using the exact same API pipeline as DFTC.
-  // The key is the bundle's priceTrendKey, so a commodity the login bundle seeded
-  // opens with zero requests. staleTime matches the bundle's STALE_TIME so the
-  // seeded entry is still considered fresh on arrival.
+  const normalizedInputStage = useMemo(() => {
+    if (!cropStage) return null;
+    const raw = String(cropStage).toLowerCase().trim();
+    if (["before_planting", "planning", "draft"].includes(raw)) return "before_planting";
+    if (["during_planting", "growing", "planted"].includes(raw)) return "during_planting";
+    if (["near_harvest", "pre_harvest", "pre-harvest", "preharvest"].includes(raw)) return "near_harvest";
+    if (["harvest", "harvesting", "harvested"].includes(raw)) return "harvest";
+    return raw;
+  }, [cropStage]);
+
+  // 2. Fetch authoritative price detail using the exact same API pipeline as backend.
+  const stageOptions = useMemo(() => {
+    if (!normalizedInputStage && !plantingDate && !expectedHarvestDate) return undefined;
+    return {
+      cropStage: normalizedInputStage,
+      plantingDate,
+      harvestDate: expectedHarvestDate,
+    };
+  }, [normalizedInputStage, plantingDate, expectedHarvestDate]);
+
   const {
     data: priceOutlookData,
     isLoading: isPriceOutlookLoading,
     isFetching: isPriceOutlookFetching,
   } = useQuery({
-    queryKey: ["farmer", "admin-price-outlook", resolvedCommodityId, pPriceTypeKey, days],
-    queryFn: () => analyticsApi.getPriceOutlook(resolvedCommodityId, pPriceTypeKey, days),
+    queryKey: [
+      "farmer",
+      "admin-price-outlook",
+      resolvedCommodityId,
+      pPriceTypeKey,
+      days,
+      cropStage,
+      plantingDate,
+      expectedHarvestDate,
+    ],
+    queryFn: () =>
+      stageOptions
+        ? analyticsApi.getPriceOutlook(resolvedCommodityId, pPriceTypeKey, days, stageOptions)
+        : analyticsApi.getPriceOutlook(resolvedCommodityId, pPriceTypeKey, days),
     enabled: Boolean(resolvedCommodityId),
     staleTime: STALE_TIME,
   });
@@ -245,41 +311,145 @@ function PriceDetailView({
   const displayCropName = selectedVariety ? `${commodityName} (${selectedVariety})` : commodityName;
   const seriesKey = commodityName || "Price";
 
+  const rawStage = String(priceOutlookData?.crop_stage || normalizedInputStage || "").toLowerCase().trim();
+  const effectiveCropStage =
+    ["before_planting", "planning", "draft"].includes(rawStage) ? "before_planting" :
+    ["during_planting", "growing", "planted"].includes(rawStage) ? "during_planting" :
+    ["near_harvest", "pre_harvest", "pre-harvest", "preharvest"].includes(rawStage) ? "near_harvest" :
+    ["harvest", "harvesting", "harvested"].includes(rawStage) ? "harvest" :
+    (rawStage || null);
+  const isStageSpecific = Boolean(effectiveCropStage);
+
   // 3. Single authoritative Price Outlook model (shares data between summary, chart, banner, and range)
   const priceOutlookModel = useMemo(() => {
-    if (isDataLoading || priceOutlookData?.status !== "processed") {
+    if (isDataLoading && !moduleResults) {
       return null;
     }
 
-    const recentAvg = priceOutlookData.recent_average_price;
-    const midpoint = priceOutlookData.forecast_midpoint;
-    const lower = priceOutlookData.lower_forecast;
-    const upper = priceOutlookData.upper_forecast;
-    const comparisonPrice = priceOutlookData.current_prevailing_price ?? recentAvg;
-    const percentChange = priceOutlookData.forecast_price_change_pct;
-    const classification = String(priceOutlookData.classification || "").toLowerCase();
-    if (
-      !["favorable", "neutral", "unfavorable"].includes(classification)
-      || recentAvg == null
-      || midpoint == null
-      || comparisonPrice == null
-      || percentChange == null
-    ) {
+    const source = priceOutlookData || (moduleResults ? {
+      status: moduleResults.price_outlook_status === "insufficient_data" ? "insufficient_data" : "processed",
+      classification: moduleResults.price_outlook,
+      forecast_price_change_pct: moduleResults.price_change_pct,
+      reference_price: moduleResults.reference_price,
+      comparison_baseline: moduleResults.comparison_baseline,
+      price_reference_type: moduleResults.price_reference_type,
+      price_reference_label: moduleResults.price_reference_label,
+      comparison_baseline_label: moduleResults.comparison_baseline_label,
+      reference_period: moduleResults.reference_period,
+      is_fallback: moduleResults.is_fallback,
+      historical_seasonal_price: moduleResults.historical_seasonal_price,
+      macro_baseline_price: moduleResults.macro_baseline_price,
+      spot_7d_average_price: moduleResults.spot_7d_average_price,
+      recent_average_price: moduleResults.recent_average_price,
+      forecast_midpoint: moduleResults.forecast_midpoint,
+      lower_forecast: moduleResults.lower_forecast_price,
+      upper_forecast: moduleResults.upper_forecast_price,
+      explanation: moduleResults.price_explanation,
+      crop_stage: cropStage,
+      historical_price_change_pct: moduleResults.historical_price_change_pct,
+      historical_price_outlook: moduleResults.historical_price_outlook,
+      forecast_price_outlook: moduleResults.forecast_price_outlook,
+      has_eligible_forecast: moduleResults.has_eligible_forecast,
+      days_to_harvest: moduleResults.days_to_harvest,
+      planting_window_start: moduleResults.planting_window_start || plantingWindowStart,
+      planting_window_end: moduleResults.planting_window_end || plantingWindowEnd,
+      planting_window_label: moduleResults.planting_window_label || plantingWindowLabel,
+    } : null);
+
+    if (!source) return null;
+
+    const rawStatus = String(source.status || "").toLowerCase();
+    const rawClass = String(source.classification || "").toLowerCase().replace(/[\s-]/g, "_");
+
+    if (rawStatus === "insufficient_data" || rawClass === "insufficient_data") {
+      return {
+        status: "insufficient_data",
+        classification: "insufficient_data",
+        explanation: source.explanation || t("farmer.factors.price.insufficient_data_expl", {}, "Required price reference or baseline data is unavailable for this crop stage."),
+        percentChange: null,
+        referencePrice: source.reference_price ?? null,
+        comparisonBaseline: source.comparison_baseline ?? null,
+        priceReferenceType: source.price_reference_type || "insufficient_data",
+        priceReferenceLabel: source.price_reference_label || t("farmer.factors.price.insufficient_data_label", {}, "Insufficient Data"),
+        comparisonBaselineLabel: source.comparison_baseline_label || "",
+        referencePeriod: source.reference_period || "",
+        isFallback: Boolean(source.is_fallback),
+        plantingWindowStart: source.planting_window_start || plantingWindowStart,
+        plantingWindowEnd: source.planting_window_end || plantingWindowEnd,
+        plantingWindowLabel: source.planting_window_label || plantingWindowLabel,
+        expectedHarvestDate: source.expected_harvest_date || expectedHarvestDate || moduleResults?.expected_harvest_date,
+      };
+    }
+
+    if (rawStatus === "unavailable" && !isStageSpecific) {
       return null;
     }
+
+    const classification = ["favorable", "neutral", "unfavorable"].includes(rawClass) ? rawClass : "neutral";
+    const percentChange = source.forecast_price_change_pct ?? null;
+
+    const refPrice = source.reference_price ?? (isStageSpecific ? null : source.forecast_midpoint);
+    const basePrice = source.comparison_baseline ?? (isStageSpecific ? null : (source.current_prevailing_price ?? source.recent_average_price));
+
+    const diff = (refPrice != null && basePrice != null)
+      ? (refPrice - basePrice)
+      : ((source.forecast_midpoint != null && source.recent_average_price != null) ? (source.forecast_midpoint - source.recent_average_price) : null);
+
+    const histPct = source.historical_price_change_pct != null
+      ? source.historical_price_change_pct
+      : ((source.historical_seasonal_price != null && source.macro_baseline_price != null && source.macro_baseline_price > 0)
+          ? ((source.historical_seasonal_price - source.macro_baseline_price) / source.macro_baseline_price) * 100
+          : null);
+    const histClass = source.historical_price_outlook || (
+      histPct != null
+        ? (histPct > 5.0 ? "favorable" : histPct < -5.0 ? "unfavorable" : "neutral")
+        : null
+    );
+    const fcPct = source.forecast_price_change_pct != null
+      ? source.forecast_price_change_pct
+      : (source.price_reference_type === "forecast" ? percentChange : null);
+    const fcClass = source.forecast_price_outlook || (
+      source.price_reference_type === "forecast"
+        ? classification
+        : (fcPct != null ? (fcPct > 5.0 ? "favorable" : fcPct < -5.0 ? "unfavorable" : "neutral") : null)
+    );
+    const hasEligibleFc = Boolean(
+      source.has_eligible_forecast ||
+      (effectiveCropStage === "during_planting" && source.price_reference_type === "forecast")
+    );
 
     return {
-      recentAverage: recentAvg,
-      comparisonPrice,
-      forecastMidpoint: midpoint,
-      absoluteChange: midpoint - comparisonPrice,
-      lowerForecast: lower,
-      upperForecast: upper,
-      percentChange,
+      status: "processed",
       classification,
-      explanation: priceOutlookData.explanation || "",
+      percentChange,
+      referencePrice: refPrice,
+      comparisonBaseline: basePrice,
+      absoluteChange: diff,
+      priceReferenceType: source.price_reference_type || (source.forecast_midpoint ? "forecast" : "historical_seasonal"),
+      priceReferenceLabel: source.price_reference_label || (isStageSpecific ? "Reference Price" : t("farmer.factors.price.estimated_price_label", {}, "Estimated Price")),
+      comparisonBaselineLabel: source.comparison_baseline_label || (isStageSpecific ? "Comparison Baseline" : t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")),
+      referencePeriod: source.reference_period || "",
+      isFallback: Boolean(source.is_fallback),
+      explanation: source.explanation || "",
+      historicalSeasonalPrice: source.historical_seasonal_price,
+      macroBaselinePrice: source.macro_baseline_price,
+      historicalPriceChangePct: histPct,
+      historicalPriceOutlook: histClass,
+      forecastPriceChangePct: fcPct,
+      forecastPriceOutlook: fcClass,
+      hasEligibleForecast: hasEligibleFc,
+      daysToHarvest: source.days_to_harvest ?? null,
+      spot7dAveragePrice: source.spot_7d_average_price,
+      recentAverage: source.recent_average_price,
+      forecastMidpoint: source.forecast_midpoint,
+      lowerForecast: source.lower_forecast,
+      upperForecast: source.upper_forecast,
+      plantingWindowStart: source.planting_window_start || plantingWindowStart,
+      plantingWindowEnd: source.planting_window_end || plantingWindowEnd,
+      plantingWindowLabel: source.planting_window_label || plantingWindowLabel,
+      expectedHarvestDate: source.expected_harvest_date || expectedHarvestDate || moduleResults?.expected_harvest_date,
     };
-  }, [priceOutlookData, isDataLoading]);
+  }, [priceOutlookData, moduleResults, isDataLoading, isStageSpecific, cropStage, plantingWindowStart, plantingWindowEnd, plantingWindowLabel, expectedHarvestDate, t]);
 
   const varietyDetails = useMemo(() => {
     if (!priceDetailData) return [];
@@ -328,24 +498,57 @@ function PriceDetailView({
     return t("farmer.factors.price.horizon_days_option", { days: d }, `${d} days`);
   };
 
-
   // Expected price change formatted string & styling
   let changeDisplay = "—";
   let changeColor = "text-[var(--hw-neutral-900)]";
-  if (priceOutlookModel) {
+  if (priceOutlookModel && priceOutlookModel.status !== "insufficient_data" && priceOutlookModel.percentChange != null) {
     const diff = priceOutlookModel.absoluteChange;
     const pct = priceOutlookModel.percentChange;
-    if (Math.abs(diff) < 0.05 || Math.abs(pct) < 0.1) {
+    if (diff != null && Math.abs(diff) < 0.05 && Math.abs(pct) < 0.1) {
       changeDisplay = t("farmer.factors.price.about_the_same", {}, "About the same");
       changeColor = "text-[var(--hw-neutral-700)]";
-    } else if (diff > 0) {
-      changeDisplay = `↑ ₱${diff.toFixed(2)}/kg · ${Math.abs(pct).toFixed(1)}% ${t("farmer.factors.price.higher_word", {}, "higher")}`;
+    } else if (pct > 0) {
+      const diffStr = diff != null ? `↑ ₱${diff.toFixed(2)}/kg · ` : "↑ ";
+      changeDisplay = `${diffStr}${Math.abs(pct).toFixed(1)}% ${t("farmer.factors.price.higher_word", {}, "higher")}`;
       changeColor = "text-emerald-700";
-    } else {
-      changeDisplay = `↓ ₱${Math.abs(diff).toFixed(2)}/kg · ${Math.abs(pct).toFixed(1)}% ${t("farmer.factors.price.lower_word", {}, "lower")}`;
+    } else if (pct < 0) {
+      const diffStr = diff != null ? `↓ ₱${Math.abs(diff).toFixed(2)}/kg · ` : "↓ ";
+      changeDisplay = `${diffStr}${Math.abs(pct).toFixed(1)}% ${t("farmer.factors.price.lower_word", {}, "lower")}`;
       changeColor = "text-red-600";
+    } else {
+      changeDisplay = `0.0% (${t("farmer.factors.price.stable_word", {}, "no change")})`;
+      changeColor = "text-[var(--hw-neutral-700)]";
     }
   }
+
+  // Historical seasonal change formatted string & styling for Stage 2 dual display
+  const histPct = priceOutlookModel?.historicalPriceChangePct;
+  const histDiff = (priceOutlookModel?.historicalSeasonalPrice != null && priceOutlookModel?.macroBaselinePrice != null)
+    ? (priceOutlookModel.historicalSeasonalPrice - priceOutlookModel.macroBaselinePrice)
+    : null;
+
+  let histChangeDisplay = "—";
+  let histChangeColor = "text-[var(--hw-neutral-900)]";
+  if (histPct != null) {
+    if (histDiff != null && Math.abs(histDiff) < 0.05 && Math.abs(histPct) < 0.1) {
+      histChangeDisplay = t("farmer.factors.price.about_the_same", {}, "About the same");
+      histChangeColor = "text-[var(--hw-neutral-700)]";
+    } else if (histPct > 0) {
+      const diffStr = histDiff != null ? `↑ ₱${histDiff.toFixed(2)}/kg · ` : "↑ ";
+      histChangeDisplay = `${diffStr}${Math.abs(histPct).toFixed(1)}% ${t("farmer.factors.price.higher_word", {}, "higher")}`;
+      histChangeColor = "text-emerald-700";
+    } else if (histPct < 0) {
+      const diffStr = histDiff != null ? `↓ ₱${Math.abs(histDiff).toFixed(2)}/kg · ` : "↓ ";
+      histChangeDisplay = `${diffStr}${Math.abs(histPct).toFixed(1)}% ${t("farmer.factors.price.lower_word", {}, "lower")}`;
+      histChangeColor = "text-red-600";
+    } else {
+      histChangeDisplay = `0.0% (${t("farmer.factors.price.stable_word", {}, "no change")})`;
+      histChangeColor = "text-[var(--hw-neutral-700)]";
+    }
+  }
+
+  const isStage2 = effectiveCropStage === "during_planting";
+  const hasStage2Forecast = isStage2 && Boolean(priceOutlookModel?.hasEligibleForecast && !priceOutlookModel?.isFallback);
 
   // Top classification banner config — resolved from live priceOutlookModel
   const bannerCfg = priceOutlookModel
@@ -370,7 +573,7 @@ function PriceDetailView({
         </div>
       )}
 
-      {/* ─── Classification Banner (Favorable / Neutral / Unfavorable) ─── */}
+      {/* ─── Classification Banner (Favorable / Neutral / Unfavorable / Insufficient Data) ─── */}
       {isDataLoading ? (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
           <Skeleton className="w-5 h-5 rounded-full flex-shrink-0" />
@@ -422,67 +625,332 @@ function PriceDetailView({
         />
       </div>
 
-      {/* Authoritative 4-Item Farmer Summary Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard
-          label={t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")}
-          value={
-            priceOutlookModel?.recentAverage != null ? (
-              <>
-                ₱{priceOutlookModel.recentAverage.toFixed(2)}
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {" "}{t("common.per_kg", {}, "/ kg")}
-                </span>
-              </>
-            ) : (
-              "—"
-            )
-          }
-          sub={t("farmer.factors.price.past_days_average_sub", { days }, `Past ${days}-day average`)}
-          isLoading={isDataLoading}
-        />
-        <StatCard
-          label={t("farmer.factors.price.estimated_price_label", {}, "Estimated Price")}
-          value={
-            priceOutlookModel?.forecastMidpoint != null ? (
-              <>
-                ₱{priceOutlookModel.forecastMidpoint.toFixed(2)}
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {" "}{t("common.per_kg", {}, "/ kg")}
-                </span>
-              </>
-            ) : (
-              "—"
-            )
-          }
-          sub={t("farmer.factors.price.next_days_sub_simple", { days }, `Next ${days} days`)}
-          isLoading={isDataLoading}
-        />
-        <StatCard
-          label={t("farmer.factors.price.forecast_range_label", {}, "Forecast Range")}
-          value={
-            priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null ? (
-              <>
-                ₱{priceOutlookModel.lowerForecast.toFixed(2)}–₱{priceOutlookModel.upperForecast.toFixed(2)}
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  {" "}{t("common.per_kg", {}, "/ kg")}
-                </span>
-              </>
-            ) : (
-              "—"
-            )
-          }
-          sub={t("farmer.factors.price.possible_price_range_sub", {}, "Possible price range")}
-          isLoading={isDataLoading}
-        />
-        <StatCard
-          label={t("farmer.factors.price.expected_price_change_label", {}, "Expected Price Change")}
-          value={changeDisplay}
-          sub={t("farmer.factors.price.compared_with_current_price_sub", {}, "Compared with the current prevailing price")}
-          valueColor={changeColor}
-          isLoading={isDataLoading}
-        />
-      </div>
+      {/* 4-Item Farmer Summary Strip or Stage 2 Dual Panels */}
+      {isStageSpecific ? (
+        isStage2 && hasStage2Forecast ? (
+          <div className="space-y-3">
+            {/* Dual Assessment Header */}
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    Dual Assessment
+                  </span>
+                  <span className="text-[11px] font-medium text-emerald-700">· Forecast & Seasonal Benchmarks</span>
+                </div>
+                <p className="text-[12px] text-emerald-950 mt-0.5">
+                  Your crop is planted and covered by an eligible harvest forecast. Both the harvest forecast and historical seasonal benchmarks are displayed below.
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-white border border-emerald-300 text-emerald-800 self-start sm:self-auto shrink-0 shadow-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Forecast Eligible
+              </span>
+            </div>
+
+            {/* Two panels: 1) Forecast Information, 2) Historical Seasonal Information */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {/* Panel 1: Forecast Information (Primary Assessment) */}
+              <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--hw-neutral-100)]">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-600" />
+                    <h3 className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
+                      Forecast Information (Primary Basis)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    ML Forecast
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard
+                    label={t("farmer.factors.price.forecast_harvest_price", {}, "Forecast Harvest Price")}
+                    value={
+                      priceOutlookModel?.referencePrice != null ? (
+                        <>
+                          ₱{priceOutlookModel.referencePrice.toFixed(2)}
+                          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                            {" "}{t("common.per_kg", {}, "/ kg")}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )
+                    }
+                    sub={
+                      priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null
+                        ? `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`
+                        : "Expected harvest window"
+                    }
+                    isLoading={isDataLoading}
+                  />
+                  <StatCard
+                    label={t("farmer.factors.price.forecast_baseline_label", {}, "Forecast Baseline")}
+                    value={
+                      priceOutlookModel?.comparisonBaseline != null ? (
+                        <>
+                          ₱{priceOutlookModel.comparisonBaseline.toFixed(2)}
+                          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                            {" "}{t("common.per_kg", {}, "/ kg")}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )
+                    }
+                    sub={priceOutlookModel?.comparisonBaselineLabel || "Comparison baseline"}
+                    isLoading={isDataLoading}
+                  />
+                  <StatCard
+                    label={t("farmer.factors.price.forecast_price_change_label", {}, "Forecast Price Change")}
+                    value={changeDisplay}
+                    sub="vs. comparison baseline"
+                    valueColor={changeColor}
+                    isLoading={isDataLoading}
+                  />
+                  <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 flex flex-col justify-between">
+                    <p className="text-[10px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide mb-1">
+                      Forecast Classification
+                    </p>
+                    <div>
+                      <ClassificationBadge classification={priceOutlookModel?.forecastPriceOutlook || priceOutlookModel?.classification} />
+                    </div>
+                    <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">Stage 2: Planting</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Panel 2: Historical Seasonal Information */}
+              <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--hw-neutral-100)]">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                    <h3 className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
+                      Historical Seasonal Information
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Historical Seasonal
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard
+                    label={t("farmer.factors.price.historical_seasonal_avg_label", {}, "Historical Seasonal Avg")}
+                    value={
+                      priceOutlookModel?.historicalSeasonalPrice != null ? (
+                        <>
+                          ₱{priceOutlookModel.historicalSeasonalPrice.toFixed(2)}
+                          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                            {" "}{t("common.per_kg", {}, "/ kg")}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )
+                    }
+                    sub="Multi-year harvest season average"
+                    isLoading={isDataLoading}
+                  />
+                  <StatCard
+                    label={t("farmer.factors.price.macro_baseline_label", {}, "Multi-Year Macro Baseline")}
+                    value={
+                      priceOutlookModel?.macroBaselinePrice != null ? (
+                        <>
+                          ₱{priceOutlookModel.macroBaselinePrice.toFixed(2)}
+                          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                            {" "}{t("common.per_kg", {}, "/ kg")}
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )
+                    }
+                    sub="Long-term historical benchmark"
+                    isLoading={isDataLoading}
+                  />
+                  <StatCard
+                    label={t("farmer.factors.price.historical_change_label", {}, "Historical Price Change")}
+                    value={histChangeDisplay}
+                    sub="vs. macro baseline"
+                    valueColor={histChangeColor}
+                    isLoading={isDataLoading}
+                  />
+                  <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 flex flex-col justify-between">
+                    <p className="text-[10px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide mb-1">
+                      Historical Classification
+                    </p>
+                    <div>
+                      <ClassificationBadge classification={priceOutlookModel?.historicalPriceOutlook || "neutral"} />
+                    </div>
+                    <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">Preserved historical benchmark</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {isStage2 && (
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 text-[12px] text-amber-900 shadow-xs">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold">Forecast Information Unavailable: </span>
+                  Your crop is in the planting stage, but the expected harvest date is beyond the validated 28-day forecast horizon (or valid forecast data is not yet available). Current Price Outlook is based on historical seasonal data. Forecast data will automatically become available when your crop enters the 28-day harvest window.
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <StatCard
+                label={priceOutlookModel?.priceReferenceLabel || t("farmer.factors.price.reference_price_label", {}, "Reference Price")}
+                value={
+                  priceOutlookModel?.referencePrice != null ? (
+                    <>
+                      ₱{priceOutlookModel.referencePrice.toFixed(2)}
+                      <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                        {" "}{t("common.per_kg", {}, "/ kg")}
+                      </span>
+                    </>
+                  ) : (
+                    "—"
+                  )
+                }
+                sub={
+                  priceOutlookModel?.referencePeriod
+                    ? priceOutlookModel.referencePeriod
+                    : (priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null
+                        ? `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`
+                        : null)
+                }
+                isLoading={isDataLoading}
+              />
+              <StatCard
+                label={priceOutlookModel?.comparisonBaselineLabel || t("farmer.factors.price.baseline_price_label", {}, "Baseline Price")}
+                value={
+                  priceOutlookModel?.comparisonBaseline != null ? (
+                    <>
+                      ₱{priceOutlookModel.comparisonBaseline.toFixed(2)}
+                      <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                        {" "}{t("common.per_kg", {}, "/ kg")}
+                      </span>
+                    </>
+                  ) : (
+                    "—"
+                  )
+                }
+                sub={
+                  effectiveCropStage === "harvest"
+                    ? t("farmer.factors.price.spot_benchmark", {}, "7-day moving spot benchmark")
+                    : t("farmer.factors.price.macro_benchmark", {}, "Multi-year historical benchmark")
+                }
+                isLoading={isDataLoading}
+              />
+              <StatCard
+                label={t("farmer.factors.price.expected_price_change_label", {}, "Expected Price Change")}
+                value={changeDisplay}
+                sub={
+                  priceOutlookModel?.comparisonBaselineLabel
+                    ? `vs. ${priceOutlookModel.comparisonBaselineLabel}`
+                    : t("farmer.factors.price.compared_with_current_price_sub", {}, "Compared with baseline price")
+                }
+                valueColor={changeColor}
+                isLoading={isDataLoading}
+              />
+              <StatCard
+                label={t("farmer.factors.price.data_source_label", {}, "Price Basis & Stage")}
+                value={
+                  priceOutlookModel?.status === "insufficient_data" ? (
+                    <span className="text-slate-600 font-semibold">{t("farmer.calendar.factors.price_level_insufficient", {}, "Insufficient Data")}</span>
+                  ) : priceOutlookModel?.isFallback ? (
+                    <span className="text-amber-700 font-semibold">{t("farmer.factors.price.fallback_source", {}, "Historical Fallback")}</span>
+                  ) : priceOutlookModel?.priceReferenceType === "historical_seasonal" ? (
+                    <span className="text-emerald-700 font-semibold">{t("farmer.factors.price.seasonal_source", {}, "Historical Seasonal")}</span>
+                  ) : priceOutlookModel?.priceReferenceType === "forecast" ? (
+                    <span className="text-blue-700 font-semibold">{t("farmer.factors.price.forecast_source", {}, "ML Forecast")}</span>
+                  ) : priceOutlookModel?.priceReferenceType === "current_observed" ? (
+                    <span className="text-teal-700 font-semibold">{t("farmer.factors.price.observed_source", {}, "Observed Market")}</span>
+                  ) : (
+                    <span className="text-[var(--hw-neutral-800)] font-semibold">{t("farmer.factors.price.standard_source", {}, "Market Data")}</span>
+                  )
+                }
+                sub={
+                  effectiveCropStage === "before_planting"
+                    ? "Stage 1: Planning"
+                    : effectiveCropStage === "during_planting"
+                    ? "Stage 2: Planting"
+                    : effectiveCropStage === "near_harvest"
+                    ? "Stage 3: Near Harvest"
+                    : effectiveCropStage === "harvest"
+                    ? "Stage 4: Harvest"
+                    : "Active Crop Stage"
+                }
+                isLoading={isDataLoading}
+              />
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <StatCard
+            label={t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")}
+            value={
+              priceOutlookModel?.recentAverage != null ? (
+                <>
+                  ₱{priceOutlookModel.recentAverage.toFixed(2)}
+                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                    {" "}{t("common.per_kg", {}, "/ kg")}
+                  </span>
+                </>
+              ) : (
+                "—"
+              )
+            }
+            sub={t("farmer.factors.price.past_days_average_sub", { days }, `Past ${days}-day average`)}
+            isLoading={isDataLoading}
+          />
+          <StatCard
+            label={t("farmer.factors.price.estimated_price_label", {}, "Estimated Price")}
+            value={
+              priceOutlookModel?.forecastMidpoint != null ? (
+                <>
+                  ₱{priceOutlookModel.forecastMidpoint.toFixed(2)}
+                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                    {" "}{t("common.per_kg", {}, "/ kg")}
+                  </span>
+                </>
+              ) : (
+                "—"
+              )
+            }
+            sub={t("farmer.factors.price.next_days_sub_simple", { days }, `Next ${days} days`)}
+            isLoading={isDataLoading}
+          />
+          <StatCard
+            label={t("farmer.factors.price.forecast_range_label", {}, "Forecast Range")}
+            value={
+              priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null ? (
+                <>
+                  ₱{priceOutlookModel.lowerForecast.toFixed(2)}–₱{priceOutlookModel.upperForecast.toFixed(2)}
+                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                    {" "}{t("common.per_kg", {}, "/ kg")}
+                  </span>
+                </>
+              ) : (
+                "—"
+              )
+            }
+            sub={t("farmer.factors.price.possible_price_range_sub", {}, "Possible price range")}
+            isLoading={isDataLoading}
+          />
+          <StatCard
+            label={t("farmer.factors.price.expected_price_change_label", {}, "Expected Price Change")}
+            value={changeDisplay}
+            sub={t("farmer.factors.price.compared_with_current_price_sub", {}, "Compared with the current prevailing price")}
+            valueColor={changeColor}
+            isLoading={isDataLoading}
+          />
+        </div>
+      )}
 
       {/* Unified Single Price Trend & Forecast Chart Card */}
       <section className="space-y-3">
@@ -591,28 +1059,66 @@ function PriceDetailView({
         ) : (
           <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3 space-y-1.5">
             <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-              {priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null
-                ? t(
-                    "farmer.factors.price.forecast_reference_range",
-                    {
-                      forecast_lo: priceOutlookModel.lowerForecast.toFixed(2),
-                      forecast_hi: priceOutlookModel.upperForecast.toFixed(2),
-                    },
-                    `Estimated selling price is between ₱${priceOutlookModel.lowerForecast.toFixed(2)} and ₱${priceOutlookModel.upperForecast.toFixed(2)}/kg.`
-                  )
-                : t("farmer.factors.price.forecast_unavailable_period", {}, "Forecast unavailable for this period.")}
+              {priceOutlookModel?.status === "insufficient_data" ? (
+                t("farmer.factors.price.insufficient_reference_notice", {}, "Price reference unavailable: Required price data could not be determined for this crop stage.")
+              ) : effectiveCropStage === "before_planting" ? (
+                t(
+                  "farmer.factors.price.historical_seasonal_notice",
+                  {
+                    price: priceOutlookModel?.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—",
+                    baseline: priceOutlookModel?.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—",
+                  },
+                  `Historical seasonal price reference: ₱${priceOutlookModel?.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—"}/kg (multi-year macro baseline: ₱${priceOutlookModel?.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—"}/kg).`
+                )
+              ) : effectiveCropStage === "during_planting" ? (
+                hasStage2Forecast
+                  ? `Stage 2 dual assessment: Forecasted harvest price is ₱${priceOutlookModel?.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—"}/kg (${priceOutlookModel?.forecastPriceOutlook || priceOutlookModel?.classification || "Neutral"}), alongside historical seasonal average of ₱${priceOutlookModel?.historicalSeasonalPrice != null ? priceOutlookModel.historicalSeasonalPrice.toFixed(2) : "—"}/kg (${priceOutlookModel?.historicalPriceOutlook || "Neutral"}).`
+                  : `Stage 2 historical seasonal price reference: ₱${priceOutlookModel?.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—"}/kg (multi-year macro baseline: ₱${priceOutlookModel?.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—"}/kg). Forecast information is unavailable beyond the 28-day horizon.`
+              ) : effectiveCropStage === "harvest" ? (
+                t(
+                  "farmer.factors.price.observed_price_notice",
+                  {
+                    price: priceOutlookModel?.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—",
+                    baseline: priceOutlookModel?.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—",
+                  },
+                  `Current observed market price: ₱${priceOutlookModel?.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—"}/kg (7-day spot baseline: ₱${priceOutlookModel?.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—"}/kg).`
+                )
+              ) : priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null ? (
+                t(
+                  "farmer.factors.price.forecast_reference_range",
+                  {
+                    forecast_lo: priceOutlookModel.lowerForecast.toFixed(2),
+                    forecast_hi: priceOutlookModel.upperForecast.toFixed(2),
+                  },
+                  `Estimated selling price is between ₱${priceOutlookModel.lowerForecast.toFixed(2)} and ₱${priceOutlookModel.upperForecast.toFixed(2)}/kg.`
+                )
+              ) : priceOutlookModel?.referencePrice != null ? (
+                `Price reference: ₱${priceOutlookModel.referencePrice.toFixed(2)}/kg (baseline: ₱${priceOutlookModel?.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—"}/kg).`
+              ) : (
+                t("farmer.factors.price.forecast_unavailable_period", {}, "Forecast unavailable for this period.")
+              )}
             </p>
             <p className="text-[11px] text-[var(--hw-neutral-500)] italic">
               {priceType === "Wholesale"
                 ? t("farmer.factors.price.wholesale_notice", {}, "Wholesale prices are typically 15–20% lower than retail. ")
                 : ""}
-              {t("farmer.factors.price.forecast_disclaimer", {}, "Forecast is based on recent trends and is not guaranteed.")}
+              {effectiveCropStage === "before_planting"
+                ? t("farmer.factors.price.stage1_disclaimer", {}, "Stage 1 uses multi-year historical seasonal averages during your expected harvest window, not ML forecasts.")
+                : effectiveCropStage === "during_planting"
+                ? (hasStage2Forecast
+                    ? "Stage 2 displays both historical seasonal context and eligible ML forecast covering your expected harvest date."
+                    : "Stage 2 currently uses historical seasonal data because forecast data is only eligible within 28 days of expected harvest.")
+                : effectiveCropStage === "near_harvest"
+                ? "Stage 3 uses ML forecasting covering your expected harvest date as the primary basis for classification."
+                : effectiveCropStage === "harvest"
+                ? t("farmer.factors.price.stage4_disclaimer", {}, "Stage 4 uses current observed market prices and recent spot averages, not forecast projections.")
+                : t("farmer.factors.price.forecast_disclaimer", {}, "Forecast is based on recent trends and is not guaranteed.")}
             </p>
           </div>
         )}
       </section>
 
-      {/* Historical Average Price Section — Informational context only */}
+      {/* Historical Average Price Section — Informational context with planting window highlight */}
       <HistoricalAveragePriceSection
         commodityId={resolvedCommodityId}
         commodityName={displayCropName}
@@ -620,6 +1126,13 @@ function PriceDetailView({
         market={market}
         priceType={priceType}
         priceTypeKey={pPriceTypeKey}
+        plantingDate={plantingDate}
+        expectedHarvestDate={expectedHarvestDate || priceOutlookModel?.expectedHarvestDate}
+        plantingWindowStart={priceOutlookModel?.plantingWindowStart || plantingWindowStart}
+        plantingWindowEnd={priceOutlookModel?.plantingWindowEnd || plantingWindowEnd}
+        plantingWindowLabel={priceOutlookModel?.plantingWindowLabel || plantingWindowLabel}
+        cropStage={effectiveCropStage}
+        plantingSeason={plantingSeason}
       />
     </div>
   );

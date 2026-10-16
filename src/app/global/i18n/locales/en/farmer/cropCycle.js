@@ -113,4 +113,5 @@ export const cropCycle = {
   est_gross_revenue: "Estimated gross revenue",
   all_amounts_estimates: "All amounts are estimates.",
   remove_farmgate: "Remove",
+  auto_calculated_duration: "Auto-filled based on typical duration ({duration})",
 };

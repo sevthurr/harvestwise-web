@@ -482,13 +482,14 @@ export const en = {
         historical_avg_frequency: "Frequency",
         historical_avg_weekly: "Weekly",
         historical_avg_monthly: "Monthly",
-        historical_avg_explanation: "This chart shows the average recorded price for each week or month. It provides additional historical context and does not affect the planting advisory.",
+        historical_avg_explanation: "This chart shows weekly or monthly average recorded prices during past seasons to provide context for your crop timeline.",
         historical_avg_dynamic: "The average recorded price for {period} was ₱{price}/kg.",
         historical_avg_empty: "No historical average price data is available for this selection.",
         historical_avg_error: "Historical average price data could not be loaded. Please try again.",
         historical_avg_limited: "Limited historical data is available for this selection.",
         historical_avg_tooltip_price: "Average price",
-        historical_avg_tooltip_observations: "Recorded observations"
+        historical_avg_tooltip_observations: "Recorded observations",
+        previous_year: "Previous Year"
       },
 
 
