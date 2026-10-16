@@ -1,13 +1,12 @@
 /**
  * Base API client for HarvestWise.
  *
- * - Sends `credentials: 'include'` on every request so the browser auto-sends
- *   HttpOnly auth cookies. No tokens are stored in localStorage.
- * - On 401, attempts a single cookie-based refresh then retries the original
- *   request.
- * - On second 401 (refresh also expired / revoked), dispatches a custom
- *   "hw:auth:expired" event so AuthContext can log the user out without a
- *   circular import.
+ * - Attaches the access token from localStorage to every request.
+ * - On 401, attempts a single token refresh then retries the original request.
+ * - On second 401 (refresh also expired / revoked), clears storage and
+ *   dispatches a custom "hw:auth:expired" event so AuthContext can log the
+ *   user out without a circular import. Only if the request actually carried an
+ *   access token — an anonymous 401 is not an expired session and stays silent.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ?? 'http://localhost:8080';
@@ -16,6 +15,27 @@ const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_U
 // loading state. Requests that time out reject (caught by query error handling)
 // instead of hanging forever.
 const FETCH_TIMEOUT_MS = 15000;
+
+const STORAGE = {
+  ACCESS:  'hw_access_token',
+  REFRESH: 'hw_refresh_token',
+};
+
+// ---------------------------------------------------------------------------
+// Token helpers
+// ---------------------------------------------------------------------------
+export function getAccessToken()  { return localStorage.getItem(STORAGE.ACCESS); }
+export function getRefreshToken() { return localStorage.getItem(STORAGE.REFRESH); }
+
+export function storeTokens({ access_token, refresh_token }) {
+  localStorage.setItem(STORAGE.ACCESS,  access_token);
+  localStorage.setItem(STORAGE.REFRESH, refresh_token);
+}
+
+export function clearTokens() {
+  localStorage.removeItem(STORAGE.ACCESS);
+  localStorage.removeItem(STORAGE.REFRESH);
+}
 
 /**
  * Auth failure. Tagged with status: 401 so queryClient's retry predicate can
@@ -26,6 +46,14 @@ function authError(message) {
   const err = new Error(message);
   err.status = 401;
   return err;
+}
+
+// ---------------------------------------------------------------------------
+// Internal fetch with auth header
+// ---------------------------------------------------------------------------
+function authHeaders() {
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export function buildUrl(url) {
@@ -64,15 +92,15 @@ function fetchWithTimeout(url, options = {}) {
 async function _fetch(url, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'X-Requested-With': 'XMLHttpRequest',
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
+    ...authHeaders(),
     ...(options.headers ?? {}),
   };
   if (isFormData) {
     delete headers['Content-Type'];
     delete headers['content-type'];
   }
-  return fetchWithTimeout(buildUrl(url), { ...options, headers, credentials: 'include' });
+  return fetchWithTimeout(buildUrl(url), { ...options, headers });
 }
 
 // ---------------------------------------------------------------------------
@@ -90,17 +118,21 @@ async function _refreshAndRetry(url, options) {
   }
 
   _refreshing = true;
+  const refreshToken = getRefreshToken();
 
   try {
     const res = await fetchWithTimeout(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
     if (!res.ok) throw new Error('refresh_failed');
 
-    // Drain the queue — retry all waiting requests with the new cookies.
+    const data = await res.json();
+    storeTokens(data);
+
+    // Drain the queue — retry all waiting requests with the new token.
     _refreshQueue.forEach(({ resolve, reject, url: u, options: o }) => {
       _fetch(u, o).then(resolve).catch(reject);
     });
@@ -109,13 +141,16 @@ async function _refreshAndRetry(url, options) {
     // Retry the original request.
     return _fetch(url, options);
   } catch (err) {
+    // Only clear tokens if the refresh actually failed (not a network error)
+    // Network errors mean we're offline — keep tokens for when we reconnect
     if (err.message === 'refresh_failed') {
+      clearTokens();
       window.dispatchEvent(new Event('hw:auth:expired'));
       _refreshQueue.forEach(({ reject }) => reject(authError('Session expired')));
       _refreshQueue = [];
       throw authError('Session expired. Please log in again.');
     }
-    // Network error — don't clear cookies, just fail this request
+    // Network error — don't clear tokens, just fail this request
     _refreshQueue.forEach(({ reject }) => reject(err));
     _refreshQueue = [];
     throw err;
@@ -128,10 +163,23 @@ async function _refreshAndRetry(url, options) {
 // Public fetch wrapper
 // ---------------------------------------------------------------------------
 export async function apiFetch(url, options = {}) {
+  // Must be read BEFORE the request: a 401 on an anonymous request (e.g. a
+  // pre-login /crop-plans probe) is not an expired session, so it must not
+  // clear tokens or fire hw:auth:expired.
+  const hadAuth = Boolean(getAccessToken());
   const res = await _fetch(url, options);
 
   if (res.status === 401) {
-    return _refreshAndRetry(url, options);
+    // Only attempt refresh if we actually have a refresh token.
+    if (getRefreshToken()) {
+      return _refreshAndRetry(url, options);
+    }
+    if (hadAuth) {
+      // The request carried a token and still got a 401 — session genuinely died.
+      clearTokens();
+      window.dispatchEvent(new Event('hw:auth:expired'));
+    }
+    throw authError('Not authenticated');
   }
 
   return res;
@@ -178,11 +226,11 @@ export async function apiDelete(url, options = {}) {
 /**
  * Open an authenticated Server-Sent Events stream.
  *
- * Native `EventSource` cannot send custom headers or credentials, so it cannot
- * be used against a cookie-authenticated API. This wrapper drives the same SSE
- * protocol over `fetch` + a ReadableStream, which sends cookies the same way
- * every other request does. It refreshes once on a 401 and then reconnects, so
- * a rotated session does not permanently kill the stream.
+ * Native `EventSource` cannot send an Authorization header, so it cannot be
+ * used against a bearer-authenticated API. This wrapper drives the same SSE
+ * protocol over `fetch` + a ReadableStream, which can attach the access token
+ * the same way every other request does. It refreshes once on a 401 and then
+ * reconnects, so a rotated token does not permanently kill the stream.
  *
  * Handlers are registered by event name and receive the parsed `data` payload
  * plus the SSE event name as a second argument. The key `*` matches any event
@@ -218,13 +266,12 @@ export function openEventStream(path, handlers = {}, options = {}) {
         // long-lived, so the shared request timeout must not abort it. The
         // stream is bounded by our own AbortController instead.
         const res = await fetch(buildUrl(path), {
-          headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'text/event-stream' },
-          credentials: 'include',
+          headers: { ...authHeaders(), Accept: 'text/event-stream' },
           signal: controller.signal,
         });
 
         if (res.status === 401) {
-          // Session expired mid-stream — refresh once, then let the loop retry.
+          // Token expired mid-stream — refresh once, then let the loop retry.
           try {
             await _refreshAndRetry(path, { method: 'GET' });
           } catch {

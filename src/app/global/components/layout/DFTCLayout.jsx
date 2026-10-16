@@ -110,9 +110,9 @@ function DFTCLayoutInner() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setAvatarOpen(false);
-    logout();
+    await logout();
     navigate("/login", { replace: true });
   };
 
