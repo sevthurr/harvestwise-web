@@ -72,20 +72,27 @@ export function resolveNotificationRoute(item, role = "Farmer") {
     // Normalize legacy redirects
     if (r === "/admin/analytics") return "/admin/modules";
     if (r === "/admin/history") return "/admin/data-sources?tab=history";
+    if (r === "/admin/modules/thresholds" || r.startsWith("/admin/modules/thresholds?")) {
+      const q = r.includes("?") ? `&${r.slice(r.indexOf("?") + 1)}` : "";
+      return `/admin/modules?tab=weights${q}`;
+    }
     if (r === "/admin/import" && meta.import_id) return `/admin/history/${meta.import_id}`;
     if (r === "/admin/configuration") {
       const action = String(meta.action || "");
-      if (action.startsWith("config.threshold")) return "/admin/modules/thresholds";
-      if (action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
+      if (action.startsWith("config.threshold") || action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
       return "/admin/modules";
     }
-    // Return specific persisted routes directly
+    // Return specific persisted routes directly (must contain specific path or query params)
     if (
       r.startsWith("/farmer/prices/COM-") ||
       r.startsWith("/farmer/crops/") ||
       r.startsWith("/dftc/submissions/") ||
       r.startsWith("/dftc/trends") ||
-      r.startsWith("/admin/") ||
+      r.startsWith("/dftc/input") ||
+      r.startsWith("/dftc/price-input") ||
+      r.startsWith("/dftc/arrival-input") ||
+      r.startsWith("/dftc/upload") ||
+      (r.startsWith("/admin/") && (r.includes("?") || r.startsWith("/admin/history/") || r.startsWith("/admin/data-sources/") || r.startsWith("/admin/system/user/"))) ||
       r === "/farmer/market/weather" ||
       r.startsWith("/farmer/market/factors") ||
       r === "/farmer/market/dftc-arrivals" ||
@@ -124,6 +131,9 @@ export function resolveNotificationRoute(item, role = "Farmer") {
       return item.route || "/farmer/crops";
     }
     if (cat === "weather_alert") {
+      const targetCommId = commId || meta.commodity_id || meta.commodityId;
+      if (item.route && item.route.includes("highlight=")) return item.route;
+      if (targetCommId) return `/farmer/market/weather?highlight=${targetCommId}`;
       return item.route || "/farmer/market/weather";
     }
     if (cat === "harvest_reminder") {
@@ -146,6 +156,9 @@ export function resolveNotificationRoute(item, role = "Farmer") {
     role.toLowerCase() === "dftc" ||
     cat === "price_volatility" ||
     cat === "oversupply_alert" ||
+    cat === "manual_price_entry" ||
+    cat === "manual_arrival_entry" ||
+    cat.startsWith("manual_") ||
     cat.startsWith("submission_") ||
     cat === "records_need_correction" ||
     cat === "upload_validation_completed"
@@ -156,6 +169,12 @@ export function resolveNotificationRoute(item, role = "Farmer") {
     if (cat === "oversupply_alert") {
       return item.route || "/dftc/trends?tab=arrival&alert=oversupply";
     }
+    if (cat === "manual_price_entry") {
+      return item.route || "/dftc/input?highlight=price";
+    }
+    if (cat === "manual_arrival_entry") {
+      return item.route || "/dftc/input?highlight=arrival";
+    }
     const subId = meta.submission_id || meta.submissionId || item.dedupe_key?.split(":")?.[2];
     if (subId) {
       return `/dftc/submissions/${subId}`;
@@ -165,20 +184,65 @@ export function resolveNotificationRoute(item, role = "Farmer") {
 
   // 4. Admin / SuperAdmin Routes
   switch (cat) {
-    case "pipeline_failed":
+    case "pipeline_failed": {
+      const rawMod = meta.module || meta.moduleKey || "";
+      const mod = rawMod.toLowerCase();
+      const err = meta.error ? `?alert=${encodeURIComponent(meta.error)}` : "";
+      if (mod.includes("forecast") || mod.includes("price")) {
+        return `/admin/forecasting${err}`;
+      }
+      if (mod.includes("arrival")) {
+        return "/admin/modules?tab=outputs&highlight=arrival-pressure";
+      }
+      if (mod.includes("weather")) {
+        return "/admin/modules?tab=outputs&highlight=weather-risk";
+      }
+      if (mod.includes("production") || mod.includes("seasonal")) {
+        return "/admin/modules?tab=outputs&highlight=historical-production";
+      }
+      const slug = mod.replace(/\s+/g, "-");
+      return `/admin/modules?tab=outputs&highlight=${encodeURIComponent(slug)}`;
+    }
     case "processing_event":
-    case "advisory_event":
-      return "/admin/modules";
+    case "advisory_event": {
+      const rawMod = meta.module || meta.moduleKey || "";
+      if (!rawMod) return "/admin/modules";
+      const mod = rawMod.toLowerCase();
+      if (mod.includes("forecast") || mod.includes("price")) {
+        return "/admin/modules?tab=outputs&highlight=price-outlook";
+      }
+      if (mod.includes("arrival")) {
+        return "/admin/modules?tab=outputs&highlight=arrival-pressure";
+      }
+      if (mod.includes("weather")) {
+        return "/admin/modules?tab=outputs&highlight=weather-risk";
+      }
+      if (mod.includes("production") || mod.includes("seasonal")) {
+        return "/admin/modules?tab=outputs&highlight=historical-production";
+      }
+      const slug = mod.replace(/\s+/g, "-");
+      return `/admin/modules?tab=outputs&highlight=${encodeURIComponent(slug)}`;
+    }
     case "ingestion_failed":
       if (meta.import_id) return `/admin/history/${meta.import_id}`;
+      if (meta.source) {
+        return `/admin/data-sources?tab=sources&highlight=${encodeURIComponent(meta.source)}`;
+      }
       return "/admin/data-sources";
     case "security_alert":
-    case "auth_event":
-      return "/admin/audit-logs";
+    case "auth_event": {
+      const search = meta.event_type || meta.action || "";
+      const hl = meta.target_user_id || meta.user_id || (search && search !== "auth" ? search : "");
+      const searchParam = search ? `search=${encodeURIComponent(search)}` : "";
+      const hlParam = hl ? `highlight=${encodeURIComponent(hl)}` : "";
+      const query = [searchParam, hlParam].filter(Boolean).join("&");
+      return query ? `/admin/audit-logs?${query}` : "/admin/audit-logs";
+    }
     case "import_event":
       if (meta.import_id) return `/admin/history/${meta.import_id}`;
       return "/admin/import";
     case "data_event":
+      if (meta.source) return `/admin/data-sources?tab=sources&highlight=${encodeURIComponent(meta.source)}`;
       return "/admin/data-sources";
     case "system_event":
       if (String(meta.action || "").startsWith("system.weather")) {
@@ -187,14 +251,17 @@ export function resolveNotificationRoute(item, role = "Farmer") {
       return "/admin/system?tab=health";
     case "config_event": {
       const action = String(meta.action || "");
-      if (action.startsWith("config.threshold")) return "/admin/modules/thresholds";
-      if (action.startsWith("config.adaptive_weight")) return "/admin/modules?tab=weights";
+      const param = meta.param || meta.rule || "";
+      if (action.startsWith("config.threshold") || action.startsWith("config.adaptive_weight")) {
+        return param ? `/admin/modules?tab=weights&highlight=${encodeURIComponent(param)}` : "/admin/modules?tab=weights";
+      }
       return "/admin/modules";
     }
-    case "user_event":
+    case "user_event": {
       if (meta.target_user_id) return `/admin/system/user/${meta.target_user_id}`;
       if (meta.user_id) return `/admin/system/user/${meta.user_id}`;
       return "/admin/system?tab=users";
+    }
     default:
       return item.route || "/admin/audit-logs";
   }

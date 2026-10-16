@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
 
@@ -69,6 +69,7 @@ function renderPage(state) {
       <MemoryRouter initialEntries={[{ pathname: "/farmer/assess/factors", state }]}>
         <Routes>
           <Route path="/farmer/assess/factors" element={<FactorDetailPage />} />
+          <Route path="/farmer/market" element={<div data-testid="market-page">Market Page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -135,5 +136,43 @@ describe("FactorDetailPage — arrival and production data", () => {
     expect(getArrivalPressureMock).toHaveBeenCalledWith("COM-0024");
     expect(getSeasonalProductionMock).toHaveBeenCalledWith("COM-0024", "Q4");
     expect(getArrivalPressureMock).not.toHaveBeenCalledWith("lettuce");
+  });
+
+  it("renders the commodity icon before page title and supports clicking previous breadcrumb for back navigation", async () => {
+    renderPage({
+      title: "Tomato — Detailed Factors",
+      commodityId: "COM-0004",
+      commodityName: "Tomato",
+      backPath: "/farmer/market",
+      backLabel: "Market",
+      breadcrumbs: [
+        { label: "Market", path: "/farmer/market" },
+        { label: "Tomato" },
+        { label: "Detailed Factors" },
+      ],
+    });
+
+    // Check heading exists
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent("Tomato — Detailed Factors");
+
+    // Check SVG illustration exists right before heading in the same container
+    const iconContainer = heading.closest("div")?.parentElement;
+    const svg = iconContainer?.querySelector("svg");
+    expect(svg).toBeInTheDocument();
+
+    // Check breadcrumb items
+    const breadcrumbNav = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(breadcrumbNav).toBeInTheDocument();
+
+    // "Market" and "Tomato" are buttons (clickable)
+    const marketBtn = within(breadcrumbNav).getByRole("button", { name: "Market" });
+    const tomatoBtn = within(breadcrumbNav).getByRole("button", { name: "Tomato" });
+    expect(marketBtn).toBeInTheDocument();
+    expect(tomatoBtn).toBeInTheDocument();
+
+    // Clicking previous breadcrumb "Tomato" triggers back navigation to /farmer/market
+    fireEvent.click(tomatoBtn);
+    expect(await screen.findByTestId("market-page")).toBeInTheDocument();
   });
 });

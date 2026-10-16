@@ -212,9 +212,22 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
 const UsersTab = ({ showToast }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const highlightParam = searchParams.get("highlight");
+  const [highlightedUser, setHighlightedUser] = useState(highlightParam);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // 3-second temporary highlight timer (matching DFTC pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedUser(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedUser(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
 
   const { data: usersRes, isLoading: loading } = useQuery({
     queryKey: ["adminUsers"],
@@ -223,6 +236,21 @@ const UsersTab = ({ showToast }) => {
   });
 
   const users = usersRes?.items || [];
+
+  // Smooth scroll to highlighted user
+  useEffect(() => {
+    if (!highlightedUser || loading) return;
+    const t = setTimeout(() => {
+      const hl = highlightedUser.toLowerCase();
+      const el =
+        document.getElementById(`user-row-${hl}`) ||
+        document.querySelector(`[data-user-row*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightedUser, loading, users]);
 
   const createUser = async (payload) => {
     const created = await adminApi.createUser({
@@ -294,24 +322,41 @@ const UsersTab = ({ showToast }) => {
 
       {/* Mobile cards */}
       <div className="space-y-3 md:hidden">
-        {filtered.map((u) => (
-          <button
-            key={u.id}
-            type="button"
-            onClick={() => navigate(`/admin/system/user/${u.id}`)}
-            className="w-full text-left bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-1 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[15px] font-semibold text-black">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</p>
-              <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" />
-            </div>
-            <p className="text-[13px] text-black">{u.email || "-"}</p>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-[13px] text-black font-medium">{u.role?.role_name || "-"}</span>
-              <span className="text-[12px] text-black">{u.is_active ? "Active" : "Inactive"}</span>
-            </div>
-          </button>
-        ))}
+        {filtered.map((u) => {
+          const hl = (highlightedUser || "").toLowerCase();
+          const userMatcher = `${u.id} ${u.email || ""} ${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
+          const isHighlighted = Boolean(
+            hl &&
+            (userMatcher.includes(hl) ||
+             u.id.toLowerCase() === hl ||
+             (u.email && u.email.toLowerCase() === hl))
+          );
+
+          return (
+            <button
+              key={u.id}
+              id={`user-card-${u.id.toLowerCase()}`}
+              data-user-row={userMatcher}
+              type="button"
+              onClick={() => navigate(`/admin/system/user/${u.id}`)}
+              className={`w-full text-left rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-1 transition-colors duration-500 cursor-pointer ${
+                isHighlighted
+                  ? "bg-emerald-50/70 font-medium"
+                  : "bg-white hover:bg-[var(--hw-neutral-50)]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[15px] font-semibold text-black">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</p>
+                <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" />
+              </div>
+              <p className="text-[13px] text-black">{u.email || "-"}</p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[13px] text-black font-medium">{u.role?.role_name || "-"}</span>
+                <span className="text-[12px] text-black">{u.is_active ? "Active" : "Inactive"}</span>
+              </div>
+            </button>
+          );
+        })}
         {filtered.length === 0 && (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-8 text-center space-y-1.5">
             <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center text-[var(--hw-neutral-400)] mx-auto mb-2">
@@ -337,22 +382,39 @@ const UsersTab = ({ showToast }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-              {filtered.map((u) => (
-                <tr
-                  key={u.id}
-                  onClick={() => navigate(`/admin/system/user/${u.id}`)}
-                  className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-                >
-                  <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role?.role_name || "-"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black">{u.is_active ? "Active" : "Inactive"}</td>
-                  <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">-</td>
-                  <td className="px-5 py-3.5">
-                    <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)]" />
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((u) => {
+                const hl = (highlightedUser || "").toLowerCase();
+                const userMatcher = `${u.id} ${u.email || ""} ${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
+                const isHighlighted = Boolean(
+                  hl &&
+                  (userMatcher.includes(hl) ||
+                   u.id.toLowerCase() === hl ||
+                   (u.email && u.email.toLowerCase() === hl))
+                );
+
+                return (
+                  <tr
+                    key={u.id}
+                    id={`user-row-${u.id.toLowerCase()}`}
+                    data-user-row={userMatcher}
+                    onClick={() => navigate(`/admin/system/user/${u.id}`)}
+                    className={`transition-colors duration-500 cursor-pointer ${
+                      isHighlighted
+                        ? "bg-emerald-50/70 font-medium"
+                        : "hover:bg-[var(--hw-neutral-50)]"
+                    }`}
+                  >
+                    <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role?.role_name || "-"}</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black">{u.is_active ? "Active" : "Inactive"}</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">-</td>
+                    <td className="px-5 py-3.5">
+                      <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)]" />
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-5 py-12 text-center">

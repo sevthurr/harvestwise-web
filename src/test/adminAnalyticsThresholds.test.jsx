@@ -1,249 +1,145 @@
 /**
- * Admin Rules & Thresholds config save wiring.
+ * Admin Analytics — Price Outlook threshold save wiring.
  *
- * Regression cover for a silent no-op save. The edit modal used to join each
- * form field to a threshold rule on `rule_key`, but the stored rows carry
+ * Regression cover for a silent save. `handlePriceOutlookSave` resolves each
+ * modal field to a stored rule on `classification` (the `ensureRule` join in
+ * AdminAnalytics.jsx); it used to join on `rule_key`, but the stored rows carry
  * descriptive keys (`favorable_min_change`, `unfavorable_max_change`) that
- * share no namespace with the form keys (`fav_min`, `unfav_max`). Every lookup
- * missed, every field was skipped, and the modal reported "Saved!" without
- * issuing a single request — so no config change was written and no
- * `config.*` audit row was ever produced.
+ * share no namespace with the form's classification labels. Every lookup then
+ * missed, so the save created duplicate rows instead of updating the existing
+ * ones — while the modal still reported "Saved!".
  *
- * The join is now on `classification`, matching the `ensureRule` pattern in
- * AdminAnalytics.jsx.
+ * The mount refresh deliberately answers with the module but no rules, so no
+ * rule id is known when the modal opens: the classification join is the only
+ * path from the form fields to the stored rules, which is what makes this test
+ * fail if the join is put back on `rule_key`.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import React from 'react';
-import { MemoryRouter } from 'react-router';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router';
 
-import AdminAnalyticsThresholds from '../app/admin/pages/AdminAnalyticsThresholds';
+import AdminAnalytics from '../app/admin/pages/AdminAnalytics';
+import { analyticsApi } from '../services/api';
+import { apiGet, parseResponse } from '../app/global/api';
 
-// Rule keys as they actually exist in the database.
-const MODULES = {
-  items: [
-    {
-      id: 'TMD-0001',
-      module_name: 'Price Outlook',
-      source_label: 'Forecasting output (Bangkerohan Retail Prices)',
-      updated_at: '2026-10-01T00:00:00',
-      rules: [
-        {
-          id: 'TRL-0001',
-          rule_key: 'favorable_min_change',
-          classification: 'Favorable',
-          operator: '>',
-          threshold_value: 0.05,
-          display_text: '> +5%',
-        },
-        {
-          id: 'TRL-0002',
-          rule_key: 'unfavorable_max_change',
-          classification: 'Unfavorable',
-          operator: '<',
-          threshold_value: -0.05,
-          display_text: '< -5%',
-        },
-      ],
-    },
-  ],
+vi.mock('../services/api', () => ({
+  analyticsApi: {
+    listWeights: vi.fn(),
+    listThresholds: vi.fn(),
+    listThresholdRules: vi.fn(),
+    listModuleOutputs: vi.fn(),
+    computeModuleOutputs: vi.fn(),
+    listWeatherRules: vi.fn(),
+    getHistoricalSeasonalProduction: vi.fn(),
+    getArrivalPressure: vi.fn(),
+    updateThresholdRule: vi.fn(),
+    createThresholdRule: vi.fn(),
+    createThreshold: vi.fn(),
+  },
+}));
+
+// The page reads its commodity list through the shared api helper rather than
+// analyticsApi, so it needs its own mock. Sibling components pull other helpers
+// from the same module, so keep the real ones.
+vi.mock('../app/global/api', async (importOriginal) => ({
+  ...(await importOriginal()),
+  apiGet: vi.fn(),
+  parseResponse: vi.fn(),
+}));
+
+const priceOutlookModule = (rules) => ({
+  items: [{ id: 'TH-1', module_name: 'Price Outlook', rules }],
   total: 1,
-};
-
-function mockFetch(handlers) {
-  return vi.fn(async (url, init = {}) => {
-    const href = String(url);
-    const method = (init.method || 'GET').toUpperCase();
-    const handler = handlers.find((h) => h.method === method && h.match(href));
-    if (!handler) {
-      return {
-        ok: false,
-        status: 404,
-        json: async () => ({ detail: `unmocked ${method} ${href}` }),
-      };
-    }
-    return {
-      ok: handler.ok ?? true,
-      status: handler.status ?? 200,
-      json: async () => handler.body ?? {},
-    };
-  });
-}
-
-function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={['/admin/modules/thresholds']}>
-      <AdminAnalyticsThresholds />
-    </MemoryRouter>
-  );
-}
-
-function writeCalls(fetchFn) {
-  return fetchFn.mock.calls.filter(([, init]) => (init?.method || 'GET') !== 'GET');
-}
-
-/**
- * The modal renders one number input per field, in RULE_EDIT_CONFIGS order.
- * For Price Outlook that is fav_min, neut_min, neut_max, unfav_max — the
- * labels are not wired to the inputs, so they are addressed by position.
- */
-function favorableInput() {
-  return screen.getAllByRole('spinbutton')[0];
-}
-
-beforeEach(() => {
-  localStorage.clear();
-  vi.restoreAllMocks();
 });
 
-describe('Rules & Thresholds save wiring', () => {
-  it('writes an audit-backed PUT for the rule whose classification matches the field', async () => {
-    const fetchFn = mockFetch([
-      { method: 'GET', match: (u) => u.includes('/admin/thresholds'), body: MODULES },
-      {
-        method: 'PUT',
-        match: (u) => /\/admin\/thresholds\/rules\/TRL-\d+/.test(u),
-        body: {},
-      },
-    ]);
-    vi.stubGlobal('fetch', fetchFn);
+// The rows `api/scripts/seed_adaptive_weights_and_thresholds.py` writes:
+// descriptive rule keys, human classifications.
+const STORED_RULES = [
+  {
+    id: 'RULE-FAV',
+    rule_key: 'favorable_min_change',
+    classification: 'Favorable',
+    operator: '>',
+    threshold_value: 0.05,
+    display_text: '> +5%',
+  },
+  {
+    id: 'RULE-UNFAV',
+    rule_key: 'unfavorable_max_change',
+    classification: 'Unfavorable',
+    operator: '<',
+    threshold_value: -0.05,
+    display_text: '< -5%',
+  },
+];
 
-    renderPage();
+const renderPage = () =>
+  render(
+    <MemoryRouter initialEntries={['/admin/modules/analytics?tab=weights']}>
+      <Routes>
+        <Route path="/admin/modules/analytics" element={<AdminAnalytics />} />
+      </Routes>
+    </MemoryRouter>
+  );
 
-    // Price Outlook card renders from the stored module.
-    await screen.findByText('Price Outlook');
-    await userEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
+describe('AdminAnalytics Price Outlook threshold save', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
 
-    // Change "Favorable minimum change (%)" from 5 to 8.
-    const favorable = favorableInput();
-    await userEvent.clear(favorable);
-    await userEvent.type(favorable, '8');
+    apiGet.mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
+    });
+    parseResponse.mockImplementation(async (res) => res.json());
 
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
-
-    await waitFor(() => expect(writeCalls(fetchFn).length).toBeGreaterThan(0));
-
-    const writes = writeCalls(fetchFn);
-    // Both mapped fields are persisted: Favorable (edited) and Unfavorable
-    // (left at its default). The neutral min/max fields have no stored rule
-    // behind them, so they produce no request.
-    expect(writes).toHaveLength(2);
-
-    // Joined on classification -> Favorable's row (TRL-0001), not by rule_key.
-    const favorableWrite = writes.find(([url]) =>
-      String(url).includes('/admin/thresholds/rules/TRL-0001')
-    );
-    expect(favorableWrite).toBeDefined();
-    expect(favorableWrite[1].method).toBe('PUT');
-    const sent = JSON.parse(favorableWrite[1].body);
-    expect(sent.threshold_value).toBe(8);
-    expect(sent.display_text).toBe('8');
-
-    // Unfavorable resolves to its own rule, not to Favorable's.
-    const unfavorableWrite = writes.find(([url]) =>
-      String(url).includes('/admin/thresholds/rules/TRL-0002')
-    );
-    expect(unfavorableWrite).toBeDefined();
-    expect(JSON.parse(unfavorableWrite[1].body).threshold_value).toBe(-5);
+    analyticsApi.listWeights.mockResolvedValue({ items: [] });
+    // Mount sees the module with no rules; the save, and the refresh that
+    // follows it, see the stored rows.
+    analyticsApi.listThresholds
+      .mockResolvedValueOnce(priceOutlookModule([]))
+      .mockResolvedValue(priceOutlookModule(STORED_RULES));
+    analyticsApi.listThresholdRules.mockResolvedValue({ items: [] });
+    analyticsApi.listModuleOutputs.mockResolvedValue({ items: [] });
+    analyticsApi.computeModuleOutputs.mockResolvedValue({ commodity_id: 'COM-0001' });
+    analyticsApi.listWeatherRules.mockResolvedValue({ items: [] });
+    analyticsApi.getHistoricalSeasonalProduction.mockResolvedValue({});
+    // The Arrival Pressure card reads this. Return the backend's "not enough
+    // records" shape so the card renders its honest empty state.
+    analyticsApi.getArrivalPressure.mockResolvedValue({
+      status: 'unavailable',
+      message: 'Only 1 arrival record(s) available; at least 4 are required to calculate quartiles.',
+      record_count: 1,
+      records: [],
+    });
+    analyticsApi.updateThresholdRule.mockResolvedValue({});
+    analyticsApi.createThresholdRule.mockResolvedValue({});
+    analyticsApi.createThreshold.mockResolvedValue({ id: 'TH-1', module_name: 'Price Outlook', rules: [] });
   });
 
-  it('does not claim success when a save is rejected', async () => {
-    const fetchFn = mockFetch([
-      { method: 'GET', match: (u) => u.includes('/admin/thresholds'), body: MODULES },
-      {
-        method: 'PUT',
-        match: (u) => /\/admin\/thresholds\/rules\//.test(u),
-        ok: false,
-        status: 409,
-        body: { detail: 'Could not update threshold rule due to a data conflict.' },
-      },
-    ]);
-    vi.stubGlobal('fetch', fetchFn);
-
+  it('updates the rule matching each field by classification instead of creating a duplicate', async () => {
     renderPage();
-    await screen.findByText('Price Outlook');
-    await userEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
 
-    const favorable = favorableInput();
-    await userEvent.clear(favorable);
-    await userEvent.type(favorable, '8');
+    // Proof that the mount refresh found no rules: no rule id is known when the
+    // modal opens, so only the classification join can find the rows to update.
+    await screen.findByText('Price Outlook thresholds not configured.');
 
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByTitle('Edit Price Outlook Thresholds'));
 
-    // The failure is surfaced rather than swallowed.
-    await screen.findByText(/data conflict/i);
-    expect(screen.queryByText('Saved!')).not.toBeInTheDocument();
-  });
+    fireEvent.change(screen.getByPlaceholderText('e.g. 5'), { target: { value: '8' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. -5'), { target: { value: '-5' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
-  it('reports that there is nothing to save instead of a false success', async () => {
-    // "Final Advisory Cutoffs" is a hardcoded card with no stored module or
-    // rules. Saving it must not report success.
-    const fetchFn = mockFetch([
-      { method: 'GET', match: (u) => u.includes('/admin/thresholds'), body: MODULES },
+    await waitFor(() => expect(analyticsApi.updateThresholdRule).toHaveBeenCalledTimes(2));
+
+    // Favorable -> RULE-FAV, Unfavorable -> RULE-UNFAV. Joined on `rule_key`
+    // both would miss and become two POSTs instead.
+    expect(analyticsApi.updateThresholdRule.mock.calls).toEqual([
+      ['RULE-FAV', { threshold_value: 0.08, display_text: '> +8%' }],
+      ['RULE-UNFAV', { threshold_value: -0.05, display_text: '< -5%' }],
     ]);
-    vi.stubGlobal('fetch', fetchFn);
+    expect(analyticsApi.createThresholdRule).not.toHaveBeenCalled();
+    expect(analyticsApi.createThreshold).not.toHaveBeenCalled();
 
-    renderPage();
-    await screen.findByText('Price Outlook');
-
-    await userEvent.click(
-      screen.getAllByRole('button', { name: /edit/i }).at(-1)
-    );
-
-    await userEvent.click(await screen.findByRole('button', { name: /save changes/i }));
-
-    await screen.findByText(/nothing to save/i);
-    expect(screen.queryByText('Saved!')).not.toBeInTheDocument();
-    expect(writeCalls(fetchFn)).toHaveLength(0);
-  });
-
-  it('creates kg-unit rules for Arrival Pressure when the module has none', async () => {
-    // Regression: the AP card defaults used to be MT/week while the backend
-    // classifier compares kg arrivals, so saving the defaults would either
-    // misclassify (unit mismatch) or — while the modal was gated — write
-    // nothing at all. Now the fields carry kg defaults plus classification and
-    // operator, so a save creates real rules the pipeline consumes.
-    const arrivalModule = {
-      id: 'TMD-0002',
-      module_name: 'Arrival Pressure',
-      source_label: 'DFTC Arrival Volume',
-      updated_at: '2026-10-01T00:00:00',
-      rules: [],
-    };
-    const fetchFn = mockFetch([
-      // Rule-less modules trigger a per-module rules fetch on load; must be
-      // matched before the /admin/thresholds catch-all.
-      { method: 'GET', match: (u) => u.includes('/admin/thresholds/TMD-0002/rules'), body: { items: [] } },
-      { method: 'GET', match: (u) => u.includes('/admin/thresholds'), body: { items: [arrivalModule], total: 1 } },
-      { method: 'POST', match: (u) => u.includes('/admin/thresholds/TMD-0002/rules'), body: {} },
-    ]);
-    vi.stubGlobal('fetch', fetchFn);
-
-    renderPage();
-    await screen.findByText('Arrival Pressure');
-
-    // Only the Arrival Pressure card (plus the hardcoded Final Advisory
-    // Cutoffs card at the end) renders, so the first Edit button is AP's.
-    await userEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
-
-    // Defaults already carry the kg thresholds the classifier compares.
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
-
-    await waitFor(() => expect(writeCalls(fetchFn).length).toBeGreaterThan(0));
-
-    const writes = writeCalls(fetchFn).filter(([url]) =>
-      String(url).includes('/rules')
-    );
-    expect(writes).toHaveLength(3);
-    const sent = writes.map(([, init]) => JSON.parse(init.body));
-    expect(sent.map((s) => s.threshold_value)).toEqual([32000, 35000, 41000]);
-    expect(sent.map((s) => s.classification)).toEqual([
-      'Lower Middle',
-      'Upper Middle',
-      'High',
-    ]);
-    expect(sent.every((s) => s.operator === '>=')).toBe(true);
-    expect(sent[0].display_text).toBe('32000 kg/week');
+    await screen.findByText('Saved!');
   });
 });

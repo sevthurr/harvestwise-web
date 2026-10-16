@@ -41,6 +41,7 @@ export const en = {
     not_applicable: "Not Applicable",
     default: "Default",
     status: "Status",
+    items: "items",
     updated: "Updated",
     last_updated: "Last updated",
     date: "Date",
@@ -76,7 +77,11 @@ export const en = {
     pw_err_generic: "Could not update password. Check your current password and try again.",
     pw_panel_title: "Change your temporary password",
     pw_panel_body: "To keep your account secure, please replace the temporary password you received with a password only you know.",
-    pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step."
+    pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step.",
+    error_title: "Something went wrong",
+    error_body: "An unexpected error stopped this page from loading.",
+    error_reload: "Reload",
+    error_home: "Go home"
   },
   nav: {
     home: "Home",
@@ -481,13 +486,14 @@ export const en = {
         historical_avg_frequency: "Frequency",
         historical_avg_weekly: "Weekly",
         historical_avg_monthly: "Monthly",
-        historical_avg_explanation: "This chart shows the average recorded price for each week or month. It provides additional historical context and does not affect the planting advisory.",
+        historical_avg_explanation: "This chart shows weekly or monthly average recorded prices during past seasons to provide context for your crop timeline.",
         historical_avg_dynamic: "The average recorded price for {period} was ₱{price}/kg.",
         historical_avg_empty: "No historical average price data is available for this selection.",
         historical_avg_error: "Historical average price data could not be loaded. Please try again.",
         historical_avg_limited: "Limited historical data is available for this selection.",
         historical_avg_tooltip_price: "Average price",
-        historical_avg_tooltip_observations: "Recorded observations"
+        historical_avg_tooltip_observations: "Recorded observations",
+        previous_year: "Previous Year"
       },
 
 
@@ -579,7 +585,21 @@ export const en = {
         planting_window_manageable: "Manageable with precautions",
         planting_window_not_ideal: "Not ideal — delay if possible",
         no_weather_guidance: "No weather guidance available.",
-        no_forecast_data: "Weather forecast is not available right now."
+        no_forecast_data: "Weather forecast is not available right now.",
+        status_monitoring: "Monitoring",
+        next_7_days: "Next 7 Days",
+        suitability_severe_combined: "Severe — Combined Risk",
+        table_forecast_data: "Forecast Data",
+        table_forecast_desc: "Per-day weather parameters used to classify weather risk.",
+        table_day: "Day",
+        table_temp_range: "Temp Range",
+        table_rainfall: "Rainfall",
+        table_humidity: "Humidity",
+        table_wind_speed: "Wind Speed",
+        table_condition: "Condition",
+        table_showing_days: "Showing {start}–{end} of {total} days",
+        prev: "Prev",
+        next: "Next"
       },
 
       arrival: {
@@ -665,7 +685,69 @@ export const en = {
       weather_note_storm: "Heavy rain with thunderstorm expected{rain_mm}. Avoid planting and protect harvested crops.",
       weather_note_heat: "Unusually hot days. Water crops early in the morning and monitor soil moisture.",
       weather_note_rain: "Rain expected{rain_mm}{rain_chance}. Clear drainage before planting.",
-      weather_note_fair: "Fair conditions{temps}. Weather is suitable for farming activity."
+      weather_note_fair: "Fair conditions{temps}. Weather is suitable for farming activity.",
+      weather_note_sun: "Fair weather.",
+      weather_rain_chance: "{pct}% rain",
+      weather_note_title: "Weather note",
+      weather_note_default: "Rain is expected this week. Clear drainage before planting.",
+      days: {
+        sun: "Sun",
+        mon: "Mon",
+        tue: "Tue",
+        wed: "Wed",
+        thu: "Thu",
+        fri: "Fri",
+        sat: "Sat"
+      },
+      months: {
+        january: "January",
+        february: "February",
+        march: "March",
+        april: "April",
+        may: "May",
+        june: "June",
+        july: "July",
+        august: "August",
+        september: "September",
+        october: "October",
+        november: "November",
+        december: "December"
+      },
+      legend: {
+        crop: "Your crop",
+        weather: "Weather",
+        events: "Events",
+        payday: "Payday",
+        light_rain: "Light rain",
+        heavy_rain: "Heavy rain",
+        hot_days: "Hot days",
+        crop_schedule: "Crop schedule"
+      },
+      selected_date: {
+        title: "Daily Calendar & Farming Details",
+        weather_note: "Weather note",
+        market_note: "Market note",
+        expected_harvest: "Expected harvest",
+        expected_harvest_date: "Expected harvest date",
+        check_crop: "Check this crop",
+        payday: "Payday period",
+        payday_note: "Payday period. Increased consumer market spending and buyer demand expected.",
+        no_crop_schedule: "No crop schedule for this date.",
+        no_weather_note: "No weather forecast available for this date yet (available for next 14 days).",
+        no_event_note: "Standard trading day. No special market event or holiday."
+      },
+      price_outlook_rise: "Price likely to rise soon",
+      price_outlook_profit: "Good estimated profit",
+      factor_price_kamatis: "₱85/kg today, rising trend over the past two weeks.",
+      factor_supply_kamatis: "Arrivals at DFTC dropped this week compared to last.",
+      factor_production_kamatis: "Supply is usually moderate.",
+      factor_weather_kamatis: "Dry days available in early and mid-month for planting.",
+      factor_profit_kamatis: "Around ₱20/kg above estimated cost.",
+      factor_price_ampalaya: "₱90/kg today, stable prices with strong market demand.",
+      factor_supply_ampalaya: "Arrivals at DFTC dropped this week compared to last.",
+      factor_production_ampalaya: "Supply is usually moderate.",
+      factor_weather_ampalaya: "Suitable planting days available.",
+      factor_profit_ampalaya: "Around ₱25/kg above estimated cost."
     },
 
     plantingGuide: {

@@ -1,9 +1,10 @@
 import React from "react";
-import { createBrowserRouter, Navigate, useParams } from "react-router";
+import { createBrowserRouter, Navigate, useParams, useSearchParams } from "react-router";
 import { Layout } from "./global/components/layout/Layout";
 import { AdminLayout } from "./global/components/layout/AdminLayout";
 import { ProtectedRoute } from "./global/components/ProtectedRoute";
 import { roleHome, useAuth } from "./global/contexts/AuthContext";
+import { RouteErrorElement } from "./global/components/RouteError";
 import LoginPage from "./auth/LoginPage";
 import RegisterPage from "./auth/RegisterPage";
 import OnboardingPage from "./auth/OnboardingPage";
@@ -66,7 +67,6 @@ import AdminDataSources from "./admin/pages/AdminDataSources";
 import AdminImport from "./admin/pages/AdminImport";
 import AdminAnalytics from "./admin/pages/AdminAnalytics";
 import AdminAnalyticsBasis from "./admin/pages/AdminAnalyticsBasis";
-import AdminAnalyticsThresholds from "./admin/pages/AdminAnalyticsThresholds";
 import AdminHistoryDetail from "./admin/pages/AdminHistoryDetail";
 import AdminConfiguration from "./admin/pages/AdminConfiguration";
 import AdminDataSourceDetail from "./admin/pages/AdminDataSourceDetail";
@@ -95,21 +95,32 @@ function LegacyAnalyticsBasisRedirect() {
   return <Navigate to={`/admin/modules/basis/${resultId}`} replace />;
 }
 
+// Legacy /admin/modules/thresholds and /admin/analytics/thresholds → canonical /admin/modules?tab=weights
+function LegacyThresholdsRedirect() {
+  const [searchParams] = useSearchParams();
+  const highlight = searchParams.get("highlight");
+  const target = highlight
+    ? `/admin/modules?tab=weights&highlight=${encodeURIComponent(highlight)}`
+    : "/admin/modules?tab=weights";
+  return <Navigate to={target} replace />;
+}
+
 export const router = createBrowserRouter([
   // ── Auth & Legal pages (unprotected) ──────────────────────────────────────────
-  { path: "/", element: <SmartRedirect /> },
-  { path: "/login", element: <SmartRedirect fallback={<LoginPage />} /> },
-  { path: "/register",   element: <RegisterPage /> },
-  { path: "/onboarding", element: <OnboardingPage /> },
-  { path: "/privacy",    element: <PrivacyPolicyPage /> },
-  { path: "/terms",      element: <TermsPage /> },
-  { path: "/about",      element: <Navigate to="/" replace /> },
+  { path: "/", element: <SmartRedirect />, errorElement: <RouteErrorElement /> },
+  { path: "/login", element: <SmartRedirect fallback={<LoginPage />} />, errorElement: <RouteErrorElement /> },
+  { path: "/register",   element: <RegisterPage />, errorElement: <RouteErrorElement /> },
+  { path: "/onboarding", element: <OnboardingPage />, errorElement: <RouteErrorElement /> },
+  { path: "/privacy",    element: <PrivacyPolicyPage />, errorElement: <RouteErrorElement /> },
+  { path: "/terms",      element: <TermsPage />, errorElement: <RouteErrorElement /> },
+  { path: "/about",      element: <Navigate to="/" replace />, errorElement: <RouteErrorElement /> },
 
 
   // ── Farmer workspace ─────────────────────────────────────────────────────────
   {
     path: "/farmer",
     element: <ProtectedRoute requiredRole="Farmer"><Layout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true, Component: DashboardPage },
 
@@ -163,6 +174,7 @@ export const router = createBrowserRouter([
   {
     path: "/dftc",
     element: <ProtectedRoute requiredRole={["DFTC"]}><DFTCLayout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true,               Component: DFTCHome         },
       { path: "input",             Component: DFTCInput        },
@@ -186,6 +198,7 @@ export const router = createBrowserRouter([
   {
     path: "/admin",
     element: <ProtectedRoute requiredRole={["Admin", "SuperAdmin"]}><AdminLayout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true,             Component: AdminDashboard   },
       { path: "data-sources",             Component: AdminDataSources      },
@@ -194,10 +207,10 @@ export const router = createBrowserRouter([
       { path: "modules",                  Component: AdminAnalytics      },
       { path: "forecasting",              Component: AdminForecasting    },
       { path: "modules/basis/:resultId",  Component: AdminAnalyticsBasis },
-      { path: "modules/thresholds",       Component: AdminAnalyticsThresholds },
+      { path: "modules/thresholds",       element: <LegacyThresholdsRedirect /> },
       { path: "analytics",                 element: <Navigate to="/admin/modules" replace /> },
       { path: "analytics/basis/:resultId", element: <LegacyAnalyticsBasisRedirect /> },
-      { path: "analytics/thresholds",      element: <Navigate to="/admin/modules/thresholds" replace /> },
+      { path: "analytics/thresholds",      element: <LegacyThresholdsRedirect /> },
       { path: "history", element: <Navigate to="/admin/data-sources?tab=history" replace /> },
       { path: "history/:historyId",   Component: AdminHistoryDetail },
       { path: "configuration",        Component: AdminConfiguration },

@@ -59,7 +59,7 @@ describe('Direct Navigation Route Resolution', () => {
         category: 'weather_alert',
         metadata: { commodity_id: 'COM-0037' },
       }, 'Farmer')
-    ).toBe('/farmer/market/weather');
+    ).toBe('/farmer/market/weather?highlight=COM-0037');
 
     // Harvest reminder with crop plan deep link
     expect(
@@ -108,6 +108,33 @@ describe('Direct Navigation Route Resolution', () => {
         dedupe_key: 'dftc:records_need_correction:SUB-20260903-02',
       }, 'DFTC')
     ).toBe('/dftc/submissions/SUB-20260903-02');
+
+    // Manual Price and Arrival Volume entries redirect to Submit Data with highlight
+    expect(
+      resolveNotificationRoute({
+        category: 'manual_price_entry',
+        route: '/dftc/input?highlight=price',
+      }, 'DFTC')
+    ).toBe('/dftc/input?highlight=price');
+
+    expect(
+      resolveNotificationRoute({
+        category: 'manual_price_entry',
+      }, 'DFTC')
+    ).toBe('/dftc/input?highlight=price');
+
+    expect(
+      resolveNotificationRoute({
+        category: 'manual_arrival_entry',
+        route: '/dftc/input?highlight=arrival',
+      }, 'DFTC')
+    ).toBe('/dftc/input?highlight=arrival');
+
+    expect(
+      resolveNotificationRoute({
+        category: 'manual_arrival_entry',
+      }, 'DFTC')
+    ).toBe('/dftc/input?highlight=arrival');
   });
 
   it('resolves Admin categories to real pages when the backend sends no route', () => {
@@ -201,7 +228,7 @@ describe('Direct Navigation Route Resolution', () => {
         { category: 'config_event', metadata: { action: 'config.threshold_rule_updated' } },
         'Admin',
       ),
-    ).toBe('/admin/modules/thresholds');
+    ).toBe('/admin/modules?tab=weights');
 
     // A weather sync is driven from the API Sync tab, not the health tab.
     expect(
@@ -242,7 +269,7 @@ describe('Direct Navigation Route Resolution', () => {
         },
         'Admin',
       ),
-    ).toBe('/admin/modules/thresholds');
+    ).toBe('/admin/modules?tab=weights');
 
     // An old row with no recoverable action still must not hit the mock page.
     expect(
@@ -256,6 +283,11 @@ describe('Direct Navigation Route Resolution', () => {
     expect(
       resolveNotificationRoute({ category: 'data_event', route: '/admin/history' }, 'Admin')
     ).toBe('/admin/data-sources?tab=history');
+
+    // Legacy /admin/modules/thresholds redirects to Weights & Thresholds
+    expect(
+      resolveNotificationRoute({ category: 'config_event', route: '/admin/modules/thresholds?highlight=arrival_pressure_q3' }, 'Admin')
+    ).toBe('/admin/modules?tab=weights&highlight=arrival_pressure_q3');
 
     // Legacy /admin/analytics redirects to Modules.
     expect(

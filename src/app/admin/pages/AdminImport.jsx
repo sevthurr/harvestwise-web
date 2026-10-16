@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Upload,
@@ -394,6 +394,10 @@ function AdminImport() {
   const [ingestionStatus, setIngestionStatus] = useState("idle"); // "idle" | "processing" | "success" | "failed"
   const [ingestionRecord, setIngestionRecord] = useState(null);
   const fileRef = useRef(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const runValidation = async (targetFile, dt, isOverwrite) => {
     const f = targetFile || file;
@@ -542,6 +546,7 @@ function AdminImport() {
         while (!isFinished && attempts < 60) {
           attempts++;
           await new Promise((r) => setTimeout(r, 2000));
+          if (!mountedRef.current) return;
           try {
             const statusRes = await ingestionApi.getHistoryDetail(importId);
             if (statusRes?.status === "completed" || statusRes?.status === "success") {

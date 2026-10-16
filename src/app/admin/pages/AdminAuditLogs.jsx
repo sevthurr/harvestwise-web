@@ -27,6 +27,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router";
 
 import {
   Search,
@@ -187,14 +188,43 @@ function buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize
 }
 
 function AdminAuditLogs() {
+  const [searchParams] = useSearchParams();
+  const searchParam = searchParams.get("search") || searchParams.get("action") || "";
+  const highlightParam = searchParams.get("highlight") || searchParam;
+
+  // Initialize prefix and search term from URL query if provided
+  const initialPrefix = (() => {
+    if (!searchParam) return "";
+    const prefix = searchParam.split(".")[0]?.toLowerCase();
+    return ACTION_FILTER_OPTIONS.some((o) => o.value === prefix && o.value !== "") ? prefix : "";
+  })();
+  const initialSearch = (() => {
+    if (!searchParam) return "";
+    if (initialPrefix && searchParam.includes(".")) {
+      return searchParam.slice(initialPrefix.length + 1);
+    }
+    return searchParam;
+  })();
+
   // ── Filter state ─────────────────────────────────────────────────────────
-  const [search, setSearch]         = useState("");   // maps to action ilike
-  const [actionPrefix, setPrefix]   = useState("");   // resource prefix filter
+  const [search, setSearch]         = useState(initialSearch);   // maps to action ilike
+  const [actionPrefix, setPrefix]   = useState(initialPrefix);   // resource prefix filter
+  const [highlightedId, setHighlightedId] = useState(highlightParam);
   const [dateFrom, setDateFrom]     = useState("");   // ISO date string
   const [dateTo, setDateTo]         = useState("");   // ISO date string
   const [page, setPage]             = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting]   = useState(null); // null | "preview" | "download"
+
+  // 3-second temporary highlight timer (matching DFTC pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedId(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedId(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
   const auth = useOptionalAuth();
   const user = auth?.user;
   const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
@@ -222,6 +252,21 @@ function AdminAuditLogs() {
     setDateTo("");
     setPage(1);
   };
+
+  // Smooth scroll to highlighted log entry
+  useEffect(() => {
+    if (!highlightedId || loading) return;
+    const t = setTimeout(() => {
+      const hl = highlightedId.toLowerCase();
+      const el =
+        document.getElementById(`log-row-${hl}`) ||
+        document.querySelector(`[data-log-row*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightedId, loading, data.items]);
 
   // Fetch every row matching the current filters (usable for full PDF export).
   const fetchAllLogs = async () => {
@@ -471,28 +516,46 @@ function AdminAuditLogs() {
                   </td>
                 </tr>
               ) : (
-                data.items.map((row) => (
-                  <tr key={row.id}>
-                    <td className="px-5 py-3 font-mono text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap">
-                      {row.id}
-                    </td>
-                    <td className="px-5 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap text-[12px]">
-                      {fmtDatetime(row.created_at)}
-                    </td>
-                    <td className="px-5 py-3 font-medium text-[var(--hw-neutral-800)] whitespace-nowrap">
-                      {formatActorLabel(row)}
-                    </td>
-                    <td className="px-5 py-3 whitespace-nowrap">
-                      <ActionText action={row.action} />
-                    </td>
-                    <td className="px-5 py-3 text-[var(--hw-neutral-700)] max-w-[300px]">
-                      <DetailsCell details={row.details} />
-                    </td>
-                    <td className="px-5 py-3 text-[var(--hw-neutral-600)] whitespace-nowrap font-mono text-[12px]">
-                      {row.ip_address || "—"}
-                    </td>
-                  </tr>
-                ))
+                data.items.map((row) => {
+                  const hl = (highlightedId || "").toLowerCase();
+                  const isHighlighted = Boolean(
+                    hl &&
+                    (row.id?.toLowerCase() === hl ||
+                     row.action?.toLowerCase().includes(hl) ||
+                     (row.user_id && row.user_id.toLowerCase().includes(hl)) ||
+                     (row.actor_name && row.actor_name.toLowerCase().includes(hl)) ||
+                     (row.details && row.details.toLowerCase().includes(hl)))
+                  );
+                  const rowDataMatcher = `${row.id} ${row.action} ${row.user_id || ""} ${row.actor_name || ""}`.toLowerCase();
+
+                  return (
+                    <tr
+                      key={row.id}
+                      id={`log-row-${row.id.toLowerCase()}`}
+                      data-log-row={rowDataMatcher}
+                      className={`transition-colors duration-500 ${isHighlighted ? "bg-emerald-50/70 font-medium" : ""}`}
+                    >
+                      <td className="px-5 py-3 font-mono text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap">
+                        {row.id}
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap text-[12px]">
+                        {fmtDatetime(row.created_at)}
+                      </td>
+                      <td className="px-5 py-3 font-medium text-[var(--hw-neutral-800)] whitespace-nowrap">
+                        {formatActorLabel(row)}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <ActionText action={row.action} />
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-700)] max-w-[300px]">
+                        <DetailsCell details={row.details} />
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-600)] whitespace-nowrap font-mono text-[12px]">
+                        {row.ip_address || "—"}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -515,28 +578,47 @@ function AdminAuditLogs() {
             </div>
           ) : (
             <div className="divide-y divide-[var(--hw-neutral-100)]">
-              {data.items.map((row) => (
-                <div key={row.id} className="px-5 py-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <ActionText action={row.action} />
-                    <span className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
-                      {row.id}
-                    </span>
+              {data.items.map((row) => {
+                const hl = (highlightedId || "").toLowerCase();
+                const isHighlighted = Boolean(
+                  hl &&
+                  (row.id?.toLowerCase() === hl ||
+                   row.action?.toLowerCase().includes(hl) ||
+                   (row.user_id && row.user_id.toLowerCase().includes(hl)) ||
+                   (row.actor_name && row.actor_name.toLowerCase().includes(hl)) ||
+                   (row.details && row.details.toLowerCase().includes(hl)))
+                );
+                const rowDataMatcher = `${row.id} ${row.action} ${row.user_id || ""} ${row.actor_name || ""}`.toLowerCase();
+
+                return (
+                  <div
+                    key={row.id}
+                    data-log-row={rowDataMatcher}
+                    className={`px-5 py-3.5 space-y-1.5 transition-colors duration-500 ${
+                      isHighlighted ? "bg-emerald-50/70 font-medium" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <ActionText action={row.action} />
+                      <span className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
+                        {row.id}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-[var(--hw-neutral-500)]">
+                      {fmtDatetime(row.created_at)}
+                    </p>
+                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
+                      {formatActorLabel(row)}
+                    </p>
+                    {row.details && (
+                      <MobileDetails details={row.details} />
+                    )}
+                    <p className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
+                      {row.ip_address || "—"}
+                    </p>
                   </div>
-                  <p className="text-[12px] text-[var(--hw-neutral-500)]">
-                    {fmtDatetime(row.created_at)}
-                  </p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                    {formatActorLabel(row)}
-                  </p>
-                  {row.details && (
-                    <MobileDetails details={row.details} />
-                  )}
-                  <p className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
-                    {row.ip_address || "—"}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

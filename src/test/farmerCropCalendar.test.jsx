@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RecommendationPage from "../app/farmer/pages/Recommendation";
 import { LanguageProvider } from "../app/global/contexts/LanguageContext";
+import { apiGet } from "../app/global/api";
 
 vi.mock("../app/global/contexts/AuthContext", () => ({
   useAuth: () => ({
@@ -158,7 +159,7 @@ describe("Farmer Crop Calendar Page", () => {
     expect(await screen.findByText(/Light rain|Gamay nga ulan/i)).toBeInTheDocument();
     expect(screen.getByText(/Heavy rain|Kusog nga ulan/i)).toBeInTheDocument();
     expect(screen.getByText(/Hot days|Init nga mga adlaw/i)).toBeInTheDocument();
-    expect(screen.getByText(/Events|Mga Hitabo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Events|Mga Events/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^Crop schedule$|^Iskedyul sa tanom$/i).length).toBeGreaterThanOrEqual(1);
   });
 
@@ -190,6 +191,22 @@ describe("Farmer Crop Calendar Page", () => {
     expect(
       screen.getByText(/View detailed factors|Tan-awa ang detalyadong mga hinungdan/i)
     ).toBeInTheDocument();
+  });
+
+  it("shows the live recommendation factors instead of hardcoded per-crop copy", async () => {
+    renderComponent();
+    await screen.findByText("Kamatis");
+
+    // The old fabricated copy hardcoded per crop must never render.
+    expect(screen.queryByText(/₱85\/kg|₱90\/kg/)).not.toBeInTheDocument();
+
+    // Factor text reflects the stored recommendation row (matched to the mock).
+    expect(
+      screen.getAllByText(/Price outlook: Favorable|Pagtana sa presyo: Favorable/i).length
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText(/Arrival pressure: Moderate|Presyon sa abot: Moderate/i).length
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("renders Weather Note and Check Crop action cards without redundant footer hyperlinks", async () => {
@@ -232,5 +249,47 @@ describe("Farmer Crop Calendar Page", () => {
     expect(
       screen.getAllByText(/Market Note|Pahinumdom sa (?:palengke|merkado)|Panahon sa sweldo/i).length
     ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not fabricate recommended crops when the stored advisory recommends none", async () => {
+    const original = apiGet.getMockImplementation();
+    apiGet.mockImplementation((url) => {
+      if (url.includes("/market/monthly-recommendations")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              items: [
+                {
+                  commodity_id: "COM-0004",
+                  commodity_name: "Kamatis",
+                  advisory_category: "Avoid for Now",
+                  explanation: "Severe weather risk",
+                  weather_risk_level: "Severe",
+                },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+
+    try {
+      renderComponent();
+
+      // The section is present, but the only crop is "Avoid for Now", so it must
+      // not be surfaced as a good crop to plant (the curated fallback is empty-data only).
+      expect(
+        await screen.findByText(/Good crops to plant|Maayong mga tanom/i)
+      ).toBeInTheDocument();
+      expect(
+        await screen.findByText(
+          /No crop recommendations available yet|Wala pay available nga rekomendasyon/i
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Kamatis")).not.toBeInTheDocument();
+    } finally {
+      apiGet.mockImplementation(original);
+    }
   });
 });

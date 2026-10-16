@@ -54,6 +54,7 @@ function NotificationsPage() {
     (item) => readIds.has(item.id) && !item.read && !item.read_at,
   ).length;
   const unreadCount = Math.max(0, serverUnreadCount - pendingLocal);
+  const hasUnread = unreadCount > 0 || serverUnreadCount > 0 || notifications.some((n) => !isRead(n));
 
   // Real-time live updates on the shared app-wide notification stream
   useNotificationEvent("NOTIFICATION_CREATED", () => {
@@ -63,9 +64,10 @@ function NotificationsPage() {
 
   useEffect(() => {
     if (typeof data?.unread_count === "number") {
-      queryClient.setQueryData(["notifications", "unread-count"], data.unread_count);
+      const effectiveUnread = Math.max(0, data.unread_count - pendingLocal);
+      queryClient.setQueryData(["notifications", "unread-count"], effectiveUnread);
     }
-  }, [data?.unread_count, queryClient]);
+  }, [data?.unread_count, pendingLocal, queryClient]);
 
   const markReadMutation = useMutation({
     mutationFn: markRead,
@@ -79,7 +81,10 @@ function NotificationsPage() {
 
   const markAllMutation = useMutation({
     mutationFn: markAllRead,
-    onMutate: () => markReadLocally(notifications.map((item) => item.id)),
+    onMutate: () => {
+      markReadLocally(notifications.map((item) => item.id));
+      queryClient.setQueryData(["notifications", "unread-count"], 0);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
@@ -87,7 +92,7 @@ function NotificationsPage() {
   });
 
   const handleCardClick = (item) => {
-    if (!isRead(item)) {
+    if (!item.read_at && !item.read) {
       markReadMutation.mutate(item.id);
     }
     let targetRoute = null;
@@ -119,7 +124,7 @@ function NotificationsPage() {
             )}
           </p>
         </div>
-        {unreadCount > 0 && (
+        {hasUnread && (
           <button
             type="button"
             onClick={() => markAllMutation.mutate()}

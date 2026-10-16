@@ -426,7 +426,7 @@ function SeasonalProductionDetailsPage() {
                 <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.source_dist_title")}</p>
                 <p className="text-[12px] text-[var(--hw-neutral-600)]">{t("farmer.factors.production.source_dist_subtitle")}</p>
               </div>
-              <ProductionSourcePieChart height={200} />
+              <ProductionSourcePieChart height={280} />
             </div>
 
             {/* Quarterly table */}

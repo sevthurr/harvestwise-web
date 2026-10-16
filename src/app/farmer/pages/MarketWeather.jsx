@@ -1,5 +1,5 @@
-import { useMemo, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw,
@@ -29,11 +29,7 @@ import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
 
-const RISK_CFG = {
-  [WEATHER_SUITABILITY_CODES.SUITABLE]: { Icon: CheckCircle2, color: "text-emerald-700", dot: "bg-emerald-500", label: "Suitable" },
-  [WEATHER_SUITABILITY_CODES.CAUTION]: { Icon: AlertTriangle, color: "text-amber-700", dot: "bg-amber-400", label: "Caution" },
-  [WEATHER_SUITABILITY_CODES.SEVERE]: { Icon: AlertOctagon, color: "text-red-600", dot: "bg-red-500", label: "Severe" },
-};
+import { CropWeatherCard } from "../components/shared/CropWeatherCard";
 
 function _mapWeatherConditionToIcon(condition) {
   if (!condition) return "sun";
@@ -56,57 +52,26 @@ function WeatherIconEl({ icon, cls = "w-6 h-6" }) {
   return <Sun className={`${cls} text-amber-400`} />;
 }
 
-const CropWeatherCard = ({ crop }) => {
-  const { t } = useLanguage();
-  const riskCode = normalizeWeatherSuitability(crop.risk_level);
-  const rc = riskCode ? (RISK_CFG[riskCode] || RISK_CFG[WEATHER_SUITABILITY_CODES.SUITABLE]) : null;
-  const RiskIcon = rc?.Icon;
-  const displayName = crop.variety ? `${crop.crop_name} (${crop.variety})` : crop.crop_name;
-  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-start gap-3 p-4 pb-3">
-        <CommodityIllustration commodityId={crop.crop_id} className="w-9 h-9 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{displayName}</p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("common.status", {}, "Status")}: {crop.status}</p>
-          {rc && (
-            <div className={`flex items-start gap-1.5 mt-1 ${rc.color}`}>
-              {RiskIcon && <RiskIcon className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />}
-              <p className="text-[13px] font-semibold leading-snug">{crop.headline}</p>
-            </div>
-          )}
-          <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{crop.date_range}</p>
-        </div>
-      </div>
-
-      {
-    /* Actions */
-  }
-      <div className="px-4 pb-3 space-y-1.5">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-2">
-          {t("farmer.factors.weather.recommended_actions_title", {}, "Recommended actions")}
-        </p>
-        {crop.recommended_actions.map((action, i) => <div key={i} className="flex items-start gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
-            <p className="text-[13px] text-[var(--hw-neutral-900)]">{action}</p>
-          </div>)}
-      </div>
-
-      {
-    /* Why */
-  }
-      {crop.crop_sensitivity && <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)]">
-        <p className="text-[12px] text-[var(--hw-neutral-900)] italic">"{crop.crop_sensitivity}"</p>
-      </div>}
-    </div>;
-};
 function MarketWeatherPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightParam = searchParams.get("highlight") || searchParams.get("commodity");
+  const [highlightedCropId, setHighlightedCropId] = useState(highlightParam);
   const carouselRef = useRef(null);
-  const { t } = useLanguage();
+  const { t, effectiveLanguage, langCode } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
   const queryClient = useQueryClient();
 
-  const { data: profile } = useQuery({
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedCropId(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedCropId(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+
+  const { data: profile, isLoading: isProfileLoading } = useQuery({
     queryKey: ["farmer", "profile"],
     queryFn: async () => {
       const res = await apiGet("/farmer/profile");
@@ -120,7 +85,7 @@ function MarketWeatherPage() {
   const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
   const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
-  const { data: weatherData, isLoading: loading, error } = useQuery({
+  const { data: weatherData, isLoading: isWeatherLoading, error } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
     enabled: true,
     queryFn: async () => {
@@ -130,6 +95,8 @@ function MarketWeatherPage() {
     },
     staleTime: 1000 * 60 * 30,
   });
+
+  const loading = (isProfileLoading && !profile) || isWeatherLoading;
 
   const transformedWeather = useMemo(() => {
     if (!weatherData) return null;
@@ -158,17 +125,18 @@ function MarketWeatherPage() {
       weather_summary: data.weather_risk_level ? t('farmer.factors.weather.summary_headline', { risk_level: data.weather_risk_level }) : t('farmer.factors.weather.forecast_fallback_davao'),
       crop_advisories: (data.advisories || []).map((adv, idx) => ({
         crop_id: adv.commodity_id || `crop-${idx}`,
-        crop_name: adv.commodity_name || 'Crop',
-        status: 'Monitoring',
+        crop_name: adv.commodity_name || (currentLang === "ceb" ? "Tanom" : currentLang === "tl" ? "Pananim" : "Crop"),
+        variety: adv.variety || null,
+        status: currentLang === "ceb" ? "Pagbantay" : currentLang === "tl" ? "Binabantayan" : "Monitoring",
         risk_level: adv.suitability || null,
-        headline: adv.headline || (adv.suitability ? `${adv.suitability} weather conditions` : "Weather conditions"),
-        date_range: 'Next 7 Days',
-        recommended_actions: adv.recommended_actions || ['Monitor field drainage and moisture'],
+        headline: adv.headline || null,
+        date_range: currentLang === "ceb" ? "Sunod 7 ka Adlaw" : currentLang === "tl" ? "Susunod na 7 Araw" : "Next 7 Days",
+        recommended_actions: adv.recommended_actions || [],
         crop_sensitivity: adv.explanation || null
       })),
       has_crops: (data.advisories || []).length > 0
     };
-  }, [weatherData, t]);
+  }, [weatherData, t, currentLang]);
 
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
 
@@ -216,6 +184,20 @@ function MarketWeatherPage() {
   const weatherSummary = transformedWeather?.weather_summary ?? 'No weather data available';
   const updatedAt = transformedWeather?.updated_at ? new Date(transformedWeather.updated_at).toLocaleTimeString() : t('farmer.factors.weather.unknown_time');
 
+  useEffect(() => {
+    if (!highlightParam || loading || cropAdvisories.length === 0) return;
+    const target = cropAdvisories.find(
+      (c) =>
+        c.crop_id === highlightParam ||
+        (c.crop_name && c.crop_name.toLowerCase() === highlightParam.toLowerCase())
+    );
+    const targetId = target ? target.crop_id : highlightParam;
+    const el = document.getElementById(`crop-weather-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightParam, loading, cropAdvisories]);
+
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
 
@@ -241,10 +223,30 @@ function MarketWeatherPage() {
 
         {/* ── 3. Crop-specific advisories ── */}
         <section className="space-y-3">
-          <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">{t("farmer.factors.weather.crop_advisories_title")}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+              {t("farmer.factors.weather.crop_advisories_title")}
+            </p>
+            {cropAdvisories.length > 3 && (
+              <span className="text-[11px] text-[var(--hw-neutral-500)] font-medium">
+                {cropAdvisories.length} {t("common.items", {}, "items")}
+              </span>
+            )}
+          </div>
           
           {cropAdvisories.length > 0 ? (
-            cropAdvisories.map((crop) => <CropWeatherCard key={crop.crop_id} crop={crop} />)
+            <div className="max-h-[600px] sm:max-h-[660px] md:max-h-[700px] overflow-y-auto pr-1 sm:pr-2 space-y-3 rounded-2xl scrollbar-thin scroll-smooth focus:outline-none">
+              {cropAdvisories.map((crop) => (
+                <CropWeatherCard
+                  key={crop.crop_id}
+                  crop={crop}
+                  isHighlighted={
+                    highlightedCropId === crop.crop_id ||
+                    (crop.crop_name && highlightedCropId && crop.crop_name.toLowerCase() === highlightedCropId.toLowerCase())
+                  }
+                />
+              ))}
+            </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center space-y-3">
               <Sprout className="w-8 h-8 text-[var(--hw-neutral-300)] mx-auto" />

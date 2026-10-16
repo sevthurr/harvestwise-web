@@ -1,7 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Check, PauseCircle, Play, ChevronDown } from "lucide-react";
 import { PHASE_CONFIG, PHASE_TRANSITIONS, formatPeso } from "./types";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { suggestHarvestDate, getCropDuration } from "../recommend/types";
+
+function toDateInputValue(val) {
+  if (!val) return "";
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+    return val.slice(0, 10);
+  }
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 const HOLD_REASONS = [
   { key: "farmer.cropCycle.hold_reason_market", value: "Waiting for better market conditions", fallback: "Waiting for better market conditions" },
@@ -29,12 +43,51 @@ const UpdatePhaseDrawer = ({
   const [holdReason, setHoldReason] = useState("");
   const [holdOther, setHoldOther] = useState("");
 
+  const cropIdentifier = crop?.commodityName || crop?.commodity || crop?.commodityId;
+  const cropVariant = crop?.variant || crop?.variety;
+  const cropDuration = cropIdentifier ? getCropDuration(cropIdentifier, cropVariant) : null;
+
+  useEffect(() => {
+    if (!open || !crop) return;
+    const initialPlanting = toDateInputValue(crop.rawPlantingDate || crop.plantingDate) || new Date().toISOString().split("T")[0];
+    const initialArea = crop.farmArea ?? "";
+    let initialHarvest = toDateInputValue(crop.rawHarvestDate || crop.harvestDate);
+    if (!initialHarvest && initialPlanting) {
+      const suggestion = suggestHarvestDate(initialPlanting, cropIdentifier, cropVariant);
+      if (suggestion?.minDate) {
+        initialHarvest = suggestion.minDate;
+      }
+    }
+
+    setFields({
+      actualPlantingDate: initialPlanting,
+      actualPlantedArea: initialArea,
+      updatedHarvestDate: initialHarvest,
+      expectedHarvestQty: crop.expectedHarvestQty ?? crop.harvestQuantity ?? "",
+      actualHarvestDate: toDateInputValue(crop.actualHarvestDate) || new Date().toISOString().split("T")[0],
+      actualHarvestedQty: crop.actualHarvestQty ?? "",
+      finalProductionCost: crop.totalCost ?? "",
+    });
+  }, [open, crop?.id]);
+
   if (!open) return null;
 
   const set = (patch) => setFields((f) => ({ ...f, ...patch }));
   const isOther = holdReason === "Other";
   const resolvedReason = isOther ? holdOther.trim() : holdReason;
   const holdValid = resolvedReason.length > 0;
+
+  const handlePlantingDateChange = (newPlantingDate) => {
+    const suggestion = newPlantingDate
+      ? suggestHarvestDate(newPlantingDate, cropIdentifier, cropVariant)
+      : null;
+
+    setFields((f) => ({
+      ...f,
+      actualPlantingDate: newPlantingDate,
+      ...(suggestion?.minDate ? { updatedHarvestDate: suggestion.minDate } : {}),
+    }));
+  };
 
   const handlePhaseConfirm = () => {
     if (!selectedPhase) return;
@@ -55,14 +108,43 @@ const UpdatePhaseDrawer = ({
     if (selectedPhase === "growing") {
       return (
         <div className="space-y-4">
-          <Field label={t("farmer.cropCycle.actual_planting_date", {}, "Actual planting date")}>
-            <input type="date" value={fields.actualPlantingDate ?? ""} onChange={(e) => set({ actualPlantingDate: e.target.value })} className={inputCls} />
+          <Field id="actualPlantingDate" label={t("farmer.cropCycle.actual_planting_date", {}, "Actual planting date")}>
+            <input
+              id="actualPlantingDate"
+              type="date"
+              value={fields.actualPlantingDate ?? ""}
+              onChange={(e) => handlePlantingDateChange(e.target.value)}
+              className={inputCls}
+            />
           </Field>
-          <Field label={t("farmer.cropCycle.actual_planted_area", {}, "Actual planted area (sq m)")}>
-            <input type="number" min="0" value={fields.actualPlantedArea ?? ""} onChange={(e) => set({ actualPlantedArea: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="e.g. 500" className={inputCls} />
+          <Field id="actualPlantedArea" label={t("farmer.cropCycle.actual_planted_area", {}, "Actual planted area (sq m)")}>
+            <input
+              id="actualPlantedArea"
+              type="number"
+              min="0"
+              value={fields.actualPlantedArea ?? ""}
+              onChange={(e) => set({ actualPlantedArea: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder="e.g. 500"
+              className={inputCls}
+            />
           </Field>
-          <Field label={t("farmer.cropCycle.updated_harvest_date", {}, "Updated expected harvest date")}>
-            <input type="date" value={fields.updatedHarvestDate ?? ""} onChange={(e) => set({ updatedHarvestDate: e.target.value })} className={inputCls} />
+          <Field id="updatedHarvestDate" label={t("farmer.cropCycle.updated_harvest_date", {}, "Updated expected harvest date")}>
+            <input
+              id="updatedHarvestDate"
+              type="date"
+              value={fields.updatedHarvestDate ?? ""}
+              onChange={(e) => set({ updatedHarvestDate: e.target.value })}
+              className={inputCls}
+            />
+            {cropDuration?.label && (
+              <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
+                {t(
+                  "farmer.cropCycle.auto_calculated_duration",
+                  { duration: cropDuration.label },
+                  `Auto-filled based on typical duration (${cropDuration.label})`
+                )}
+              </p>
+            )}
           </Field>
         </div>
       );
@@ -361,9 +443,9 @@ const UpdatePhaseDrawer = ({
 
 const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition bg-white";
 
-const Field = ({ label, children }) => (
+const Field = ({ label, id, children }) => (
   <div>
-    <label className="block text-sm font-medium text-[var(--hw-neutral-700)] mb-1.5">{label}</label>
+    <label htmlFor={id} className="block text-sm font-medium text-[var(--hw-neutral-700)] mb-1.5">{label}</label>
     {children}
   </div>
 );

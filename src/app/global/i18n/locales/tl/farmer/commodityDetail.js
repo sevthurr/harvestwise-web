@@ -1,7 +1,7 @@
 export const commodityDetail = {
   historical_prices: "Nakaraang mga Presyo",
   wholesale_comparison: "Paghahambing sa Wholesale",
-  today_market_price: "Presyo sa Merkado Ngayon",
+  today_market_price: "Presyo sa Palengke Ngayon",
   expected_trend: "Inaasahang Galaw",
   view_forecast: "Tingnan ang Pagtataya",
   view_wholesale: "Tingnan ang Detalye ng Wholesale",

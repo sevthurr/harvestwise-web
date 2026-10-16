@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Upload,
@@ -364,6 +364,10 @@ function DFTCUpload() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [ingestionStatus, setIngestionStatus] = useState("idle");
   const fileRef = useRef(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const runValidation = async (targetFile, dt, isOverwrite) => {
     const f = targetFile || file;
@@ -514,6 +518,7 @@ function DFTCUpload() {
         while (!isFinished && attempts < 60) {
           attempts++;
           await new Promise((r) => setTimeout(r, 2000));
+          if (!mountedRef.current) return;
           try {
             const statusRes = await ingestionApi.getHistoryDetail(importId);
             if (statusRes?.status === "completed" || statusRes?.status === "success") {

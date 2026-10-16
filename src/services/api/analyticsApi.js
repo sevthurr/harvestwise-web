@@ -130,10 +130,21 @@ export async function getHistoricalSeasonalProduction(commodityRef, quarter = nu
   );
 }
 
-export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_retail", horizon = 14) {
-  return parseResponse(
-    await apiGet(`/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${encodeURIComponent(horizon)}`)
-  );
+export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_retail", horizon = 14, options = {}) {
+  let url = `/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${encodeURIComponent(horizon)}`;
+  const stage = options.cropStage || options.crop_stage;
+  const planting = options.plantingDate || options.planting_date;
+  const harvest = options.harvestDate || options.harvest_date;
+  if (stage) {
+    url += `&crop_stage=${encodeURIComponent(stage)}`;
+  }
+  if (planting) {
+    url += `&planting_date=${encodeURIComponent(planting)}`;
+  }
+  if (harvest) {
+    url += `&harvest_date=${encodeURIComponent(harvest)}`;
+  }
+  return parseResponse(await apiGet(url));
 }
 
 export async function getArrivalPressure(commodityId, year = null, source = null) {

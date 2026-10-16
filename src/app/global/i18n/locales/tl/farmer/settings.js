@@ -109,7 +109,7 @@ export const settings = {
   schedule_reminders: "Mga paalala sa iskedyul ng pagtatanim",
   schedule_reminders_desc: "Paalala para sa nakaplanong petsa ng pagtatanim at mga susunod na yugto.",
   price_alerts: "Mga alerto sa galaw ng presyo",
-  price_alerts_desc: "Notipikasyon kapag ang presyo sa merkado ng iyong mga pananim ay tumaas o bumaba nang malaki.",
+  price_alerts_desc: "Notipikasyon kapag ang presyo sa palengke ng iyong mga pananim ay tumaas o bumaba nang malaki.",
   offline_sync_alerts: "Mga paalala sa pag-sync offline",
   offline_sync_alerts_desc: "Paalala na i-sync ang iyong datos kapag nagkaroon muli ng internet.",
   change_password: "Baguhin ang Password",

@@ -8,14 +8,7 @@ import {
   CloudLightning,
 } from "lucide-react";
 import { CommodityIllustration, getCommodityIconKey, COMMODITY_REGISTRY } from "./CommodityIllustrations";
-import {
-  NOTIFICATION_CATEGORIES,
-  getCategoryConfig,
-} from "../../utils/notificationCategories";
-
-// Re-exported under the original name: the category→glyph table now lives in
-// notificationCategories.js so a new category is declared in exactly one place.
-const CATEGORY_MAP = NOTIFICATION_CATEGORIES;
+import { getCategoryConfig } from "../../utils/notificationCategories";
 
 /**
  * Resolves a Top 10 commodity key ONLY from structured metadata.
@@ -169,5 +162,3 @@ export function NotificationIcon({
     );
   }
 }
-
-export { CATEGORY_MAP, resolveTop10CommodityKey };

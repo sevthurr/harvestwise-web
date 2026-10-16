@@ -18,7 +18,7 @@ export const notifications = {
   category_weather: "Alerto sa Panahon",
   category_harvest: "Pag-ani",
   category_price_update: "Bag-ong Presyo",
-  category_arrival: "Abot sa Merkado",
+  category_arrival: "Abot sa Palengke",
   category_production: "Panahon sa Produksiyon",
   category_planting: "Pahibalo sa Pagtanom",
   new_notification: "Bag-ong Pahibalo",
@@ -39,7 +39,7 @@ export const notifications = {
   price_update_general_body: "Ang gi-update nga presyo sa palengke alang sa {commodity} anaa na karon.",
 
   // Arrival Update
-  arrival_high_title: "Taas nga abot sa merkado alang sa {commodity}",
+  arrival_high_title: "Taas nga abot sa palengke alang sa {commodity}",
   arrival_high_body: "Ang mga abot sa DFTC alang sa {commodity} miabot sa taas nga gidaghanon ({volume} tons) sugod niadtong {date}. Ang taas nga suplay angay bantayan sa pagplano sa pag-ani o pagbaligya.",
 
   // Production Update

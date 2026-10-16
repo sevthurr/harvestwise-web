@@ -168,7 +168,40 @@ const FORECAST_TABLE_PAGE_SIZE = 7;
  * - pagination state is scoped to the table and resets when the forecast changes.
  */
 function ForecastDataTable({ items, commodityName = null }) {
+  const { langCode, effectiveLanguage } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
   const [page, setPage] = useState(1);
+
+  const columns = useMemo(() => {
+    if (currentLang === "ceb") {
+      return [
+        { key: "day", label: "Adlaw" },
+        { key: "temp", label: "Temperatura" },
+        { key: "rain", label: "Ulan" },
+        { key: "humidity", label: "Kaumog" },
+        { key: "wind", label: "Kusog sa Hangin" },
+        { key: "condition", label: "Kahimtang" },
+      ];
+    }
+    if (currentLang === "tl") {
+      return [
+        { key: "day", label: "Araw" },
+        { key: "temp", label: "Temperatura" },
+        { key: "rain", label: "Ulan" },
+        { key: "humidity", label: "Halumigmig" },
+        { key: "wind", label: "Bilis ng Hangin" },
+        { key: "condition", label: "Kondisyon" },
+      ];
+    }
+    return [
+      { key: "day", label: "Day" },
+      { key: "temp", label: "Temp Range" },
+      { key: "rain", label: "Rainfall" },
+      { key: "humidity", label: "Humidity" },
+      { key: "wind", label: "Wind Speed" },
+      { key: "condition", label: "Condition" },
+    ];
+  }, [currentLang]);
 
   // Table-only fields (humidity / wind / condition) are normalized here rather than
   // in the shared card memo, so the farmer path does no extra work.
@@ -177,10 +210,9 @@ function ForecastDataTable({ items, commodityName = null }) {
       items.map((day, i) => {
         const humidity = day.humidity ?? day.humidity_pct;
         const windSpeed = day.wind_speed_max_kmh ?? day.windSpeed;
-        // The cards show weekday names (getDayName collapses "+1d" to "Wed" whenever a
-        // real date exists). The table keeps the relative offset so a 14-day window is
-        // unambiguous at a glance, with the absolute date alongside.
-        const relativeLabel = i === 0 ? 'Today' : day.dayLabel || `+${i}d`;
+        const relativeLabel = i === 0
+          ? (currentLang === "ceb" ? "Karon" : currentLang === "tl" ? "Ngayon" : "Today")
+          : day.dayLabel || `+${i}d`;
         return {
           key: `${day.formattedDate}-${relativeLabel}`,
           dayName: relativeLabel,
@@ -194,41 +226,59 @@ function ForecastDataTable({ items, commodityName = null }) {
           suitability: day.suitability,
         };
       }),
-    [items]
+    [items, currentLang]
   );
 
   const totalPages = Math.ceil(rows.length / FORECAST_TABLE_PAGE_SIZE) || 1;
-  // Clamp so a shrinking forecast window (commodity switch) can't strand the user
-  // on an out-of-range page.
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * FORECAST_TABLE_PAGE_SIZE;
   const pageRows = rows.slice(start, start + FORECAST_TABLE_PAGE_SIZE);
 
-  // A new forecast window means the stored page is meaningless — restart at page 1.
   useEffect(() => {
     setPage(1);
   }, [items]);
+
+  const tableTitle = currentLang === "ceb"
+    ? "Datos sa Tagna sa Panahon"
+    : currentLang === "tl"
+    ? "Datos ng Ulat Panahon"
+    : "Forecast Data";
+
+  const tableSubtitle = currentLang === "ceb"
+    ? "Inadlaw nga mga parametro sa panahon nga gigamit sa pagsusi sa risk."
+    : currentLang === "tl"
+    ? "Pang-araw-araw na mga datos ng panahon na ginagamit sa pagsusuri ng panganib."
+    : "Per-day weather parameters used to classify weather risk.";
+
+  const showingText = currentLang === "ceb"
+    ? `Gipakita ang ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} sa ${rows.length} ka adlaw`
+    : currentLang === "tl"
+    ? `Ipinapakita ang ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} ng ${rows.length} araw`
+    : `Showing ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} of ${rows.length} days`;
+
+  const prevText = currentLang === "ceb" ? "Miagi" : currentLang === "tl" ? "Nakaraan" : "Prev";
+  const nextText = currentLang === "ceb" ? "Sunod" : currentLang === "tl" ? "Susunod" : "Next";
 
   return (
     <div className="border-t border-[var(--hw-neutral-100)] pt-4 space-y-2.5">
       <div>
         <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
-          Forecast Data
+          {tableTitle}
         </p>
         <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-          Per-day weather parameters used to classify weather risk.
+          {tableSubtitle}
         </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
             <tr>
-              {FORECAST_TABLE_COLUMNS.map((c) => (
+              {columns.map((c) => (
                 <th
-                  key={c}
+                  key={c.key}
                   className="px-4 py-3 text-left font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap"
                 >
-                  {c}
+                  {c.label}
                 </th>
               ))}
             </tr>
@@ -240,7 +290,11 @@ function ForecastDataTable({ items, commodityName = null }) {
                 evaluateSuitability(day, commodityName) ||
                 "Suitable";
               const suitCfg = SUITABILITY_STYLES[suitKey] || SUITABILITY_STYLES.Suitable;
-              const label = suitCfg.labelEn || suitKey;
+              const label = currentLang === "ceb"
+                ? (suitCfg.labelCeb || suitCfg.shortCeb)
+                : currentLang === "tl"
+                ? (suitCfg.labelTl || suitCfg.shortTl)
+                : (suitCfg.labelEn || suitKey);
 
               return (
                 <tr key={day.key} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
@@ -276,7 +330,7 @@ function ForecastDataTable({ items, commodityName = null }) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-4 pt-1">
           <p className="text-[12px] text-[var(--hw-neutral-600)]">
-            Showing {start + 1}–{Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} of {rows.length} days
+            {showingText}
           </p>
           <div className="flex items-center gap-1">
             <button
@@ -284,7 +338,7 @@ function ForecastDataTable({ items, commodityName = null }) {
               onClick={() => setPage(currentPage - 1)}
               className="px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Prev
+              {prevText}
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
               <button
@@ -304,7 +358,7 @@ function ForecastDataTable({ items, commodityName = null }) {
               onClick={() => setPage(currentPage + 1)}
               className="px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Next
+              {nextText}
             </button>
           </div>
         </div>
@@ -347,8 +401,8 @@ export function WeatherForecastOutlook({
   emptyMessage,
   onSelectDay,
 }) {
-  const { langCode, t } = useLanguage();
-  const currentLang = langCode || "ceb";
+  const { langCode, effectiveLanguage, t } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
 
   const defaultTitle =
     currentLang === "ceb"
@@ -524,7 +578,7 @@ export function WeatherForecastOutlook({
       {/* Cards Container */}
       {items.length > 0 ? (
         <div
-          className="flex gap-2.5 sm:gap-3 overflow-x-auto pb-2 pt-0.5 select-none no-scrollbar [&::-webkit-scrollbar]:hidden"
+          className="flex gap-2.5 sm:gap-3 overflow-x-auto p-1.5 pb-2.5 -m-1.5 select-none no-scrollbar [&::-webkit-scrollbar]:hidden"
           style={{
             scrollbarWidth: "none",
             msOverflowStyle: "none",

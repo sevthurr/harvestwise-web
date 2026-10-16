@@ -41,6 +41,7 @@ export const ceb = {
     not_applicable: "Dili Aplikable",
     default: "Default",
     status: "Status",
+    items: "ka mga tanom",
     updated: "Gipabag-o",
     last_updated: "Katapusang na-update",
     date: "Petsa",
@@ -76,7 +77,11 @@ export const ceb = {
     pw_err_generic: "Wala nga na-update ang password. Susiha ang imong kasalukuyang password ug try usab.",
     pw_panel_title: "Palita ang imong temporary password",
     pw_panel_body: "Arong safe ang imong account, palita ang temporary password nga natanggap nimo ng password nga ikaw lang ang nakamakat.",
-    pw_panel_restricted: "Temporary password pa gikan ang imong account, kaya dili pa available ang uban nga parte sa app hangtod sa matapos nimo niini."
+    pw_panel_restricted: "Temporary password pa gikan ang imong account, kaya dili pa available ang uban nga parte sa app hangtod sa matapos nimo niini.",
+    error_title: "Naay nasayop",
+    error_body: "Naundang ang pag-load niini nga panid tungod sa wala damha nga sayop.",
+    error_reload: "I-reload",
+    error_home: "Balik sa home"
   },
   nav: {
     home: "Home",
@@ -480,13 +485,14 @@ export const ceb = {
         historical_avg_frequency: "Kadugayon",
         historical_avg_weekly: "Kada Semana",
         historical_avg_monthly: "Kada Bulan",
-        historical_avg_explanation: "Gipakita niini nga tsart ang kasagarang na-record nga presyo kada semana o kada bulan. Dugang nga impormasyon lang kini ug dili kini apil sa pagkwenta sa rekomendasyon sa pagtanom.",
+        historical_avg_explanation: "Gipakita niini nga tsart ang kada semana o kada bulan nga kasagarang na-record nga presyo sa miaging mga panahon aron maghatag og konteksto sa iskedyul sa imong tanom.",
         historical_avg_dynamic: "Ang kasagarang na-record nga presyo sa {period} kay ₱{price}/kg.",
         historical_avg_empty: "Walay available nga datos sa kasagarang presyo sa miaging mga panahon para niini nga pagpili.",
         historical_avg_error: "Dili ma-load ang datos sa kasagarang presyo sa miaging mga panahon. Sulayi pag-usab.",
         historical_avg_limited: "Limitado pa ang available nga historical nga datos para niini nga pagpili.",
         historical_avg_tooltip_price: "Kasagarang presyo",
-        historical_avg_tooltip_observations: "Mga na-record nga obserbasyon"
+        historical_avg_tooltip_observations: "Mga na-record nga obserbasyon",
+        previous_year: "Miaging Tuig"
       },
 
 
@@ -578,7 +584,21 @@ export const ceb = {
         planting_window_manageable: "Madaog ra uban ang pag-amping",
         planting_window_not_ideal: "Dili maayo — i-oktaba kung mahimo",
         no_weather_guidance: "Walay giya sa panahon karon.",
-        no_forecast_data: "Walay datos sa forecast sa panahon karon."
+        no_forecast_data: "Walay datos sa forecast sa panahon karon.",
+        status_monitoring: "Pagbantay",
+        next_7_days: "Sunod 7 ka Adlaw",
+        suitability_severe_combined: "Taas ang Kombinadong Risk",
+        table_forecast_data: "Datos sa Tagna sa Panahon",
+        table_forecast_desc: "Inadlaw nga mga parametro sa panahon nga gigamit sa pagsusi sa risk.",
+        table_day: "Adlaw",
+        table_temp_range: "Temperatura",
+        table_rainfall: "Ulan",
+        table_humidity: "Kaumog",
+        table_wind_speed: "Kusog sa Hangin",
+        table_condition: "Kahimtang",
+        table_showing_days: "Gipakita ang {start}–{end} sa {total} ka adlaw",
+        prev: "Miagi",
+        next: "Sunod"
       },
 
       arrival: {
@@ -664,7 +684,69 @@ export const ceb = {
       weather_note_storm: "Kusog nga ulan nga may panugdog ug kilat ang gilauman{rain_mm}. Likayi ang pagtanom ug panalipdi ang naani.",
       weather_note_heat: "Talagsaong init nga mga adlaw. Bisbisi ang mga tanom sayo sa buntag ug bantayi ang kaumog sa yuta.",
       weather_note_rain: "Gilauman ang ulan{rain_mm}{rain_chance}. Hawani ang kanal sa dili pa magtanom.",
-      weather_note_fair: "Maayong kahimtang{temps}. Ang panahon angay alang sa mga buluhaton sa uma."
+      weather_note_fair: "Maayong kahimtang{temps}. Ang panahon angay alang sa mga buluhaton sa uma.",
+      weather_note_sun: "Maayo nga panahon.",
+      weather_rain_chance: "{pct}% ulan",
+      weather_note_title: "Pahibalo sa panahon",
+      weather_note_default: "Gilaoman ang ulan karong semanaha. Limpyohi ang agianan sa tubig sa dili pa magtanom.",
+      days: {
+        sun: "Dom",
+        mon: "Lun",
+        tue: "Mar",
+        wed: "Miy",
+        thu: "Huw",
+        fri: "Biy",
+        sat: "Sab"
+      },
+      months: {
+        january: "Enero",
+        february: "Pebrero",
+        march: "Marso",
+        april: "Abril",
+        may: "Mayo",
+        june: "Hunyo",
+        july: "Hulyo",
+        august: "Agosto",
+        september: "Setyembre",
+        october: "Oktubre",
+        november: "Nobyembre",
+        december: "Disyembre"
+      },
+      legend: {
+        crop: "Imong tanom",
+        weather: "Panahon",
+        events: "Mga Events",
+        payday: "Payday",
+        light_rain: "Gamay nga ulan",
+        heavy_rain: "Kusog nga ulan",
+        hot_days: "Init nga mga adlaw",
+        crop_schedule: "Iskedyul sa tanom"
+      },
+      selected_date: {
+        title: "Inadlaw nga Detalye sa Kalendaryo ug Pag-uma",
+        weather_note: "Pahinumdom sa panahon",
+        market_note: "Pahinumdom sa palengke",
+        expected_harvest: "Gilaom nga ani",
+        expected_harvest_date: "Gilaom nga petsa sa ani",
+        check_crop: "Susiha kining tanoma",
+        payday: "Panahon sa sweldo",
+        payday_note: "Panahon sa sweldo. Gilaom nga mas taas ang gastos sa mga konsumer ug ang panginahanglan sa palengke.",
+        no_crop_schedule: "Walay iskedyul sa tanom niining petsaha.",
+        no_weather_note: "Wala pay available nga tagna sa panahon alang niining petsaha (magamit alang sa sunod nga 14 ka adlaw).",
+        no_event_note: "Normal nga adlaw sa pamatigayon. Walay espesyal nga okasyon o holiday."
+      },
+      price_outlook_rise: "Posibleng musaka ang presyo sa dili madugay",
+      price_outlook_profit: "Maayong gilaomang ginansya",
+      factor_price_kamatis: "₱85/kg karon, nagsaka nga trend sa nilabayng duha ka semana.",
+      factor_supply_kamatis: "Minaog ang mga abot sa DFTC karong semanaha kumpara sa nilabay.",
+      factor_production_kamatis: "Kasarangang suplay ang naandan niining panahona.",
+      factor_weather_kamatis: "Adunay mga adlaw nga uga nga angay itanom.",
+      factor_profit_kamatis: "Mga ₱20/kg labaw sa gibanabanang gasto.",
+      factor_price_ampalaya: "₱90/kg karon, lig-on nga presyo nga may taas nga panginahanglan.",
+      factor_supply_ampalaya: "Minaog ang mga abot sa DFTC karong semanaha kumpara sa nilabay.",
+      factor_production_ampalaya: "Kasarangang suplay ang naandan niining panahona.",
+      factor_weather_ampalaya: "Adunay mga adlaw nga angay itanom.",
+      factor_profit_ampalaya: "Mga ₱25/kg labaw sa gibanabanang gasto."
     },
 
     empty: {

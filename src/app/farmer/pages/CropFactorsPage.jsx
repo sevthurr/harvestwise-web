@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useSearchParams } from "react-router";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCrops } from "../components/crops/CropsContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -9,6 +9,7 @@ import { normalizePhaseCode, PHASE_CODES } from "../utils/farmerCodes";
 import { apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
@@ -21,7 +22,10 @@ function CropFactorsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") || "price";
-  const { t } = useLanguage();
+  const { t, effectiveLanguage, langCode } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
+  const location = useLocation();
+  const state = location.state;
   const { crops } = useCrops();
   const crop = crops.find((c) => c.id === cropId);
   if (!crop) {
@@ -35,12 +39,19 @@ function CropFactorsPage() {
     );
   }
 
+  const explicitStage = crop?.phase ? (
+    crop.phase.toLowerCase().includes("plan") ? "before_planting" :
+    crop.phase.toLowerCase().includes("grow") || crop.phase.toLowerCase().includes("plant") ? "during_planting" :
+    crop.phase.toLowerCase().includes("pre") ? "near_harvest" :
+    crop.phase.toLowerCase().includes("harvest") ? "harvest" : null
+  ) : null;
+
   const updatedTotalCost = crop.totalCost || 0;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
   const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
 
   const { data: planAdvisoryData } = useQuery({
-    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty],
+    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
     queryFn: async () => {
       try {
         const pDate = new Date(crop.plantingDate);
@@ -53,6 +64,7 @@ function CropFactorsPage() {
           expected_harvest_date: hDateStr,
           total_production_cost: updatedTotalCost,
           expected_yield_kg: qty,
+          crop_stage: explicitStage,
         };
         const res = await apiPost("/advisory/plan", payload);
         if (!res.ok) return null;
@@ -95,9 +107,20 @@ function CropFactorsPage() {
   const fLo = crop.forecastLower || planAdvisoryData?.module_results?.lower_forecast_price || null;
   const fHi = crop.forecastUpper || planAdvisoryData?.module_results?.upper_forecast_price || null;
   const forecastMid = fLo != null && fHi != null ? (fLo + fHi) / 2 : (planAdvisoryData?.module_results?.forecast_midpoint || null);
+  const stageRef = planAdvisoryData?.module_results?.reference_price;
   const phaseCode = normalizePhaseCode(crop.phase);
-  const useForecast = [PHASE_CODES.PLANNING, PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
-  const basePrice = useForecast ? (forecastMid || currentPrice) : currentPrice;
+  const resolvedCropStage =
+    state?.cropStage ||
+    crop.cropStage ||
+    crop.stage ||
+    explicitStage ||
+    planAdvisoryData?.crop_stage ||
+    "before_planting";
+  const isPlanning = resolvedCropStage === "before_planting" || phaseCode === PHASE_CODES.PLANNING;
+  const useForecast = !isPlanning && [PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
+  const basePrice = isPlanning
+    ? (stageRef || currentPrice)
+    : (useForecast ? (stageRef || forecastMid || currentPrice) : currentPrice);
   const costToRecover = qty > 0 && updatedTotalCost > 0 ? Math.ceil(updatedTotalCost / qty) : null;
   const farmgatePrice = crop.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : null;
   const sellingBasis = farmgatePrice ?? basePrice;
@@ -144,6 +167,7 @@ function CropFactorsPage() {
     commodityName: crop.commodityName,
     weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
     weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+    lang: currentLang,
   });
   const weatherTabData = {
     risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
@@ -170,6 +194,7 @@ function CropFactorsPage() {
   const phaseConfig = crop.phase ? getPhaseConfig(crop.phase) : null;
   const phaseLabel = phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null;
 
+
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
       {/* Breadcrumb */}
@@ -182,14 +207,22 @@ function CropFactorsPage() {
       />
 
       {/* Page title */}
-      <div>
-        <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">
-          {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
-        </h1>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-          {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
-          {phaseLabel ? ` · ${phaseLabel}` : ""}
-        </p>
+      <div className="flex items-center gap-3">
+        <CommodityIllustration
+          commodityId={commodityIdentifier}
+          commodityName={crop.commodityName}
+          baseName={crop.commodityName}
+          className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0"
+        />
+        <div className="min-w-0">
+          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">
+            {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
+          </h1>
+          <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
+            {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
+            {phaseLabel ? ` · ${phaseLabel}` : ""}
+          </p>
+        </div>
       </div>
 
       {/* Factor tabs */}
@@ -201,6 +234,13 @@ function CropFactorsPage() {
         defaultTab={defaultTab}
         commodityId={commodityIdentifier}
         commodityName={crop.commodityName}
+        cropStage={resolvedCropStage}
+        plantingDate={state?.plantingDate || crop.rawPlantingDate || crop.plantingDate || planAdvisoryData?.planting_date}
+        expectedHarvestDate={state?.expectedHarvestDate || crop.rawHarvestDate || crop.harvestDate || planAdvisoryData?.expected_harvest_date}
+        moduleResults={state?.moduleResults || planAdvisoryData?.module_results}
+        plantingWindowStart={state?.plantingWindowStart || planAdvisoryData?.planting_window_start}
+        plantingWindowEnd={state?.plantingWindowEnd || planAdvisoryData?.planting_window_end}
+        plantingWindowLabel={state?.plantingWindowLabel || planAdvisoryData?.planting_window_label}
       />
 
       {/* Bottom action */}

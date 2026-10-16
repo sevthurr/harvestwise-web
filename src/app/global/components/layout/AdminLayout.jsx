@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
 import { getUnreadCount } from "../../../../services/api/notificationsApi";
@@ -14,6 +14,7 @@ import {
   LogOut,
   RefreshCw,
   Info,
+  Loader2,
   Shield,
   Layers,
   ClipboardList
@@ -169,6 +170,9 @@ const AdminLayoutInner = () => {
 
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    if (location.pathname.includes("/notifications")) {
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    }
   }, [location.pathname, queryClient]);
 
   useNotificationEvent("NOTIFICATION_CREATED", () => {
@@ -178,9 +182,9 @@ const AdminLayoutInner = () => {
     refreshUnread();
   });
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setAvatarOpen(false);
-    logout();
+    await logout();
     navigate("/login");
   };
 
@@ -336,7 +340,15 @@ const AdminLayoutInner = () => {
           <ChangePasswordPanel onRotated={handlePasswordRotated} />
         ) : (
           <>
-            <Outlet />
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center w-full h-[50vh]">
+                  <Loader2 className="w-6 h-6 text-[var(--hw-green-700)] animate-spin" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
             <Footer className="mt-6 mb-2" />
           </>
         )}

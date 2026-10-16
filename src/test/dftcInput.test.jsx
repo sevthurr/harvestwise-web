@@ -6,12 +6,18 @@ import DFTCInput from '../app/dftc/pages/DFTCInput';
 
 const mockNavigate = vi.fn();
 let mockLocationState = null;
+let mockSearchParams = new URLSearchParams();
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    useLocation: () => ({ state: mockLocationState, pathname: '/dftc/input' })
+    useLocation: () => ({
+      state: mockLocationState,
+      pathname: '/dftc/input',
+      search: mockSearchParams.toString() ? `?${mockSearchParams.toString()}` : ''
+    }),
+    useSearchParams: () => [mockSearchParams, vi.fn()]
   };
 });
 
@@ -516,5 +522,22 @@ describe('DFTCInput Submit Data Page', () => {
       // The row should display 19 in the Records column instead of 1
       expect(screen.getByText('19')).toBeInTheDocument();
     });
+  });
+
+  it("briefly highlights the draft item in Today's Draft section when highlight parameter is present", async () => {
+    mockSearchParams = new URLSearchParams('highlight=price');
+    global.fetch = mockSubmissionsFetch();
+
+    renderDFTCInput();
+
+    await waitFor(() => {
+      expect(screen.getByText("Today's Draft")).toBeInTheDocument();
+      expect(screen.queryByText('Selected')).toBeNull();
+      const draftRow = screen.getByText('DFTC Price Monitoring — ' + todayFormatted).closest('tr');
+      expect(draftRow).toHaveClass('bg-emerald-50/90');
+      expect(draftRow).not.toHaveClass('ring-4');
+    });
+
+    mockSearchParams = new URLSearchParams();
   });
 });

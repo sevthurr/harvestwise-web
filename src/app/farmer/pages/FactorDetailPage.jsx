@@ -10,6 +10,7 @@ import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis
 import { catalogPairsFromPriceList, findCommodityId } from "../../global/utils/priceChartTransforms";
 import { fetchPricesList, STALE_TIME } from "../../global/hooks/useFarmerPrefetch";
 import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
@@ -21,7 +22,8 @@ function FactorDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { t } = useLanguage();
+  const { t, effectiveLanguage, langCode } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
   const state = location.state;
 
   const paramCommodity = searchParams.get("commodity") || searchParams.get("commodityId");
@@ -80,6 +82,68 @@ function FactorDetailPage() {
       || commodityId;
   }, [catalogPairs, commodityId, commodityName]);
 
+  const cropStage =
+    state?.cropStage ||
+    state?.crop_stage ||
+    state?.stage ||
+    state?.phase ||
+    state?.advisoryPayload?.crop_stage ||
+    state?.resultData?.cropStage ||
+    state?.resultData?.crop_stage ||
+    state?.resultData?.phase ||
+    state?.resultData?.stage ||
+    null;
+
+  const plantingDate =
+    state?.plantingDate ||
+    state?.planting_date ||
+    state?.resultData?.plantingDate ||
+    state?.resultData?.planting_date ||
+    state?.advisoryPayload?.planting_date ||
+    null;
+
+  const expectedHarvestDate =
+    state?.expectedHarvestDate ||
+    state?.expected_harvest_date ||
+    state?.resultData?.harvestDate ||
+    state?.resultData?.expectedHarvestDate ||
+    state?.resultData?.expected_harvest_date ||
+    state?.advisoryPayload?.expected_harvest_date ||
+    null;
+
+  const plantingSeason =
+    state?.plantingSeason ||
+    state?.planting_season ||
+    state?.resultData?.plantingSeason ||
+    state?.resultData?.season ||
+    null;
+
+  const moduleResults =
+    state?.moduleResults ||
+    state?.module_results ||
+    state?.advisoryPayload?.module_results ||
+    null;
+
+  const plantingWindowStart =
+    state?.plantingWindowStart ||
+    state?.planting_window_start ||
+    state?.advisoryPayload?.planting_window_start ||
+    moduleResults?.planting_window_start ||
+    null;
+
+  const plantingWindowEnd =
+    state?.plantingWindowEnd ||
+    state?.planting_window_end ||
+    state?.advisoryPayload?.planting_window_end ||
+    moduleResults?.planting_window_end ||
+    null;
+
+  const plantingWindowLabel =
+    state?.plantingWindowLabel ||
+    state?.planting_window_label ||
+    state?.advisoryPayload?.planting_window_label ||
+    moduleResults?.planting_window_label ||
+    null;
   const arrivalPressureQuery = useQuery({
     queryKey: ["farmer", "arrival-pressure", resolvedCommodityId],
     queryFn: () => analyticsApi.getArrivalPressure(resolvedCommodityId),
@@ -165,6 +229,7 @@ function FactorDetailPage() {
     commodityName: commodityName || "selected crop",
     weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
     weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+    lang: currentLang,
   });
   const weatherTab = {
     risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
@@ -176,16 +241,6 @@ function FactorDetailPage() {
   };
 
   const displayTitle = title || `${commodityName || "Crop"} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`;
-  const breadcrumbItems = (breadcrumbs && breadcrumbs.length > 0)
-    ? breadcrumbs.map((bc) => ({
-        label: bc.label,
-        onClick: bc.path ? () => navigate(bc.path) : void 0,
-      }))
-    : [
-        { label: t("farmer.dashboard.title", {}, "Dashboard"), onClick: () => navigate("/farmer") },
-        { label: commodityName || "Crop" },
-        { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
-      ];
 
   const advisoryText = advisoryLabel || (subtitle && subtitle.includes("·") ? subtitle.split("·")[1].trim() : subtitle) || t("farmer.advisory.labels.recommended", {}, "Recommended");
   const advCode = String(advisoryCode || "").toLowerCase();
@@ -208,6 +263,69 @@ function FactorDetailPage() {
       navigate(-1);
     }
   };
+
+  const breadcrumbItems = useMemo(() => {
+    let rawItems = [];
+
+    if (breadcrumbs && breadcrumbs.length > 0) {
+      rawItems = breadcrumbs;
+    } else {
+      const isAssessRoute = location.pathname.startsWith("/farmer/assess");
+      const isFromDashboard = backPath === "/farmer" || (!backPath && !isAssessRoute && state?.source === "dashboard");
+      const isFromWeather = backPath?.includes("/weather") || searchParams.get("tab") === "weather";
+
+      if (isAssessRoute) {
+        rawItems = [
+          { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/farmer/assess" },
+          canResume
+            ? { label: t("farmer.assess.result", {}, "Result") }
+            : (commodityName ? { label: commodityName } : null),
+          { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") },
+        ].filter(Boolean);
+      } else if (isFromWeather) {
+        rawItems = [
+          { label: t("farmer.weather.title", {}, "Weather"), path: "/farmer/market/weather" },
+          commodityName ? { label: commodityName } : null,
+          { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") },
+        ].filter(Boolean);
+      } else if (isFromDashboard) {
+        rawItems = [
+          { label: t("farmer.dashboard.title", {}, "Dashboard"), path: "/farmer" },
+          commodityName ? { label: commodityName } : null,
+          { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") },
+        ].filter(Boolean);
+      } else {
+        rawItems = [
+          { label: t("nav.market", {}, "Market"), path: "/farmer/market" },
+          commodityName ? { label: commodityName } : null,
+          { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") },
+        ].filter(Boolean);
+      }
+    }
+
+    return rawItems.map((bc, index) => {
+      const isLast = index === rawItems.length - 1;
+      const isImmediatePrevious = index === rawItems.length - 2;
+
+      let onClick = undefined;
+      if (!isLast) {
+        if (typeof bc.onClick === "function") {
+          onClick = bc.onClick;
+        } else if (isImmediatePrevious) {
+          onClick = handleBack;
+        } else if (bc.path) {
+          onClick = () => navigate(bc.path);
+        } else {
+          onClick = handleBack;
+        }
+      }
+
+      return {
+        label: bc.label,
+        onClick,
+      };
+    });
+  }, [breadcrumbs, location.pathname, backPath, state, searchParams, canResume, commodityName, t, handleBack, navigate]);
 
   let badgeTheme = {
     badge: "bg-red-50 text-red-700 border-red-200",
@@ -242,11 +360,19 @@ function FactorDetailPage() {
 
       {/* Page title & Emphasized Final Advisory */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-1">
-        <div>
-          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">{displayTitle}</h1>
-          <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-            {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
-          </p>
+        <div className="flex items-center gap-3 min-w-0">
+          <CommodityIllustration
+            commodityId={commodityId}
+            commodityName={commodityName}
+            baseName={commodityName}
+            className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0"
+          />
+          <div className="min-w-0">
+            <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">{displayTitle}</h1>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+              {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
+            </p>
+          </div>
         </div>
         {advisoryText && (
           <div className="inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white shadow-[var(--shadow-xs)]">
@@ -270,6 +396,14 @@ function FactorDetailPage() {
         defaultTab={defaultTab}
         commodityId={commodityId}
         commodityName={commodityName}
+        cropStage={cropStage}
+        plantingDate={plantingDate}
+        expectedHarvestDate={expectedHarvestDate}
+        plantingSeason={plantingSeason}
+        moduleResults={moduleResults}
+        plantingWindowStart={plantingWindowStart}
+        plantingWindowEnd={plantingWindowEnd}
+        plantingWindowLabel={plantingWindowLabel}
       />
     </div>
   );

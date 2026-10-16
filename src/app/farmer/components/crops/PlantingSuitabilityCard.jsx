@@ -121,8 +121,14 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
       seen.add(cname);
 
       const profile = DEFAULT_RECOMMENDED_PROFILES[cid] || {};
+      const startMonthIndex = rec.planting_window_start ? new Date(rec.planting_window_start).getMonth() : null;
+      const startMonthName = startMonthIndex != null ? monthNames[startMonthIndex] : null;
+      const startMonthLocalized = startMonthName ? t(`farmer.calendar.months.${startMonthName}`, {}, rawMonthNames[startMonthIndex]) : localizedMonth;
+      const startDay = rec.planting_window_start ? new Date(rec.planting_window_start).getDate() : 1;
+      const endDay = rec.planting_window_end ? new Date(rec.planting_window_end).getDate() : 20;
+
       const plantWindowStr = rec.planting_window_start && rec.planting_window_end
-        ? `${new Date(rec.planting_window_start).toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${new Date(rec.planting_window_end).getDate()}`
+        ? `${startMonthLocalized} ${startDay}–${endDay}`
         : profile.plantWindow
         ? profile.plantWindow(localizedMonth)
         : `${localizedMonth} 1–20`;
@@ -136,8 +142,10 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
       });
     }
 
-    // Fallback if none in database for this month (same as Market Calendar)
-    if (result.length === 0) {
+    // Fallback only when the API returned no rows at all. It must NOT fire just
+    // because no crop is "Recommended" — that would surface an "Avoid for Now"
+    // crop as a good one (same defect as the Market Calendar page).
+    if (rawRecommendations.length === 0) {
       const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
       defaultIds.forEach((cid) => {
         const p = DEFAULT_RECOMMENDED_PROFILES[cid];
