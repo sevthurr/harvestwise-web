@@ -723,131 +723,71 @@ const AccountRequestsTab = ({ showToast }) => {
 };
 
 const SecurityTab = ({ showToast }) => {
-  const [adminTfa, setAdminTfa] = useState(true);
-  const [dftcTfa, setDftcTfa] = useState(false);
-  const [minLength, setMinLength] = useState(8);
-  const [reqUpper, setReqUpper] = useState(true);
-  const [reqNumber, setReqNumber] = useState(true);
-  const [reqSpecial, setReqSpecial] = useState(true);
-  const [failLimit, setFailLimit] = useState(5);
-  const [lockoutDur, setLockoutDur] = useState("15 minutes");
-  const [sessionTo, setSessionTo] = useState("1 hour");
+  const [settings, setSettings] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const { data: securityData, isLoading, isError } = useQuery({
+    queryKey: ["adminSystemSecurity"],
+    queryFn: adminApi.getSystemSecurity,
+  });
+  useEffect(() => {
+    if (securityData) setSettings(securityData);
+  }, [securityData]);
 
-  const handleTfaToggle = (setter, v) => {
-    setter(v);
-    showToast("Security setting updated.");
+  const save = async () => {
+    setSaving(true);
+    try {
+      const saved = await adminApi.updateSystemSecurity(settings);
+      setSettings(saved);
+      showToast("System security settings saved.");
+    } catch {
+      showToast("Failed to save system security settings.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (isError) {
+    return <Card><p className="text-[14px] text-rose-700">Unable to load security settings.</p></Card>;
+  }
+  if (isLoading || !settings) {
+    return <Card><p className="text-[14px] text-black">Loading security settings...</p></Card>;
+  }
 
   return (
     <div className="space-y-4">
-      <Card>
-        <SectionLabel>Two-Factor Authentication Requirement</SectionLabel>
-        <div className="divide-y divide-[var(--hw-neutral-100)]">
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <p className="text-[14px] font-semibold text-black">Require 2FA for Admin accounts</p>
-              <p className="text-[13px] text-black">All admin users must use two-factor authentication.</p>
-            </div>
-            <Toggle on={adminTfa} onChange={(v) => handleTfaToggle(setAdminTfa, v)} />
-          </div>
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <p className="text-[14px] font-semibold text-black">Require 2FA for DFTC accounts</p>
-              <p className="text-[13px] text-black">All DFTC users must use two-factor authentication.</p>
-            </div>
-            <Toggle on={dftcTfa} onChange={(v) => handleTfaToggle(setDftcTfa, v)} />
-          </div>
-        </div>
-      </Card>
-
       <Card>
         <SectionLabel>Password Policy</SectionLabel>
         <div className="space-y-4">
           <div>
             <FieldLabel htmlFor="sec-minlen">Minimum password length</FieldLabel>
-            <input
-              id="sec-minlen"
-              type="number"
-              min={6}
-              max={32}
-              value={minLength}
-              onChange={(e) => setMinLength(Number(e.target.value))}
-              className={inputCls}
-            />
+            <input id="sec-minlen" type="number" min={8} max={128} value={settings.min_password_length}
+              onChange={(e) => setSettings({ ...settings, min_password_length: Number(e.target.value) })} className={inputCls} />
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {[
-              { label: "Require uppercase letter", val: reqUpper, set: setReqUpper },
-              { label: "Require number", val: reqNumber, set: setReqNumber },
-              { label: "Require special character", val: reqSpecial, set: setReqSpecial }
-            ].map((row) => (
-              <div key={row.label} className="flex items-center justify-between py-3">
-                <p className="text-[14px] font-semibold text-black">{row.label}</p>
-                <Toggle on={row.val} onChange={(v) => row.set(v)} />
+            {["require_uppercase", "require_number", "require_special"].map((field) => (
+              <div key={field} className="flex items-center justify-between py-3">
+                <p className="text-[14px] font-semibold text-black">
+                  {field === "require_uppercase" ? "Require uppercase letter" : field === "require_number" ? "Require number" : "Require special character"}
+                </p>
+                <Toggle on={settings[field]} onChange={(value) => setSettings({ ...settings, [field]: value })} />
               </div>
             ))}
           </div>
-          <GreenBtn onClick={() => showToast("System security settings saved.")}>Save security settings</GreenBtn>
         </div>
       </Card>
-
       <Card>
         <SectionLabel>Login Attempt Limit</SectionLabel>
         <div className="space-y-4">
-          <div>
-            <FieldLabel htmlFor="sec-fail">Failed attempt limit</FieldLabel>
-            <input
-              id="sec-fail"
-              type="number"
-              min={3}
-              max={20}
-              value={failLimit}
-              onChange={(e) => setFailLimit(Number(e.target.value))}
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="sec-lockout">Lockout duration</FieldLabel>
-            <div className="relative">
-              <select
-                id="sec-lockout"
-                value={lockoutDur}
-                onChange={(e) => setLockoutDur(e.target.value)}
-                className={`${inputCls} appearance-none pr-9`}
-              >
-                {["5 minutes", "15 minutes", "30 minutes", "1 hour", "24 hours"].map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
-            </div>
-          </div>
-          <GreenBtn onClick={() => showToast("System security settings saved.")}>Save security settings</GreenBtn>
+          <div><FieldLabel htmlFor="sec-fail">Failed attempt limit</FieldLabel>
+            <input id="sec-fail" type="number" min={3} max={20} value={settings.failed_attempt_limit}
+              onChange={(e) => setSettings({ ...settings, failed_attempt_limit: Number(e.target.value) })} className={inputCls} /></div>
+          <div><FieldLabel htmlFor="sec-lock">Lockout duration (minutes)</FieldLabel>
+            <input id="sec-lock" type="number" min={1} max={1440} value={settings.lockout_minutes}
+              onChange={(e) => setSettings({ ...settings, lockout_minutes: Number(e.target.value) })} className={inputCls} /></div>
+          <GreenBtn disabled={saving} onClick={save}>{saving ? "Saving..." : "Save security settings"}</GreenBtn>
         </div>
       </Card>
-
-      <Card>
-        <SectionLabel>Session Timeout</SectionLabel>
-        <div className="space-y-4">
-          <div>
-            <FieldLabel htmlFor="sec-session">Timeout duration</FieldLabel>
-            <div className="relative">
-              <select
-                id="sec-session"
-                value={sessionTo}
-                onChange={(e) => setSessionTo(e.target.value)}
-                className={`${inputCls} appearance-none pr-9`}
-              >
-                {["15 minutes", "30 minutes", "1 hour", "4 hours", "8 hours", "Never"].map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
-            </div>
-          </div>
-          <GreenBtn onClick={() => showToast("System security settings saved.")}>Save security settings</GreenBtn>
-        </div>
-      </Card>
+      <Card><p className="text-[13px] text-black">Two-factor authentication and session timeout remain managed by the existing authentication flows and are not configurable here yet.</p></Card>
     </div>
   );
 };
