@@ -515,6 +515,17 @@ function AdminImport() {
       setUploadError("Select a dataset type before importing.");
       return;
     }
+    if (!overwrite && (validationResult.duplicates > 0 || validationResult.rejected > 0)) {
+      const isArrivalUpload = DATA_TYPE_MAP[datasetType] === "arrival";
+      setUploadError(
+        validationResult.duplicates > 0
+          ? `${isArrivalUpload ? "Duplicate arrival-volume records" : "Duplicate price records"} were found. Enable overwrite to replace existing records, or remove the duplicates before importing.`
+          : "The file contains rejected rows. Fix the validation errors before importing."
+      );
+      setStep("validated");
+      setCurrentStep(1);
+      return;
+    }
     setUploading(true);
     setUploadError("");
     setUploadMessage("");

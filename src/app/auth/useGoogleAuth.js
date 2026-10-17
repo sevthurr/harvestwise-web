@@ -77,7 +77,13 @@ export function useGoogleAuth({ redirectTo, onResult, submit = authApi.googleSig
           throw exchangeError ?? new Error("Google sign-in failed.");
         }
         clearAuthCodeFromUrl();
-        const res = await submitRef.current(data.session.access_token);
+        const accessToken = data.session.access_token;
+        // The Supabase session is only the vehicle for the access token: it is
+        // handed to the backend and never needed again, so drop it here rather
+        // than leave a second JS-readable credential in sessionStorage.
+        // Cleanup must never fail the sign-in itself.
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        const res = await submitRef.current(accessToken);
         const result = await parseResponse(res);
         await onResultRef.current(result);
       } catch (err) {

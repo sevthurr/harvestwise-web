@@ -49,6 +49,14 @@ export async function getSystemHealth(params = {}) {
   return parseResponse(await apiGet(`/admin/system/health${qs ? `?${qs}` : ""}`));
 }
 
+export async function getSystemSecurity() {
+  return parseResponse(await apiGet("/admin/system/security"));
+}
+
+export async function updateSystemSecurity(payload) {
+  return parseResponse(await apiPut("/admin/system/security", payload));
+}
+
 /**
  * Account removal requests. A non-SuperAdmin caller only receives their own
  * rows from the backend.

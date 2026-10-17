@@ -13,20 +13,38 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+/**
+ * sessionStorage when the browser exposes it, otherwise `undefined` so
+ * auth-js falls back to its own default. Access can throw in some privacy
+ * modes, which is why it is guarded.
+ */
+function authStorage() {
+  try {
+    return globalThis.sessionStorage ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const supabase =
   SUPABASE_URL && SUPABASE_ANON_KEY
     ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
           flowType: "pkce",
           detectSessionInUrl: false,
-          // This client is an OAuth *broker* only. The app's own authority is
-          // the backend, and HarvestWise's session lives in its own token
-          // store. Leaving Supabase session persistence on would additionally
-          // write a Supabase session JWT to localStorage under
-          // `sb-<ref>-auth-token`, which is a second JS-readable credential on
-          // the same device for no benefit — the id_token is read once, handed
-          // to the backend, and never needed again.
-          persistSession: false,
+          // The PKCE code verifier is written to the auth storage and must
+          // survive the full-page redirect to Google and back. With
+          // `persistSession: false`, auth-js swaps in an in-memory adapter
+          // (and ignores a custom `storage`), so the verifier is gone by the
+          // time the callback runs and `exchangeCodeForSession` fails with
+          // "PKCE code verifier not found in storage". Persistence stays on,
+          // but scoped to sessionStorage: it is per-tab and dropped when the
+          // tab closes, and the Supabase session it stores is cleared right
+          // after the exchange (see useGoogleAuth). That keeps a Supabase
+          // session JWT out of localStorage, so no durable second credential
+          // is left on the device.
+          persistSession: true,
+          storage: authStorage(),
           autoRefreshToken: false,
         },
       })

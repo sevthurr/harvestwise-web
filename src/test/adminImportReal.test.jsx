@@ -13,6 +13,46 @@ vi.mock('../services/api', () => ({
 }));
 
 describe('AdminImport component with backend dry-run validation', () => {
+  it('uses arrival-volume wording for duplicate arrival rows', async () => {
+    ingestionApi.validateFile.mockResolvedValue({
+      summary: {
+        total_rows: 1,
+        valid_rows: 0,
+        rejected_rows: 1,
+        duplicate_rows: 1,
+        missing_value_rows: 0,
+        unrecognized_commodity_rows: 0,
+      },
+      rows: [],
+    });
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AdminImport />
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/Dataset type/i), {
+      target: { value: 'DFTC Arrival Volume' },
+    });
+    const file = new File(
+      ['Arrival_Date,Commodity,Volume_Kg\n2025-12-31,Tomato,1000'],
+      'DFTC-VOLUME-2025-Final.csv',
+      { type: 'text/csv' }
+    );
+    fireEvent.change(document.querySelector('input[type="file"]'), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => expect(screen.getByText('Validate Data')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Validate Data'));
+    await waitFor(() => expect(screen.getByText('Import Valid Records (0)')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Import Valid Records (0)'));
+
+    expect(await screen.findByText(/Duplicate arrival-volume records were found/)).toBeInTheDocument();
+    expect(screen.queryByText(/Duplicate price records were found/)).not.toBeInTheDocument();
+  });
+
   it('parses CSV file, runs backend dry-run validation, and imports valid records', async () => {
     ingestionApi.validateFile.mockResolvedValue({
       summary: {
