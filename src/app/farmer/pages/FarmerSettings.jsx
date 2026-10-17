@@ -4,6 +4,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Check, Navigation, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { isValidEmail } from "../../auth/authValidation";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -69,6 +70,8 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   });
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [removalReason, setRemovalReason] = useState("");
   const [removalError, setRemovalError] = useState("");
@@ -144,7 +147,15 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
     }
   }, [rawProfile, user]);
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    const value = e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
+    if (k === "email") setEmailError(value.trim() && !isValidEmail(value) ? "Enter a valid email address." : "");
+  };
+  const handlePreSave = () => {
+    if (emailError) return;
+    setShowSaveModal(true);
+  };
 
   const handleSave = async () => {
     setShowSaveModal(false);
@@ -158,14 +169,13 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
         phone: form.phone || null,
         email: form.email || null
       };
-      const res = await apiPut("/farmer/profile", payload);
-      if (res.ok) {
-        showToast("Account updated successfully.");
-      } else {
-        showToast("Account updated.");
-      }
-    } catch {
-      showToast("Account updated.");
+      if (currentPassword) payload.current_password = currentPassword;
+      setCurrentPassword("");
+      await parseResponse(await apiPut("/farmer/profile", payload));
+      queryClient.invalidateQueries({ queryKey: ["farmer", "profile"] });
+      showToast("Account updated successfully.");
+    } catch (err) {
+      showToast(err?.message || "Could not save your account information.");
     } finally {
       setSaving(false);
     }
@@ -328,10 +338,11 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               value={form.email}
               onChange={set("email")}
               placeholder="farmer@example.com"
-              className={inputCls}
+              className={`${inputCls} ${emailError ? "border-red-500 focus:ring-red-500" : ""}`}
             />
+            {emailError && <p className="mt-1 text-[12px] text-red-600">{emailError}</p>}
           </div>
-          <GreenBtn onClick={() => setShowSaveModal(true)} disabled={saving} className="w-full sm:w-auto">
+          <GreenBtn onClick={handlePreSave} disabled={saving} className="w-full sm:w-auto">
             {saving ? t("common.saving", {}, "Saving…") : t("farmer.settings.save_changes", {}, "Save changes")}
           </GreenBtn>
         </div>
@@ -406,6 +417,17 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
       {showSaveModal && (
         <Modal title={t("farmer.settings.save_changes", {}, "Save changes")} onClose={() => setShowSaveModal(false)}>
           <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your HarvestWise profile.</p>
+          <label htmlFor="farmer-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
+            Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
+          </label>
+          <input
+            id="farmer-current-password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className={`${inputCls} mb-5`}
+          />
           <div className="flex gap-2 justify-end">
             <GhostBtn onClick={() => setShowSaveModal(false)}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
             <GreenBtn onClick={handleSave}>{t("farmer.settings.save_changes", {}, "Save changes")}</GreenBtn>

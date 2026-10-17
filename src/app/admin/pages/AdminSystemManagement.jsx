@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -484,8 +484,11 @@ function formatRemovalDate(value) {
  */
 const AccountRequestsTab = ({ showToast }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState("pending");
+  const requestId = searchParams.get("request_id");
+  const [filter, setFilter] = useState(requestId ? "all" : "pending");
+  const targetRequestRef = useRef(null);
   // { request, status } for the confirm dialog, or null when closed.
   const [confirm, setConfirm] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -519,6 +522,12 @@ const AccountRequestsTab = ({ showToast }) => {
   const roleOf = (userId) => usersById.get(userId)?.role?.role_name || "-";
 
   const isOpen = (status) => status === "pending" || status === "submitted";
+
+  useEffect(() => {
+    if (requestId && requests.some((request) => request.id === requestId)) {
+      targetRequestRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [requestId, requests]);
 
   const review = async () => {
     if (!confirm) return;
@@ -596,7 +605,12 @@ const AccountRequestsTab = ({ showToast }) => {
         {requests.map((r) => (
           <div
             key={r.id}
-            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-2"
+            ref={r.id === requestId ? targetRequestRef : undefined}
+            className={`bg-white rounded-2xl border shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-2 ${
+              r.id === requestId
+                ? "border-[var(--hw-green-700)] ring-2 ring-[var(--hw-green-100)]"
+                : "border-[var(--hw-neutral-200)]"
+            }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -647,7 +661,13 @@ const AccountRequestsTab = ({ showToast }) => {
             </thead>
             <tbody className="divide-y divide-[var(--hw-neutral-100)]">
               {requests.map((r) => (
-                <tr key={r.id} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
+                <tr
+                  key={r.id}
+                  ref={r.id === requestId ? targetRequestRef : undefined}
+                  className={`hover:bg-[var(--hw-neutral-50)] transition-colors ${
+                    r.id === requestId ? "bg-[var(--hw-green-50)]" : ""
+                  }`}
+                >
                   <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">
                     {r.user_id ? (
                       <button
