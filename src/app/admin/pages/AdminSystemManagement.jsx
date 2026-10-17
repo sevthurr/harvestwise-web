@@ -17,6 +17,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 
 
 const TABS = [
@@ -408,7 +409,7 @@ const UsersTab = ({ showToast }) => {
                     <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role?.role_name || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black">{u.is_active ? "Active" : "Inactive"}</td>
-                    <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">-</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{u.last_login ? formatDateTime(u.last_login) : "-"}</td>
                     <td className="px-5 py-3.5">
                       <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)]" />
                     </td>

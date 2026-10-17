@@ -19,7 +19,7 @@ vi.mock('../services/api', () => ({
     getPriceOutlook: vi.fn().mockResolvedValue({
       status: 'processed',
       classification: 'Favorable',
-      source: 'Bangkerohan Retail',
+      source: 'bankerohan_daily_retail',
       forecast_horizon_days: 14,
       price_records: [
         {

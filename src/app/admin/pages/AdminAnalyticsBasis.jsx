@@ -607,6 +607,16 @@ const DETAIL_MODULE_PERIODS = {
   "weather-risk": "14 days"
 };
 
+const PRICE_OUTLOOK_SOURCE_LABELS = {
+  bankerohan_daily_retail: "Bangkerohan Retail",
+  bankerohan_daily_wholesale: "Bangkerohan Wholesale",
+  dftc_daily_retail: "DFTC Retail",
+  dftc_daily_wholesale: "DFTC Wholesale",
+};
+
+const priceOutlookSourceLabel = (source) =>
+  PRICE_OUTLOOK_SOURCE_LABELS[source] || source || "-";
+
 // Shared by the Data Reliability badge and its band legend so a band always
 // renders in the same colour in both places.
 const reliabilityBadgeClass = (status) =>
@@ -1056,7 +1066,7 @@ function AdminAnalyticsBasis() {
     const money = (value) => value == null ? "-/kg" : `₱${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}/kg`;
     return {
       ...result,
-      basisSource: priceOutlook?.source || "-",
+      basisSource: priceOutlookSourceLabel(priceOutlook?.source),
       inputPeriod: priceOutlook?.forecast_horizon_days ? `${priceOutlook.forecast_horizon_days} days` : "-",
       classification: processed ? priceOutlook.classification : "Not processed",
       basisInputs: {
@@ -1084,7 +1094,7 @@ function AdminAnalyticsBasis() {
         Market: row.market || "-",
         "Price Type": row.price_type || "-",
         Price: row.prevail_price != null ? `₱${Number(row.prevail_price).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "-",
-        Source: priceOutlook?.source || "Bangkerohan Retail"
+        Source: priceOutlookSourceLabel(priceOutlook?.source)
       }))
     };
   }, [result, resultId, priceOutlook, priceOutlookError, selectedCommodity, selectedVariety]);
