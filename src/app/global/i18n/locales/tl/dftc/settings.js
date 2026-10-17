@@ -11,6 +11,7 @@ export const settings = {
   request_deletion_title: "Humiling ng pagtanggal ng account",
   request_deletion_desc: "Magsumite ng kahilingan upang tanggalin ang iyong DFTC account. Morespaso ito ng HarvestWise team.",
   request_deletion_btn: "Humiling",
+  request_again_btn: "Humiling Muli",
   request_deletion_modal_title: "Humiling ng pagtanggal ng account?",
   request_deletion_modal_body: "Upang maprotektahan ang iyong account at mga tala mula sa hindi awtorisadong pagbura, nangangailangan ang HarvestWise ng beripikasyon bago iproseso ang kahilingan. Pakilarawan ang dahilan ng iyong kahilingan. Kapag na-verify na, ang identifying account information at contact information ay permanenteng aalisin o ia-anonymize alinsunod sa aming Patakaran sa Privacy. Ang impormasyon sa agrikultura, pananim, gastos, o ani ay maaaring itago lamang pagkatapos ma-anonymize upang hindi na ito maiugnay sa iyo, alinsunod sa aming Patakaran sa Privacy §8. Maaari ka ring magpadala ng kahilingan sa harvestwise.app@gmail.com mula sa iyong nakarehistrong email address.",
   removal_reason_label: "Dahilan",

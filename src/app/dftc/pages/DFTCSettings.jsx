@@ -247,7 +247,9 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               disabled={removalBlocked}
               className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
-              {t("dftc.settings.request_deletion_btn", {}, "Request")}
+              {removalStatus === "rejected"
+                ? t("dftc.settings.request_again_btn", {}, "Request Again")
+                : t("dftc.settings.request_deletion_btn", {}, "Request")}
             </button>
           </div>
         </div>

@@ -396,7 +396,9 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               disabled={removalBlocked}
               className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
-              {t("farmer.settings.request_deletion_btn", {}, "Request removal")}
+              {removalStatus === "rejected"
+                ? t("farmer.settings.request_again_btn", {}, "Request Again")
+                : t("farmer.settings.request_deletion_btn", {}, "Request removal")}
             </button>
           </div>
         </div>

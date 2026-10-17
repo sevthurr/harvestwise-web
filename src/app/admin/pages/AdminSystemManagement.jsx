@@ -487,7 +487,7 @@ const AccountRequestsTab = ({ showToast }) => {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const requestId = searchParams.get("request_id");
-  const [filter, setFilter] = useState(requestId ? "all" : "pending");
+  const [filter, setFilter] = useState(requestId ? null : "pending");
   const targetRequestRef = useRef(null);
   // { request, status } for the confirm dialog, or null when closed.
   const [confirm, setConfirm] = useState(null);
@@ -497,7 +497,7 @@ const AccountRequestsTab = ({ showToast }) => {
     queryKey: ["adminRemovalRequests", filter],
     queryFn: () =>
       adminApi.listRemovalRequests({
-        status: filter === "all" ? undefined : filter,
+        status: filter || undefined,
         page_size: 100
       })
   });
@@ -578,17 +578,11 @@ const AccountRequestsTab = ({ showToast }) => {
           { id: "pending", label: "Pending" },
           { id: "approved", label: "Approved" },
           { id: "rejected", label: "Rejected" },
-          { id: "cancelled", label: "Cancelled" },
-          // `fulfilled` is deliberately absent from this filter: the API filters
-          // on `status`, which stays "approved" after the erasure runs — the done
-          // marker is `fulfilled_at`, so a "fulfilled" filter would always return
-          // nothing. The Fulfilled badge is still rendered.
-          { id: "all", label: "All" }
         ].map((f) => (
           <button
             key={f.id}
             type="button"
-            onClick={() => setFilter(f.id)}
+            onClick={() => setFilter((current) => current === f.id ? null : f.id)}
             className={`h-9 px-3.5 text-[13px] font-medium rounded-xl border transition-colors cursor-pointer ${
               filter === f.id
                 ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)]"

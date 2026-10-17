@@ -20,6 +20,7 @@ export const settings = {
   request_deletion_title: "Hangyoa ang pagtangtang sa account",
   request_deletion_desc: "Ang pagtangtang sa account iproseso human ma-verify ang identity. Ang HarvestWise team maoy morepaso sa mga hangyo.",
   request_deletion_btn: "Hangyoa ang pagtangtang",
+  request_again_btn: "Pangayo Pag-usab",
   request_deletion_modal_body: "Aron mapanalipdan ang imong account ug datos gikan sa unauthorized deletion, kinahanglan og verification sa dili pa kini maproseso. Aron ma-delete ang imong account ug personal nga mga rekord, palihog pagpadala og email request sa harvestwise.app@gmail.com gikan sa imong rehistradong email address. Human ma-verify, ang identifying account information, contact information, ug exact farm coordinates permanenteng tangtangon o i-anonymize sumala sa among Patakaran sa Privacy. Ang impormasyon sa agrikultura, pananom, gasto, o ani mahimong tipigan lamang human kini ma-anonymize aron dili na kini ikapalagay sa imo, sumala sa among Patakaran sa Privacy §8.",
   removal_status_label: "Estado sa hangyo",
   removal_status_pending: "Naghulat",
