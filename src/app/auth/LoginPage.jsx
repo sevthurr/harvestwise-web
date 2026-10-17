@@ -103,8 +103,13 @@ function LoginPage() {
         setError(msg || t("auth.errors.account_locked", {}, "Account locked. Please try again later."));
       } else if (err.status === 403) {
         setError(t("auth.errors.account_inactive", {}, "Your account is inactive. Contact support."));
-      } else {
+      } else if (err.status === 401) {
         setError(t("auth.errors.invalid_credentials", {}, "Invalid email/phone or password."));
+      } else {
+        // A correct password can still fail while the second factor is being
+        // prepared (for example, Supabase may reject the OTP email request).
+        // Preserve that safe backend message instead of blaming the password.
+        setError(msg || t("auth.errors.sign_in_failed", {}, "Unable to sign in right now. Try again later."));
       }
     } finally {
       setLoading(false);
