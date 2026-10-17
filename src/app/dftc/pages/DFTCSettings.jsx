@@ -131,7 +131,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       }
       showToast("Account updated successfully.");
     } catch (err) {
-      showToast(err?.message || "Could not save account changes. Please try again.");
+      showToast(err?.message || "Could not save account changes. Please try again.", "error");
     }
   };
   const handleRemoveSubmit = () => {
@@ -391,8 +391,8 @@ function DFTCSettings() {
     if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [activeTab]);
 
-  const showToast = (msg) => {
-    setToast(msg);
+  const showToast = (msg, type = "success") => {
+    setToast(typeof msg === "object" ? msg : { message: msg, type });
     setTimeout(() => setToast(""), 3e3);
   };
 

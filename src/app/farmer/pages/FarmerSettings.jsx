@@ -175,7 +175,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
       queryClient.invalidateQueries({ queryKey: ["farmer", "profile"] });
       showToast("Account updated successfully.");
     } catch (err) {
-      showToast(err?.message || "Could not save your account information.");
+      showToast(err?.message || "Could not save your account information.", "error");
     } finally {
       setSaving(false);
     }
