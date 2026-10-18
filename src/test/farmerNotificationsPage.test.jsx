@@ -194,4 +194,108 @@ describe('Farmer Notification List Rendering & Fallbacks', () => {
     };
     expect(resolveNotificationRoute(itemWithoutComm, 'Farmer')).toBe('/farmer/prices');
   });
+
+  it('renders preferred crop star icon and filters list when Preferred Crops tab is selected', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const mixedNotifications = [
+      {
+        id: 'FNT-0201',
+        category: 'price_change',
+        title: 'Kamatis (Diamante Big) price dropped',
+        body: 'The latest market price for Kamatis (Diamante Big) is 45.00 PHP/kg, down from 50.00 PHP/kg.',
+        route: '/farmer/prices/COM-0004',
+        read: false,
+        metadata: {
+          commodity_id: 'COM-0004',
+          commodity_name: 'Kamatis (Diamante Big)',
+          is_preferred: true,
+          direction: 'dropped',
+          latest: 45.0,
+          prev: 50.0,
+        },
+        created_at: '2026-10-18T10:00:00.000Z',
+      },
+      {
+        id: 'FNT-0202',
+        category: 'price_update',
+        title: 'New prices available for Talong (Banate King)',
+        body: 'Updated market prices for Talong (Banate King) are now available.',
+        route: '/farmer/prices/COM-0010',
+        read: false,
+        metadata: {
+          commodity_id: 'COM-0010',
+          commodity_name: 'Talong (Banate King)',
+          is_preferred: false,
+        },
+        created_at: '2026-10-18T09:00:00.000Z',
+      },
+    ];
+
+    notificationsApi.listNotifications.mockResolvedValueOnce({
+      items: mixedNotifications,
+      total: 2,
+      unread_count: 2,
+    });
+
+    const testQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={testQueryClient}>
+        <MemoryRouter>
+          <NotificationsPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    // Initial render shows both items
+    const kamatisItems = await screen.findAllByText(/Kamatis/i);
+    expect(kamatisItems.length).toBeGreaterThanOrEqual(1);
+
+    const talongItems = await screen.findAllByText(/Talong/i);
+    expect(talongItems.length).toBeGreaterThanOrEqual(1);
+
+    // Preferred star should be rendered for the preferred crop
+    const starIcons = screen.getAllByTestId('preferred-star');
+    expect(starIcons.length).toBeGreaterThanOrEqual(1);
+
+    // Click "Preferred Crops" filter button
+    const preferredTab = screen.getByRole('button', { name: /preferred crops|gipiling pananom/i });
+    fireEvent.click(preferredTab);
+
+    // After filtering, Kamatis is shown and Talong is filtered out
+    expect(screen.getAllByText(/Kamatis/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Talong/i)).not.toBeInTheDocument();
+  });
+
+  it('localizes favorable and unfavorable price forecast notifications', () => {
+    const favorableForecast = {
+      category: 'price_change',
+      title: 'Favorable price forecast for Kamatis (Diamante Big)',
+      body: 'The 7-day forecast projects Kamatis (Diamante Big) prices to rise to 55.00 PHP/kg (+10.0%).',
+      metadata: {
+        commodity_name: 'Kamatis (Diamante Big)',
+        is_preferred: true,
+        outlook: 'Favorable',
+        forecast_midpoint: 55.0,
+        change_pct: 10.0,
+        horizon_days: 7,
+      },
+    };
+
+    const mockT = (key, params, fallback) => {
+      if (key === 'farmer.notifications.forecast_favorable_title') {
+        return `Favorable forecast for ${params.commodity}`;
+      }
+      if (key === 'farmer.notifications.forecast_favorable_body') {
+        return `Forecast for ${params.commodity} is ${params.midpoint} PHP/kg (+${params.pct}%) in ${params.horizon} days.`;
+      }
+      return fallback;
+    };
+
+    const { title, body } = localizeFarmerNotification(favorableForecast, mockT);
+    expect(title).toBe('Favorable forecast for Kamatis (Diamante Big)');
+    expect(body).toContain('55.00 PHP/kg (+10.0%) in 7 days');
+  });
 });

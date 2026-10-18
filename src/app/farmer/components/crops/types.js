@@ -2,6 +2,7 @@ import { Sprout, Clock, Leaf, Scissors, CheckCircle2, PauseCircle } from "lucide
 import { PHASE_CODES, normalizePhaseCode } from "../../utils/farmerCodes";
 
 const BASE_PHASE_CONFIG = {
+  [PHASE_CODES.DRAFT]: { labelKey: "farmer.phases.draft", label: "Draft – Incomplete", icon: Clock, color: "text-amber-800", bg: "bg-amber-50", border: "border-amber-300" },
   [PHASE_CODES.PLANNING]: { labelKey: "farmer.phases.planning", label: "Planning", icon: Sprout, color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
   [PHASE_CODES.ON_HOLD]: { labelKey: "farmer.phases.on_hold", label: "On Hold", icon: PauseCircle, color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
   [PHASE_CODES.GROWING]: { labelKey: "farmer.phases.planted", label: "Planted", icon: Leaf, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
@@ -13,6 +14,7 @@ const BASE_PHASE_CONFIG = {
 const PHASE_CONFIG = {
   ...BASE_PHASE_CONFIG,
   // Backward compatibility string aliases
+  draft: BASE_PHASE_CONFIG[PHASE_CODES.DRAFT],
   planning: BASE_PHASE_CONFIG[PHASE_CODES.PLANNING],
   "on-hold": BASE_PHASE_CONFIG[PHASE_CODES.ON_HOLD],
   growing: BASE_PHASE_CONFIG[PHASE_CODES.GROWING],

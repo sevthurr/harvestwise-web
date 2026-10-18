@@ -10,6 +10,7 @@ import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSou
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
+import { apiGet, parseResponse } from "../../global/api";
 import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
 
 import {
@@ -1367,21 +1368,33 @@ function DFTCTrends() {
               },
               {
                 title: "Forecast Price Change",
-                renderVal: (v) => (
-                  <span
-                    className={`text-[12px] font-bold ${
-                      v.change == null
-                        ? "text-[var(--hw-neutral-500)]"
-                        : v.change > 0
-                        ? "text-emerald-700"
-                        : v.change < 0
-                        ? "text-rose-600"
-                        : "text-[var(--hw-neutral-700)]"
-                    }`}
-                  >
-                    {v.change == null ? "—" : `${v.change > 0 ? "↑ " : v.change < 0 ? "↓ " : ""}${Math.abs(v.change).toFixed(1)}%`}
-                  </span>
-                )
+                renderVal: (v) => {
+                  if (v.change == null || !Number.isFinite(v.change)) {
+                    return (
+                      <span className="text-[12px] font-bold text-[var(--hw-neutral-500)]">
+                        —
+                      </span>
+                    );
+                  }
+                  const rounded = Math.abs(v.change).toFixed(1);
+                  const isZero = Number(rounded) === 0;
+                  const isPositive = v.change > 0 && !isZero;
+                  const isNegative = v.change < 0 && !isZero;
+
+                  return (
+                    <span
+                      className={`text-[12px] font-bold ${
+                        isPositive
+                          ? "text-emerald-700"
+                          : isNegative
+                          ? "text-rose-600"
+                          : "text-[var(--hw-neutral-700)]"
+                      }`}
+                    >
+                      {isPositive ? "↑ " : isNegative ? "↓ " : ""}{rounded}%
+                    </span>
+                  );
+                }
               }
             ].map(({ title, renderVal }, idx) => (
               <div key={title} className={`${idx !== 0 ? "lg:border-l-2 lg:border-[var(--hw-neutral-200)] lg:pl-5" : "lg:pl-0"} flex flex-col justify-between`}>

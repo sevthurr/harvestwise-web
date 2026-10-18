@@ -20,6 +20,11 @@ import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { InformationDisclosure } from "../components/market/DetailCards";
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 const WHOLESALE_PRICE_DATA = {
   kamatis: { latest: 78, direction: "Rising" },
   talong: { latest: 55, direction: "Stable" },
@@ -42,6 +47,15 @@ const tooltipStyle = { backgroundColor: "white", border: "1px solid var(--hw-neu
 function DftcWholesaleDetailPage() {
   const { commodityId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const sortedCommodities = sortWithPreferredFirst(COMMODITIES, preferredCrops);
+
   const [period, setPeriod] = useState("7d");
   const commodity = COMMODITIES.find((c) => c.id === commodityId);
   const record = commodityId ? WHOLESALE_PRICE_DATA[commodityId] : void 0;
@@ -78,13 +92,23 @@ function DftcWholesaleDetailPage() {
             Price History
           </button>
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-            {COMMODITIES.map((c) => <button
-    key={c.id}
-    onClick={() => navigate(`/farmer/prices/${c.id}/wholesale`)}
-    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-                {c.name}
-              </button>)}
+            {sortedCommodities.map((c) => {
+              const isPref = isPreferredCrop(c, preferredCrops);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => navigate(`/farmer/prices/${c.id}/wholesale`)}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
+                >
+                  {c.name}
+                  {isPref && (
+                    <span className={`inline-flex items-center px-1 rounded text-[9px] font-semibold ${c.id === commodity.id ? "bg-white/20 text-white" : "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]"}`}>
+                      ★
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -95,7 +119,12 @@ function DftcWholesaleDetailPage() {
           <div className="flex items-center gap-4">
             <CommodityIllustration commodityId={commodity.id} className="w-16 h-16 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+                {isPreferredCrop(commodity, preferredCrops) && (
+                  <PreferredStar className="w-4 h-4 text-amber-500" />
+                )}
+              </div>
               <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] mt-0.5">DFTC Wholesale Price</p>
             </div>
           </div>

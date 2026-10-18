@@ -15,6 +15,9 @@ import {
 import { COMMODITIES } from "../components/market/mockData";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 const ARRIVAL_WEEKLY = {
   kamatis: {
     classification: "Normal",
@@ -111,9 +114,17 @@ function DftcArrivalDetailsPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const defaultId = searchParams.get("commodity") ?? "kamatis";
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const sortedCommodities = sortWithPreferredFirst(COMMODITIES, preferredCrops);
+
+  const defaultId = searchParams.get("commodity") ?? (sortedCommodities[0]?.id || "kamatis");
   const [commodityId, setCommodityId] = useState(
-    COMMODITIES.find((c) => c.id === defaultId) ? defaultId : "kamatis"
+    COMMODITIES.find((c) => c.id === defaultId) ? defaultId : (sortedCommodities[0]?.id || "kamatis")
   );
   const commodity = COMMODITIES.find((c) => c.id === commodityId);
   const data = ARRIVAL_WEEKLY[commodityId] ?? ARRIVAL_WEEKLY["kamatis"];
@@ -143,14 +154,22 @@ function DftcArrivalDetailsPage() {
           </p>
         </div>
 
-        {
-    /* Commodity selector */
-  }
+        {/* Commodity selector */}
         <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          {COMMODITIES.map((c) => <button key={c.id} onClick={() => setCommodityId(c.id)} className={chipBtn(c.id === commodityId)}>
-              <CommodityIllustration commodityId={c.id} className="w-5 h-5 flex-shrink-0" />
-              {c.name}
-            </button>)}
+          {sortedCommodities.map((c) => {
+            const isPref = isPreferredCrop(c, preferredCrops);
+            return (
+              <button key={c.id} onClick={() => setCommodityId(c.id)} className={chipBtn(c.id === commodityId)}>
+                <CommodityIllustration commodityId={c.id} className="w-5 h-5 flex-shrink-0" />
+                {c.name}
+                {isPref && (
+                  <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium ${c.id === commodityId ? "bg-white/20 text-white" : "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]"}`}>
+                    Preferred
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {

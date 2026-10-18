@@ -11,7 +11,7 @@ import {
   RefreshCw,
   MapPin
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -24,6 +24,8 @@ import PlantingSuitabilityCard from "../components/crops/PlantingSuitabilityCard
 import { getPhaseConfig } from "../components/crops/types";
 import { useCrops } from "../components/crops/CropsContext";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
@@ -348,7 +350,20 @@ function DashboardPage() {
   });
 
   const farmerProfile = profileQuery.data;
-  const prices = pricesQuery.data ?? [];
+
+  // Preferred crops the farmer already selected.
+  const preferredCrops = useMemo(() => {
+    return farmerProfile?.preferred_crops || farmerProfile?.preferredCrops || [];
+  }, [farmerProfile]);
+  const preferredCropIds = useMemo(() => {
+    return new Set(preferredCrops.map(p => p.commodity_id || p.commodityId).filter(Boolean));
+  }, [preferredCrops]);
+
+  const rawPrices = pricesQuery.data ?? [];
+  const prices = useMemo(() => {
+    return sortWithPreferredFirst(rawPrices, preferredCrops);
+  }, [rawPrices, preferredCrops]);
+
   const priceTrendQueries = useQueries({
     queries: prices.map((item) => ({
       queryKey: ["farmer-price-card-trend", item.id, item.priceType || "bangkerohan_retail", 7],
@@ -368,9 +383,9 @@ function DashboardPage() {
   // Re-measured whenever the list content or the page loading state changes.
   const [pricesListRef, pricesScrollable] = useOverflowHint(`${prices.length}:${isLoading}`);
 
-  // Preferred crops the farmer already selected.
-  const preferredCrops = farmerProfile?.preferred_crops || farmerProfile?.preferredCrops || [];
-  const preferredCropIds = new Set(preferredCrops.map(p => p.commodity_id || p.commodityId));
+  const sortedCropPlans = useMemo(() => {
+    return sortWithPreferredFirst(cropPlans, preferredCrops);
+  }, [cropPlans, preferredCrops]);
 
   const greeting = getGreeting(t);
   const firstName = farmerProfile?.first_name || user?.first_name;
@@ -488,6 +503,8 @@ function DashboardPage() {
                         const priceChange = hasForecast ? formatPriceChange(forecast, currentPrice) : null;
                         const isQueryLoading = !item.forecast && item.id && (trendQuery?.isPending || trendQuery?.isFetching);
 
+                        const isPreferred = isPreferredCrop(item, preferredCrops);
+
                         return (
                           <button
                             key={item.id}
@@ -501,7 +518,12 @@ function DashboardPage() {
                               className="w-9 h-9 flex-shrink-0" 
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-tight truncate">{item.name || '–'}</p>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-tight truncate">{item.name || '–'}</p>
+                                {isPreferred && (
+                                  <PreferredStar className="w-3.5 h-3.5 text-amber-500" />
+                                )}
+                              </div>
                               <p className="text-[12px] font-semibold text-[var(--hw-green-700)] leading-tight mt-0.5 truncate">
                                 {count === 1 ? t("common.variety_one", {}, "1 variety") : t("common.varieties_count", { count }, `${count} varieties`)}
                               </p>
@@ -557,7 +579,7 @@ function DashboardPage() {
             </div>
 
             <div className="flex-1 flex flex-col min-h-0">
-              <PlantingSuitabilityCard preferredCropIds={[...preferredCropIds]} />
+              <PlantingSuitabilityCard preferredCropIds={[...preferredCropIds]} preferredCrops={preferredCrops} />
             </div>
           </section>
         </div>
@@ -586,7 +608,8 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="divide-y divide-[var(--hw-neutral-100)]">
-                {cropPlans.map((item) => {
+                {sortedCropPlans.map((item) => {
+                  const isPreferred = isPreferredCrop(item, preferredCrops);
                   // The API stores the status as an English string
                   // ("Pre-Harvest", "On Hold", …). Resolve it through the same
                   // phase codes the crop cards use so it renders localized.
@@ -599,9 +622,14 @@ function DashboardPage() {
                     >
                       <CommodityIllustration commodityId={item.commodityId} commodityName={item.commodityName} baseName={item.commodityName} className="w-9 h-9 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-                          {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
-                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                            {item.variety ? `${item.commodityName || '–'} (${item.variety})` : (item.commodityName || '–')}
+                          </p>
+                          {isPreferred && (
+                            <PreferredStar className="w-3.5 h-3.5 text-amber-500" />
+                          )}
+                        </div>
                         <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
                           {t("common.status", {}, "Status")}: {t(phase.labelKey, {}, phase.label)}
                         </p>

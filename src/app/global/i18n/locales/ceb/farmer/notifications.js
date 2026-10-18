@@ -32,6 +32,17 @@ export const notifications = {
   price_dropped_body: "Ang pinakaulahing presyo sa palengke alang sa {commodity} kay {latest} PHP/kg, mas ubos gikan sa {prev} PHP/kg.",
   price_dropped_general_body: "Nibaba ang pinakaulahing presyo sa palengke alang sa {commodity}.",
 
+  // Price Forecast (Preferred Crops)
+  forecast_favorable_title: "Paborableng panagna sa presyo alang sa {commodity}",
+  forecast_favorable_body: "Ang {horizon}-ka-adlaw nga forecast nagpakita nga mosaka ang presyo sa {commodity} ngadto sa {midpoint} PHP/kg (+{pct}%). Paborableng panahon alang sa imong gipiling tanom.",
+  forecast_unfavorable_title: "Gilaomang pag-ubos sa presyo sa {commodity}",
+  forecast_unfavorable_body: "Ang {horizon}-ka-adlaw nga forecast nagpakita nga moubos ang presyo sa {commodity} ngadto sa {midpoint} PHP/kg ({pct}%). Bantayi ang merkado alang sa imong gipiling tanom.",
+
+  // Filters
+  filter_all: "Tanan",
+  filter_preferred: "Gipiling Pananom",
+  filter_unread: "Wala pa Mabasa",
+
   // Price Update
   price_update_title: "Bag-ong presyo alang sa {commodity}",
   price_update_body: "Ang gi-update nga presyo sa palengke alang sa {commodity} kay {price} PHP/kg.",

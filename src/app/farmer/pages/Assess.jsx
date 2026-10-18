@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Save, RotateCcw, AlertCircle, RefreshCw, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, RotateCcw, AlertCircle, RefreshCw, Check, FileText } from "lucide-react";
 import { RecommendationResult } from "../components/recommend/RecommendationResult";
 import {
   DEFAULT_ASSESSMENT,
@@ -61,6 +61,7 @@ function buildDraftPayload(data) {
       : [];
 
   return {
+    plan_id: data.draftId || null,
     commodity_id: data.commodityId || data.commodity,
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
@@ -185,11 +186,9 @@ function AssessPage() {
   const [advisoryError, setAdvisoryError] = useState(null);
   const [advisoryResponse, setAdvisoryResponse] = useState(null);
 
-  const { crops, refreshCrops } = useCrops();
-  const draftCrop = useMemo(
-    () => (Array.isArray(crops) ? crops.find((c) => c.status === "Draft") || null : null),
-    [crops]
-  );
+  const { crops, loading: cropsLoading, refreshCrops } = useCrops();
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftLoadError, setDraftLoadError] = useState(null);
 
   // Reuse prefetched prices list for top10 commodities
   const { data: pricesListData, isLoading: loadingCommodities } = useQuery({
@@ -229,13 +228,153 @@ function AssessPage() {
       setShowResult(true);
       return;
     }
+
+    const resumeDraftId = searchParams.get("resumeDraft") || searchParams.get("draft") || searchParams.get("id");
+    if (resumeDraftId) {
+      if (cropsLoading) {
+        setDraftLoading(true);
+        return;
+      }
+
+      setDraftLoading(false);
+      let match = Array.isArray(crops) ? crops.find((c) => c.id === resumeDraftId) : null;
+
+      if (!match) {
+        try {
+          const raw = localStorage.getItem("harvestwise_assessment_draft");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && (resumeDraftId === "local_draft" || parsed.draftId === resumeDraftId || parsed.isDraft)) {
+              match = {
+                id: parsed.draftId || "local_draft",
+                commodity: parsed.commodity || "",
+                commodityId: parsed.commodityId || parsed.commodity || "",
+                variant: parsed.variant || "",
+                rawPlantingDate: parsed.plantingDate || "",
+                rawHarvestDate: parsed.harvestDate || "",
+                farmArea: parsed.farmArea ?? "",
+                farmAreaUnit: parsed.farmAreaUnit || "sqm",
+                harvestQuantity: parsed.harvestQuantity ?? "",
+                costMethod: parsed.costMethod || "simple",
+                totalCost: parsed.totalCost || parsed.simpleCost || 0,
+                expenses: parsed.expenses,
+                farmgatePrice: parsed.farmgatePrice,
+                status: "Draft",
+                isDraft: true,
+              };
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (match) {
+        const expenses =
+          match.costMethod === "detailed" && Array.isArray(match.expenses) && match.expenses.length > 0
+            ? match.expenses
+            : makeDefaultExpenses();
+        setData({
+          ...DEFAULT_ASSESSMENT,
+          commodity: match.commodity || "",
+          commodityId: match.commodityId || match.commodity || "",
+          variant: match.variant || match.variety || "",
+          plantingDate: match.rawPlantingDate || match.plantingDate || "",
+          harvestDate: match.rawHarvestDate || match.harvestDate || "",
+          farmArea: match.farmArea ?? "",
+          farmAreaUnit: match.farmAreaUnit || "sqm",
+          harvestQuantity: match.harvestQuantity ?? "",
+          costMethod: match.costMethod || "simple",
+          simpleCost: match.costMethod !== "detailed" ? (match.totalCost || "") : "",
+          expenses,
+          useFarmgate: Boolean(match.farmgatePrice && match.farmgatePrice > 0),
+          farmgatePrice: match.farmgatePrice ?? "",
+          draftId: match.id === "local_draft" ? null : match.id,
+          isDraft: true,
+        });
+        setDraftStatus(null);
+        setDraftLoadError(null);
+        setStep(1);
+        setView("assessment");
+        setErrors({});
+        setShowResult(false);
+        return;
+      }
+
+      if (resumeDraftId !== "local_draft") {
+        setDraftLoading(true);
+        (async () => {
+          try {
+            const res = await apiGet(`/crop-plans/${resumeDraftId}`);
+            if (!res.ok) {
+              throw new Error("Draft not found");
+            }
+            const rawPlan = await parseResponse(res);
+            if (rawPlan.status !== "Draft") {
+              throw new Error("Not a draft assessment");
+            }
+            const prodCosts = Array.isArray(rawPlan.production_costs) ? rawPlan.production_costs : [];
+            const exps = rawPlan.cost_entry_mode === "detailed"
+              ? prodCosts.map((c, i) => ({ id: String(i + 1), name: c.category || "Additional", amount: Number(c.amount || 0), isCustom: true }))
+              : makeDefaultExpenses();
+            setData({
+              ...DEFAULT_ASSESSMENT,
+              commodity: rawPlan.commodity_id || "",
+              commodityId: rawPlan.commodity_id || "",
+              variant: rawPlan.commodity?.variety || "",
+              plantingDate: rawPlan.planned_planting_date || "",
+              harvestDate: rawPlan.expected_harvest_date || "",
+              farmArea: rawPlan.farm_area ?? "",
+              farmAreaUnit: "sqm",
+              harvestQuantity: rawPlan.expected_harvest_qty ?? "",
+              costMethod: rawPlan.cost_entry_mode || "simple",
+              simpleCost: rawPlan.cost_entry_mode !== "detailed" && prodCosts[0] ? prodCosts[0].amount : "",
+              expenses: exps,
+              useFarmgate: Boolean(rawPlan.expected_farmgate_price && Number(rawPlan.expected_farmgate_price) > 0),
+              farmgatePrice: rawPlan.expected_farmgate_price ?? "",
+              draftId: rawPlan.id,
+              isDraft: true,
+            });
+            setDraftStatus(null);
+            setDraftLoadError(null);
+            setStep(1);
+            setView("assessment");
+            setErrors({});
+            setShowResult(false);
+          } catch (_err) {
+            setDraftLoadError(
+              t(
+                "farmer.draft.not_found_message",
+                {},
+                "The requested draft assessment could not be found or you do not have permission to access it."
+              )
+            );
+          } finally {
+            setDraftLoading(false);
+          }
+        })();
+        return;
+      }
+
+      setDraftLoadError(
+        t(
+          "farmer.draft.not_found_message",
+          {},
+          "The requested draft assessment could not be found or you do not have permission to access it."
+        )
+      );
+      return;
+    }
+
+    setDraftLoadError(null);
+    setDraftLoading(false);
     const pre = searchParams.get("commodity");
     if (pre) {
       setData((d) => ({ ...d, commodity: pre }));
       setView("assessment");
       setStep(1);
     }
-  }, []);
+  }, [searchParams, crops, cropsLoading]);
 
   const patch = (p) => {
     setData((d) => ({ ...d, ...p }));
@@ -248,6 +387,13 @@ function AssessPage() {
   };
 
   const handleStart = () => {
+    try {
+      localStorage.removeItem("harvestwise_assessment_draft");
+    } catch {
+      // ignore
+    }
+    setDraftLoadError(null);
+    setDraftLoading(false);
     setData(DEFAULT_ASSESSMENT);
     setStep(1);
     setView("assessment");
@@ -257,59 +403,68 @@ function AssessPage() {
     setAdvisoryResponse(null);
   };
 
-  const handleContinueDraft = () => {
-    if (!draftCrop) return;
-    const expenses =
-      draftCrop.costMethod === "detailed" && Array.isArray(draftCrop.expenses) && draftCrop.expenses.length > 0
-        ? draftCrop.expenses
-        : makeDefaultExpenses();
-    setData({
-      ...DEFAULT_ASSESSMENT,
-      commodity: draftCrop.commodity || "",
-      variant: draftCrop.variant || "",
-      plantingDate: draftCrop.rawPlantingDate || "",
-      harvestDate: draftCrop.rawHarvestDate || "",
-      farmArea: draftCrop.farmArea ?? "",
-      harvestQuantity: draftCrop.harvestQuantity ?? "",
-      costMethod: draftCrop.costMethod || "simple",
-      simpleCost: draftCrop.costMethod !== "detailed" ? (draftCrop.totalCost || "") : "",
-      expenses,
-      useFarmgate: Boolean(draftCrop.farmgatePrice && draftCrop.farmgatePrice > 0),
-      farmgatePrice: draftCrop.farmgatePrice ?? "",
-    });
-    setDraftStatus(null);
-    setStep(1);
-    setView("assessment");
-    setErrors({});
-    setShowResult(false);
-    setAdvisoryError(null);
-    setAdvisoryResponse(null);
-  };
-
   const handleSaveDraft = async () => {
+    setSavingDraft(true);
+    setDraftStatus(null);
+
+    const draftSnapshot = {
+      ...data,
+      isDraft: true,
+    };
+    try {
+      localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
+      setLocalDraft(draftSnapshot);
+    } catch {
+      // ignore
+    }
+
     if (!data.commodity) {
-      setDraftStatus({
-        type: "error",
-        message: t("farmer.assess.draft_require_crop", {}, "Select a crop first before saving a draft."),
+      setSavingDraft(false);
+      navigate("/farmer/crops", {
+        state: {
+          draftSaved: true,
+          message: t(
+            "farmer.assess.draft_saved_partial",
+            {},
+            "Step 1 progress saved as draft. You can continue anytime."
+          ),
+        },
       });
       return;
     }
-    setSavingDraft(true);
-    setDraftStatus(null);
+
     try {
       const res = await apiPost("/crop-plans/draft", buildDraftPayload(data));
       if (!res.ok) {
         throw new Error("Failed to save draft");
       }
-      setDraftStatus({
-        type: "success",
-        message: t("farmer.assess.draft_saved", {}, "Draft saved. Continue anytime from the crop assessment home."),
-      });
+      const saved = await parseResponse(res);
+      setData((d) => ({
+        ...d,
+        draftId: saved.id,
+        isDraft: true,
+      }));
       await refreshCrops();
+      navigate("/farmer/crops", {
+        state: {
+          draftSaved: true,
+          message: t(
+            "farmer.assess.draft_saved",
+            {},
+            "Draft saved. Continue anytime from My Crops or Assessment home."
+          ),
+        },
+      });
     } catch (_err) {
-      setDraftStatus({
-        type: "error",
-        message: t("farmer.assess.draft_save_failed", {}, "We couldn't save your draft right now. Please try again."),
+      navigate("/farmer/crops", {
+        state: {
+          draftSaved: true,
+          message: t(
+            "farmer.assess.draft_saved_local_notice",
+            {},
+            "Draft saved locally on this device. You can continue anytime."
+          ),
+        },
       });
     } finally {
       setSavingDraft(false);
@@ -386,6 +541,54 @@ function AssessPage() {
   const breakEven = harvestQty && total > 0 ? Math.ceil(total / harvestQty) : null;
   const showSidePanel = step >= 3;
 
+  if (draftLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 space-y-3">
+        <RefreshCw className="w-8 h-8 text-[var(--hw-green-700)] animate-spin" />
+        <p className="text-sm font-medium text-[var(--hw-neutral-700)]">
+          {t("farmer.draft.loading", {}, "Loading assessment draft...")}
+        </p>
+      </div>
+    );
+  }
+
+  if (draftLoadError) {
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-10 max-w-2xl mx-auto space-y-6">
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-6 text-center space-y-3 shadow-xs">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto text-amber-800">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-amber-950">
+            {t("farmer.draft.not_found_title", {}, "Draft Assessment Not Found")}
+          </h2>
+          <p className="text-sm text-amber-900 leading-relaxed max-w-md mx-auto">
+            {draftLoadError}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <button
+              type="button"
+              onClick={() => navigate("/farmer/crops")}
+              className="px-5 py-2.5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors text-sm shadow-xs"
+            >
+              {t("farmer.draft.go_to_crops", {}, "Back to My Crops")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraftLoadError(null);
+                handleStart();
+              }}
+              className="px-5 py-2.5 bg-white text-[var(--hw-neutral-800)] font-medium rounded-xl border border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors text-sm"
+            >
+              {t("farmer.assess.start_new_assessment", {}, "Start new assessment")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (showResult) {
     return (
       <RecommendationResult
@@ -397,7 +600,7 @@ function AssessPage() {
     );
   }
   if (view === "entry") {
-    return <RecommendEntry hasDraft={draftCrop !== null} onStart={handleStart} onContinueDraft={handleContinueDraft} />;
+    return <RecommendEntry onStart={handleStart} />;
   }
   const SidePanel = () => <div className="hidden md:flex flex-col gap-3 sticky top-24">
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
@@ -449,6 +652,23 @@ function AssessPage() {
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className={`md:grid gap-8 ${showSidePanel ? "md:grid-cols-[1fr_280px]" : ""}`}>
           <div className="space-y-6">
+            {(data.isDraft || data.draftId) && (
+              <div className="flex items-center justify-between p-3.5 bg-amber-50/90 border border-amber-300 rounded-2xl text-amber-950 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
+                    <FileText className="w-3.5 h-3.5 text-amber-800" />
+                    {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Incomplete")}
+                  </span>
+                  <p className="text-xs sm:text-sm font-medium text-amber-900">
+                    {t(
+                      "farmer.assess.draft_banner_notice",
+                      {},
+                      "You are continuing an unfinished assessment. Review, edit, and complete Step 1 before continuing."
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
             <StepProgress currentStep={step} />
             <div>
               <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
@@ -491,5 +711,7 @@ function AssessPage() {
     </div>;
 }
 export {
-  AssessPage as default
+  AssessPage as default,
+  StepActions,
+  validateStep
 };

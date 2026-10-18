@@ -55,7 +55,9 @@ function buildHistoricalSummaries(varietyDetails, preset, customFrom, customTo) 
 /**
  * Summary cards use the selected horizon endpoint (+7/+14/+21/+28),
  * not the +1 point and not an average of daily points.
- * Forecast Change stays unimplemented (null → "—").
+ * Forecast Change is calculated using the system formula:
+ *   midpoint = (lower + upper) / 2 (or forecast.forecast_midpoint)
+ *   change % = ((midpoint - recent_avg) / recent_avg) * 100
  */
 function buildForecastSummaries(varietyDetails) {
   return (varietyDetails || []).map((entry) => {
@@ -72,13 +74,21 @@ function buildForecastSummaries(varietyDetails) {
         change: null,
       };
     }
+    const lo = numericPrice(forecast.lower_forecast);
+    const hi = numericPrice(forecast.upper_forecast);
+    const avgMid =
+      numericPrice(forecast.forecast_midpoint) ??
+      (lo != null && hi != null ? (lo + hi) / 2 : null);
+
+    const change = forecastChangePercent(avgMid, recentAvg);
+
     return {
       variety: entry.varietyKey,
-      avgMid: numericPrice(forecast.forecast_midpoint),
-      lo: numericPrice(forecast.lower_forecast),
-      hi: numericPrice(forecast.upper_forecast),
+      avgMid,
+      lo,
+      hi,
       recentAvg,
-      change: null,
+      change,
     };
   });
 }

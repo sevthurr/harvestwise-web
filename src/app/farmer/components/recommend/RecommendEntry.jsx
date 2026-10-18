@@ -1,11 +1,7 @@
-import { Sprout, ChevronRight, FileText, AlertCircle } from "lucide-react";
+import { Sprout, ChevronRight, AlertCircle } from "lucide-react";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
-const RecommendEntry = ({
-  hasDraft,
-  onStart,
-  onContinueDraft
-}) => {
+const RecommendEntry = ({ onStart }) => {
   const { t } = useLanguage();
 
   const steps = [
@@ -57,16 +53,6 @@ const RecommendEntry = ({
           {t("farmer.assess.start_assessment", {}, "Start assessment")}
           <ChevronRight className="w-4 h-4" />
         </button>
-
-        {hasDraft && (
-          <button
-            onClick={onContinueDraft}
-            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            {t("farmer.assess.continue_draft", {}, "Continue saved draft")}
-          </button>
-        )}
       </div>
 
       {/* Disclaimer */}

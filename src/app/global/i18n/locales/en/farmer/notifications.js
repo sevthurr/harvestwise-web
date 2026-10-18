@@ -32,6 +32,17 @@ export const notifications = {
   price_dropped_body: "The latest market price for {commodity} is {latest} PHP/kg, down from {prev} PHP/kg.",
   price_dropped_general_body: "The latest market price for {commodity} has decreased.",
 
+  // Price Forecast (Preferred Crops)
+  forecast_favorable_title: "Favorable price forecast for {commodity}",
+  forecast_favorable_body: "The {horizon}-day forecast projects {commodity} prices to rise to {midpoint} PHP/kg (+{pct}%). Favorable outlook for your preferred crop.",
+  forecast_unfavorable_title: "Price drop forecasted for {commodity}",
+  forecast_unfavorable_body: "The {horizon}-day forecast projects {commodity} prices to decline to {midpoint} PHP/kg ({pct}%). Monitor market conditions for your preferred crop.",
+
+  // Filters
+  filter_all: "All",
+  filter_preferred: "Preferred Crops",
+  filter_unread: "Unread",
+
   // Price Update
   price_update_title: "New prices available for {commodity}",
   price_update_body: "Updated prevailing market price for {commodity} is {price} PHP/kg.",

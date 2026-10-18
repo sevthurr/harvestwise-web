@@ -38,8 +38,6 @@ vi.mock("recharts", () => {
     Cell: () => null,
     Line: () => null,
     Bar: ({ children }) => <div>{children}</div>,
-    Cell: () => null,
-    Pie: ({ children }) => <div>{children}</div>,
     Area: () => null,
     XAxis: () => null,
     YAxis: () => null,
@@ -248,8 +246,26 @@ describe("dftcTrendsPriceData helpers", () => {
     expect(summaries[0].avgMid).toBeCloseTo(81.4, 5);
     expect(summaries[0].lo).toBeCloseTo(71.4, 5);
     expect(summaries[0].hi).toBeCloseTo(91.4, 5);
-    expect(summaries[0].change).toBeNull();
+    expect(summaries[0].change).toBeCloseTo(14.647887, 3);
     expect(summaries[0].recentAvg).toBeCloseTo(71, 5);
+  });
+
+  it("returns null change when forecast or recent records are missing", () => {
+    const withoutForecast = buildForecastSummaries([
+      {
+        varietyKey: "Diamante Big",
+        detail: detailBody({ forecast: null }),
+      },
+    ]);
+    expect(withoutForecast[0].change).toBeNull();
+
+    const withoutRecords = buildForecastSummaries([
+      {
+        varietyKey: "Diamante Big",
+        detail: detailBody({ records: [] }),
+      },
+    ]);
+    expect(withoutRecords[0].change).toBeNull();
   });
 
   it("keeps historical chart data when forecast is missing", () => {
@@ -430,13 +446,31 @@ describe("DFTC Trends page prices API integration", () => {
     });
   });
 
-  it("keeps Forecast Change as an em dash and does not expose Price Outlook", async () => {
+  it("calculates Forecast Price Change using the formula and does not expose Price Outlook", async () => {
     installApi();
     renderTrends(<DFTCTrends />);
     await waitFor(() => {
       expect(screen.getByText("Forecast Price Change")).toBeInTheDocument();
     });
     expect(screen.queryByText("Price Outlook")).not.toBeInTheDocument();
+    const changeTitle = screen.getByText("Forecast Price Change");
+    // With horizon 7: midpoint 80.7, recentAvg 71 => change is +13.7%
+    expect(changeTitle.parentElement?.textContent || "").toMatch(/Forecast Price Change[\s\S]*↑\s*13\.7%/);
+  });
+
+  it("shows em dash for Forecast Price Change when forecast data is unavailable", async () => {
+    installApi();
+    vi.spyOn(pricesApi, "getPriceDetail").mockImplementation(async (commodityId, params = {}) => {
+      return detailBody({
+        commodityId,
+        forecast: null,
+        records: [],
+      });
+    });
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => {
+      expect(screen.getByText("Forecast Price Change")).toBeInTheDocument();
+    });
     const changeTitle = screen.getByText("Forecast Price Change");
     expect(changeTitle.parentElement?.textContent || "").toMatch(/Forecast Price Change[\s\S]*—/);
   });

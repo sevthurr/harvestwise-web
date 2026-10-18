@@ -213,7 +213,9 @@ const DEFAULT_ASSESSMENT = {
   expenses: makeDefaultExpenses(),
   sellingPrice: "",
   useFarmgate: true,
-  farmgatePrice: ""
+  farmgatePrice: "",
+  draftId: null,
+  isDraft: false
 };
 const STEP_LABELS = {
   1: "Choose crop",

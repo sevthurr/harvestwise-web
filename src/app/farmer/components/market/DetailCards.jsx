@@ -15,11 +15,24 @@ import {
 import { COMMODITIES } from "./mockData";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PriceDirectionIndicator, SupplyConditionIndicator, DataFreshnessLabel } from "./Indicators";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst } from "../../utils/cropPreferences";
+
 const CommodityDetailHeader = ({
   commodity,
   onBack,
   onSwitch
-}) => <div className="space-y-4">
+}) => {
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const sortedCommodities = sortWithPreferredFirst(COMMODITIES, preferredCrops);
+
+  return <div className="space-y-4">
     {
   /* Back + switch row */
 }
@@ -35,7 +48,7 @@ const CommodityDetailHeader = ({
   /* Commodity switcher */
 }
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-        {COMMODITIES.map((c) => <button
+        {sortedCommodities.map((c) => <button
   key={c.id}
   onClick={() => onSwitch(c.id)}
   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
@@ -67,6 +80,8 @@ const CommodityDetailHeader = ({
       <span className="text-xs text-[var(--hw-neutral-900)]">{commodity.priceType}</span>
     </div>
   </div>;
+};
+
 const CurrentMarketConditionCard = ({
   commodity
 }) => <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-4 shadow-[var(--shadow-xs)]">

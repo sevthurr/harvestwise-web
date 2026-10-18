@@ -23,9 +23,13 @@ vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   }),
 }));
 
-vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", () => ({
-  CommodityIllustration: () => <span data-testid="commodity-art" />,
-}));
+vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    CommodityIllustration: () => <span data-testid="commodity-art" />,
+  };
+});
 
 import PricesPage from "../app/farmer/pages/Prices.jsx";
 
@@ -105,5 +109,34 @@ describe("Farmer prices page", () => {
     expect(await screen.findAllByText("No trend data")).not.toHaveLength(0);
     expect(screen.queryByText("Not available")).not.toBeInTheDocument();
     expect(screen.queryByText("₱0/kg")).not.toBeInTheDocument();
+  });
+
+  it("renders preferred crops first before non-preferred commodities", async () => {
+    const pipino = {
+      commodity_id: "COM-0008",
+      name: "Pipino",
+      variety: "Mega C",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: {
+        bangkerohan_retail: 60,
+      },
+    };
+    priceListResponse.current = {
+      items: [lettuce, pipino],
+      preferred_crops: [{ commodity_id: "COM-0008", commodity_name: "Pipino" }],
+    };
+
+    renderPricesPage();
+
+    // Both commodities render
+    expect(await screen.findByText("Pipino")).toBeInTheDocument();
+    expect(screen.getByText("Lettuce")).toBeInTheDocument();
+
+    // Verify ordering: Pipino (preferred) comes before Lettuce
+    const headings = screen.getAllByText(/Pipino|Lettuce/);
+    expect(headings[0]).toHaveTextContent("Pipino");
+    expect(headings[1]).toHaveTextContent("Lettuce");
+    expect(screen.getByText("Preferred")).toBeInTheDocument();
   });
 });
