@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { CROP_DURATIONS, formatDurationLabel, getCropDuration, suggestHarvestDate } from "../app/farmer/components/recommend/types.js";
-import { buildCatalog, durationForOption } from "../app/farmer/components/recommend/useCommodityCatalog.js";
+import { buildCatalog, durationForOption, findCatalogOption } from "../app/farmer/components/recommend/useCommodityCatalog.js";
 
 // Trimmed from GET /api/v1/prices?is_top10=true
 const PRICES_ITEMS = [
@@ -66,6 +66,18 @@ describe("buildCatalog", () => {
   it("falls back to the default variety when none is selected", () => {
     expect(durationForOption(byId.talong, "")).toEqual({ min: 46, max: 50, basis: "DAT" });
     expect(durationForOption(null, "Ball")).toBeNull();
+  });
+});
+
+describe("findCatalogOption", () => {
+  const options = buildCatalog(PRICES_ITEMS);
+
+  it("resolves a resumed draft stored with its database commodity id", () => {
+    expect(findCatalogOption(options, "COM-0011").id).toBe("talong");
+  });
+
+  it("resolves the grouped base id used by Step 1 selections", () => {
+    expect(findCatalogOption(options, "talong").name).toBe("Talong");
   });
 });
 

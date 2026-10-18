@@ -86,6 +86,15 @@ function durationForOption(option, variant) {
   return option.defaultDuration ?? null;
 }
 
+function findCatalogOption(options, commodityId) {
+  if (!commodityId) return null;
+  return options.find((option) => (
+    option.id === commodityId
+    || option.defaultCommodityId === commodityId
+    || Object.values(option.varietyMap || {}).includes(commodityId)
+  )) || null;
+}
+
 function useCommodityCatalog() {
   const { data: resData, isLoading: pricesLoading } = useQuery({
     queryKey: ["prices", "list"],
@@ -113,5 +122,6 @@ function useCommodityCatalog() {
 export {
   buildCatalog,
   durationForOption,
+  findCatalogOption,
   useCommodityCatalog
 };

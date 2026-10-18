@@ -195,4 +195,30 @@ describe("Crop Assessment Updates", () => {
     expect(screen.getByText(/Break-even|Cost to recover|Pagbawi sa Gasto/i)).toBeDefined();
     expect(screen.getByText(/You need to sell/i)).toBeDefined();
   });
+
+  it("resolves resumed draft commodity ids in the Step 4 review", () => {
+    const data = {
+      ...DEFAULT_ASSESSMENT,
+      commodity: "COM-0011",
+      commodityName: "Talong",
+      harvestQuantity: "500",
+      costMethod: "simple",
+      simpleCost: "20000",
+      useFarmgate: true,
+      farmgatePrice: 70,
+    };
+
+    renderWithProviders(
+      <Step4ReviewBreakEven
+        data={data}
+        onChange={() => {}}
+        onEditStep={() => {}}
+        errors={{}}
+      />
+    );
+
+    expect(screen.getAllByText("Talong").length).toBeGreaterThan(0);
+    expect(screen.getByText(/You need to sell Talong/i)).toBeDefined();
+    expect(screen.getByText(/₱40\/kg/)).toBeDefined();
+  });
 });

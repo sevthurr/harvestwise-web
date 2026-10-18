@@ -10,7 +10,7 @@ import {
   Minus
 } from "lucide-react";
 import { getTotalCost, formatPeso, formatDurationLabel, COMMODITY_OPTIONS, getCropDuration } from "./types";
-import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
+import { durationForOption, findCatalogOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { fetchPricesList } from "../../../global/hooks/useFarmerPrefetch";
 import { getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
@@ -113,18 +113,32 @@ const Step4ReviewBreakEven = ({
   const { t } = useLanguage();
   const [calcOpen, setCalcOpen] = useState(false);
   const { options } = useCommodityCatalog();
+  const selectedOption = findCatalogOption(options, data.commodity);
+  const commodityKey = selectedOption?.id || data.commodity;
   // API duration first, CROP_DURATIONS as the fallback table (see Step1).
-  const apiDuration = durationForOption(options.find((c) => c.id === data.commodity) || null, data.variant);
+  const apiDuration = durationForOption(selectedOption, data.variant);
   const duration = apiDuration || (data.commodity ? getCropDuration(data.commodity, data.variant) : null);
   const durationVarKey = data.variant
     ? `duration_${data.commodity}_${data.variant.toLowerCase().replace(/[^a-z0-9]/g, "_")}`
     : `duration_${data.commodity}`;
   const durationLabel = formatDurationLabel(apiDuration, t)
     || (data.commodity ? t(`farmer.assess.${durationVarKey}`, {}, duration?.label || "") : null);
-  const commodityLabel = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? "\u2014";
+  const commodityLabel = selectedOption?.name
+    || COMMODITY_OPTIONS.find((c) => c.id === commodityKey)?.name
+    || data.commodityName
+    || HW_ID_TO_NAME[commodityKey]
+    || data.commodity
+    || "\u2014";
   const displayLabel = data.variant ? `${commodityLabel} (${data.variant})` : commodityLabel;
-  const totalCost = getTotalCost(data);
-  const harvestQty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
+  const totalCost = getTotalCost({
+    ...data,
+    simpleCost: Number(data.simpleCost) || 0,
+    expenses: (data.expenses || []).map((expense) => ({
+      ...expense,
+      amount: Number(expense.amount) || 0,
+    })),
+  });
+  const harvestQty = Number(data.harvestQuantity) > 0 ? Number(data.harvestQuantity) : null;
   const breakEven = harvestQty ? Math.ceil(totalCost / harvestQty) : null;
   const farmAreaText = data.farmArea !== "" ? `${data.farmArea} ${data.farmAreaUnit === "sqm" ? t("farmer.assess.sqm", {}, "sq m") : t("farmer.assess.hectares", {}, "ha")}` : "—";
 
@@ -147,7 +161,7 @@ const Step4ReviewBreakEven = ({
 
       const nameStr = camelItem.name || camelItem.commodityName || item.name || "";
       const iconKey = getCommodityIconKey(camelItem.commodityId, camelItem.baseName, nameStr);
-      if (iconKey !== data.commodity) return;
+      if (iconKey !== commodityKey) return;
 
       let varietyName = camelItem.variety || "";
       if (!varietyName && nameStr.includes("-")) {
@@ -175,7 +189,7 @@ const Step4ReviewBreakEven = ({
       });
     });
 
-    const baseName = HW_ID_TO_NAME[data.commodity] || data.commodity;
+    const baseName = commodityLabel;
     const localVariants = getVariants(baseName);
 
     if (matching.length === 0) {
@@ -188,7 +202,7 @@ const Step4ReviewBreakEven = ({
         }));
       }
       return [{
-        id: data.commodity,
+        id: commodityKey,
         name: baseName,
         variety: "",
         avgPrice: null,
@@ -196,7 +210,7 @@ const Step4ReviewBreakEven = ({
     }
 
     return matching;
-  }, [pricesListData, data.commodity]);
+  }, [pricesListData, commodityKey, commodityLabel]);
 
   const displayedVariants = useMemo(() => {
     if (!data.commodity) return [];
@@ -210,7 +224,7 @@ const Step4ReviewBreakEven = ({
 
       const fallbackAvg = variantPricingList[0]?.avgPrice ?? null;
       return [{
-        id: `${data.commodity}-${normSelected}`,
+        id: `${commodityKey}-${normSelected}`,
         name: `${commodityLabel} (${data.variant})`,
         variety: data.variant,
         avgPrice: fallbackAvg,
