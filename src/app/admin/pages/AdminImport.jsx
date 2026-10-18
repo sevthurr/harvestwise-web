@@ -16,6 +16,7 @@ import {
 import { ingestionApi } from "../../../services/api";
 import { useBackgroundProcess } from "../../global/contexts/BackgroundProcessContext";
 import { parseFileReal } from "../../global/utils/excelFilePreview";
+import { useFileDropZone } from "../../global/hooks/useFileDropZone";
 
 
 const DATA_TYPE_MAP = {
@@ -377,6 +378,9 @@ function AdminImport() {
   const [validationResult, setValidationResult] = useState({
     totalRows: 0,
     valid: 0,
+    new: 0,
+    updated: 0,
+    unchanged: 0,
     duplicates: 0,
     missingValues: 0,
     unrecognizedCommodities: 0,
@@ -416,6 +420,9 @@ function AdminImport() {
       setValidationResult({
         totalRows: summary.total_rows ?? 0,
         valid: summary.valid_rows ?? 0,
+        new: summary.new_rows ?? 0,
+        updated: summary.updated_rows ?? 0,
+        unchanged: summary.unchanged_rows ?? summary.duplicate_rows ?? 0,
         duplicates: summary.duplicate_rows ?? 0,
         missingValues: summary.missing_value_rows ?? 0,
         unrecognizedCommodities: summary.unrecognized_commodity_rows ?? 0,
@@ -432,9 +439,7 @@ function AdminImport() {
     }
   };
 
-  const handleFileSelect = async (e) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+  const processFile = async (selected) => {
     setFile(selected);
     setFileName(selected.name);
     setUploadError("");
@@ -494,6 +499,13 @@ function AdminImport() {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const selected = e.target.files?.[0];
+    if (selected) processFile(selected);
+  };
+
+  const { dropProps, isDragging } = useFileDropZone({ onFile: processFile, disabled: parsing });
+
   const handleSheetChange = (sheetName) => {
     setActiveSheet(sheetName);
     if (sheetsDataRef.current?.[sheetName] && extractPreviewFnRef.current) {
@@ -515,13 +527,9 @@ function AdminImport() {
       setUploadError("Select a dataset type before importing.");
       return;
     }
-    if (!overwrite && (validationResult.duplicates > 0 || validationResult.rejected > 0)) {
-      const isArrivalUpload = DATA_TYPE_MAP[datasetType] === "arrival";
-      setUploadError(
-        validationResult.duplicates > 0
-          ? `${isArrivalUpload ? "Duplicate arrival-volume records" : "Duplicate price records"} were found. Enable overwrite to replace existing records, or remove the duplicates before importing.`
-          : "The file contains rejected rows. Fix the validation errors before importing."
-      );
+    if (validationResult.rejected > 0) {
+      setUploadError("The file contains rejected rows. Fix the validation errors before importing.");
+
       setStep("validated");
       setCurrentStep(1);
       return;
@@ -636,6 +644,9 @@ function AdminImport() {
     setValidationResult({
       totalRows: 0,
       valid: 0,
+      new: 0,
+      updated: 0,
+      unchanged: 0,
       duplicates: 0,
       missingValues: 0,
       unrecognizedCommodities: 0,
@@ -659,6 +670,8 @@ function AdminImport() {
     if (tableFilter === "rejected") return r.result === "rejected";
     if (tableFilter === "warning") return r.result === "valid_with_warning";
     if (tableFilter === "duplicate") return r.issues?.some((i) => i.code === "duplicate");
+    if (tableFilter === "updated") return r.issues?.some((i) => i.code === "update" || i.code === "updated");
+    if (tableFilter === "changed") return r.issues?.some((i) => i.code === "update" || i.code === "updated");
     if (tableFilter === "missing") return r.issues?.some((i) => i.code === "missing_required");
     if (tableFilter === "new_commodity") return r.issues?.some((i) => i.code === "new_commodity");
     return true;
@@ -709,7 +722,8 @@ function AdminImport() {
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={parsing}
-                className="w-full border-2 border-dashed border-[var(--hw-neutral-300)] rounded-2xl p-8 flex flex-col items-center gap-3 hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 cursor-pointer"
+                {...dropProps}
+                className={`w-full border-2 border-dashed ${isDragging ? "border-[var(--hw-green-400)] bg-[var(--hw-green-50)]" : "border-[var(--hw-neutral-300)]"} rounded-2xl p-8 flex flex-col items-center gap-3 hover:border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 cursor-pointer`}
               >
                 <div className="p-3 bg-[var(--hw-neutral-100)] rounded-2xl">
                   {parsing ? <Loader2 className="w-7 h-7 text-[var(--hw-green-700)] animate-spin" /> : <Upload className="w-7 h-7 text-[var(--hw-neutral-800)]" />}
@@ -939,6 +953,7 @@ function AdminImport() {
                       <option value="rejected">Rejected Only</option>
                       <option value="warning">Warnings Only</option>
                       <option value="duplicate">Duplicates</option>
+                      <option value="updated">Updated</option>
                       <option value="missing">Missing Values</option>
                       <option value="new_commodity">New Commodities</option>
                     </select>

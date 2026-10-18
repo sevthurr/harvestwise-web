@@ -289,4 +289,36 @@ describe('AdminImport component with backend dry-run validation', () => {
       'OpenMeteo',
     ]);
   });
+
+  it('accepts a dropped file on the drop zone and previews it', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AdminImport />
+      </QueryClientProvider>
+    );
+
+    const dropZone = screen.getByText('Drop file here or click to upload').closest('button');
+
+    // Drag feedback: the drop zone highlights while a file is over it
+    fireEvent.dragOver(dropZone, { dataTransfer: { items: [{ kind: 'file' }] } });
+    await waitFor(() => {
+      expect(dropZone.className).toContain('border-[var(--hw-green-400)]');
+    });
+
+    const file = new File(
+      ['Date,Commodity,Variety,Price,Unit\n2026-08-30,Tomato,Diamante,85.00,kg'],
+      'dropped_prices.csv',
+      { type: 'text/csv' }
+    );
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [file], items: [{ kind: 'file' }], types: ['Files'] },
+    });
+
+    // Same observable outcome as the file-input path
+    await waitFor(() => {
+      expect(screen.getByText('dropped_prices.csv')).toBeInTheDocument();
+      expect(screen.getByText('Validate Data')).toBeInTheDocument();
+    });
+  });
 });
