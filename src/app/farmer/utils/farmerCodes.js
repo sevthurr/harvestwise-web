@@ -5,6 +5,7 @@ export const ADVISORY_CODES = {
 };
 
 export const PHASE_CODES = {
+  DRAFT: "phase_draft",
   PLANNING: "phase_planning",
   GROWING: "phase_growing",
   PRE_HARVEST: "phase_pre_harvest",
@@ -60,8 +61,9 @@ export function normalizePhaseCode(value) {
   const normalized = String(value || "").trim().toLowerCase();
 
   const map = {
+    "draft": PHASE_CODES.DRAFT,
+    "phase_draft": PHASE_CODES.DRAFT,
     "planning": PHASE_CODES.PLANNING,
-    "draft": PHASE_CODES.PLANNING,
     "phase_planning": PHASE_CODES.PLANNING,
     "planted": PHASE_CODES.GROWING,
     "growing": PHASE_CODES.GROWING,

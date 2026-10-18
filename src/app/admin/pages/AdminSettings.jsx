@@ -6,6 +6,7 @@ import { useGoogleLink } from "../../auth/useGoogleLink";
 import { authApi } from "../../../services/api";
 import { parseResponse } from "../../global/api";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
+import { isValidEmail } from "../../auth/authValidation";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
@@ -40,7 +41,9 @@ const AccountTab = ({ showToast }) => {
     email: typeof user?.email === "string" ? user.email : ""
   });
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const emailInvalid = Boolean(form.email.trim()) && !isValidEmail(form.email);
 
   const set = (k) => (e) => {
     setErrorMsg("");
@@ -48,6 +51,10 @@ const AccountTab = ({ showToast }) => {
   };
 
   const handlePreSave = () => {
+    if (emailInvalid) {
+      setErrorMsg("Enter a valid email address.");
+      return;
+    }
     if (!form.email.trim() && !form.phone.trim()) {
       setErrorMsg("An email address or phone number is required.");
       return;
@@ -67,6 +74,8 @@ const AccountTab = ({ showToast }) => {
       if (form.suffix && form.suffix !== "None") payload.suffix = form.suffix;
       if (form.email?.trim()) payload.email = form.email.trim();
       if (form.phone?.trim()) payload.phone = form.phone.trim();
+      if (currentPassword) payload.current_password = currentPassword;
+      setCurrentPassword("");
       await authApi.updateProfile(payload);
       try {
         await refreshUser();
@@ -161,8 +170,9 @@ const AccountTab = ({ showToast }) => {
               placeholder="admin@example.com"
               value={form.email}
               onChange={set("email")}
-              className={inputCls}
+              className={`${inputCls} ${emailInvalid ? "border-red-500 focus:ring-red-500" : ""}`}
             />
+            {emailInvalid && <p className="mt-1 text-[12px] text-red-600">Enter a valid email address.</p>}
           </div>
           <div>
             <FieldLabel htmlFor="adm-role">Role</FieldLabel>
@@ -188,6 +198,17 @@ const AccountTab = ({ showToast }) => {
           <p className="text-[14px] text-black mb-5">
             Your updated account information will be saved to your Admin profile.
           </p>
+          <label htmlFor="admin-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
+            Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
+          </label>
+          <input
+            id="admin-current-password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className={`${inputCls} mb-5`}
+          />
           <div className="flex gap-2 justify-end">
             <GhostBtn onClick={() => setShowSaveModal(false)}>Cancel</GhostBtn>
             <GreenBtn onClick={handleSave}>Save changes</GreenBtn>

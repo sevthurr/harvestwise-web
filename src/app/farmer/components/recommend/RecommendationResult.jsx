@@ -154,6 +154,7 @@ function buildCropPlanPayload(data, status = "Draft") {
       : [];
 
   return {
+    plan_id: data.draftId || null,
     commodity_id: data.commodityId || data.commodity,
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
@@ -323,7 +324,19 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       const res = await apiPost("/crop-plans", payload);
       const savedPlan = await parseResponse(res);
       addCrop(normalizeCropPlan(savedPlan));
-      setSaved("plan");
+      try {
+        localStorage.removeItem("harvestwise_assessment_draft");
+      } catch {}
+      await refreshCrops?.();
+      navigate("/farmer/crops", {
+        state: {
+          message: t(
+            "farmer.common.crop_plan_saved_toast",
+            { displayName, action_status: "saved as a crop plan" },
+            `${displayName} has been saved as a crop plan.`
+          ),
+        },
+      });
     } catch (err) {
       console.error("Failed to save crop plan:", err);
       setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
@@ -340,8 +353,19 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       const res = await apiPost("/crop-plans", payload);
       const savedPlan = await parseResponse(res);
       addCrop(normalizeCropPlan(savedPlan));
-      setSaved("planted");
-      setShowPlantedForm(false);
+      try {
+        localStorage.removeItem("harvestwise_assessment_draft");
+      } catch {}
+      await refreshCrops?.();
+      navigate("/farmer/crops", {
+        state: {
+          message: t(
+            "farmer.common.crop_plan_saved_toast",
+            { displayName, action_status: "marked as planted and growing" },
+            `${displayName} has been marked as planted and growing.`
+          ),
+        },
+      });
     } catch (err) {
       console.error("Failed to save crop plan as planted:", err);
       setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));

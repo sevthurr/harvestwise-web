@@ -386,10 +386,16 @@ function PriceDetailView({
     }
 
     const classification = ["favorable", "neutral", "unfavorable"].includes(rawClass) ? rawClass : "neutral";
-    const percentChange = source.forecast_price_change_pct ?? null;
-
     const refPrice = source.reference_price ?? (isStageSpecific ? null : source.forecast_midpoint);
     const basePrice = source.comparison_baseline ?? (isStageSpecific ? null : (source.current_prevailing_price ?? source.recent_average_price));
+
+    const percentChange = source.forecast_price_change_pct != null
+      ? source.forecast_price_change_pct
+      : ((refPrice != null && basePrice != null && basePrice > 0)
+          ? ((refPrice - basePrice) / basePrice) * 100
+          : (source.forecast_midpoint != null && source.recent_average_price != null && source.recent_average_price > 0)
+            ? ((source.forecast_midpoint - source.recent_average_price) / source.recent_average_price) * 100
+            : null);
 
     const diff = (refPrice != null && basePrice != null)
       ? (refPrice - basePrice)
@@ -660,7 +666,7 @@ function PriceDetailView({
                     </h3>
                   </div>
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                    ML Forecast
+                    {t("farmer.factors.price.forecast_source", {}, "Forecasting")}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -866,7 +872,7 @@ function PriceDetailView({
                   ) : priceOutlookModel?.priceReferenceType === "historical_seasonal" ? (
                     <span className="text-emerald-700 font-semibold">{t("farmer.factors.price.seasonal_source", {}, "Historical Seasonal")}</span>
                   ) : priceOutlookModel?.priceReferenceType === "forecast" ? (
-                    <span className="text-blue-700 font-semibold">{t("farmer.factors.price.forecast_source", {}, "ML Forecast")}</span>
+                    <span className="text-blue-700 font-semibold">{t("farmer.factors.price.forecast_source", {}, "Forecasting")}</span>
                   ) : priceOutlookModel?.priceReferenceType === "current_observed" ? (
                     <span className="text-teal-700 font-semibold">{t("farmer.factors.price.observed_source", {}, "Observed Market")}</span>
                   ) : (

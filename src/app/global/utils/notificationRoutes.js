@@ -66,6 +66,18 @@ export function resolveNotificationRoute(item, role = "Farmer") {
   const meta = item.metadata || item.payload || {};
   const cat = item.category || "";
 
+  // Removal notifications identify a request record, not just the affected
+  // user. Keep this before the persisted-route branch for older rows whose
+  // route still points at the user's profile.
+  if (role.toLowerCase() === "admin" && cat === "user_event") {
+    const action = String(meta.action || "").toLowerCase();
+    const requestId = meta.removal_request_id || meta.request_id ||
+      String(item.body || item.title || "").match(/ARR-\d+/i)?.[0];
+    if (action.includes("removal") && requestId) {
+      return `/admin/system?tab=removal-requests&request_id=${encodeURIComponent(requestId)}`;
+    }
+  }
+
   // 1. Respect valid persisted route if already explicit and non-generic
   if (item.route) {
     const r = item.route;

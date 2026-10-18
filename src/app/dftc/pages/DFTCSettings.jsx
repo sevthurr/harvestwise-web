@@ -7,6 +7,7 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
+import { isValidEmail } from "../../auth/authValidation";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
@@ -63,6 +64,8 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
     });
   }, [firstName, lastName, middleName, suffix, phone, email, position]);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
   const [removeReasonErr, setRemoveReasonErr] = useState("");
@@ -96,7 +99,15 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       setCancelling(false);
     }
   };
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    const value = e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
+    if (k === "email") setEmailError(value.trim() && !isValidEmail(value) ? "Enter a valid email address." : "");
+  };
+  const handlePreSave = () => {
+    if (emailError) return;
+    setShowSaveModal(true);
+  };
   const handleSave = async () => {
     setShowSaveModal(false);
     const payload = {
@@ -108,6 +119,8 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       phone: form.phone || null,
       email: form.email || null
     };
+    if (currentPassword) payload.current_password = currentPassword;
+    setCurrentPassword("");
     try {
       await parseResponse(await apiPut("/dftc/staff/me", payload));
       try {
@@ -118,7 +131,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       }
       showToast("Account updated successfully.");
     } catch (err) {
-      showToast(err?.message || "Could not save account changes. Please try again.");
+      showToast(err?.message || "Could not save account changes. Please try again.", "error");
     }
   };
   const handleRemoveSubmit = () => {
@@ -167,7 +180,8 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
           </div>
           <div>
             <FieldLabel htmlFor="ac-em">Email</FieldLabel>
-            <input id="ac-em" type="email" value={form.email} onChange={set("email")} className={inputCls} />
+            <input id="ac-em" type="email" value={form.email} onChange={set("email")} className={`${inputCls} ${emailError ? "border-red-500 focus:ring-red-500" : ""}`} />
+            {emailError && <p className="mt-1 text-[12px] text-red-600">{emailError}</p>}
           </div>
           <div>
             <FieldLabel htmlFor="ac-role">Role</FieldLabel>
@@ -183,7 +197,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
             <FieldLabel htmlFor="ac-pos">Position</FieldLabel>
             <input id="ac-pos" type="text" value={form.position} onChange={set("position")} className={inputCls} />
           </div>
-          <GreenBtn onClick={() => setShowSaveModal(true)} className="w-full sm:w-auto">Save changes</GreenBtn>
+          <GreenBtn onClick={handlePreSave} className="w-full sm:w-auto">Save changes</GreenBtn>
         </div>
       </Card>
 
@@ -233,7 +247,9 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               disabled={removalBlocked}
               className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
-              {t("dftc.settings.request_deletion_btn", {}, "Request")}
+              {removalStatus === "rejected"
+                ? t("dftc.settings.request_again_btn", {}, "Request Again")
+                : t("dftc.settings.request_deletion_btn", {}, "Request")}
             </button>
           </div>
         </div>
@@ -241,6 +257,17 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
 
       {showSaveModal && <Modal title="Save account changes?" onClose={() => setShowSaveModal(false)}>
           <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your HarvestWise profile.</p>
+          <label htmlFor="dftc-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
+            Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
+          </label>
+          <input
+            id="dftc-current-password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className={`${inputCls} mb-5`}
+          />
           <div className="flex gap-2 justify-end">
             <GhostBtn onClick={() => setShowSaveModal(false)}>Cancel</GhostBtn>
             <GreenBtn onClick={handleSave}>Save changes</GreenBtn>
@@ -364,8 +391,8 @@ function DFTCSettings() {
     if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [activeTab]);
 
-  const showToast = (msg) => {
-    setToast(msg);
+  const showToast = (msg, type = "success") => {
+    setToast(typeof msg === "object" ? msg : { message: msg, type });
     setTimeout(() => setToast(""), 3e3);
   };
 

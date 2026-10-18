@@ -319,7 +319,7 @@ describe('DFTCInput Submit Data Page', () => {
 
     renderDFTCInput();
 
-    const arrivalLabels = await screen.findAllByText(new RegExp(`Arrival Volume — ${todayIso}`, 'i'));
+    const arrivalLabels = await screen.findAllByText(new RegExp(`Arrival Volume — (${todayIso}|${todayFormatted})`, 'i'));
     fireEvent.click(arrivalLabels[0].closest('tr') || arrivalLabels[0].closest('button') || arrivalLabels[0]);
 
     await waitFor(() => {

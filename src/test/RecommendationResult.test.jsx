@@ -17,6 +17,7 @@ vi.mock("../app/farmer/components/crops/CropsContext.jsx", () => ({
     addCrop: vi.fn(),
     refreshCrops: vi.fn(),
   }),
+  normalizeCropPlan: (p) => p || {},
 }));
 
 vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
@@ -113,5 +114,23 @@ describe("RecommendationResult — View basis navigation", () => {
         state: expect.objectContaining({ commodityId: "COM-0025" }),
       })
     );
+  });
+
+  it("proceeds directly to My Crops module when Save to My Crops is clicked", async () => {
+    renderResult(baseData);
+
+    const saveBtn = screen.getByRole("button", { name: /Save to My Crops/i });
+    fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith(
+        "/farmer/crops",
+        expect.objectContaining({
+          state: expect.objectContaining({
+            message: expect.stringContaining("saved as a crop plan"),
+          }),
+        })
+      );
+    });
   });
 });

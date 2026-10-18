@@ -32,6 +32,17 @@ export const notifications = {
   price_dropped_body: "Ang pinakahuling presyo sa palengke para sa {commodity} ay {latest} PHP/kg, bumaba mula {prev} PHP/kg.",
   price_dropped_general_body: "Bumaba ang pinakahuling presyo sa palengke para sa {commodity}.",
 
+  // Price Forecast (Preferred Crops)
+  forecast_favorable_title: "Paborableng pagtataya sa presyo para sa {commodity}",
+  forecast_favorable_body: "Inaasahan sa {horizon}-araw na forecast na tataas ang presyo ng {commodity} sa {midpoint} PHP/kg (+{pct}%). Paborableng sitwasyon para sa iyong paboritong pananim.",
+  forecast_unfavorable_title: "Inaasahang pagbaba ng presyo para sa {commodity}",
+  forecast_unfavorable_body: "Inaasahan sa {horizon}-araw na forecast na bababa ang presyo ng {commodity} sa {midpoint} PHP/kg ({pct}%). Bantayan ang takbo ng merkado para sa iyong paboritong pananim.",
+
+  // Filters
+  filter_all: "Lahat",
+  filter_preferred: "Paboritong Pananim",
+  filter_unread: "Hindi pa Nabasa",
+
   // Price Update
   price_update_title: "Bagong presyo para sa {commodity}",
   price_update_body: "Ang na-update na presyo sa palengke para sa {commodity} ay {price} PHP/kg.",

@@ -11,6 +11,7 @@ export const settings = {
   request_deletion_title: "Hangyoa ang pagtangtang sa account",
   request_deletion_desc: "Magpadala og hangyo sa pagtangtang sa imong DFTC account. Morepaso ang HarvestWise team niini.",
   request_deletion_btn: "Hangyo",
+  request_again_btn: "Pangayo Pag-usab",
   request_deletion_modal_title: "Hangyoa ang pagtangtang sa account?",
   request_deletion_modal_body: "Aron mapanalipdan ang imong account ug datos gikan sa unauthorized deletion, kinahanglan og verification sa dili pa kini maproseso. Palihog isulti ang rason sa imong hangyo. Human ma-verify, ang identifying account information ug contact information permanenteng tangtangon o i-anonymize sumala sa among Patakaran sa Privacy. Ang impormasyon sa agrikultura, pananom, gasto, o ani mahimong tipigan lamang human kini ma-anonymize aron dili na kini ikapalagay sa imo, sumala sa among Patakaran sa Privacy §8. Mahimo usab kang magpadala og hangyo sa harvestwise.app@gmail.com gikan sa imong rehistradong email address.",
   removal_reason_label: "Rason",

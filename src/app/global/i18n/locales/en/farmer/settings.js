@@ -20,6 +20,7 @@ export const settings = {
   request_deletion_title: "Request account removal",
   request_deletion_desc: "Account removal is processed after verification. Requests are reviewed by the HarvestWise team.",
   request_deletion_btn: "Request removal",
+  request_again_btn: "Request Again",
   request_deletion_modal_body: "To protect your account and records from unauthorized deletion, HarvestWise verifies all requests before processing. Please send a deletion request to harvestwise.app@gmail.com from your registered email address. Once verified, identifying account information, contact information, and precise farm-location coordinates will be permanently removed or irreversibly anonymized in accordance with our Privacy Policy. Agricultural, crop, cost, or harvest information may be retained only after it is anonymised so it can no longer be linked to you, per our Privacy Policy §8.",
   removal_status_label: "Request status",
   removal_status_pending: "Pending",

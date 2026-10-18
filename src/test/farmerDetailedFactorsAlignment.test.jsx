@@ -283,7 +283,7 @@ describe("Farmer detailed factors use Admin analytics data", () => {
       </QueryClientProvider>
     );
 
-    expect(await screen.findByText("ML Forecast")).toBeInTheDocument();
+    expect(await screen.findByText("Forecasting")).toBeInTheDocument();
     expect(screen.getByText("Stage 2: Planting")).toBeInTheDocument();
 
     // Fallback scenario

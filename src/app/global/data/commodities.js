@@ -36,7 +36,7 @@ const COMMODITY_CATEGORIES = [
       item("Broccoli", []),
       item("Cauliflower", []),
       item("Chinese Pechay", [], true),
-      item("Lettuce", ["Curly", "Ball", "Romaine"], true),
+      item("Lettuce", ["Curly", "Ball"], true),
       item("Repolyo", ["Wakamini"], true),
       item("Carrots", ["Big", "Medium", "Small"], true),
       item("Patatas", ["Big", "Medium", "Small"]),

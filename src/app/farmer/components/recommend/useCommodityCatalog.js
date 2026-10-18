@@ -8,9 +8,11 @@
  * and the UI shows "-".
  */
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
-import { fetchPricesList } from "../../../global/hooks/useFarmerPrefetch";
+import { fetchPricesList, fetchFarmerProfile } from "../../../global/hooks/useFarmerPrefetch";
 import { getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
+import { sortWithPreferredFirst } from "../../utils/cropPreferences";
 
 const STALE_TIME = 1000 * 60 * 30;
 
@@ -84,19 +86,42 @@ function durationForOption(option, variant) {
   return option.defaultDuration ?? null;
 }
 
+function findCatalogOption(options, commodityId) {
+  if (!commodityId) return null;
+  return options.find((option) => (
+    option.id === commodityId
+    || option.defaultCommodityId === commodityId
+    || Object.values(option.varietyMap || {}).includes(commodityId)
+  )) || null;
+}
+
 function useCommodityCatalog() {
-  const { data: resData, isLoading } = useQuery({
+  const { data: resData, isLoading: pricesLoading } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: fetchPricesList,
     staleTime: STALE_TIME,
   });
 
+  const { data: profileData, isLoading: profileLoading } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: STALE_TIME,
+  });
+
   const rawItems = resData?.items || (Array.isArray(resData) ? resData : []);
-  return { options: buildCatalog(rawItems), isLoading };
+  const preferredCrops = profileData?.preferred_crops || profileData?.preferredCrops || [];
+
+  const options = useMemo(() => {
+    const catalog = buildCatalog(rawItems);
+    return sortWithPreferredFirst(catalog, preferredCrops, (a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [rawItems, preferredCrops]);
+
+  return { options, isLoading: pricesLoading || profileLoading };
 }
 
 export {
   buildCatalog,
   durationForOption,
+  findCatalogOption,
   useCommodityCatalog
 };

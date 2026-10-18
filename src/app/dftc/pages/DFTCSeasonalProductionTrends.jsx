@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import * as analyticsApi from "../../../services/api/analyticsApi";
+import { getClassificationColor, getClassificationTextColor } from "./dftcClassificationColors";
 
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -112,24 +113,32 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
       {hasData && (
         <>
           <section className={`${CARD_CLASS} p-5 md:p-6`}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Selected season</p>
-                <p className="mt-1 text-lg font-bold text-[var(--hw-neutral-900)]">{quarter} · {QUARTER_NAMES[quarter]}</p>
+                <p className="mt-1 text-xl sm:text-2xl font-bold text-[var(--hw-neutral-900)] tracking-tight">{quarter} · {QUARTER_NAMES[quarter]}</p>
               </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Historical seasonal average</p>
-                <p className="mt-1 text-lg font-bold text-[var(--hw-neutral-900)]">
+                <p className="mt-1 text-xl sm:text-2xl font-bold text-[var(--hw-neutral-900)] tracking-tight">
                   {Number(selected.average_production_mt).toLocaleString()} MT
                 </p>
               </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Production level</p>
-                <p className="mt-1 text-lg font-bold text-[var(--hw-green-800)]">{selected.classification}</p>
+                <p className={`mt-1 text-xl sm:text-2xl font-bold tracking-tight ${getClassificationTextColor(selected.classification)}`}>{selected.classification}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-500)]">Grand average production</p>
+                <p className="mt-1 text-xl sm:text-2xl font-bold text-[var(--hw-neutral-900)] tracking-tight">
+                  {data.grand_average_quarterly_mt != null
+                    ? `${Number(data.grand_average_quarterly_mt).toLocaleString()} MT`
+                    : "—"}
+                </p>
               </div>
             </div>
             <p className="mt-4 text-xs text-[var(--hw-neutral-500)]">
-              Admin analytics · {data.source || "PSA OpenSTAT"} · {data.years_covered || "historical records"}
+              {data.source || "PSA OpenSTAT"} · {data.years_covered || "historical records"}
             </p>
           </section>
 
@@ -144,24 +153,42 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                 <XAxis dataKey="quarter" tickFormatter={(value) => `${value} · ${QUARTER_NAMES[value]}`} />
                 <YAxis tickFormatter={(value) => Number(value).toLocaleString()} />
                 <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} MT`, "Average production"]} />
-                {data.grand_average_quarterly_mt != null && (
-                  <ReferenceLine
-                    y={data.grand_average_quarterly_mt}
-                    stroke="#64748b"
-                    strokeDasharray="4 4"
-                    label="Grand average"
-                  />
-                )}
                 <Bar dataKey="average_production_mt" name="Average production" radius={[6, 6, 0, 0]}>
-                  {profiles.filter((profile) => profile.years_available > 0).map((profile) => (
-                    <Cell
-                      key={profile.quarter}
-                      fill={profile.quarter === quarter ? "#15803d" : "#86efac"}
-                    />
-                  ))}
+                  {profiles.filter((profile) => profile.years_available > 0).map((profile) => {
+                    const color = getClassificationColor(profile.classification);
+                    const isSelected = profile.quarter === quarter;
+                    return (
+                      <Cell
+                        key={profile.quarter}
+                        fill={color}
+                        opacity={isSelected ? 1 : 0.85}
+                        stroke={isSelected ? "#1e293b" : "none"}
+                        strokeWidth={isSelected ? 2 : 0}
+                      />
+                    );
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            <div className="flex flex-wrap items-center gap-4 mt-3 justify-center">
+              <span className="text-[11px] font-semibold text-[var(--hw-neutral-500)]">Classification:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#16a34a]" />
+                <span className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Low</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#eab308]" />
+                <span className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Lower Middle</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#ea580c]" />
+                <span className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Upper Middle</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#dc2626]" />
+                <span className="text-[11px] font-medium text-[var(--hw-neutral-700)]">High</span>
+              </div>
+            </div>
           </section>
 
           <section className={`${CARD_CLASS} overflow-hidden`}>
@@ -197,7 +224,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                         </td>
                       ))}
                       <td className="px-5 py-3 text-[var(--hw-neutral-800)]">{record.production.toLocaleString()} MT</td>
-                      <td className="px-5 py-3 text-[var(--hw-green-800)]">{selected.classification}</td>
+                      <td className={`px-5 py-3 font-semibold ${getClassificationTextColor(selected.classification)}`}>{selected.classification}</td>
                     </tr>
                   ))}
                   {records.length === 0 && (

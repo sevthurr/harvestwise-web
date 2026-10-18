@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from "react-router";
 import { ChevronDown, Info, X, Edit2, Sliders, ArrowRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../global/components/ui/tooltip";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
-import { getVariants } from "../../global/data/commodities";
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
@@ -807,6 +806,12 @@ function AdminAnalytics() {
               return {
                 id: c.id,
                 name,
+                // Varieties come from the same DB rows that produced this
+                // list, under the same is_top10/is_active filter. Reading them
+                // here rather than from a hardcoded table is what keeps the
+                // variety list from offering a scope the commodity list would
+                // never produce (Lettuce/Romaine is is_top10=false).
+                varieties: Array.isArray(c.varieties) ? c.varieties : [],
                 iconKey: getCommodityIconKey(c.id, c.baseName || c.base_name, name)
               };
             });
@@ -898,11 +903,13 @@ function AdminAnalytics() {
     };
   }, [refreshPriceOutlook]);
 
-  // Scoped varieties
+  // Scoped varieties — read from the fetched commodity row, not from the
+  // hardcoded commodities table, so the variety dropdown can only ever offer a
+  // scope the commodity dropdown also offers.
   const scopedVariants = useMemo(() => {
     if (!scopedCommodity) return [];
-    return getVariants(scopedCommodity);
-  }, [scopedCommodity]);
+    return commodities.find((commodity) => commodity.name === scopedCommodity)?.varieties || [];
+  }, [scopedCommodity, commodities]);
 
   // Wait for the commodity list before defaulting the variety. Setting
   // "Standard" while the list was still in flight made the scope briefly

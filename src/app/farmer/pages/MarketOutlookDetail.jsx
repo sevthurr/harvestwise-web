@@ -20,6 +20,10 @@ import {
   normalizePriceTrendCode,
 } from "../utils/farmerCodes";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 
 const STATUS_MAP = {
   [MARKET_STATUS_CODES.FAVORABLE]: "Favorable",
@@ -132,6 +136,15 @@ function MarketOutlookDetailPage() {
   const { commodityId } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const registryList = Object.entries(COMMODITY_REGISTRY).map(([id, val]) => ({ id, ...val }));
+  const sortedRegistryList = sortWithPreferredFirst(registryList, preferredCrops);
+
   const commodity = COMMODITIES.find((c) => c.id === commodityId);
   const outlook = commodityId ? COMMODITY_OUTLOOK[commodityId] : void 0;
   if (!commodity || !outlook) {
@@ -169,13 +182,23 @@ function MarketOutlookDetailPage() {
             ← Market Overview
           </button>
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-            {Object.entries(COMMODITY_REGISTRY).map(([id, { name }]) => <button
-    key={id}
-    onClick={() => navigate(`/farmer/market/detail/${id}`)}
-    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${id === commodityId ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-                {name}
-              </button>)}
+            {sortedRegistryList.map(({ id, name }) => {
+              const isPref = isPreferredCrop({ id, name }, preferredCrops);
+              return (
+                <button
+                  key={id}
+                  onClick={() => navigate(`/farmer/market/detail/${id}`)}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${id === commodityId ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
+                >
+                  {name}
+                  {isPref && (
+                    <span className={`inline-flex items-center px-1 rounded text-[9px] font-semibold ${id === commodityId ? "bg-white/20 text-white" : "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]"}`}>
+                      ★
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -186,7 +209,12 @@ function MarketOutlookDetailPage() {
           <div className="flex items-center gap-4">
             <CommodityIllustration commodityId={commodity.id} className="w-16 h-16 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+                {isPreferredCrop(commodity, preferredCrops) && (
+                  <PreferredStar className="w-4 h-4 text-amber-500" />
+                )}
+              </div>
               <span className={`inline-block text-sm font-semibold mt-1 ${statusCls.color}`}>
                 {statusLabel}
               </span>

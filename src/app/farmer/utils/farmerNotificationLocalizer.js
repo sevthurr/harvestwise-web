@@ -89,6 +89,22 @@ export function localizeFarmerNotification(item, t, lang = "en") {
 
   // 1. PRICE CHANGE
   if (category === "price_change") {
+    // 1a. Forecast outlook for preferred crops
+    if (metadata.outlook || metadata.forecast_midpoint != null || /forecast|panagna|pagtataya/i.test(fallbackTitle)) {
+      const isFavorable = metadata.outlook === "Favorable" || metadata.direction === "rose" || /favorable|paborable/i.test(fallbackTitle);
+      const titleKey = isFavorable ? "farmer.notifications.forecast_favorable_title" : "farmer.notifications.forecast_unfavorable_title";
+      const bodyKey = isFavorable ? "farmer.notifications.forecast_favorable_body" : "farmer.notifications.forecast_unfavorable_body";
+      const midpoint = metadata.forecast_midpoint != null ? Number(metadata.forecast_midpoint).toFixed(2) : "";
+      const pct = metadata.change_pct != null ? Math.abs(Number(metadata.change_pct)).toFixed(1) : "";
+      const horizon = metadata.horizon_days || 7;
+
+      const title = t(titleKey, { commodity }, fallbackTitle) || fallbackTitle;
+      const body = midpoint
+        ? (t(bodyKey, { commodity, midpoint, pct, horizon }, fallbackBody) || fallbackBody)
+        : fallbackBody;
+      return { title, body };
+    }
+
     let direction = metadata.direction;
     if (!direction && fallbackTitle) {
       if (/rose|increased|up|Misaka|Musaka|Tumaas/i.test(fallbackTitle)) direction = "rose";

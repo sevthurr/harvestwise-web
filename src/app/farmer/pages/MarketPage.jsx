@@ -1,5 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 import {
   LayoutDashboard,
   CloudRain,
@@ -192,7 +196,8 @@ const CARD_INSIGHTS = {
   lettuce: { insight: "Prices are falling and arrivals are rising. Oversupply is creating strong pressure.", consideration: "Consider waiting for conditions to improve before planting." },
   pechay: { insight: "Prices are falling and arrivals are significantly elevated. Pressure is high.", consideration: "Consider waiting for better market conditions before planting." }
 };
-const CommodityOutlookCard = ({ commodity, outlook, onViewDetails }) => {
+const CommodityOutlookCard = ({ commodity, outlook, onViewDetails, isPreferred = false }) => {
+  const { t } = useLanguage();
   const statusCode = normalizeMarketStatusCode(outlook.status) || MARKET_STATUS_CODES.BALANCED;
   const cfg = STATUS_CONFIG[statusCode] || STATUS_CONFIG[MARKET_STATUS_CODES.BALANCED];
   const cardInsight = CARD_INSIGHTS[commodity.id] ?? {
@@ -203,7 +208,12 @@ const CommodityOutlookCard = ({ commodity, outlook, onViewDetails }) => {
       <div className="flex items-start gap-3">
         <CommodityIllustration commodityId={commodity.id} className="w-11 h-11 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">{commodity.name}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-semibold text-[var(--hw-neutral-900)]">{commodity.name}</p>
+            {isPreferred && (
+              <PreferredStar className="w-3.5 h-3.5 text-amber-500" />
+            )}
+          </div>
           <span className={`text-xs font-semibold ${cfg.color} mt-0.5 block`}>{cfg.label}</span>
         </div>
       </div>
@@ -368,8 +378,22 @@ function MarketOverviewPage() {
   const isAnalytics = mode === "analytics";
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
+
+  const sortedCommodities = useMemo(() => {
+    return sortWithPreferredFirst(COMMODITIES, preferredCrops);
+  }, [preferredCrops]);
+
   const marketDrivers = getMarketDrivers(t);
-  const commoditiesToShow = filters.commodityId === "all" ? COMMODITIES : COMMODITIES.filter((c) => c.id === filters.commodityId);
+  const commoditiesToShow = filters.commodityId === "all" ? sortedCommodities : sortedCommodities.filter((c) => c.id === filters.commodityId);
   const periodLabel = filters.period === "7d" ? "7 days" : filters.period === "14d" ? "14 days" : "28 days";
   const filterSummary = `${periodLabel} \xB7 ${filters.marketSource === "Combined" ? "All markets" : filters.marketSource === "Bangkerohan Public Market" ? "Bangkerohan" : "DFTC"} \xB7 ${filters.commodityId === "all" ? "All commodities" : COMMODITY_REGISTRY[filters.commodityId]?.name ?? filters.commodityId}`;
   const nearTermOutlook = filters.period === "7d" ? OVERALL_MARKET.nearTermOutlook7d : filters.period === "14d" ? OVERALL_MARKET.nearTermOutlook14d : OVERALL_MARKET.nearTermOutlook28d;
@@ -436,6 +460,7 @@ function MarketOverviewPage() {
       outlook={outlook}
       isAnalytics={isAnalytics}
       period={filters.period}
+      isPreferred={isPreferredCrop(c, preferredCrops)}
       onViewDetails={() => navigate(`/farmer/market/detail/${c.id}`)}
     />;
   })}

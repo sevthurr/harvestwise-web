@@ -67,9 +67,13 @@ describe('AdminAnalytics module outputs table', () => {
 
     // Kalabasa is picked automatically and carries variants, so the page sets
     // a real scope and runs the compute. Its first variant is "Suprema".
+    // `varieties` mirrors the API contract — the page reads the variety list
+    // off this response rather than from the hardcoded commodities table.
     apiGet.mockResolvedValue({
       ok: true,
-      json: async () => [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
+      json: async () => [
+        { id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true, varieties: ['Suprema'] },
+      ],
     });
     parseResponse.mockImplementation(async (res) => res.json());
 

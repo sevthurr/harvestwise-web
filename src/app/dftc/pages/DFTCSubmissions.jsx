@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, parseResponse } from "../../global/api";
+import { getLocalDateString } from "./dftcSavedDatasets";
 
 const selectCls = [
   "w-full px-3 py-2 text-[14px] border border-[var(--hw-neutral-200)] rounded-lg bg-white",
@@ -40,10 +41,10 @@ function getCutoff(preset) {
   if (preset === "all" || preset === "custom") return null;
   const d = new Date();
   d.setDate(d.getDate() - (preset === "7d" ? 7 : preset === "14d" ? 14 : 28));
-  return d.toISOString().slice(0, 10);
+  return getLocalDateString(d);
 }
 
-function applyFilters(rows, datasetType, savedBy, datePreset, customFrom, customTo, statusFilter) {
+function applyFilters(rows, datasetType, savedBy, datePreset, customFrom, customTo) {
   const cutoff = getCutoff(datePreset);
   return rows.filter((r) => {
     if (datasetType && r.datasetType !== datasetType) return false;
@@ -54,7 +55,6 @@ function applyFilters(rows, datasetType, savedBy, datePreset, customFrom, custom
     } else if (cutoff) {
       if (r.savedIso < cutoff) return false;
     }
-    if (statusFilter && r.status.toLowerCase() !== statusFilter.toLowerCase()) return false;
     return true;
   });
 }
@@ -242,6 +242,9 @@ function Pagination({ page, total, onChange }) {
 
 function DFTCHistory() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightParam = searchParams.get("highlight");
+  const [highlightKey, setHighlightKey] = useState(highlightParam);
   const { user } = useAuth();
   const currentUserName = user?.name || (user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : "DFTC Personnel");
 
@@ -250,8 +253,17 @@ function DFTCHistory() {
   const [datePreset, setDatePreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
+
+  // 3-second temporary highlight timer (matching HarvestWise pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightKey(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightKey(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
 
   // Live Query from backend API
   const { data: submissionsData, isLoading } = useQuery({
@@ -260,16 +272,18 @@ function DFTCHistory() {
       try {
         const res = await apiGet("/dftc/submissions?page_size=100");
         return parseResponse(res);
-      } catch {
+      } catch (err) {
+        console.error("DFTC SUBMISSIONS FETCH ERROR:", err);
         return null;
       }
     },
-    staleTime: 60 * 1000
+    staleTime: 0,
+    refetchOnMount: "always"
   });
 
   const rawRows = useMemo(() => {
     if (submissionsData?.items && submissionsData.items.length > 0) {
-      return submissionsData.items.map((item) => {
+      const mapped = submissionsData.items.map((item) => {
         const dTypeRaw = (item.data_type || "").toLowerCase();
         const isArrival = dTypeRaw.includes("arrival");
         const pTypeRaw = (item.price_type || "").toLowerCase();
@@ -277,15 +291,26 @@ function DFTCHistory() {
           ? "Wholesale"
           : pTypeRaw.includes("landing")
           ? "Landing"
-          : "Retail";
+          : pTypeRaw.includes("retail")
+          ? "Retail"
+          : "";
         const isManual = (item.submission_method || "").toLowerCase().includes("manual");
         const dType = isArrival
           ? "DFTC Arrival Volume"
           : isManual
-          ? `Manual Input · ${pTypeDisplay} Prices`
-          : `Daily ${pTypeDisplay} Prices`;
+          ? (pTypeDisplay ? `Manual Input · ${pTypeDisplay} Prices` : "Manual Input · Daily Prices")
+          : `Daily ${pTypeDisplay || "Retail"} Prices`;
 
-        const savedIso = item.saved_at ? item.saved_at.slice(0, 10) : item.created_at ? item.created_at.slice(0, 10) : "";
+        const savedDateObj = item.saved_at
+          ? new Date(item.saved_at)
+          : item.created_at
+          ? new Date(item.created_at)
+          : null;
+        const savedIso =
+          savedDateObj && !isNaN(savedDateObj.getTime())
+            ? getLocalDateString(savedDateObj)
+            : (item.saved_at?.slice(0, 10) || item.created_at?.slice(0, 10) || "");
+
         const stRaw = (item.status || "").toLowerCase();
         const formattedStatus = stRaw.includes("draft")
           ? "Draft"
@@ -293,15 +318,22 @@ function DFTCHistory() {
           ? "Failed"
           : "Saved";
 
-        const submitterFullName = item.submitted_by_name || item.submitter_name || (item.user ? `${item.user.first_name || ""} ${item.user.last_name || ""}`.trim() : null) || currentUserName;
+        const submitterFullName =
+          item.submitted_by_name ||
+          item.submitter_name ||
+          (item.user ? `${item.user.first_name || ""} ${item.user.last_name || ""}`.trim() : null) ||
+          currentUserName;
 
         return {
           datasetId: item.id,
           fileName: item.original_file_name || item.file_name || null,
           datasetType: dType,
+          isArrival,
           savedBy: submitterFullName,
           savedDateTime: formatDateTime(item.saved_at || item.created_at),
+          savedDateTimeRaw: item.saved_at || item.created_at || "",
           savedIso,
+          reportingDate: item.reporting_date || "",
           totalRecords: item.record_count ?? 0,
           analyticsSupported: item.analytics_supported_count ?? 0,
           otherCommodities: item.other_commodity_count ?? 0,
@@ -310,21 +342,37 @@ function DFTCHistory() {
           status: formattedStatus
         };
       });
+
+      return mapped.sort((a, b) => {
+        const tA = new Date(a.savedDateTimeRaw || 0).getTime();
+        const tB = new Date(b.savedDateTimeRaw || 0).getTime();
+        if (tB !== tA) return tB - tA;
+        return String(b.datasetId || "").localeCompare(String(a.datasetId || ""), undefined, { numeric: true });
+      });
     }
     return [];
   }, [submissionsData, currentUserName]);
 
   const filtered = useMemo(
-    () => applyFilters(rawRows, datasetType, savedBy, datePreset, customFrom, customTo, statusFilter),
-    [rawRows, datasetType, savedBy, datePreset, customFrom, customTo, statusFilter]
+    () => applyFilters(rawRows, datasetType, savedBy, datePreset, customFrom, customTo),
+    [rawRows, datasetType, savedBy, datePreset, customFrom, customTo]
   );
 
   useEffect(() => {
     setPage(1);
-  }, [datasetType, savedBy, datePreset, customFrom, customTo, statusFilter]);
+  }, [datasetType, savedBy, datePreset, customFrom, customTo]);
+
+  // Smooth scroll to highlighted dataset row
+  useEffect(() => {
+    if (!highlightKey) return;
+    const el = document.querySelector('[data-highlighted="true"]');
+    if (el) {
+      el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightKey, filtered]);
 
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const hasFilter = !!(datasetType || savedBy || datePreset !== "all" || statusFilter);
+  const hasFilter = !!(datasetType || savedBy || datePreset !== "all");
 
   function clearAll() {
     setDatasetType("");
@@ -332,20 +380,34 @@ function DFTCHistory() {
     setDatePreset("all");
     setCustomFrom("");
     setCustomTo("");
-    setStatusFilter("");
   }
 
   const TABLE_HEADERS = [
-    "Dataset ID",
+    "ID",
     "Dataset Type",
     "Saved By",
     "Saved Date",
     "Total",
     "Analytics-Supported",
-    "Other Commodities",
-    "Duplicates",
-    "Status"
+    "Other Commodities"
   ];
+
+  const todayStr = getLocalDateString();
+  function checkIsHighlighted(r) {
+    if (!highlightKey) return false;
+    const isToday = r.savedIso === todayStr || r.reportingDate === todayStr;
+    const hk = highlightKey.toLowerCase();
+    if (hk === "price") {
+      return isToday && !r.isArrival;
+    }
+    if (hk === "arrival") {
+      return isToday && r.isArrival;
+    }
+    if (hk === "today") {
+      return isToday;
+    }
+    return r.datasetId?.toLowerCase() === hk;
+  }
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -367,6 +429,7 @@ function DFTCHistory() {
                 <option>Daily Retail Prices</option>
                 <option>Daily Wholesale Prices</option>
                 <option>Daily Landing Prices</option>
+                <option>Manual Input · Daily Prices</option>
                 <option>Manual Input · Retail Prices</option>
                 <option>Manual Input · Wholesale Prices</option>
                 <option>Manual Input · Landing Prices</option>
@@ -387,7 +450,7 @@ function DFTCHistory() {
             />
           </div>
 
-          {/* Date */}
+          {/* Period */}
           <div className="w-full sm:w-auto flex-1 min-w-[150px]">
             <label className={labelCls}>Period</label>
             <DateCombobox
@@ -401,24 +464,10 @@ function DFTCHistory() {
               }}
             />
           </div>
-
-          {/* Status */}
-          <div className="w-full sm:w-auto flex-1 min-w-[120px]">
-            <label className={labelCls}>Status</label>
-            <div className="relative">
-              <select className={selectCls} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="">All Statuses</option>
-                <option>Draft</option>
-                <option>Saved</option>
-                <option>Failed</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
-            </div>
-          </div>
         </div>
 
         {hasFilter && (
-          <button
+            <button
             onClick={clearAll}
             className="mt-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity cursor-pointer"
           >
@@ -476,44 +525,38 @@ function DFTCHistory() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {pageRows.map((r) => (
-                    <tr
-                      key={r.datasetId}
-                      onClick={() => navigate(`/dftc/submissions/${r.datasetId}`)}
-                      className="cursor-pointer hover:bg-[var(--hw-neutral-50)] transition-colors"
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] font-medium text-[var(--hw-neutral-900)]">{r.datasetId}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">
-                        {r.fileName ? (
-                          <div className="flex flex-col">
-                            <span className="font-medium text-[var(--hw-neutral-900)]">{r.fileName}</span>
-                            <span className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</span>
-                          </div>
-                        ) : (
-                          r.datasetType
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedBy}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedDateTime}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.totalRecords}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.analyticsSupported}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.otherCommodities}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.duplicate}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-[14px]">
-                        <span
-                          className={`font-semibold ${
-                            r.status === "Saved"
-                              ? "text-emerald-700"
-                              : r.status === "Failed"
-                              ? "text-rose-600"
-                              : "text-amber-700"
-                          }`}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {pageRows.map((r) => {
+                    const isHighlighted = checkIsHighlighted(r);
+                    return (
+                      <tr
+                        key={r.datasetId}
+                        data-highlighted={isHighlighted ? "true" : undefined}
+                        onClick={() => navigate(`/dftc/submissions/${r.datasetId}`)}
+                        className={`cursor-pointer transition-all duration-700 ease-out ${
+                          isHighlighted
+                            ? "bg-emerald-50/90 hover:bg-emerald-100/70 ring-1 ring-inset ring-[var(--hw-green-600)]"
+                            : "hover:bg-[var(--hw-neutral-50)]"
+                        }`}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] font-medium text-[var(--hw-neutral-900)]">{r.datasetId}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">
+                          {r.fileName ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium text-[var(--hw-neutral-900)]">{r.fileName}</span>
+                              <span className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</span>
+                            </div>
+                          ) : (
+                            r.datasetType
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedBy}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedDateTime}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.totalRecords}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.analyticsSupported}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.otherCommodities}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -522,43 +565,39 @@ function DFTCHistory() {
 
           {/* Mobile cards */}
           <div className="md:hidden space-y-3">
-            {pageRows.map((r) => (
-              <button
-                key={r.datasetId}
-                onClick={() => navigate(`/dftc/submissions/${r.datasetId}`)}
-                className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] active:scale-[.99] transition-all cursor-pointer"
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{r.datasetId}</p>
-                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] mt-0.5">{r.fileName || r.datasetType}</p>
-                    {r.fileName && <p className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</p>}
+            {pageRows.map((r) => {
+              const isHighlighted = checkIsHighlighted(r);
+              return (
+                <button
+                  key={r.datasetId}
+                  data-highlighted={isHighlighted ? "true" : undefined}
+                  onClick={() => navigate(`/dftc/submissions/${r.datasetId}`)}
+                  className={`w-full rounded-2xl border transition-all duration-700 ease-out p-4 text-left shadow-[var(--shadow-xs)] cursor-pointer ${
+                    isHighlighted
+                      ? "bg-emerald-50/90 border-[var(--hw-green-600)] ring-1 ring-[var(--hw-green-600)]"
+                      : "bg-white border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] active:scale-[.99]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{r.datasetId}</p>
+                      <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] mt-0.5">{r.fileName || r.datasetType}</p>
+                      {r.fileName && <p className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</p>}
+                    </div>
                   </div>
-                  <span
-                    className={`text-[12px] font-semibold shrink-0 ${
-                      r.status === "Saved"
-                        ? "text-emerald-700"
-                        : r.status === "Failed"
-                        ? "text-rose-600"
-                        : "text-amber-700"
-                    }`}
-                  >
-                    {r.status}
-                  </span>
-                </div>
-                <div className="text-[13px] text-[var(--hw-neutral-800)] space-y-0.5">
-                  <p>
-                    {r.savedDateTime} · {r.savedBy}
-                  </p>
-                  <p className="flex flex-wrap gap-3 mt-1">
-                    <span>{r.totalRecords} total</span>
-                    <span>{r.analyticsSupported} analytics</span>
-                    <span>{r.otherCommodities} other</span>
-                    {r.duplicate > 0 && <span className="text-amber-700 font-medium">{r.duplicate} duplicate</span>}
-                  </p>
-                </div>
-              </button>
-            ))}
+                  <div className="text-[13px] text-[var(--hw-neutral-800)] space-y-0.5">
+                    <p>
+                      {r.savedDateTime} · {r.savedBy}
+                    </p>
+                    <p className="flex flex-wrap gap-3 mt-1">
+                      <span>{r.totalRecords} total</span>
+                      <span>{r.analyticsSupported} analytics</span>
+                      <span>{r.otherCommodities} other</span>
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
             {Math.ceil(filtered.length / PAGE_SIZE) > 1 && (
               <div className="flex justify-center gap-2 pt-2">
                 <button

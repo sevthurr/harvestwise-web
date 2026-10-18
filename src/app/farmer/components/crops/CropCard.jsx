@@ -1,4 +1,4 @@
-import { ChevronRight, PauseCircle } from "lucide-react";
+import { ChevronRight, PauseCircle, Clock } from "lucide-react";
 import { getPhaseConfig } from "./types";
 import { PHASE_CODES, normalizePhaseCode } from "../../utils/farmerCodes";
 import { formatCropLabel } from "../../utils/formatters";
@@ -8,6 +8,14 @@ import { useLanguage } from "../../../global/contexts/LanguageContext";
 const PhasePill = ({ phase, isOnHold }) => {
   const { t } = useLanguage();
   const phaseCode = normalizePhaseCode(phase);
+  if (phaseCode === PHASE_CODES.DRAFT || phase === "draft") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300">
+        <Clock className="w-3 h-3" />
+        {t("farmer.phases.draft", {}, "Draft – Incomplete")}
+      </span>
+    );
+  }
   if (isOnHold || phaseCode === PHASE_CODES.ON_HOLD) {
     return (
       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200">
@@ -52,8 +60,11 @@ const CropCard = ({ crop, onView }) => {
   const loProfit = Math.round((crop.harvestQuantity * profitPrice * 0.9 - crop.totalCost) / 1e3) * 1e3;
   const hiProfit = Math.floor((crop.harvestQuantity * profitPrice * 1.1 - crop.totalCost) / 1e3) * 1e3;
   const phaseCode = normalizePhaseCode(crop.phase);
+  const isDraft = phaseCode === PHASE_CODES.DRAFT || crop.phase === "draft" || crop.status === "Draft";
   const isCompleted = phaseCode === PHASE_CODES.COMPLETED;
-  const bottomText = crop.isOnHold
+  const bottomText = isDraft
+    ? t("farmer.draft.card_notice", {}, "Draft assessment in progress")
+    : crop.isOnHold
     ? t("farmer.cropCard.resume_when_improved")
     : isCompleted
     ? t("farmer.cropCard.cycle_completed")
@@ -95,7 +106,7 @@ const CropCard = ({ crop, onView }) => {
           onClick={() => onView(crop.id)}
           className="inline-flex items-center gap-0.5 text-sm font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors flex-shrink-0"
         >
-          {t("farmer.cropCard.view_crop_btn")} <ChevronRight className="w-4 h-4" />
+          {isDraft ? t("farmer.draft.continue_btn", {}, "Continue draft") : t("farmer.cropCard.view_crop_btn")} <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     </div>

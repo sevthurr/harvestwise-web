@@ -20,6 +20,7 @@ export const settings = {
   request_deletion_title: "Humiling ng pagtanggal ng account",
   request_deletion_desc: "Ipinoproseso ang pagtanggal ng account pagkatapos ma-verify ang identity. Ang HarvestWise team ang morespaso sa mga kahilingan.",
   request_deletion_btn: "Humiling ng pagtanggal",
+  request_again_btn: "Humiling Muli",
   request_deletion_modal_body: "Upang maprotektahan ang iyong account at mga tala mula sa hindi awtorisadong pagbura, nangangailangan ang HarvestWise ng beripikasyon bago iproseso ang kahilingan. Upang mai-delete ang iyong account at mga personal na tala, magpadala po ng kahilingan sa email sa harvestwise.app@gmail.com mula sa iyong nakarehistrong email address. Kapag na-verify na, ang identifying account information, contact information, at exact farm coordinates ay permanenteng aalisin o ia-anonymize alinsunod sa aming Patakaran sa Privacy. Ang impormasyon sa agrikultura, pananim, gastos, o ani ay maaaring itago lamang pagkatapos ma-anonymize upang hindi na ito maiugnay sa iyo, alinsunod sa aming Patakaran sa Privacy §8.",
   removal_status_label: "Estado ng kahilingan",
   removal_status_pending: "Nakabinbin",

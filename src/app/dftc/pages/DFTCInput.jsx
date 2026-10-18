@@ -8,7 +8,8 @@ import {
   X,
   ChevronRight,
   CheckCircle,
-  Truck
+  Truck,
+  Trash2
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, parseResponse } from "../../global/api";
@@ -109,6 +110,8 @@ export default function DFTCInput() {
   });
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState(null);
+  const [deleteModalDraft, setDeleteModalDraft] = useState(null);
+  const [deletedDraftIds, setDeletedDraftIds] = useState(new Set());
 
   // Preserve just-saved submission context across history.replaceState so that freshly saved items
   // are immediately pinned as the latest (first) item in Today's Saved Data.
@@ -352,6 +355,35 @@ export default function DFTCInput() {
     return drafts;
   }, [rawSubmissions, todayStr, todayReportRecordCount, highlightParam]);
 
+  const visibleDrafts = useMemo(() => {
+    return draftList.filter(d => !deletedDraftIds.has(d.id));
+  }, [draftList, deletedDraftIds]);
+
+  const handleDeleteDraft = async () => {
+    if (!deleteModalDraft) return;
+    const draft = deleteModalDraft;
+
+    try {
+      if (draft.id === "local-price-draft") {
+        localStorage.removeItem("dftc_price_draft");
+        localStorage.removeItem("dftc_price_draft_data");
+      } else if (draft.id === "local-arrival-draft") {
+        localStorage.removeItem("dftc_arrival_draft");
+        localStorage.removeItem("dftc_arrival_draft_data");
+      }
+
+      setDeletedDraftIds(prev => {
+        const next = new Set(prev);
+        next.add(draft.id);
+        return next;
+      });
+    } catch (e) {
+      console.error("Failed to delete draft:", e);
+    } finally {
+      setDeleteModalDraft(null);
+    }
+  };
+
   useEffect(() => {
     if (!successMessage) return;
     const t = setTimeout(() => setSuccessMessage(""), 6000);
@@ -495,7 +527,7 @@ export default function DFTCInput() {
           </p>
         </div>
 
-        {draftList.length === 0 ? (
+        {visibleDrafts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-6 text-center">
             <p className="text-[13px] text-[var(--hw-neutral-700)] font-medium">No drafts available today.</p>
             <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
@@ -507,13 +539,13 @@ export default function DFTCInput() {
             <table className="w-full">
               <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                 <tr>
-                  {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Draft Status", "Records"].map((h) => (
+                  {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Draft Status", "Records", ""].map((h) => (
                     <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                {draftList.map((draft) => {
+                {visibleDrafts.map((draft) => {
                   const param = (highlightedDraftId || "").toLowerCase();
                   const draftId = (draft.id || "").toLowerCase();
                   const dataType = (draft.dataType || "").toLowerCase();
@@ -551,6 +583,20 @@ export default function DFTCInput() {
                       <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.submissionMethod}</td>
                       <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
                       <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
+                      <td className="px-5 py-4 text-right">
+                        {(draft.id === "local-price-draft" || draft.id === "local-arrival-draft") && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteModalDraft(draft);
+                            }}
+                            className="p-2 rounded-lg text-[var(--hw-neutral-400)] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Delete draft"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -681,6 +727,33 @@ export default function DFTCInput() {
           </>
         )}
       </div>
+
+      {/* Delete Draft Confirmation Modal */}
+      {deleteModalDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteModalDraft(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <p className="font-semibold text-[var(--hw-neutral-900)]">Delete Draft?</p>
+            <p className="text-[14px] text-[var(--hw-neutral-800)]">
+              This draft will be permanently deleted. This action cannot be undone.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setDeleteModalDraft(null)}
+                className="flex-1 py-2.5 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteDraft}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-[13px] font-medium hover:bg-red-700 transition-colors cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

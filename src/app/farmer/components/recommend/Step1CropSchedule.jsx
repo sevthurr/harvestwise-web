@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { formatDurationLabel, getCropDuration, suggestHarvestDate } from "./types";
-import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
+import { durationForOption, findCatalogOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../global/components/ui/select";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { fetchFarmerProfile } from "../../../global/hooks/useFarmerPrefetch";
+import { isPreferredCrop } from "../../utils/cropPreferences";
+import { PreferredStar } from "../shared/PreferredStar";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -17,6 +21,15 @@ const PAGE_SIZE = 4;
 
 const Step1CropSchedule = ({ data, onChange, errors }) => {
   const { t } = useLanguage();
+
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
 
   // Top10 commodities + per-variety duration from the API
   // (persisted to IndexedDB by the offline layer).
@@ -29,7 +42,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     return acc;
   }, []);
 
-  const selectedOption = commodityOptions.find((c) => c.id === data.commodity) || null;
+  const selectedOption = findCatalogOption(commodityOptions, data.commodity);
   // commodity.typical_duration_min_days / max_days from GET /prices; falls back
   // to the CROP_DURATIONS table when the catalog has no row for this crop
   // (offline bundle or a crop outside the top 10).
@@ -42,9 +55,13 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
     || (data.commodity ? t(`farmer.assess.${durationVarKey}`, {}, duration?.label || "") : null);
   const suggestion = suggestHarvestDate(data.plantingDate, apiDuration || data.commodity, data.variant);
   const selectedPage = Math.floor(
-    commodityOptions.findIndex((c) => c.id === data.commodity) / PAGE_SIZE
+    commodityOptions.findIndex((c) => c.id === selectedOption?.id) / PAGE_SIZE
   );
   const [page, setPage] = useState(() => selectedPage >= 0 ? selectedPage : 0);
+
+  useEffect(() => {
+    if (selectedPage >= 0) setPage(selectedPage);
+  }, [selectedPage]);
 
   // Auto-calculate suggested harvest date when planting date, crop, variety or
   // its duration changes.
@@ -96,7 +113,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {COMMODITY_PAGES[page]?.map((c) => {
-                const selected = data.commodity === c.id;
+                const selected = selectedOption?.id === c.id;
                 return <button
                   key={c.id}
                   type="button"
@@ -118,6 +135,9 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
                   <span className={`text-sm font-medium text-center leading-tight ${selected ? "text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-700)]"}`}>
                     {c.name}
                   </span>
+                  {isPreferredCrop(c, preferredCrops) && (
+                    <PreferredStar className="w-3.5 h-3.5 text-amber-500 mt-0.5" />
+                  )}
                 </button>;
               })}
             </div>

@@ -154,6 +154,30 @@ describe('Direct Navigation Route Resolution', () => {
     expect(resolveNotificationRoute({ category: 'user_event' }, 'Admin')).toBe('/admin/system?tab=users');
   });
 
+  it('opens the specific account-removal request record', () => {
+    expect(
+      resolveNotificationRoute(
+        {
+          category: 'user_event',
+          route: '/admin/system/user/USR-01',
+          metadata: { action: 'user.removal_requested', removal_request_id: 'ARR-0007' },
+        },
+        'Admin',
+      ),
+    ).toBe('/admin/system?tab=removal-requests&request_id=ARR-0007');
+
+    expect(
+      resolveNotificationRoute(
+        {
+          category: 'user_event',
+          metadata: { action: 'user.removal_approved' },
+          body: 'Account removal request ARR-0008 approved.',
+        },
+        'Admin',
+      ),
+    ).toBe('/admin/system?tab=removal-requests&request_id=ARR-0008');
+  });
+
   it('links an import notification to that upload\'s processing history', () => {
     // An import alert is about a finished upload, so it opens that upload's
     // history entry rather than the form that starts one.

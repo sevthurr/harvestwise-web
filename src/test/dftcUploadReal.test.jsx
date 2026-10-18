@@ -251,5 +251,36 @@ describe('DFTCUpload component with Admin-like upload, preview, and dry-run vali
     expect(screen.getByText('Drop file here or click to upload')).toBeInTheDocument();
     expect(screen.queryByText('Import Completed & Stored')).not.toBeInTheDocument();
   });
+
+  it('accepts a dropped file on the drop zone and previews it', async () => {
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DFTCUpload />
+      </QueryClientProvider>
+    );
+
+    const dropZone = screen.getByText('Drop file here or click to upload').closest('button');
+
+    // Drag feedback: the drop zone highlights while a file is over it
+    fireEvent.dragOver(dropZone, { dataTransfer: { items: [{ kind: 'file' }] } });
+    await waitFor(() => {
+      expect(dropZone.className).toContain('border-[var(--hw-green-400)]');
+    });
+
+    const csvContent = 'Date,Commodity,Variety,Price,Unit\n2026-08-30,Tomato,Diamante,85.00,kg\n2026-08-30,Eggplant,Banate,60.00,kg';
+    const file = new File([csvContent], 'dropped_prices.csv', { type: 'text/csv' });
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [file], items: [{ kind: 'file' }], types: ['Files'] },
+    });
+
+    // Same observable outcome as the file-input path
+    await waitFor(() => {
+      expect(screen.getByText('File preview — first 2 of 2 rows')).toBeInTheDocument();
+      expect(screen.getByText('dropped_prices.csv')).toBeInTheDocument();
+      expect(screen.getByText('Validate Data')).toBeInTheDocument();
+    });
+  });
 });
 

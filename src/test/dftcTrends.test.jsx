@@ -38,8 +38,6 @@ vi.mock("recharts", () => {
     Cell: () => null,
     Line: () => null,
     Bar: ({ children }) => <div>{children}</div>,
-    Cell: () => null,
-    Pie: ({ children }) => <div>{children}</div>,
     Area: () => null,
     XAxis: () => null,
     YAxis: () => null,
@@ -248,8 +246,26 @@ describe("dftcTrendsPriceData helpers", () => {
     expect(summaries[0].avgMid).toBeCloseTo(81.4, 5);
     expect(summaries[0].lo).toBeCloseTo(71.4, 5);
     expect(summaries[0].hi).toBeCloseTo(91.4, 5);
-    expect(summaries[0].change).toBeNull();
+    expect(summaries[0].change).toBeCloseTo(14.647887, 3);
     expect(summaries[0].recentAvg).toBeCloseTo(71, 5);
+  });
+
+  it("returns null change when forecast or recent records are missing", () => {
+    const withoutForecast = buildForecastSummaries([
+      {
+        varietyKey: "Diamante Big",
+        detail: detailBody({ forecast: null }),
+      },
+    ]);
+    expect(withoutForecast[0].change).toBeNull();
+
+    const withoutRecords = buildForecastSummaries([
+      {
+        varietyKey: "Diamante Big",
+        detail: detailBody({ records: [] }),
+      },
+    ]);
+    expect(withoutRecords[0].change).toBeNull();
   });
 
   it("keeps historical chart data when forecast is missing", () => {
@@ -430,13 +446,31 @@ describe("DFTC Trends page prices API integration", () => {
     });
   });
 
-  it("keeps Forecast Change as an em dash and does not expose Price Outlook", async () => {
+  it("calculates Forecast Price Change using the formula and does not expose Price Outlook", async () => {
     installApi();
     renderTrends(<DFTCTrends />);
     await waitFor(() => {
       expect(screen.getByText("Forecast Price Change")).toBeInTheDocument();
     });
     expect(screen.queryByText("Price Outlook")).not.toBeInTheDocument();
+    const changeTitle = screen.getByText("Forecast Price Change");
+    // With horizon 7: midpoint 80.7, recentAvg 71 => change is +13.7%
+    expect(changeTitle.parentElement?.textContent || "").toMatch(/Forecast Price Change[\s\S]*↑\s*13\.7%/);
+  });
+
+  it("shows em dash for Forecast Price Change when forecast data is unavailable", async () => {
+    installApi();
+    vi.spyOn(pricesApi, "getPriceDetail").mockImplementation(async (commodityId, params = {}) => {
+      return detailBody({
+        commodityId,
+        forecast: null,
+        records: [],
+      });
+    });
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => {
+      expect(screen.getByText("Forecast Price Change")).toBeInTheDocument();
+    });
     const changeTitle = screen.getByText("Forecast Price Change");
     expect(changeTitle.parentElement?.textContent || "").toMatch(/Forecast Price Change[\s\S]*—/);
   });
@@ -456,9 +490,9 @@ describe("DFTC Trends page prices API integration", () => {
     await waitFor(() => {
       expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith("COM-CAR");
     });
-    expect(await screen.findByText("Admin Arrival Pressure Classification")).toBeInTheDocument();
+    expect(await screen.findByText("Arrival Pressure Classification")).toBeInTheDocument();
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
-    expect(screen.getByText("Admin Average Arrival")).toBeInTheDocument();
+    expect(screen.getByText("Historical Average Arrival")).toBeInTheDocument();
     expect(await screen.findByTestId("arrival-chart-dates")).toHaveTextContent(
       "Mar 31, 2025|Sep 30, 2025|Oct 2, 2026"
     );
@@ -480,7 +514,7 @@ describe("DFTC Trends page prices API integration", () => {
     expect(await screen.findByText("Historical seasonal average")).toBeInTheDocument();
     expect(screen.getByText("Production level")).toBeInTheDocument();
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Admin analytics · PSA OpenSTAT/)).toBeInTheDocument();
+    expect(screen.getByText(/PSA OpenSTAT/)).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Bukidnon" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "City of Davao" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Davao del Sur" })).toBeInTheDocument();
@@ -594,15 +628,15 @@ describe("DFTC Trends Alert Commodities Modal", () => {
     });
   });
 
-  it("displays Oversupply Commodities modal when alert=oversupply in URL", async () => {
+  it("displays High Arrival Commodities modal when alert=oversupply in URL", async () => {
     window.history.replaceState({}, "", "/dftc/trends?tab=arrival&alert=oversupply");
     renderTrends(<DFTCTrends />);
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByRole("heading", { name: "Oversupply Commodities" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "High Arrival Commodities" })).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/Check the trend for these commodities currently in an oversupply state/i)
+      within(dialog).getByText(/Check the trend for these commodities currently with high arrival volume/i)
     ).toBeInTheDocument();
 
     // Renders list of oversupply commodities once home data loads
