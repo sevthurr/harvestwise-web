@@ -456,9 +456,9 @@ describe("DFTC Trends page prices API integration", () => {
     await waitFor(() => {
       expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith("COM-CAR");
     });
-    expect(await screen.findByText("Admin Arrival Pressure Classification")).toBeInTheDocument();
+    expect(await screen.findByText("Arrival Pressure Classification")).toBeInTheDocument();
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
-    expect(screen.getByText("Admin Average Arrival")).toBeInTheDocument();
+    expect(screen.getByText("Historical Average Arrival")).toBeInTheDocument();
     expect(await screen.findByTestId("arrival-chart-dates")).toHaveTextContent(
       "Mar 31, 2025|Sep 30, 2025|Oct 2, 2026"
     );
@@ -480,7 +480,7 @@ describe("DFTC Trends page prices API integration", () => {
     expect(await screen.findByText("Historical seasonal average")).toBeInTheDocument();
     expect(screen.getByText("Production level")).toBeInTheDocument();
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Admin analytics · PSA OpenSTAT/)).toBeInTheDocument();
+    expect(screen.getByText(/PSA OpenSTAT/)).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Bukidnon" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "City of Davao" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Davao del Sur" })).toBeInTheDocument();
@@ -594,15 +594,15 @@ describe("DFTC Trends Alert Commodities Modal", () => {
     });
   });
 
-  it("displays Oversupply Commodities modal when alert=oversupply in URL", async () => {
+  it("displays High Arrival Commodities modal when alert=oversupply in URL", async () => {
     window.history.replaceState({}, "", "/dftc/trends?tab=arrival&alert=oversupply");
     renderTrends(<DFTCTrends />);
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByRole("heading", { name: "Oversupply Commodities" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "High Arrival Commodities" })).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/Check the trend for these commodities currently in an oversupply state/i)
+      within(dialog).getByText(/Check the trend for these commodities currently with high arrival volume/i)
     ).toBeInTheDocument();
 
     // Renders list of oversupply commodities once home data loads

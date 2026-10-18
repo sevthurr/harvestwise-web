@@ -654,15 +654,24 @@ function AdminImport() {
 
   const displayedIssueRows = validationRows.filter((r) => r.issues && r.issues.length > 0);
 
-  const filteredTableRows = displayedIssueRows.filter((r) => {
+  const filteredTableRows = (tableFilter === "valid" ? validationRows : displayedIssueRows).filter((r) => {
     if (tableFilter === "all") return true;
+    if (tableFilter === "valid") return r.result === "valid" || r.result === "valid_with_warning" || (!r.issues || r.issues.length === 0);
     if (tableFilter === "rejected") return r.result === "rejected";
     if (tableFilter === "warning") return r.result === "valid_with_warning";
     if (tableFilter === "duplicate") return r.issues?.some((i) => i.code === "duplicate");
-    if (tableFilter === "missing") return r.issues?.some((i) => i.code === "missing_required");
-    if (tableFilter === "new_commodity") return r.issues?.some((i) => i.code === "new_commodity");
+    if (tableFilter === "missing") return r.issues?.some((i) => i.code === "missing_required" || i.code?.includes("missing"));
+    if (tableFilter === "new_commodity") return r.issues?.some((i) => i.code === "new_commodity" || i.code?.includes("commodity"));
     return true;
   });
+
+  const handleKpiFilter = (filterKey) => {
+    if (tableFilter === filterKey && filterKey !== "all") {
+      setTableFilter("all");
+    } else {
+      setTableFilter(filterKey);
+    }
+  };
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
 
@@ -893,33 +902,69 @@ function AdminImport() {
             {/* 6 KPI Cards (3 on Row 1, 3 on Row 2) */}
             <div className="space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => handleKpiFilter("all")}
+                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                    tableFilter === "all" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                  }`}
+                >
                   <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Total Rows</p>
                   <p className="text-[18px] font-bold text-[var(--hw-neutral-900)] mt-0.5">{validationResult.totalRows}</p>
-                </div>
-                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleKpiFilter("valid")}
+                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                    tableFilter === "valid" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                  }`}
+                >
                   <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Valid Rows</p>
                   <p className="text-[18px] font-bold text-emerald-700 mt-0.5">{validationResult.valid}</p>
-                </div>
-                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleKpiFilter("rejected")}
+                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                    tableFilter === "rejected" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                  }`}
+                >
                   <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Rejected Rows</p>
                   <p className="text-[18px] font-bold text-red-600 mt-0.5">{validationResult.rejected}</p>
-                </div>
+                </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => handleKpiFilter("duplicate")}
+                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                    tableFilter === "duplicate" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                  }`}
+                >
                   <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Duplicates</p>
                   <p className="text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.duplicates}</p>
-                </div>
-                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleKpiFilter("missing")}
+                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                    tableFilter === "missing" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                  }`}
+                >
                   <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Missing Values</p>
                   <p className="text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.missingValues}</p>
-                </div>
-                <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleKpiFilter("new_commodity")}
+                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                    tableFilter === "new_commodity" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                  }`}
+                >
                   <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Unrecognized Commodities</p>
                   <p className="text-[18px] font-bold text-[var(--hw-neutral-800)] mt-0.5">{validationResult.unrecognizedCommodities}</p>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -936,11 +981,12 @@ function AdminImport() {
                       className="px-2 py-1 border border-[var(--hw-neutral-300)] rounded-lg text-[12px] bg-white text-[var(--hw-neutral-800)] focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)]"
                     >
                       <option value="all">All Issues ({displayedIssueRows.length})</option>
-                      <option value="rejected">Rejected Only</option>
+                      <option value="valid">Valid Rows ({validationResult.valid})</option>
+                      <option value="rejected">Rejected Only ({validationResult.rejected})</option>
                       <option value="warning">Warnings Only</option>
-                      <option value="duplicate">Duplicates</option>
-                      <option value="missing">Missing Values</option>
-                      <option value="new_commodity">New Commodities</option>
+                      <option value="duplicate">Duplicates ({validationResult.duplicates})</option>
+                      <option value="missing">Missing Values ({validationResult.missingValues})</option>
+                      <option value="new_commodity">New Commodities ({validationResult.unrecognizedCommodities})</option>
                     </select>
                   </div>
                 )}
@@ -998,7 +1044,7 @@ function AdminImport() {
               <div className="flex flex-wrap gap-3 pt-1">
                 <button
                   onClick={handleImport}
-                  disabled={uploading || validationResult.valid === 0}
+                  disabled={uploading}
                   className="flex-1 min-w-[140px] py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50"
                 >
                   Import Valid Records ({validationResult.valid})

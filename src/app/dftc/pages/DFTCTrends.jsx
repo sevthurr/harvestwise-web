@@ -10,6 +10,8 @@ import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSou
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
+import { apiGet, parseResponse } from "../../global/api";
+import { getClassificationTextColor } from "./dftcClassificationColors";
 import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
 
 import {
@@ -1226,7 +1228,7 @@ function DFTCTrends() {
   const aPeriodLabel = aDatePreset === "all"
     ? arrivalQueryData?.data_is_stale
       ? "Historical fallback records"
-      : `Admin ${arrivalQueryData?.lookback_days ?? 90}-day window`
+      : `${arrivalQueryData?.lookback_days ?? 90}-day window`
     : getPeriodLabel(aDatePreset, aCustomFrom, aCustomTo);
 
   function priceSummaryRows(items, renderValue, showAll, setShowAll) {
@@ -1598,9 +1600,9 @@ function DFTCTrends() {
           {arrivalQueryData?.classification && (
             <div>
               <div className="text-[11px] font-bold text-[var(--hw-neutral-500)] uppercase tracking-wider">
-                Admin Arrival Pressure Classification
+                Arrival Pressure Classification
               </div>
-              <div className="mt-1 text-lg font-bold text-[var(--hw-green-800)]">
+              <div className={`mt-1 text-lg font-bold ${getClassificationTextColor(arrivalQueryData.classification)}`}>
                 {arrivalQueryData.classification}
                 {arrivalQueryData.data_is_stale && (
                   <span className="ml-2 text-xs font-medium text-amber-700">Historical data</span>
@@ -1611,41 +1613,37 @@ function DFTCTrends() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
-                title: "Latest Arrival Volume (Admin)",
-                renderVal: (v) => (
-                  <span className={`text-[13px] font-bold ${v.combined != null ? "text-[var(--hw-neutral-900)]" : "text-[var(--hw-neutral-400)]"}`}>
-                    {formatVol(v.combined)}
-                  </span>
-                )
+                title: "Latest Arrival Volume",
+                val: arrivalQueryData?.current_arrival_kg != null
+                  ? `${Number(arrivalQueryData.current_arrival_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
+                  : "—",
+                color: "text-[var(--hw-neutral-900)]"
               },
               {
                 title: "Arrival-Window Farm Source Total",
-                renderVal: (v) => (
-                  <span className={`text-[13px] font-bold ${v.farm != null ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`}>
-                    {formatVol(v.farm)}
-                  </span>
-                )
+                val: arrivalQueryData?.source_breakdown?.farm_source_volume_kg != null
+                  ? `${Number(arrivalQueryData.source_breakdown.farm_source_volume_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
+                  : "—",
+                color: "text-[var(--hw-green-700)]"
               },
               {
                 title: "Arrival-Window Other Source Total",
-                renderVal: (v) => (
-                  <span className={`text-[13px] font-bold ${v.other != null ? "text-amber-700" : "text-[var(--hw-neutral-400)]"}`}>
-                    {formatVol(v.other)}
-                  </span>
-                )
+                val: arrivalQueryData?.source_breakdown?.other_source_volume_kg != null
+                  ? `${Number(arrivalQueryData.source_breakdown.other_source_volume_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
+                  : "—",
+                color: "text-amber-700"
               },
               {
-                title: "Admin Average Arrival",
-                renderVal: () => (
-                  <span className={`text-[13px] font-bold ${arrivalQueryData?.average_arrival_kg != null ? "text-[var(--hw-neutral-900)]" : "text-[var(--hw-neutral-400)]"}`}>
-                    {formatVol(arrivalQueryData?.average_arrival_kg)}
-                  </span>
-                )
+                title: "Historical Average Arrival",
+                val: arrivalQueryData?.average_arrival_kg != null
+                  ? `${Number(arrivalQueryData.average_arrival_kg).toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`
+                  : "—",
+                color: "text-[var(--hw-neutral-900)]"
               }
-            ].map(({ title, renderVal }, idx) => (
+            ].map(({ title, val, color }, idx) => (
               <div key={title} className={`${idx !== 0 ? "sm:border-l-2 sm:border-[var(--hw-neutral-200)] sm:pl-5" : "sm:pl-0"} flex flex-col justify-between`}>
                 <div className="text-[11px] font-bold text-[var(--hw-neutral-500)] uppercase tracking-wider mb-2">{title}</div>
-                {priceSummaryRows(aVarietySummaries, renderVal, aShowAll, setAShowAll)}
+                <div className={`text-xl sm:text-2xl font-bold tracking-tight ${color}`}>{val}</div>
               </div>
             ))}
           </div>
@@ -1686,7 +1684,7 @@ function DFTCTrends() {
                 varietyKeys={aVarietyKeys}
                 sourceType={aVolumeType}
                 height={300}
-                referenceValue={aVolumeType === "Combined Total" ? arrivalQueryData?.average_arrival_kg ?? null : null}
+                quartileThresholds={arrivalQueryData?.quartile_thresholds}
               />
             )}
           </div>
@@ -1787,7 +1785,7 @@ function DFTCTrends() {
       <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8">
         <PageHeader
           title="Market Trends"
-          description="Explore Admin-backed price, arrival-volume, and seasonal-production trends at DFTC markets."
+          description="Explore price, arrival-volume, and seasonal-production trends at DFTC markets."
           className="mb-6"
         />
         <div className={`${cardCls} mb-6 overflow-hidden`}>
@@ -1834,13 +1832,13 @@ function DFTCTrends() {
                     <h3 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
                       {activeAlertModal === "volatility"
                         ? "Price Volatility Alerts"
-                        : "Oversupply Commodities"}
+                        : "High Arrival Commodities"}
                     </h3>
                   </div>
                   <p className="text-[13px] text-[var(--hw-neutral-600)]">
                     {activeAlertModal === "volatility"
                       ? "Check the trend for these commodities experiencing sharp price swings (>10%)."
-                      : "Check the trend for these commodities currently in an oversupply state (≥Q3)."}
+                      : "Check the trend for these commodities currently with high arrival volume (≥Q3)."}
                   </p>
                 </div>
                 <button
@@ -1871,7 +1869,7 @@ function DFTCTrends() {
                         key={comm.commodity_id || commName}
                         type="button"
                         onClick={() => selectAlertCommodity(commName)}
-                        className="w-full flex items-center justify-between gap-3 p-3 rounded-xl hover:bg-[var(--hw-neutral-50)] text-left transition-colors cursor-pointer group"
+                        className="w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left cursor-default"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <CommodityIllustration
@@ -1880,7 +1878,7 @@ function DFTCTrends() {
                             className="w-9 h-9 shrink-0 object-contain rounded-lg bg-[var(--hw-neutral-50)] p-1 border border-[var(--hw-neutral-100)]"
                           />
                           <div className="min-w-0">
-                            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] group-hover:text-[var(--hw-green-800)] truncate">
+                            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] truncate">
                               {commName}
                               {comm.variety ? ` · ${comm.variety}` : ""}
                             </p>
@@ -1914,16 +1912,11 @@ function DFTCTrends() {
                               </p>
                             </>
                           ) : (
-                            <>
-                              {comm.volume_kg != null && (
-                                <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
-                                  {Number(comm.volume_kg).toLocaleString("en-US")} kg
-                                </p>
-                              )}
-                              <span className="inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                Oversupply
-                              </span>
-                            </>
+                            comm.volume_kg != null && (
+                              <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
+                                {Number(comm.volume_kg).toLocaleString("en-US")} kg
+                              </p>
+                            )
                           )}
                         </div>
                       </button>
@@ -1933,10 +1926,7 @@ function DFTCTrends() {
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-3.5 bg-[var(--hw-neutral-50)] border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
-                <span className="text-[12px] text-[var(--hw-neutral-500)]">
-                  Select a commodity to view its trend chart
-                </span>
+              <div className="px-6 py-3.5 bg-[var(--hw-neutral-50)] border-t border-[var(--hw-neutral-100)] flex items-center justify-end">
                 <button
                   type="button"
                   onClick={closeAlertModal}
