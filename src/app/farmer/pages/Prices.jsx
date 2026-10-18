@@ -18,6 +18,9 @@ import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
@@ -134,7 +137,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
   );
 };
 
-const CropPriceCard = ({ commodity, data, onViewDetails }) => {
+const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) => {
   const { t } = useLanguage();
   const unit = commodity.unitOfMeasure || 'kg';
   const forecast = data.trendDetail?.forecast;
@@ -171,7 +174,12 @@ const CropPriceCard = ({ commodity, data, onViewDetails }) => {
             commodityName={commodity.name}
             className="w-10 h-10 flex-shrink-0" 
           />
-          <p className="font-semibold text-[var(--hw-neutral-900)] text-base truncate">{commodity.name || '–'}</p>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="font-semibold text-[var(--hw-neutral-900)] text-base truncate">{commodity.name || '–'}</p>
+            {isPreferred && (
+              <PreferredStar className="w-4 h-4 text-amber-500" />
+            )}
+          </div>
         </div>
         <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
           {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
@@ -248,6 +256,16 @@ function PricesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState(DEFAULT_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
 
   const { data: apiData, isLoading: loading } = useQuery({
     queryKey: ["prices", "list"],
@@ -408,7 +426,7 @@ function PricesPage() {
       list = list.filter((c) => c.category === filter.category);
     }
     
-    list.sort((a, b) => {
+    const secondaryCompare = (a, b) => {
       const ORDER_RISING = { Rising: 0, Stable: 1, Falling: 2 };
       const ORDER_FALLING = { Falling: 0, Stable: 1, Rising: 2 };
       if (filter.sortBy === "rising-first") return (ORDER_RISING[a.displayData.direction] ?? 1) - (ORDER_RISING[b.displayData.direction] ?? 1);
@@ -419,10 +437,10 @@ function PricesPage() {
         return filter.sortBy === "price-low" ? priceA - priceB : priceB - priceA;
       }
       return (a.name || '').localeCompare(b.name || '');
-    });
-    
-    return list;
-  }, [searchQuery, filter, commodities, priceTrendByCommodity]);
+    };
+
+    return sortWithPreferredFirst(list, preferredCrops, secondaryCompare);
+  }, [searchQuery, filter, commodities, priceTrendByCommodity, preferredCrops]);
   
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -500,6 +518,7 @@ function PricesPage() {
                 key={c.id}
                 commodity={c}
                 data={c.displayData}
+                isPreferred={isPreferredCrop(c, preferredCrops)}
                 onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
               />
             ))}

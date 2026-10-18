@@ -20,7 +20,8 @@ import {
   Tractor,
   Eye,
   Scale,
-  PhilippinePeso
+  PhilippinePeso,
+  Clock
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -138,6 +139,51 @@ function CropCycleDetailPage() {
           {t("farmer.crops.title", {}, "Go to My Crops")}
         </button>
       </div>;
+  }
+
+  const isDraftCrop = crop.phase === "draft" || crop.status === "Draft";
+  if (isDraftCrop) {
+    return (
+      <div className="px-4 md:px-8 lg:px-10 py-8 max-w-3xl mx-auto space-y-6">
+        <Breadcrumb
+          crumbs={[
+            { label: t("farmer.crops.title", {}, "My Crops"), to: "/farmer/crops" },
+            { label: crop.commodityName || "Draft" },
+          ]}
+        />
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-start gap-3">
+            <Clock className="w-6 h-6 text-amber-700 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-amber-900">
+                {t("farmer.draft.incomplete_title", {}, "Assessment Draft – Incomplete")}
+              </h2>
+              <p className="text-sm text-amber-800">
+                {t(
+                  "farmer.draft.incomplete_desc",
+                  {},
+                  "This crop assessment is saved as a draft. Step 1 has not been submitted yet, and this crop is not yet active in your farm plan."
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <button
+              onClick={() => navigate(`/farmer/assess?resumeDraft=${crop.id}`)}
+              className="px-5 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-sm"
+            >
+              {t("farmer.draft.continue_btn", {}, "Review & continue Step 1")}
+            </button>
+            <button
+              onClick={() => navigate("/farmer/crops")}
+              className="px-4 py-2.5 bg-white border border-[var(--hw-neutral-300)] text-sm font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)]"
+            >
+              {t("common.back_to_crops", {}, "Back to My Crops")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
   const handleDrawerAction = async (action) => {
     const statusMap = {

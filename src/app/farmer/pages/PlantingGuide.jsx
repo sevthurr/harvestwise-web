@@ -19,6 +19,9 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { ADVISORY_CODES, normalizeAdvisoryCode } from "../utils/farmerCodes";
 import { formatMonthShort } from "../utils/formatters";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 
 const ADV_CFG = {
   [ADVISORY_CODES.RECOMMENDED]: {
@@ -62,7 +65,7 @@ const WEATHER_ACTIONS = [
   "farmer.factors.weather.actions.protect_harvest"
 ];
 
-const CropAdvisoryCard = ({ crop, onViewGuide }) => {
+const CropAdvisoryCard = ({ crop, isPreferred, onViewGuide }) => {
   const { t } = useLanguage();
   const advCode = normalizeAdvisoryCode(crop.advisory || crop.advisoryCategory) || ADVISORY_CODES.RECOMMENDED;
   const cfg = ADV_CFG[advCode] || ADV_CFG[ADVISORY_CODES.RECOMMENDED];
@@ -76,7 +79,12 @@ const CropAdvisoryCard = ({ crop, onViewGuide }) => {
             <AdvIcon className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="text-[12px] font-semibold">{t(cfg.labelKey)}</span>
           </div>
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{crop.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{crop.name}</p>
+            {isPreferred && (
+              <PreferredStar className="w-4 h-4 text-amber-500" />
+            )}
+          </div>
           <div className="flex flex-wrap gap-x-4 gap-y-0.5">
             <p className="text-[12px] text-[var(--hw-neutral-900)]">
               {t("farmer.plantingGuide.estimated_profit_label")} <span className="font-medium text-[var(--hw-neutral-700)]">{crop.profit || "–"}</span>
@@ -130,9 +138,16 @@ function PlantingGuidePage() {
     staleTime: 1000 * 60 * 30,
   });
 
-  const recommended = advisories.filter((a) => a.advisory === ADVISORY_CODES.RECOMMENDED);
-  const conservative = advisories.filter((a) => a.advisory === ADVISORY_CODES.PROCEED_WITH_CAUTION);
-  const avoid = advisories.filter((a) => a.advisory === ADVISORY_CODES.AVOID_FOR_NOW);
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+
+  const recommended = sortWithPreferredFirst(advisories.filter((a) => a.advisory === ADVISORY_CODES.RECOMMENDED), preferredCrops);
+  const conservative = sortWithPreferredFirst(advisories.filter((a) => a.advisory === ADVISORY_CODES.PROCEED_WITH_CAUTION), preferredCrops);
+  const avoid = sortWithPreferredFirst(advisories.filter((a) => a.advisory === ADVISORY_CODES.AVOID_FOR_NOW), preferredCrops);
 
   if (loading) {
     return (
@@ -221,6 +236,7 @@ function PlantingGuidePage() {
                   <CropAdvisoryCard
                     key={crop.id}
                     crop={crop}
+                    isPreferred={isPreferredCrop(crop, preferredCrops)}
                     onViewGuide={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
                   />
                 ))}
@@ -248,6 +264,7 @@ function PlantingGuidePage() {
                   <CropAdvisoryCard
                     key={crop.id}
                     crop={crop}
+                    isPreferred={isPreferredCrop(crop, preferredCrops)}
                     onViewGuide={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
                   />
                 ))}
@@ -275,6 +292,7 @@ function PlantingGuidePage() {
                   <CropAdvisoryCard
                     key={crop.id}
                     crop={crop}
+                    isPreferred={isPreferredCrop(crop, preferredCrops)}
                     onViewGuide={() => navigate(`/farmer/assess?commodity=${crop.id}`)}
                   />
                 ))}

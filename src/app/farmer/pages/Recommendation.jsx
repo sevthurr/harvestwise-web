@@ -30,6 +30,9 @@ import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 import { explainRainfall } from "../../global/components/shared/weatherExplanations";
 import { resolveFactorCondition } from "../utils/factorColors";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 
 const TwoToneStormIcon = ({ className }) => (
   <svg
@@ -734,6 +737,16 @@ function RecommendationPage() {
 
   const rawRecommendations = recommendationsData?.items ?? [];
 
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
+
   // Weather forecast — fills the calendar's daily weather note + icons
   const { data: weatherForecasts = [] } = useQuery({
     queryKey: ["weather", "advisory", weatherLat, weatherLon],
@@ -884,8 +897,8 @@ function RecommendationPage() {
       });
     }
 
-    return result;
-  }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, recommendationsLoading, t]);
+    return sortWithPreferredFirst(result, preferredCrops);
+  }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, recommendationsLoading, t, preferredCrops]);
 
   // Auto-scroll and expand accordion for highlighted crop
   useEffect(() => {
@@ -1094,13 +1107,16 @@ function RecommendationPage() {
                     className="w-12 h-12 flex-shrink-0 mt-0.5"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline gap-2 flex-wrap">
                       <h3 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">
                         {crop.name}
                       </h3>
                       <span className="text-[13px] text-[var(--hw-neutral-600)]">
                         {crop.varietyCount}
                       </span>
+                      {isPreferredCrop(crop, preferredCrops) && (
+                        <PreferredStar className="w-4 h-4 text-amber-500" />
+                      )}
                     </div>
 
                     <p className="text-[14px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">

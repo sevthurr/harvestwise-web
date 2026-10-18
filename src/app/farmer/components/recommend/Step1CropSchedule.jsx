@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { formatDurationLabel, getCropDuration, suggestHarvestDate } from "./types";
 import { durationForOption, useCommodityCatalog } from "./useCommodityCatalog";
@@ -7,6 +8,9 @@ import { PlantingActivityContext } from "./PlantingActivityContext";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../../../global/components/ui/select";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { fetchFarmerProfile } from "../../../global/hooks/useFarmerPrefetch";
+import { isPreferredCrop } from "../../utils/cropPreferences";
+import { PreferredStar } from "../shared/PreferredStar";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -17,6 +21,15 @@ const PAGE_SIZE = 4;
 
 const Step1CropSchedule = ({ data, onChange, errors }) => {
   const { t } = useLanguage();
+
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
 
   // Top10 commodities + per-variety duration from the API
   // (persisted to IndexedDB by the offline layer).
@@ -118,6 +131,9 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
                   <span className={`text-sm font-medium text-center leading-tight ${selected ? "text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-700)]"}`}>
                     {c.name}
                   </span>
+                  {isPreferredCrop(c, preferredCrops) && (
+                    <PreferredStar className="w-3.5 h-3.5 text-amber-500 mt-0.5" />
+                  )}
                 </button>;
               })}
             </div>

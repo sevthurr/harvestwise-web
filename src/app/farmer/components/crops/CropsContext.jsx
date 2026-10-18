@@ -25,7 +25,7 @@ function formatLocalDate(isoDate) {
 }
 
 const STATUS_TO_PHASE = {
-  Draft: "planning",
+  Draft: "draft",
   Planning: "planning",
   Planted: "growing",
   "Pre-Harvest": "pre-harvest",

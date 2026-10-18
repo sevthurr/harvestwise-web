@@ -13,6 +13,8 @@ import { CommodityIllustration } from "../../../global/components/shared/Commodi
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { SkeletonListRow } from "../shared/FarmerSkeletons";
 import { apiGet, parseResponse } from "../../../global/api";
+import { sortWithPreferredFirst, isPreferredCrop } from "../../utils/cropPreferences";
+import { PreferredStar } from "../shared/PreferredStar";
 
 const DEFAULT_RECOMMENDED_PROFILES = {
   "COM-0004": {
@@ -64,7 +66,7 @@ function useOverflowHint(revision) {
   return [ref, scrollable];
 }
 
-export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
+export default function PlantingSuitabilityCard({ preferredCropIds = [], preferredCrops = [] }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
@@ -162,8 +164,9 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
       });
     }
 
-    return result;
-  }, [rawRecommendations, localizedMonth, t]);
+    const prefSource = preferredCrops && preferredCrops.length > 0 ? preferredCrops : preferredCropIds;
+    return sortWithPreferredFirst(result, prefSource);
+  }, [rawRecommendations, localizedMonth, t, preferredCrops, preferredCropIds]);
 
   const [cropsListRef, cropsScrollable] = useOverflowHint(`${recommendedCrops.length}:${isLoading}`);
 
@@ -227,9 +230,14 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [] }) {
                         {t("farmer.advisory.labels.recommended", {}, "Recommended")}
                       </span>
                     </div>
-                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] truncate">
-                      {crop.variety ? `${crop.name} (${crop.variety})` : crop.name}
-                    </p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] truncate">
+                        {crop.variety ? `${crop.name} (${crop.variety})` : crop.name}
+                      </p>
+                      {isPreferredCrop(crop, preferredCrops && preferredCrops.length > 0 ? preferredCrops : preferredCropIds) && (
+                        <PreferredStar className="w-4 h-4 text-amber-500" />
+                      )}
+                    </div>
                     <p className="text-[12px] text-[var(--hw-neutral-600)] truncate">
                       {crop.priceOutlookText || (crop.plantWindow ? `${t("farmer.calendar.plant_prefix", { window: crop.plantWindow }, `Plant: ${crop.plantWindow}`)}` : "")}
                     </p>

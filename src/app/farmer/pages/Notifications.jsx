@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCheck, ChevronRight } from "lucide-react";
@@ -11,6 +11,7 @@ import { resolveNotificationRoute } from "../../global/utils/notificationRoutes"
 import { useNotificationEvent } from "../../global/contexts/NotificationStreamContext";
 import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
+import { PreferredStar } from "../components/shared/PreferredStar";
 
 function formatTimestamp(iso) {
   if (!iso) return "";
@@ -48,6 +49,15 @@ function NotificationsPage() {
   const notifications = data?.items ?? [];
   const serverUnreadCount = data?.unread_count ?? 0;
 
+  const [filter, setFilter] = useState("all");
+
+  const preferredNotifications = useMemo(() => {
+    return notifications.filter((n) => {
+      const meta = n.metadata || n.payload || {};
+      return meta.is_preferred === true || meta.preferred_crop === true;
+    });
+  }, [notifications]);
+
   // Locally-acknowledged items the server has not caught up with yet must not
   // keep the badge lit while offline.
   const pendingLocal = notifications.filter(
@@ -55,6 +65,16 @@ function NotificationsPage() {
   ).length;
   const unreadCount = Math.max(0, serverUnreadCount - pendingLocal);
   const hasUnread = unreadCount > 0 || serverUnreadCount > 0 || notifications.some((n) => !isRead(n));
+
+  const unreadNotifications = useMemo(() => {
+    return notifications.filter((n) => !isRead(n));
+  }, [notifications, isRead]);
+
+  const filteredNotifications = useMemo(() => {
+    if (filter === "preferred") return preferredNotifications;
+    if (filter === "unread") return unreadNotifications;
+    return notifications;
+  }, [filter, notifications, preferredNotifications, unreadNotifications]);
 
   // Real-time live updates on the shared app-wide notification stream
   useNotificationEvent("NOTIFICATION_CREATED", () => {
@@ -137,6 +157,73 @@ function NotificationsPage() {
         )}
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          type="button"
+          onClick={() => setFilter("all")}
+          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+            filter === "all"
+              ? "bg-[var(--hw-green-700)] text-white shadow-xs"
+              : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
+          }`}
+        >
+          {t("farmer.notifications.filter_all", {}, "All")}
+          <span
+            className={`text-[11px] px-1.5 py-0.2 rounded-full ${
+              filter === "all"
+                ? "bg-white/20 text-white"
+                : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)]"
+            }`}
+          >
+            {notifications.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilter("preferred")}
+          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+            filter === "preferred"
+              ? "bg-[var(--hw-green-700)] text-white shadow-xs"
+              : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
+          }`}
+        >
+          <PreferredStar className={`w-3.5 h-3.5 ${filter === "preferred" ? "text-amber-300" : "text-amber-500"}`} />
+          {t("farmer.notifications.filter_preferred", {}, "Preferred Crops")}
+          <span
+            className={`text-[11px] px-1.5 py-0.2 rounded-full ${
+              filter === "preferred"
+                ? "bg-white/20 text-white"
+                : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)]"
+            }`}
+          >
+            {preferredNotifications.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilter("unread")}
+          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+            filter === "unread"
+              ? "bg-[var(--hw-green-700)] text-white shadow-xs"
+              : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
+          }`}
+        >
+          {t("farmer.notifications.filter_unread", {}, "Unread")}
+          <span
+            className={`text-[11px] px-1.5 py-0.2 rounded-full ${
+              filter === "unread"
+                ? "bg-white/20 text-white"
+                : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)]"
+            }`}
+          >
+            {unreadCount}
+          </span>
+        </button>
+      </div>
+
       {/* List / States */}
       {isLoading ? (
         <div className="space-y-2.5">
@@ -162,23 +249,31 @@ function NotificationsPage() {
             {t("farmer.notifications.load_error", {}, "Could not load notifications. Please try again.")}
           </p>
         </Card>
-      ) : notifications.length === 0 ? (
+      ) : filteredNotifications.length === 0 ? (
         <Card className="py-16 text-center">
           <div className="flex flex-col items-center justify-center">
             <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
               <Bell className="w-8 h-8 text-[var(--hw-neutral-400)]" />
             </div>
             <p className="text-[16px] font-semibold text-[var(--hw-neutral-900)] mb-1">
-              {t("farmer.notifications.all_caught_up", {}, "You're all caught up")}
+              {filter === "preferred"
+                ? t("farmer.notifications.no_preferred_notifications", {}, "No preferred crop alerts right now")
+                : t("farmer.notifications.all_caught_up", {}, "You're all caught up")}
             </p>
             <p className="text-[13px] text-[var(--hw-neutral-600)] max-w-sm">
-              {t("farmer.notifications.no_notifications", {}, "No notifications at this time.")}
+              {filter === "preferred"
+                ? t(
+                    "farmer.notifications.no_preferred_notifications_desc",
+                    {},
+                    "Daily price movements, monthly planting advisories, and forecasts for your preferred crops will appear here."
+                  )
+                : t("farmer.notifications.no_notifications", {}, "No notifications at this time.")}
             </p>
           </div>
         </Card>
       ) : (
         <div className="space-y-2.5">
-          {notifications.map((item) => {
+          {filteredNotifications.map((item) => {
             let localizedTitle = item.title || "";
             let localizedBody = item.body || "";
             try {
@@ -193,6 +288,9 @@ function NotificationsPage() {
               localizedTitle = item.title || "";
               localizedBody = item.body || "";
             }
+
+            const itemMeta = item.metadata || item.payload || {};
+            const isPreferredItem = itemMeta.is_preferred === true || itemMeta.preferred_crop === true;
 
             return (
               <div
@@ -211,7 +309,7 @@ function NotificationsPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <p
                         className={`text-[14px] leading-snug ${
                           isRead(item)
@@ -221,6 +319,9 @@ function NotificationsPage() {
                       >
                         {localizedTitle}
                       </p>
+                      {isPreferredItem && (
+                        <PreferredStar className="w-3.5 h-3.5" title="Preferred Crop" />
+                      )}
                       {!isRead(item) && (
                         <span className="w-2 h-2 rounded-full bg-[var(--hw-green-600)] flex-shrink-0" />
                       )}

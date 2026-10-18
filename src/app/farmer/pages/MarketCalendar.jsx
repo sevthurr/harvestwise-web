@@ -12,6 +12,8 @@ import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { useCrops } from "../components/crops/CropsContext";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 
 const CAT_CFG = {
   "national-holiday-regular": { label: "National Holiday — Regular", dotColor: "bg-red-500", textColor: "text-red-700" },
@@ -125,6 +127,13 @@ function MarketCalendarPage() {
   // Use normalized farmer crop plans
   const { crops: cropPlansData = [] } = useCrops();
 
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+
   // Process all events once, then filter by view month
   const allEvents = useMemo(() => {
     const marketEvents = [];
@@ -177,8 +186,10 @@ function MarketCalendarPage() {
     });
 
     const cropEvents = [];
-    (cropPlansData || []).forEach(c => {
+    const sortedCrops = sortWithPreferredFirst(cropPlansData || [], preferredCrops);
+    sortedCrops.forEach(c => {
       const name = c.commodityName && c.commodityName !== "\u2013" ? c.commodityName : 'Crop';
+      const isPref = isPreferredCrop(c, preferredCrops);
       const pDate = c.rawPlantingDate || c.plantingDate;
       if (pDate) {
         cropEvents.push({
@@ -188,7 +199,8 @@ function MarketCalendarPage() {
           title: `Planting: ${name}`,
           description: `Target/actual planting for ${name}`,
           marketRelevance: "Farmer crop schedule event",
-          source: "My Crops"
+          source: "My Crops",
+          isPreferred: isPref
         });
       }
       const hDate = c.rawHarvestDate || c.harvestDate;
@@ -200,13 +212,14 @@ function MarketCalendarPage() {
           title: `Expected Harvest: ${name}`,
           description: `Expected harvest window for ${name}`,
           marketRelevance: "Farmer crop harvest milestone",
-          source: "My Crops"
+          source: "My Crops",
+          isPreferred: isPref
         });
       }
     });
 
     return [...marketEvents, ...cropEvents];
-  }, [rawMarketEvents, cropPlansData]);
+  }, [rawMarketEvents, cropPlansData, preferredCrops]);
 
   // Filter events to current view month
   const events = useMemo(() => {
@@ -234,7 +247,15 @@ function MarketCalendarPage() {
     } else setMonth((m) => m + 1);
   };
 
-  const selectedEvents = selectedDate ? events.filter((e) => !e.endDate ? e.date === selectedDate : selectedDate >= e.date && selectedDate <= e.endDate) : [];
+  const selectedEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    const list = events.filter((e) => !e.endDate ? e.date === selectedDate : selectedDate >= e.date && selectedDate <= e.endDate);
+    return list.slice().sort((a, b) => {
+      const aPref = a.isPreferred ? 1 : 0;
+      const bPref = b.isPreferred ? 1 : 0;
+      return bPref - aPref;
+    });
+  }, [events, selectedDate]);
   const TODAY = new Date().toISOString().split('T')[0];
   const periodDays = analyticsPeriod === "7d" ? 7 : analyticsPeriod === "14d" ? 14 : 28;
 
@@ -330,7 +351,14 @@ function MarketCalendarPage() {
     return <div key={evt.id} className="flex items-start gap-2">
                           <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${cfg.dotColor}`} />
                           <div className="flex-1 min-w-0">
-                            <p className={`text-[13px] font-semibold ${cfg.textColor}`}>{evt.title}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className={`text-[13px] font-semibold ${cfg.textColor}`}>{evt.title}</p>
+                              {evt.isPreferred && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]">
+                                  Preferred
+                                </span>
+                              )}
+                            </div>
                             <p className={`text-[11px] font-medium ${cfg.textColor} opacity-70`}>{cfg.label}</p>
                             <p className="text-[12px] text-[var(--hw-neutral-900)] leading-snug mt-0.5">{evt.marketRelevance}</p>
                           </div>
@@ -358,7 +386,14 @@ function MarketCalendarPage() {
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${cfg.dotColor}`} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className={`text-[13px] font-semibold ${cfg.textColor}`}>{evt.title}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className={`text-[13px] font-semibold ${cfg.textColor}`}>{evt.title}</p>
+                              {evt.isPreferred && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]">
+                                  Preferred
+                                </span>
+                              )}
+                            </div>
                             <p className={`text-[11px] flex-shrink-0 ${cfg.textColor} opacity-70`}>{evt.date.slice(5).replace("-", "/")}</p>
                           </div>
                           <p className={`text-[11px] font-medium ${cfg.textColor} opacity-70`}>{cfg.label}</p>
