@@ -2,8 +2,8 @@ import { Star } from "lucide-react";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 
 /**
- * Star outline icon indicator for preferred crops.
- * Rendered in yellow/amber outline with an accessible title tooltip and sr-only label.
+ * Filled star icon indicator for preferred crops.
+ * Rendered in yellow/amber with an accessible title tooltip and sr-only label.
  */
 export function PreferredStar({ className = "w-3.5 h-3.5", title }) {
   const { t } = useLanguage();
@@ -17,7 +17,7 @@ export function PreferredStar({ className = "w-3.5 h-3.5", title }) {
       data-testid="preferred-star"
     >
       <Star
-        className={`text-amber-500 fill-none stroke-[2] ${className}`}
+        className={`text-amber-500 fill-current ${className}`}
         aria-hidden="true"
       />
       <span className="sr-only">{label}</span>
