@@ -1361,6 +1361,7 @@ function DFTCPriceInput() {
     const failedTabs = [];
 
     let tabIndex = 0;
+    let sessionSubmissionId = null;
     for (const tab of MARKET_TABS) {
       tabIndex++;
       setSaveProgress(15 + Math.round((tabIndex / MARKET_TABS.length) * 65));
@@ -1421,11 +1422,15 @@ function DFTCPriceInput() {
         price_type: tab.priceType,
         reporting_date: selectedDate,
         records,
-        remove_records: removedCommodities
+        remove_records: removedCommodities,
+        ...(sessionSubmissionId ? { submission_id: sessionSubmissionId } : {})
       };
 
       try {
-        await parseResponse(await apiPost("/dftc/submissions/manual", payload));
+        const res = await parseResponse(await apiPost("/dftc/submissions/manual", payload));
+        if (!sessionSubmissionId && res?.submission?.id) {
+          sessionSubmissionId = res.submission.id;
+        }
         totalSaved += records.length;
       } catch (err) {
         console.error(`Failed to save submission for ${tab.label}:`, err);

@@ -1,10 +1,28 @@
 export function formatMarketName(sourceId) {
   if (!sourceId) return "—";
-  const lower = sourceId.toLowerCase();
-  if (lower.includes("bkrh") || lower.includes("bangkerohan") || lower.includes("bankerohan")) {
+  const lower = String(sourceId).toLowerCase();
+  if (lower.includes("bankerohan") && (lower.includes("dftc") || lower.includes("taboan"))) {
+    return "Bangkerohan & DFTC Taboan";
+  }
+  if (
+    lower.includes("bkrh") ||
+    lower.includes("bangkerohan") ||
+    lower.includes("bankerohan") ||
+    lower === "src-0005" ||
+    lower === "src-0006" ||
+    lower === "src-0007"
+  ) {
     return "Bangkerohan Public Market";
   }
-  if (lower.includes("dftc") || lower.includes("taboan")) {
+  if (
+    lower.includes("dftc") ||
+    lower.includes("taboan") ||
+    lower.includes("volume") ||
+    lower === "src-0008" ||
+    lower === "src-0009" ||
+    lower === "src-0010" ||
+    lower === "src-0011"
+  ) {
     return "DFTC Taboan";
   }
   return sourceId;
@@ -17,17 +35,80 @@ export function getLocalDateString(d = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+export const FULL_MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+export const SHORT_MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+export function formatDateOrMonth(val) {
+  if (!val) return "—";
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === "—") return "—";
+
+    // 1. Check if it's YYYY-MM (month only, e.g. "2026-10")
+    const ymMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})$/);
+    if (ymMatch) {
+      const year = ymMatch[1];
+      const mIdx = parseInt(ymMatch[2], 10) - 1;
+      if (mIdx >= 0 && mIdx < 12) {
+        return `${FULL_MONTH_NAMES[mIdx]} ${year}`;
+      }
+    }
+
+    // 2. Check if it's Month YYYY (e.g. "Oct 2026", "October 2026", "Oct-2026")
+    const myMatch = trimmed.match(/^([A-Za-z]+)[-\s]+(\d{4})$/);
+    if (myMatch) {
+      const mStr = myMatch[1].toLowerCase();
+      const year = myMatch[2];
+      const mIdx = SHORT_MONTH_NAMES.findIndex((m) => mStr.startsWith(m.toLowerCase()));
+      if (mIdx !== -1) {
+        return `${FULL_MONTH_NAMES[mIdx]} ${year}`;
+      }
+    }
+
+    // 3. Check if it's already "Oct 18, 2026" or similar
+    const alreadyFormatted = trimmed.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})$/);
+    if (alreadyFormatted) {
+      return trimmed;
+    }
+
+    // 4. Check if it's YYYY-MM-DD
+    const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymdMatch) {
+      const year = ymdMatch[1];
+      const mIdx = parseInt(ymdMatch[2], 10) - 1;
+      const day = parseInt(ymdMatch[3], 10);
+      if (mIdx >= 0 && mIdx < 12) {
+        return `${SHORT_MONTH_NAMES[mIdx]} ${day}, ${year}`;
+      }
+    }
+  }
+
+  try {
+    const d = val instanceof Date ? val : new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return `${SHORT_MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  } catch {
+    return String(val);
+  }
+}
+
 export function formatSavedDate(dateStr) {
   if (!dateStr) return "—";
   try {
     const d = new Date(dateStr);
-    return d.toLocaleString("en-PH", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
-    });
+    if (isNaN(d.getTime())) return dateStr;
+    const month = SHORT_MONTH_NAMES[d.getMonth()];
+    const day = d.getDate();
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    return `${month} ${day}, ${year} · ${time}`;
   } catch {
     return dateStr;
   }
@@ -88,9 +169,10 @@ export function buildSavedDatasetsList(
         ? sub.price_type.charAt(0).toUpperCase() + sub.price_type.slice(1).toLowerCase()
         : "";
 
+      const formattedRepDate = formatDateOrMonth(sub.reporting_date);
       const defaultName = isArrival
-        ? `${market} Arrival Volume — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`
-        : `${market} ${priceTypeCapitalized ? priceTypeCapitalized + " " : ""}Prices — ${sub.reporting_date || formatSavedDate(sub.saved_at || sub.created_at)}`;
+        ? `${market} Arrival Volume — ${formattedRepDate !== "—" ? formattedRepDate : formatSavedDate(sub.saved_at || sub.created_at)}`
+        : `${market} ${priceTypeCapitalized ? priceTypeCapitalized + " " : ""}Prices — ${formattedRepDate !== "—" ? formattedRepDate : formatSavedDate(sub.saved_at || sub.created_at)}`;
 
       const dataName = isFileUpload
         ? (sub.original_file_name || sub.file_name || defaultName)
@@ -164,13 +246,7 @@ export function buildSavedDatasetsList(
     )[0];
     const savedDate = formatSavedDate(latestSub?.saved_at || latestSub?.created_at);
 
-    let dateFormatted = dateStr;
-    try {
-      const d = new Date(dateStr + "T00:00:00");
-      dateFormatted = d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-    } catch {
-      dateFormatted = dateStr;
-    }
+    const dateFormatted = formatDateOrMonth(dateStr);
 
     const isJustSaved =
       justSaved?.type === "price" && (dateStr === justSaved.date || dateStr === todayStr);

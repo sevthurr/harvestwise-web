@@ -6,6 +6,7 @@ import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/componen
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { DFTCFilePreview } from "../components/DFTCFilePreview";
 import { apiGet, parseResponse } from "../../global/api";
+import { formatDateOrMonth } from "./dftcSavedDatasets";
 
 const PAGE_SIZE = 20;
 
@@ -687,7 +688,7 @@ function DFTCCommodityRecords() {
                   <tbody>
                     {aPageRows.map((r, i) => (
                       <tr key={i} className="border-b border-[var(--hw-neutral-100)]">
-                        <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.dateMonth}</td>
+                        <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)] whitespace-nowrap">{formatDateOrMonth(r.dateMonth)}</td>
                         <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)]">{r.variety || "—"}</td>
                         <td className="px-4 py-3 text-[13px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.farmSource != null ? `${Number(r.farmSource).toLocaleString()} kg` : "—"}</td>
                         <td className="px-4 py-3 text-[13px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.otherSource != null ? `${Number(r.otherSource).toLocaleString()} kg` : "—"}</td>
@@ -702,13 +703,13 @@ function DFTCCommodityRecords() {
                               onClick={() =>
                                 setPreviewFile({
                                   reportId: r.reportId,
-                                  dataName: `DFTC Arrival Volume — ${r.dateMonth}`,
-                                  reportingDate: r.dateMonth,
+                                  dataName: `DFTC Arrival Volume — ${formatDateOrMonth(r.dateMonth)}`,
+                                  reportingDate: formatDateOrMonth(r.dateMonth),
                                   dataType: "DFTC Arrival Volume",
                                   market: "DFTC Taboan",
                                   entryMethod: r.entryMethod,
                                   records: 1,
-                                  savedDate: r.dateMonth,
+                                  savedDate: formatDateOrMonth(r.dateMonth),
                                   encodedBy: r.encodedBy
                                 })
                               }

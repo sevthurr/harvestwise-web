@@ -20,7 +20,8 @@ import { apiGet, parseResponse } from "../../global/api";
 import {
   buildSavedDatasetsList,
   formatMarketName,
-  getLocalDateString
+  getLocalDateString,
+  isSubmissionToday
 } from "./dftcSavedDatasets";
 
 function getTimeOfDay() {
@@ -62,14 +63,14 @@ function DFTCHome() {
   const priceSubmissionsToday = submissions.filter(
     (s) =>
       (s.data_type === "price" || s.data_type === "daily_price") &&
-      (s.reporting_date === todayStr || (s.saved_at && s.saved_at.slice(0, 10) === todayStr)) &&
+      isSubmissionToday(s, todayStr) &&
       (s.status?.toLowerCase() === "saved" || s.status?.toLowerCase() === "validated" || s.status?.toLowerCase() === "accepted")
   );
 
   const arrivalSubmissionsToday = submissions.filter(
     (s) =>
       s.data_type === "arrival_volume" &&
-      (s.reporting_date === todayStr || (s.saved_at && s.saved_at.slice(0, 10) === todayStr)) &&
+      isSubmissionToday(s, todayStr) &&
       (s.status?.toLowerCase() === "saved" || s.status?.toLowerCase() === "validated" || s.status?.toLowerCase() === "accepted")
   );
 
@@ -157,11 +158,11 @@ function DFTCHome() {
   const oversupplyCount = kpis.oversupply_commodities_count ?? 0;
   const topOversupply = kpis.top_oversupply_commodity || null;
 
-  const priceSubmissionsCount = priceSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0) || priceSubmissionsToday.length;
-  const arrivalSubmissionsCount = arrivalSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0) || arrivalSubmissionsToday.length;
+  const priceSubmissionsCount = priceSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0);
+  const arrivalSubmissionsCount = arrivalSubmissionsToday.reduce((sum, s) => sum + (s.record_count || 0), 0);
 
-  const priceRecordsTodayVal = kpis.price_records_today || priceSubmissionsCount || 0;
-  const arrivalRecordsTodayVal = kpis.arrival_records_today || arrivalSubmissionsCount || 0;
+  const priceRecordsTodayVal = Math.max(kpis.price_records_today || 0, priceSubmissionsCount || 0);
+  const arrivalRecordsTodayVal = Math.max(kpis.arrival_records_today || 0, arrivalSubmissionsCount || 0);
 
   const latestPriceSub =
     priceSubmissionsToday[0] ||
@@ -196,11 +197,7 @@ function DFTCHome() {
           labelColor="text-[var(--hw-neutral-800)]"
           valueColor="text-[var(--hw-neutral-900)]"
           onClick={() => {
-            if (latestPriceSub?.id) {
-              navigate(`/dftc/submissions/${latestPriceSub.id}`);
-            } else {
-              navigate("/dftc/submissions");
-            }
+            navigate("/dftc/submissions?highlight=price");
           }}
         />
         <DFTCKpiCard
@@ -210,11 +207,7 @@ function DFTCHome() {
           labelColor="text-[var(--hw-neutral-800)]"
           valueColor="text-[var(--hw-neutral-900)]"
           onClick={() => {
-            if (latestArrivalSub?.id) {
-              navigate(`/dftc/submissions/${latestArrivalSub.id}`);
-            } else {
-              navigate("/dftc/submissions");
-            }
+            navigate("/dftc/submissions?highlight=arrival");
           }}
         />
         <DFTCKpiCard
@@ -235,7 +228,7 @@ function DFTCHome() {
           }}
         />
         <DFTCKpiCard
-          label="Oversupply Commodities"
+          label="High Arrival Commodities"
           value={oversupplyCount}
           sub={oversupplyCount === 1 ? "1 in high arrival pressure (≥Q3)" : `${oversupplyCount} in high arrival pressure (≥Q3)`}
           loading={isLoading}

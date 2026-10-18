@@ -83,12 +83,12 @@ describe('DFTCHome KPI Overhaul', () => {
     expect(screen.getByText('Arrival Records Today')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
 
-    // Verify Price Volatility Alerts and Oversupply Commodities cards
+    // Verify Price Volatility Alerts and High Arrival Commodities cards
     expect(screen.getByText('Price Volatility Alerts')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('2 commodities with >10% shift')).toBeInTheDocument();
 
-    expect(screen.getByText('Oversupply Commodities')).toBeInTheDocument();
+    expect(screen.getByText('High Arrival Commodities')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('3 in high arrival pressure (≥Q3)')).toBeInTheDocument();
 
@@ -115,20 +115,20 @@ describe('DFTCHome KPI Overhaul', () => {
 
     await screen.findByText('15');
 
-    // Click Price Records Today -> opens details page /dftc/submissions/SUB-PRICE-1
+    // Click Price Records Today -> navigates to Submission History with highlight
     fireEvent.click(screen.getByText('Price Records Today').closest('button'));
-    expect(mockNavigate).toHaveBeenCalledWith('/dftc/submissions/SUB-PRICE-1');
+    expect(mockNavigate).toHaveBeenCalledWith('/dftc/submissions?highlight=price');
 
-    // Click Arrival Records Today -> opens details page /dftc/submissions/SUB-ARR-1
+    // Click Arrival Records Today -> navigates to Submission History with highlight
     fireEvent.click(screen.getByText('Arrival Records Today').closest('button'));
-    expect(mockNavigate).toHaveBeenCalledWith('/dftc/submissions/SUB-ARR-1');
+    expect(mockNavigate).toHaveBeenCalledWith('/dftc/submissions?highlight=arrival');
 
     // Click Price Volatility Alerts (count=2 >= 2) -> /dftc/trends?tab=price&alert=volatility
     fireEvent.click(screen.getByText('Price Volatility Alerts').closest('button'));
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/trends?tab=price&alert=volatility');
 
-    // Click Oversupply Commodities (count=3 >= 2) -> /dftc/trends?tab=arrival&alert=oversupply
-    fireEvent.click(screen.getByText('Oversupply Commodities').closest('button'));
+    // Click High Arrival Commodities (count=3 >= 2) -> /dftc/trends?tab=arrival&alert=oversupply
+    fireEvent.click(screen.getByText('High Arrival Commodities').closest('button'));
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/trends?tab=arrival&alert=oversupply');
   });
 
@@ -157,8 +157,8 @@ describe('DFTCHome KPI Overhaul', () => {
     fireEvent.click(screen.getByText('Price Volatility Alerts').closest('button'));
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/trends?tab=price&commodity=Carrots');
 
-    // Click Oversupply Commodities (count=0) -> normal redirect to tab, no modal
-    fireEvent.click(screen.getByText('Oversupply Commodities').closest('button'));
+    // Click High Arrival Commodities (count=0) -> normal redirect to tab, no modal
+    fireEvent.click(screen.getByText('High Arrival Commodities').closest('button'));
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/trends?tab=arrival');
   });
 
@@ -405,6 +405,42 @@ describe('DFTCHome KPI Overhaul', () => {
     expect(items[0]).toHaveTextContent('DFTC Price Monitoring');
     expect(items[0]).toHaveTextContent('Manual Input');
     expect(items[0]).toHaveTextContent('SUB-MANUAL-NEWEST');
+  });
+
+  it('correctly calculates Price Records Today and Arrival Records Today from multiple saved datasets', async () => {
+    const todayISO = new Date().toISOString();
+    const submissions = [
+      { id: 'SUB-PRICE-1', data_type: 'daily_price', status: 'Saved', saved_at: todayISO, record_count: 2 },
+      { id: 'SUB-PRICE-2', data_type: 'price', status: 'Saved', saved_at: todayISO, record_count: 5 },
+      { id: 'SUB-PRICE-3', data_type: 'price', status: 'Saved', saved_at: todayISO, record_count: 4 },
+      { id: 'SUB-PRICE-4', data_type: 'price', status: 'Saved', saved_at: todayISO, record_count: 944 },
+      { id: 'SUB-ARR-1', data_type: 'arrival_volume', status: 'Saved', saved_at: todayISO, record_count: 12 },
+      { id: 'SUB-ARR-2', data_type: 'arrival_volume', status: 'Saved', saved_at: todayISO, record_count: 18 },
+    ];
+
+    // Backend initially returning 0 for records today
+    const homeWithZero = {
+      ...HOME_DATA,
+      kpis: {
+        ...HOME_DATA.kpis,
+        price_records_today: 0,
+        arrival_records_today: 0,
+      },
+    };
+
+    const fetchFn = mockFetchByUrl([
+      { path: '/dftc/home', response: { ok: true, status: 200, body: homeWithZero } },
+      { path: '/dftc/submissions', response: { ok: true, status: 200, body: { items: submissions } } },
+      { path: '/dftc/requirements', response: { ok: true, status: 200, body: { items: [] } } },
+    ]);
+    vi.stubGlobal('fetch', fetchFn);
+
+    renderDFTCHome();
+
+    // Price records sum = 2 + 5 + 4 + 944 = 955
+    expect(await screen.findByText('955')).toBeInTheDocument();
+    // Arrival records sum = 12 + 18 = 30
+    expect(await screen.findByText('30')).toBeInTheDocument();
   });
 });
 

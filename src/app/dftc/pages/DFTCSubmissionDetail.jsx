@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, AlertCircle, X, Download, Loader2, FileSpreadsheet } from "lucide-react";
+import { ChevronLeft, AlertCircle, Loader2, Info } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { apiGet, parseResponse } from "../../global/api";
+import { formatMarketName, formatDateOrMonth } from "./dftcSavedDatasets";
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatDateTime(isoStr) {
   if (!isoStr) return "—";
   try {
     const d = new Date(isoStr);
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const month = months[d.getMonth()];
+    const month = MONTH_NAMES[d.getMonth()];
     const day = d.getDate();
     const year = d.getFullYear();
     const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -18,6 +20,73 @@ function formatDateTime(isoStr) {
   } catch {
     return isoStr;
   }
+}
+
+function formatDateOnly(val) {
+  if (!val) return null;
+  if (typeof val === "string") {
+    const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = match[1];
+      const monthIdx = parseInt(match[2], 10) - 1;
+      const day = parseInt(match[3], 10);
+      return `${MONTH_NAMES[monthIdx]} ${day}, ${year}`;
+    }
+  }
+  try {
+    const d = val instanceof Date ? val : new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  } catch {
+    return String(val);
+  }
+}
+
+function parseToDayTimestamp(val) {
+  if (!val) return null;
+  if (typeof val === "string") {
+    const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return Date.UTC(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+    }
+  }
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) {
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  return null;
+}
+
+function computeDateCoverage(records, fallbackDate) {
+  const timestamps = [];
+  if (Array.isArray(records)) {
+    for (const r of records) {
+      const raw = r.price_date || r.arrival_date || r.date || r.dateMonth;
+      const ts = parseToDayTimestamp(raw);
+      if (ts !== null) {
+        timestamps.push(ts);
+      }
+    }
+  }
+
+  if (timestamps.length === 0) {
+    return formatDateOrMonth(fallbackDate) || "—";
+  }
+
+  timestamps.sort((a, b) => a - b);
+  const minTs = timestamps[0];
+  const maxTs = timestamps[timestamps.length - 1];
+
+  const minD = new Date(minTs);
+  const maxD = new Date(maxTs);
+
+  const minStr = `${MONTH_NAMES[minD.getUTCMonth()]} ${minD.getUTCDate()}, ${minD.getUTCFullYear()}`;
+  const maxStr = `${MONTH_NAMES[maxD.getUTCMonth()]} ${maxD.getUTCDate()}, ${maxD.getUTCFullYear()}`;
+
+  if (minStr === maxStr) {
+    return minStr;
+  }
+  return `${minStr} – ${maxStr}`;
 }
 
 const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]";
@@ -28,8 +97,7 @@ const thCls = "px-4 py-3 text-left text-[13px] font-semibold text-[var(--hw-neut
 function ValTabNav({ active, onChange, ds }) {
   const tabs = [
     { id: "analytics", label: `Analytics-Supported Records (${ds.analyticsSupported ?? 0})` },
-    { id: "other", label: `Other Commodity Records (${ds.otherCommodities ?? 0})` },
-    { id: "duplicate", label: `Duplicate Records (${ds.duplicate ?? 0})` }
+    { id: "other", label: `Other Commodity Records (${ds.otherCommodities ?? 0})` }
   ];
   return (
     <div className="flex gap-0 border-b border-[var(--hw-neutral-200)] overflow-x-auto" style={{ scrollbarWidth: "none" }}>
@@ -46,106 +114,6 @@ function ValTabNav({ active, onChange, ds }) {
           {t.label}
         </button>
       ))}
-    </div>
-  );
-}
-
-function ExcelModal({ onClose, datasetId, count }) {
-  const [step, setStep] = useState("form");
-  const genTime = new Date().toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
-
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
-
-  const shortId = (datasetId || "").replace("DATA-", "DFTC-Other-");
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Download Other Commodity Records</p>
-          <button onClick={onClose} className="p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-700)] flex-shrink-0 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {step === "form" && (
-          <>
-            <div className="px-5 py-4 space-y-3">
-              <p className="text-[14px] text-[var(--hw-neutral-800)]">
-                Generate an Excel report containing the other commodity records from this dataset.
-              </p>
-              <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-2">
-                {[
-                  ["Dataset ID", datasetId || "—"],
-                  ["Commodity count", `${count} records`]
-                ].map(([l, v]) => (
-                  <div key={l} className="flex justify-between gap-3">
-                    <span className="text-[13px] text-[var(--hw-neutral-800)]">{l}</span>
-                    <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{v}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="px-5 py-4 border-t border-[var(--hw-neutral-100)] flex gap-2">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setStep("done")}
-                className="flex-[2] bg-[var(--hw-green-700)] text-white py-2.5 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
-              >
-                Generate Excel Report
-              </button>
-            </div>
-          </>
-        )}
-
-        {step === "done" && (
-          <>
-            <div className="px-5 py-4 space-y-3">
-              <div className="flex items-center gap-2 text-[var(--hw-green-700)]">
-                <FileSpreadsheet className="w-5 h-5" />
-                <p className="font-semibold">Excel report generated successfully</p>
-              </div>
-              <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-2">
-                {[
-                  ["File name", `${shortId}.xlsx`],
-                  ["Records", String(count)],
-                  ["Generated", `Today · ${genTime}`]
-                ].map(([l, v]) => (
-                  <div key={l} className="flex justify-between gap-3">
-                    <span className="text-[13px] text-[var(--hw-neutral-800)]">{l}</span>
-                    <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{v}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="px-5 py-4 border-t border-[var(--hw-neutral-100)] flex gap-2">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-              <button
-                onClick={onClose}
-                className="flex-[2] bg-[var(--hw-green-700)] text-white py-2.5 rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" /> Download File
-              </button>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }
@@ -207,13 +175,29 @@ function DFTCSubmissionDetail() {
   const ds = useMemo(() => {
     if (!apiSubmission) return null;
     const isArrival = apiSubmission.data_type === "arrival_volume";
+    const isManual = (apiSubmission.submission_method || "").toLowerCase().includes("manual");
+    const pTypeRaw = (apiSubmission.price_type || "").toLowerCase();
+    const pTypeDisplay = pTypeRaw.includes("wholesale")
+      ? "Wholesale"
+      : pTypeRaw.includes("landing")
+      ? "Landing"
+      : pTypeRaw.includes("retail")
+      ? "Retail"
+      : "";
     const dType = isArrival
       ? "DFTC Arrival Volume"
-      : `Daily ${apiSubmission.price_type ? apiSubmission.price_type.charAt(0).toUpperCase() + apiSubmission.price_type.slice(1) : "Retail"} Prices`;
+      : isManual
+      ? (pTypeDisplay ? `Manual Input · ${pTypeDisplay} Prices` : "Manual Input · Daily Prices")
+      : `Daily ${pTypeDisplay || "Retail"} Prices`;
     const formattedStatus = apiSubmission.status
       ? apiSubmission.status.charAt(0).toUpperCase() + apiSubmission.status.slice(1).toLowerCase()
       : "Saved";
     const submitterFullName = apiSubmission.submitted_by_name || apiSubmission.submitter_name || (apiSubmission.user ? `${apiSubmission.user.first_name || ""} ${apiSubmission.user.last_name || ""}`.trim() : null) || currentUserName;
+
+    const analyticsRecords = Array.isArray(apiSubmission.analytics_records) ? apiSubmission.analytics_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => r.is_top10) : [];
+    const otherRecords = Array.isArray(apiSubmission.other_records) ? apiSubmission.other_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => !r.is_top10) : [];
+    const dateCoverage = computeDateCoverage([...analyticsRecords, ...otherRecords, ...(Array.isArray(apiSubmission.records) ? apiSubmission.records : [])], apiSubmission.reporting_date);
+    const hasMarketAndType = !isArrival && ([...analyticsRecords, ...otherRecords].some((r) => r.price_type || r.source_name));
 
     return {
       datasetId: apiSubmission.id,
@@ -229,22 +213,21 @@ function DFTCSubmissionDetail() {
       status: formattedStatus,
       fileName: apiSubmission.submission_method === "Manual Input" ? "—" : (apiSubmission.original_file_name || apiSubmission.file_name || "—"),
       fileType: apiSubmission.submission_method === "Manual Input" ? "—" : (apiSubmission.file_format || (apiSubmission.original_file_name ? apiSubmission.original_file_name.split('.').pop() : "xlsx")),
-      market: apiSubmission.source_name || "Bankerohan Public Market",
-      priceType: isArrival ? "—" : (apiSubmission.price_type ? apiSubmission.price_type.charAt(0).toUpperCase() + apiSubmission.price_type.slice(1) : "Retail"),
-      reportingDate: apiSubmission.reporting_date ? formatDateTime(apiSubmission.reporting_date) : "—",
-      validationCompletedDate: formatDateTime(apiSubmission.validation_completed_at || apiSubmission.saved_at),
+      market: (isManual && !pTypeDisplay) ? "Bangkerohan & DFTC Taboan" : formatMarketName(apiSubmission.source_name || apiSubmission.source_id),
+      priceType: isArrival ? "—" : (pTypeDisplay || "All Price Types"),
+      hasMarketAndType,
+      dateCoverage,
       entryMethod: (apiSubmission.submission_method === "Manual Input") ? "Manual Input" : "File Upload",
       submissionMethod: (apiSubmission.submission_method === "Manual Input") ? "Manual Input" : "File Upload",
       failureReason: apiSubmission.failure_reason || null,
-      analyticsRecords: Array.isArray(apiSubmission.analytics_records) ? apiSubmission.analytics_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => r.is_top10) : [],
-      otherRecords: Array.isArray(apiSubmission.other_records) ? apiSubmission.other_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => !r.is_top10) : [],
+      analyticsRecords,
+      otherRecords,
       correctionIssues: Array.isArray(apiSubmission.validation_issues) ? apiSubmission.validation_issues.filter((i) => i.result_type === "needs_correction" || i.issue_type === "needs_correction" || i.type === "correction") : [],
       duplicateIssues: Array.isArray(apiSubmission.validation_issues) ? apiSubmission.validation_issues.filter((i) => i.result_type === "duplicate" || i.issue_type === "duplicate" || i.type === "duplicate") : []
     };
   }, [apiSubmission, currentUserName]);
 
   const [valTab, setValTab] = useState("analytics");
-  const [showExcel, setShowExcel] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retried, setRetried] = useState(false);
@@ -314,18 +297,14 @@ function DFTCSubmissionDetail() {
     ["Dataset Type", ds.datasetType],
     ["Market / Facility", ds.market],
     ...(!isArrival && ds.priceType !== "—" ? [["Price Type", ds.priceType]] : []),
-    ["Reporting Date", ds.reportingDate],
+    ["Date Coverage", ds.dateCoverage],
     ["Submission Method", ds.submissionMethod || ds.entryMethod],
     ["Saved By", ds.savedBy],
-    ["Saved Date and Time", ds.savedDateTime],
-    ["Validation Completed", ds.validationCompletedDate],
-    ["Current Status", effectiveStatus],
-    ["Validation Result", effectiveStatus === "Saved" ? "Passed — dataset saved successfully" : effectiveStatus === "Failed" ? "Failed — see failure details below" : "Pending — draft not yet validated"]
+    ["Saved Date and Time", ds.savedDateTime]
   ];
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-      {showExcel && <ExcelModal onClose={() => setShowExcel(false)} datasetId={ds.datasetId} count={ds.otherCommodities} />}
       {showDelete && <DeleteModal onCancel={() => setShowDelete(false)} onConfirm={() => navigate("/dftc/submissions")} />}
 
       {/* Back */}
@@ -346,17 +325,6 @@ function DFTCSubmissionDetail() {
           {ds.fileName && ds.fileName !== "—" && (
             <span className="text-[13px] text-[var(--hw-neutral-500)] font-medium">({ds.datasetId})</span>
           )}
-          <span
-            className={`text-[15px] font-semibold ${
-              effectiveStatus === "Saved"
-                ? "text-emerald-700"
-                : effectiveStatus === "Failed"
-                ? "text-rose-600"
-                : "text-amber-700"
-            }`}
-          >
-            {effectiveStatus}
-          </span>
         </div>
         <p className="text-[14px] text-[var(--hw-neutral-800)]">{ds.datasetType} · {ds.savedDateTime}</p>
         <p className="text-[14px] text-[var(--hw-neutral-800)]">Saved by {ds.savedBy}</p>
@@ -448,8 +416,9 @@ function DFTCSubmissionDetail() {
           {/* Analytics-Supported Records */}
           {valTab === "analytics" && (
             <>
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
-                <p className="text-[14px] text-[var(--hw-neutral-800)]">
+              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 mt-0.5" />
+                <p className="text-[14px] text-[var(--hw-neutral-700)]">
                   These records are used in HarvestWise price trends, forecasting, and analytical processing where applicable.
                 </p>
               </div>
@@ -474,7 +443,7 @@ function DFTCSubmissionDetail() {
                             <td className={tdCls}>{idx + 1}</td>
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.variety || "—"}</td>
-                            <td className={tdCls}>{r.dateMonth || r.arrival_date || "—"}</td>
+                            <td className={tdCls}>{formatDateOrMonth(r.dateMonth || r.arrival_date)}</td>
                             <td className={tdCls}>{r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg).toLocaleString() : (r.farmSource != null ? Number(r.farmSource).toLocaleString() : "—")}</td>
                             <td className={tdCls}>{r.other_source_volume_kg != null ? Number(r.other_source_volume_kg).toLocaleString() : (r.otherSource != null ? Number(r.otherSource).toLocaleString() : "—")}</td>
                             <td className={tdBold}>{r.volume_kg != null ? Number(r.volume_kg).toLocaleString() : (r.combinedTotal != null ? Number(r.combinedTotal).toLocaleString() : "—")}</td>
@@ -487,7 +456,10 @@ function DFTCSubmissionDetail() {
                     <table className="w-full">
                       <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                         <tr>
-                          {["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"].map((h) => (
+                          {(ds.hasMarketAndType
+                            ? ["Row", "Commodity", "Category", "Variety", "Market", "Type", "Date", "UOM", "Price"]
+                            : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
+                          ).map((h) => (
                             <th key={h} className={thCls}>{h}</th>
                           ))}
                         </tr>
@@ -499,7 +471,9 @@ function DFTCSubmissionDetail() {
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.category || "—"}</td>
                             <td className={tdCls}>{r.variety || "—"}</td>
-                            <td className={tdCls}>{r.price_date || r.date || "—"}</td>
+                            {ds.hasMarketAndType && <td className={tdCls}>{formatMarketName(r.source_name || r.market) || "—"}</td>}
+                            {ds.hasMarketAndType && <td className={tdCls}>{r.price_type || "—"}</td>}
+                            <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
                             <td className={tdCls}>{r.uom || "kg"}</td>
                             <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
                           </tr>
@@ -515,18 +489,11 @@ function DFTCSubmissionDetail() {
           {/* Other Commodity Records */}
           {valTab === "other" && (
             <>
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)] flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-[14px] text-[var(--hw-neutral-800)]">
-                  These records are retained for DFTC monitoring, reporting, and downloads. HarvestWise crop analytics are not available for these commodities yet.
+              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 mt-0.5" />
+                <p className="text-[14px] text-[var(--hw-neutral-700)]">
+                  These commodities are not part of HarvestWise crop analytics. Records in this list are retained for DFTC monitoring and will be automatically removed after 30 days.
                 </p>
-                {ds.otherCommodities > 0 && (
-                  <button
-                    onClick={() => setShowExcel(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors flex-shrink-0 cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download Excel Report
-                  </button>
-                )}
               </div>
               {ds.otherRecords.length === 0 ? (
                 <div className="px-5 py-10 text-center text-[14px] text-[var(--hw-neutral-800)]">
@@ -549,7 +516,7 @@ function DFTCSubmissionDetail() {
                             <td className={tdCls}>{idx + 1}</td>
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.variety || "—"}</td>
-                            <td className={tdCls}>{r.dateMonth || r.arrival_date || "—"}</td>
+                            <td className={tdCls}>{formatDateOrMonth(r.dateMonth || r.arrival_date)}</td>
                             <td className={tdCls}>{r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg).toLocaleString() : (r.farmSource != null ? Number(r.farmSource).toLocaleString() : "—")}</td>
                             <td className={tdCls}>{r.other_source_volume_kg != null ? Number(r.other_source_volume_kg).toLocaleString() : (r.otherSource != null ? Number(r.otherSource).toLocaleString() : "—")}</td>
                             <td className={tdBold}>{r.volume_kg != null ? Number(r.volume_kg).toLocaleString() : (r.combinedTotal != null ? Number(r.combinedTotal).toLocaleString() : "—")}</td>
@@ -562,7 +529,10 @@ function DFTCSubmissionDetail() {
                     <table className="w-full">
                       <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                         <tr>
-                          {["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"].map((h) => (
+                          {(ds.hasMarketAndType
+                            ? ["Row", "Commodity", "Category", "Variety", "Market", "Type", "Date", "UOM", "Price"]
+                            : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
+                          ).map((h) => (
                             <th key={h} className={thCls}>{h}</th>
                           ))}
                         </tr>
@@ -574,7 +544,9 @@ function DFTCSubmissionDetail() {
                             <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
                             <td className={tdCls}>{r.category || "—"}</td>
                             <td className={tdCls}>{r.variety || "—"}</td>
-                            <td className={tdCls}>{r.price_date || r.date || "—"}</td>
+                            {ds.hasMarketAndType && <td className={tdCls}>{formatMarketName(r.source_name || r.market) || "—"}</td>}
+                            {ds.hasMarketAndType && <td className={tdCls}>{r.price_type || "—"}</td>}
+                            <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
                             <td className={tdCls}>{r.uom || "kg"}</td>
                             <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
                           </tr>
@@ -582,49 +554,6 @@ function DFTCSubmissionDetail() {
                       </tbody>
                     </table>
                   )}
-                </div>
-              )}
-            </>
-          )}
-
-
-
-          {/* Duplicate Records */}
-          {valTab === "duplicate" && (
-            <>
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
-                <p className="text-[14px] text-[var(--hw-neutral-800)]">
-                  Duplicate records are excluded from the dataset and were not saved. Duplicate detection applies to file-linked submissions; manually entered data is de-duplicated on save.
-                </p>
-              </div>
-              {ds.duplicateIssues.length === 0 ? (
-                <div className="px-5 py-10 text-center text-[14px] text-[var(--hw-neutral-800)]">
-                  No duplicate records were flagged for this dataset.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                      <tr>
-                        {["Row", "Commodity", "Date", "Market", "Price Type", "Matching Record ID", "Duplicate Reason"].map((h) => (
-                          <th key={h} className={thCls}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                      {ds.duplicateIssues.map((r, idx) => (
-                        <tr key={idx}>
-                          <td className={tdCls}>{r.row_number || r.row || idx + 1}</td>
-                          <td className={tdBold}>{r.commodity_name || r.commodity || "—"}</td>
-                          <td className={tdCls}>{r.price_date || r.date || "—"}</td>
-                          <td className={tdCls}>{r.market || ds.market || "—"}</td>
-                          <td className={tdCls}>{r.price_type || ds.priceType || "—"}</td>
-                          <td className={tdCls}>{r.matching_record_id || r.matchId || "—"}</td>
-                          <td className="px-4 py-3 text-[14px] text-[var(--hw-neutral-800)] max-w-[240px] whitespace-normal leading-snug">{r.reason || r.duplicate_reason || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               )}
             </>
