@@ -1,136 +1,561 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router";
-import { ChevronDown, Edit2, Info, X } from "lucide-react";
-import { CommodityIllustration } from "../../farmer/components/market/CommodityIllustrations";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { ChevronDown, Info, X, Edit2, Sliders, ArrowRight } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../global/components/ui/tooltip";
+import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
+import { apiGet, parseResponse } from "../../global/api";
+import { analyticsApi } from "../../../services/api";
+import { useArrivalPressure, useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
 import {
-  RESULTS,
-  MODULE_SUMMARY_CARDS,
-  MODULE_RULES,
-  FINAL_ADVISORY_CUTOFFS,
-  COMMODITIES,
+  arrivalBoundaryRows,
+  arrivalSeriesTotals,
+  bucketArrivals,
+  latestArrivalBucket
+} from "../components/analytics/arrivalVolumeSeries";
+import {
   MODULES,
   CLASSIFICATIONS,
-  STATUSES,
   CLASSIFICATION_COLORS
 } from "../components/analytics/adminAnalyticsMockData";
+
 const DEFAULT_ROWS = 8;
-const COMMODITY_ID = {
-  "Kamatis": "kamatis",
-  "Talong": "talong",
-  "Repolyo": "repolyo",
-  "Atsal": "atsal",
-  "Carrots": "carrots",
-  "Pipino": "pipino",
-  "Ampalaya": "ampalaya",
-  "Kalabasa": "kalabasa",
-  "Lettuce": "lettuce",
-  "Chinese Pechay": "pechay"
+const RELIABILITY_TONES = {
+  High: "text-[var(--hw-success)] bg-[var(--hw-success)]/10",
+  Moderate: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
+  Limited: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
+  Low: "text-[var(--hw-error)] bg-[var(--hw-error)]/10"
 };
-const WEIGHT_MODULES = ["Price Outlook", "Arrival Pressure", "Historical Seasonal Production Level", "Weather Risk", "Profitability"];
-const DEFAULT_PHASE_WEIGHTS = {
-  Planning: { "Price Outlook": 30, "Arrival Pressure": 20, "Historical Seasonal Production Level": 15, "Weather Risk": 25, "Profitability": 10 },
-  Planting: { "Price Outlook": 25, "Arrival Pressure": 20, "Historical Seasonal Production Level": 15, "Weather Risk": 30, "Profitability": 10 },
-  Harvesting: { "Price Outlook": 35, "Arrival Pressure": 15, "Historical Seasonal Production Level": 10, "Weather Risk": 15, "Profitability": 25 }
+// The Arrival Pressure card reads as a supply scale: Low (deficit) through
+// High (surplus). This is deliberately not CLASSIFICATION_COLORS, which maps
+// Low to emerald and Lower Middle to blue because it is shared with Price
+// Outlook, where those labels mean something different.
+const ARRIVAL_PRESSURE_TONES = {
+  Low: "text-blue-600",
+  "Lower Middle": "text-emerald-600",
+  "Upper Middle": "text-amber-600",
+  High: "text-red-600"
 };
-const RULE_EDIT_CONFIGS = {
-  "Price Outlook": {
-    description: "Compares the forecast midpoint with the recent average price to classify the price direction.",
-    fields: [
-      { key: "fav_min", label: "Favorable minimum change (%)", defaultValue: "5" },
-      { key: "neut_min", label: "Neutral minimum change (%)", defaultValue: "-5" },
-      { key: "neut_max", label: "Neutral maximum change (%)", defaultValue: "5" },
-      { key: "unfav_max", label: "Unfavorable maximum change (%)", defaultValue: "-5" }
-    ],
-    sample: [
-      { scenario: "Forecast Price Change = 7.5%", result: "Favorable" },
-      { scenario: "Forecast Price Change = 2%", result: "Neutral" },
-      { scenario: "Forecast Price Change = \u22126%", result: "Unfavorable" }
-    ]
+const MODULE_CARD_DATA = {
+  "price-outlook": { label: "days", required: 14, key: "days_available" },
+  "arrival-pressure": { label: "records", required: 4, key: "records_available" },
+  "historical-production": { label: "quarters", required: 4, key: "quarters_available" },
+  "weather-risk": { label: "days", required: 7, key: "days_available" }
+};
+const MODULE_ROW_FIELDS = [
+  { key: "price-outlook", module: "Price Outlook", field: "price_outlook" },
+  { key: "arrival-pressure", module: "Arrival Pressure", field: "arrival_pressure" },
+  { key: "historical-production", module: "Historical Seasonal Production Level", field: "historical_seasonal_production_level" },
+  { key: "weather-risk", module: "Weather Risk", field: "weather_risk_level" }
+];
+const WEIGHT_MODULES = [
+  "Price Outlook",
+  "Arrival Pressure",
+  "Historical Seasonal Production Level",
+  "Weather Risk",
+  "Profitability"
+];
+const WEIGHT_ABBR = {
+  "Price Outlook": "Price",
+  "Arrival Pressure": "Arrival",
+  "Historical Seasonal Production Level": "Seasonal",
+  "Weather Risk": "Weather",
+  Profitability: "Profit"
+};
+// Backend crop-stage keys (must match the advisory pipeline's CropStage enum)
+// with the display labels shown to admins.
+const WEIGHT_PHASES = [
+  { key: "before_planting", label: "Planning" },
+  { key: "during_planting", label: "Planting" },
+  { key: "near_harvest", label: "Near Harvest" },
+  { key: "harvest", label: "Harvest" }
+];
+// Validated weather-sensitive presets (percent) — default base profile per
+// stage, pre-filled when no adaptive_weight row exists yet.
+const DEFAULT_STAGE_WEIGHTS = {
+  before_planting: {
+    "Price Outlook": 30, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 25, Profitability: 10
   },
-  "Arrival Pressure": {
-    description: "Classifies market arrival volume against historical Q1/Q2/Q3 quartile thresholds.",
-    fields: [
-      { key: "q1", label: "Q1 threshold", defaultValue: "32", unit: "MT/week" },
-      { key: "q2", label: "Q2 threshold", defaultValue: "35", unit: "MT/week" },
-      { key: "q3", label: "Q3 threshold", defaultValue: "41", unit: "MT/week" },
-      { key: "unit", label: "Volume unit", defaultValue: "MT/week", isSelect: true, options: ["kg/week", "MT/week", "tons/week"] }
-    ],
-    sample: [
-      { scenario: "Current arrival volume \u2264 Q1", result: "Low" },
-      { scenario: "Current arrival volume > Q1 and \u2264 Q2", result: "Lower Middle" },
-      { scenario: "Current arrival volume > Q2 and \u2264 Q3", result: "Upper Middle" },
-      { scenario: "Current arrival volume > Q3", result: "High" }
-    ]
+  during_planting: {
+    "Price Outlook": 25, "Arrival Pressure": 15,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 35, Profitability: 10
   },
-  "Historical Seasonal Production Level": {
-    description: "Classifies the expected harvest quarter using PSA OpenStat production ratios against quartile thresholds.",
-    fields: [
-      { key: "q1_ratio", label: "Q1 ratio", defaultValue: "0.75" },
-      { key: "q2_ratio", label: "Q2 ratio", defaultValue: "1.00" },
-      { key: "q3_ratio", label: "Q3 ratio", defaultValue: "1.25" }
-    ],
-    sample: [
-      { scenario: "Ratio < Q1", result: "Low" },
-      { scenario: "Ratio \u2265 Q1 and < Q2", result: "Lower Middle" },
-      { scenario: "Ratio \u2265 Q2 and < Q3", result: "Upper Middle" },
-      { scenario: "Ratio \u2265 Q3", result: "High" }
-    ]
+  near_harvest: {
+    "Price Outlook": 35, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 30, Profitability: 10
   },
-  "Weather Risk": {
-    description: "Compares forecast weather conditions with crop-specific rainfall, temperature, and humidity thresholds.",
-    fields: [
-      { key: "crop", label: "Crop", defaultValue: "Kamatis", isSelect: true, options: ["Kamatis", "Talong", "Repolyo", "Atsal", "Carrots", "Pipino", "Ampalaya", "Kalabasa", "Lettuce", "Chinese Pechay"] },
-      { key: "suit_rain_max", label: "Suitable rainfall maximum", defaultValue: "15", unit: "mm/day" },
-      { key: "caut_rain_min", label: "Caution rainfall minimum", defaultValue: "15", unit: "mm/day" },
-      { key: "sev_rain_min", label: "Severe rainfall minimum", defaultValue: "30", unit: "mm/day" },
-      { key: "suit_temp_min", label: "Suitable temperature minimum", defaultValue: "20", unit: "\xB0C" },
-      { key: "suit_temp_max", label: "Suitable temperature maximum", defaultValue: "30", unit: "\xB0C" },
-      { key: "caut_temp_min", label: "Caution temperature minimum", defaultValue: "30", unit: "\xB0C" },
-      { key: "caut_temp_max", label: "Caution temperature maximum", defaultValue: "35", unit: "\xB0C" },
-      { key: "sev_temp", label: "Severe temperature threshold", defaultValue: "35", unit: "\xB0C" },
-      { key: "humidity", label: "Humidity threshold (optional)", defaultValue: "90", unit: "%" },
-      { key: "wind", label: "Wind threshold (optional)", defaultValue: "60", unit: "km/h" }
-    ],
-    sample: [
-      { scenario: "Values within suitable range", result: "Suitable" },
-      { scenario: "Rainfall or temperature enters caution range", result: "Caution" },
-      { scenario: "Rainfall, temperature, humidity, or wind exceeds limits", result: "Severe" }
-    ]
-  },
-  "Profitability": {
-    description: "Applied during individual farmer assessments using production cost, expected yield, and selling price.",
-    note: "This rule is applied during farmer assessment and is not shown as a global admin analytical result.",
-    fields: [
-      { key: "fav_multiplier", label: "Favorable multiplier (%)", defaultValue: "110" },
-      { key: "overlap_rule", label: "Break-even overlap rule", defaultValue: "enabled", isSelect: true, options: ["enabled", "disabled"] }
-    ],
-    sample: [
-      { scenario: "Lower Forecast \u2265 110% of Break-even Price", result: "Favorable" },
-      { scenario: "Forecast Range overlaps Break-even Price", result: "Marginal" },
-      { scenario: "Upper Forecast < Break-even Price", result: "Unfavorable" }
-    ]
-  },
-  "Final Advisory Cutoffs": {
-    description: "Maps the final adaptive weighted score to a planting advisory.",
-    fields: [
-      { key: "rec_min", label: "Recommended minimum", defaultValue: "0.00" },
-      { key: "rec_max", label: "Recommended maximum", defaultValue: "0.99" },
-      { key: "cons_min", label: "Plant Conservatively minimum", defaultValue: "1.00" },
-      { key: "cons_max", label: "Plant Conservatively maximum", defaultValue: "1.99" },
-      { key: "avoid_min", label: "Avoid for Now minimum", defaultValue: "2.00" },
-      { key: "avoid_max", label: "Avoid for Now maximum", defaultValue: "3.00" }
-    ],
-    sample: [
-      { scenario: "Final weighted score = 0.75", result: "Recommended" },
-      { scenario: "Final weighted score = 1.35", result: "Plant Conservatively" },
-      { scenario: "Final weighted score = 2.20", result: "Avoid for Now" }
-    ]
+  harvest: {
+    "Price Outlook": 40, "Arrival Pressure": 25,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 20, Profitability: 10
   }
 };
-const CommodityDropdown = ({ value, options, onChange }) => {
+// Weather-resilient presets (percent) — read-only reference for the admin.
+const RESILIENT_STAGE_WEIGHTS = {
+  before_planting: {
+    "Price Outlook": 35, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 15, Profitability: 15
+  },
+  during_planting: {
+    "Price Outlook": 30, "Arrival Pressure": 15,
+    "Historical Seasonal Production Level": 15, "Weather Risk": 25, Profitability: 15
+  },
+  near_harvest: {
+    "Price Outlook": 40, "Arrival Pressure": 20,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 20, Profitability: 15
+  },
+  harvest: {
+    "Price Outlook": 45, "Arrival Pressure": 25,
+    "Historical Seasonal Production Level": 5, "Weather Risk": 10, Profitability: 15
+  }
+};
+const PRICE_OUTLOOK_MODULE = "Price Outlook";
+
+const WEATHER_METRICS = [
+  { key: "temp_range", label: "Temperature range", unit: "°C" },
+  { key: "temp_min", label: "Temperature min", unit: "°C" },
+  { key: "temp_max", label: "Temperature max", unit: "°C" },
+  { key: "max_rh", label: "Max relative humidity", unit: "%" },
+  { key: "hours_rh_above_85", label: "Hours RH above 85%", unit: "h" },
+  { key: "consecutive_rh_hours_above_90", label: "Consecutive hours RH above 90%", unit: "h" },
+  { key: "consecutive_rh_hours_above_95", label: "Consecutive hours RH above 95%", unit: "h" },
+  { key: "wind_speed_max", label: "Max wind speed", unit: "km/h" },
+  { key: "rain_daily_sum", label: "Daily rainfall", unit: "mm" }
+];
+const WEATHER_OPERATORS = ["between", ">", ">=", "<", "<="];
+const WEATHER_RISK_LEVELS = ["suitable", "caution", "severe"];
+
+// Edit Adaptive Weights Modal
+const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
+  const phaseLabel = WEIGHT_PHASES.find((p) => p.key === phase)?.label || phase;
+  const [values, setValues] = useState(() => {
+    const base =
+      currentWeights && Object.keys(currentWeights).length > 0
+        ? currentWeights
+        : DEFAULT_STAGE_WEIGHTS[phase] || {};
+    return Object.fromEntries(
+      WEIGHT_MODULES.map((m) => [m, base[m] !== undefined ? String(base[m]) : ""])
+    );
+  });
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const total = WEIGHT_MODULES.reduce((sum, m) => sum + (parseFloat(values[m]) || 0), 0);
+  const totalOk = Math.abs(total - 100) < 0.01;
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
+
+  // `onSave` resolves to null on success or the failure message. It must be
+  // awaited: setting "Saved!" before the write resolves is what let a rejected
+  // save look identical to a successful one.
+  const handleSave = async () => {
+    if (!totalOk) return;
+    const formatted = Object.fromEntries(
+      WEIGHT_MODULES.map((m) => [m, parseFloat(values[m]) || 0])
+    );
+    setSaveError("");
+    setSaving(true);
+    let failure;
+    try {
+      failure = await onSave(phase, formatted);
+    } catch (err) {
+      failure = err.message || "Failed to save weights.";
+    }
+    setSaving(false);
+    if (failure) {
+      setSaveError(`${failure} Nothing was changed.`);
+      return;
+    }
+    setSaved(true);
+    setTimeout(onClose, 600);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
+          <p className="font-semibold text-[var(--hw-neutral-900)]">Edit {phaseLabel} Weights</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          {WEIGHT_MODULES.map((m) => (
+            <div key={m}>
+              <label className="block text-[12px] text-[var(--hw-neutral-700)] mb-1">{m} %</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                placeholder="0"
+                value={values[m]}
+                onChange={(e) => setValues((v) => ({ ...v, [m]: e.target.value }))}
+                className={inputCls}
+              />
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--hw-neutral-100)]">
+            <span className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
+            <span className={`text-[13px] font-bold ${totalOk ? "text-emerald-700" : "text-red-600"}`}>
+              {total > 0 ? `${total.toFixed(0)}%` : "0%"}
+            </span>
+          </div>
+          {!totalOk && <p className="text-[12px] text-red-600">Weights must total 100%.</p>}
+        </div>
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!totalOk || saving || saved}
+            onClick={handleSave}
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Edit Price Outlook Modal (Simplified to Favorable > and Unfavorable < per Section 5)
+const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
+  const [favMin, setFavMin] = useState(currentRules?.favMin !== undefined ? String(currentRules.favMin) : "");
+  const [unfavMax, setUnfavMax] = useState(currentRules?.unfavMax !== undefined ? String(currentRules.unfavMax) : "");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const favNum = parseFloat(favMin);
+  const unfavNum = parseFloat(unfavMax);
+  const isValid = !isNaN(favNum) && !isNaN(unfavNum) && unfavNum < favNum;
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaveError("");
+    setSaving(true);
+    let failure;
+    try {
+      failure = await onSave({ favMin: favNum, unfavMax: unfavNum });
+    } catch (err) {
+      failure = err.message || "Failed to save threshold rules.";
+    }
+    setSaving(false);
+    if (failure) {
+      setSaveError(`${failure} Nothing was changed.`);
+      return;
+    }
+    setSaved(true);
+    setTimeout(onClose, 600);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
+          <p className="font-semibold text-[var(--hw-neutral-900)]">Edit Price Outlook Thresholds</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-[12px] text-[var(--hw-neutral-600)]">
+            Configure global percentage change thresholds. Neutral is automatically derived as the range between unfavorable and favorable boundaries.
+          </p>
+          <div>
+            <label className="block text-[12px] text-[var(--hw-neutral-700)] mb-1">Favorable above (%)</label>
+            <input
+              type="number"
+              step="0.1"
+              placeholder="e.g. 5"
+              value={favMin}
+              onChange={(e) => setFavMin(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] text-[var(--hw-neutral-700)] mb-1">Unfavorable below (%)</label>
+            <input
+              type="number"
+              step="0.1"
+              placeholder="e.g. -5"
+              value={unfavMax}
+              onChange={(e) => setUnfavMax(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          {!isValid && (favMin !== "" || unfavMax !== "") && (
+            <p className="text-[12px] text-red-600">Unfavorable cutoff must be strictly less than Favorable cutoff.</p>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!isValid || saving || saved}
+            onClick={handleSave}
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Edit Weather Risk Modal (metric-based crop_weather_rules, persisted via API)
+const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved }) => {
+  const [rules, setRules] = useState(null);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setError("");
+      try {
+        const data = await analyticsApi.listWeatherRules(commodityId);
+        if (!active) return;
+        const initial = (data?.items || []).map((r) => ({
+          id: r.id,
+          commodity_id: r.commodity_id,
+          metric_key: r.metric_key,
+          operator: r.operator,
+          threshold_min: r.threshold_min !== null && r.threshold_min !== undefined ? String(r.threshold_min) : "",
+          threshold_max: r.threshold_max !== null && r.threshold_max !== undefined ? String(r.threshold_max) : "",
+          risk_level: r.risk_level,
+          unit: r.unit || "",
+          advisory_template: r.advisory_template || ""
+        }));
+        if (active) setRules(initial);
+      } catch (err) {
+        if (active) setError(err.message || "Failed to load weather rules.");
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [commodityId]);
+
+  const updateRule = (idx, patch) =>
+    setRules((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
+  const addRule = () => {
+    const metric = WEATHER_METRICS[0];
+    setRules((prev) => [
+      ...(prev || []),
+      {
+        id: null,
+        commodity_id: commodityId,
+        metric_key: metric.key,
+        operator: ">",
+        threshold_min: "",
+        threshold_max: "",
+        risk_level: "caution",
+        unit: metric.unit,
+        advisory_template: ""
+      }
+    ]);
+  };
+
+  const removeRule = (idx) =>
+    setRules((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleSave = async () => {
+    if (!rules || rules.length === 0) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await Promise.all(
+        rules.map(async (r) => {
+          const payload = {
+            metric_key: r.metric_key,
+            operator: r.operator,
+            threshold_min: r.threshold_min !== "" ? Number(r.threshold_min) : null,
+            threshold_max: r.threshold_max !== "" ? Number(r.threshold_max) : null,
+            risk_level: r.risk_level,
+            unit: r.unit || WEATHER_METRICS.find((m) => m.key === r.metric_key)?.unit,
+            advisory_template:
+              r.advisory_template ||
+              `Crop weather rule for ${r.metric_key} (${r.risk_level}).`
+          };
+          if (r.id) {
+            await analyticsApi.updateWeatherRule(r.id, payload);
+          } else {
+            await analyticsApi.createWeatherRule({ commodity_id: commodityId, ...payload });
+          }
+        })
+      );
+      setSaved(true);
+      onSaved?.();
+      setTimeout(onClose, 600);
+    } catch (err) {
+      setError(err.message || "Failed to save weather rules.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
+  const selectCls = "w-full px-2 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
+          <div>
+            <p className="font-semibold text-[var(--hw-neutral-900)]">Edit Weather Thresholds</p>
+            <p className="text-[12px] text-[var(--hw-neutral-600)]">{commodity} · {variety || "Standard"}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {error && <p className="text-[12px] text-red-600">{error}</p>}
+          <p className="text-[12px] text-[var(--hw-neutral-600)]">
+            One row per metric threshold stored in <span className="font-mono">crop_weather_rules</span>.
+            These rules drive the Weather Risk and HSRA module classifications.
+          </p>
+
+          {!rules && !error && <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading weather rules…</p>}
+          {rules && rules.length === 0 && (
+            <p className="text-[13px] text-[var(--hw-neutral-500)]">
+              No weather rules configured for this commodity and variety. Add one below.
+            </p>
+          )}
+
+          {rules && (
+            <div className="space-y-2">
+              {rules.map((r, i) => (
+                <div key={r.id || `new-${i}`} className="grid grid-cols-12 gap-2 items-center border border-[var(--hw-neutral-200)] rounded-xl p-2.5 bg-[var(--hw-neutral-50)]/50">
+                  <div className="col-span-3">
+                    <select
+                      value={r.metric_key}
+                      onChange={(e) => {
+                        const metric = WEATHER_METRICS.find((m) => m.key === e.target.value);
+                        updateRule(i, { metric_key: e.target.value, unit: metric?.unit || r.unit });
+                      }}
+                      className={selectCls}
+                    >
+                      {WEATHER_METRICS.map((m) => (
+                        <option key={m.key} value={m.key}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <select
+                      value={r.operator}
+                      onChange={(e) => updateRule(i, { operator: e.target.value })}
+                      className={selectCls}
+                    >
+                      {WEATHER_OPERATORS.map((op) => (
+                        <option key={op} value={op}>{op}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="Min"
+                      value={r.threshold_min}
+                      onChange={(e) => updateRule(i, { threshold_min: e.target.value })}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="Max"
+                      value={r.threshold_max}
+                      onChange={(e) => updateRule(i, { threshold_max: e.target.value })}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <select
+                      value={r.risk_level}
+                      onChange={(e) => updateRule(i, { risk_level: e.target.value })}
+                      className={selectCls}
+                    >
+                      {WEATHER_RISK_LEVELS.map((lvl) => (
+                        <option key={lvl} value={lvl}>{lvl}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    {!r.id && (
+                      <button
+                        onClick={() => removeRule(i)}
+                        className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                        title="Remove rule"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={addRule}
+            className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
+          >
+            + Add rule
+          </button>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+          <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
+            Cancel
+          </button>
+          <button
+            disabled={saving}
+            onClick={handleSave}
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Text-only Commodity Dropdown without icons
+const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder = "Select commodity" }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+
   useEffect(() => {
     const h = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
@@ -138,164 +563,509 @@ const CommodityDropdown = ({ value, options, onChange }) => {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
-  return <div ref={ref} className="relative">
+
+  if (!options || options.length === 0) {
+    return (
+      <div className="px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl text-[var(--hw-neutral-500)] min-w-[148px]">
+        No analytics commodities available.
+      </div>
+    );
+  }
+
+  const selectedName = typeof value === "object" ? value?.name : value;
+
+  return (
+    <div ref={ref} className="relative">
       <button
-    onClick={() => setOpen((o) => !o)}
-    className="flex items-center gap-2 px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:border-[var(--hw-neutral-300)] transition-colors min-w-[148px]"
-  >
-        {value !== "All" && COMMODITY_ID[value] && <CommodityIllustration commodityId={COMMODITY_ID[value]} className="w-5 h-5 flex-shrink-0" />}
-        <span className="flex-1 text-left text-[var(--hw-neutral-800)]">{value === "All" ? "All commodities" : value}</span>
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:border-[var(--hw-neutral-300)] transition-colors cursor-pointer min-w-[148px]"
+      >
+        <span className="flex-1 text-left text-[var(--hw-neutral-800)]">
+          {selectedName || placeholder}
+        </span>
         <ChevronDown className="w-3.5 h-3.5 text-[var(--hw-neutral-700)] flex-shrink-0" />
       </button>
-      {open && <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden min-w-full">
-          {options.map((opt) => <button
-    key={opt}
-    onClick={() => {
-      onChange(opt);
-      setOpen(false);
-    }}
-    className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-[var(--hw-neutral-50)] transition-colors text-left
-                ${opt === value ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] font-medium" : "text-[var(--hw-neutral-800)]"}`}
-  >
-              {opt !== "All" && COMMODITY_ID[opt] && <CommodityIllustration commodityId={COMMODITY_ID[opt]} className="w-5 h-5 flex-shrink-0" />}
-              <span>{opt === "All" ? "All commodities" : opt}</span>
-            </button>)}
-        </div>}
-    </div>;
-};
-const EditWeightModal = ({ phase, onClose }) => {
-  const [values, setValues] = useState(
-    Object.fromEntries(WEIGHT_MODULES.map((m) => [m, String(DEFAULT_PHASE_WEIGHTS[phase][m])]))
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden min-w-full max-h-60 overflow-y-auto">
+          {options.map((opt) => {
+            const optName = typeof opt === "object" ? opt.name : opt;
+            const isSelected = optName === selectedName;
+
+            return (
+              <button
+                key={optName}
+                onClick={() => {
+                  onChange(optName);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center px-3 py-2 text-[13px] hover:bg-[var(--hw-neutral-50)] transition-colors text-left
+                  ${isSelected ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] font-medium" : "text-[var(--hw-neutral-800)]"}`}
+              >
+                <span>{optName}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
-  const [saved, setSaved] = useState(false);
-  const total = WEIGHT_MODULES.reduce((sum, m) => sum + (parseFloat(values[m]) || 0), 0);
-  const totalOk = Math.abs(total - 100) < 0.01;
-  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
-  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-800)]">Edit {phase} Weights</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="px-5 py-4 space-y-3">
-          {WEIGHT_MODULES.map((m) => <div key={m}>
-              <label className="block text-[12px] text-[var(--hw-neutral-800)] mb-1">{m} %</label>
-              <input
-    type="number"
-    min="0"
-    max="100"
-    value={values[m]}
-    onChange={(e) => setValues((v) => ({ ...v, [m]: e.target.value }))}
-    className={inputCls}
-  />
-            </div>)}
-          <div className={`flex items-center justify-between pt-2 border-t border-[var(--hw-neutral-100)]`}>
-            <span className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
-            <span className={`text-[13px] font-bold ${totalOk ? "text-emerald-700" : "text-red-600"}`}>{total.toFixed(0)}%</span>
-          </div>
-          {!totalOk && <p className="text-[12px] text-red-600">Weights must total 100%.</p>}
-        </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-          <button
-    onClick={onClose}
-    className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-            Cancel
-          </button>
-          <button
-    disabled={!totalOk}
-    onClick={() => {
-      setSaved(true);
-      setTimeout(onClose, 700);
-    }}
-    className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-  >
-            {saved ? "Saved!" : "Save Changes"}
-          </button>
-        </div>
-      </div>
-    </div>;
 };
-const EditThresholdModal = ({ ruleName, onClose }) => {
-  const config = RULE_EDIT_CONFIGS[ruleName];
-  const [values, setValues] = useState(
-    Object.fromEntries(config.fields.map((f) => [f.key, f.defaultValue]))
-  );
-  const [saved, setSaved] = useState(false);
-  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
-  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-800)]">Edit — {ruleName}</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="overflow-y-auto flex-1">
-          <div className="px-5 py-4 space-y-5">
-            <p className="text-[13px] text-[var(--hw-neutral-800)]">{config.description}</p>
-            {config.note && <div className="flex items-start gap-2 px-3 py-2.5 bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl">
-                <Info className="w-4 h-4 text-[var(--hw-neutral-700)] flex-shrink-0 mt-0.5" />
-                <p className="text-[12px] text-[var(--hw-neutral-800)]">{config.note}</p>
-              </div>}
-            <div className="space-y-3">
-              {config.fields.map((f) => <div key={f.key}>
-                  <label className="block text-[12px] text-[var(--hw-neutral-800)] mb-1">{f.label}</label>
-                  <div className="flex items-center gap-2">
-                    {f.isSelect ? <select value={values[f.key]} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} className={inputCls}>
-                        {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                      </select> : <input type="number" value={values[f.key]} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))} className={inputCls} />}
-                    {f.unit && !f.isSelect && <span className="text-[13px] text-[var(--hw-neutral-700)] flex-shrink-0">{f.unit}</span>}
-                  </div>
-                </div>)}
-            </div>
-            <div>
-              <p className="text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Sample output</p>
-              <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] divide-y divide-[var(--hw-neutral-100)]">
-                {config.sample.map((s, i) => <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <span className="text-[12px] text-[var(--hw-neutral-800)]">{s.scenario}</span>
-                    <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)] flex-shrink-0">{s.result}</span>
-                  </div>)}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-          <button
-    onClick={onClose}
-    className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-            Cancel
-          </button>
-          <button
-    onClick={() => {
-      setSaved(true);
-      setTimeout(onClose, 700);
-    }}
-    className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-            {saved ? "Saved!" : "Save Changes"}
-          </button>
-        </div>
+
+// Commodity + variety scope control. Both tabs drive the same `scopedCommodity`
+// / `scopedVariety` state, so this renders on each of them rather than being
+// duplicated inline -- the threshold cards read that scope, and without a
+// control on the Weights & Thresholds tab the card had no way to change
+// commodity and silently kept whatever the other tab had selected.
+const ScopeSelector = ({
+  commodity,
+  variety,
+  commodities = [],
+  variants = [],
+  selectCls = "",
+  onCommodityChange,
+  onVarietyChange
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+    <div className="flex items-center gap-3">
+      {commodity && (
+        <CommodityIllustration
+          commodityId={getCommodityIconKey(null, null, commodity)}
+          className="w-8 h-8 flex-shrink-0"
+        />
+      )}
+      <span className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+        {commodity ? `${commodity} · ${variety || "Standard"}` : "Select a commodity and variety"}
+      </span>
+    </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Commodity</label>
+        <TextOnlyCommodityDropdown
+          value={commodity}
+          options={commodities}
+          onChange={onCommodityChange}
+          placeholder="Select Commodity"
+        />
       </div>
-    </div>;
-};
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Variety</label>
+        <select
+          value={variety}
+          onChange={(e) => onVarietyChange(e.target.value)}
+          disabled={!commodity || variants.length === 0}
+          className={`${selectCls} min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {variants.length === 0 ? (
+            <option value="Standard">Standard</option>
+          ) : (
+            variants.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    </div>
+  </div>
+);
+
 function AdminAnalytics() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState("outputs");
-  const [fCommodity, setFCommodity] = useState("All");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightParam = searchParams.get("highlight");
+  const [tab, setTabState] = useState(() => {
+    const t = searchParams.get("tab");
+    if (t === "weights") return "weights";
+    if (t === "outputs") return "outputs";
+    const hl = (searchParams.get("highlight") || "").toLowerCase();
+    if (
+      hl.includes("weight") ||
+      hl.includes("threshold") ||
+      hl.includes("q1") ||
+      hl.includes("q2") ||
+      hl.includes("q3") ||
+      hl.includes("ratio")
+    ) {
+      return "weights";
+    }
+    return "outputs";
+  });
+  const setTab = (id) => {
+    setTabState(id);
+    if (id === "weights") {
+      setSearchParams({ tab: "weights" }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
+  const [commodities, setCommodities] = useState([]);
+  const [loadingCommodities, setLoadingCommodities] = useState(true);
+
+  // Scoped commodity and variety selection
+  const [scopedCommodity, setScopedCommodity] = useState("");
+  const [scopedVariety, setScopedVariety] = useState("");
+
+  // History table filters (only Module and Classification since Commodity + Variety are scoped above)
   const [fModule, setFModule] = useState("All");
   const [fClassification, setFClassification] = useState("All");
-  const [fStatus, setFStatus] = useState("All");
   const [showAll, setShowAll] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipRef = useRef(null);
+
+  // Weights & Thresholds state (empty handling support)
+  const [phaseWeights, setPhaseWeights] = useState({});
+  const [priceOutlookRules, setPriceOutlookRules] = useState(null);
+  const [weightsLoading, setWeightsLoading] = useState(false);
+  const [weightsError, setWeightsError] = useState("");
+  const [weightIds, setWeightIds] = useState({});
+  const [thresholdsLoading, setThresholdsLoading] = useState(false);
+  const [thresholdsError, setThresholdsError] = useState("");
+  const [priceOutlookRuleIds, setPriceOutlookRuleIds] = useState({ fav: null, unfav: null });
+
+  // Module outputs state (computed + persisted via /admin/analytics/outputs)
+  const [moduleOutputs, setModuleOutputs] = useState(null);
+  const [commodityId, setCommodityId] = useState("");
+  const [processedResults, setProcessedResults] = useState([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+
+  const [highlightedCard, setHighlightedCard] = useState(highlightParam);
+
+  // 3-second temporary highlight timer (matching DFTC highlight pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedCard(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedCard(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+
+  const isCardHighlighted = useCallback((key) => {
+    if (!highlightedCard) return false;
+    const hl = highlightedCard.toLowerCase();
+    if (key === "price" && (hl.includes("price") || hl.includes("forecast"))) return true;
+    if (key === "arrival" && hl.includes("arrival")) return true;
+    if (key === "production" && (hl.includes("production") || hl.includes("seasonal"))) return true;
+    if (key === "weather" && hl.includes("weather")) return true;
+    if (key === "profitability" && hl.includes("profit")) return true;
+    if (key === "advisory" && hl.includes("advisory")) return true;
+    return hl.includes(key);
+  }, [highlightedCard]);
+
+  // Smooth scroll to highlighted card (works for both Module Outputs and Weights & Thresholds)
+  useEffect(() => {
+    if (!highlightedCard) return;
+    const t = setTimeout(() => {
+      const hl = highlightedCard.toLowerCase();
+      const el =
+        document.getElementById(`threshold-${hl}`) ||
+        document.getElementById(`threshold-${hl.replace(/_/g, "-")}`) ||
+        (hl.includes("arrival") ? document.getElementById("threshold-arrival-pressure") : null) ||
+        (hl.includes("price") ? document.getElementById("threshold-price-outlook") : null) ||
+        (hl.includes("weather") ? document.getElementById("threshold-weather-risk") : null) ||
+        (hl.includes("production") || hl.includes("seasonal") ? document.getElementById("threshold-seasonal-production") : null) ||
+        (hl.includes("profit") ? document.getElementById("threshold-profitability") : null) ||
+        (hl.includes("advisory") ? document.getElementById("threshold-final-advisory") : null) ||
+        (hl.includes("weight") ? document.querySelector('[id^="weight-phase-"]') : null) ||
+        document.querySelector(`[data-threshold-card*="${hl}"]`) ||
+        document.getElementById(`module-card-${hl}`) ||
+        document.querySelector(`[data-module-card*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightedCard, analyticsLoading, tab]);
+
+  // Weather rules per commodity (loaded from API for the summary card)
+  const [weatherRulesByCommodity, setWeatherRulesByCommodity] = useState({});
+
+  // Modals state
   const [editingPhase, setEditingPhase] = useState(null);
-  const [editingThreshold, setEditingThreshold] = useState(null);
+  const [editingPriceOutlook, setEditingPriceOutlook] = useState(false);
+  const [editingWeather, setEditingWeather] = useState(false);
+
+  // Fetch commodities from database
+  useEffect(() => {
+    let active = true;
+    async function loadCommodities() {
+      try {
+        setLoadingCommodities(true);
+        const res = await apiGet("/farmer/commodities");
+        if (res.ok && active) {
+          const data = await parseResponse(res);
+          const rawList = Array.isArray(data) ? data : data?.items || [];
+          const top10 = rawList
+            .filter((c) => (c.isTop10 ?? c.is_top10 ?? true) && (c.isActive ?? c.is_active ?? true))
+            .map((c) => {
+              const name = c.name || c.baseName || c.base_name;
+              return {
+                id: c.id,
+                name,
+                // Varieties come from the same DB rows that produced this
+                // list, under the same is_top10/is_active filter. Reading them
+                // here rather than from a hardcoded table is what keeps the
+                // variety list from offering a scope the commodity list would
+                // never produce (Lettuce/Romaine is is_top10=false).
+                varieties: Array.isArray(c.varieties) ? c.varieties : [],
+                iconKey: getCommodityIconKey(c.id, c.baseName || c.base_name, name)
+              };
+            });
+          setCommodities(top10);
+          if (top10.length > 0) {
+            setScopedCommodity(top10[0].name);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load commodities for analytics:", err);
+      } finally {
+        if (active) setLoadingCommodities(false);
+      }
+    }
+    loadCommodities();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Load adaptive weights from the admin weights API
+  useEffect(() => {
+    let active = true;
+    async function loadWeights() {
+      try {
+        setWeightsLoading(true);
+        const data = await analyticsApi.listWeights();
+        if (!active) return;
+        const byPhase = {};
+        const ids = {};
+        (data?.items || []).forEach((w) => {
+          if (!w.crop_stage) return;
+          byPhase[w.crop_stage] = {
+            "Price Outlook": Number((Number(w.price_outlook_weight) * 100).toFixed(2)),
+            "Arrival Pressure": Number((Number(w.arrival_pressure_weight) * 100).toFixed(2)),
+            "Historical Seasonal Production Level": Number((Number(w.historical_seasonal_production_weight) * 100).toFixed(2)),
+            "Weather Risk": Number((Number(w.weather_risk_weight) * 100).toFixed(2)),
+            Profitability: Number((Number(w.profitability_weight) * 100).toFixed(2))
+          };
+          ids[w.crop_stage] = w.id;
+        });
+        setPhaseWeights(byPhase);
+        setWeightIds(ids);
+      } catch (err) {
+        if (active) setWeightsError(err.message || "Failed to load weights.");
+      } finally {
+        if (active) setWeightsLoading(false);
+      }
+    }
+    loadWeights();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Load the Price Outlook threshold rules from the admin thresholds API
+  const refreshPriceOutlook = useCallback(async () => {
+    try {
+      setThresholdsError("");
+      const data = await analyticsApi.listThresholds();
+      const poModule = (data?.items || []).find((m) => m.module_name === PRICE_OUTLOOK_MODULE);
+      if (!poModule) return;
+      const rules =
+        poModule.rules && poModule.rules.length > 0
+          ? poModule.rules
+          : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
+      const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
+      const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
+      if (fav && unfav) {
+        setPriceOutlookRules({
+          favMin: Math.round(Number(fav.threshold_value) * 100),
+          unfavMax: Math.round(Number(unfav.threshold_value) * 100)
+        });
+        setPriceOutlookRuleIds({ fav, unfav });
+      }
+    } catch (err) {
+      setThresholdsError(err.message || "Failed to load threshold rules.");
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setThresholdsLoading(true);
+    refreshPriceOutlook().finally(() => {
+      if (active) setThresholdsLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [refreshPriceOutlook]);
+
+  // Scoped varieties — read from the fetched commodity row, not from the
+  // hardcoded commodities table, so the variety dropdown can only ever offer a
+  // scope the commodity dropdown also offers.
+  const scopedVariants = useMemo(() => {
+    if (!scopedCommodity) return [];
+    return commodities.find((commodity) => commodity.name === scopedCommodity)?.varieties || [];
+  }, [scopedCommodity, commodities]);
+
+  // Wait for the commodity list before defaulting the variety. Setting
+  // "Standard" while the list was still in flight made the scope briefly
+  // ("Kalabasa" + "Standard") look complete, so `reloadAnalytics` computed and
+  // persisted a second set of module outputs for a variety nobody selected.
+  useEffect(() => {
+    if (loadingCommodities) return;
+    if (scopedVariants.length > 0) {
+      setScopedVariety(scopedVariants[0]);
+    } else {
+      setScopedVariety("Standard");
+    }
+  }, [scopedCommodity, scopedVariants, loadingCommodities]);
+
+  // Load the persisted module-output history.
+  //
+  // Refreshes whenever the commodity or variety scope changes, so the table
+  // always reflects the commodity currently selected in Module Outputs. It also
+  // runs on mount, before any scope exists, so the table is populated on open
+  // rather than waiting for a commodity to be picked.
+  const loadProcessedResults = useCallback(async () => {
+    try {
+      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
+      const rows = (data?.items || []).flatMap((r) =>
+        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
+          id: r.id,
+          basisId: key,
+          module,
+          commodity: r.commodity_name,
+          // `variant`, not `variety` — the row shape uses `variant` and the
+          // filter below reads it. Reading `variety` here left it undefined,
+          // which made every non-Standard variety match nothing.
+          variant: r.variety || "Standard",
+          classification: r[field] || "Not available",
+          inputPeriod: r.reference_month,
+          processedAt: r.generated_at
+        }))
+      );
+      setProcessedResults(rows);
+    } catch {
+      setProcessedResults([]);
+    }
+  }, []);
+
+  // Mount only. Once a scope exists, `reloadAnalytics` owns the refresh: it
+  // awaits the compute before reloading, so the table never shows pre-compute
+  // rows. Listing the scope here as well raced that and fetched the same
+  // unfiltered page twice on every scope change.
+  useEffect(() => {
+    loadProcessedResults();
+  }, [loadProcessedResults]);
+
+  // A module or classification chosen for the previous commodity can mask the
+  // new one entirely, leaving an empty table that looks like missing records.
+  // Reset both whenever the scope changes so the table starts from "All".
+  useEffect(() => {
+    setFModule("All");
+    setFClassification("All");
+  }, [scopedCommodity, scopedVariety]);
+
+  // Compute + persist module outputs for the scoped commodity/variety.
+  const reloadAnalytics = useCallback(async () => {
+    if (!scopedCommodity || !scopedVariety) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    try {
+      const variety =
+        scopedVariety === "Standard" || scopedVariety === "All Varieties"
+          ? undefined
+          : scopedVariety;
+      const outputs = await analyticsApi.computeModuleOutputs({
+        crop_name: scopedCommodity,
+        variety
+      });
+      setModuleOutputs(outputs);
+      setCommodityId(outputs.commodity_id || "");
+    } catch (err) {
+      setAnalyticsError(err.message || "Failed to compute module outputs.");
+      setModuleOutputs(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+
+    // A compute rewrites rows, so refresh the history it feeds.
+    await loadProcessedResults();
+  }, [scopedCommodity, scopedVariety, loadProcessedResults]);
+
+  useEffect(() => {
+    reloadAnalytics();
+  }, [reloadAnalytics]);
+
+  // Load persisted weather rules for the current commodity to render the summary card.
+  useEffect(() => {
+    if (!commodityId) return;
+    let active = true;
+    analyticsApi
+      .listWeatherRules(commodityId)
+      .then((data) => {
+        if (active) setWeatherRulesByCommodity((prev) => ({ ...prev, [commodityId]: data?.items || [] }));
+      })
+      .catch(() => {
+        if (active) setWeatherRulesByCommodity((prev) => ({ ...prev, [commodityId]: [] }));
+      });
+    return () => { active = false; };
+  }, [commodityId]);
+
+  const currentWeatherRules = commodityId ? weatherRulesByCommodity[commodityId] || [] : [];
+  const weatherMetricLabel = (k) => WEATHER_METRICS.find((m) => m.key === k)?.label || k;
+  const weatherRuleSummary = (r) => {
+    const unit = r.unit || WEATHER_METRICS.find((m) => m.key === r.metric_key)?.unit || "";
+    const lo = r.threshold_min != null && r.threshold_min !== "" ? `${r.threshold_min}${unit}` : "";
+    const hi = r.threshold_max != null && r.threshold_max !== "" ? `${r.threshold_max}${unit}` : "";
+    if (r.operator === "between") return lo && hi ? `${lo} – ${hi}` : lo || hi || "Set";
+    const val = lo || hi;
+    return val ? `${r.operator} ${val}` : "Set";
+  };
+
+  const scopedCommodityRecord = useMemo(
+    () => commodities.find((commodity) => commodity.name === scopedCommodity) || null,
+    [commodities, scopedCommodity]
+  );
+
+  // Historical seasonal production used in the Weights & Thresholds tab.
+  const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
+    !!scopedCommodityRecord?.id,
+    scopedCommodityRecord?.id
+  );
+
+  // Live arrival volume behind the Arrival Pressure card. The backend withholds
+  // the classification and quartiles below four records rather than publishing a
+  // zero-padded reading, so this card can legitimately show "—" for the
+  // thresholds while still reporting the volumes it does have.
+  const { data: arrivalSummary, loading: arrivalLoading, error: arrivalError } = useArrivalPressure(
+    !!scopedCommodityRecord?.id,
+    scopedCommodityRecord?.id
+  );
+
+  const arrivalQuartiles = arrivalSummary?.quartile_thresholds || null;
+  const arrivalClassification = arrivalSummary?.classification || null;
+  const arrivalSeries = useMemo(
+    () => bucketArrivals(arrivalSummary?.records || [], { granularity: "monthly" }),
+    [arrivalSummary]
+  );
+  const arrivalTotals = useMemo(() => arrivalSeriesTotals(arrivalSeries), [arrivalSeries]);
+  const arrivalCurrentKg = useMemo(() => {
+    const bucket = latestArrivalBucket(arrivalSeries);
+    return bucket ? bucket.total_kg : null;
+  }, [arrivalSeries]);
+  const arrivalBoundary = useMemo(() => arrivalBoundaryRows(arrivalQuartiles), [arrivalQuartiles]);
+  const arrivalBasisParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (scopedCommodity) params.set("commodity", scopedCommodity);
+    if (scopedVariety) params.set("variety", scopedVariety);
+    return params.toString();
+  }, [scopedCommodity, scopedVariety]);
+
   useEffect(() => {
     if (!showTooltip) return;
     const h = (e) => {
@@ -304,302 +1074,1070 @@ function AdminAnalytics() {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [showTooltip]);
+
   const selectCls = "px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
-  const filteredResults = RESULTS.filter(
-    (r) => (fCommodity === "All" || r.commodity === fCommodity) && (fModule === "All" || r.module === fModule) && (fClassification === "All" || r.classification === fClassification) && (fStatus === "All" || r.status === fStatus)
-  );
+
+  // Filter processed results using the top scope (scopedCommodity + scopedVariety) + module & classification
+  const filteredResults = processedResults.filter((r) => {
+    const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
+    // Rows carry `variant`; "Standard" in the selector means the commodity's
+    // plain (null-variety) row. Comparing against `r.variety` here silently
+    // matched nothing for every named variety.
+    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
+    const matchVar =
+      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
+    const matchMod = fModule === "All" || r.module === fModule;
+    const matchClass = fClassification === "All" || r.classification === fClassification;
+    return matchComm && matchVar && matchMod && matchClass;
+  });
+
   const visibleResults = showAll ? filteredResults : filteredResults.slice(0, DEFAULT_ROWS);
-  return <>
-      {editingPhase && <EditWeightModal phase={editingPhase} onClose={() => setEditingPhase(null)} />}
-      {editingThreshold && <EditThresholdModal ruleName={editingThreshold} onClose={() => setEditingThreshold(null)} />}
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+  // True when rows exist for the scope but the module/classification filters are
+  // hiding them. Distinguishes "no records" from "filtered everything away".
+  const scopeHasFiltered = processedResults.some((r) => {
+    const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
+    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
+    const matchVar =
+      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
+    return matchComm && matchVar;
+  });
 
-        {
-    /* ── Header ── */
-  }
+  // 4 Module cards built from the latest computed outputs for the current scope.
+  const withCardData = (key, moduleOutput) => {
+    const base = {
+      classification: "Not processed",
+      source: "-",
+      processed: "-",
+      reliability: "—",
+      dataAvailable: null,
+      dataRequired: null,
+      dataLabel: "—"
+    };
+    if (!moduleOutput) return base;
+    const cfg = MODULE_CARD_DATA[key];
+    const basis = moduleOutput.basis_inputs || {};
+    const available = cfg ? basis[cfg.key] ?? 0 : null;
+    return {
+      classification: moduleOutput.classification || base.classification,
+      source: moduleOutput.source_label || "-",
+      processed: moduleOutput.input_period || "-",
+      reliability: moduleOutput.reliability_status || "—",
+      dataAvailable: available,
+      dataRequired: cfg ? cfg.required : null,
+      dataLabel: cfg ? `${available}/${cfg.required} ${cfg.label}` : "—"
+    };
+  };
+
+  const moduleOutputsByCard = moduleOutputs
+    ? {
+      "price-outlook": withCardData("price-outlook", moduleOutputs.price_outlook),
+      "arrival-pressure": withCardData("arrival-pressure", moduleOutputs.arrival_pressure),
+      "historical-production": withCardData(
+        "historical-production",
+        moduleOutputs.historical_seasonal_production_level
+      ),
+      "weather-risk": withCardData("weather-risk", moduleOutputs.weather_risk)
+    }
+    : {};
+
+  const moduleCards = [
+    {
+      module: "Price Outlook",
+      moduleKey: "price-outlook",
+      ...(moduleOutputsByCard["price-outlook"] || { classification: "Not processed", source: "-", processed: "-" })
+    },
+    {
+      module: "Arrival Pressure",
+      moduleKey: "arrival-pressure",
+      ...(moduleOutputsByCard["arrival-pressure"] || { classification: "Not processed", source: "-", processed: "-" })
+    },
+    {
+      module: "Historical Seasonal Production Level",
+      moduleKey: "historical-production",
+      ...(moduleOutputs?.historical_seasonal_production_level
+        ? moduleOutputsByCard["historical-production"]
+        : {
+          classification: productionLoading
+            ? "Loading..."
+            : productionSummary?.status === "processed"
+              ? (productionSummary.peak_quarter && productionSummary.lean_quarter
+                ? `Peak: ${productionSummary.peak_quarter} · Lean: ${productionSummary.lean_quarter}`
+                : (productionSummary.classification || "Processed"))
+              : "Not processed",
+          source: productionSummary?.source || "-",
+          processed: productionSummary?.processed_at
+            ? new Date(productionSummary.processed_at).toLocaleString()
+            : "-"
+        })
+    },
+    {
+      module: "Weather Risk",
+      moduleKey: "weather-risk",
+      ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" })
+    }
+  ];
+
+  const handleCardClick = (card) => {
+    const targetId = card.basisId || card.moduleKey;
+    const match = processedResults.find(
+      (r) =>
+        r.basisId === targetId &&
+        r.commodity === scopedCommodity &&
+        (r.variant || "Standard") === (scopedVariety || "Standard")
+    );
+    const params = new URLSearchParams();
+    if (scopedCommodity) params.set("commodity", scopedCommodity);
+    if (scopedVariety) params.set("variety", scopedVariety);
+    if (match?.id) params.set("output", match.id);
+    navigate(`/admin/modules/basis/${targetId}?${params.toString()}`);
+  };
+
+  const handleRowClick = (row) => {
+    const params = new URLSearchParams();
+    params.set("commodity", row.commodity || scopedCommodity);
+    params.set("variety", row.variant || scopedVariety);
+    if (row.id) params.set("output", row.id);
+    navigate(`/admin/modules/basis/${row.basisId || row.moduleKey}?${params.toString()}`);
+  };
+
+  const handleWeightSave = async (phase, updated) => {
+    try {
+      setWeightsError("");
+      const keys = ["price_outlook_weight", "arrival_pressure_weight", "historical_seasonal_production_weight", "weather_risk_weight", "profitability_weight"];
+      const vals = keys.map((_, i) => Math.round((updated[WEIGHT_MODULES[i]] || 0) * 100) / 10000);
+      vals[vals.length - 1] = Number((vals[vals.length - 1] + (1 - vals.reduce((a, b) => a + b, 0))).toFixed(4));
+      const payload = Object.fromEntries(keys.map((k, i) => [k, vals[i]]));
+      const existingId = weightIds[phase];
+      const saved = existingId
+        ? await analyticsApi.updateWeight(existingId, payload)
+        : await analyticsApi.createWeight({ crop_stage: phase, ...payload });
+      setWeightIds((prev) => ({ ...prev, [phase]: saved.id }));
+      setPhaseWeights((prev) => ({ ...prev, [phase]: updated }));
+      return null;
+    } catch (err) {
+      const message = err.message || "Failed to save weights.";
+      setWeightsError(message);
+      // Returned so the modal can refuse to claim success. Without this the
+      // modal closed showing "Saved!" even when the write was rejected.
+      return message;
+    }
+  };
+
+  const handlePriceOutlookSave = async (updated) => {
+    try {
+      setThresholdsError("");
+      const favPct = Number(updated.favMin);
+      const unfavPct = Number(updated.unfavMax);
+      const favVal = Math.round(favPct * 100) / 10000;
+      const unfavVal = Math.round(unfavPct * 100) / 10000;
+
+      let data = await analyticsApi.listThresholds();
+      let poModule = (data?.items || []).find((m) => m.module_name === PRICE_OUTLOOK_MODULE);
+      if (!poModule) {
+        poModule = await analyticsApi.createThreshold({
+          module_name: PRICE_OUTLOOK_MODULE,
+          source_label: "Forecasting Output (Bangkerohan Retail)"
+        });
+      }
+
+      const ensureRule = async (rule, classification, operator, value, display) => {
+        if (rule) {
+          await analyticsApi.updateThresholdRule(rule.id, {
+            threshold_value: value,
+            display_text: display
+          });
+        } else {
+          const rules =
+            poModule.rules && poModule.rules.length > 0
+              ? poModule.rules
+              : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
+          const existing = rules.find((r) => (r.classification || "").toLowerCase() === classification.toLowerCase());
+          if (existing) {
+            await analyticsApi.updateThresholdRule(existing.id, {
+              threshold_value: value,
+              display_text: display
+            });
+          } else {
+            await analyticsApi.createThresholdRule(poModule.id, {
+              rule_key: classification.toLowerCase(),
+              classification,
+              operator,
+              threshold_value: value,
+              display_text: display
+            });
+          }
+        }
+      };
+
+      const { fav, unfav } = priceOutlookRuleIds;
+      await ensureRule(fav, "Favorable", ">", favVal, `> +${favPct}%`);
+      await ensureRule(unfav, "Unfavorable", "<", unfavVal, `< ${unfavPct}%`);
+
+      await refreshPriceOutlook();
+      return null;
+    } catch (err) {
+      const message = err.message || "Failed to save threshold rules.";
+      setThresholdsError(message);
+      // Returned so the modal can refuse to claim success. Without this the
+      // modal closed showing "Saved!" even when the write was rejected.
+      return message;
+    }
+  };
+
+  return (
+    <>
+      {editingPhase && (
+        <EditWeightModal
+          phase={editingPhase}
+          currentWeights={phaseWeights[editingPhase]}
+          onClose={() => setEditingPhase(null)}
+          onSave={handleWeightSave}
+        />
+      )}
+      {editingPriceOutlook && (
+        <EditPriceOutlookModal
+          currentRules={priceOutlookRules}
+          onClose={() => setEditingPriceOutlook(false)}
+          onSave={handlePriceOutlookSave}
+        />
+      )}
+      {editingWeather && (
+        <EditWeatherModal
+          commodity={scopedCommodity}
+          variety={scopedVariety}
+          commodityId={commodityId}
+          onClose={() => setEditingWeather(false)}
+          onSaved={() => {
+            reloadAnalytics();
+          }}
+        />
+      )}
+
+      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+        {/* Header */}
         <PageHeader
-    title="Analytics Processing"
-    description="Review processed module outputs and advisory rules used by HarvestWise."
-    action={<p className="text-[12px] text-[var(--hw-neutral-700)] whitespace-nowrap hidden sm:block">Last updated: Jul 20, 2026, 7:30 AM</p>}
-  />
+          title="Analytical Modules"
+          description="Review processed module outputs and advisory rules used by HarvestWise."
+        />
 
-        {
-    /* ── Tabs ── */
-  }
+        {/* Navigation Tabs */}
         <div className="border-b border-[var(--hw-neutral-200)]">
           <div className="flex">
             {[
-    { id: "outputs", label: "Module Outputs" },
-    { id: "weights", label: "Weights & Thresholds" }
-  ].map((t) => <button
-    key={t.id}
-    onClick={() => setTab(t.id)}
-    className={`px-5 py-3 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.id ? "border-[var(--hw-green-700)] text-[var(--hw-neutral-900)]" : "border-transparent text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)]"}`}
-  >
+              { id: "outputs", label: "Module Outputs" },
+              { id: "weights", label: "Weights & Thresholds" }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-5 py-3 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.id
+                  ? "border-[var(--hw-green-700)] text-[var(--hw-neutral-900)] font-semibold"
+                  : "border-transparent text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+                  }`}
+              >
                 {t.label}
-              </button>)}
+              </button>
+            ))}
           </div>
         </div>
 
-        {
-    /* ══ MODULE OUTPUTS TAB ══ */
-  }
-        {tab === "outputs" && <div className="space-y-6">
+        {/* ══ MODULE OUTPUTS TAB ══ */}
+        {tab === "outputs" && (
+          <div className="space-y-6">
+            {/* Scoped Variety Selector */}
+            <ScopeSelector
+              commodity={scopedCommodity}
+              variety={scopedVariety}
+              commodities={commodities}
+              variants={scopedVariants}
+              selectCls={selectCls}
+              onCommodityChange={setScopedCommodity}
+              onVarietyChange={setScopedVariety}
+            />
 
-            {
-    /* Module output cards */
-  }
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {MODULE_SUMMARY_CARDS.map((card) => {
-    const cc = CLASSIFICATION_COLORS[card.classification] ?? "text-[var(--hw-neutral-700)]";
-    return <div
-      key={card.module}
-      onClick={() => navigate(`/admin/analytics/basis/${card.basisId}`)}
-      className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3 hover:bg-[var(--hw-neutral-50)] hover:border-[var(--hw-neutral-300)] transition-colors cursor-pointer"
-    >
-                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)] leading-snug">{card.module}</p>
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[12px] text-[var(--hw-neutral-700)]">Classification</span>
-                        <span className={`text-[12px] font-semibold ${cc}`}>{card.classification}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[12px] text-[var(--hw-neutral-700)]">Source</span>
-                        <span className="text-[12px] text-[var(--hw-neutral-800)] text-right max-w-[120px] leading-tight">{card.source}</span>
-                      </div>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[12px] text-[var(--hw-neutral-700)]">Processed</span>
-                        <span className="text-[12px] text-[var(--hw-neutral-800)]">Jul 20, 2026, 7:30 AM</span>
+            {/* 4 Module Output Cards (Clickable & Empty State) */}
+            {analyticsError && (
+              <div className="bg-[var(--hw-red-50)] border border-[var(--hw-red-200)] text-[var(--hw-red-800)] text-[12px] rounded-xl px-4 py-3">
+                {analyticsError}
+              </div>
+            )}
+            <div>
+              <h2 className="text-[14px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide mb-3">
+                Current Analytics Outputs
+              </h2>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${analyticsLoading ? "opacity-60 pointer-events-none" : ""}`}>
+                {moduleCards.map((card) => {
+                  const cc = CLASSIFICATION_COLORS[card.classification] ?? "text-[var(--hw-neutral-500)]";
+                  const modSlug = card.module.toLowerCase().replace(/[^a-z0-9]/g, "-");
+                  const hl = (highlightedCard || "").toLowerCase();
+                  const isHighlighted = Boolean(
+                    hl &&
+                    (card.module.toLowerCase().includes(hl) ||
+                     hl.includes(modSlug) ||
+                     (hl.includes("forecast") && card.module === "Price Outlook") ||
+                     (hl.includes("price") && card.module === "Price Outlook") ||
+                     (hl.includes("arrival") && card.module === "Arrival Pressure") ||
+                     (hl.includes("weather") && card.module === "Weather Risk") ||
+                     (hl.includes("production") && card.module === "Historical Seasonal Production Level"))
+                  );
+
+                  return (
+                    <div
+                      key={card.module}
+                      id={`module-card-${modSlug}`}
+                      data-module-card={`${modSlug} ${card.module.toLowerCase()}`}
+                      onClick={() => handleCardClick(card)}
+                      className={`rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3 hover:border-[var(--hw-neutral-300)] transition-colors duration-500 cursor-pointer ${
+                        isHighlighted
+                          ? "bg-emerald-50/70 font-medium"
+                          : "bg-white hover:bg-[var(--hw-neutral-50)]"
+                      }`}
+                    >
+                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] leading-snug">{card.module}</p>
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Classification</span>
+                          <span className={`text-[12px] font-semibold ${cc}`}>{card.classification}</span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Source</span>
+                          <span className="text-[12px] text-[var(--hw-neutral-800)] text-right max-w-[120px] leading-tight truncate">
+                            {card.source}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Reliability</span>
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${RELIABILITY_TONES[card.reliability] ?? "text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)]"}`}>
+                            {card.reliability}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>;
-  })}
+                  );
+                })}
+              </div>
+              {(moduleOutputs?.warnings?.length || 0) > 0 && (
+                <div className="mt-3 rounded-lg border border-[var(--hw-warning)]/30 bg-[var(--hw-warning)]/5 p-3 flex flex-col gap-1">
+                  <p className="text-[12px] font-semibold text-[var(--hw-warning)] flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5" /> Data reliability warnings
+                  </p>
+                  <ul className="space-y-0.5">
+                    {moduleOutputs.warnings.map((w, i) => (
+                      <li key={i} className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {
-    /* Processed Results */
-  }
-            <div className="space-y-4">
-              {
-    /* Heading + tooltip */
-  }
+            {/* Processed Results History Table */}
+            <div className="space-y-4 pt-2">
+              {/* Heading + tooltip */}
               <div ref={tooltipRef} className="relative flex items-center gap-2">
-                <p className="text-[15px] font-semibold text-[var(--hw-neutral-800)]">Processed Results</p>
+                <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Processed Results</h2>
                 <button
-    onClick={() => setShowTooltip((v) => !v)}
-    className="text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
-  >
+                  onClick={() => setShowTooltip((v) => !v)}
+                  className="text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] transition-colors"
+                >
                   <Info className="w-4 h-4" />
                 </button>
-                {showTooltip && <div className="absolute top-full left-0 mt-2 z-20 w-[320px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3.5">
+                {showTooltip && (
+                  <div className="absolute top-full left-0 mt-2 z-20 w-[320px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3.5">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-[12px] text-[var(--hw-neutral-800)] leading-relaxed">
                         This table shows processed outputs for Price Outlook, Arrival Pressure, Historical Seasonal Production Level, and Weather Risk. Profitability is calculated during individual farmer assessment because it depends on farmer-specific cost, yield, and selling-price inputs.
                       </p>
                       <button
-    onClick={() => setShowTooltip(false)}
-    className="text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] flex-shrink-0 mt-0.5"
-  >
+                        onClick={() => setShowTooltip(false)}
+                        className="text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] flex-shrink-0 mt-0.5"
+                      >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>}
+                  </div>
+                )}
               </div>
 
-              {
-    /* Filters */
-  }
+              {/* Filters (Module & Classification only — redundant Commodity/Variety removed) */}
               <div className="flex flex-wrap gap-3 items-center">
-                <CommodityDropdown value={fCommodity} options={COMMODITIES} onChange={(v) => {
-    setFCommodity(v);
-    setShowAll(false);
-  }} />
-                <select value={fModule} onChange={(e) => {
-    setFModule(e.target.value);
-    setShowAll(false);
-  }} className={selectCls}>
-                  {MODULES.map((m) => <option key={m} value={m}>{m === "All" ? "All modules" : m}</option>)}
+                {/* Module Filter */}
+                <select
+                  value={fModule}
+                  onChange={(e) => {
+                    setFModule(e.target.value);
+                    setShowAll(false);
+                  }}
+                  className={selectCls}
+                >
+                  {MODULES.map((m) => (
+                    <option key={m} value={m}>
+                      {m === "All" ? "All modules" : m}
+                    </option>
+                  ))}
                 </select>
-                <select value={fClassification} onChange={(e) => {
-    setFClassification(e.target.value);
-    setShowAll(false);
-  }} className={selectCls}>
-                  {CLASSIFICATIONS.map((c) => <option key={c} value={c}>{c === "All" ? "All classifications" : c}</option>)}
+
+                {/* Classification Filter */}
+                <select
+                  value={fClassification}
+                  onChange={(e) => {
+                    setFClassification(e.target.value);
+                    setShowAll(false);
+                  }}
+                  className={selectCls}
+                >
+                  {CLASSIFICATIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c === "All" ? "All classifications" : c}
+                    </option>
+                  ))}
                 </select>
-                <select value={fStatus} onChange={(e) => {
-    setFStatus(e.target.value);
-    setShowAll(false);
-  }} className={selectCls}>
-                  {STATUSES.map((s) => <option key={s} value={s}>{s === "All" ? "All statuses" : s}</option>)}
-                </select>
-                {(fCommodity !== "All" || fModule !== "All" || fClassification !== "All" || fStatus !== "All") && <button
-    onClick={() => {
-      setFCommodity("All");
-      setFModule("All");
-      setFClassification("All");
-      setFStatus("All");
-      setShowAll(false);
-    }}
-    className="text-[12px] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
-  >
+
+                {(fModule !== "All" || fClassification !== "All") && (
+                  <button
+                    onClick={() => {
+                      setFModule("All");
+                      setFClassification("All");
+                      setShowAll(false);
+                    }}
+                    className="text-[12px] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors underline"
+                  >
                     Clear filters
-                  </button>}
+                  </button>
+                )}
               </div>
 
-              {
-    /* Table */
-  }
+              {/* Table */}
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-                {filteredResults.length === 0 ? <p className="px-4 py-10 text-center text-[var(--hw-neutral-700)] text-[13px]">No results match the selected filters.</p> : <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[12px]">
-                        <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                          <tr>
-                            {["Module", "Commodity", "Input Period", "Classification", "Processed Date"].map((h) => <th key={h} className="px-3 py-2.5 text-left font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">{h}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                          {visibleResults.map((r) => {
-    const cc = CLASSIFICATION_COLORS[r.classification] ?? "text-[var(--hw-neutral-700)]";
-    return <tr
-      key={r.id}
-      onClick={() => navigate(`/admin/analytics/basis/${r.id}`)}
-      className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-    >
-                                <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">{r.module}</td>
-                                <td className="px-3 py-2.5">
-                                  <div className="flex items-center gap-1.5">
-                                    {COMMODITY_ID[r.commodity] && <CommodityIllustration commodityId={COMMODITY_ID[r.commodity]} className="w-5 h-5 flex-shrink-0" />}
-                                    <div>
-                                      <span className="text-[var(--hw-neutral-700)]">{r.commodity}</span>
-                                      {r.variant && <p className="text-[11px] text-[var(--hw-neutral-500)]">{r.variant}</p>}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">{r.inputPeriod}</td>
-                                <td className={`px-3 py-2.5 font-semibold ${cc}`}>{r.classification}</td>
-                                <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">{r.processedAt}</td>
-                              </tr>;
-  })}
-                        </tbody>
-                      </table>
-                    </div>
-                    {filteredResults.length > DEFAULT_ROWS && <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
-                        <p className="text-[12px] text-[var(--hw-neutral-700)]">
-                          Showing {visibleResults.length} of {filteredResults.length} results
-                        </p>
-                        <button
-    onClick={() => setShowAll((v) => !v)}
-    className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-  >
-                          {showAll ? "Show less" : `Show all ${filteredResults.length} results`}
-                        </button>
-                      </div>}
-                  </>}
-              </div>
-            </div>
-          </div>}
-
-        {
-    /* ══ WEIGHTS & THRESHOLDS TAB ══ */
-  }
-        {tab === "weights" && <div className="space-y-8">
-
-            {
-    /* Adaptive Weights */
-  }
-            <div className="space-y-3">
-              <p className="text-[15px] font-semibold text-[var(--hw-neutral-800)]">Adaptive Weights</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {Object.entries(DEFAULT_PHASE_WEIGHTS).map(([phase, weights]) => <div key={phase} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">{phase}</p>
-                      <button
-    onClick={() => setEditingPhase(phase)}
-    className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
-  >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="space-y-1.5">
-                      {WEIGHT_MODULES.map((m) => <div key={m} className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] text-[var(--hw-neutral-800)] truncate">{m}</span>
-                          <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)] flex-shrink-0">{weights[m]}%</span>
-                        </div>)}
-                    </div>
-                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)]">
-                      <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Total</span>
-                      <span className="text-[12px] font-bold text-emerald-700">100%</span>
-                    </div>
-                  </div>)}
-              </div>
-            </div>
-
-            {
-    /* Threshold Rules */
-  }
-            <div className="space-y-3">
-              <p className="text-[15px] font-semibold text-[var(--hw-neutral-800)]">Threshold Rules</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {
-    /* Module rules */
-  }
-                {MODULE_RULES.map((mr) => <div key={mr.module} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)] leading-snug">{mr.module}</p>
-                        <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">{mr.source}</p>
-                      </div>
-                      <button
-    onClick={() => setEditingThreshold(mr.module)}
-    className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors flex-shrink-0"
-  >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="space-y-1.5 flex-1">
-                      {mr.rules.map((r) => <div key={r.classification} className="flex items-start justify-between gap-2">
-                          <span className={`text-[12px] font-semibold flex-shrink-0 ${r.color}`}>{r.classification}</span>
-                          <span className="text-[12px] text-[var(--hw-neutral-800)] text-right leading-snug">{r.rule}</span>
-                        </div>)}
-                      {mr.module === "Profitability" && <p className="text-[12px] text-[var(--hw-neutral-700)] italic mt-1">Applied during farmer assessment.</p>}
-                      {mr.module === "Weather Risk" && <p className="text-[12px] text-[var(--hw-neutral-700)] mt-1">Crop-specific rainfall, temperature, humidity, and wind thresholds.</p>}
-                    </div>
-                    <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated {mr.lastUpdated}</p>
-                  </div>)}
-                {
-    /* Final Advisory Cutoffs */
-  }
-                <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">Final Advisory Cutoffs</p>
-                      <p className="text-[12px] text-[var(--hw-neutral-700)] mt-0.5">Adaptive Weight Crop Modules</p>
-                    </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
+                      <tr>
+                        {["Module", "Commodity", "Variety", "Input Period", "Classification", "Processed Date"].map((h) => (
+                          <th key={h} className="px-3 py-2.5 text-left font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                      {filteredResults.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-10 text-center text-[var(--hw-neutral-500)] text-[13px]">
+                            {scopeHasFiltered ? (
+                              "No processed results match the selected module and classification."
+                            ) : scopedCommodity ? (
+                              <>
+                                No processed results for{" "}
+                                <span className="font-medium text-[var(--hw-neutral-800)]">
+                                  {scopedCommodity}
+                                  {scopedVariety && scopedVariety !== "Standard"
+                                    ? ` · ${scopedVariety}`
+                                    : ""}
+                                </span>
+                                . Run the module outputs for this commodity to create them.
+                              </>
+                            ) : (
+                              "No processed results yet. Run the module outputs for a commodity to create them."
+                            )}
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleResults.map((r) => {
+                          const cc = CLASSIFICATION_COLORS[r.classification] ?? "text-[var(--hw-neutral-700)]";
+                          return (
+                            <tr
+                              key={`${r.id}::${r.basisId}`}
+                              onClick={() => handleRowClick(r)}
+                              className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                            >
+                              <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">{r.module}</td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex items-center gap-1.5">
+                                  {r.commodity && (
+                                    <CommodityIllustration
+                                      commodityId={getCommodityIconKey(null, null, r.commodity)}
+                                      className="w-5 h-5 flex-shrink-0"
+                                    />
+                                  )}
+                                  <span className="text-[var(--hw-neutral-800)]">{r.commodity || "-"}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-[var(--hw-neutral-700)] whitespace-nowrap">{r.variant || "Standard"}</td>
+                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">{r.inputPeriod || "-"}</td>
+                              <td className={`px-3 py-2.5 font-semibold ${cc}`}>{r.classification || "Not available"}</td>
+                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">{r.processedAt || "-"}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {filteredResults.length > DEFAULT_ROWS && (
+                  <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
+                    <p className="text-[12px] text-[var(--hw-neutral-700)]">
+                      Showing {visibleResults.length} of {filteredResults.length} results
+                    </p>
                     <button
-    onClick={() => setEditingThreshold("Final Advisory Cutoffs")}
-    className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors flex-shrink-0"
-  >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      onClick={() => setShowAll((v) => !v)}
+                      className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+                    >
+                      {showAll ? "Show less" : `Show all ${filteredResults.length} results`}
                     </button>
                   </div>
-                  <div className="space-y-1.5 flex-1">
-                    {FINAL_ADVISORY_CUTOFFS.map((c) => <div key={c.advisory} className="flex items-center justify-between gap-2">
-                        <span className={`text-[12px] font-semibold ${c.color}`}>{c.advisory}</span>
-                        <span className="text-[12px] text-[var(--hw-neutral-800)] font-medium">{c.range}</span>
-                      </div>)}
-                  </div>
-                  <p className="text-[12px] text-[var(--hw-neutral-700)]">Updated Jun 1, 2026</p>
-                </div>
+                )}
               </div>
             </div>
+          </div>
+        )}
 
-          </div>}
+        {/* ══ WEIGHTS & THRESHOLDS TAB ══ */}
+        {tab === "weights" && (
+          <div className="space-y-8">
+            {/* The threshold cards below read this scope, so the control has to
+                be reachable from this tab too. */}
+            <ScopeSelector
+              commodity={scopedCommodity}
+              variety={scopedVariety}
+              commodities={commodities}
+              variants={scopedVariants}
+              selectCls={selectCls}
+              onCommodityChange={setScopedCommodity}
+              onVarietyChange={setScopedVariety}
+            />
 
+            {/* Section 1: Adaptive Weights */}
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Adaptive Weights</h2>
+                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
+                  One base weight profile per stage (Planning, Planting, Near Harvest, Harvest). It overrides the built-in presets for both weather-sensitive and weather-resilient crops in that stage; leave a stage empty to keep the presets. Weights per stage must sum to 100%.
+                </p>
+              </div>
+
+              {weightsLoading && (
+                <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading adaptive weights…</p>
+              )}
+              {weightsError && (
+                <p className="text-[12px] text-red-600">{weightsError}</p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {WEIGHT_PHASES.map(({ key: phase, label }) => {
+                  const weights = phaseWeights[phase];
+                  const hasWeights = weights && Object.keys(weights).length > 0;
+                  const defaultWeights = DEFAULT_STAGE_WEIGHTS[phase] || {};
+                  const effectiveWeights = hasWeights ? weights : defaultWeights;
+                  const total = Object.values(effectiveWeights).reduce((a, b) => a + (Number(b) || 0), 0);
+                  const resilient = RESILIENT_STAGE_WEIGHTS[phase] || {};
+
+                  const isPhaseHighlighted = Boolean(
+                    highlightedCard &&
+                    (highlightedCard.toLowerCase().includes(phase.toLowerCase()) ||
+                     (highlightedCard.toLowerCase().includes("weight") && phase === "planning"))
+                  );
+
+                  return (
+                    <div
+                      key={phase}
+                      id={`weight-phase-${phase.toLowerCase()}`}
+                      data-threshold-card={`weights ${phase.toLowerCase()}`}
+                      className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                        isPhaseHighlighted ? "bg-emerald-50/70" : "bg-white"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                          <div>
+                            <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{label}</h3>
+                            <p className="text-[11px] text-[var(--hw-neutral-500)]">Base weight override for this stage</p>
+                          </div>
+                          <button
+                            onClick={() => setEditingPhase(phase)}
+                            className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors cursor-pointer"
+                            title={`Edit ${label} Weights`}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {!hasWeights ? (
+                          <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
+                            No override set — using built-in presets.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {WEIGHT_MODULES.map((m) => (
+                              <div key={m} className="flex items-center justify-between text-[12px]">
+                                <span className="text-[var(--hw-neutral-700)] truncate pr-2">{m}</span>
+                                <span className="font-semibold text-[var(--hw-neutral-900)] shrink-0">
+                                  {weights[m] !== undefined ? `${weights[m]}%` : "-"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-4 pt-3 border-t border-dashed border-[var(--hw-neutral-200)] text-[11px] leading-relaxed text-[var(--hw-neutral-500)]">
+                          Weather-resilient default:{" "}
+                          {WEIGHT_MODULES.map((m) => `${WEIGHT_ABBR[m]} ${resilient[m] ?? "-"}%`).join(" · ")}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
+                        <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
+                        <span className={`text-[13px] font-bold ${Math.abs(total - 100) < 0.01 ? "text-emerald-700" : "text-amber-600"}`}>
+                          {total}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Section 2: Threshold Rules */}
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Threshold Rules</h2>
+                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
+                  Threshold configurations and classification boundaries used by each analytical module.
+                </p>
+              </div>
+
+              {thresholdsLoading && (
+                <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading threshold rules…</p>
+              )}
+              {thresholdsError && (
+                <p className="text-[12px] text-red-600">{thresholdsError}</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Price Outlook (Global Admin Configured) */}
+                <div
+                  id="threshold-price-outlook"
+                  data-threshold-card="price price-outlook"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("price") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Price Outlook</h3>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">Source: Forecasting output (Bangkerohan Retail Prices)</p>
+                      </div>
+                      <button
+                        onClick={() => setEditingPriceOutlook(true)}
+                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 cursor-pointer"
+                        title="Edit Price Outlook Thresholds"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {!priceOutlookRules ? (
+                      <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
+                        Price Outlook thresholds not configured.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
+                        <div className="py-2 flex items-center justify-between gap-3">
+                          <span className="font-semibold text-emerald-700">Favorable</span>
+                          <span className="text-[var(--hw-neutral-700)]">Forecast price change &gt; +{priceOutlookRules.favMin}%</span>
+                        </div>
+                        <div className="py-2 flex items-center justify-between gap-3">
+                          <span className="font-semibold text-[var(--hw-neutral-600)]">Neutral</span>
+                          <span className="text-[var(--hw-neutral-700)]">{priceOutlookRules.unfavMax}% to +{priceOutlookRules.favMin}%</span>
+                        </div>
+                        <div className="py-2 flex items-center justify-between gap-3">
+                          <span className="font-semibold text-red-600">Unfavorable</span>
+                          <span className="text-[var(--hw-neutral-700)]">Forecast price change &lt; {priceOutlookRules.unfavMax}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Arrival Pressure (Derived per Commodity + Variety — Read-Only) */}
+                <div
+                  id="threshold-arrival-pressure"
+                  data-threshold-card="arrival arrival-pressure arrival_pressure_q3"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("arrival") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Arrival Pressure</h3>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
+                          Source: DFTC Arrival Volume · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
+                        {[
+                          { label: "Q1 Threshold", value: arrivalQuartiles?.q1 },
+                          { label: "Q2 (Median)", value: arrivalQuartiles?.q2 },
+                          { label: "Q3 Threshold", value: arrivalQuartiles?.q3 }
+                        ].map((q) => (
+                          <div key={q.label}>
+                            <p className="text-[11px] text-[var(--hw-neutral-500)]">{q.label}</p>
+                            {/* Number bold, unit lighter -- as the design sets it. */}
+                            <p className="text-[13px] mt-0.5">
+                              {q.value == null ? (
+                                <span className="font-bold text-[var(--hw-neutral-400)]">— kg/mo</span>
+                              ) : (
+                                <>
+                                  <span className="font-bold text-[var(--hw-neutral-800)]">
+                                    {q.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                  </span>{" "}
+                                  <span className="text-[11px] text-[var(--hw-neutral-500)]">kg/mo</span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-blue-700">Current Month Volume</p>
+                          <p className="mt-0.5 flex items-center justify-center gap-1.5">
+                            <span className="text-[15px] font-bold text-blue-800">
+                              {arrivalCurrentKg == null
+                                ? "—"
+                                : `${arrivalCurrentKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`}
+                            </span>
+                            {arrivalClassification && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-[10px] font-bold text-blue-700">
+                                {arrivalClassification}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Annual Recorded Total</p>
+                          <p className="mt-0.5 text-[15px] font-bold text-[var(--hw-neutral-800)]">
+                            {arrivalTotals.total_kg == null ? (
+                              "—"
+                            ) : (
+                              <>
+                                {arrivalTotals.total_kg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg{" "}
+                                <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+                                  ({arrivalTotals.months} mo)
+                                </span>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      {arrivalBoundary.length > 0 ? (
+                        <div className="border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
+                          <div className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)] text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-500)]">
+                            <span>Classification</span>
+                            <span>Monthly Boundary</span>
+                            <span className="text-right">Supply Pressure</span>
+                          </div>
+                          {arrivalBoundary.map((row) => (
+                            <div
+                              key={row.classification}
+                              className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 border-b border-[var(--hw-neutral-100)] last:border-b-0 text-[11px]"
+                            >
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span
+                                    tabIndex={0}
+                                    title={row.supply}
+                                    className={`font-bold cursor-help ${ARRIVAL_PRESSURE_TONES[row.classification]}`}
+                                  >
+                                    {row.classification}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="top"
+                                  className="max-w-xs bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed z-50"
+                                >
+                                  <p>{row.supply}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              <span className="text-[var(--hw-neutral-700)]">{row.boundary}</span>
+                              <span className="text-right text-[var(--hw-neutral-600)]">{row.supply}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                          {arrivalLoading
+                            ? "Loading arrival volume…"
+                            : arrivalError || "Insufficient arrival history to calculate quartiles for this variety."}
+                        </p>
+                      )}
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/modules/basis/arrival-pressure?${arrivalBasisParams}`)}
+                          className="text-[13px] font-bold text-[var(--hw-green-700)] hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          View Basis
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Historical Seasonal Production Level (Derived per Commodity + Variety — Read-Only) */}
+                <div
+                  id="threshold-seasonal-production"
+                  data-threshold-card="production seasonal seasonal-production"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("production") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Historical Seasonal Production Level</h3>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
+                          Source: {productionSummary?.source || "production_record"} · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
+                        <div>
+                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q1 Ratio</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q1.toFixed(2) : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q2 Ratio</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q2.toFixed(2) : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q3 Ratio</p>
+                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                            {productionSummary?.quartiles ? productionSummary.quartiles.q3.toFixed(2) : "-"}
+                          </p>
+                        </div>
+                      </div>
+                      {productionLoading ? (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">Loading production history…</p>
+                      ) : productionError ? (
+                        <p className="text-[11px] text-red-600 text-center">{productionError}</p>
+                      ) : productionSummary?.status !== "processed" ? (
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                          {productionSummary?.message || "Insufficient historical production data to calculate thresholds."}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 text-center">
+                            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2">
+                              <p className="text-[10px] text-emerald-700 font-medium">Peak Season</p>
+                              <p className="text-[12px] font-bold text-emerald-800">{productionSummary.peak_quarter || "—"}</p>
+                            </div>
+                            <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-2">
+                              <p className="text-[10px] text-amber-700 font-medium">Lean Season</p>
+                              <p className="text-[12px] font-bold text-amber-800">{productionSummary.lean_quarter || "—"}</p>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto rounded-lg border border-[var(--hw-neutral-100)]">
+                            <table className="w-full text-[10px] text-left">
+                              <thead className="bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-500)]">
+                                <tr>
+                                  <th className="px-2 py-1.5">Quarter</th>
+                                  <th className="px-2 py-1.5 text-right">Avg MT</th>
+                                  <th className="px-2 py-1.5 text-right">Ratio</th>
+                                  <th className="px-2 py-1.5 text-center">Level</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(productionSummary.quarterly_profiles && productionSummary.quarterly_profiles.length > 0
+                                  ? productionSummary.quarterly_profiles
+                                  : (productionSummary.seasonal_totals || []).map((st) => ({
+                                    quarter: st.season,
+                                    average_production_mt: st.average_production_mt || 0,
+                                    seasonal_ratio: 1.0,
+                                    classification: "—"
+                                  }))
+                                ).map((qp) => (
+                                  <tr key={qp.quarter} className="border-t border-[var(--hw-neutral-100)]">
+                                    <td className="px-2 py-1.5 font-semibold text-[var(--hw-neutral-800)]">{qp.quarter}</td>
+                                    <td className="px-2 py-1.5 text-right text-[var(--hw-neutral-700)]">
+                                      {Number(qp.average_production_mt).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-[var(--hw-neutral-600)]">
+                                      {Number(qp.seasonal_ratio).toFixed(2)}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center font-medium">
+                                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${qp.classification === "High" ? "bg-red-50 text-red-700" :
+                                        qp.classification === "Upper Middle" ? "bg-amber-50 text-amber-700" :
+                                          qp.classification === "Lower Middle" ? "bg-blue-50 text-blue-700" :
+                                            qp.classification === "Low" ? "bg-emerald-50 text-emerald-700" :
+                                              "text-[var(--hw-neutral-500)]"
+                                        }`}>
+                                        {qp.classification}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Weather Risk (Configured per Commodity + Variety) */}
+                <div
+                  id="threshold-weather-risk"
+                  data-threshold-card="weather weather-risk"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("weather") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Weather Risk</h3>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
+                          Scope: {scopedCommodity ? `${scopedCommodity} — ${scopedVariety || "Standard"}` : "Select a commodity and variety"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setEditingWeather(true)}
+                        disabled={!scopedCommodity}
+                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Edit Weather Thresholds"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {currentWeatherRules.length === 0 ? (
+                      <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
+                        Weather thresholds not configured for {scopedCommodity || "crop"} — {scopedVariety || "Standard"}.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
+                        {currentWeatherRules.slice(0, 3).map((r) => (
+                          <div key={r.id || r.metric_key} className="py-2 flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[var(--hw-neutral-600)]">{weatherMetricLabel(r.metric_key)}</span>
+                              <span className="font-medium text-[var(--hw-neutral-900)] capitalize">{r.risk_level}</span>
+                            </div>
+                            <span className="text-[11px] text-[var(--hw-neutral-500)]">{weatherRuleSummary(r)}</span>
+                          </div>
+                        ))}
+                        {currentWeatherRules.length > 3 && (
+                          <div className="py-2 text-center text-[var(--hw-neutral-400)] text-[11px]">
+                            +{currentWeatherRules.length - 3} more rule{currentWeatherRules.length - 3 > 1 ? "s" : ""} configured
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 5. Profitability (Global Farmer Assessment Rule) */}
+                <div
+                  id="threshold-profitability"
+                  data-threshold-card="profit profitability"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("profitability") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Profitability</h3>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">Applied during individual farmer assessment</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)]">
+                        <p className="text-[11px] text-[var(--hw-neutral-600)] leading-relaxed">
+                          This rule is applied during individual farmer assessment using the farmer&apos;s own production cost, expected yield, and selling price. It is not shown as a global analytical result.
+                        </p>
+                      </div>
+                      <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
+                        <div className="py-1.5 flex items-center justify-between">
+                          <span className="text-[var(--hw-neutral-600)]">Favorable Multiplier</span>
+                          <span className="font-medium text-[var(--hw-neutral-900)]">-</span>
+                        </div>
+                        <div className="py-1.5 flex items-center justify-between">
+                          <span className="text-[var(--hw-neutral-600)]">Break-even Overlap Rule</span>
+                          <span className="font-medium text-[var(--hw-neutral-500)]">Not configured</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. Final Advisory Cutoffs (Global Rule) */}
+                <div
+                  id="threshold-final-advisory"
+                  data-threshold-card="advisory final-advisory"
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("advisory") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Final Advisory Cutoffs</h3>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">Recommendation Engine output mapping</p>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
+                      <div className="py-2.5 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-emerald-700">Recommended</span>
+                          <span className="font-mono text-[var(--hw-neutral-800)] font-medium">-</span>
+                        </div>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)]">Most factors support planting.</p>
+                      </div>
+                      <div className="py-2.5 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-amber-700">Proceed with Caution</span>
+                          <span className="font-mono text-[var(--hw-neutral-800)] font-medium">-</span>
+                        </div>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)]">Some factors add caution.</p>
+                      </div>
+                      <div className="py-2.5 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-red-700">Avoid for Now</span>
+                          <span className="font-mono text-[var(--hw-neutral-800)] font-medium">-</span>
+                        </div>
+                        <p className="text-[11px] text-[var(--hw-neutral-500)]">Multiple unfavorable factors.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
-    </>;
+    </>
+  );
 }
-export {
-  AdminAnalytics as default
-};
+
+export { AdminAnalytics as default, EditPriceOutlookModal, EditWeightModal };

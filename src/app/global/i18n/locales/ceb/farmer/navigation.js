@@ -1,0 +1,15 @@
+export const navigation = {
+  home: "Home",
+  prices: "Mga Presyo",
+  crop_calendar: "Kalendaryo sa Tanom",
+  my_crops: "Akong mga Tanom",
+  settings: "Settings",
+  about: "Bahin sa HarvestWise",
+  profile: "Profile",
+  notifications: "Mga Pahibalo",
+  farmer_role: "Mag-uuma",
+  get_app: "I-install ang App",
+  installed: "Naka-install na",
+  installing: "Gina-install...",
+  logout: "Mag-log out",
+};

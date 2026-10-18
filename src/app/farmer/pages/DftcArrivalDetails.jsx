@@ -13,7 +13,11 @@ import {
   Cell
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 const ARRIVAL_WEEKLY = {
   kamatis: {
     classification: "Normal",
@@ -71,6 +75,8 @@ const pressureCfg = {
   Normal: { color: "text-blue-600", borderColor: "border-l-blue-500", Icon: Minus },
   High: { color: "text-amber-700", borderColor: "border-l-amber-500", Icon: TrendingUp }
 };
+import { useLanguage } from "../../global/contexts/LanguageContext";
+
 function countAboveBelow(weeks) {
   const mean = weeks.reduce((s, w) => s + w.tons, 0) / weeks.length;
   const threshold = mean * 0.05;
@@ -79,37 +85,46 @@ function countAboveBelow(weeks) {
     below: weeks.filter((w) => w.tons < mean - threshold).length
   };
 }
-function buildInsight(name, classification, weeks) {
+function buildInsight(name, classification, weeks, t) {
   const latest = weeks[weeks.length - 1];
   const { above, below } = countAboveBelow(weeks);
   if (classification === "High") {
     return {
       headline: `${name} arrivals were above the usual level in ${above} of the last 4 weeks, reaching ${latest.tons.toFixed(1)} tons on ${latest.week}.`,
-      meaning: `More ${name} is entering DFTC, which may place pressure on market prices.`,
-      action: `Based on recent DFTC arrivals, consider comparing current prices and reviewing your selling schedule.`
+      meaning: t ? t("farmer.factors.arrival.arrival_high_meaning", { crop_name: name }) : `More ${name} is entering DFTC, which may place pressure on market prices.`,
+      action: t ? t("farmer.factors.arrival.arrival_action_high") : `Based on recent DFTC arrivals, consider comparing current prices and reviewing your selling schedule.`
     };
   }
   if (classification === "Low") {
     return {
       headline: `${name} arrivals were below the usual level in ${below} of the last 4 weeks.`,
-      meaning: `Fewer ${name} deliveries reaching DFTC may reduce supply pressure in the near term.`,
-      action: `Based on recent DFTC arrivals, lower volumes may support prices. Confirm the current market price before selling.`
+      meaning: t ? t("farmer.factors.arrival.arrival_low_meaning", { crop_name: name }) : `Fewer ${name} deliveries reaching DFTC may reduce supply pressure in the near term.`,
+      action: t ? t("farmer.factors.arrival.arrival_action_low") : `Based on recent DFTC arrivals, lower volumes may support prices. Confirm the current market price before selling.`
     };
   }
   return {
     headline: `${name} arrivals stayed within the usual range during the last 4 weeks.`,
-    meaning: `Arrival volumes at DFTC are consistent with recent seasonal patterns.`,
-    action: `Based on recent DFTC arrivals, no strong arrival warning is present. Continue checking current prices before harvesting or selling.`
+    meaning: t ? t("farmer.factors.arrival.meaning_moderate", { crop_name: name }) : `Arrival volumes at DFTC are consistent with recent seasonal patterns.`,
+    action: t ? t("farmer.factors.arrival.arrival_action_normal") : `Based on recent DFTC arrivals, no strong arrival warning is present. Continue checking current prices before harvesting or selling.`
   };
 }
 const chipBtn = (active) => `flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[13px] font-medium transition-colors whitespace-nowrap ${active ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`;
 const tooltipStyle = { backgroundColor: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 11 };
 function DftcArrivalDetailsPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const defaultId = searchParams.get("commodity") ?? "kamatis";
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const sortedCommodities = sortWithPreferredFirst(COMMODITIES, preferredCrops);
+
+  const defaultId = searchParams.get("commodity") ?? (sortedCommodities[0]?.id || "kamatis");
   const [commodityId, setCommodityId] = useState(
-    COMMODITIES.find((c) => c.id === defaultId) ? defaultId : "kamatis"
+    COMMODITIES.find((c) => c.id === defaultId) ? defaultId : (sortedCommodities[0]?.id || "kamatis")
   );
   const commodity = COMMODITIES.find((c) => c.id === commodityId);
   const data = ARRIVAL_WEEKLY[commodityId] ?? ARRIVAL_WEEKLY["kamatis"];
@@ -119,41 +134,42 @@ function DftcArrivalDetailsPage() {
   const previous = data.weeks[2];
   const change = Math.round((latest.tons - previous.tons) * 10) / 10;
   const changeStr = change === 0 ? "\u2014" : change > 0 ? `+${change.toFixed(1)} tons` : `${change.toFixed(1)} tons`;
-  const insight = buildInsight(commodity.name, data.classification, data.weeks);
+  const insight = buildInsight(commodity.name, data.classification, data.weeks, t);
   const chartData = data.weeks.map((w, i) => ({
     week: w.week,
     tons: w.tons,
     isCurrent: i === 3
   }));
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
-        {
-    /* Page header */
-  }
+        {/* Page header */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-              DFTC Arrival Details
+              {t("farmer.factors.arrival.page_title", {}, "DFTC Arrival Details")}
             </h1>
-            <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at 7:30 AM</span>
-            </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)]">
             View DFTC commodity arrivals and arrival pressure in Davao City.
           </p>
         </div>
 
-        {
-    /* Commodity selector */
-  }
+        {/* Commodity selector */}
         <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          {COMMODITIES.map((c) => <button key={c.id} onClick={() => setCommodityId(c.id)} className={chipBtn(c.id === commodityId)}>
-              <CommodityIllustration commodityId={c.id} className="w-5 h-5 flex-shrink-0" />
-              {c.name}
-            </button>)}
+          {sortedCommodities.map((c) => {
+            const isPref = isPreferredCrop(c, preferredCrops);
+            return (
+              <button key={c.id} onClick={() => setCommodityId(c.id)} className={chipBtn(c.id === commodityId)}>
+                <CommodityIllustration commodityId={c.id} className="w-5 h-5 flex-shrink-0" />
+                {c.name}
+                {isPref && (
+                  <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium ${c.id === commodityId ? "bg-white/20 text-white" : "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]"}`}>
+                    Preferred
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {
@@ -244,9 +260,16 @@ function DftcArrivalDetailsPage() {
             </div>)}
         </div>
 
-        {
-    /* Table — 4 rows */
-  }
+        {/* Arrival Sources Distribution */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-2">
+          <div>
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Arrival Source Distribution</p>
+            <p className="text-[12px] text-[var(--hw-neutral-600)]">DFTC registered farms vs other supplying sources.</p>
+          </div>
+          <ArrivalSourcePieChart height={200} />
+        </div>
+
+        {/* Table — 4 rows */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
             <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
@@ -318,7 +341,6 @@ function DftcArrivalDetailsPage() {
           </button>
         </div>
 
-      </div>
     </div>;
 }
 export {

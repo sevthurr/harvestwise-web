@@ -12,7 +12,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       devOptions: {
         enabled: true,
         type: 'module'
@@ -51,9 +51,60 @@ export default defineConfig({
         ]
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/]
+        navigateFallbackDenylist: [/^\/api/],
+        // Runtime caching for API responses — enables offline-first for farmers
+        runtimeCaching: [
+          {
+            // Authenticated identity must never come from a service-worker
+            // cache. Two reasons, the second being the reason this rule has to
+            // come first (workbox matches routes in registration order):
+            //
+            //  1. Correctness. `/auth/me` is what carries
+            //     `profile_picture_path` into AuthContext, and every avatar in
+            //     the app reads it from there. NetworkFirst falls back to the
+            //     cached copy once a request exceeds `networkTimeoutSeconds`,
+            //     so a save-then-navigate could hand back the *pre-save*
+            //     response and silently revert the change on screen.
+            //  2. Isolation. The cache key is the URL, with no notion of who
+            //     is signed in, and entries live 7 days. On a shared handset —
+            //     the case AuthContext already guards against for tokens — user
+            //     A's cached identity, email, and role could be served to user
+            //     B during a slow request.
+            //
+            // Offline is unaffected: AuthContext restores a cached session from
+            // IndexedDB (HARVESTWISE_USER_CACHE_V1) when /auth/me is
+            // unreachable, which is the intended offline path, not this cache.
+            urlPattern: /\/api\/v1\/auth\//i,
+            handler: 'NetworkOnly',
+          },
+          {
+            // Admin analytics outputs are real-time computed data — never serve
+            // from cache or the year picker and classification values will be stale.
+            urlPattern: /\/api\/v1\/admin\/analytics\//i,
+            handler: 'NetworkOnly',
+          },
+          {
+            // Cache all other API GET responses with NetworkFirst strategy
+            // (try network, fall back to cache when offline)
+            // Match any origin with /api/v1/ path — works for localhost, production domains, etc.
+            urlPattern: /\/api\/v1\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'harvestwise-api-cache',
+              networkTimeoutSeconds: 5,
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       }
     })
   ],
@@ -70,5 +121,15 @@ export default defineConfig({
     esbuildOptions: {
       sourcemap: false,
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    // The DFTC entry suites need 7s+ of wall clock once all 40+ files run in
+    // parallel, so vitest's 5s default killed them on a loaded machine. This is
+    // headroom for slow rendering, not a relaxation of any assertion.
+    testTimeout: 15000,
   },
 })

@@ -6,15 +6,19 @@ const PriceChart = ({
 }) => {
   return <ResponsiveContainer width="100%" height="100%">
       <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--hw-neutral-200)" />
+        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--hw-neutral-200)" />
         <XAxis
     dataKey="date"
     tick={{ fill: "var(--hw-neutral-500)", fontSize: 12 }}
     stroke="var(--hw-neutral-300)"
+    tickLine={false}
+    axisLine={false}
   />
         <YAxis
     tick={{ fill: "var(--hw-neutral-500)", fontSize: 12 }}
     stroke="var(--hw-neutral-300)"
+    tickLine={false}
+    axisLine={false}
   />
         <Tooltip
     contentStyle={{
@@ -25,50 +29,48 @@ const PriceChart = ({
     }}
   />
         
-        {
-    /* Confidence Band */
-  }
+        {/* Confidence Band */}
         {showForecast && <Area
-    type="monotone"
-    dataKey="confidenceHigh"
-    stroke="none"
-    fill="#AAD576"
-    fillOpacity={0.2}
-  />}
+          type="monotone"
+          dataKey="confidenceHigh"
+          stroke="none"
+          fill="#AAD576"
+          fillOpacity={0.2}
+          connectNulls={false}
+        />}
         {showForecast && <Area
-    type="monotone"
-    dataKey="confidenceLow"
-    stroke="none"
-    fill="#AAD576"
-    fillOpacity={0.2}
-  />}
+          type="monotone"
+          dataKey="confidenceLow"
+          stroke="none"
+          fill="#AAD576"
+          fillOpacity={0.2}
+          connectNulls={false}
+        />}
         
-        {
-    /* Actual Price Line */
-  }
+        {/* Actual Price Line */}
         <Line
-    type="monotone"
-    dataKey="price"
-    stroke="#245501"
-    strokeWidth={3}
-    dot={{ fill: "#245501", r: 4 }}
-    activeDot={{ r: 6 }}
-    name="Current Price"
-  />
+          type="monotone"
+          dataKey="price"
+          stroke="#245501"
+          strokeWidth={3}
+          dot={{ fill: "white", stroke: "#245501", strokeWidth: 2, r: 4 }}
+          activeDot={{ r: 6, strokeWidth: 0, fill: "#245501" }}
+          connectNulls={false}
+          name="Current Price"
+        />
         
-        {
-    /* Forecast Line */
-  }
+        {/* Forecast Line */}
         {showForecast && <Line
-    type="monotone"
-    dataKey="forecast"
-    stroke="#73A942"
-    strokeWidth={3}
-    strokeDasharray="5 5"
-    dot={{ fill: "#73A942", r: 4 }}
-    activeDot={{ r: 6 }}
-    name="Forecast"
-  />}
+          type="monotone"
+          dataKey="forecast"
+          stroke="#73A942"
+          strokeWidth={3}
+          strokeDasharray="5 5"
+          dot={{ fill: "white", stroke: "#73A942", strokeWidth: 2, r: 4 }}
+          activeDot={{ r: 6, strokeWidth: 0, fill: "#73A942" }}
+          connectNulls={false}
+          name="Forecast"
+        />}
       </ComposedChart>
     </ResponsiveContainer>;
 };

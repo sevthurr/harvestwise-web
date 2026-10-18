@@ -1,0 +1,668 @@
+/**
+ * AdminAuditLogs.jsx
+ *
+ * Displays the audit trail from the `logs` table.
+ *
+ * DB schema (logs):
+ *   id          VARCHAR(15)   LOG-xxxx
+ *   user_id     VARCHAR(15)   FK to users.id, NULLABLE — NULL means a
+ *                             system-initiated event (API sync, cron, weather
+ *                             backfill) with no human actor
+ *   action      VARCHAR(100)  dot-notation, namespaced by resource:
+ *                             auth.*, import.*, config.*, analytics.*,
+ *                             system.*, dftc.*, farmer.*, user.*
+ *   details     TEXT nullable  free-form description
+ *   ip_address  VARCHAR(45) nullable
+ *   created_at  DATETIME
+ *
+ * API (query_logs):
+ *   GET /api/admin/logs
+ *   ?user_id=&action=&date_from=&date_to=&page=1&page_size=20
+ *   Returns: { items: LogResponse[], total, page, page_size }
+ *
+ * NOTE: `actor_name` is resolved from `user_id` by the backend join in
+ * audit/repository.py; both it and the raw `user_id` are rendered together
+ * by formatActorLabel() so an actor is never ambiguous in an export.
+ */
+
+import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router";
+
+import {
+  Search,
+  Download,
+  ClipboardList,
+  ChevronDown,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight as ChevronRightIcon,
+  FileText,
+  Eye
+} from "lucide-react";
+import { PageHeader } from "../../global/components/shared/PageHeader";
+import { adminApi } from "../../../services/api";
+import { createAuditLogsPdf } from "../utils/auditLogsPdf";
+import { formatActorLabel } from "../utils/auditActor";
+// Optional, not useAuth(): this page renders in unit tests without an
+// AuthProvider, and useAuth() throws in that case.
+import { useOptionalAuth } from "../../global/contexts/AuthContext";
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "../../global/components/ui/tooltip";
+
+// ─── Components ───────────────────────────────────────────────────────────────
+
+function ActionText({ action }) {
+  return (
+    <span className="text-[13px] text-[var(--hw-neutral-800)] font-mono">
+      {action}
+    </span>
+  );
+}
+
+function DetailsCell({ details }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!details) {
+    return <span className="text-[var(--hw-neutral-400)] italic">No details</span>;
+  }
+
+  return (
+    <Tooltip open={isOpen ? true : undefined} onOpenChange={setIsOpen}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="text-left max-w-[300px] truncate block text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] cursor-default md:cursor-help focus:outline-none"
+          title={details}
+        >
+          {details}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        className="max-w-md bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed break-words z-50 pointer-events-auto"
+      >
+        <p>{details}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function MobileDetails({ details }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!details) return null;
+  const isLong = details.length > 70;
+
+  return (
+    <div
+      onClick={() => isLong && setExpanded((v) => !v)}
+      className={`text-[12px] text-[var(--hw-neutral-700)] ${isLong ? "cursor-pointer" : ""}`}
+    >
+      <p className={expanded ? "break-words" : "line-clamp-2"}>
+        {details}
+      </p>
+      {isLong && (
+        <span className="text-[11px] font-medium text-[var(--hw-green-700)] mt-0.5 inline-block">
+          {expanded ? "Show less" : "Tap to view full details"}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function FilterSelect({ label, id, value, onChange, options }) {
+  return (
+    <div className="relative">
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 pr-8 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)] cursor-pointer"
+        aria-label={label}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)] pointer-events-none" />
+    </div>
+  );
+}
+
+function EmptyState({ filtered }) {
+  return (
+    <div className="flex flex-col items-center gap-3 text-center max-w-xs mx-auto">
+      <div className="w-12 h-12 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center">
+        <ClipboardList className="w-6 h-6 text-[var(--hw-neutral-400)]" />
+      </div>
+      <div>
+        <p className="text-[14px] font-semibold text-[var(--hw-neutral-700)]">
+          {filtered ? "No matching logs" : "No audit logs yet"}
+        </p>
+        <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">
+          {filtered
+            ? "Try adjusting your filters to find what you're looking for."
+            : "Admin actions will be recorded here automatically once the backend is connected."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+// Action filter options based on the dot-notation namespaces actually written
+// to the logs table. Each value is matched as a substring by the backend, so
+// "auth" covers auth.login, auth.totp_*, auth.otp_*, etc.
+const ACTION_FILTER_OPTIONS = [
+  { value: "",           label: "All Actions"         },
+  { value: "auth",       label: "Auth"                },
+  { value: "import",     label: "Import"              },
+  { value: "config",     label: "Config"              },
+  { value: "analytics",  label: "Analytics"           },
+  { value: "system",     label: "System Management"   },
+  { value: "dftc",       label: "DFTC"                },
+  { value: "farmer",     label: "Farmer"              },
+  { value: "user",       label: "User Management"     },
+];
+
+const PAGE_SIZE = 20;
+const EXPORT_PAGE_SIZE = 100;
+
+function buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize }) {
+  const params = { page, page_size: pageSize };
+  const actionParts = [];
+  if (actionPrefix) actionParts.push(actionPrefix);
+  if (search.trim()) actionParts.push(search.trim());
+  if (actionParts.length) params.action = actionParts.join(".");
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+  return params;
+}
+
+function AdminAuditLogs() {
+  const [searchParams] = useSearchParams();
+  const searchParam = searchParams.get("search") || searchParams.get("action") || "";
+  const highlightParam = searchParams.get("highlight") || searchParam;
+
+  // Initialize prefix and search term from URL query if provided
+  const initialPrefix = (() => {
+    if (!searchParam) return "";
+    const prefix = searchParam.split(".")[0]?.toLowerCase();
+    return ACTION_FILTER_OPTIONS.some((o) => o.value === prefix && o.value !== "") ? prefix : "";
+  })();
+  const initialSearch = (() => {
+    if (!searchParam) return "";
+    if (initialPrefix && searchParam.includes(".")) {
+      return searchParam.slice(initialPrefix.length + 1);
+    }
+    return searchParam;
+  })();
+
+  // ── Filter state ─────────────────────────────────────────────────────────
+  const [search, setSearch]         = useState(initialSearch);   // maps to action ilike
+  const [actionPrefix, setPrefix]   = useState(initialPrefix);   // resource prefix filter
+  const [highlightedId, setHighlightedId] = useState(highlightParam);
+  const [dateFrom, setDateFrom]     = useState("");   // ISO date string
+  const [dateTo, setDateTo]         = useState("");   // ISO date string
+  const [page, setPage]             = useState(1);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting]   = useState(null); // null | "preview" | "download"
+
+  // 3-second temporary highlight timer (matching DFTC pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedId(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedId(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+  const auth = useOptionalAuth();
+  const user = auth?.user;
+  const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
+    queryKey: ["adminAuditLogs", actionPrefix, search, dateFrom, dateTo, page],
+    queryFn: () =>
+      adminApi.getAuditLogs(
+        buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize: PAGE_SIZE })
+      ),
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: true,
+  });
+
+  const error = queryErr ? (queryErr.message || "Failed to load audit logs") : null;
+
+  const data = logsRes || { items: [], total: 0, page, page_size: PAGE_SIZE };
+
+  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+
+  const hasFilters = search.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
+
+  const handleReset = () => {
+    setSearch("");
+    setPrefix("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  };
+
+  // Smooth scroll to highlighted log entry
+  useEffect(() => {
+    if (!highlightedId || loading) return;
+    const t = setTimeout(() => {
+      const hl = highlightedId.toLowerCase();
+      const el =
+        document.getElementById(`log-row-${hl}`) ||
+        document.querySelector(`[data-log-row*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightedId, loading, data.items]);
+
+  // Fetch every row matching the current filters (usable for full PDF export).
+  const fetchAllLogs = async () => {
+    const all = [];
+    let pageNo = 1;
+    let total = 0;
+    for (;;) {
+      const res = await adminApi.getAuditLogs(
+        buildLogParams({
+          actionPrefix,
+          search,
+          dateFrom,
+          dateTo,
+          page: pageNo,
+          pageSize: EXPORT_PAGE_SIZE,
+        })
+      );
+      total = res.total;
+      all.push(...res.items);
+      if (all.length >= total || res.items.length === 0) break;
+      pageNo += 1;
+    }
+    return { logs: all, total };
+  };
+
+  const buildFilterLabel = () => {
+    const parts = [];
+    const actionParts = [];
+    if (actionPrefix) actionParts.push(actionPrefix);
+    if (search.trim()) actionParts.push(search.trim());
+    if (actionParts.length) parts.push(`Action: ${actionParts.join(".")}`);
+    if (dateFrom) parts.push(`From ${dateFrom}`);
+    if (dateTo) parts.push(`To ${dateTo}`);
+    return parts.length ? parts.join("  |  ") : "All logs";
+  };
+
+  // Attribution printed on the export: "<Full Name> (<USER-ID>)".
+  const buildGeneratedBy = () => {
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const label = fullName || user?.email || "Unknown Admin";
+    return user?.id ? `${label} (${user.id})` : label;
+  };
+
+  // Build a pixel-perfect PDF and either open it for preview or download it.
+  const generatePdf = async (mode) => {
+    if (exporting) return;
+    setExporting(mode);
+    try {
+      const { logs, total } = await fetchAllLogs();
+      const generatedAt = new Date().toLocaleString("en-PH", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const doc = await createAuditLogsPdf({
+        logs,
+        total,
+        filterLabel: buildFilterLabel(),
+        generatedAt,
+        generatedBy: buildGeneratedBy(),
+      });
+
+      const slug = new Date().toISOString().slice(0, 10);
+      const filename = `audit-logs-${slug}.pdf`;
+
+      if (mode === "preview") {
+        const blob = doc.output("blob");
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, "_blank");
+        if (!win) doc.save(filename); // pop-up blocked — fall back to download
+      } else {
+        doc.save(filename);
+      }
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert("Failed to generate the PDF. Please try again.");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+
+  // Format ISO datetime for display
+  function fmtDatetime(isoStr) {
+    if (!isoStr) return "—";
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleString("en-PH", {
+        year: "numeric", month: "short", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: true
+      });
+    } catch {
+      return isoStr;
+    }
+  }
+
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
+      {/* ── Header ── */}
+      <div className="mb-5">
+        <PageHeader
+          title="Audit Logs"
+          description="View and track system events and administrative actions."
+        />
+      </div>
+
+      {/* ── Filter bar ── */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 mb-4">
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Search → maps to action ilike filter */}
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
+            <input
+              id="audit-search"
+              type="text"
+              placeholder="Search action (e.g. import.completed)…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full pl-9 pr-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+            />
+          </div>
+
+          {/* Resource prefix filter */}
+          <FilterSelect
+            id="audit-action-filter"
+            label="Action category"
+            value={actionPrefix}
+            onChange={(v) => { setPrefix(v); setPage(1); }}
+            options={ACTION_FILTER_OPTIONS}
+          />
+
+          {/* Date range */}
+          <input
+            id="audit-date-from"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            aria-label="Date from"
+            className="bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+          />
+          <span className="text-[12px] text-[var(--hw-neutral-400)]">to</span>
+          <input
+            id="audit-date-to"
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            aria-label="Date to"
+            className="bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+          />
+
+          {hasFilters && (
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-black border border-[var(--hw-neutral-200)] rounded-xl bg-white hover:bg-[var(--hw-neutral-50)] transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset
+            </button>
+          )}
+
+          {/* Export PDF dropdown inside filter container */}
+          <div className="relative ml-auto">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={!!exporting}
+              className="flex items-center gap-2 px-3.5 py-2 text-[13px] font-medium rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] bg-white hover:bg-[var(--hw-neutral-50)] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileText className={`w-4 h-4 text-[#245501] ${exporting ? "animate-pulse" : ""}`} />
+              {exporting ? "Preparing PDF…" : "Export PDF"}
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden z-20">
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    generatePdf("preview");
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2"
+                >
+                  <Eye className="w-4 h-4" /> Preview
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    generatePdf("download");
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" /> Download
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Table ── */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
+                {[
+                  { key: "id",         label: "Log ID"    },
+                  { key: "timestamp",  label: "Timestamp" },
+                  { key: "actor",      label: "Actor"     },
+                  { key: "action",     label: "Action"    },
+                  { key: "details",    label: "Details"   },
+                  { key: "ip",         label: "IP Address"},
+                ].map((h) => (
+                  <th
+                    key={h.key}
+                    className="text-left px-5 py-3 font-semibold text-[var(--hw-neutral-700)] text-[11px] uppercase tracking-wide whitespace-nowrap"
+                  >
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-6 h-6 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading audit logs...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <p className="text-[13px] text-red-600">{error}</p>
+                  </td>
+                </tr>
+              ) : data.items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <EmptyState filtered={hasFilters} />
+                  </td>
+                </tr>
+              ) : (
+                data.items.map((row) => {
+                  const hl = (highlightedId || "").toLowerCase();
+                  const isHighlighted = Boolean(
+                    hl &&
+                    (row.id?.toLowerCase() === hl ||
+                     row.action?.toLowerCase().includes(hl) ||
+                     (row.user_id && row.user_id.toLowerCase().includes(hl)) ||
+                     (row.actor_name && row.actor_name.toLowerCase().includes(hl)) ||
+                     (row.details && row.details.toLowerCase().includes(hl)))
+                  );
+                  const rowDataMatcher = `${row.id} ${row.action} ${row.user_id || ""} ${row.actor_name || ""}`.toLowerCase();
+
+                  return (
+                    <tr
+                      key={row.id}
+                      id={`log-row-${row.id.toLowerCase()}`}
+                      data-log-row={rowDataMatcher}
+                      className={`transition-colors duration-500 ${isHighlighted ? "bg-emerald-50/70 font-medium" : ""}`}
+                    >
+                      <td className="px-5 py-3 font-mono text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap">
+                        {row.id}
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap text-[12px]">
+                        {fmtDatetime(row.created_at)}
+                      </td>
+                      <td className="px-5 py-3 font-medium text-[var(--hw-neutral-800)] whitespace-nowrap">
+                        {formatActorLabel(row)}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <ActionText action={row.action} />
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-700)] max-w-[300px]">
+                        <DetailsCell details={row.details} />
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-600)] whitespace-nowrap font-mono text-[12px]">
+                        {row.ip_address || "—"}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="md:hidden">
+          {loading ? (
+            <div className="px-5 py-16 flex flex-col items-center gap-3">
+              <div className="w-6 h-6 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading audit logs...</p>
+            </div>
+          ) : error ? (
+            <div className="px-5 py-16 flex justify-center">
+              <p className="text-[13px] text-red-600">{error}</p>
+            </div>
+          ) : data.items.length === 0 ? (
+            <div className="px-5 py-16 flex justify-center">
+              <EmptyState filtered={hasFilters} />
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--hw-neutral-100)]">
+              {data.items.map((row) => {
+                const hl = (highlightedId || "").toLowerCase();
+                const isHighlighted = Boolean(
+                  hl &&
+                  (row.id?.toLowerCase() === hl ||
+                   row.action?.toLowerCase().includes(hl) ||
+                   (row.user_id && row.user_id.toLowerCase().includes(hl)) ||
+                   (row.actor_name && row.actor_name.toLowerCase().includes(hl)) ||
+                   (row.details && row.details.toLowerCase().includes(hl)))
+                );
+                const rowDataMatcher = `${row.id} ${row.action} ${row.user_id || ""} ${row.actor_name || ""}`.toLowerCase();
+
+                return (
+                  <div
+                    key={row.id}
+                    data-log-row={rowDataMatcher}
+                    className={`px-5 py-3.5 space-y-1.5 transition-colors duration-500 ${
+                      isHighlighted ? "bg-emerald-50/70 font-medium" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <ActionText action={row.action} />
+                      <span className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
+                        {row.id}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-[var(--hw-neutral-500)]">
+                      {fmtDatetime(row.created_at)}
+                    </p>
+                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
+                      {formatActorLabel(row)}
+                    </p>
+                    {row.details && (
+                      <MobileDetails details={row.details} />
+                    )}
+                    <p className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
+                      {row.ip_address || "—"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Pagination ── */}
+      <div className="mt-4 flex items-center justify-between gap-4 px-5 py-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[var(--shadow-xs)] text-[12px] text-[var(--hw-neutral-700)] flex-wrap">
+        <p>
+          {data.total > 0
+            ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, data.total)} of ${data.total} activities`
+            : "No entries"}
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Prev
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPage(p)}
+              className={`px-2.5 py-1 border rounded-lg transition-colors ${
+                p === page
+                  ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white"
+                  : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default AdminAuditLogs;

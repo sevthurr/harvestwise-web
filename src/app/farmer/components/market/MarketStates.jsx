@@ -1,8 +1,21 @@
-import { Loader2, SearchX, WifiOff, AlertTriangle } from "lucide-react";
-const MarketLoadingState = () => <div className="flex flex-col items-center justify-center py-16 gap-4 text-[var(--hw-neutral-500)]">
-    <Loader2 className="w-8 h-8 animate-spin text-[var(--hw-green-600)]" />
-    <p className="text-sm">Loading market information…</p>
-  </div>;
+import { SearchX, WifiOff, AlertTriangle } from "lucide-react";
+
+const MarketLoadingState = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div key={i} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3 animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[var(--hw-neutral-200)] flex-shrink-0" />
+          <div className="space-y-1.5 flex-1">
+            <div className="h-4 w-28 rounded bg-[var(--hw-neutral-200)]" />
+            <div className="h-3 w-16 rounded bg-[var(--hw-neutral-200)]" />
+          </div>
+        </div>
+        <div className="h-16 w-full rounded-xl bg-[var(--hw-neutral-200)]" />
+      </div>
+    ))}
+  </div>
+);
 const MarketEmptyState = ({ query }) => <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
     <SearchX className="w-10 h-10 text-[var(--hw-neutral-300)]" />
     <p className="font-semibold text-[var(--hw-neutral-700)]">

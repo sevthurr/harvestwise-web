@@ -1,5 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 import {
   LayoutDashboard,
   CloudRain,
@@ -28,8 +32,14 @@ import {
   Cell
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import {
+  MARKET_STATUS_CODES,
+  normalizeMarketStatusCode
+} from "../utils/farmerCodes";
+
 const COMMODITY_OUTLOOK = {
   kamatis: { id: "kamatis", status: "Balanced", nearTermOutlook: "Supply may increase during the next period.", mainFactor: "More harvests are expected soon in the region.", action: "Monitor prices before increasing planted area.", arrivalVolume: "Increasing", arrivalDetail: "Kamatis deliveries to DFTC have risen slightly over the past three days.", priceBehavior: "Rising", priceDetail: "Bangkerohan retail prices have improved slightly, currently above break-even for most farms.", seasonalCondition: "Peak harvest season approaching in the coming weeks.", weatherInfluence: "Heavy rain may delay deliveries and briefly reduce supply.", calendarInfluence: "Upcoming payday period may support buyer demand near harvest.", risks: ["Oversupply risk if multiple farms harvest at the same time"], opportunities: ["Current Bangkerohan prices are above average break-even"], demandPressure: 55, arrivalVolumeMock: [82, 85, 88, 91, 90, 94, 96] },
   talong: { id: "talong", status: "Balanced", nearTermOutlook: "Stable market conditions expected.", mainFactor: "Supply and demand are well balanced.", action: "Continue monitoring. No urgent action needed.", arrivalVolume: "Stable", arrivalDetail: "Talong deliveries to DFTC have remained consistent this week.", priceBehavior: "Stable", priceDetail: "Bangkerohan retail prices have held steady. No major movement expected in the short term.", seasonalCondition: "Normal production season. No major seasonal shift expected soon.", weatherInfluence: "Some rain may occur but unlikely to significantly affect deliveries.", calendarInfluence: "No major calendar events expected to shift demand significantly.", risks: ["Minor supply fluctuations if weather worsens"], opportunities: ["Stable prices make planning easier for farmers"], demandPressure: 48, arrivalVolumeMock: [70, 72, 71, 73, 72, 71, 72] },
@@ -50,22 +60,28 @@ const OVERALL_MARKET = {
   nearTermOutlook14d: "DFTC Arrival Volume and Seasonal Production Pressure may increase during the next 14 days. Prices may face mild downward pressure for some commodities.",
   nearTermOutlook28d: "Supply pressure may increase over the next 28 days. Prices may soften for high-supply commodities, while low-supply items may remain elevated."
 };
-const MARKET_DRIVERS_DATA = {
+const getMarketDriversData = (t) => ({
   arrivals: {
     status: "DFTC Arrival Volume: Slightly Increasing",
-    detail: "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases. Bangkerohan does not have verified arrival volume data.",
+    detail: t
+      ? `${t("farmer.factors.arrival.driver_overview")} ${t("farmer.factors.arrival.bangkerohan_unverified_notice")}`
+      : "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases. Bangkerohan does not have verified arrival volume data.",
     link: null,
     trend: "up"
   },
   price: {
     status: "Mixed",
-    detail: "Prices have remained mostly stable. Sibuyas, Luya, and Okra are rising. Repolyo, Bawang, and Pechay are falling.",
+    detail: t
+      ? t("farmer.factors.price.driver_overview")
+      : "Prices have remained mostly stable. Sibuyas, Luya, and Okra are rising. Repolyo, Bawang, and Pechay are falling.",
     link: "/prices",
     trend: "mixed"
   },
   seasonality: {
     status: "Harvest Season Approaching",
-    detail: "More farms in the Davao Region may begin harvesting in the coming weeks, which could increase market supply.",
+    detail: t
+      ? t("farmer.factors.production.driver_overview")
+      : "More farms in the Davao Region may begin harvesting in the coming weeks, which could increase market supply.",
     link: null,
     trend: "neutral"
   },
@@ -77,20 +93,29 @@ const MARKET_DRIVERS_DATA = {
   },
   calendar: {
     status: "Payday Period Ahead",
-    detail: "An upcoming payday period may support buyer demand at markets this week.",
+    detail: t
+      ? t("farmer.calendar.driver_payday_detail")
+      : "An upcoming payday period may support buyer demand at markets this week.",
     link: "/market/calendar",
     trend: "up"
   }
-};
-const RISKS_OPPORTUNITIES = [
+});
+const MARKET_DRIVERS_DATA = getMarketDriversData();
+
+const getRisksOpportunities = (t) => [
   { type: "risk", icon: AlertTriangle, label: "Possible oversupply", detail: "Kamatis, Repolyo, Bawang, and Pechay may face higher arrivals as farms harvest.", action: "Review market conditions before planting." },
   { type: "risk", icon: CloudRain, label: "Weather-related delivery disruption", detail: "Heavy rain over the next several days may delay farm-to-market transport.", action: "Prepare alternate transport or storage options." },
-  { type: "opportunity", icon: TrendingUp, label: "Payday demand may strengthen prices", detail: "Upcoming payday periods historically support higher retail prices.", action: "Consider timing sales to coincide with payday periods." }
+  { type: "opportunity", icon: TrendingUp, label: "Payday demand may strengthen prices", detail: t ? t("farmer.calendar.opportunity_payday_detail") : "Upcoming payday periods historically support higher retail prices.", action: "Consider timing sales to coincide with payday periods." }
 ];
+const RISKS_OPPORTUNITIES = getRisksOpportunities();
 const STATUS_CONFIG = {
-  "Favorable": { icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", label: "Favorable" },
-  "Balanced": { icon: Scale, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Balanced" },
-  "Monitor": { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", label: "Monitor" },
+  [MARKET_STATUS_CODES.FAVORABLE]: { icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", label: "Favorable" },
+  [MARKET_STATUS_CODES.BALANCED]: { icon: Scale, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Balanced" },
+  [MARKET_STATUS_CODES.MONITOR]: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", label: "Monitor" },
+  [MARKET_STATUS_CODES.HIGH_RISK]: { icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: "High Risk" },
+  Favorable: { icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", label: "Favorable" },
+  Balanced: { icon: Scale, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Balanced" },
+  Monitor: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", label: "Monitor" },
   "High Risk": { icon: AlertOctagon, color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: "High Risk" }
 };
 const DEFAULT_FILTERS = {
@@ -171,8 +196,10 @@ const CARD_INSIGHTS = {
   lettuce: { insight: "Prices are falling and arrivals are rising. Oversupply is creating strong pressure.", consideration: "Consider waiting for conditions to improve before planting." },
   pechay: { insight: "Prices are falling and arrivals are significantly elevated. Pressure is high.", consideration: "Consider waiting for better market conditions before planting." }
 };
-const CommodityOutlookCard = ({ commodity, outlook, onViewDetails }) => {
-  const cfg = STATUS_CONFIG[outlook.status];
+const CommodityOutlookCard = ({ commodity, outlook, onViewDetails, isPreferred = false }) => {
+  const { t } = useLanguage();
+  const statusCode = normalizeMarketStatusCode(outlook.status) || MARKET_STATUS_CODES.BALANCED;
+  const cfg = STATUS_CONFIG[statusCode] || STATUS_CONFIG[MARKET_STATUS_CODES.BALANCED];
   const cardInsight = CARD_INSIGHTS[commodity.id] ?? {
     insight: outlook.nearTermOutlook,
     consideration: outlook.action
@@ -181,7 +208,12 @@ const CommodityOutlookCard = ({ commodity, outlook, onViewDetails }) => {
       <div className="flex items-start gap-3">
         <CommodityIllustration commodityId={commodity.id} className="w-11 h-11 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">{commodity.name}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-semibold text-[var(--hw-neutral-900)]">{commodity.name}</p>
+            {isPreferred && (
+              <PreferredStar className="w-3.5 h-3.5 text-amber-500" />
+            )}
+          </div>
           <span className={`text-xs font-semibold ${cfg.color} mt-0.5 block`}>{cfg.label}</span>
         </div>
       </div>
@@ -205,13 +237,15 @@ const signalCls = {
   Opportunity: "bg-emerald-50 text-emerald-700 border border-emerald-200",
   Monitor: "bg-blue-50 text-blue-600 border border-blue-200"
 };
-const MARKET_DRIVERS = [
+const getMarketDrivers = (t) => [
   {
     id: "price",
     title: "Price Behavior",
     Icon: TrendingUp,
     classification: "Mixed",
-    evidence: "Bangkerohan prices showed upward movement for Kamatis and Sibuyas. Repolyo, Bawang, and Pechay prices declined during the same period.",
+    evidence: t
+      ? t("farmer.factors.price.driver_overview")
+      : "Bangkerohan prices showed upward movement for Kamatis and Sibuyas. Repolyo, Bawang, and Pechay prices declined during the same period.",
     signal: "Monitor",
     viewBasisLabel: "View price records",
     viewBasisPath: "/prices"
@@ -221,7 +255,9 @@ const MARKET_DRIVERS = [
     title: "DFTC Arrival Pressure",
     Icon: Package,
     classification: "Slightly Elevated",
-    evidence: "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases.",
+    evidence: t
+      ? `${t("farmer.factors.arrival.driver_overview")} ${t("farmer.factors.arrival.bangkerohan_unverified_notice")}`
+      : "DFTC arrivals are above their recent level for most commodities. Repolyo and Bawang show the highest increases.",
     signal: "Risk",
     viewBasisLabel: "View arrival details",
     viewBasisPath: "/market/dftc-arrivals"
@@ -231,7 +267,9 @@ const MARKET_DRIVERS = [
     title: "Seasonal Production Pressure",
     Icon: Leaf,
     classification: "Moderate",
-    evidence: "More farms in Davao Region may begin harvesting during the coming weeks, which may increase market supply.",
+    evidence: t
+      ? t("farmer.factors.production.driver_overview")
+      : "More farms in Davao Region may begin harvesting during the coming weeks, which may increase market supply.",
     signal: "Monitor",
     viewBasisLabel: "View production context",
     viewBasisPath: "/market/seasonal-production"
@@ -251,12 +289,15 @@ const MARKET_DRIVERS = [
     title: "Market Calendar",
     Icon: CalendarDays,
     classification: "Neutral to Positive",
-    evidence: "An upcoming payday period may support market activity in Davao City. Effect on prices remains uncertain.",
+    evidence: t
+      ? t("farmer.calendar.driver_payday_detail")
+      : "An upcoming payday period may support market activity in Davao City. Effect on prices remains uncertain.",
     signal: "Opportunity",
     viewBasisLabel: "View market calendar",
     viewBasisPath: "/market/calendar"
   }
 ];
+const MARKET_DRIVERS = getMarketDrivers();
 const DriverCard = ({
   driver,
   onNavigate
@@ -332,18 +373,34 @@ const ActiveCalendarIndicators = () => <div className="bg-white rounded-2xl bord
   </div>;
 function MarketOverviewPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const { mode } = useDisplayMode();
   const isAnalytics = mode === "analytics";
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
-  const commoditiesToShow = filters.commodityId === "all" ? COMMODITIES : COMMODITIES.filter((c) => c.id === filters.commodityId);
+
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
+
+  const sortedCommodities = useMemo(() => {
+    return sortWithPreferredFirst(COMMODITIES, preferredCrops);
+  }, [preferredCrops]);
+
+  const marketDrivers = getMarketDrivers(t);
+  const commoditiesToShow = filters.commodityId === "all" ? sortedCommodities : sortedCommodities.filter((c) => c.id === filters.commodityId);
   const periodLabel = filters.period === "7d" ? "7 days" : filters.period === "14d" ? "14 days" : "28 days";
   const filterSummary = `${periodLabel} \xB7 ${filters.marketSource === "Combined" ? "All markets" : filters.marketSource === "Bangkerohan Public Market" ? "Bangkerohan" : "DFTC"} \xB7 ${filters.commodityId === "all" ? "All commodities" : COMMODITY_REGISTRY[filters.commodityId]?.name ?? filters.commodityId}`;
   const nearTermOutlook = filters.period === "7d" ? OVERALL_MARKET.nearTermOutlook7d : filters.period === "14d" ? OVERALL_MARKET.nearTermOutlook14d : OVERALL_MARKET.nearTermOutlook28d;
-  const overallStatus = STATUS_CONFIG[OVERALL_MARKET.status];
+  const overallStatusCode = normalizeMarketStatusCode(OVERALL_MARKET.status) || MARKET_STATUS_CODES.BALANCED;
+  const overallStatus = STATUS_CONFIG[overallStatusCode] || STATUS_CONFIG[MARKET_STATUS_CODES.BALANCED];
   const OverallIcon = overallStatus.icon;
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
         {
     /* Filter button — below tabs, compact height */
@@ -403,6 +460,7 @@ function MarketOverviewPage() {
       outlook={outlook}
       isAnalytics={isAnalytics}
       period={filters.period}
+      isPreferred={isPreferredCrop(c, preferredCrops)}
       onViewDetails={() => navigate(`/farmer/market/detail/${c.id}`)}
     />;
   })}
@@ -425,7 +483,7 @@ function MarketOverviewPage() {
   }
           <div className="hidden md:flex md:flex-col gap-4">
             <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Market drivers</h2>
-            {MARKET_DRIVERS.map((d) => <DriverCard key={d.id} driver={d} onNavigate={navigate} />)}
+            {marketDrivers.map((d) => <DriverCard key={d.id} driver={d} onNavigate={navigate} />)}
             {isAnalytics && <SupplyPressureCard commodityId={filters.commodityId} />}
           </div>
         </div>
@@ -436,11 +494,9 @@ function MarketOverviewPage() {
         <div className="md:hidden space-y-3">
           <h2 className="text-[17px] font-semibold text-[var(--hw-neutral-900)]">Market drivers</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {MARKET_DRIVERS.map((d) => <DriverCard key={d.id} driver={d} onNavigate={navigate} />)}
+            {marketDrivers.map((d) => <DriverCard key={d.id} driver={d} onNavigate={navigate} />)}
           </div>
         </div>
-
-      </div>
 
       <MarketOutlookFilterDrawer
     open={filterOpen}
@@ -478,10 +534,6 @@ const MarketLayout = () => {
         <div className="px-4 md:px-6 pt-4 pb-2 space-y-1">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">{meta.title}</h1>
-            <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] flex-shrink-0">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at 7:30 AM</span>
-            </div>
           </div>
           <p className="text-[15px] text-[var(--hw-neutral-900)]">{meta.subtitle}</p>
         </div>
@@ -503,8 +555,7 @@ const MarketLayout = () => {
     </div>;
 };
 function MarketWeatherPage() {
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-6 py-14 text-center">
           <CloudRain className="w-10 h-10 text-[var(--hw-neutral-300)] mx-auto mb-3" />
           <p className="font-semibold text-[var(--hw-neutral-900)]">Weather Forecast</p>
@@ -512,12 +563,10 @@ function MarketWeatherPage() {
             This view will show detailed weather conditions that may affect field activity, farm-to-market transport, and delivery volumes.
           </p>
         </div>
-      </div>
     </div>;
 }
 function MarketCalendarPage() {
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-6 py-14 text-center">
           <CalendarDays className="w-10 h-10 text-[var(--hw-neutral-300)] mx-auto mb-3" />
           <p className="font-semibold text-[var(--hw-neutral-900)]">Market Calendar</p>
@@ -525,7 +574,6 @@ function MarketCalendarPage() {
             This view will show upcoming payday periods, public holidays, market-day schedules, and other calendar factors.
           </p>
         </div>
-      </div>
     </div>;
 }
 export {

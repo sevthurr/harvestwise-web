@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Download, X, Loader2, FileSpreadsheet, AlertCircle, Leaf } from "lucide-react";
+import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import {
   TEMP_RECORDS,
   getExpiryInfo,
@@ -300,7 +301,7 @@ function DFTCTemporaryRecords() {
     if (s === "Previously Downloaded") return "text-[var(--hw-neutral-800)]";
     return "text-[var(--hw-neutral-700)]";
   }
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
       {showExcel && <ExcelModal
     onClose={() => setShowExcel(false)}
@@ -328,18 +329,29 @@ function DFTCTemporaryRecords() {
         </div>
       </div>
 
-      {
-    /* Summary cards */
-  }
-      <div className="grid grid-cols-3 gap-3">
-        {[
-    { label: "Active Temporary Records", value: "148" },
-    { label: "Expiring Within 3 Days", value: "24" },
-    { label: "Included in Current Report", value: downloadedAll ? "0" : "148" }
-  ].map((c) => <div key={c.label} className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-            <p className="text-2xl font-bold text-[var(--hw-neutral-900)] leading-none">{c.value}</p>
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-700)] mt-1.5 leading-snug">{c.label}</p>
-          </div>)}
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <DFTCKpiCard
+          label="Active Temporary Records"
+          value="148"
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-700)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
+        <DFTCKpiCard
+          label="Expiring Within 3 Days"
+          value="24"
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-700)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
+        <DFTCKpiCard
+          label="Included in Current Report"
+          value={downloadedAll ? 0 : 148}
+          dotColor="bg-[var(--hw-neutral-400)]"
+          labelColor="text-[var(--hw-neutral-700)]"
+          valueColor="text-[var(--hw-neutral-900)]"
+        />
       </div>
 
       {

@@ -17,7 +17,7 @@ const DATASETS = [
     priceType: "Retail",
     reportingDate: "Aug 2, 2026",
     validationCompletedDate: "Aug 2, 2026 \xB7 9:44 AM",
-    entryMethod: "Excel/CSV Upload"
+    entryMethod: "File Upload"
   },
   {
     datasetId: "DATA-2026-0802-002",
@@ -57,7 +57,7 @@ const DATASETS = [
     priceType: "Wholesale",
     reportingDate: "Aug 1, 2026",
     validationCompletedDate: "Aug 1, 2026 \xB7 5:12 PM",
-    entryMethod: "Excel/CSV Upload"
+    entryMethod: "File Upload"
   },
   {
     datasetId: "DATA-2026-0801-004",
@@ -97,7 +97,7 @@ const DATASETS = [
     priceType: "Retail",
     reportingDate: "Jul 31, 2026",
     validationCompletedDate: "Jul 31, 2026 \xB7 8:03 AM",
-    entryMethod: "Excel/CSV Upload"
+    entryMethod: "File Upload"
   },
   {
     datasetId: "DATA-2026-0731-006",
@@ -137,7 +137,7 @@ const DATASETS = [
     priceType: "Wholesale",
     reportingDate: "Jul 30, 2026",
     validationCompletedDate: "Jul 30, 2026 \xB7 8:17 AM",
-    entryMethod: "Excel/CSV Upload"
+    entryMethod: "File Upload"
   },
   {
     datasetId: "DATA-2026-0729-008",
@@ -157,7 +157,7 @@ const DATASETS = [
     priceType: "Landing",
     reportingDate: "Jul 29, 2026",
     validationCompletedDate: "Jul 29, 2026 \xB7 4:32 PM",
-    entryMethod: "Excel/CSV Upload"
+    entryMethod: "File Upload"
   },
   {
     datasetId: "DATA-2026-0728-009",
@@ -177,7 +177,7 @@ const DATASETS = [
     priceType: "Retail",
     reportingDate: "Jul 28, 2026",
     validationCompletedDate: "Jul 28, 2026 \xB7 8:48 AM",
-    entryMethod: "Excel/CSV Upload"
+    entryMethod: "File Upload"
   },
   {
     datasetId: "DATA-2026-0726-010",
@@ -217,7 +217,7 @@ const DATASETS = [
     priceType: "Landing",
     reportingDate: "Jul 25, 2026",
     validationCompletedDate: "\u2014",
-    entryMethod: "Excel/CSV Upload",
+    entryMethod: "File Upload",
     failureReason: 'File validation error: required column "Market" not found in uploaded file. Please re-upload with correct column headers.'
   },
   {

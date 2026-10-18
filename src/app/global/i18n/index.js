@@ -1,6 +1,6 @@
-import { en } from './locales/en';
-import { ceb } from './locales/ceb';
-import { tl } from './locales/tl';
+import { en } from './locales/en.js';
+import { ceb } from './locales/ceb.js';
+import { tl } from './locales/tl.js';
 
 export const LOCALES = {
   english: en,

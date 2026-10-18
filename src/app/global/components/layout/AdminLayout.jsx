@@ -1,42 +1,48 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
+import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   LayoutDashboard,
   Database,
   TrendingUp,
   LineChart,
-  History,
   Bell,
   ChevronDown,
   Settings,
   LogOut,
-  ArrowLeftRight,
   RefreshCw,
   Info,
-  Shield
+  Loader2,
+  Shield,
+  Layers,
+  ClipboardList
 } from "lucide-react";
 import { Footer } from "../Footer";
-import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
+import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { UserAvatar } from "../profile/UserAvatar";
+import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useAuth } from "../../contexts/AuthContext";
-const FONT_SIZE_MAP = { small: "13px", medium: "15px", large: "17px" };
+
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", path: "/admin", Icon: LayoutDashboard },
-  { id: "data", label: "Data", path: "/admin/data-sources", Icon: Database },
+  { id: "modules", label: "Analytical Modules", path: "/admin/modules", Icon: Layers },
   { id: "forecasting", label: "Forecasting", path: "/admin/forecasting", Icon: TrendingUp },
-  { id: "analytics", label: "Analytics", path: "/admin/analytics", Icon: LineChart },
-  { id: "history", label: "History", path: "/admin/history", Icon: History }
+  { id: "data", label: "Data Sources", path: "/admin/data-sources", Icon: Database },
+  { id: "audit", label: "Audit Logs", path: "/admin/audit-logs", Icon: ClipboardList }
 ];
 function getActive(pathname) {
   if (pathname === "/admin") return "dashboard";
   if (pathname.startsWith("/admin/data-sources") || pathname.startsWith("/admin/import")) return "data";
   if (pathname.startsWith("/admin/forecasting")) return "forecasting";
-  if (pathname.startsWith("/admin/analytics")) return "analytics";
-  if (pathname.startsWith("/admin/history")) return "history";
+  if (pathname.startsWith("/admin/modules") || pathname.startsWith("/admin/analytics")) return "modules";
+  if (pathname.startsWith("/admin/audit-logs")) return "audit";
   return "";
 }
 const AdminMain = ({ children }) => {
-  const { textSize } = useTextSize();
-  return <main className="pt-13 pb-16 md:pb-4 md:ml-[220px]" style={{ fontSize: FONT_SIZE_MAP[textSize] }}>
+  return <main className="pt-13 pb-16 md:pb-4 md:ml-[220px]">
       {children}
     </main>;
 };
@@ -44,11 +50,56 @@ const AdminLayoutInner = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const active = getActive(location.pathname);
-  const { user, logout } = useAuth();
-  const displayName = "HarvestWise Admin";
-  const initials = "HA";
+  const { user, logout, refreshUser } = useAuth();
+
+  // ── Must-change-password gate ──────────────────────────────────────────
+  // Admin-provisioned accounts — including SuperAdmins created by
+  // scripts/seed_superadmin.py — start on a temporary password. The admin API
+  // rejects every privileged route with 403 until it is rotated, so this must
+  // replace the workspace rather than render behind it. `rotated` is cleared
+  // the moment the POST succeeds: change_password() revokes every session and
+  // purges the cached snapshot before returning, so the next /auth/me can come
+  // back 401 and null out `user` — and a gate derived from the flag alone
+  // would strand the user. The rotation already committed server-side;
+  // refreshUser() only reconciles the cache, so it is best-effort.
+  const [rotated, setRotated] = useState(false);
+  const pendingPasswordChange = user?.must_change_password === true && !rotated;
+
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
+  };
+  // Build a proper display name whether or not the profile fields are populated.
+  // If first_name is available, use "First Last". Otherwise parse the username
+  // (which may contain dots, e.g. "kaye.mayugba") and title-case it.
+  function toTitleCase(str) {
+    return str
+      .split(/[._\s]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+  const displayName =
+    user?.first_name
+      ? `${user.first_name} ${user.last_name || ""}`.trim()
+      : user?.email
+      ? user.email
+      : "Admin";
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "HA";
+
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
+
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -58,26 +109,91 @@ const AdminLayoutInner = () => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
   const go = (path) => {
     setAvatarOpen(false);
     navigate(path);
   };
-  const handleLogout = () => {
+
+  const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
+  const { processState } = useBackgroundProcess();
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+
+  const syncTimeLabel = () =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  // Keep the "Last updated" timestamp in sync when a background process
+  // completes and triggers an automatic live resync.
+  useEffect(() => {
+    if (processState.completed || processState.error) {
+      setLastSyncedTime(syncTimeLabel());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processState.completed, processState.error]);
+
+  const isSyncing = isManualSyncing || isFetching > 0;
+
+  const handleResync = async () => {
+    if (isSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await queryClient.refetchQueries();
+      await queryClient.invalidateQueries();
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    } catch (e) {
+      console.error("Data resync failed:", e);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
+  const { data: unreadData, refetch: refreshUnread } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      try {
+        const res = await getUnreadCount();
+        return res?.unread_count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    if (location.pathname.includes("/notifications")) {
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    }
+  }, [location.pathname, queryClient]);
+
+  useNotificationEvent("NOTIFICATION_CREATED", () => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-unread-notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    refreshUnread();
+  });
+
+  const handleLogout = async () => {
     setAvatarOpen(false);
-    logout();
+    await logout();
     navigate("/login");
   };
-  return <div className="min-h-screen bg-[var(--hw-neutral-50)]">
 
-      {
-    /* ── Compact top bar ── */
-  }
+  return (
+    <div className="min-h-screen bg-[var(--hw-neutral-50)]">
+      {/* ── Compact top bar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)] h-13">
         <div className="flex items-center h-13 px-4 gap-3">
-
-          {
-    /* Logo + label */
-  }
+          {/* Logo + label */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <img 
               src="/horizontal-logo.png" 
@@ -94,33 +210,43 @@ const AdminLayoutInner = () => {
 
           <div className="flex-1" />
 
-          {
-    /* Sync indicator — desktop only */
-  }
-          <div className="hidden lg:flex items-center gap-1.5 text-[var(--hw-neutral-400)] flex-shrink-0">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="text-[12px]">Jun 24, 5:12 AM</span>
-          </div>
+          {/* Background Process Badge (pops up when process active) + Clickable Last Updated button */}
+          <BackgroundProcessBadge />
+          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
-          {
-    /* Bell */
-  }
-          <button className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0">
+          {/* Bell */}
+          <button
+            onClick={() => navigate("/admin/notifications")}
+            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+              location?.pathname?.includes("/notifications")
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
+          >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
-          {
-    /* Admin avatar + dropdown */
-  }
+
+          {/* Admin avatar + dropdown */}
           <div className="relative flex-shrink-0" ref={dropdownRef}>
             <button
-    onClick={() => setAvatarOpen((v) => !v)}
-    className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
-  >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center">
-                <span className="text-white text-[11px] font-bold select-none">{initials}</span>
-              </div>
+              onClick={() => setAvatarOpen((v) => !v)}
+              className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
+            >
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={displayName}
+                className="w-7 h-7"
+                textClassName="text-[11px]"
+              />
               <span className="hidden sm:block text-[13px] font-medium text-black">{displayName}</span>
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
@@ -136,9 +262,13 @@ const AdminLayoutInner = () => {
     onClick={() => go("/admin/profile")}
     className="w-full flex items-center gap-3 px-4 py-3.5 border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-[13px] font-bold select-none">{initials}</span>
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={displayName}
+                    className="w-9 h-9"
+                    textClassName="text-[13px]"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">Admin</p>
@@ -178,26 +308,6 @@ const AdminLayoutInner = () => {
                     Log out
                   </button>
                 </div>
-
-                {
-    /* Switch views */
-  }
-                <div className="py-1 border-t border-[var(--hw-neutral-100)]">
-                  <button
-    onClick={() => go("/farmer")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-                    Switch to Farmer View
-                  </button>
-                  <button
-    onClick={() => go("/dftc")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-                    Switch to DFTC View
-                  </button>
-                </div>
               </div>}
           </div>
         </div>
@@ -220,50 +330,32 @@ const AdminLayoutInner = () => {
               </button>;
   })}
         </nav>
-
-        {
-    /* Bottom: switch views + profile */
-  }
-        <div className="p-2 border-t border-[var(--hw-neutral-200)] space-y-0.5">
-          <button
-    onClick={() => navigate("/farmer")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">Farmer View</span>
-          </button>
-          <button
-    onClick={() => navigate("/dftc")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">DFTC View</span>
-          </button>
-          <button
-    onClick={() => navigate("/admin/profile")}
-    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors text-left"
-  >
-            <div className="w-6 h-6 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-[10px] font-bold select-none">{initials}</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium text-black truncate">{displayName}</p>
-              <p className="text-[11px] text-black">Admin</p>
-            </div>
-          </button>
-        </div>
       </aside>
 
       {
     /* ── Main content area ── */
   }
       <AdminMain>
-        <Outlet />
-        <Footer className="mt-6 mb-2" />
+        {pendingPasswordChange ? (
+          <ChangePasswordPanel onRotated={handlePasswordRotated} />
+        ) : (
+          <>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center w-full h-[50vh]">
+                  <Loader2 className="w-6 h-6 text-[var(--hw-green-700)] animate-spin" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
+            <Footer className="mt-6 mb-2" />
+          </>
+        )}
       </AdminMain>
 
       {
-    /* ── Mobile bottom nav — exactly 5 items ── */
+    /* ── Mobile bottom nav — mirrors ADMIN_NAV ── */
   }
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[var(--hw-neutral-200)] md:hidden">
         <div className="flex items-stretch">
@@ -280,11 +372,10 @@ const AdminLayoutInner = () => {
   })}
         </div>
       </nav>
-    </div>;
+    </div>
+  );
 };
-const AdminLayout = () => <TextSizeProvider storageKey="hw_admin_text_size">
-    <AdminLayoutInner />
-  </TextSizeProvider>;
-export {
-  AdminLayout
-};
+
+const AdminLayout = () => <AdminLayoutInner />;
+
+export { AdminLayout };

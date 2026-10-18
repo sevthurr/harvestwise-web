@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, Menu, RefreshCw, Settings, LogOut, ChevronDown, ArrowLeftRight, Info, Download } from "lucide-react";
-import { useNavigate } from "react-router";
+import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download } from "lucide-react";
+import { useNavigate, useLocation } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
+import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
+import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { UserAvatar } from "../profile/UserAvatar";
 
 const TopBar = ({
   logo,
@@ -12,12 +16,55 @@ const TopBar = ({
   notificationCount = 0
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isNotificationOpen = Boolean(location?.pathname?.includes("/notifications"));
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
+  const queryClient = useQueryClient();
+
   const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
   const ref = useRef(null);
+  const { processState } = useBackgroundProcess();
+
+  // Scoped on purpose: only the manual resync and an active background
+  // process count as "syncing". An unfiltered useIsFetching() here made the
+  // badge flash "Syncing..." on every route change, because Dashboard,
+  // Prices, Profile and Notifications opt back into refetchOnMount:"always"
+  // even though the login bundle seeded their cache.
+  const isSyncing = isManualSyncing || processState.active;
+
+  // Keep the "Last updated" timestamp in sync when a background process
+  // completes and triggers an automatic live resync.
+  useEffect(() => {
+    if (processState.completed || processState.error) {
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processState.completed, processState.error]);
+
+  const handleResync = async () => {
+    if (isSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await queryClient.refetchQueries();
+      await queryClient.invalidateQueries();
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    } catch (e) {
+      console.error("Data resync failed:", e);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -27,8 +74,9 @@ const TopBar = ({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const fullName = user?.name || "Juan Dela Cruz";
-  const initials = fullName.trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  const fullName = user?.name || (user?.first_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : "");
+  const displayName = fullName || "Farmer";
+  const initials = fullName ? fullName.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase() : "F";
 
   const go = (path) => {
     setOpen(false);
@@ -60,19 +108,25 @@ const TopBar = ({
         <div className="flex-1" />
 
         {/* Right: sync · bell · avatar */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <div className="hidden sm:flex items-center gap-1.5 pr-2 text-[var(--hw-neutral-400)]">
-            <RefreshCw className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="text-xs whitespace-nowrap">{t("farmer.last_synced", {}, "Last synced")}: {t("common.updated", {}, "Updated")} 8:30 AM</span>
-          </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
           <button
             onClick={onNotificationClick}
-            className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
-            aria-label="Notifications"
+            className={`relative p-2 rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${
+              isNotificationOpen
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={notificationCount > 0 ? `Notifications, ${notificationCount} unread` : "Notifications"}
+            aria-current={isNotificationOpen ? "page" : undefined}
           >
             <Bell className="w-5 h-5" />
-            {notificationCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--hw-error)] rounded-full" />}
+            {notificationCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {notificationCount > 9 ? "9+" : notificationCount}
+              </span>
+            )}
           </button>
 
           {/* Avatar + dropdown */}
@@ -82,9 +136,13 @@ const TopBar = ({
               className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
               aria-label="Account menu"
             >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-xs font-bold select-none">
-                {initials}
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={displayName}
+                className="w-7 h-7"
+                textClassName="text-xs"
+              />
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
 
@@ -95,11 +153,15 @@ const TopBar = ({
                   onClick={() => go("profile")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left border-b border-[var(--hw-neutral-100)]"
                 >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-sm font-bold select-none flex-shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={displayName}
+                    className="w-9 h-9"
+                    textClassName="text-sm"
+                  />
                   <div className="min-w-0">
-                    <p className="text-[14px] font-semibold text-black truncate">{fullName}</p>
+                    <p className="text-[14px] font-semibold text-black truncate">{displayName}</p>
                     <p className="text-[12px] text-black">{t("auth.role_farmer", {}, "Farmer")}</p>
                   </div>
                 </button>
@@ -128,16 +190,16 @@ const TopBar = ({
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] disabled:opacity-40 disabled:cursor-not-allowed disabled:text-[var(--hw-neutral-500)] transition-colors text-left"
                   >
                     <Download className="w-4 h-4 flex-shrink-0" />
-                    {isInstalled ? "App Installed" : installing ? "Installing..." : "Get the App"}
+                    {isInstalled ? t("farmer.navigation.installed", {}, "App Installed") : installing ? t("farmer.navigation.installing", {}, "Installing...") : t("farmer.navigation.get_app", {}, "Get the App")}
                   </button>
                 </div>
 
                 {/* Log out */}
                 <div className="py-1 border-t border-[var(--hw-neutral-100)]">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setOpen(false);
-                      logout();
+                      await logout();
                       navigate("/login", { replace: true });
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-red-600 hover:bg-red-50 transition-colors text-left"
@@ -147,24 +209,7 @@ const TopBar = ({
                   </button>
                 </div>
 
-                {/* Switch views */}
-                <div className="py-1 border-t border-[var(--hw-neutral-100)]">
-                  <button
-                    onClick={() => go("/admin")}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
-                    Switch to Admin View
-                  </button>
-                  <button
-                    onClick={() => go("/dftc")}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 flex-shrink-0" />
-                    Switch to DFTC View
-                  </button>
                 </div>
-              </div>
             )}
           </div>
         </div>

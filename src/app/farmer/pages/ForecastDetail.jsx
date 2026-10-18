@@ -21,8 +21,14 @@ import {
   LabelList
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { composePriceOutlook, renderComposedMessage } from "../utils/advisoryMessageComposer";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 const RETAIL_FORECAST_DATA = {
   kamatis: {
     bangkerohan: { direction: "rising", directionLabel: "Likely to rise", currentPrice: 85, recentAvg: 82, forecastedPrice: 90, forecastLow: 84, forecastHigh: 97, changePct: 9.8, reliability: "Moderate", reliabilityNote: "Based on sufficient recent Bangkerohan Retail price records." },
@@ -86,6 +92,14 @@ const tooltipStyle = { backgroundColor: "white", border: "1px solid var(--hw-neu
 function ForecastDetailPage() {
   const { commodityId } = useParams();
   const navigate = useNavigate();
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const sortedCommodities = sortWithPreferredFirst(COMMODITIES, preferredCrops);
+
   const [market, setMarket] = useState("bangkerohan");
   const [period, setPeriod] = useState("7d");
   const commodity = COMMODITIES.find((c) => c.id === commodityId);
@@ -98,6 +112,7 @@ function ForecastDetailPage() {
         </button>
       </div>;
   }
+  const { t, langCode } = useLanguage();
   const rec = market === "bangkerohan" ? forecastEntry.bangkerohan : forecastEntry.dftcRetail;
   const marketLabel = market === "bangkerohan" ? "Bangkerohan Retail" : "DFTC Retail";
   const marketStr = market === "bangkerohan" ? "Bangkerohan Public Market" : "DFTC";
@@ -113,64 +128,88 @@ function ForecastDetailPage() {
   const allHistoryRows = getHistoryRows(commodity.id, marketStr, "Retail", rec.currentPrice);
   const periodCount = period === "7d" ? 7 : period === "14d" ? 14 : period === "21d" ? 21 : 28;
   const historyRows = allHistoryRows.slice(0, Math.min(periodCount, allHistoryRows.length));
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
 
-        {
-    /* Back + commodity switcher */
-  }
+  const horizonDays = periodCount;
+  const outlookCode = rec.direction === "rising" ? "favorable" : rec.direction === "falling" ? "unfavorable" : "neutral";
+  const composedOutlook = composePriceOutlook({
+    price_outlook: outlookCode,
+    forecast_midpoint: rec.forecastedPrice,
+    recent_average_price: rec.recentAvg,
+    lower_forecast_price: rec.forecastLow,
+    upper_forecast_price: rec.forecastHigh
+  }, commodity.name, horizonDays);
+  const composedInsightText = renderComposedMessage(composedOutlook, langCode);
+
+  const dirLabel = rec.direction === "rising"
+    ? t("farmer.factors.price.trend_label_rising", {}, rec.directionLabel)
+    : rec.direction === "falling"
+      ? t("farmer.factors.price.trend_label_falling", {}, rec.directionLabel)
+      : t("farmer.factors.price.trend_label_stable", {}, rec.directionLabel);
+
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+
+        {/* Back + commodity switcher */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
-    onClick={() => navigate("/farmer/forecast")}
-    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
-  >
+            onClick={() => navigate("/farmer/forecast")}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
-            Price Forecast
+            {t("farmer.factors.price.page_title", {}, "Price Forecast")}
           </button>
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-            {COMMODITIES.map((c) => <button
-    key={c.id}
-    onClick={() => navigate(`/farmer/forecast/${c.id}`)}
-    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-                {c.name}
-              </button>)}
+            {sortedCommodities.map((c) => {
+              const isPref = isPreferredCrop(c, preferredCrops);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => navigate(`/farmer/forecast/${c.id}`)}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
+                >
+                  {c.name}
+                  {isPref && (
+                    <span className={`inline-flex items-center px-1 rounded text-[9px] font-semibold ${c.id === commodity.id ? "bg-white/20 text-white" : "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]"}`}>
+                      ★
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {
-    /* Commodity header */
-  }
+        {/* Commodity header */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
           <div className="flex items-center gap-4">
             <CommodityIllustration commodityId={commodity.id} className="w-16 h-16 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+                {isPreferredCrop(commodity, preferredCrops) && (
+                  <PreferredStar className="w-4 h-4 text-amber-500" />
+                )}
+              </div>
               <div className={`flex items-center gap-1.5 mt-1 text-sm font-semibold ${dir.color}`}>
                 <DirIcon className="w-4 h-4" />
-                {rec.directionLabel}
+                {dirLabel}
               </div>
               <div className="flex items-center gap-1.5 mt-1.5 text-[var(--hw-neutral-700)]">
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span className="text-xs">Forecast updated today at 6:00 AM</span>
+                <span className="text-xs">{t("farmer.factors.price.forecast_updated_today", {}, "Forecast updated today at 6:00 AM")}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {
-    /* Period controls */
-  }
+        {/* Period controls */}
         <div className="flex items-center gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          <span className="text-xs font-medium text-[var(--hw-neutral-900)] flex-shrink-0 pr-1">Period:</span>
+          <span className="text-xs font-medium text-[var(--hw-neutral-900)] flex-shrink-0 pr-1">{t("farmer.factors.price.period_label", {}, "Period:")}</span>
           {["7d", "14d", "21d", "28d"].map((p) => <button key={p} onClick={() => setPeriod(p)} className={periodBtn(period === p)}>
-              {p === "7d" ? "7 days" : p === "14d" ? "14 days" : p === "21d" ? "21 days" : "28 days"}
+              {p === "7d" ? `7 ${t("farmer.factors.price.days_label", {}, "days")}` : p === "14d" ? `14 ${t("farmer.factors.price.days_label", {}, "days")}` : p === "21d" ? `21 ${t("farmer.factors.price.days_label", {}, "days")}` : `28 ${t("farmer.factors.price.days_label", {}, "days")}`}
             </button>)}
         </div>
 
-        {
-    /* Retail market selector */
-  }
+        {/* Retail market selector */}
         <div className="flex rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden bg-white shadow-[var(--shadow-xs)]">
           <button onClick={() => setMarket("bangkerohan")} className={segBtn(market === "bangkerohan")}>
             Bangkerohan Retail
@@ -181,27 +220,29 @@ function ForecastDetailPage() {
           </button>
         </div>
 
-        {
-    /* Forecast Insight card */
-  }
+        {/* Forecast Insight card */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
           <div className={`flex items-center gap-1.5 ${dir.color}`}>
             <DirIcon className="w-5 h-5" />
-            <span className="font-semibold">{rec.directionLabel}</span>
+            <span className="font-semibold">{dirLabel}</span>
           </div>
           <p className="text-[var(--hw-neutral-900)] leading-relaxed">
-            {commodity.name} is forecasted at{" "}
-            <strong className="text-[var(--hw-neutral-900)]">₱{rec.forecastedPrice}/kg for {fpRange}</strong>,{" "}
-            {diffStr}.
+            {composedInsightText || (
+              <>
+                {commodity.name} is forecasted at{" "}
+                <strong className="text-[var(--hw-neutral-900)]">₱{rec.forecastedPrice}/kg for {fpRange}</strong>,{" "}
+                {diffStr}.
+              </>
+            )}
           </p>
           <div className="flex items-center gap-4 pt-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[var(--hw-neutral-700)]">Price Outlook:</span>
+              <span className="text-xs text-[var(--hw-neutral-700)]">{t("farmer.factors.price.factor_title", {}, "Price Outlook")}:</span>
               <span className={`text-xs font-semibold ${outlookColor(rec.direction)}`}>{outlookLabel(rec.direction)}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${reliabilityDot(rec.reliability)}`} />
-              <span className="text-xs text-[var(--hw-neutral-700)]">Reliability:</span>
+              <span className="text-xs text-[var(--hw-neutral-700)]">{t("farmer.factors.price.reliability_label", {}, "Reliability")}:</span>
               <span className="text-xs font-semibold text-[var(--hw-neutral-700)]">{rec.reliability}</span>
             </div>
           </div>
@@ -376,7 +417,6 @@ function ForecastDetailPage() {
           View another commodity →
         </button>
 
-      </div>
     </div>;
 }
 export {

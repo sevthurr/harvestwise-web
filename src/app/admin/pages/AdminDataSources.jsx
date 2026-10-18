@@ -1,80 +1,81 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import React, { useState, useMemo } from "react";
-import { useNavigate } from "react-router";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Check,
   FileText,
-  Download,
   Plus,
-  RotateCcw,
   X,
   Pencil,
   Trash2,
   List
 } from "lucide-react";
-const DATA_SOURCES = [
-  { id: "bangk-retail", name: "Bangkerohan Retail Prices", type: "Manual Upload", lastImport: "Jun 24, 7:30 AM", records: 140, status: "Updated", isManual: true },
-  { id: "bangk-wholesale", name: "Bangkerohan Wholesale Prices", type: "Manual Upload", lastImport: "Jun 24, 7:35 AM", records: 140, status: "Updated", isManual: true },
-  { id: "dftc-retail", name: "DFTC Retail Prices", type: "Manual Upload", lastImport: "Jun 24, 5:31 AM", records: 57, status: "Requires Review", isManual: true, issue: "38 records failed price range validation" },
-  { id: "dftc-wholesale", name: "DFTC Wholesale Prices", type: "Manual Upload", lastImport: "Jun 24, 5:10 AM", records: 88, status: "Updated", isManual: true },
-  { id: "dftc-arrivals", name: "DFTC Arrival Volume", type: "Manual Upload", lastImport: "Jun 24, 5:22 AM", records: 70, status: "Updated", isManual: true },
-  { id: "psa", name: "Historical Production Volume", type: "PSA OpenStat API", lastImport: "Jun 24, 1:00 AM", records: 3200, status: "Updated", isManual: false },
-  { id: "meteo-fore", name: "Weather Forecast", type: "OpenMeteo API", lastImport: "Jun 23, 5:00 AM", records: 0, status: "Failed", isManual: false, issue: "Retrieval failed \u2014 Jun 24, 5:00 AM" },
-  { id: "gcal", name: "Holidays", type: "Google Calendar API", lastImport: "Jun 24, 1:00 AM", records: 22, status: "Updated", isManual: false }
-];
+import { calendarApi, adminApi, ingestionApi } from "../../../services/api";
+import AdminHistory from "./AdminHistory";
+
+
+function fmtISO(dateStr) {
+  return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "";
+}
+
+function toApiEvent(form) {
+  return {
+    event_name: form.name,
+    event_type: form.type,
+    start_date: form.from,
+    end_date: form.to || form.from,
+    recurrence: form.recurrence === "None" ? null : form.recurrence,
+    description: form.description || null,
+    status: form.status.toLowerCase()
+  };
+}
+
+function mapEvent(ev) {
+  return {
+    id: ev.id,
+    name: ev.event_name || "Untitled",
+    type: ev.event_type || "Others",
+    date: new Date(ev.start_date),
+    from: fmtDate(ev.start_date),
+    to: ev.end_date ? fmtDate(ev.end_date) : fmtDate(ev.start_date),
+    source: ev.source || "Manual Entry",
+    category: ev.source === "Payday Period" ? "payday" : ev.source === "Google Calendar API" ? "holiday" : "manual",
+    recurrence: ev.recurrence || "None",
+    description: ev.description || undefined,
+    status: ev.status === "active" ? "Active" : "Inactive",
+    lastUpdated: ev.updated_at ? fmtDate(ev.updated_at) : fmtDate(ev.created_at)
+  };
+}
+
 const STATUS_TEXT = {
   Updated: "text-emerald-700",
   "Requires Review": "text-amber-700",
-  Failed: "text-red-600"
+  Failed: "text-red-600",
+  "No data uploaded": "text-[var(--hw-neutral-500)]",
+  "Not yet synced": "text-[var(--hw-neutral-500)]"
 };
-const IMPORT_DATASETS = [
-  { id: "bangk-retail", label: "Bangkerohan Retail Prices", required: "Date, Commodity, Retail Price (\u20B1/kg)" },
-  { id: "bangk-wholesale", label: "Bangkerohan Wholesale Prices", required: "Date, Commodity, Wholesale Price (\u20B1/kg)" },
-  { id: "dftc-retail", label: "DFTC Retail Prices", required: "Date, Commodity, Retail Price (\u20B1/kg)" },
-  { id: "dftc-wholesale", label: "DFTC Wholesale Prices", required: "Date, Commodity, Wholesale Price (\u20B1/kg)" },
-  { id: "dftc-arrivals", label: "DFTC Arrival Volume", required: "Week ending date, Commodity, Volume (MT)" }
-];
-const PROCESSING_STEPS = ["Uploaded", "Standardized", "Cleaned", "Validated", "Stored", "Ready for processing"];
-const MOCK_PREVIEW = [
-  { date: "Jun 24, 2026", commodity: "Kamatis", variety: "Diamante Big", price: "\u20B185.00" },
-  { date: "Jun 24, 2026", commodity: "Talong", variety: "Banate King", price: "\u20B160.00" },
-  { date: "Jun 24, 2026", commodity: "Repolyo", variety: "Wakamini", price: "\u20B145.00" },
-  { date: "Jun 24, 2026", commodity: "Atsal", variety: "Smooth Cayene", price: "\u20B1120.00" },
-  { date: "Jun 24, 2026", commodity: "Carrots", variety: "Big", price: "\u20B190.00" }
-];
-const VALIDATION_ISSUES = [
-  { row: 12, field: "price", issue: "Value out of expected range", value: "\u20B1580.00" },
-  { row: 28, field: "date", issue: "Date format not recognized", value: "24-06-26" },
-  { row: 45, field: "commodity", issue: "Commodity not in registry", value: "Sibuyas Tagalog" }
-];
-const API_SYNC_SOURCES = [
-  { id: "psa", name: "Historical Production Volume", apiSource: "PSA OpenStat API", lastSync: "Jun 24, 1:00 AM", nextSync: "Jun 25, 1:00 AM", recordsFetched: 3200, recordsAccepted: 3200, status: "Updated" },
-  { id: "meteo-fore", name: "Weather Forecast", apiSource: "OpenMeteo API", lastSync: "Jun 23, 5:00 AM", nextSync: "\u2014", recordsFetched: 0, recordsAccepted: 0, status: "Failed", issue: "Retrieval failed \u2014 Jun 24, 5:00 AM. API responded with a 503 error. Next retry is scheduled." },
-  { id: "gcal", name: "Holidays", apiSource: "Google Calendar API", lastSync: "Jun 24, 1:00 AM", nextSync: "Jun 25, 1:00 AM", recordsFetched: 22, recordsAccepted: 22, status: "Updated" }
-];
-const syncHasFailed = API_SYNC_SOURCES.some((s) => s.status === "Failed");
-const syncSummary = syncHasFailed ? `${API_SYNC_SOURCES.filter((s) => s.status === "Failed").length} source failed \u2014 retry recommended` : "All sources updated";
-const syncSummaryColor = syncHasFailed ? "text-red-600" : "text-emerald-700";
-const BASE_EVENTS = [
-  { id: "CE-001", name: "Araw ng Kagitingan", date: new Date(2026, 3, 9), from: "Apr 9, 2026", to: "Apr 9, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-002", name: "Labor Day", date: new Date(2026, 4, 1), from: "May 1, 2026", to: "May 1, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-003", name: "Independence Day", date: new Date(2026, 5, 12), from: "Jun 12, 2026", to: "Jun 12, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-004", name: "Araw ng Dabaw", date: new Date(2026, 6, 4), from: "Jul 4, 2026", to: "Jul 4, 2026", type: "Local Event", source: "Manual Entry", recurrence: "Yearly", status: "Active", lastUpdated: "Jun 1, 2026", description: "Local Davao City holiday." },
-  { id: "CE-005", name: "Kadayawan Festival", date: new Date(2026, 7, 15), from: "Aug 15, 2026", to: "Aug 17, 2026", type: "Local Event", source: "Manual Entry", recurrence: "Yearly", status: "Active", lastUpdated: "Jun 1, 2026", description: "Annual Kadayawan festival in Davao City." },
-  { id: "CE-006", name: "Ninoy Aquino Day", date: new Date(2026, 7, 21), from: "Aug 21, 2026", to: "Aug 21, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-007", name: "National Heroes Day", date: new Date(2026, 7, 31), from: "Aug 31, 2026", to: "Aug 31, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-008", name: "Davao City Charter Day", date: new Date(2026, 9, 16), from: "Oct 16, 2026", to: "Oct 16, 2026", type: "Local Event", source: "Manual Entry", recurrence: "Yearly", status: "Active", lastUpdated: "Jun 1, 2026" },
-  { id: "CE-009", name: "Bonifacio Day", date: new Date(2026, 10, 30), from: "Nov 30, 2026", to: "Nov 30, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-010", name: "Immaculate Conception", date: new Date(2026, 11, 8), from: "Dec 8, 2026", to: "Dec 8, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-011", name: "Christmas Day", date: new Date(2026, 11, 25), from: "Dec 25, 2026", to: "Dec 25, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" },
-  { id: "CE-012", name: "Rizal Day", date: new Date(2026, 11, 30), from: "Dec 30, 2026", to: "Dec 30, 2026", type: "National Event", source: "Google Calendar API", recurrence: "Yearly", status: "Active", lastUpdated: "Jan 1, 2026" }
-];
+
+const SOURCE_DISPLAY_NAMES = {
+  consolidated_monthly_wholesale:  "Consolidated Monthly Wholesale",
+  consolidated_monthly_retail:     "Consolidated Monthly Retail",
+  consolidated_monthly_landing:    "Consolidated Monthly Landing",
+  bankerohan_daily_wholesale:      "Bankerohan Daily Wholesale",
+  bankerohan_daily_retail:         "Bankerohan Daily Retail",
+  bankerohan_daily_landing:        "Bankerohan Daily Landing",
+  dftc_volume:                     "DFTC Arrival Volume",
+  dftc_daily_wholesale:            "DFTC Daily Wholesale",
+  dftc_daily_retail:               "DFTC Daily Retail",
+  dftc_daily_landing:              "DFTC Daily Landing",
+  psa_openstat:                    "PSA OpenStat",
+  open_meteo:                      "Open-Meteo Weather API",
+};
+const BASE_EVENTS = [];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const TODAY_DATE = new Date(2026, 5, 24);
+const TODAY_DATE = new Date();
 function buildGrid(year, month) {
   const first = new Date(year, month, 1).getDay();
   const lastDate = new Date(year, month + 1, 0).getDate();
@@ -124,17 +125,43 @@ const EMPTY_FORM = {
   description: "",
   status: "Active"
 };
+// Bounded wait (30s) for a background PSA resync to commit and move "Last sync".
+const RESYNC_POLL_ATTEMPTS = 10;
+const RESYNC_POLL_INTERVAL_MS = 3000;
+
+// Tab ids double as ?tab= URL values, so the initial-tab guard above and the
+// tab bar below stay in sync from one list.
+const DATA_SOURCE_TABS = [
+  ["sources", "Data Sources"],
+  ["api-sync", "API Sync"],
+  ["history", "Processing History"],
+  ["calendar", "Calendar & Events"],
+];
+
 function AdminDataSources() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState("sources");
-  const [showImport, setShowImport] = useState(false);
-  const [importStep, setImportStep] = useState(0);
-  const [selectedDs, setSelectedDs] = useState(IMPORT_DATASETS[0].id);
-  const [fileUploaded, setFileUploaded] = useState(false);
-  const [calYear, setCalYear] = useState(2026);
-  const [calMonth, setCalMonth] = useState(5);
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Every tab id is a valid ?tab= value. Admin notifications deep-link here
+  // (?tab=api-sync for a weather sync), and any id outside this set falls back
+  // to "sources" rather than rendering a blank page.
+  const [tab, setTabState] = useState(() =>
+    DATA_SOURCE_TABS.some(([id]) => id === searchParams.get("tab"))
+      ? searchParams.get("tab")
+      : "sources",
+  );
+  const setTab = (id) => {
+    setTabState(id);
+    if (id === "sources") {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab: id }, { replace: true });
+    }
+  };
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calFilter, setCalFilter] = useState("30d");
-  const [events, setEvents] = useState(BASE_EVENTS);
+
   const [showConfiguredEvents, setShowConfiguredEvents] = useState(false);
   const [selectedCalDay, setSelectedCalDay] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -143,6 +170,114 @@ function AdminDataSources() {
   const [deleteEventId, setDeleteEventId] = useState(null);
   const [addForm, setAddForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+
+  const [fetchingSource, setFetchingSource] = useState({});
+
+  // Identifies which sources have a manual fetch endpoint
+  const MANUAL_FETCH_LABEL = {
+    open_meteo: true,
+    psa_openstat: true,
+  };
+
+  // The PSA resync is a background job, so "Last sync" only moves once it has
+  // committed and the server has refreshed its cache. Poll until it does rather
+  // than leaving the tile showing the pre-sync value.
+  const pollUntilResynced = async (sourceId, before) => {
+    for (let attempt = 0; attempt < RESYNC_POLL_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, RESYNC_POLL_INTERVAL_MS));
+      const res = await adminApi.listApiSyncSources();
+      queryClient.setQueryData(["adminApiSyncSources"], res);
+      const after = res?.items?.find((s) => s.id === sourceId)?.lastSync ?? null;
+      if (after && after !== before) return;
+    }
+  };
+
+  const handleFetchNow = async (sourceId, sourceName) => {
+    if (fetchingSource[sourceId]) return;
+    setFetchingSource((f) => ({ ...f, [sourceId]: true }));
+    const before = queryClient
+      .getQueryData(["adminApiSyncSources"])
+      ?.items?.find((s) => s.id === sourceId)?.lastSync ?? null;
+    try {
+      if (sourceName === "open_meteo") {
+        // Synchronous endpoint: the server has already committed and refreshed
+        // its cache by the time this resolves, so the refetch below is fresh.
+        await ingestionApi.triggerWeatherSync();
+      } else if (sourceName === "psa_openstat") {
+        // 202 acceptance only — the actual sync runs in the background.
+        await ingestionApi.triggerPsaSync();
+        await pollUntilResynced(sourceId, before);
+      }
+      queryClient.invalidateQueries({ queryKey: ["adminApiSyncSources"] });
+      queryClient.invalidateQueries({ queryKey: ["adminDataSources"] });
+    } catch (_err) {
+      // failure is silent here; the status tile will reflect it on next load
+    } finally {
+      setFetchingSource((f) => ({ ...f, [sourceId]: false }));
+    }
+  };
+
+  const { data: eventsData } = useQuery({
+    queryKey: ["adminCalendarEvents"],
+    queryFn: calendarApi.listEvents,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: dataSourcesRes, isLoading: dataSourcesLoading, error: dsErr } = useQuery({
+    queryKey: ["adminDataSources"],
+    queryFn: adminApi.listDataSources,
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: apiSyncRes, isLoading: apiSyncLoading, error: syncErr } = useQuery({
+    queryKey: ["adminApiSyncSources"],
+    queryFn: adminApi.listApiSyncSources,
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: true,
+  });
+
+  const events = useMemo(() => {
+    if (eventsData?.items && eventsData.items.length > 0) {
+      return eventsData.items.map(mapEvent);
+    }
+    return BASE_EVENTS;
+  }, [eventsData]);
+
+  const dataSources = (dataSourcesRes?.items || []).filter(
+    (s) => s.name !== "open_meteo" && s.name !== "psa_openstat"
+  );
+  const apiSyncSources = apiSyncRes?.items || [];
+  const dataSourcesError = dsErr ? (dsErr.message || "Failed to load data sources.") : null;
+  const apiSyncError = syncErr ? (syncErr.message || "Failed to load API sync sources.") : null;
+
+  const highlightParam = searchParams.get("highlight");
+  const [highlightedSource, setHighlightedSource] = useState(highlightParam);
+
+  // 3-second temporary highlight timer (matching DFTC highlight pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedSource(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedSource(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+
+  // Smooth scroll to highlighted data source row
+  useEffect(() => {
+    if (!highlightedSource || dataSourcesLoading) return;
+    const t = setTimeout(() => {
+      const hl = highlightedSource.toLowerCase();
+      const el =
+        document.getElementById(`source-row-${hl}`) ||
+        document.querySelector(`[data-source-match*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+  }, [highlightedSource, dataSourcesLoading, dataSources]);
+
   const calGrid = useMemo(() => buildGrid(calYear, calMonth), [calYear, calMonth]);
   const filteredEvents = useMemo(() => {
     const end = filterEnd(calFilter);
@@ -158,7 +293,6 @@ function AdminDataSources() {
   );
   const viewEvent = viewEventId ? events.find((e) => e.id === viewEventId) : null;
   const deleteEvent = deleteEventId ? events.find((e) => e.id === deleteEventId) : null;
-  const ds = IMPORT_DATASETS.find((d) => d.id === selectedDs);
   const prevMonth = () => {
     if (calMonth === 0) {
       setCalMonth(11);
@@ -170,11 +304,6 @@ function AdminDataSources() {
       setCalMonth(0);
       setCalYear((y) => y + 1);
     } else setCalMonth((m) => m + 1);
-  };
-  const closeImport = () => {
-    setShowImport(false);
-    setImportStep(0);
-    setFileUploaded(false);
   };
   const openEdit = (id) => {
     const ev = events.find((e) => e.id === id);
@@ -194,9 +323,9 @@ function AdminDataSources() {
   const inputCls = "w-full px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
   const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
   const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
-  const renderEventFormFields = (form, setForm) => <div className="px-5 py-4 space-y-3">
+  const renderEventFormFields = (form, setForm, error) => <div className="px-5 py-4 space-y-3">
       <div>
-        <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Event name</label>
+        <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Event name *</label>
         <input
     value={form.name}
     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -215,7 +344,7 @@ function AdminDataSources() {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">From</label>
+          <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">From *</label>
           <input
     type="date"
     value={form.from}
@@ -233,9 +362,11 @@ function AdminDataSources() {
   />
         </div>
       </div>
+      {error && <p className="text-[12px] text-red-600">{error}</p>}
       <div>
         <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Recurrence</label>
         <select value={form.recurrence} onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))} className={inputCls}>
+          <option value="None">None</option>
           <option value="Bi-weekly">Bi-weekly</option>
           <option value="Monthly">Monthly</option>
           <option value="Yearly">Yearly</option>
@@ -258,10 +389,12 @@ function AdminDataSources() {
         </select>
       </div>
     </div>;
+  const [formError, setFormError] = useState("");
   const renderAddModal = () => <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/30" onClick={() => {
     setShowAddModal(false);
     setAddForm(EMPTY_FORM);
+    setFormError("");
   }} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
@@ -270,37 +403,37 @@ function AdminDataSources() {
     onClick={() => {
       setShowAddModal(false);
       setAddForm(EMPTY_FORM);
+      setFormError("");
     }}
     className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
   >
             <X className="w-4 h-4" />
           </button>
         </div>
-        {renderEventFormFields(addForm, setAddForm)}
+        {renderEventFormFields(addForm, setAddForm, formError)}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
           <button onClick={() => {
     setShowAddModal(false);
     setAddForm(EMPTY_FORM);
+    setFormError("");
   }} className={btnSecondary}>Cancel</button>
-          <button onClick={() => {
-    if (addForm.name.trim() && addForm.from) {
-      const d = new Date(addForm.from);
-      const newId = `CE-${String(events.length + 1).padStart(3, "0")}`;
-      setEvents((prev) => [...prev, {
-        id: newId,
-        name: addForm.name,
-        date: d,
-        from: fmtDate(addForm.from),
-        to: addForm.to ? fmtDate(addForm.to) : fmtDate(addForm.from),
-        type: addForm.type,
-        source: "Manual Entry",
-        recurrence: addForm.recurrence,
-        description: addForm.description || void 0,
-        status: addForm.status,
-        lastUpdated: "Jun 24, 2026"
-      }]);
+          <button onClick={async () => {
+    if (!addForm.name.trim() || !addForm.from) {
+      setFormError("Event name and 'From' date are required.");
+      return;
+    }
+    if (addForm.to && addForm.from && addForm.to < addForm.from) {
+      setFormError("'To' date cannot be earlier than 'From' date.");
+      return;
+    }
+    try {
+      await calendarApi.createEvent(toApiEvent(addForm));
+      queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
       setShowAddModal(false);
       setAddForm(EMPTY_FORM);
+      setFormError("");
+    } catch (err) {
+      setFormError(err.message || "Failed to create event.");
     }
   }} className={btnPrimary}>Save Event</button>
         </div>
@@ -309,35 +442,45 @@ function AdminDataSources() {
   const renderEditModal = () => {
     if (!editEventId) return null;
     return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/30" onClick={() => setEditEventId(null)} />
+        <div className="absolute inset-0 bg-black/30" onClick={() => {
+          setEditEventId(null);
+          setFormError("");
+        }} />
         <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
             <p className="font-semibold text-[var(--hw-neutral-800)]">Edit Calendar Event</p>
             <button
-      onClick={() => setEditEventId(null)}
+      onClick={() => {
+        setEditEventId(null);
+        setFormError("");
+      }}
       className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors"
     >
               <X className="w-4 h-4" />
             </button>
           </div>
-          {renderEventFormFields(editForm, setEditForm)}
+          {renderEventFormFields(editForm, setEditForm, formError)}
           <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-            <button onClick={() => setEditEventId(null)} className={btnSecondary}>Cancel</button>
             <button onClick={() => {
-      if (editForm.name.trim() && editForm.from) {
-        setEvents((prev) => prev.map((e) => e.id !== editEventId ? e : {
-          ...e,
-          name: editForm.name,
-          type: editForm.type,
-          date: new Date(editForm.from),
-          from: fmtDate(editForm.from),
-          to: editForm.to ? fmtDate(editForm.to) : fmtDate(editForm.from),
-          recurrence: editForm.recurrence,
-          description: editForm.description || void 0,
-          status: editForm.status,
-          lastUpdated: "Jun 24, 2026"
-        }));
+              setEditEventId(null);
+              setFormError("");
+            }} className={btnSecondary}>Cancel</button>
+            <button onClick={async () => {
+      if (!editForm.name.trim() || !editForm.from) {
+        setFormError("Event name and 'From' date are required.");
+        return;
+      }
+      if (editForm.to && editForm.from && editForm.to < editForm.from) {
+        setFormError("'To' date cannot be earlier than 'From' date.");
+        return;
+      }
+      try {
+        await calendarApi.updateEvent(editEventId, toApiEvent(editForm));
+        queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
         setEditEventId(null);
+        setFormError("");
+      } catch (err) {
+        setFormError(err.message || "Failed to update event.");
       }
     }} className={btnPrimary}>Save Changes</button>
           </div>
@@ -365,8 +508,14 @@ function AdminDataSources() {
           </div>
           <div className="flex items-center justify-end gap-2">
             <button onClick={() => setDeleteEventId(null)} className={btnSecondary}>Cancel</button>
-            <button onClick={() => {
-      setEvents((prev) => prev.filter((e) => e.id !== deleteEventId));
+            <button onClick={async () => {
+      const id = deleteEventId;
+      try {
+        await calendarApi.deleteEvent(id);
+        queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
+      } catch (err) {
+        // Keep the modal open context; deletion failure leaves event in place.
+      }
       setDeleteEventId(null);
     }} className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors">
               <Trash2 className="w-3.5 h-3.5" />Delete
@@ -443,7 +592,7 @@ function AdminDataSources() {
         <div className="grid grid-cols-7 gap-y-1">
           {calGrid.map((day, i) => {
       if (day === null) return <div key={i} />;
-      const isToday = calYear === 2026 && calMonth === 5 && day === 24;
+      const isToday = calYear === new Date().getFullYear() && calMonth === new Date().getMonth() && day === new Date().getDate();
       const isSelected = selectedCalDay === day;
       const dayEvents = eventsInMonth.filter((e) => e.date.getDate() === day);
       const hasEvents = dayEvents.length > 0;
@@ -457,8 +606,8 @@ function AdminDataSources() {
       >
                 <span>{day}</span>
                 {hasEvents && <div className="flex gap-0.5 mt-1 justify-center">
-                    {dayEvents.slice(0, 3).map((e, ei) => <span key={ei} className={`w-1.5 h-1.5 rounded-full flex-shrink-0
-                        ${e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}
+                    {dayEvents.slice(0, 3).map((e, ei) => <span key={ei} data-cat={e.category} className={`w-1.5 h-1.5 rounded-full flex-shrink-0
+                        ${e.category === "payday" ? "bg-amber-500" : e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}
                         ${isSelected ? "opacity-70" : ""}`} />)}
                   </div>}
               </button>;
@@ -482,7 +631,7 @@ function AdminDataSources() {
             </div>
             <div className="space-y-2">
               {selectedEvents.map((e) => <div key={e.id} className="flex items-start gap-2.5 px-3 py-2.5 bg-[var(--hw-neutral-50)] rounded-xl">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${e.category === "payday" ? "bg-amber-500" : e.source === "Google Calendar API" ? "bg-emerald-500" : "bg-blue-500"}`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">{e.name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -514,31 +663,33 @@ function AdminDataSources() {
             <span className="text-[12px] text-[var(--hw-neutral-800)]">API holiday</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+            <span className="text-[12px] text-[var(--hw-neutral-800)]">Payday period</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
             <span className="text-[12px] text-[var(--hw-neutral-800)]">Configured event</span>
           </div>
         </div>
       </div>;
   };
-  const renderConfiguredEventsPage = () => <div className="space-y-4">
-      {
-    /* Back */
-  }
-      <button
-    onClick={() => setShowConfiguredEvents(false)}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors"
-  >
-        <ChevronLeft className="w-4 h-4" />Back to Calendar &amp; Events
-      </button>
+  const renderConfiguredEventsPage = () => <div className="space-y-6">
+      {/* Back */}
+      <div>
+        <button
+          onClick={() => setShowConfiguredEvents(false)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />Back to Calendar &amp; Events
+        </button>
+      </div>
 
-      {
-    /* Header */
-  }
-      <div className="flex items-center justify-between gap-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 pt-1">
         <div>
-          <h2 className="font-semibold text-[var(--hw-neutral-800)]">Configured Events</h2>
-          <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">
-            Manually added events configured by admins. {manualEvents.length} {manualEvents.length === 1 ? "event" : "events"} total.
+          <h2 className="text-[18px] font-bold text-[var(--hw-neutral-900)]">Configured Events</h2>
+          <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+            Manage custom holidays and special market events for the platform.
           </p>
         </div>
         <button onClick={() => setShowAddModal(true)} className={`${btnPrimary} flex-shrink-0`}>
@@ -605,199 +756,6 @@ function AdminDataSources() {
         </div>
       </div>
     </div>;
-  const renderImport = () => <div className="max-w-2xl mx-auto space-y-5 pt-2">
-      <button
-    onClick={closeImport}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors"
-  >
-        <ChevronLeft className="w-4 h-4" />Back to Data Sources
-      </button>
-
-      {
-    /* Step indicator */
-  }
-      <div className="flex items-center">
-        {["Select dataset", "Upload file", "Preview", "Validate", "Result"].map((label, i) => <React.Fragment key={label}>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${i < importStep ? "bg-[var(--hw-green-700)] text-white" : i === importStep ? "bg-[var(--hw-green-700)] text-white ring-2 ring-[var(--hw-green-200)]" : "bg-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)]"}`}>
-                {i < importStep ? <Check className="w-3.5 h-3.5" /> : i + 1}
-              </div>
-              <span className={`text-[11px] font-medium hidden sm:block whitespace-nowrap ${i === importStep ? "text-[var(--hw-green-700)]" : i < importStep ? "text-[var(--hw-neutral-800)]" : "text-[var(--hw-neutral-700)]"}`}>
-                {label}
-              </span>
-            </div>
-            {i < 4 && <div className={`flex-1 h-0.5 mx-2 rounded ${i < importStep ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-200)]"}`} />}
-          </React.Fragment>)}
-      </div>
-
-      {
-    /* Step 0: Select dataset */
-  }
-      {importStep === 0 && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-          <p className="font-semibold text-[var(--hw-neutral-800)]">Select dataset</p>
-          <div className="space-y-2">
-            {IMPORT_DATASETS.map((d) => <label key={d.id} className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${selectedDs === d.id ? "border-[var(--hw-green-600)] bg-[var(--hw-green-50)]" : "border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"}`}>
-                <input type="radio" name="dataset" checked={selectedDs === d.id} onChange={() => setSelectedDs(d.id)} className="mt-0.5 accent-[var(--hw-green-700)]" />
-                <div>
-                  <p className="font-medium text-[var(--hw-neutral-800)]">{d.label}</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">CSV · {d.required}</p>
-                </div>
-              </label>)}
-          </div>
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <button className="text-[13px] font-medium text-[var(--hw-neutral-800)] hover:opacity-70 flex items-center gap-1">
-              <Download className="w-4 h-4" />Download Template
-            </button>
-            <button onClick={() => setImportStep(1)} className={btnPrimary}>Continue →</button>
-          </div>
-        </div>}
-
-      {
-    /* Step 1: Upload */
-  }
-      {importStep === 1 && <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="font-semibold text-[var(--hw-neutral-800)]">Upload file</p>
-              <span className="text-[12px] text-[var(--hw-neutral-700)]">{ds.label}</span>
-            </div>
-            {!fileUploaded ? <div
-    onClick={() => setFileUploaded(true)}
-    className="border-2 border-dashed border-[var(--hw-neutral-300)] rounded-xl p-8 text-center space-y-3 hover:border-[var(--hw-green-500)] transition-colors cursor-pointer"
-  >
-                <div className="w-10 h-10 mx-auto rounded-xl bg-[var(--hw-neutral-100)] flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-[var(--hw-neutral-700)]" />
-                </div>
-                <div>
-                  <p className="font-medium text-[var(--hw-neutral-700)]">Drag and drop your file here</p>
-                  <p className="text-[13px] text-[var(--hw-neutral-700)] mt-0.5">CSV only · Max 10 MB</p>
-                </div>
-                <button type="button" className={btnSecondary + " mx-auto"}>Browse File</button>
-              </div> : <div className="flex items-center gap-3 p-3.5 bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded-xl">
-                <FileText className="w-5 h-5 text-[var(--hw-green-700)] flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-800)]">bangk_retail_jun24.csv</p>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)]">24.8 KB · 140 rows</p>
-                </div>
-                <button onClick={() => setFileUploaded(false)} className="text-[12px] text-[var(--hw-neutral-800)] hover:opacity-70">Replace</button>
-              </div>}
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <button onClick={() => setImportStep(0)} className="text-[13px] text-[var(--hw-neutral-800)] hover:opacity-70">← Back</button>
-            <button onClick={() => {
-    if (fileUploaded) setImportStep(2);
-  }} disabled={!fileUploaded} className={`${btnPrimary} disabled:opacity-40`}>
-              Preview Records →
-            </button>
-          </div>
-        </div>}
-
-      {
-    /* Step 2: Preview */
-  }
-      {importStep === 2 && <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
-            <p className="font-semibold text-[var(--hw-neutral-800)]">Preview — first 5 rows</p>
-            <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)]">
-              <table className="w-full text-[12px]">
-                <thead><tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                  {["Date", "Commodity", "Variety", "Price"].map((h) => <th key={h} className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-800)]">{h}</th>)}
-                </tr></thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {MOCK_PREVIEW.map((r, i) => <tr key={i}><td className="px-3 py-2">{r.date}</td><td className="px-3 py-2">{r.commodity}</td><td className="px-3 py-2 text-[var(--hw-neutral-500)] italic">{r.variety}</td><td className="px-3 py-2">{r.price}</td></tr>)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <button onClick={() => setImportStep(1)} className="text-[13px] text-[var(--hw-neutral-800)] hover:opacity-70">← Back</button>
-            <button onClick={() => setImportStep(3)} className={btnPrimary}>Validate Records →</button>
-          </div>
-        </div>}
-
-      {
-    /* Step 3: Validate */
-  }
-      {importStep === 3 && <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-    { label: "Total", value: "140", color: "text-[var(--hw-neutral-900)]" },
-    { label: "Accepted", value: "137", color: "text-emerald-700" },
-    { label: "Rejected", value: "3", color: "text-red-600" },
-    { label: "Warnings", value: "3", color: "text-amber-700" }
-  ].map((s) => <div key={s.label} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 py-3 text-center">
-                <p className="text-[12px] text-[var(--hw-neutral-700)]">{s.label}</p>
-                <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-              </div>)}
-          </div>
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
-              <p className="text-[13px] font-semibold text-amber-700">{VALIDATION_ISSUES.length} issues found</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead><tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                  {["Row", "Field", "Issue", "Value"].map((h) => <th key={h} className="px-4 py-2 text-left font-semibold text-[var(--hw-neutral-800)]">{h}</th>)}
-                </tr></thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {VALIDATION_ISSUES.map((r, i) => <tr key={i}>
-                      <td className="px-4 py-2.5 text-[var(--hw-neutral-700)]">Row {r.row}</td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--hw-neutral-700)]">{r.field}</td>
-                      <td className="px-4 py-2.5 text-amber-700">{r.issue}</td>
-                      <td className="px-4 py-2.5 font-mono text-[var(--hw-neutral-800)]">{r.value}</td>
-                    </tr>)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setImportStep(2)} className="text-[13px] text-[var(--hw-neutral-800)] hover:opacity-70">← Back</button>
-            <div className="flex-1" />
-            <button className={btnSecondary}><Download className="w-3.5 h-3.5" />Error Report</button>
-            <button onClick={() => setImportStep(4)} className={btnPrimary}>Import 137 Valid Records →</button>
-          </div>
-        </div>}
-
-      {
-    /* Step 4: Result */
-  }
-      {importStep === 4 && <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-                <Check className="w-5 h-5 text-white" />
-              </div>
-              <p className="font-semibold text-[var(--hw-neutral-800)]">Import completed</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Processing checklist</p>
-              <div className="space-y-1.5">
-                {PROCESSING_STEPS.map((step) => <div key={step} className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-emerald-700" />
-                    </div>
-                    <span className="text-[13px] text-[var(--hw-neutral-700)]">{step}</span>
-                  </div>)}
-              </div>
-            </div>
-            <div className="divide-y divide-[var(--hw-neutral-100)] rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden">
-              {[
-    { label: "Dataset", value: ds.label },
-    { label: "Imported records", value: "137", color: "text-emerald-700" },
-    { label: "Rejected records", value: "3", color: "text-amber-700" },
-    { label: "Completed", value: "Jun 24, 2026 \xB7 7:52 AM" }
-  ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <p className="text-[13px] text-[var(--hw-neutral-800)]">{r.label}</p>
-                  <p className={`text-[13px] font-semibold ${"color" in r ? r.color : "text-[var(--hw-neutral-800)]"}`}>{r.value}</p>
-                </div>)}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => navigate("/admin/history")} className={btnPrimary}>View Processing History</button>
-            <button onClick={closeImport} className={btnSecondary}>Done</button>
-          </div>
-        </div>}
-    </div>;
   return <>
       {
     /* Modals */
@@ -807,115 +765,167 @@ function AdminDataSources() {
       {deleteEventId && renderDeleteConfirmModal()}
       {viewEventId && renderViewEventModal()}
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
 
-        {
-    /* Header */
-  }
+        {/* Header */}
         <PageHeader
-    title="Data"
-    description="Manage data sources, API sync, and calendar events."
-    action={<div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] text-[12px]"><RefreshCw className="w-3.5 h-3.5" /><span>Jun 24, 7:30 AM</span></div>}
-  />
+          title="Data"
+          description="Manage data sources, API sync, and calendar events."
+        />
 
-        {
-    /* Tabs (hidden during import subview) */
-  }
-        {!showImport && <div className="flex border-b border-[var(--hw-neutral-200)]">
-            {[["sources", "Data Sources"], ["api-sync", "API Sync"], ["calendar", "Calendar & Events"]].map(([id, label]) => <button key={id} onClick={() => {
+        {/* Tabs */}
+        {<div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto">
+            {DATA_SOURCE_TABS.map(([id, label]) => <button key={id} onClick={() => {
     setTab(id);
     setShowConfiguredEvents(false);
   }} className={tabCls(id)}>{label}</button>)}
           </div>}
 
-        {
-    /* Import subview */
-  }
-        {showImport && renderImport()}
-
-        {
-    /* ══ TAB: DATA SOURCES ══ */
-  }
-        {!showImport && tab === "sources" && <div className="space-y-3">
+        {/* ══ TAB: DATA SOURCES ══ */}
+        {tab === "sources" && <div className="space-y-3">
             <div className="flex items-center justify-end">
-              <button onClick={() => {
-    setShowImport(true);
-    setImportStep(0);
-    setFileUploaded(false);
-  }} className={btnPrimary}>
+              <button onClick={() => navigate("/admin/import")} className={btnPrimary}>
                 <FileText className="w-4 h-4" />Import Data
               </button>
             </div>
+            {dataSourcesLoading ? (
+
+
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading data sources...</p>
+              </div>
+            ) : dataSourcesError ? (
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <p className="text-[13px] text-red-600">{dataSourcesError}</p>
+              </div>
+            ) : (
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                      {["Source", "Type", "Last Import", "Records Imported", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+                      {["Source", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                    {DATA_SOURCES.map((s) => <tr
-    key={s.id}
-    onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-    className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-  >
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-[var(--hw-neutral-800)]">{s.name}</p>
-                          {s.issue && <p className="text-[11px] text-amber-600 mt-0.5">{s.issue}</p>}
+                    {dataSources.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                          No data sources configured.
                         </td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.type}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastImport}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">{s.records > 0 ? s.records.toLocaleString() : "\u2014"}</td>
-                        <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status]}`}>{s.status}</td>
-                      </tr>)}
+                      </tr>
+                    ) : (
+                      dataSources.map((s) => {
+                        const hl = (highlightedSource || "").toLowerCase();
+                        const displayName = SOURCE_DISPLAY_NAMES[s.name] || s.name || "";
+                        const matcher = `${s.id} ${s.name} ${displayName}`.toLowerCase();
+                        const isHighlighted = Boolean(
+                          hl &&
+                          (matcher.includes(hl) ||
+                           hl.includes(s.name.toLowerCase()) ||
+                           (hl.includes("dftc") && s.name.toLowerCase().includes("dftc")) ||
+                           (hl.includes("openstat") && s.name.toLowerCase().includes("openstat")) ||
+                           (hl.includes("meteo") && s.name.toLowerCase().includes("meteo")))
+                        );
+
+                        return (
+                          <tr
+                            key={s.id}
+                            id={`source-row-${s.id.toLowerCase()}`}
+                            data-source-match={matcher}
+                            onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                            className={`hover:bg-[var(--hw-neutral-50)] transition-colors duration-500 cursor-pointer ${
+                              isHighlighted ? "bg-emerald-50/70 font-medium" : ""
+                            }`}
+                          >
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-[var(--hw-neutral-800)]">{displayName}</p>
+                            </td>
+                            <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
+                            <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
+                              {s.records != null ? s.records.toLocaleString() : "—"}
+                            </td>
+                            <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
+            )}
           </div>}
 
-        {
-    /* ══ TAB: API SYNC ══ */
-  }
-        {!showImport && tab === "api-sync" && <div className="space-y-4">
-            {
-    /* Header row */
-  }
+        {/* ══ TAB: PROCESSING HISTORY ══ */}
+        {tab === "history" && <div className="space-y-4">
+            <AdminHistory embedded />
+          </div>}
+
+        {/* ══ TAB: API SYNC ══ */}
+        {tab === "api-sync" && <div className="space-y-4">
+            {/* Header row */}
             <div className="flex items-center justify-end gap-2 flex-shrink-0">
-              <button className={btnPrimary}>
-                {syncHasFailed ? <><RotateCcw className="w-4 h-4" />Retry Sync</> : <><RefreshCw className="w-4 h-4" />Sync Now</>}
-              </button>
-              <button onClick={() => navigate("/admin/history")} className={btnSecondary}>
+              <button onClick={() => setTab("history")} className={btnSecondary}>
                 View Sync History
               </button>
             </div>
 
-            {
-    /* Sources list */
-  }
+            {apiSyncLoading ? (
+
+
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading sync sources...</p>
+              </div>
+            ) : apiSyncError ? (
+              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
+                <p className="text-[13px] text-red-600">{apiSyncError}</p>
+              </div>
+            ) : (
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden divide-y divide-[var(--hw-neutral-100)]">
-              {API_SYNC_SOURCES.map((s) => <div
-    key={s.id}
-    onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-    className="px-5 py-4 space-y-3 hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-  >
+              {apiSyncSources.length === 0 ? (
+                <div className="px-5 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                  No API sources configured.
+                </div>
+              ) : (
+                apiSyncSources.map((s) => <div
+                  key={s.id}
+                  className="px-5 py-4 space-y-3"
+                >
                   <div className="flex items-start gap-3 flex-wrap">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-[var(--hw-neutral-800)]">{s.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                          className="font-semibold text-[var(--hw-neutral-800)] hover:text-[var(--hw-green-700)] transition-colors text-left"
+                        >
+                          {SOURCE_DISPLAY_NAMES[s.name] || s.name}
+                        </button>
                         <span className={`text-[13px] font-medium ${STATUS_TEXT[s.status]}`}>{s.status}</span>
                       </div>
                       <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{s.apiSource}</p>
                     </div>
+                    {MANUAL_FETCH_LABEL[s.name] && (
+                      <button
+                        type="button"
+                        disabled={!!fetchingSource[s.id]}
+                        onClick={(e) => { e.stopPropagation(); handleFetchNow(s.id, s.name); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-[var(--hw-green-700)] border border-[var(--hw-green-300)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-50 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 flex-shrink-0 ${fetchingSource[s.id] ? "animate-spin" : ""}`} />
+                        {fetchingSource[s.id] ? "Fetching..." : "Fetch Now"}
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
                     {[
-    { label: "Last sync", value: s.lastSync },
-    { label: "Next scheduled", value: s.nextSync },
-    { label: "Records fetched", value: s.recordsFetched.toLocaleString() },
-    { label: "Records accepted", value: s.recordsAccepted.toLocaleString() }
-  ].map((f) => <div key={f.label}>
+                      { label: "Last sync", value: s.lastSync ? fmtDate(s.lastSync) : "-" },
+                      { label: "Next scheduled", value: s.nextSync || "-" },
+                      { label: "Records fetched", value: s.recordsFetched != null ? s.recordsFetched.toLocaleString() : "0" },
+                      { label: "Records accepted", value: s.recordsAccepted != null ? s.recordsAccepted.toLocaleString() : "0" }
+                    ].map((f) => <div key={f.label}>
                         <p className="text-[12px] text-[var(--hw-neutral-700)]">{f.label}</p>
                         <p className="text-[13px] font-medium text-[var(--hw-neutral-700)] mt-0.5">{f.value}</p>
                       </div>)}
@@ -923,17 +933,15 @@ function AdminDataSources() {
                   {s.issue && <p className="text-[12px] text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100">
                       {s.issue}
                     </p>}
-                </div>)}
+                </div>)
+              )}
             </div>
+            )}
           </div>}
 
-        {
-    /* ══ TAB: CALENDAR & EVENTS ══ */
-  }
-        {!showImport && tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-5">
-              {
-    /* Top row */
-  }
+        {/* ══ TAB: CALENDAR & EVENTS ══ */}
+        {tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-5">
+              {/* Top row */}
               <div className="flex items-center justify-end gap-2 flex-shrink-0">
                 <button onClick={() => setShowConfiguredEvents(true)} className={btnSecondary}>
                   <List className="w-4 h-4" />View Configured Events
@@ -943,14 +951,10 @@ function AdminDataSources() {
                 </button>
               </div>
 
-              {
-    /* Calendar widget — full width */
-  }
+              {/* Calendar widget — full width */}
               {renderCalendarWidget()}
 
-              {
-    /* Filter */
-  }
+              {/* Filter */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[12px] text-[var(--hw-neutral-800)] font-medium">Show:</span>
                 {[["30d", "Next 30 days"], ["3m", "Next 3 months"], ["6m", "Next 6 months"], ["1y", "Next 1 year"]].map(([val, label]) => <button
@@ -962,9 +966,7 @@ function AdminDataSources() {
                   </button>)}
               </div>
 
-              {
-    /* Events table */
-  }
+              {/* Events table */}
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
@@ -974,14 +976,14 @@ function AdminDataSources() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                      {filteredEvents.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-700)]">No events in this period.</td></tr> : filteredEvents.map((e) => <tr
+                      {filteredEvents.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">No events found for this period.</td></tr> : filteredEvents.map((e) => <tr
     key={e.id}
     onClick={() => setViewEventId(e.id)}
     className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
   >
                           <td className="px-4 py-3 font-medium text-[var(--hw-neutral-800)]">{e.name}</td>
                           <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">
-                            {e.from === e.to ? e.from : `${e.from} \u2013 ${e.to}`}
+                            {e.from === e.to || !e.to ? e.from : `${e.from} \u2013 ${e.to}`}
                           </td>
                           <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{e.type}</td>
                           <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{e.source}</td>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   ChevronRight,
@@ -11,261 +12,532 @@ import {
   SlidersHorizontal,
   Check
 } from "lucide-react";
-import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { MarketEmptyState } from "../components/market/MarketStates";
-const PRICE_DATA = {
-  kamatis: { bangkerohanRetail: 85, bangkerohanWholesale: 72, dftcRetail: 80, dftcWholesale: 68, direction: "Rising", range: "\u20B184\u2013\u20B195/kg" },
-  talong: { bangkerohanRetail: 72, bangkerohanWholesale: 60, dftcRetail: 70, dftcWholesale: 58, direction: "Stable", range: "\u20B168\u2013\u20B176/kg" },
-  repolyo: { bangkerohanRetail: 60, bangkerohanWholesale: 50, dftcRetail: 57, dftcWholesale: 47, direction: "Falling", range: "\u20B154\u2013\u20B162/kg" },
-  atsal: { bangkerohanRetail: 120, bangkerohanWholesale: 100, dftcRetail: 115, dftcWholesale: 95, direction: "Rising", range: "\u20B1117\u2013\u20B1130/kg" },
-  carrots: { bangkerohanRetail: 90, bangkerohanWholesale: 76, dftcRetail: 85, dftcWholesale: 72, direction: "Stable", range: "\u20B186\u2013\u20B196/kg" },
-  pipino: { bangkerohanRetail: 40, bangkerohanWholesale: 34, dftcRetail: 38, dftcWholesale: 32, direction: "Stable", range: "\u20B137\u2013\u20B144/kg" },
-  ampalaya: { bangkerohanRetail: 75, bangkerohanWholesale: 63, dftcRetail: 70, dftcWholesale: 60, direction: "Rising", range: "\u20B173\u2013\u20B184/kg" },
-  kalabasa: { bangkerohanRetail: 35, bangkerohanWholesale: 30, dftcRetail: 33, dftcWholesale: 28, direction: "Stable", range: "\u20B132\u2013\u20B139/kg" },
-  lettuce: { bangkerohanRetail: 80, bangkerohanWholesale: 67, dftcRetail: 75, dftcWholesale: 63, direction: "Falling", range: "\u20B170\u2013\u20B180/kg" },
-  pechay: { bangkerohanRetail: 35, bangkerohanWholesale: 30, dftcRetail: 32, dftcWholesale: 27, direction: "Falling", range: "\u20B130\u2013\u20B137/kg" }
-};
-const OUTLOOK_TEXT = {
-  Rising: "Price may rise next week",
-  Falling: "Price may fall next week",
-  Stable: "Price may stay stable"
-};
-const MEANING_TEXT = {
-  Rising: "Price may improve soon.",
-  Falling: "Be careful before planting more.",
-  Stable: "Price is not changing much."
-};
+import { apiGet, parseResponse } from "../../global/api";
+import { toCamelCase } from "../../global/utils/apiTransforms";
+import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
+import * as pricesApi from "../../../services/api/pricesApi";
+
 const DIR_CFG = {
-  Rising: { color: "text-emerald-600", Icon: TrendingUp },
-  Falling: { color: "text-red-500", Icon: TrendingDown },
-  Stable: { color: "text-blue-500", Icon: Minus }
+  Rising: { color: "text-emerald-700", bg: "bg-emerald-50/60", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
+  Falling: { color: "text-red-700", bg: "bg-red-50/60", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
+  Stable: { color: "text-blue-700", bg: "bg-blue-50/60", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  default: { color: "text-[var(--hw-neutral-500)]", bg: "bg-[var(--hw-neutral-50)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
-const DEFAULT_FILTER = { direction: "All", sortBy: "name" };
-const PricesFilterDrawer = ({ open, filter, onClose, onApply }) => {
+
+
+
+const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
+
+const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState(filter);
   React.useEffect(() => {
     if (open) setDraft(filter);
   }, [open, filter]);
   if (!open) return null;
-  const chip = (active) => `px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${active ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`;
-  return <>
+
+  const chip = (active) =>
+    `px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${
+      active
+        ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
+        : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
+    }`;
+
+  const sortOptions = [
+    ["name", t("farmer.prices.sort_name", {}, "Commodity name (A–Z)")],
+    ["rising-first", t("farmer.prices.sort_rising_first", {}, "Price rising first")],
+    ["falling-first", t("farmer.prices.sort_falling_first", {}, "Price falling first")],
+    ["price-low", t("farmer.prices.sort_price_low", {}, "Lowest price first")],
+    ["price-high", t("farmer.prices.sort_price_high", {}, "Highest price first")]
+  ];
+
+  const directionOptions = [
+    ["All", "All"],
+    ["Rising", t("farmer.prices.trend_rising", {}, "Rising")],
+    ["Stable", t("farmer.prices.trend_stable", {}, "Stable")],
+    ["Falling", t("farmer.prices.trend_falling", {}, "Falling")]
+  ];
+
+  return (
+    <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-72 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
+      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-80 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Filter & Sort</p>
+          <p className="font-semibold text-[var(--hw-neutral-900)]">{t("farmer.prices.filter_and_sort", {}, "Filter & Sort")}</p>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+
+          {/* Sort by */}
           <div>
-            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Sort by</p>
+            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.sort_by", {}, "Sort by")}</p>
             <div className="flex flex-col gap-2">
-              {[
-    ["name", "Commodity name (A\u2013Z)"],
-    ["rising-first", "Price rising first"],
-    ["falling-first", "Price falling first"]
-  ].map(([v, label]) => <button key={v} onClick={() => setDraft((d) => ({ ...d, sortBy: v }))} className={chip(draft.sortBy === v)}>
+              {sortOptions.map(([v, label]) => (
+                <button key={v} onClick={() => setDraft((d) => ({ ...d, sortBy: v }))} className={chip(draft.sortBy === v)}>
                   {label}
-                </button>)}
+                </button>
+              ))}
             </div>
           </div>
 
+          {/* Price direction */}
           <div>
-            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">Price direction</p>
+            <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.direction_label", {}, "Price direction")}</p>
             <div className="flex flex-wrap gap-2">
-              {["All", "Rising", "Stable", "Falling"].map((v) => <button key={v} onClick={() => setDraft((d) => ({ ...d, direction: v }))} className={chip(draft.direction === v)}>
-                  {v}
-                </button>)}
+              {directionOptions.map(([v, label]) => (
+                <button key={v} onClick={() => setDraft((d) => ({ ...d, direction: v }))} className={chip(draft.direction === v)}>
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Category */}
+          {categories.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.category_label", {}, "Category")}</p>
+              <div className="flex flex-wrap gap-2">
+                {["All", ...categories].map((v) => (
+                  <button key={v} onClick={() => setDraft((d) => ({ ...d, category: v }))} className={chip(draft.category === v)}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+
         </div>
 
         <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3">
           <button
-    onClick={() => setDraft(DEFAULT_FILTER)}
-    className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-            Clear
+            onClick={() => setDraft(DEFAULT_FILTER)}
+            className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+          >
+            {t("farmer.prices.clear", {}, "Clear")}
           </button>
           <button
-    onClick={() => onApply(draft)}
-    className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5"
-  >
-            <Check className="w-4 h-4" />Apply
+            onClick={() => onApply(draft)}
+            className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5"
+          >
+            <Check className="w-4 h-4" />{t("farmer.prices.apply", {}, "Apply")}
           </button>
         </div>
       </div>
-    </>;
+    </>
+  );
 };
-const CropPriceCard = ({ commodity, data, onViewDetails }) => {
-  const cfg = DIR_CFG[data.direction];
+
+const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) => {
+  const { t } = useLanguage();
+  const unit = commodity.unitOfMeasure || 'kg';
+  const forecast = data.trendDetail?.forecast;
+  const forecastPrice = forecast?.forecast_midpoint != null
+    ? Number(forecast.forecast_midpoint)
+    : null;
+  const hasForecast = (data.trendDetail?.recent_records?.length ?? 0) > 0
+    && forecastPrice != null;
+  const direction = hasForecast ? forecast.trend : null;
+  const horizonDays = hasForecast ? forecast.horizon_days : 7;
+
+  const cfg = direction ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
-  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
+  const outlook = hasForecast
+    ? (direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))
+    : data.trendError
+      ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
+      : t("farmer.prices.trend_no_data", {}, "No trend data");
 
-      {
-    /* Header: icon + name + direction */
-  }
-      <div className="flex items-center gap-3">
-        <CommodityIllustration commodityId={commodity.id} className="w-10 h-10 flex-shrink-0" />
-        <p className="flex-1 font-semibold text-[var(--hw-neutral-900)]">{commodity.name}</p>
-        <div className={`flex items-center gap-1 flex-shrink-0 ${cfg.color}`}>
-          <DirIcon className="w-3.5 h-3.5" />
-          <span className="text-[13px] font-medium">{data.direction}</span>
-        </div>
-      </div>
+  const formatPriceValue = (value) => {
+    if (value === null || value === undefined || value === '') return `-/${unit}`;
+    const clean = typeof value === 'string' ? value.replace(/^₱+/, '') : value;
+    return `₱${clean}/${unit}`;
+  };
 
-      {
-    /* Current prices — 2×2 grid */
-  }
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-        <div>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">Bangkerohan Retail</p>
-          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">₱{data.bangkerohanRetail}/kg</p>
-        </div>
-        <div>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">DFTC Retail</p>
-          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">₱{data.dftcRetail}/kg</p>
-        </div>
-        <div>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">Bangkerohan Wholesale</p>
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">₱{data.bangkerohanWholesale}/kg</p>
-        </div>
-        <div>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] uppercase tracking-wide mb-0.5">DFTC Wholesale</p>
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">₱{data.dftcWholesale}/kg</p>
-        </div>
-      </div>
-
-      {
-    /* Outlook */
-  }
-      <div className="rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 space-y-0.5">
-        <p className={`text-[13px] font-medium ${cfg.color}`}>{OUTLOOK_TEXT[data.direction]}</p>
-        <p className="text-[12px] text-[var(--hw-neutral-900)]">
-          Expected next 7 days:{" "}
-          <span className="font-semibold text-[var(--hw-neutral-900)]">{data.range}</span>
-        </p>
-      </div>
-
-      {
-    /* Meaning + action */
-  }
+  return (
+    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
+      {/* Header: icon + name + direction */}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug flex-1">
-          {MEANING_TEXT[data.direction]}
+        <div className="flex items-center gap-3 min-w-0">
+          <CommodityIllustration 
+            commodityId={commodity.id} 
+            baseName={commodity.baseName}
+            commodityName={commodity.name}
+            className="w-10 h-10 flex-shrink-0" 
+          />
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="font-semibold text-[var(--hw-neutral-900)] text-base truncate">{commodity.name || '–'}</p>
+            {isPreferred && (
+              <PreferredStar className="w-4 h-4 text-amber-500" />
+            )}
+          </div>
+        </div>
+        <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+          {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
+          <span className="text-[13px] font-medium">
+            {data.trendLoading
+                ? t("farmer.prices.trend_loading", {}, "Loading trend")
+              : hasForecast
+                ? t(cfg.key, {}, cfg.label)
+                : outlook}
+          </span>
+        </div>
+      </div>
+
+      {/* 4-Tier Market Price Grid */}
+      <div className="grid grid-cols-2 gap-y-3 gap-x-4 my-1">
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            BANGKEROHAN RETAIL
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.bangkerohanRetail)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            DFTC RETAIL
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.dftcRetail)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            BANGKEROHAN WHOLESALE
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.bangkerohanWholesale)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+            DFTC WHOLESALE
+          </p>
+          <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+            {formatPriceValue(data.dftcWholesale)}
+          </p>
+        </div>
+      </div>
+
+      {/* Outlook summary */}
+      <div className={`rounded-xl px-3.5 py-2.5 ${hasForecast ? (cfg.bg || 'bg-[var(--hw-neutral-50)]') : 'bg-[var(--hw-neutral-50)]'}`}>
+        <p className={`text-[13px] font-medium leading-snug ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+          {data.trendLoading ? t("farmer.prices.trend_loading", {}, "Loading trend") : outlook}
         </p>
+      </div>
+
+      {/* Action footer */}
+      <div className="flex items-center justify-end pt-0.5">
         <button
-    onClick={onViewDetails}
-    className="flex-shrink-0 inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-  >
-          View details
+          onClick={() => onViewDetails(commodity.id)}
+          className="inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
+        >
+          {t("common.see_details", {}, "View details")}
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
-    </div>;
+    </div>
+  );
 };
+
 function PricesPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState(DEFAULT_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
-  const activeCount = (filter.direction !== "All" ? 1 : 0) + (filter.sortBy !== "name" ? 1 : 0);
+
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const preferredCrops = useMemo(() => {
+    return profileData?.preferred_crops || profileData?.preferredCrops || [];
+  }, [profileData]);
+
+  const { data: apiData, isLoading: loading } = useQuery({
+    queryKey: ["prices", "list"],
+    queryFn: async () => {
+      const response = await apiGet("/prices?is_top10=true&page_size=50");
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return parseResponse(response);
+    },
+    staleTime: 1000 * 60,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  });
+
+  const { commodities } = useMemo(() => {
+    if (!apiData) return { commodities: [] };
+
+    const items = apiData.items || [];
+    const baseMap = new Map();
+
+    items.forEach(item => {
+      const camelItem = toCamelCase(item);
+
+      const rawName = camelItem.baseName || camelItem.name || '–';
+      let baseName = rawName;
+      if (baseName.includes(' - ')) {
+        baseName = baseName.split(' - ')[0].trim();
+      }
+      if (baseName.includes(' (')) {
+        baseName = baseName.split(' (')[0].trim();
+      }
+      const uom = camelItem.unitOfMeasure || 'kg';
+      const itemPrices = {
+        bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
+        bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
+        dftcRetail: camelItem.prices?.dftcRetail ?? null,
+        dftcWholesale: camelItem.prices?.dftcWholesale ?? null,
+      };
+
+      const variantItem = {
+        id: camelItem.commodityId,
+        name: camelItem.name,
+        category: camelItem.category,
+        variety: camelItem.variety,
+        unitOfMeasure: uom,
+        displayData: itemPrices,
+      };
+
+      if (!baseMap.has(baseName)) {
+        baseMap.set(baseName, {
+          id: camelItem.commodityId,
+          name: baseName,
+          baseName: baseName,
+          category: camelItem.category,
+          unitOfMeasure: uom,
+          isTop10: true,
+          displayData: { ...itemPrices },
+          variants: [variantItem],
+        });
+      } else {
+        const existing = baseMap.get(baseName);
+        existing.variants.push(variantItem);
+
+        const existingHasPrice = [
+          existing.displayData.bangkerohanRetail,
+          existing.displayData.bangkerohanWholesale,
+          existing.displayData.dftcRetail,
+          existing.displayData.dftcWholesale
+        ].some(v => v != null);
+
+        const thisHasPrice = [
+          itemPrices.bangkerohanRetail,
+          itemPrices.bangkerohanWholesale,
+          itemPrices.dftcRetail,
+          itemPrices.dftcWholesale
+        ].some(v => v != null);
+
+        if (!existingHasPrice && thisHasPrice) {
+          existing.id = camelItem.commodityId;
+        }
+
+        existing.displayData = {
+          bangkerohanRetail: existing.displayData.bangkerohanRetail ?? itemPrices.bangkerohanRetail,
+          bangkerohanWholesale: existing.displayData.bangkerohanWholesale ?? itemPrices.bangkerohanWholesale,
+          dftcRetail: existing.displayData.dftcRetail ?? itemPrices.dftcRetail,
+          dftcWholesale: existing.displayData.dftcWholesale ?? itemPrices.dftcWholesale,
+        };
+      }
+    });
+
+    return {
+      commodities: Array.from(baseMap.values()),
+    };
+  }, [apiData]);
+
+  const priceTrendQueries = useQueries({
+    queries: commodities.map((commodity) => ({
+      queryKey: ["farmer-price-card-trend", commodity.id, "bangkerohan_retail", 7],
+      queryFn: () => pricesApi.getPriceDetail(commodity.id, {
+        price_type: "bangkerohan_retail",
+        horizon: 7,
+        records_limit: 100,
+      }),
+      enabled: Boolean(commodity.id),
+      staleTime: 60 * 1000,
+      refetchOnMount: true,
+    })),
+  });
+
+  const priceTrendByCommodity = useMemo(
+    () => new Map(commodities.map((commodity, index) => [
+      commodity.id,
+      {
+        trendDetail: priceTrendQueries[index]?.data,
+        trendLoading: priceTrendQueries[index]?.isPending || priceTrendQueries[index]?.isFetching,
+        trendError: priceTrendQueries[index]?.isError,
+      },
+    ])),
+    [commodities, priceTrendQueries],
+  );
+  
+  const activeCount = (filter.direction !== "All" ? 1 : 0)
+    + (filter.sortBy !== "name" ? 1 : 0)
+    + (filter.category !== "All" ? 1 : 0);
+
+  const categories = useMemo(() => {
+    const set = new Set();
+    commodities.forEach((c) => { if (c.category) set.add(c.category); });
+    return [...set].sort();
+  }, [commodities]);
+  
   const visible = useMemo(() => {
-    let list = COMMODITIES.filter((c) => PRICE_DATA[c.id]);
+    let list = commodities.map(commodity => {
+      const data = commodity.displayData;
+      return {
+        ...commodity,
+        displayData: {
+          ...(data || {
+          bangkerohanRetail: null,
+          bangkerohanWholesale: null,
+          dftcRetail: null,
+          dftcWholesale: null,
+          }),
+          ...(priceTrendByCommodity.get(commodity.id) || {}),
+        },
+      };
+    });
+    
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q));
+      list = list.filter((c) => (c.name || '').toLowerCase().includes(q));
     }
+    
     if (filter.direction !== "All") {
-      list = list.filter((c) => PRICE_DATA[c.id].direction === filter.direction);
+      list = list.filter((c) => c.displayData.direction === filter.direction);
     }
-    list.sort((a, b) => {
+
+    if (filter.category !== "All") {
+      list = list.filter((c) => c.category === filter.category);
+    }
+    
+    const secondaryCompare = (a, b) => {
       const ORDER_RISING = { Rising: 0, Stable: 1, Falling: 2 };
       const ORDER_FALLING = { Falling: 0, Stable: 1, Rising: 2 };
-      if (filter.sortBy === "rising-first") return ORDER_RISING[PRICE_DATA[a.id].direction] - ORDER_RISING[PRICE_DATA[b.id].direction];
-      if (filter.sortBy === "falling-first") return ORDER_FALLING[PRICE_DATA[a.id].direction] - ORDER_FALLING[PRICE_DATA[b.id].direction];
-      return a.name.localeCompare(b.name);
-    });
-    return list;
-  }, [searchQuery, filter]);
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-4xl space-y-5">
+      if (filter.sortBy === "rising-first") return (ORDER_RISING[a.displayData.direction] ?? 1) - (ORDER_RISING[b.displayData.direction] ?? 1);
+      if (filter.sortBy === "falling-first") return (ORDER_FALLING[a.displayData.direction] ?? 1) - (ORDER_FALLING[b.displayData.direction] ?? 1);
+      if (filter.sortBy === "price-low" || filter.sortBy === "price-high") {
+        const priceA = a.displayData.bangkerohanRetail ?? a.displayData.dftcRetail ?? Infinity;
+        const priceB = b.displayData.bangkerohanRetail ?? b.displayData.dftcRetail ?? Infinity;
+        return filter.sortBy === "price-low" ? priceA - priceB : priceB - priceA;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    };
 
-        {
-    /* Header */
-  }
-        <div>
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">Prices</h1>
-            <div className="flex items-center gap-1.5 text-[var(--hw-neutral-900)] flex-shrink-0 mt-1">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="text-[13px] whitespace-nowrap">Updated today at 7:30 AM</span>
-            </div>
+    return sortWithPreferredFirst(list, preferredCrops, secondaryCompare);
+  }, [searchQuery, filter, commodities, priceTrendByCommodity, preferredCrops]);
+  
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+              {t("nav.prices", {}, "Prices")}
+            </h1>
+            <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
+              {t("farmer.prices.subtitle", {}, "Check today's price and likely price movement.")}
+            </p>
           </div>
-          <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-            Check today's price and likely price movement.
-          </p>
         </div>
 
-        {
-    /* Search + filter */
-  }
+        {/* Search + filter */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-700)] pointer-events-none" />
             <input
-    type="text"
-    value={searchQuery}
-    onChange={(e) => setSearchQuery(e.target.value)}
-    placeholder="Search commodity…"
-    className="w-full pl-9 pr-9 py-2.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
-  />
-            {searchQuery && <button
-    onClick={() => setSearchQuery("")}
-    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)]"
-  >
+              type="text"
+              value={searchQuery}
+              disabled={loading}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("farmer.prices.search_placeholder", {}, "Search commodity…")}
+              className="w-full pl-9 pr-9 py-2.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)]"
+              >
                 <X className="w-3.5 h-3.5" />
-              </button>}
+              </button>
+            )}
           </div>
           <button
-    onClick={() => setFilterOpen(true)}
-    className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)] transition-colors text-[14px] font-medium shadow-[var(--shadow-xs)] flex-shrink-0"
-  >
+            onClick={() => setFilterOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)] transition-colors text-[14px] font-medium shadow-[var(--shadow-xs)] flex-shrink-0"
+          >
             <SlidersHorizontal className="w-4 h-4" />
-            Filter
-            {activeCount > 0 && <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--hw-green-700)] text-white text-[10px] font-bold">
+            {t("common.filter", {}, "Filter")}
+            {activeCount > 0 && (
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--hw-green-700)] text-white text-[10px] font-bold">
                 {activeCount}
-              </span>}
+              </span>
+            )}
           </button>
         </div>
 
-        {
-    /* Cards grid */
-  }
-        {visible.length === 0 ? <MarketEmptyState query={searchQuery} /> : <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-            {visible.map((c) => <CropPriceCard
-    key={c.id}
-    commodity={c}
-    data={PRICE_DATA[c.id]}
-    onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
-  />)}
-          </div>}
-      </div>
-
+        {/* Cards grid */}
+        {loading ? (
+          <SkeletonPriceGrid count={6} />
+        ) : visible.length === 0 ? (
+          searchQuery.trim() ? (
+            <MarketEmptyState query={searchQuery} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
+                <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
+              </div>
+              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
+                {t("farmer.emptyStates.no_prices", {}, "No price data available")}
+              </p>
+              <p className="text-sm text-[var(--hw-neutral-700)]">
+                {t("farmer.emptyStates.no_prices_desc", {}, "Price data for top 10 commodities will appear here")}
+              </p>
+            </div>
+          )
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+            {visible.map((c) => (
+              <CropPriceCard
+                key={c.id}
+                commodity={c}
+                data={c.displayData}
+                isPreferred={isPreferredCrop(c, preferredCrops)}
+                onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
+              />
+            ))}
+          </div>
+        )}
       <PricesFilterDrawer
-    open={filterOpen}
-    filter={filter}
-    onClose={() => setFilterOpen(false)}
-    onApply={(f) => {
-      setFilter(f);
-      setFilterOpen(false);
-    }}
-  />
-    </div>;
+        open={filterOpen}
+        filter={filter}
+        onClose={() => setFilterOpen(false)}
+        onApply={(f) => {
+          setFilter(f);
+          setFilterOpen(false);
+        }}
+        categories={categories}
+      />
+    </div>
+  );
 }
+
 export {
   PricesPage as default
 };

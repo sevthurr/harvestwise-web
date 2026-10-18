@@ -1,0 +1,15 @@
+export const navigation = {
+  home: "Home",
+  prices: "Prices",
+  crop_calendar: "Crop Calendar",
+  my_crops: "My Crops",
+  settings: "Settings",
+  about: "About HarvestWise",
+  profile: "Profile",
+  notifications: "Notifications",
+  farmer_role: "Farmer",
+  get_app: "Get the App",
+  installed: "Installed",
+  installing: "Installing...",
+  logout: "Sign Out",
+};

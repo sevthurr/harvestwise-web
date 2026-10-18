@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { CommodityIllustration } from "./CommodityIllustrations";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PriceDirectionIndicator, SupplyConditionIndicator } from "./Indicators";
 const CommodityMarketCard = ({
   commodity,

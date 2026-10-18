@@ -1,8 +1,10 @@
 import React from "react";
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, useParams, useSearchParams } from "react-router";
 import { Layout } from "./global/components/layout/Layout";
 import { AdminLayout } from "./global/components/layout/AdminLayout";
 import { ProtectedRoute } from "./global/components/ProtectedRoute";
+import { roleHome, useAuth } from "./global/contexts/AuthContext";
+import { RouteErrorElement } from "./global/components/RouteError";
 import LoginPage from "./auth/LoginPage";
 import RegisterPage from "./auth/RegisterPage";
 import OnboardingPage from "./auth/OnboardingPage";
@@ -26,6 +28,8 @@ import DftcArrivalDetailsPage from "./farmer/pages/DftcArrivalDetails";
 import SeasonalProductionDetailsPage from "./farmer/pages/SeasonalProductionDetails";
 import MyCropsPage from "./farmer/pages/MyCrops";
 import CropCycleDetailPage from "./farmer/pages/CropCycleDetail";
+import CropArrivalPressureDetailsPage from "./farmer/pages/CropArrivalPressureDetails";
+import CropSeasonalProductionDetailsPage from "./farmer/pages/CropSeasonalProductionDetails";
 import PriceTrendDetailPage from "./farmer/pages/PriceTrendDetail";
 import CropFactorsPage from "./farmer/pages/CropFactorsPage";
 import FactorDetailPage from "./farmer/pages/FactorDetailPage";
@@ -36,7 +40,11 @@ import ShowcasePage from "./farmer/pages/Showcase";
 import FarmerProfile from "./farmer/pages/FarmerProfile";
 import FarmerSettings from "./farmer/pages/FarmerSettings";
 import AboutPage from "./farmer/pages/About";
+
+import PrivacyPolicyPage from "./global/pages/PrivacyPolicyPage";
+import TermsPage from "./global/pages/TermsPage";
 // DFTC workspace
+
 import { DFTCLayout }       from "./global/components/layout/DFTCLayout";
 import DFTCHome             from "./dftc/pages/DFTCHome";
 import DFTCInput            from "./dftc/pages/DFTCInput";
@@ -49,6 +57,7 @@ import DFTCTemporaryRecords    from "./dftc/pages/DFTCTemporaryRecords";
 import DFTCTemporaryRecordDetail from "./dftc/pages/DFTCTemporaryRecordDetail";
 import DFTCSubmissionDetail      from "./dftc/pages/DFTCSubmissionDetail";
 import DFTCCommodityRecords      from "./dftc/pages/DFTCCommodityRecords";
+import DFTCNotifications         from "./dftc/pages/DFTCNotifications";
 import DFTCProfile               from "./dftc/pages/DFTCProfile";
 import DFTCSettings              from "./dftc/pages/DFTCSettings";
 import DFTCAbout                 from "./dftc/pages/DFTCAbout";
@@ -56,11 +65,8 @@ import DFTCAbout                 from "./dftc/pages/DFTCAbout";
 import AdminDashboard from "./admin/pages/AdminDashboard";
 import AdminDataSources from "./admin/pages/AdminDataSources";
 import AdminImport from "./admin/pages/AdminImport";
-import AdminForecasting from "./admin/pages/AdminForecasting";
 import AdminAnalytics from "./admin/pages/AdminAnalytics";
 import AdminAnalyticsBasis from "./admin/pages/AdminAnalyticsBasis";
-import AdminAnalyticsThresholds from "./admin/pages/AdminAnalyticsThresholds";
-import AdminHistory from "./admin/pages/AdminHistory";
 import AdminHistoryDetail from "./admin/pages/AdminHistoryDetail";
 import AdminConfiguration from "./admin/pages/AdminConfiguration";
 import AdminDataSourceDetail from "./admin/pages/AdminDataSourceDetail";
@@ -69,18 +75,52 @@ import AdminSettings from "./admin/pages/AdminSettings";
 import AdminAbout from "./admin/pages/AdminAbout";
 import AdminSystemManagement from "./admin/pages/AdminSystemManagement";
 import AdminUserDetails from "./admin/pages/AdminUserDetails";
+import AdminAuditLogs from "./admin/pages/AdminAuditLogs";
+import AdminNotifications from "./admin/pages/AdminNotifications";
+import AdminForecasting from "./admin/pages/AdminForecasting";
+
+export function SmartRedirect({ fallback }) {
+  const { user, isLoggedIn, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (isLoggedIn) return <Navigate to={roleHome(user?.role?.role_name)} replace />;
+
+  return fallback ?? <Navigate to="/login" replace />;
+}
+
+// Legacy /admin/analytics/basis/:resultId → canonical /admin/modules/basis/:resultId
+function LegacyAnalyticsBasisRedirect() {
+  const { resultId } = useParams();
+  return <Navigate to={`/admin/modules/basis/${resultId}`} replace />;
+}
+
+// Legacy /admin/modules/thresholds and /admin/analytics/thresholds → canonical /admin/modules?tab=weights
+function LegacyThresholdsRedirect() {
+  const [searchParams] = useSearchParams();
+  const highlight = searchParams.get("highlight");
+  const target = highlight
+    ? `/admin/modules?tab=weights&highlight=${encodeURIComponent(highlight)}`
+    : "/admin/modules?tab=weights";
+  return <Navigate to={target} replace />;
+}
 
 export const router = createBrowserRouter([
-  // ── Auth pages (unprotected) ──────────────────────────────────────────────────
-  { path: "/", element: <Navigate to="/login" replace /> },
-  { path: "/login",      element: <LoginPage /> },
-  { path: "/register",   element: <RegisterPage /> },
-  { path: "/onboarding", element: <OnboardingPage /> },
+  // ── Auth & Legal pages (unprotected) ──────────────────────────────────────────
+  { path: "/", element: <SmartRedirect />, errorElement: <RouteErrorElement /> },
+  { path: "/login", element: <SmartRedirect fallback={<LoginPage />} />, errorElement: <RouteErrorElement /> },
+  { path: "/register",   element: <RegisterPage />, errorElement: <RouteErrorElement /> },
+  { path: "/onboarding", element: <OnboardingPage />, errorElement: <RouteErrorElement /> },
+  { path: "/privacy",    element: <PrivacyPolicyPage />, errorElement: <RouteErrorElement /> },
+  { path: "/terms",      element: <TermsPage />, errorElement: <RouteErrorElement /> },
+  { path: "/about",      element: <Navigate to="/" replace />, errorElement: <RouteErrorElement /> },
+
 
   // ── Farmer workspace ─────────────────────────────────────────────────────────
   {
     path: "/farmer",
-    element: <ProtectedRoute><Layout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole="Farmer"><Layout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true, Component: DashboardPage },
 
@@ -113,6 +153,8 @@ export const router = createBrowserRouter([
 
       { path: "crops",                Component: MyCropsPage },
       { path: "crops/:cropId",       Component: CropCycleDetailPage },
+      { path: "crops/:cropId/arrival-pressure", Component: CropArrivalPressureDetailsPage },
+      { path: "crops/:cropId/seasonal-production", Component: CropSeasonalProductionDetailsPage },
       { path: "crops/:cropId/factors", Component: CropFactorsPage },
       { path: "assess",              Component: AssessPage },
       { path: "assess/factors",      Component: FactorDetailPage },
@@ -131,7 +173,8 @@ export const router = createBrowserRouter([
   // ── DFTC workspace ────────────────────────────────────────────────────────────
   {
     path: "/dftc",
-    element: <ProtectedRoute><DFTCLayout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole={["DFTC"]}><DFTCLayout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true,               Component: DFTCHome         },
       { path: "input",             Component: DFTCInput        },
@@ -144,6 +187,7 @@ export const router = createBrowserRouter([
       { path: "upload",                        Component: DFTCUpload              },
       { path: "temporary-records",             Component: DFTCTemporaryRecords    },
       { path: "temporary-records/:recordId",   Component: DFTCTemporaryRecordDetail },
+      { path: "notifications",                  Component: DFTCNotifications },
       { path: "profile",                        Component: DFTCProfile    },
       { path: "settings",                       Component: DFTCSettings   },
       { path: "about",                          Component: DFTCAbout      },
@@ -153,17 +197,21 @@ export const router = createBrowserRouter([
   // ── Admin workspace ───────────────────────────────────────────────────────────
   {
     path: "/admin",
-    element: <ProtectedRoute><AdminLayout /></ProtectedRoute>,
+    element: <ProtectedRoute requiredRole={["Admin", "SuperAdmin"]}><AdminLayout /></ProtectedRoute>,
+    errorElement: <RouteErrorElement />,
     children: [
       { index: true,             Component: AdminDashboard   },
       { path: "data-sources",             Component: AdminDataSources      },
       { path: "data-sources/:sourceId",   Component: AdminDataSourceDetail  },
       { path: "import",                   Component: AdminImport            },
-      { path: "forecasting",     Component: AdminForecasting  },
-      { path: "analytics",                Component: AdminAnalytics      },
-      { path: "analytics/basis/:resultId", Component: AdminAnalyticsBasis },
-      { path: "analytics/thresholds",      Component: AdminAnalyticsThresholds },
-      { path: "history",              Component: AdminHistory       },
+      { path: "modules",                  Component: AdminAnalytics      },
+      { path: "forecasting",              Component: AdminForecasting    },
+      { path: "modules/basis/:resultId",  Component: AdminAnalyticsBasis },
+      { path: "modules/thresholds",       element: <LegacyThresholdsRedirect /> },
+      { path: "analytics",                 element: <Navigate to="/admin/modules" replace /> },
+      { path: "analytics/basis/:resultId", element: <LegacyAnalyticsBasisRedirect /> },
+      { path: "analytics/thresholds",      element: <LegacyThresholdsRedirect /> },
+      { path: "history", element: <Navigate to="/admin/data-sources?tab=history" replace /> },
       { path: "history/:historyId",   Component: AdminHistoryDetail },
       { path: "configuration",        Component: AdminConfiguration },
       { path: "profile",              Component: AdminProfile          },
@@ -171,6 +219,8 @@ export const router = createBrowserRouter([
       { path: "about",                Component: AdminAbout            },
       { path: "system",               Component: AdminSystemManagement },
       { path: "system/user/:userId", Component: AdminUserDetails      },
+      { path: "audit-logs",            Component: AdminAuditLogs        },
+      { path: "notifications",         Component: AdminNotifications    },
     ],
   },
 ]);

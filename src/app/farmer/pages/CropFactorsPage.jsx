@@ -1,138 +1,257 @@
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useCrops } from "../components/crops/CropsContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
-import {
-  FactorDetailTabs,
-  buildPricePoints,
-  getArrivalData,
-  getProductionData,
-  getWeatherData
-} from "../components/shared/FactorDetailTabs";
-const CURRENT_PRICES = {
-  kamatis: 85,
-  talong: 60,
-  repolyo: 45,
-  atsal: 120,
-  carrots: 90,
-  pipino: 40,
-  ampalaya: 75,
-  kalabasa: 35,
-  lettuce: 80,
-  pechay: 35
-};
-const FORECAST_PRICES = {
-  kamatis: { mid: 87, lo: 83, hi: 91 },
-  talong: { mid: 62, lo: 58, hi: 66 },
-  repolyo: { mid: 47, lo: 43, hi: 51 },
-  atsal: { mid: 123, lo: 118, hi: 128 },
-  carrots: { mid: 92, lo: 88, hi: 96 },
-  pipino: { mid: 42, lo: 38, hi: 46 },
-  ampalaya: { mid: 78, lo: 73, hi: 83 },
-  kalabasa: { mid: 37, lo: 33, hi: 41 },
-  lettuce: { mid: 82, lo: 78, hi: 87 },
-  pechay: { mid: 37, lo: 33, hi: 41 }
-};
+import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { getPhaseConfig } from "../components/crops/types";
+import { normalizePhaseCode, PHASE_CODES } from "../utils/farmerCodes";
+import { apiPost, parseResponse } from "../../global/api";
+import * as analyticsApi from "../../../services/api/analyticsApi";
+import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+
+function quarterForDate(value) {
+  const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
+  const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return `Q${Math.floor(validDate.getMonth() / 3) + 1}`;
+}
+
 function CropFactorsPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") || "price";
+  const { t, effectiveLanguage, langCode } = useLanguage();
+  const currentLang = effectiveLanguage || langCode || "ceb";
+  const location = useLocation();
+  const state = location.state;
   const { crops } = useCrops();
   const crop = crops.find((c) => c.id === cropId);
   if (!crop) {
-    return <div className="px-4 py-8 text-center space-y-3">
-        <p className="text-[var(--hw-neutral-900)]">Crop not found.</p>
+    return (
+      <div className="px-4 py-8 text-center space-y-3">
+        <p className="text-[var(--hw-neutral-900)]">{t("farmer.empty.crop_not_found", {}, "Crop not found.")}</p>
         <button onClick={() => navigate("/farmer/crops")} className="text-sm font-medium text-[var(--hw-green-700)]">
-          Go to My Crops
+          {t("farmer.crops.title", {}, "Go to My Crops")}
         </button>
-      </div>;
+      </div>
+    );
   }
-  const currentPrice = CURRENT_PRICES[crop.commodity] ?? 70;
-  const forecast = FORECAST_PRICES[crop.commodity] ?? { mid: currentPrice, lo: Math.round(currentPrice * 0.95), hi: Math.round(currentPrice * 1.07) };
-  const useForecast = ["planning", "on-hold", "growing"].includes(crop.phase);
-  const basePrice = useForecast ? forecast.mid : currentPrice;
-  const updatedTotalCost = crop.totalCost;
-  const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 1;
-  const costToRecover = Math.ceil(updatedTotalCost / qty);
-  const sellingBasis = basePrice;
-  const margin = sellingBasis - costToRecover;
-  const priceDir = margin > 15 ? "rising" : margin > 0 ? "stable" : "falling";
-  const fLo = forecast.lo;
-  const fHi = forecast.hi;
-  const actualPts = Array.from({ length: 7 }, (_, i) => ({
-    label: i === 0 ? "7d ago" : i === 6 ? "Today" : `Day ${i + 1}`,
-    price: Math.round(basePrice + (priceDir === "rising" ? -0.5 : priceDir === "falling" ? 0.5 : 0.1) * (6 - i) + Math.sin(i * 1.9) * 2)
-  }));
-  const priceTabData = {
-    currentPrice: basePrice,
-    previousPrice: actualPts[0].price,
-    market: useForecast ? "Forecasted price reference" : "Bangkerohan Retail",
-    direction: priceDir,
-    directionLabel: priceDir === "rising" ? "Price may rise" : priceDir === "falling" ? "Price may fall" : "Price likely stable",
-    forecastRange: `\u20B1${fLo}\u2013\u20B1${fHi}/kg`,
-    points: buildPricePoints(actualPts.map((p) => ({ label: p.label, price: p.price })), basePrice, priceDir, fLo, fHi, 7),
-    summary: `Current ${useForecast ? "forecasted" : "market"} price for ${crop.commodityName} is \u20B1${basePrice}/kg. ${priceDir === "rising" ? "Prices are trending upward \u2014 good news if your harvest is near." : priceDir === "falling" ? "Prices are softening. Monitor closely before deciding to sell." : "Prices are stable. Good conditions for planning your sale."}`
-  };
-  const arrivalTabData = getArrivalData(crop.commodity);
-  const productionTabData = getProductionData(crop.commodity, (/* @__PURE__ */ new Date()).getMonth());
-  const weatherTabData = getWeatherData(margin > 10 ? "low" : "moderate", crop.commodityName);
-  const profitabilityData = {
-    costPerKg: costToRecover,
-    sellingPricePerKg: sellingBasis,
-    profitPerKg: margin,
-    totalCost: updatedTotalCost,
-    harvestQty: qty,
-    summary: margin >= 0 ? `At \u20B1${sellingBasis}/kg selling price, you may earn about \u20B1${margin}/kg above your cost to recover of \u20B1${costToRecover}/kg. Total estimated profit for ${qty} kg harvest: \u20B1${(margin * qty).toLocaleString("en-PH")}.` : `The current price of \u20B1${sellingBasis}/kg is below your cost to recover of \u20B1${costToRecover}/kg. Selling now would result in a loss. Consider waiting for prices to improve.`
-  };
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
 
-        {
-    /* Breadcrumb */
-  }
-        <Breadcrumb
-    items={[
-      { label: "My Crops", onClick: () => navigate("/farmer/crops") },
-      { label: crop.commodityName, onClick: () => navigate(`/farmer/crops/${crop.id}`) },
-      { label: "Detailed Factors" }
-    ]}
-  />
+  const explicitStage = crop?.phase ? (
+    crop.phase.toLowerCase().includes("plan") ? "before_planting" :
+    crop.phase.toLowerCase().includes("grow") || crop.phase.toLowerCase().includes("plant") ? "during_planting" :
+    crop.phase.toLowerCase().includes("pre") ? "near_harvest" :
+    crop.phase.toLowerCase().includes("harvest") ? "harvest" : null
+  ) : null;
 
-        {
-    /* Page title */
-  }
-        <div>
-          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{crop.commodityName} — Detailed Factors</h1>
+  const updatedTotalCost = crop.totalCost || 0;
+  const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
+  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
+
+  const { data: planAdvisoryData } = useQuery({
+    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
+    queryFn: async () => {
+      try {
+        const pDate = new Date(crop.plantingDate);
+        const hDate = new Date(crop.harvestDate);
+        const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
+        const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
+        const payload = {
+          crop_name: crop.commodityName,
+          planting_date: pDateStr,
+          expected_harvest_date: hDateStr,
+          total_production_cost: updatedTotalCost,
+          expected_yield_kg: qty,
+          crop_stage: explicitStage,
+        };
+        const res = await apiPost("/advisory/plan", payload);
+        if (!res.ok) return null;
+        return await parseResponse(res);
+      } catch {
+        return null;
+      }
+    },
+    enabled: canQueryPlan,
+    staleTime: 1000 * 60 * 15,
+  });
+
+  const commodityIdentifier = crop.commodityId || crop.commodity;
+  const selectedQuarter = quarterForDate(crop.harvestDate || crop.plantingDate);
+  const arrivalPressureQuery = useQuery({
+    queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
+    queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 5,
+  });
+  const seasonalProductionQuery = useQuery({
+    queryKey: ["farmer", "seasonal-production", commodityIdentifier, selectedQuarter],
+    queryFn: () => analyticsApi.getHistoricalSeasonalProduction(commodityIdentifier, selectedQuarter),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 30,
+  });
+  const weatherForecastQuery = useQuery({
+    queryKey: ["farmer", "admin-weather-forecast", 14],
+    queryFn: () => analyticsApi.getWeatherForecast(14),
+    staleTime: 1000 * 60 * 30,
+  });
+  const weatherRulesQuery = useQuery({
+    queryKey: ["farmer", "weather-rules", commodityIdentifier],
+    queryFn: () => analyticsApi.listWeatherRules(commodityIdentifier),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const currentPrice = crop.currentPrice || planAdvisoryData?.module_results?.recent_average_price || null;
+  const fLo = crop.forecastLower || planAdvisoryData?.module_results?.lower_forecast_price || null;
+  const fHi = crop.forecastUpper || planAdvisoryData?.module_results?.upper_forecast_price || null;
+  const forecastMid = fLo != null && fHi != null ? (fLo + fHi) / 2 : (planAdvisoryData?.module_results?.forecast_midpoint || null);
+  const stageRef = planAdvisoryData?.module_results?.reference_price;
+  const phaseCode = normalizePhaseCode(crop.phase);
+  const resolvedCropStage =
+    state?.cropStage ||
+    crop.cropStage ||
+    crop.stage ||
+    explicitStage ||
+    planAdvisoryData?.crop_stage ||
+    "before_planting";
+  const isPlanning = resolvedCropStage === "before_planting" || phaseCode === PHASE_CODES.PLANNING;
+  const useForecast = !isPlanning && [PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
+  const basePrice = isPlanning
+    ? (stageRef || currentPrice)
+    : (useForecast ? (stageRef || forecastMid || currentPrice) : currentPrice);
+  const costToRecover = qty > 0 && updatedTotalCost > 0 ? Math.ceil(updatedTotalCost / qty) : null;
+  const farmgatePrice = crop.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : null;
+  const sellingBasis = farmgatePrice ?? basePrice;
+  const margin = sellingBasis != null && costToRecover != null ? sellingBasis - costToRecover : null;
+  const arrivalData = arrivalPressureQuery.data;
+  const arrivalTabData = {
+    arrivalPressure: arrivalData?.status === "processed" ? arrivalData.classification : null,
+    currentVolumeKg: arrivalData?.current_arrival_kg ?? null,
+    records: arrivalData?.records || [],
+    averageArrivalKg: arrivalData?.average_arrival_kg ?? null,
+    quartileThresholds: arrivalData?.quartile_thresholds || null,
+    sourceBreakdown: arrivalData?.source_breakdown || {},
+    summary: arrivalData?.status === "processed"
+      ? `The latest recorded arrival volume is ${arrivalData.current_arrival_kg?.toLocaleString?.() ?? "—"} kg; the historical average is ${arrivalData.average_arrival_kg?.toLocaleString?.() ?? "—"} kg.`
+      : arrivalData?.message,
+    dataIsStale: arrivalData?.data_is_stale === true,
+    commodityId: commodityIdentifier,
+    commodityName: crop.commodityName,
+  };
+
+  const productionSummary = seasonalProductionQuery.data;
+  const selectedProductionProfile = productionSummary?.quarterly_profiles?.find(
+    (profile) => profile.quarter === selectedQuarter
+  );
+  const productionTabData = {
+    productionLevel: productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null,
+    quarterlyProfiles: productionSummary?.quarterly_profiles || [],
+    selectedQuarter,
+    grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
+    records: productionSummary?.records || [],
+    sources: (productionSummary?.source_areas || []).map((area) => ({
+      name: area.name,
+      value: Number(area.value),
+      volumeKg: Number(area.total_production_mt),
+    })),
+    commodityId: commodityIdentifier,
+    commodityName: crop.commodityName,
+    dataSource: productionSummary?.record_count > 0 ? { name: productionSummary.commodity_name } : null,
+  };
+
+  const weatherAnalysis = buildWeatherRiskAnalysis({
+    weatherForecast: weatherForecastQuery.data,
+    weatherRules: weatherRulesQuery.data?.items || [],
+    commodityName: crop.commodityName,
+    weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
+    weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+    lang: currentLang,
+  });
+  const weatherTabData = {
+    risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
+    forecast_14d: weatherAnalysis.forecast_14d,
+    commodityName: crop.commodityName,
+    actions: [],
+    why: weatherAnalysis.resultExplanation,
+    summary: weatherAnalysis.resultExplanation,
+  };
+
+  const hasProfitabilityData = Boolean(costToRecover != null && costToRecover > 0 && sellingBasis != null && sellingBasis > 0 && qty > 0);
+  const profitabilityData = hasProfitabilityData
+    ? {
+        costPerKg: costToRecover,
+        sellingPricePerKg: sellingBasis,
+        profitPerKg: margin != null ? margin : 0,
+        totalCost: updatedTotalCost,
+        harvestQty: qty,
+        expenses: crop.expenses || (crop.costMethod === "detailed" ? crop.expenses : null),
+        level: planAdvisoryData?.module_results?.profitability || null,
+      }
+    : null;
+
+  const phaseConfig = crop.phase ? getPhaseConfig(crop.phase) : null;
+  const phaseLabel = phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null;
+
+
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      {/* Breadcrumb */}
+      <Breadcrumb
+        items={[
+          { label: t("farmer.crops.title", {}, "My Crops"), onClick: () => navigate("/farmer/crops") },
+          { label: crop.commodityName, onClick: () => navigate(`/farmer/crops/${crop.id}`) },
+          { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") },
+        ]}
+      />
+
+      {/* Page title */}
+      <div className="flex items-center gap-3">
+        <CommodityIllustration
+          commodityId={commodityIdentifier}
+          commodityName={crop.commodityName}
+          baseName={crop.commodityName}
+          className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0"
+        />
+        <div className="min-w-0">
+          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">
+            {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
+          </h1>
           <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-            Market analysis for your crop plan · {crop.phase.replace(/-/g, " ")} phase
+            {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
+            {phaseLabel ? ` · ${phaseLabel}` : ""}
           </p>
         </div>
-
-        {
-    /* Factor tabs — profitability always available for saved crop plan */
-  }
-        <FactorDetailTabs
-    price={priceTabData}
-    arrival={arrivalTabData}
-    production={productionTabData}
-    weather={weatherTabData}
-    profitability={profitabilityData}
-    defaultTab="price"
-    commodityId={crop.commodity}
-    commodityName={crop.commodityName}
-  />
-
-        {
-    /* Bottom action */
-  }
-        <button
-    onClick={() => navigate(`/farmer/assess?commodity=${crop.commodity}`)}
-    className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-          Assess this crop again
-        </button>
-
       </div>
-    </div>;
+
+      {/* Factor tabs */}
+      <FactorDetailTabs
+        arrival={arrivalTabData}
+        production={productionTabData}
+        weather={weatherTabData}
+        profitability={profitabilityData}
+        defaultTab={defaultTab}
+        commodityId={commodityIdentifier}
+        commodityName={crop.commodityName}
+        cropStage={resolvedCropStage}
+        plantingDate={state?.plantingDate || crop.rawPlantingDate || crop.plantingDate || planAdvisoryData?.planting_date}
+        expectedHarvestDate={state?.expectedHarvestDate || crop.rawHarvestDate || crop.harvestDate || planAdvisoryData?.expected_harvest_date}
+        moduleResults={state?.moduleResults || planAdvisoryData?.module_results}
+        plantingWindowStart={state?.plantingWindowStart || planAdvisoryData?.planting_window_start}
+        plantingWindowEnd={state?.plantingWindowEnd || planAdvisoryData?.planting_window_end}
+        plantingWindowLabel={state?.plantingWindowLabel || planAdvisoryData?.planting_window_label}
+      />
+
+      {/* Bottom action */}
+      <button
+        onClick={() => navigate(`/farmer/assess?commodity=${commodityIdentifier}`)}
+        className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
+      >
+        {t("farmer.advisory.assess_crop_again", {}, "Assess this crop again")}
+      </button>
+    </div>
+  );
 }
-export {
-  CropFactorsPage as default
-};
+
+export default CropFactorsPage;

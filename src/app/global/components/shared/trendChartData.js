@@ -30,7 +30,7 @@ const COMMODITY_VARIETIES_DATA = {
   "Talong": [{ variety: "Banate King", basePrice: 72 }],
   "Pipino": [{ variety: "Mega C", basePrice: 57 }],
   "Ampalaya": [{ variety: "Galaxy", basePrice: 78 }],
-  "Kalabasa": [{ variety: "Suprema", basePrice: 62 }, { variety: "Malagkit", basePrice: 58 }],
+  "Kalabasa": [{ variety: "Suprema", basePrice: 62 }],
   // Highland HW
   "Repolyo": [{ variety: "Wakamini", basePrice: 68 }],
   "Atsal": [{ variety: "Smooth Cayene", basePrice: 128 }, { variety: "Sultan", basePrice: 112 }],
@@ -202,7 +202,7 @@ const ARRIVAL_VARIETY_DATA = {
       { month: "Jul", farm: 6800, other: 3650 }
     ] }
   ],
-  // Kalabasa: two canonical varieties — Suprema + Malagkit
+  // Kalabasa: single canonical variety — Suprema (volumes combined)
   "Kalabasa": [
     { variety: "Suprema", records: [
       { month: "Jan", farm: 3400, other: 1850 },
@@ -212,15 +212,6 @@ const ARRIVAL_VARIETY_DATA = {
       { month: "May", farm: 3500, other: 1900 },
       { month: "Jun", farm: 3100, other: 1700 },
       { month: "Jul", farm: 3300, other: 1800 }
-    ] },
-    { variety: "Malagkit", records: [
-      { month: "Jan", farm: 2200, other: 1200 },
-      { month: "Feb", farm: 2100, other: 1100 },
-      { month: "Mar", farm: 2300, other: 1250 },
-      { month: "Apr", farm: 2500, other: 1350 },
-      { month: "May", farm: 2200, other: 1200 },
-      { month: "Jun", farm: 2e3, other: 1050 },
-      { month: "Jul", farm: 2100, other: 1150 }
     ] }
   ],
   // ── Highland HW ─────────────────────────────────────────────────────────────

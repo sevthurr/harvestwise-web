@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
-import { Loader2, RefreshCw, Eye, EyeOff, Check } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useGoogleLink } from "../../auth/useGoogleLink";
+import { authApi } from "../../../services/api";
+import { parseResponse } from "../../global/api";
+import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
+import { isValidEmail } from "../../auth/authValidation";
+import { PageHeader } from "../../global/components/shared/PageHeader";
+import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
   inputCls,
   SUFFIX_OPTIONS,
-  PW_REQS,
   Card,
   SectionLabel,
   FieldLabel,
@@ -15,42 +21,75 @@ import {
   Toast,
   Modal
 } from "../../global/components/ui/hw-ui";
-import { TextSizeSlider } from "../../global/components/settings/TextSizeSlider";
+
 const TABS = [
   { id: "account", label: "Account" },
-  { id: "security", label: "Security" },
-  { id: "preferences", label: "Preferences" },
-  { id: "notifications", label: "Notifications" }
+  { id: "security", label: "Security" }
 ];
-const NOTIF_ITEMS = [
-  { id: "dftc_submission", label: "DFTC submission received", desc: "Get notified when a DFTC user submits new price or arrival records.", defaultOn: true },
-  { id: "upload_review", label: "Upload requires review", desc: "Get notified when an uploaded dataset needs admin review.", defaultOn: true },
-  { id: "api_sync_failed", label: "API sync failed", desc: "Get notified when an API-based data source fails to sync.", defaultOn: true },
-  { id: "forecast_failed", label: "Forecast generation failed", desc: "Get notified when a forecast run fails.", defaultOn: true },
-  { id: "module_failed", label: "Module output calculation failed", desc: "Get notified when module processing does not complete successfully.", defaultOn: true },
-  { id: "records_pending", label: "Records pending publish", desc: "Get notified when validated records are ready to publish to the Farmer interface.", defaultOn: true },
-  { id: "weight_updated", label: "Weight or threshold updated", desc: "Get notified when advisory rules are changed.", defaultOn: true },
-  { id: "user_access_change", label: "User access change", desc: "Get notified when a user account role or access status changes.", defaultOn: true },
-  { id: "security_alert", label: "System security alert", desc: "Get notified about important security-related events.", defaultOn: true },
-  { id: "health_alert", label: "System health alert", desc: "Get notified when system services need attention.", defaultOn: true }
-];
+
+
+
 const AccountTab = ({ showToast }) => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const staff = user?.staff_profile || user?.staffProfile || {};
   const [form, setForm] = useState({
-    firstName: "HarvestWise",
-    lastName: "Admin",
-    middleName: "",
-    suffix: "None",
-    phone: "09XX XXX XXXX",
-    email: user?.email || ""
+    firstName: staff?.first_name || staff?.firstName || user?.first_name || user?.firstName || "",
+    lastName: staff?.last_name || staff?.lastName || user?.last_name || user?.lastName || "",
+    middleName: staff?.middle_name || staff?.middleName || user?.middle_name || user?.middleName || "",
+    suffix: staff?.suffix || user?.suffix || "None",
+    phone: typeof user?.phone === "string" ? user.phone : "",
+    email: typeof user?.email === "string" ? user.email : ""
   });
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const handleSave = () => {
-    setShowSaveModal(false);
-    showToast("Account updated successfully.");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const emailInvalid = Boolean(form.email.trim()) && !isValidEmail(form.email);
+
+  const set = (k) => (e) => {
+    setErrorMsg("");
+    setForm((f) => ({ ...f, [k]: e.target.value }));
   };
-  return <div className="space-y-4">
+
+  const handlePreSave = () => {
+    if (emailInvalid) {
+      setErrorMsg("Enter a valid email address.");
+      return;
+    }
+    if (!form.email.trim() && !form.phone.trim()) {
+      setErrorMsg("An email address or phone number is required.");
+      return;
+    }
+    setErrorMsg("");
+    setShowSaveModal(true);
+  };
+
+  const handleSave = async () => {
+    setShowSaveModal(false);
+    setErrorMsg("");
+    try {
+      const payload = {};
+      if (form.firstName?.trim()) payload.first_name = form.firstName.trim();
+      if (form.lastName?.trim()) payload.last_name = form.lastName.trim();
+      if (form.middleName?.trim()) payload.middle_name = form.middleName.trim();
+      if (form.suffix && form.suffix !== "None") payload.suffix = form.suffix;
+      if (form.email?.trim()) payload.email = form.email.trim();
+      if (form.phone?.trim()) payload.phone = form.phone.trim();
+      if (currentPassword) payload.current_password = currentPassword;
+      setCurrentPassword("");
+      await authApi.updateProfile(payload);
+      try {
+        await refreshUser();
+      } catch {
+        // Profile refresh is best-effort; the save already succeeded.
+      }
+      showToast("Account updated successfully.");
+    } catch (err) {
+      setErrorMsg(err.message || "Could not save your account information.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
       <Card>
         <SectionLabel>Personal Information</SectionLabel>
         <div className="space-y-3">
@@ -64,388 +103,567 @@ const AccountTab = ({ showToast }) => {
               <input id="adm-ln" type="text" value={form.lastName} onChange={set("lastName")} className={inputCls} />
             </div>
             <div>
-              <FieldLabel htmlFor="adm-mn" optional>Middle Name</FieldLabel>
-              <input id="adm-mn" type="text" value={form.middleName} onChange={set("middleName")} placeholder="Optional" className={inputCls} />
+              <FieldLabel htmlFor="adm-mn" optional>
+                Middle Name
+              </FieldLabel>
+              <input
+                id="adm-mn"
+                type="text"
+                value={form.middleName}
+                onChange={set("middleName")}
+                placeholder="Optional"
+                className={inputCls}
+              />
             </div>
             <div>
-              <FieldLabel htmlFor="adm-sfx" optional>Suffix</FieldLabel>
+              <FieldLabel htmlFor="adm-sfx" optional>
+                Suffix
+              </FieldLabel>
               <div className="relative">
-                <select id="adm-sfx" value={form.suffix} onChange={set("suffix")} className={`${inputCls} appearance-none pr-9`}>
-                  {SUFFIX_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                <select
+                  id="adm-sfx"
+                  value={form.suffix}
+                  onChange={set("suffix")}
+                  className={`${inputCls} appearance-none pr-9`}
+                >
+                  {SUFFIX_OPTIONS.map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
                 </select>
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" fill="none" viewBox="0 0 10 6">
-                  <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none"
+                  fill="none"
+                  viewBox="0 0 10 6"
+                >
+                  <path
+                    d="M1 1l4 4 4-4"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </div>
             </div>
           </div>
           <div>
             <FieldLabel htmlFor="adm-ph">Phone Number</FieldLabel>
-            <input id="adm-ph" type="tel" inputMode="numeric" value={form.phone} onChange={set("phone")} className={inputCls} />
+            <input
+              id="adm-ph"
+              type="tel"
+              inputMode="numeric"
+              maxLength={PHONE_MAX_LENGTH}
+              placeholder="09XX XXX XXXX"
+              value={form.phone}
+              onChange={(e) => {
+                setErrorMsg("");
+                setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }));
+              }}
+              className={inputCls}
+            />
           </div>
           <div>
             <FieldLabel htmlFor="adm-em">Email</FieldLabel>
-            <input id="adm-em" type="email" value={form.email} onChange={set("email")} className={inputCls} />
+            <input
+              id="adm-em"
+              type="email"
+              placeholder="admin@example.com"
+              value={form.email}
+              onChange={set("email")}
+              className={`${inputCls} ${emailInvalid ? "border-red-500 focus:ring-red-500" : ""}`}
+            />
+            {emailInvalid && <p className="mt-1 text-[12px] text-red-600">Enter a valid email address.</p>}
           </div>
           <div>
             <FieldLabel htmlFor="adm-role">Role</FieldLabel>
             <input
-    id="adm-role"
-    type="text"
-    value="Admin"
-    readOnly
-    className={`${inputCls} bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed`}
-  />
+              id="adm-role"
+              type="text"
+              value="Admin"
+              readOnly
+              className={`${inputCls} bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed`}
+            />
           </div>
-          <GreenBtn onClick={() => setShowSaveModal(true)} className="w-full sm:w-auto">Save changes</GreenBtn>
+
+          {errorMsg && <p className="text-[13px] text-red-600 font-medium">{errorMsg}</p>}
+
+          <GreenBtn onClick={handlePreSave} className="w-full sm:w-auto">
+            Save changes
+          </GreenBtn>
         </div>
       </Card>
 
-      {showSaveModal && <Modal title="Save account changes?" onClose={() => setShowSaveModal(false)}>
-          <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your Admin profile.</p>
+      {showSaveModal && (
+        <Modal title="Save account changes?" onClose={() => setShowSaveModal(false)}>
+          <p className="text-[14px] text-black mb-5">
+            Your updated account information will be saved to your Admin profile.
+          </p>
+          <label htmlFor="admin-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
+            Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
+          </label>
+          <input
+            id="admin-current-password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className={`${inputCls} mb-5`}
+          />
           <div className="flex gap-2 justify-end">
             <GhostBtn onClick={() => setShowSaveModal(false)}>Cancel</GhostBtn>
             <GreenBtn onClick={handleSave}>Save changes</GreenBtn>
           </div>
-        </Modal>}
-    </div>;
+        </Modal>
+      )}
+    </div>
+  );
 };
+
 const SecurityTab = ({ showToast }) => {
-  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
+  const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
+  const isSuperAdmin = (user?.role?.role_name ?? "").toLowerCase() === "superadmin";
+  const [twoFAEnabled, setTwoFAEnabled] = useState(Boolean(user?.is_totp_enabled));
   const [twoFAAccordionOpen, setTwoFAAccordionOpen] = useState(false);
   const [verifyCode, setVerifyCode] = useState("");
-  const [googleConnected, setGoogleConnected] = useState(false);
+  const [setupData, setSetupData] = useState(null); // { secret, qr_code } from POST /totp/setup
+  const [setupCode, setSetupCode] = useState("");
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [disablePw, setDisablePw] = useState("");
+  const [disableCode, setDisableCode] = useState("");
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [newRecoveryCodes, setNewRecoveryCodes] = useState([]);
+  const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
-  const [pw, setPw] = useState({ current: "", newPw: "", confirm: "" });
-  const [showCur, setShowCur] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showCfm, setShowCfm] = useState(false);
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/admin/settings?tab=security`,
+    onResult: () => showToast(t("admin.settings.toast_google_connected", {}, "Google account connected.")),
+  });
+  // The form owns the password fields and the POST; this page keeps its own
+  // error copy, which prefers the server's message over the shared fallback.
   const [pwError, setPwError] = useState("");
-  const handlePasswordSave = () => {
-    if (!pw.current || !pw.newPw || !pw.confirm) {
-      setPwError("Please fill in all fields.");
-      return;
-    }
-    if (pw.newPw !== pw.confirm) {
-      setPwError("Passwords do not match.");
-      return;
-    }
-    if (!PW_REQS.every((r) => r.test(pw.newPw))) {
-      setPwError("Password does not meet all requirements.");
-      return;
-    }
-    setPwError("");
-    setPw({ current: "", newPw: "", confirm: "" });
-    showToast("Password updated successfully.");
-  };
+
   const handlePasswordCancel = () => {
-    setPw({ current: "", newPw: "", confirm: "" });
     setPwError("");
   };
-  const handleTwoFAConfirm = () => {
-    setTwoFAEnabled(true);
-    setTwoFAAccordionOpen(false);
+
+  const handleTwoFAStart = async () => {
+    setSetupData(null);
+    setSetupCode("");
     setVerifyCode("");
-    showToast("Two-Factor Authentication enabled.");
+    try {
+      setSetupLoading(true);
+      const res = await authApi.setupTotp();
+      const data = await parseResponse(res);
+      setSetupData(data);
+    } catch (err) {
+      showToast(
+        err.status === 403
+          ? "TOTP setup is restricted to SuperAdmin accounts."
+          : (err.message || "Could not start 2FA setup.")
+      );
+    } finally {
+      setSetupLoading(false);
+    }
   };
+
+  const handleTwoFAConfirm = async () => {
+    if (!setupCode || setupCode.length !== 6) return;
+    try {
+      setSetupLoading(true);
+      const res = await authApi.enableTotp(setupCode);
+      const data = await parseResponse(res);
+      setTwoFAEnabled(true);
+      setSetupData(null);
+      setSetupCode("");
+      setNewRecoveryCodes(data.recovery_codes || []);
+      setShowRecoverModal(true);
+      showToast("Two-Factor Authentication enabled.");
+      try { await refreshUser(); } catch {}
+    } catch (err) {
+      const msg = (err.status === 429 ? "Too many attempts. " : "") + (err.message || "Invalid code.");
+      showToast(msg);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleTwoFADisable = async () => {
+    if (!disablePw || !disableCode || disableCode.length !== 6) return;
+    try {
+      const res = await authApi.disableTotp(disablePw, disableCode);
+      await parseResponse(res);
+      setTwoFAEnabled(false);
+      setDisablePw("");
+      setDisableCode("");
+      setShowDisableModal(false);
+      showToast("Two-Factor Authentication disabled.");
+      try { await refreshUser(); } catch {}
+    } catch (err) {
+      showToast(err.message || "Could not disable 2FA.");
+    }
+  };
+
+  const handleRegenerateCodes = async () => {
+    if (!verifyCode || verifyCode.length !== 6) return;
+    try {
+      const res = await authApi.regenerateRecoveryCodes(verifyCode);
+      const data = await parseResponse(res);
+      setVerifyCode("");
+      setNewRecoveryCodes(data.recovery_codes || []);
+      setShowRecoverModal(true);
+      showToast("Recovery codes regenerated.");
+    } catch (err) {
+      showToast(err.message || "Could not regenerate recovery codes.");
+    }
+  };
+
   const handleGoogleConnect = () => {
-    setGoogleConnected(true);
-    showToast("Google sign-in updated.");
+    googleLink.handleConnect();
   };
+
   const handleGoogleDisconnect = () => {
     setShowDisconnectModal(false);
-    setGoogleConnected(false);
-    showToast("Google sign-in updated.");
+    googleLink.handleDisconnect();
+    showToast(t("admin.settings.toast_google_disconnected", {}, "Google account disconnected."));
   };
-  return <div className="space-y-4">
 
-      {
-    /* Card 1: Two-Factor Authentication */
-  }
+  return (
+    <div className="space-y-4">
+      {/* Card 1: Two-Factor Authentication */}
       <Card>
         <SectionLabel>Two-Factor Authentication</SectionLabel>
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[14px] font-semibold text-black">Two-Factor Authentication</p>
-              {twoFAEnabled ? <p className="text-[13px] text-emerald-600 mt-0.5">Enabled</p> : <p className="text-[13px] text-black mt-0.5">Not set up</p>}
+              {twoFAEnabled ? (
+                <p className="text-[13px] text-emerald-600 mt-0.5">Enabled</p>
+              ) : (
+                <p className="text-[13px] text-black mt-0.5">Not set up</p>
+              )}
             </div>
-            {twoFAEnabled ? <GhostBtn onClick={() => setTwoFAAccordionOpen((v) => !v)}>
+            {twoFAEnabled ? (
+              <GhostBtn onClick={() => setTwoFAAccordionOpen((v) => !v)}>
                 Manage Two-Factor Authentication
-              </GhostBtn> : <GreenBtn onClick={() => setTwoFAAccordionOpen((v) => !v)}>
+              </GhostBtn>
+            ) : (
+              <GreenBtn onClick={() => setTwoFAAccordionOpen((v) => !v)}>
                 Set up Two-Factor Authentication
-              </GreenBtn>}
+              </GreenBtn>
+            )}
           </div>
 
-          {!twoFAEnabled && twoFAAccordionOpen && <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-3">
-              <p className="text-[14px] text-black">Enter the verification code sent to your registered phone number or email to complete setup.</p>
+          {!isSuperAdmin && (
+            <p className="text-[12px] text-[var(--hw-neutral-500)]">
+              Two-Factor Authentication is available for SuperAdmin accounts only.
+            </p>
+          )}
+
+          {!twoFAEnabled && twoFAAccordionOpen && (
+            <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-3">
+              {!setupData && (
+                <button
+                  type="button"
+                  onClick={handleTwoFAStart}
+                  disabled={setupLoading}
+                  className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[14px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  {setupLoading ? "Generating…" : "Generate QR code"}
+                </button>
+              )}
+
+              {setupData && (
+                <>
+                  <div className="flex flex-col items-center gap-3">
+                    {/* QR code returned as base64 PNG by the backend */}
+                    <img
+                      src={setupData.qr_code}
+                      alt="Scan this QR code with Google Authenticator"
+                      className="w-48 h-48 object-contain border border-[var(--hw-neutral-200)] rounded-xl"
+                    />
+                    <p className="text-[13px] text-black text-center">
+                      Scan this QR code with your authenticator app. If you cannot scan it,
+                      enter this secret manually:
+                    </p>
+                    <code className="text-[13px] font-mono bg-[var(--hw-neutral-100)] px-3 py-1.5 rounded-lg select-all">
+                      {setupData.secret}
+                    </code>
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="twofa-setup-code">Verification Code</FieldLabel>
+                    <input
+                      id="twofa-setup-code"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={setupCode}
+                      onChange={(e) => setSetupCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Enter 6-digit code"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <GhostBtn
+                      onClick={() => {
+                        setSetupData(null);
+                        setSetupCode("");
+                        setTwoFAAccordionOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </GhostBtn>
+                    <GreenBtn
+                      onClick={handleTwoFAConfirm}
+                      disabled={setupLoading || setupCode.length !== 6}
+                    >
+                      Confirm &amp; Enable
+                    </GreenBtn>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {twoFAEnabled && twoFAAccordionOpen && (
+            <div className="border border-[var(--hw-neutral-200)] rounded-xl p-4 space-y-4">
               <div>
-                <FieldLabel htmlFor="twofa-code">Verification Code</FieldLabel>
+                <FieldLabel htmlFor="twofa-regen-code">Current Authenticator Code</FieldLabel>
                 <input
-    id="twofa-code"
-    type="text"
-    inputMode="numeric"
-    value={verifyCode}
-    onChange={(e) => setVerifyCode(e.target.value)}
-    placeholder="Enter 6-digit code"
-    className={inputCls}
-  />
+                  id="twofa-regen-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Enter 6-digit code"
+                  className={inputCls}
+                />
               </div>
-              <div className="flex gap-2">
-                <GhostBtn onClick={() => {
-    setTwoFAAccordionOpen(false);
-    setVerifyCode("");
-  }}>Cancel</GhostBtn>
-                <GreenBtn onClick={handleTwoFAConfirm} disabled={!verifyCode.trim()}>Confirm setup</GreenBtn>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <GhostBtn onClick={handleRegenerateCodes} disabled={verifyCode.length !== 6}>
+                  Regenerate Recovery Codes
+                </GhostBtn>
+                <button
+                  type="button"
+                  onClick={() => setShowDisableModal(true)}
+                  className="h-10 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer flex-shrink-0"
+                >
+                  Disable Two-Factor Authentication
+                </button>
               </div>
-            </div>}
+            </div>
+          )}
         </div>
       </Card>
 
-      {
-    /* Card 2: Password Reset */
-  }
+      {/* Card 2: Password Reset */}
       <Card>
         <SectionLabel>Change Password</SectionLabel>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="adm-cpw-cur">Current password</FieldLabel>
-            <div className="relative">
-              <input
-    id="adm-cpw-cur"
-    type={showCur ? "text" : "password"}
-    value={pw.current}
-    onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
-    placeholder="••••••••"
-    className={`${inputCls} pr-11`}
-  />
-              <button
-    type="button"
-    onClick={() => setShowCur((v) => !v)}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-  >
-                {showCur ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="adm-cpw-new">New password</FieldLabel>
-            <div className="relative">
-              <input
-    id="adm-cpw-new"
-    type={showNew ? "text" : "password"}
-    value={pw.newPw}
-    onChange={(e) => setPw((p) => ({ ...p, newPw: e.target.value }))}
-    placeholder="New password"
-    className={`${inputCls} pr-11`}
-  />
-              <button
-    type="button"
-    onClick={() => setShowNew((v) => !v)}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-  >
-                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {pw.newPw && <ul className="space-y-1 mt-1">
-                {PW_REQS.map((r) => {
-    const ok = r.test(pw.newPw);
-    return <li key={r.label} className={`flex items-center gap-1.5 text-[12px] ${ok ? "text-emerald-600" : "text-black"}`}>
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 border ${ok ? "bg-emerald-500 border-emerald-500" : "border-[var(--hw-neutral-300)]"}`}>
-                      {ok && <Check className="w-2.5 h-2.5 text-white" />}
-                    </div>
-                    {r.label}
-                  </li>;
-  })}
-              </ul>}
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel htmlFor="adm-cpw-cfm">Confirm new password</FieldLabel>
-            <div className="relative">
-              <input
-    id="adm-cpw-cfm"
-    type={showCfm ? "text" : "password"}
-    value={pw.confirm}
-    onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))}
-    placeholder="Repeat new password"
-    className={`${inputCls} pr-11`}
-  />
-              <button
-    type="button"
-    onClick={() => setShowCfm((v) => !v)}
-    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-black"
-  >
-                {showCfm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-          {pwError && <p className="text-[13px] text-red-600">{pwError}</p>}
-          <div className="flex gap-2 pt-1">
-            <GhostBtn onClick={handlePasswordCancel}>Cancel</GhostBtn>
-            <GreenBtn onClick={handlePasswordSave}>Update password</GreenBtn>
-          </div>
-        </div>
+        <PasswordChangeForm
+          idPrefix="adm-cpw"
+          onSuccess={() => showToast("Password updated successfully.")}
+          onCancel={handlePasswordCancel}
+          // Keeps this page's behaviour of surfacing the server's own message
+          // instead of the shared fallback copy.
+          onError={(err) => setPwError(err.message || "Could not update your password.")}
+        />
+        {pwError && <p className="mt-3 text-[13px] text-red-600 font-medium">{pwError}</p>}
       </Card>
 
-      {
-    /* Card 3: Google Sign-In */
-  }
+      {/* Card 3: Google Sign-In */}
       <Card>
-        <SectionLabel>Google Sign-In</SectionLabel>
+        <SectionLabel>{t("admin.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[14px] font-semibold text-black">Google sign-in</p>
-            <p className="text-[13px] text-black mt-0.5">{googleConnected ? "Connected" : "Not connected"}</p>
+            <p className="text-[14px] font-semibold text-black">{t("admin.settings.google_card_title", {}, "Google Sign-In")}</p>
+            <p className="text-[13px] text-black mt-0.5">{googleLink.googleConnected ? t("admin.settings.google_connected", {}, "Connected") : t("admin.settings.google_not_connected", {}, "Not connected")}</p>
           </div>
-          {googleConnected ? <button
-    type="button"
-    onClick={() => setShowDisconnectModal(true)}
-    className="h-9 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0"
-  >
-              Disconnect Google account
-            </button> : <button
-    type="button"
-    onClick={handleGoogleConnect}
-    className="h-9 px-4 text-[13px] font-medium text-[var(--hw-green-700)] border border-[var(--hw-green-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors flex-shrink-0"
-  >
-              Connect Google account
-            </button>}
+          {googleLink.googleConnected ? (
+            <button
+              type="button"
+              onClick={() => setShowDisconnectModal(true)}
+              disabled={googleLink.loading}
+              className="h-9 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0 cursor-pointer"
+            >
+              {t("admin.settings.google_disconnect", {}, "Disconnect")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleGoogleConnect}
+              disabled={googleLink.loading}
+              className="h-9 px-4 text-[13px] font-medium text-[var(--hw-green-700)] border border-[var(--hw-green-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors flex-shrink-0 cursor-pointer"
+            >
+              {t("admin.settings.google_connect", {}, "Connect")}
+            </button>
+          )}
         </div>
       </Card>
 
-      {showDisconnectModal && <Modal title="Disconnect Google sign-in?" onClose={() => setShowDisconnectModal(false)}>
-          <p className="text-[14px] text-black mb-5">You can still sign in using your email or phone number and password.</p>
+      {showDisconnectModal && (
+        <Modal title="Disconnect Google sign-in?" onClose={() => setShowDisconnectModal(false)}>
+          <p className="text-[14px] text-black mb-5">
+            You can still sign in using your email or phone number and password.
+          </p>
           <div className="flex gap-2 justify-end">
             <GhostBtn onClick={() => setShowDisconnectModal(false)}>Cancel</GhostBtn>
             <button
-    type="button"
-    onClick={handleGoogleDisconnect}
-    className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 transition-colors"
-  >
+              type="button"
+              onClick={handleGoogleDisconnect}
+              className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 transition-colors cursor-pointer"
+            >
               Disconnect
             </button>
           </div>
-        </Modal>}
-    </div>;
-};
-const PreferencesTab = ({ showToast }) => {
-  const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(null);
-  const handleSync = () => {
-    setSyncing(true);
-    setSyncStatus(null);
-    setTimeout(() => {
-      setSyncing(false);
-      setSyncStatus("ok");
-      showToast("Offline data updated successfully.");
-    }, 2200);
-  };
-  return <div className="space-y-4">
-      <TextSizeSlider
-    showToast={showToast}
-    description="Adjusts text size across your Admin interface."
-  />
+        </Modal>
+      )}
 
-      <Card>
-        <SectionLabel>Offline Data</SectionLabel>
-        <div className="space-y-2.5 mb-4">
-          {[
-    { label: "Last synced", value: "Today, 7:30 AM" },
-    { label: "Offline data", value: "Available" },
-    {
-      label: "Status",
-      value: syncStatus === "ok" ? "Updated" : syncStatus === "error" ? "Sync failed" : "Up to date",
-      error: syncStatus === "error"
-    }
-  ].map((row) => <div key={row.label} className="flex items-center justify-between">
-              <span className="text-[14px] text-black">{row.label}</span>
-              <span className={`text-[14px] font-medium ${"error" in row && row.error ? "text-red-600" : "text-black"}`}>
-                {row.value}
-              </span>
-            </div>)}
-        </div>
-        <button
-    type="button"
-    onClick={handleSync}
-    disabled={syncing}
-    className="h-10 px-4 flex items-center gap-2 border border-[var(--hw-neutral-200)] text-[14px] font-medium text-black rounded-xl hover:bg-[var(--hw-neutral-50)] disabled:opacity-60 transition-colors"
-  >
-          {syncing ? <><Loader2 className="w-4 h-4 animate-spin" />Syncing latest data…</> : <><RefreshCw className="w-4 h-4" />Sync now</>}
-        </button>
-      </Card>
-    </div>;
-};
-const NotificationsTab = ({ showToast }) => {
-  const [prefs, setPrefs] = useState(
-    Object.fromEntries(NOTIF_ITEMS.map((item) => [item.id, item.defaultOn]))
-  );
-  const toggle = (id) => {
-    setPrefs((p) => ({ ...p, [id]: !p[id] }));
-    showToast("Notification preference updated.");
-  };
-  return <Card>
-      <SectionLabel>Notification Preferences</SectionLabel>
-      <div className="divide-y divide-[var(--hw-neutral-100)]">
-        {NOTIF_ITEMS.map((item) => <div key={item.id} className="flex items-start justify-between gap-4 py-4">
-            <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-black">{item.label}</p>
-              <p className="text-[13px] text-black mt-0.5 leading-relaxed">{item.desc}</p>
+      {showDisableModal && (
+        <Modal title="Disable Two-Factor Authentication?" onClose={() => setShowDisableModal(false)}>
+          <p className="text-[13px] text-black mb-4">
+            Enter your current password and an authenticator code to disable 2FA.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="adm-2fa-pw">Password</FieldLabel>
+              <input
+                id="adm-2fa-pw"
+                type="password"
+                value={disablePw}
+                onChange={(e) => setDisablePw(e.target.value)}
+                placeholder="••••••••"
+                className={inputCls}
+              />
             </div>
-            <Toggle on={prefs[item.id]} onChange={() => toggle(item.id)} />
-          </div>)}
-      </div>
-    </Card>;
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="adm-2fa-code">Authenticator Code</FieldLabel>
+              <input
+                id="adm-2fa-code"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={disableCode}
+                onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="Enter 6-digit code"
+                className={inputCls}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end mt-5">
+            <GhostBtn onClick={() => setShowDisableModal(false)}>Cancel</GhostBtn>
+            <button
+              type="button"
+              onClick={handleTwoFADisable}
+              disabled={!disablePw || disableCode.length !== 6}
+              className="h-11 px-5 flex items-center bg-red-600 text-white text-[14px] font-semibold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              Disable 2FA
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showRecoverModal && (
+        <Modal title="Save your recovery codes" onClose={() => setShowRecoverModal(false)}>
+          <p className="text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+            These codes are shown only once. Save them in a secure location. Each code can be used a
+            single time to recover your account if you lose your authenticator device.
+          </p>
+          <div className="grid grid-cols-1 gap-2 mb-5">
+            {(newRecoveryCodes || []).map((code) => (
+              <div
+                key={code}
+                className="flex items-center justify-between bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg px-3 py-2"
+              >
+                <code className="text-[13px] font-mono select-all">{code}</code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(code)}
+                  className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)]"
+                >
+                  Copy
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 justify-end">
+            <GreenBtn onClick={() => setShowRecoverModal(false)}>Done</GreenBtn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
 };
+
+
+
 function AdminSettings() {
-  const [params] = useSearchParams();
+  const [params, setSearchParams] = useSearchParams();
   const tabBarRef = useRef(null);
   const tabFromUrl = params.get("tab") || "account";
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   const [toast, setToast] = useState("");
+
   useEffect(() => {
     const t = params.get("tab") || "account";
-    setActiveTab(t);
+    if (t === "preferences") {
+      setActiveTab("account");
+    } else {
+      setActiveTab(t);
+    }
   }, [params]);
+
   useEffect(() => {
     const bar = tabBarRef.current;
     if (!bar) return;
     const btn = bar.querySelector('[data-active="true"]');
     if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [activeTab]);
+
   const showToast = (msg) => {
     setToast(msg);
-    setTimeout(() => setToast(""), 3e3);
+    setTimeout(() => setToast(""), 3000);
   };
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1240px] mx-auto">
-      <div className="mb-5">
-        <h1 className="text-[22px] font-bold text-black">Settings</h1>
-        <p className="text-[15px] text-black mt-0.5">Manage your admin account, security, preferences, and notifications.</p>
-      </div>
+
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      <PageHeader
+        title="Settings"
+        description="Manage your admin account and security settings."
+      />
 
       <div
-    ref={tabBarRef}
-    className="flex gap-1 border-b border-[var(--hw-neutral-200)] mb-5"
-    style={{ overflowX: "auto", scrollbarWidth: "none" }}
-  >
-        {TABS.map((tab) => <button
-    key={tab.id}
-    data-active={activeTab === tab.id ? "true" : "false"}
-    type="button"
-    onClick={() => setActiveTab(tab.id)}
-    className={`flex-shrink-0 px-3.5 py-2.5 text-[14px] font-medium rounded-t-lg border-b-2 transition-all whitespace-nowrap ${activeTab === tab.id ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]" : "border-transparent text-black hover:text-[var(--hw-green-700)]"}`}
-  >
+        ref={tabBarRef}
+        className="flex gap-1 border-b border-[var(--hw-neutral-200)] mb-5"
+        style={{ overflowX: "auto", scrollbarWidth: "none" }}
+      >
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            data-active={activeTab === tab.id ? "true" : "false"}
+            type="button"
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSearchParams({ tab: tab.id });
+            }}
+            className={`flex-shrink-0 px-3.5 py-2.5 text-[14px] font-semibold rounded-t-lg border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === tab.id
+                ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]"
+                : "border-transparent text-black hover:text-[var(--hw-green-700)]"
+            }`}
+          >
             {tab.label}
-          </button>)}
+          </button>
+        ))}
       </div>
 
       {activeTab === "account" && <AccountTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
-      {activeTab === "preferences" && <PreferencesTab showToast={showToast} />}
-      {activeTab === "notifications" && <NotificationsTab showToast={showToast} />}
 
-      <Toast message={toast} />
-    </div>;
+      {toast && <Toast msg={toast} onDismiss={() => setToast("")} />}
+    </div>
+  );
 }
-export {
-  AdminSettings as default
-};
+
+export { AdminSettings as default };

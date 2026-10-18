@@ -21,8 +21,13 @@ import {
   LabelList
 } from "recharts";
 import { COMMODITIES } from "../components/market/mockData";
-import { CommodityIllustration } from "../components/market/CommodityIllustrations";
+import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
+import { useLanguage } from "../../global/contexts/LanguageContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { PreferredStar } from "../components/shared/PreferredStar";
 const WHOLESALE_FORECAST_DATA = {
   kamatis: { direction: "rising", directionLabel: "Likely to rise", currentPrice: 78, recentAvg: 76, forecastedPrice: 80, forecastLow: 75, forecastHigh: 86, changePct: 5.3, reliability: "Moderate", reliabilityNote: "Based on available DFTC Wholesale price records." },
   talong: { direction: "stable", directionLabel: "Likely to remain stable", currentPrice: 55, recentAvg: 55, forecastedPrice: 55, forecastLow: 52, forecastHigh: 59, changePct: 0, reliability: "Moderate", reliabilityNote: "Based on available DFTC Wholesale price records." },
@@ -53,6 +58,15 @@ const tooltipStyle = { backgroundColor: "white", border: "1px solid var(--hw-neu
 function DftcWholesaleForecastPage() {
   const { commodityId } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const { data: profile } = useQuery({
+    queryKey: ["farmerProfile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 5 * 60 * 1000
+  });
+  const preferredCrops = profile?.preferredCrops;
+  const sortedCommodities = sortWithPreferredFirst(COMMODITIES, preferredCrops);
+
   const [period, setPeriod] = useState("7d");
   const commodity = COMMODITIES.find((c) => c.id === commodityId);
   const rec = commodityId ? WHOLESALE_FORECAST_DATA[commodityId] : void 0;
@@ -76,8 +90,7 @@ function DftcWholesaleForecastPage() {
   const allHistoryRows = getHistoryRows(commodity.id, "DFTC", "Wholesale", rec.currentPrice);
   const periodCount = period === "7d" ? 7 : period === "14d" ? 14 : period === "21d" ? 21 : 28;
   const historyRows = allHistoryRows.slice(0, Math.min(periodCount, allHistoryRows.length));
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-2xl mx-auto md:max-w-3xl space-y-4">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {
     /* Back + commodity switcher */
@@ -91,13 +104,23 @@ function DftcWholesaleForecastPage() {
             Forecast Details
           </button>
           <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-            {COMMODITIES.map((c) => <button
-    key={c.id}
-    onClick={() => navigate(`/farmer/forecast/${c.id}/wholesale`)}
-    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
-                {c.name}
-              </button>)}
+            {sortedCommodities.map((c) => {
+              const isPref = isPreferredCrop(c, preferredCrops);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => navigate(`/farmer/forecast/${c.id}/wholesale`)}
+                  className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${c.id === commodity.id ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
+                >
+                  {c.name}
+                  {isPref && (
+                    <span className={`inline-flex items-center px-1 rounded text-[9px] font-semibold ${c.id === commodity.id ? "bg-white/20 text-white" : "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)]"}`}>
+                      ★
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -108,7 +131,12 @@ function DftcWholesaleForecastPage() {
           <div className="flex items-center gap-4">
             <CommodityIllustration commodityId={commodity.id} className="w-16 h-16 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">{commodity.name}</h1>
+                {isPreferredCrop(commodity, preferredCrops) && (
+                  <PreferredStar className="w-4 h-4 text-amber-500" />
+                )}
+              </div>
               <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] mt-0.5">DFTC Wholesale Forecast</p>
               <div className={`flex items-center gap-1.5 mt-1 text-sm font-semibold ${dir.color}`}>
                 <DirIcon className="w-4 h-4" />
@@ -318,7 +346,6 @@ function DftcWholesaleForecastPage() {
           </button>
         </div>
 
-      </div>
     </div>;
 }
 export {

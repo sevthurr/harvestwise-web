@@ -1,0 +1,165 @@
+import { apiGet, apiPost, apiPut, apiFetch, parseResponse } from "../../app/global/api";
+
+// ── Weights ────────────────────────────────────────────────────────────────
+export async function listWeights() {
+  return parseResponse(await apiGet("/admin/weights"));
+}
+
+export async function getWeight(weightId) {
+  return parseResponse(await apiGet(`/admin/weights/${weightId}`));
+}
+
+export async function createWeight(payload) {
+  return parseResponse(await apiPost("/admin/weights", payload));
+}
+
+export async function updateWeight(weightId, payload) {
+  return parseResponse(await apiPut(`/admin/weights/${weightId}`, payload));
+}
+
+// ── Thresholds (modules + rules) ───────────────────────────────────────────
+export async function listThresholds() {
+  return parseResponse(await apiGet("/admin/thresholds"));
+}
+
+export async function createThreshold(payload) {
+  return parseResponse(await apiPost("/admin/thresholds", payload));
+}
+
+export async function updateThreshold(moduleId, payload) {
+  return parseResponse(await apiPut(`/admin/thresholds/${moduleId}`, payload));
+}
+
+export async function deleteThreshold(moduleId) {
+  return parseResponse(
+    await apiFetch(`/admin/thresholds/${moduleId}`, { method: "DELETE" })
+  );
+}
+
+export async function listThresholdRules(moduleId) {
+  return parseResponse(await apiGet(`/admin/thresholds/${moduleId}/rules`));
+}
+
+export async function createThresholdRule(moduleId, payload) {
+  return parseResponse(await apiPost(`/admin/thresholds/${moduleId}/rules`, payload));
+}
+
+export async function updateThresholdRule(ruleId, payload) {
+  return parseResponse(await apiPut(`/admin/thresholds/rules/${ruleId}`, payload));
+}
+
+export async function deleteThresholdRule(ruleId) {
+  return parseResponse(
+    await apiFetch(`/admin/thresholds/rules/${ruleId}`, { method: "DELETE" })
+  );
+}
+
+// ── Computations ───────────────────────────────────────────────────────────
+export async function runPriceChange(payload) {
+  return parseResponse(await apiPost("/computations/price-change", payload));
+}
+
+export async function runPriceOutlook(payload) {
+  return parseResponse(await apiPost("/computations/price-outlook", payload));
+}
+
+export async function runArrivalPressure(payload) {
+  return parseResponse(await apiPost("/computations/arrival-pressure", payload));
+}
+
+export async function runSeasonalProduction(payload) {
+  return parseResponse(await apiPost("/computations/seasonal-production", payload));
+}
+
+export async function runProfitability(payload) {
+  return parseResponse(await apiPost("/computations/profitability", payload));
+}
+
+export async function runRecommendation(payload) {
+  return parseResponse(await apiPost("/computations/recommendation", payload));
+}
+
+// ── Farmer commodities (analytics scoping) ─────────────────────────────────
+export async function listCommodities() {
+  return parseResponse(await apiGet("/farmer/commodities"));
+}
+
+// ── Module outputs (compute + persist) ─────────────────────────────────────
+export async function computeModuleOutputs(payload) {
+  return parseResponse(await apiPost("/admin/analytics/outputs/compute", payload));
+}
+
+export async function listModuleOutputs(params = {}) {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, v);
+  });
+  const query = qs.toString();
+  return parseResponse(await apiGet(`/admin/analytics/outputs${query ? `?${query}` : ""}`));
+}
+
+export async function getModuleOutputDetail(recId) {
+  return parseResponse(await apiGet(`/admin/analytics/outputs/${recId}`));
+}
+
+// ── Crop weather rules (per-crop weather requirements) ─────────────────────
+export async function listWeatherRules(commodityId) {
+  const qs = commodityId ? `?commodity_id=${encodeURIComponent(commodityId)}` : "";
+  return parseResponse(await apiGet(`/admin/crop-weather-rules${qs}`));
+}
+
+export async function createWeatherRule(payload) {
+  return parseResponse(await apiPost("/admin/crop-weather-rules", payload));
+}
+
+export async function updateWeatherRule(ruleId, payload) {
+  return parseResponse(await apiPut(`/admin/crop-weather-rules/${ruleId}`, payload));
+}
+
+// ── Live-computed analytics outputs ───────────────────────────────────────────
+// `commodityRef` must be a commodity id (e.g. "COM-0001"). A bare crop name is
+// only accepted by the API when the crop has a name-level (variety IS NULL) row,
+// so names alone 404 for crops that exist solely per variety.
+export async function getHistoricalSeasonalProduction(commodityRef, quarter = null) {
+  const query = new URLSearchParams({
+    commodity_id: commodityRef,
+  });
+  if (quarter) query.set("quarter", quarter);
+  return parseResponse(
+    await apiGet(`/admin/analytics/outputs/historical-seasonal-production?${query.toString()}`)
+  );
+}
+
+export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_retail", horizon = 14, options = {}) {
+  let url = `/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${encodeURIComponent(horizon)}`;
+  const stage = options.cropStage || options.crop_stage;
+  const planting = options.plantingDate || options.planting_date;
+  const harvest = options.harvestDate || options.harvest_date;
+  if (stage) {
+    url += `&crop_stage=${encodeURIComponent(stage)}`;
+  }
+  if (planting) {
+    url += `&planting_date=${encodeURIComponent(planting)}`;
+  }
+  if (harvest) {
+    url += `&harvest_date=${encodeURIComponent(harvest)}`;
+  }
+  return parseResponse(await apiGet(url));
+}
+
+export async function getArrivalPressure(commodityId, year = null, source = null) {
+  let url = `/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`;
+  if (year != null) {
+    url += `&year=${encodeURIComponent(year)}`;
+  }
+  if (source != null && source !== "overall") {
+    url += `&source=${encodeURIComponent(source)}`;
+  }
+  return parseResponse(await apiGet(url));
+}
+
+export async function getWeatherForecast(days = 14) {
+  return parseResponse(
+    await apiGet(`/admin/analytics/outputs/weather-forecast?days=${encodeURIComponent(days)}`)
+  );
+}

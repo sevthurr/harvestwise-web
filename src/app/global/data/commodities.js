@@ -10,7 +10,7 @@ const COMMODITY_CATEGORIES = [
     items: [
       item("Ampalaya", ["Galaxy"], true),
       item("Batong", ["Negrostar"]),
-      item("Kalabasa", ["Suprema", "Malagkit"], true),
+      item("Kalabasa", ["Suprema"], true),
       item("Kamatis", ["Diamante Big"], true),
       item("Native Pechay", ["Condor"]),
       item("Okra", ["Smooth Green"]),
@@ -36,7 +36,7 @@ const COMMODITY_CATEGORIES = [
       item("Broccoli", []),
       item("Cauliflower", []),
       item("Chinese Pechay", [], true),
-      item("Lettuce", ["Curly", "Ball", "Romaine"], true),
+      item("Lettuce", ["Curly", "Ball"], true),
       item("Repolyo", ["Wakamini"], true),
       item("Carrots", ["Big", "Medium", "Small"], true),
       item("Patatas", ["Big", "Medium", "Small"]),

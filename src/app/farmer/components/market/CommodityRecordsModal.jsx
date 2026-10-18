@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { X, ChevronDown, ChevronUp, Leaf } from "lucide-react";
 import { PRICE_CATEGORIES, ARRIVAL_COMMODITIES } from "../../../dftc/pages/dftc-add-data-data";
-import { CommodityIllustration, COMMODITY_REGISTRY } from "./CommodityIllustrations";
+import { CommodityIllustration, COMMODITY_REGISTRY } from "../../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../../global/data/commodities";
 const PAGE_SIZE = 20;
 const HW_NAME_TO_ID = _HW_NAME_TO_ID;
@@ -585,7 +585,7 @@ function CommodityRecordsModal({ data, onClose, savedFiles, onOpenFile }) {
                   <tbody>
                     {pPageRows.length === 0 ? <tr><td colSpan={10} className="px-4 py-8 text-center text-[var(--hw-neutral-500)]">No records match the selected filters.</td></tr> : pPageRows.map((r, i) => {
     const file = findSavedFile(r.fileId);
-    return <tr key={i} className="border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors">
+    return <tr key={i} className="border-b border-[var(--hw-neutral-100)]">
                               <td className="px-3 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap">{r.date}</td>
                               <td className="px-3 py-2.5 text-[var(--hw-neutral-900)]">{r.variety}</td>
                               <td className="px-3 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap">{r.category}</td>
@@ -668,7 +668,7 @@ function CommodityRecordsModal({ data, onClose, savedFiles, onOpenFile }) {
                   <tbody>
                     {aPageRows.length === 0 ? <tr><td colSpan={9} className="px-4 py-8 text-center text-[var(--hw-neutral-500)]">No records match the selected filters.</td></tr> : aPageRows.map((r, i) => {
     const file = findSavedFile(r.fileId);
-    return <tr key={i} className="border-b border-[var(--hw-neutral-100)] hover:bg-[var(--hw-neutral-50)] transition-colors">
+    return <tr key={i} className="border-b border-[var(--hw-neutral-100)]">
                               <td className="px-3 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap">{r.dateMonth}</td>
                               <td className="px-3 py-2.5 text-[var(--hw-neutral-900)]">{r.variety}</td>
                               <td className="px-3 py-2.5 text-[var(--hw-neutral-900)]">{formatVol(r.farmSource)}</td>

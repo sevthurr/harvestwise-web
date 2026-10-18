@@ -1,204 +1,181 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   CheckCircle2,
   MinusCircle,
   XCircle,
   TrendingUp,
-  Package,
-  CloudRain,
-  Leaf,
-  PhilippinePeso,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Save,
   Sprout,
   RefreshCw,
   AlertCircle,
-  Check
+  Check,
+  Package,
+  Leaf,
+  Cloud
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { COMMODITY_OPTIONS, getTotalCost, formatPeso } from "./types";
-import { useCrops } from "../crops/CropsContext";
-import { CommodityIllustration } from "../market/CommodityIllustrations";
-import { Breadcrumb } from "../shared/Breadcrumb";
+import { getTotalCost, formatPeso, COMMODITY_OPTIONS, suggestHarvestDate } from "./types";
+import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
+import { useLanguage } from "../../../global/contexts/LanguageContext";
 import {
-  buildPricePoints,
-  getArrivalData,
-  getProductionData,
-  getWeatherData
-} from "../shared/FactorDetailTabs";
-const SENTIMENT_COLOR = {
-  favorable: "text-emerald-700",
-  caution: "text-amber-600",
-  unfavorable: "text-red-700"
-};
+  ADVISORY_CODES,
+  PRICE_TREND_CODES,
+  normalizeAdvisoryCode,
+  normalizePriceTrendCode,
+} from "../../utils/farmerCodes";
+import {
+  composeAdvisorySummary,
+  composeAdvisoryBadge,
+  renderComposedMessage,
+} from "../../utils/advisoryMessageComposer";
+import {
+  composeAdvisoryReasons,
+  composeAdvisoryAction,
+  composeImmediateActions,
+  resolveMainFactor,
+} from "../../utils/advisoryReasons";
+import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
+import { apiPost, parseResponse } from "../../../global/api";
+import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
+import { Breadcrumb } from "../shared/Breadcrumb";
+import { resolveFactorCondition } from "../../utils/factorColors";
+
+function renderFactorIcon(iconType, colorClass) {
+  if (iconType === "price") {
+    return (
+      <span className={`w-5 h-5 flex items-center justify-center font-bold text-[17px] leading-none flex-shrink-0 mt-0.5 ${colorClass}`}>
+        ₱
+      </span>
+    );
+  }
+  if (iconType === "supply") {
+    return <Package className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  }
+  if (iconType === "production") {
+    return <Leaf className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  }
+  if (iconType === "weather") {
+    return <Cloud className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  }
+  return <TrendingUp className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+}
+
+// Presentation config for each advisory badge state: icon, text colour and card
+// border. The `type` values come from `composeAdvisoryBadge`.
 const ADVISORY_CFG = {
-  "Recommended": {
+  recommended: {
     Icon: CheckCircle2,
     color: "text-emerald-700",
     border: "border-[var(--hw-neutral-200)]",
-    summary: (n) => `Current conditions support your ${n} plan.`,
-    support: "Prices are fair and weather is manageable this week."
   },
-  "Plant Conservatively": {
+  proceed_with_caution: {
     Icon: MinusCircle,
     color: "text-amber-700",
     border: "border-[var(--hw-neutral-200)]",
-    summary: (n) => `${n} may still be planted, but consider starting with a smaller area.`,
-    support: "Consider a smaller area until conditions improve."
   },
-  "Avoid for Now": {
+  caution: {
+    Icon: MinusCircle,
+    color: "text-amber-700",
+    border: "border-[var(--hw-neutral-200)]",
+  },
+  avoid_for_now: {
     Icon: XCircle,
     color: "text-red-700",
     border: "border-[var(--hw-neutral-200)]",
-    summary: (n) => `Conditions are not favorable for planting ${n} at this time.`,
-    support: "Consider waiting for better timing before committing."
-  }
+  },
+  avoid: {
+    Icon: XCircle,
+    color: "text-red-700",
+    border: "border-[var(--hw-neutral-200)]",
+  },
+  high_risk: {
+    Icon: XCircle,
+    color: "text-red-700",
+    border: "border-[var(--hw-neutral-200)]",
+  },
 };
-function getAdvisory(commodityId) {
-  const map = {
-    kamatis: "Plant Conservatively",
-    talong: "Plant Conservatively",
-    repolyo: "Avoid for Now",
-    atsal: "Recommended",
-    carrots: "Recommended",
-    pipino: "Plant Conservatively",
-    ampalaya: "Recommended",
-    kalabasa: "Plant Conservatively",
-    lettuce: "Avoid for Now",
-    pechay: "Avoid for Now"
-  };
-  return map[commodityId] ?? "Plant Conservatively";
-}
-const FORECAST_PRICES = {
-  kamatis: { mid: 87, lo: 83, hi: 91 },
-  talong: { mid: 62, lo: 58, hi: 66 },
-  repolyo: { mid: 47, lo: 43, hi: 51 },
-  atsal: { mid: 123, lo: 118, hi: 128 },
-  carrots: { mid: 92, lo: 88, hi: 96 },
-  pipino: { mid: 42, lo: 38, hi: 46 },
-  ampalaya: { mid: 78, lo: 73, hi: 83 },
-  kalabasa: { mid: 37, lo: 33, hi: 41 },
-  lettuce: { mid: 82, lo: 78, hi: 87 },
-  pechay: { mid: 37, lo: 33, hi: 41 }
-};
-const CURRENT_PRICES = {
-  kamatis: 85,
-  talong: 60,
-  repolyo: 45,
-  atsal: 120,
-  carrots: 90,
-  pipino: 40,
-  ampalaya: 75,
-  kalabasa: 35,
-  lettuce: 80,
-  pechay: 35
-};
-function factorSentiment(advisory, factor) {
-  if (advisory === "Recommended") return factor === "Weather" ? "caution" : "favorable";
-  if (advisory === "Plant Conservatively") return "caution";
-  if (factor === "Price" || factor === "Production") return "caution";
-  return "unfavorable";
-}
-function getWhyFactors(name, commodityId, costToRecover, farmgatePrice, advisory) {
-  const currentPrice = CURRENT_PRICES[commodityId] ?? 70;
-  const forecast = FORECAST_PRICES[commodityId] ?? { mid: currentPrice, lo: currentPrice - 5, hi: currentPrice + 5 };
-  const sellingBasis = farmgatePrice ?? forecast.mid;
-  const margin = sellingBasis - costToRecover;
-  return [
-    {
-      label: "Price",
-      Icon: TrendingUp,
-      sentiment: factorSentiment(advisory, "Price"),
-      value: `\u20B1${currentPrice}/kg today, up \u20B15/kg from last week.`
-    },
-    {
-      label: "Supply",
-      Icon: Package,
-      sentiment: factorSentiment(advisory, "Supply"),
-      value: "DFTC arrivals are 12 tons this week, lower than 18 tons last week."
-    },
-    {
-      label: "Production",
-      Icon: Leaf,
-      sentiment: factorSentiment(advisory, "Production"),
-      value: advisory === "Recommended" ? `Q3 (Jul\u2013Sep) production is usually lower for ${name}, which may reduce supply pressure near harvest.` : `Q3 (Jul\u2013Sep) production is usually moderate to high for ${name}, so some harvest competition is expected.`
-    },
-    {
-      label: "Weather",
-      Icon: CloudRain,
-      sentiment: factorSentiment(advisory, "Weather"),
-      value: "Heavy rain is expected on Jul 12\u201313, so field work may need caution."
-    },
-    {
-      label: "Profit",
-      Icon: PhilippinePeso,
-      sentiment: factorSentiment(advisory, "Profit"),
-      value: margin >= 0 ? `Around \u20B1${margin}/kg above cost to recover, using ${farmgatePrice ? "estimated farmgate price" : "forecasted price reference"}.` : `Currently \u20B1${Math.abs(margin)}/kg below cost to recover at forecasted price.`
-    }
-  ];
-}
+
 const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, priceBasisShort, margin, hasFarmgate }) => {
   const [open, setOpen] = useState(false);
+  const { t } = useLanguage();
   return <div className="border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
       <button
     onClick={() => setOpen((v) => !v)}
     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left bg-[var(--hw-neutral-50)]"
   >
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">How was this calculated?</p>
+        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">
+          {t("farmer.factors.profitability.calc_accordion_title", {}, "How was this calculated?")}
+        </p>
         {open ? <ChevronUp className="w-3.5 h-3.5 text-[var(--hw-neutral-400)] flex-shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-[var(--hw-neutral-400)] flex-shrink-0" />}
       </button>
-      {open && <div className="px-3 py-3 space-y-1.5 border-t border-[var(--hw-neutral-200)] bg-white">
-          {[
-    { label: "Expected harvest volume", value: `${qty} kg` },
-    { label: "Total estimated cost", value: formatPeso(totalCost) },
-    { label: "Price basis used", value: priceBasisShort },
-    { label: "Price basis (per kg)", value: `\u20B1${sellingBasis}/kg` },
-    { label: "Cost to recover", value: `\u20B1${costToRecover}/kg` },
-    { label: `Estimated profit per kg (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
-  ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
-              <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
-              <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
-            </div>)}
+      {open && <div className="px-3 py-3 space-y-2 border-t border-[var(--hw-neutral-200)] bg-white">
+          <p className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed pb-1.5 border-b border-[var(--hw-neutral-100)]">
+            {t("farmer.assess.how_calculated_desc", {
+              cost: formatPeso(totalCost),
+              harvest: qty,
+              qty: qty
+            })}
+          </p>
+          <div className="space-y-1.5">
+            {[
+              { label: t("farmer.factors.profitability.expected_harvest_volume_label"), value: `${qty} kg` },
+              { label: t("farmer.factors.profitability.total_estimated_cost_label"), value: formatPeso(totalCost) },
+              { label: t("farmer.factors.profitability.price_basis_used_label"), value: priceBasisShort },
+              { label: t("farmer.factors.profitability.price_basis_per_kg_label"), value: `\u20B1${sellingBasis}/kg` },
+              { label: t("farmer.factors.profitability.cost_to_recover_short_label"), value: `\u20B1${costToRecover}/kg` },
+              { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label")} (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
+            ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
+                <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
+                <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
+              </div>)}
+          </div>
           {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-1 border-t border-[var(--hw-neutral-100)]">
-              Using forecasted price as reference. Actual buyer price may be different.
+              {t("farmer.factors.profitability.forecast_reference_notice")}
             </p>}
         </div>}
     </div>;
 };
-function makeCropId() {
-  return `crop-${Date.now()}`;
-}
-function buildCropRecord(data, phase, overrides = {}) {
-  const commodityName = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? data.commodity;
+function buildCropPlanPayload(data, status = "Draft") {
   const totalCost = getTotalCost(data);
-  const qty = typeof data.harvestQuantity === "number" ? data.harvestQuantity : 1;
-  const breakEvenPrice = qty > 0 ? Math.ceil(totalCost / qty) : 0;
+  const productionCosts = data.costMethod === "detailed"
+    ? (data.expenses || [])
+        .filter((e) => typeof e.amount === "number" && e.amount > 0)
+        .map((e) => ({
+          category: e.name || "Additional",
+          amount: e.amount,
+          cost_type: "initial",
+        }))
+    : totalCost > 0
+      ? [{ category: "Total Cost", amount: totalCost, cost_type: "initial" }]
+      : [];
+
   return {
-    id: makeCropId(),
-    commodity: data.commodity,
-    commodityName,
-    variant: data.variant || void 0,
-    phase,
-    plantingDate: data.plantingDate || "TBD",
-    harvestDate: data.harvestDate || "TBD",
-    farmArea: typeof data.farmArea === "number" ? data.farmArea : 0,
-    farmAreaUnit: data.farmAreaUnit,
-    harvestQuantity: typeof data.harvestQuantity === "number" ? data.harvestQuantity : 0,
-    totalCost,
-    breakEvenPrice,
-    condition: "Monitor market conditions near harvest.",
-    nextMilestone: phase === "growing" ? "Monitor crop conditions" : "Reassess market conditions",
-    lastUpdated: "Just now",
-    ...overrides
+    plan_id: data.draftId || null,
+    commodity_id: data.commodityId || data.commodity,
+    planned_planting_date: data.plantingDate || null,
+    expected_harvest_date: data.harvestDate || null,
+    farm_area: typeof data.farmArea === "number" && data.farmArea > 0 ? data.farmArea : null,
+    expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
+    expected_farmgate_price: typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
+    status,
+    cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
+    production_costs: productionCosts,
   };
 }
-const RecommendationResult = ({ data, onEdit }) => {
+
+const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, onCompareAnother }) => {
+  const { t, langCode } = useLanguage();
   const navigate = useNavigate();
-  const { addCrop } = useCrops();
+  const { addCrop, refreshCrops, crops } = useCrops();
   const [saved, setSaved] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [showPlantedForm, setShowPlantedForm] = useState(false);
+  const draftAutosavedRef = useRef(false);
   const [plantedForm, setPlantedForm] = useState({
     actualPlantingDate: data.plantingDate,
     actualArea: data.farmArea,
@@ -209,327 +186,515 @@ const RecommendationResult = ({ data, onEdit }) => {
   const totalCost = getTotalCost(data);
   const qty = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
   const costToRecover = qty ? Math.ceil(totalCost / qty) : null;
-  const advisory = getAdvisory(data.commodity);
-  const advisoryCfg = ADVISORY_CFG[advisory];
-  const AdvisoryIcon = advisoryCfg.Icon;
+
+  useEffect(() => {
+    if (draftAutosavedRef.current) return;
+    const autosaveCommodityId = data.commodityId || data.commodity;
+    if (!autosaveCommodityId) return;
+    draftAutosavedRef.current = true;
+    const alreadyTracked = Array.isArray(crops) && crops.some((c) => c.commodity === autosaveCommodityId);
+    if (alreadyTracked) return;
+    const payload = buildCropPlanPayload(data);
+    delete payload.status;
+    (async () => {
+      try {
+        const res = await apiPost("/crop-plans/draft", payload);
+        if (res.ok) refreshCrops();
+      } catch {
+        // noop — never block viewing the advisory
+      }
+    })();
+  }, [data.commodityId, data.commodity, crops]);
+
+  // Real backend advisory & module results from POST /api/v1/advisory/plan
+  const advisoryResponse = propAdvisory || data.advisoryResponse;
+  const cropStage = advisoryResponse?.crop_stage || "before_planting";
+  const moduleResults = advisoryResponse?.module_results || {};
+  const rawAdvisory = advisoryResponse?.advisory?.advisory || data.advisoryCategory;
+  const advisoryCode = normalizeAdvisoryCode(rawAdvisory);
+  const badge = composeAdvisoryBadge(advisoryCode, cropStage);
+  const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
+  const AdvisoryIcon = advisoryCfg ? advisoryCfg.Icon : null;
+  const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");
+
+  const composedSummary = composeAdvisorySummary(advisoryCode, cropStage, displayName);
+  const summaryText = renderComposedMessage(composedSummary, langCode, advisoryCode ? t(`farmer.advisory.${advisoryCode}_summary`, { crop_name: displayName }) : "");
+  const advisoryMeta = advisoryResponse?.advisory || {};
+  const mainFactor = advisoryCode
+    ? resolveMainFactor({
+        moduleResults,
+        contributions: advisoryMeta.module_contributions,
+        weightsApplied: advisoryMeta.weights_applied,
+        vetoes: advisoryMeta.hard_vetoes,
+        lang: langCode,
+      })
+    : null;
+  const horizonCandidate = Number(advisoryResponse?.price_horizon || data.horizonDays || 14);
+  const horizonDays = [7, 14, 21, 28].includes(horizonCandidate) ? horizonCandidate : 14;
+  const composedReasons = composeAdvisoryReasons({
+    moduleResults,
+    contributions: advisoryMeta.module_contributions,
+    vetoes: advisoryMeta.hard_vetoes,
+    cropName: displayName,
+    horizonDays,
+    extra: {
+      commodityId: data.commodity,
+      harvestDate: data.harvestDate || advisoryResponse?.expected_harvest_date || data.plantingDate,
+      plantingDate: data.plantingDate,
+    },
+  });
   const hasFarmgate = data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0;
-  const farmgateNum = hasFarmgate ? data.farmgatePrice : null;
-  const forecast = FORECAST_PRICES[data.commodity] ?? { mid: 70, lo: 65, hi: 75 };
-  const sellingBasis = hasFarmgate ? data.farmgatePrice : forecast.mid;
-  const priceBasisLabel = hasFarmgate ? "Based on estimated farmgate price" : "Based on forecasted market price";
-  const priceBasisShort = hasFarmgate ? "Estimated farmgate price" : "Forecasted market price";
-  const priceBasisDetail = hasFarmgate ? `Farmgate price: \u20B1${data.farmgatePrice}/kg` : `Forecasted price reference: \u20B1${forecast.lo}\u2013\u20B1${forecast.hi}/kg`;
-  const margin = costToRecover !== null ? sellingBasis - costToRecover : null;
+  const immediateActions = composeImmediateActions({
+    advisoryCode,
+    cropStage,
+    moduleResults,
+    cropName: displayName,
+    contributions: advisoryMeta.module_contributions,
+    vetoes: advisoryMeta.hard_vetoes,
+    actionGuidance: advisoryMeta.action_guidance,
+    hasFarmgate,
+  });
+  const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName, advisoryMeta);
+  const currentPx = data.currentPrice || null;
+  const forecastLo = data.forecastLower || null;
+  const forecastHi = data.forecastUpper || null;
+  const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : currentPx;
+  const sellingBasis = hasFarmgate ? data.farmgatePrice : forecastMid;
+  const priceBasisLabel = hasFarmgate
+    ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price")
+    : t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price");
+  const priceBasisShort = hasFarmgate
+    ? t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")
+    : t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference");
+  const priceBasisDetail = hasFarmgate
+    ? `${t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated Farmgate Price")}: \u20B1${data.farmgatePrice}/kg`
+    : (forecastLo != null && forecastHi != null
+        ? t("farmer.factors.price.forecast_reference_range", { forecast_lo: forecastLo, forecast_hi: forecastHi })
+        : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: -/kg`);
+  const margin = costToRecover !== null && sellingBasis != null ? sellingBasis - costToRecover : null;
   const hasProfit = margin !== null && qty !== null && margin > 0;
   const profitLo = hasProfit ? Math.floor(margin * qty * 0.85 / 1e3) * 1e3 : 0;
   const profitHi = hasProfit ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
-  const whyFactors = getWhyFactors(commodityName, data.commodity, costToRecover ?? 0, farmgateNum, advisory);
   const dirMap = {
-    "Recommended": "rising",
-    "Plant Conservatively": "stable",
-    "Avoid for Now": "falling"
+    [ADVISORY_CODES.RECOMMENDED]: PRICE_TREND_CODES.RISING,
+    [ADVISORY_CODES.PROCEED_WITH_CAUTION]: PRICE_TREND_CODES.STABLE,
+    [ADVISORY_CODES.AVOID_FOR_NOW]: PRICE_TREND_CODES.FALLING
   };
-  const priceDir = dirMap[advisory];
-  const currentPx = CURRENT_PRICES[data.commodity] ?? 70;
-  const fcast = forecast;
-  const pricePoints = buildPricePoints(
-    Array.from({ length: 7 }, (_, i) => ({
-      label: i === 0 ? "7d ago" : i === 6 ? "Today" : `Day ${i + 1}`,
-      price: Math.round(currentPx + (priceDir === "rising" ? -0.5 : priceDir === "falling" ? 0.5 : 0.1) * (6 - i) + Math.sin(i * 1.9) * 2)
-    })),
-    currentPx,
-    priceDir,
-    fcast.lo,
-    fcast.hi,
-    7
-  );
+  const priceDir = advisoryCode ? (dirMap[advisoryCode] || PRICE_TREND_CODES.STABLE) : PRICE_TREND_CODES.STABLE;
+  const pricePoints = data.pricePoints || [];
   const priceTabData = {
     currentPrice: currentPx,
-    previousPrice: Math.round(currentPx + (priceDir === "rising" ? -5 : priceDir === "falling" ? 5 : 0)),
-    market: "Bangkerohan Retail",
+    previousPrice: currentPx ? Math.round(currentPx + (priceDir === PRICE_TREND_CODES.RISING ? -5 : priceDir === PRICE_TREND_CODES.FALLING ? 5 : 0)) : null,
+    market: data.market || "Not available",
     direction: priceDir,
-    directionLabel: priceDir === "rising" ? "Price may rise" : priceDir === "falling" ? "Price may fall" : "Price likely stable",
-    forecastRange: `\u20B1${fcast.lo}\u2013\u20B1${fcast.hi}/kg`,
+    directionLabel: priceDir === PRICE_TREND_CODES.RISING
+      ? t("farmer.factors.price.trend_label_rising")
+      : priceDir === PRICE_TREND_CODES.FALLING
+        ? t("farmer.factors.price.trend_label_falling")
+        : t("farmer.factors.price.trend_label_stable"),
+    forecastRange: forecastLo != null && forecastHi != null ? `₱${forecastLo}–₱${forecastHi}/kg` : "-/kg",
     points: pricePoints,
-    summary: whyFactors.find((f) => f.label === "Price")?.value ?? ""
+    summary: data.priceInsight || ""
   };
-  const arrivalTabData = getArrivalData(data.commodity, whyFactors.find((f) => f.label === "Supply")?.value);
-  const productionTabData = getProductionData(data.commodity, (/* @__PURE__ */ new Date()).getMonth());
-  const weatherRisk = advisory === "Recommended" ? "low" : advisory === "Plant Conservatively" ? "moderate" : "high";
-  const weatherTabData = getWeatherData(weatherRisk, displayName);
+  const arrivalTabData = data.arrivalData || null;
+  const productionTabData = data.productionData || null;
+  const weatherTabData = data.weatherData ? { ...data.weatherData, cropName: commodityName } : null;
+  const weatherRisk = advisoryCode === ADVISORY_CODES.RECOMMENDED ? "low" : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION ? "moderate" : "high";
   const profitabilityData = costToRecover !== null && qty !== null ? {
     costPerKg: costToRecover,
     sellingPricePerKg: sellingBasis,
     profitPerKg: margin ?? 0,
     totalCost,
     harvestQty: qty,
-    summary: hasProfit ? `At \u20B1${sellingBasis}/kg, you may earn around \u20B1${margin}/kg above your cost to recover. Total estimated profit: \u20B1${((margin ?? 0) * qty).toLocaleString("en-PH")}.` : `Current price may not cover your cost to recover. Consider revising your cost or waiting for better pricing.`
+    expenses: data.costMethod === "detailed" ? data.expenses : null,
+    level: moduleResults.profitability || null,
+    summary: hasProfit
+      ? t("farmer.factors.profitability.summary_positive", {
+          selling_price: sellingBasis,
+          margin: margin,
+          total_profit: ((margin ?? 0) * qty).toLocaleString("en-PH")
+        })
+      : t("farmer.factors.profitability.summary_negative")
   } : void 0;
-  const handleSavePlan = () => {
-    addCrop(buildCropRecord(data, "planning"));
-    setSaved("plan");
+  const handleSavePlan = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = buildCropPlanPayload(data, "Planning");
+      const res = await apiPost("/crop-plans", payload);
+      const savedPlan = await parseResponse(res);
+      addCrop(normalizeCropPlan(savedPlan));
+      try {
+        localStorage.removeItem("harvestwise_assessment_draft");
+      } catch {}
+      await refreshCrops?.();
+      navigate("/farmer/crops", {
+        state: {
+          message: t(
+            "farmer.common.crop_plan_saved_toast",
+            { displayName, action_status: "saved as a crop plan" },
+            `${displayName} has been saved as a crop plan.`
+          ),
+        },
+      });
+    } catch (err) {
+      console.error("Failed to save crop plan:", err);
+      setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+    } finally {
+      setSaving(false);
+    }
   };
-  const handleConfirmPlanted = () => {
-    addCrop(buildCropRecord(data, "growing", {
-      plantingDate: plantedForm.actualPlantingDate || data.plantingDate,
-      harvestDate: plantedForm.updatedHarvestDate || data.harvestDate,
-      farmArea: typeof plantedForm.actualArea === "number" ? plantedForm.actualArea : typeof data.farmArea === "number" ? data.farmArea : 0
-    }));
-    setSaved("planted");
-    setShowPlantedForm(false);
+  const handleConfirmPlanted = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = buildCropPlanPayload(data, "Planted");
+      payload.actual_planting_date = plantedForm.actualPlantingDate || data.plantingDate || null;
+      const res = await apiPost("/crop-plans", payload);
+      const savedPlan = await parseResponse(res);
+      addCrop(normalizeCropPlan(savedPlan));
+      try {
+        localStorage.removeItem("harvestwise_assessment_draft");
+      } catch {}
+      await refreshCrops?.();
+      navigate("/farmer/crops", {
+        state: {
+          message: t(
+            "farmer.common.crop_plan_saved_toast",
+            { displayName, action_status: "marked as planted and growing" },
+            `${displayName} has been marked as planted and growing.`
+          ),
+        },
+      });
+    } catch (err) {
+      console.error("Failed to save crop plan as planted:", err);
+      setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+    } finally {
+      setSaving(false);
+    }
   };
   if (saved) {
     const lm = { plan: "saved as a crop plan", planted: "marked as planted and growing", "on-hold": "saved and put on hold" };
-    return <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-        <div className="max-w-lg mx-auto space-y-5">
+    return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
           <div className="bg-[var(--hw-green-50)] border border-[var(--hw-green-400)] rounded-2xl p-5 text-center space-y-2">
             <div className="flex justify-center mb-2">
               <div className="p-3 bg-[var(--hw-green-700)] rounded-full"><Check className="w-6 h-6 text-white" /></div>
             </div>
-            <p className="font-semibold text-[var(--hw-green-900)]">{displayName} has been {lm[saved]}.</p>
-            <p className="text-sm text-[var(--hw-green-800)]">You can monitor and update it anytime in My Crops.</p>
+            <p className="font-semibold text-[var(--hw-green-900)]">
+              {t("farmer.common.crop_plan_saved_toast", { displayName, action_status: lm[saved] })}
+            </p>
+            <p className="text-sm text-[var(--hw-green-800)]">
+              {t("farmer.common.crop_plan_saved_desc")}
+            </p>
           </div>
           <button
-      onClick={() => navigate("/farmer/crops")}
-      className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-    >
-            Go to My Crops <ChevronRight className="w-4 h-4" />
+            onClick={() => navigate("/farmer/crops")}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+          >
+            {t("farmer.crops.title", {}, "Go to My Crops")} <ChevronRight className="w-4 h-4" />
           </button>
-        </div>
       </div>;
   }
   if (showPlantedForm) {
     const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition bg-white";
-    return <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-        <div className="max-w-lg mx-auto space-y-5">
-          <Breadcrumb items={[{ label: "Crop Assessment" }, { label: "Result" }]} />
+    return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+          <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
           <button
-      onClick={() => setShowPlantedForm(false)}
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
-    >
-            <ChevronLeft className="w-4 h-4" />Back to recommendation
+            onClick={() => setShowPlantedForm(false)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />{t("farmer.advisory.back_to_recommendation", {}, "Back to recommendation")}
           </button>
           <div>
-            <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">Adjust planting details</h2>
-            <p className="text-sm text-[var(--hw-neutral-900)] mt-1">Confirm your details to start monitoring {displayName}.</p>
+            <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">{t("farmer.crops.adjust_planting_details", {}, "Adjust planting details")}</h2>
+            <p className="text-sm text-[var(--hw-neutral-900)] mt-1">{t("farmer.crops.confirm_details_monitoring", { displayName }, `Confirm your details to start monitoring ${displayName}.`)}</p>
           </div>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">Actual planting date</label>
-              <input type="date" value={plantedForm.actualPlantingDate} onChange={(e) => setPlantedForm((f) => ({ ...f, actualPlantingDate: e.target.value }))} className={inputCls} />
+              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planting_date", {}, "Actual planting date")}</label>
+              <input
+                type="date"
+                value={plantedForm.actualPlantingDate}
+                onChange={(e) => {
+                  const newPlantingDate = e.target.value;
+                  const suggestion = newPlantingDate
+                    ? suggestHarvestDate(newPlantingDate, data.commodityId || data.commodity, data.variant)
+                    : null;
+                  setPlantedForm((f) => ({
+                    ...f,
+                    actualPlantingDate: newPlantingDate,
+                    ...(suggestion?.minDate ? { updatedHarvestDate: suggestion.minDate } : {}),
+                  }));
+                }}
+                className={inputCls}
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">Actual planted area (sq m)</label>
+              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planted_area", {}, "Actual planted area (sq m)")}</label>
               <input type="number" min="0" value={plantedForm.actualArea} onChange={(e) => setPlantedForm((f) => ({ ...f, actualArea: e.target.value === "" ? "" : Number(e.target.value) }))} placeholder="e.g. 500" className={inputCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">Updated expected harvest date</label>
+              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.updated_expected_harvest", {}, "Updated expected harvest date")}</label>
               <input type="date" value={plantedForm.updatedHarvestDate} onChange={(e) => setPlantedForm((f) => ({ ...f, updatedHarvestDate: e.target.value }))} className={inputCls} />
             </div>
           </div>
           <button
-      onClick={handleConfirmPlanted}
-      className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-    >
-            <Sprout className="w-4 h-4" />Confirm — I planted this
+            onClick={handleConfirmPlanted}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Sprout className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
           </button>
-        </div>
       </div>;
   }
-  return <div className="px-4 md:px-6 lg:px-8 py-5 md:py-8">
-      <div className="max-w-lg mx-auto md:max-w-2xl space-y-4">
-
-        <Breadcrumb items={[{ label: "Crop Assessment" }, { label: "Result" }]} />
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+        <WeatherLocationBanner />
+        <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
 
         <button
-    onClick={onEdit}
-    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
-  >
-          <ChevronLeft className="w-4 h-4" />Edit information
+          onClick={onEdit}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />{t("farmer.assess.edit_information", {}, "Edit information")}
         </button>
 
-        {
-    /* 1. Advisory card */
-  }
-        <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 space-y-3 ${advisoryCfg.border}`}>
+        {/* 1. Advisory card */}
+        <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 space-y-3 ${advisoryCfg ? advisoryCfg.border : "border-[var(--hw-neutral-200)]"}`}>
 
-          {
-    /* Commodity header */
-  }
+          {/* Commodity header */}
           <div className="flex items-center gap-2.5">
-            <CommodityIllustration commodityId={data.commodity} className="w-10 h-10 flex-shrink-0" />
+            <CommodityIllustration commodityId={data.commodity} commodityName={commodityName} className="w-10 h-10 flex-shrink-0" />
             <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">{displayName}</p>
           </div>
 
-          {
-    /* Advisory level — prominent */
-  }
-          <div className={`flex items-center gap-2.5 ${advisoryCfg.color}`}>
-            <AdvisoryIcon className={`w-7 h-7 flex-shrink-0 ${advisoryCfg.color}`} />
-            <p className={`text-[28px] font-bold leading-tight ${advisoryCfg.color}`}>{advisory}</p>
-          </div>
+          {!advisoryCode ? (
+            <div>
+              <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug font-medium">
+                {t("farmer.advisory.not_available")}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Advisory level — prominent */}
+              <div className={`flex items-center gap-2.5 ${advisoryCfg.color}`}>
+                <AdvisoryIcon className={`w-7 h-7 flex-shrink-0 ${advisoryCfg.color}`} />
+                <p className={`text-[28px] font-bold leading-tight ${advisoryCfg.color}`}>{advisoryLabel}</p>
+              </div>
 
-          {
-    /* Explanation */
-  }
-          <div>
-            <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-              {advisoryCfg.summary(displayName)}
-            </p>
-            <p className={`text-[13px] font-medium mt-1 ${advisoryCfg.color}`}>
-              {advisoryCfg.support}
-            </p>
-            <button
-    onClick={() => {
-      const pageState = {
-        title: `${displayName} \u2014 Detailed Factors`,
-        subtitle: `Assessment result \xB7 ${advisory}`,
-        breadcrumbs: [
-          { label: "Crop Assessment", path: "/assess" },
-          { label: "Result" },
-          { label: "Detailed Factors" }
-        ],
-        backPath: "/assess",
-        backLabel: "Assessment Result",
-        price: priceTabData,
-        arrival: arrivalTabData,
-        production: productionTabData,
-        weather: weatherTabData,
-        profitability: profitabilityData,
-        commodityId: data.commodity,
-        commodityName
-      };
-      navigate("/farmer/assess/factors", { state: pageState });
-    }}
-    className="mt-2 text-[13px] font-semibold text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
-  >
-              View basis →
-            </button>
-          </div>
+              {/* Explanation */}
+              <div>
+                <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
+                  {summaryText}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pageState = {
+                      title: `${displayName} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`,
+                      subtitle: `${t("farmer.advisory.assessment_result_title", {}, "Assessment result")} · ${advisoryLabel}`,
+                      breadcrumbs: [
+                        { label: t("farmer.assess.title", {}, "Crop Assessment"), path: "/farmer/assess" },
+                        { label: t("farmer.assess.result", {}, "Result") },
+                        { label: t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors") }
+                      ],
+                      backPath: "/farmer/assess",
+                      backLabel: t("farmer.assess.result", {}, "Assessment Result"),
+                      price: priceTabData,
+                      arrival: arrivalTabData,
+                      production: productionTabData,
+                      weather: weatherTabData,
+                      profitability: profitabilityData,
+                      // The wizard stores the picked crop as a catalog icon key
+                      // (data.commodity, e.g. "lettuce"); the real commodity id
+                      // (e.g. "COM-0025") lives in data.commodityId. The factors
+                      // page queries the analytics endpoints, which resolve only
+                      // exact ids — an icon key 404s and the arrival/production
+                      // tabs stay empty. Same fallback as buildCropPlanPayload.
+                      commodityId: data.commodityId || data.commodity,
+                      commodityName,
+                      cropStage,
+                      moduleResults,
+                      advisoryCode,
+                      advisoryLabel,
+                      resultData: data,
+                      advisoryPayload: advisoryResponse,
+                    };
+                    navigate("/farmer/assess/factors", { state: pageState });
+                  }}
+                  className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
+                >
+                  {t("farmer.advisory.view_basis", {}, "View basis →")}
+                </button>
+              </div>
+            </>
+          )}
 
-          {
-    /* Date chips */
-  }
+          {/* Date chips */}
           {(data.plantingDate || data.harvestDate) && <div className="grid grid-cols-2 gap-2 text-[13px]">
               {data.plantingDate && <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-[var(--hw-neutral-900)] text-[12px]">Planting date</p>
+                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.assess.planting_date", {}, "Planting date")}</p>
                   <p className="font-medium text-[var(--hw-neutral-900)]">{data.plantingDate}</p>
                 </div>}
               {data.harvestDate && <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-[var(--hw-neutral-900)] text-[12px]">Expected harvest</p>
+                  <p className="text-[var(--hw-neutral-900)] text-[12px]">{t("farmer.assess.expected_harvest", {}, "Expected harvest")}</p>
                   <p className="font-medium text-[var(--hw-neutral-900)]">{data.harvestDate}</p>
                 </div>}
             </div>}
 
-          <p className="text-[12px] text-[var(--hw-neutral-900)]">Based on available market data · Jul 11, 2026</p>
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">
+            {t("farmer.dataNotes.market_data_as_of", { date: data.generatedDate || "Jul 11, 2026" })}
+          </p>
         </div>
 
-        {
-    /* 2. Estimated Profit card */
-  }
-        {hasProfit && qty && margin !== null && costToRecover !== null && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">Estimated Profit</p>
+        {/* 2. Why this recommendation? Factors card */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
+          </p>
 
-            <p className="text-[20px] font-bold text-emerald-700 leading-none">
-              ₱{profitLo.toLocaleString("en-PH")} – ₱{profitHi.toLocaleString("en-PH")}
+          {mainFactor && <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--hw-green-50)] border border-[var(--hw-green-400)]">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--hw-green-700)]" />
+            <p className="text-[13px] font-semibold text-[var(--hw-green-900)] leading-snug">
+              {renderComposedMessage(mainFactor, langCode)}
             </p>
-
-            <div className="space-y-0.5">
-              <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
-              {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)]">
-                  Price may still change before harvest. Update this as harvest gets closer.
-                </p>}
-            </div>
-
-            <ProfitCalcAccordion
-    qty={qty}
-    totalCost={totalCost}
-    costToRecover={costToRecover}
-    sellingBasis={sellingBasis}
-    priceBasisShort={priceBasisShort}
-    margin={margin}
-    hasFarmgate={hasFarmgate}
-  />
-
-            {
-    /* Supporting values */
-  }
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Estimated cost</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{formatPeso(totalCost)}</p>
-              </div>
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Expected harvest</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{qty} kg</p>
-              </div>
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Price basis</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">₱{sellingBasis}/kg</p>
-              </div>
-              <div>
-                <p className="text-[var(--hw-neutral-900)]">Cost to recover</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">₱{costToRecover}/kg</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-[var(--hw-neutral-900)]">Estimated farmgate price</p>
-                {hasFarmgate ? <p className="font-medium text-[var(--hw-neutral-900)]">₱{data.farmgatePrice}/kg</p> : <p className="text-[var(--hw-neutral-900)] italic">Not set — using market price as reference.</p>}
-              </div>
-            </div>
-
-            <p className="text-[12px] text-[var(--hw-neutral-900)]">Estimate only. Actual income may change.</p>
           </div>}
 
-        {
-    /* 3. What to do next */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">What to do next</p>
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+            {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+          </p>
           <div className="space-y-2.5">
-            {[
-    "Save to My Crops to start tracking your plan and monitoring conditions.",
-    hasFarmgate ? "Confirm your farmgate price with your buyer before harvest." : "Update your farmgate price later when a buyer gives you an offer.",
-    "Check prices again closer to harvest before deciding when to sell."
-  ].map((text, i) => <div key={i} className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">{i + 1}</p>
+            {composedReasons.map((r, idx) => {
+              const reasonText = renderComposedMessage(r, langCode);
+              const factorCond = resolveFactorCondition(
+                r.module,
+                moduleResults?.[r.module],
+                r.key,
+                reasonText
+              );
+
+              return (
+                <div key={r.module || idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)]">
+                  {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
+                  <div className="min-w-0 flex-1">
+                    {r.labelKey && (
+                      <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
+                        {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
+                      </p>
+                    )}
+                    <p className="text-[12px] text-black leading-snug mt-0.5">{reasonText}</p>
+                  </div>
                 </div>
-                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{text}</p>
-              </div>)}
+              );
+            })}
           </div>
         </div>
 
-        {
-    /* 5. Actions */
-  }
+        {/* 3. Estimated Profit card */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.factors.profitability.title", {}, "Estimated Profit")}
+          </p>
+
+          <p className={`text-[20px] font-bold leading-none ${hasProfit ? "text-emerald-700" : "text-[var(--hw-neutral-700)]"}`}>
+            {hasProfit
+              ? `₱${profitLo.toLocaleString("en-PH")} – ₱${profitHi.toLocaleString("en-PH")}`
+              : margin !== null && qty !== null
+                ? `₱${(margin * qty).toLocaleString("en-PH")}`
+                : "-"}
+          </p>
+
+          <div className="space-y-0.5">
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
+            {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)]">
+                {t("farmer.factors.profitability.price_change_notice", {}, "Price may still change before harvest. Update this as harvest gets closer.")}
+              </p>}
+          </div>
+
+          <ProfitCalcAccordion
+            qty={qty || "-"}
+            totalCost={totalCost}
+            costToRecover={costToRecover != null ? costToRecover : "-"}
+            sellingBasis={sellingBasis != null ? sellingBasis : "-"}
+            priceBasisShort={priceBasisShort}
+            margin={margin != null ? margin : "-"}
+            hasFarmgate={hasFarmgate}
+          />
+
+          {/* Supporting values */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : "-"}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{qty ? `${qty} kg` : "- kg"}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.price_basis", {}, "Price basis")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis != null ? `₱${sellingBasis}/kg` : "-/kg"}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover != null ? `₱${costToRecover}/kg` : "-/kg"}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")}</p>
+              {hasFarmgate ? <p className="font-medium text-[var(--hw-neutral-900)]">₱{data.farmgatePrice}/kg</p> : <p className="text-[var(--hw-neutral-900)] italic">{t("farmer.factors.profitability.not_set_reference", {}, "Not set — using market price as reference.")}</p>}
+            </div>
+          </div>
+
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may change.")}</p>
+        </div>
+
+        {/* 4. What to do next */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.advisory.advisory_action_title", {}, "What should I do next?")}</p>
+          <div className="space-y-2.5">
+            {(immediateActions.length > 0 ? immediateActions.slice(0, 2) : [composedAction].filter(Boolean)).map((act, idx) => (
+              <div key={act.key || idx} className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <p className="text-[12px] font-bold text-[var(--hw-neutral-900)]">{idx + 1}</p>
+                </div>
+                <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
+                  {renderComposedMessage(act, langCode, t("farmer.actions.monitoring.save_plan_instruction", {}, "Save to My Crops to start tracking your plan and monitoring conditions."))}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 5. Actions */}
         <div className="space-y-3 pt-1">
+          {saveError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{saveError}</p>}
           <button
-    onClick={handleSavePlan}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-  >
-            <Save className="w-4 h-4" />Save to My Crops
+            onClick={handleSavePlan}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.save_to_crops", {}, "Save to My Crops")}
           </button>
           <button
-    onClick={() => setShowPlantedForm(true)}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors"
-  >
-            <Sprout className="w-4 h-4" />I already planted this
+            onClick={() => setShowPlantedForm(true)}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-green-700)] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Sprout className="w-4 h-4" />{t("farmer.crops.already_planted", {}, "I already planted this")}
           </button>
           <button
-    onClick={() => navigate("/farmer/assess")}
-    className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-neutral-900)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-  >
-            <RefreshCw className="w-4 h-4" />Compare another crop
+            onClick={onCompareAnother}
+            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-white text-[var(--hw-neutral-900)] font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />{t("farmer.crops.compare_another", {}, "Compare another crop")}
           </button>
         </div>
 
         <div className="flex items-start gap-2 text-[var(--hw-neutral-900)]">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <p className="text-[13px]">Results are estimates and do not guarantee income.</p>
+          <p className="text-[13px]">{t("farmer.assess.results_disclaimer", {}, "Results are estimates and do not guarantee income.")}</p>
         </div>
 
-      </div>
     </div>;
 };
 export {

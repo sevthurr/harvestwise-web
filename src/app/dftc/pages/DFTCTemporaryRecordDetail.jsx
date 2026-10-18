@@ -27,7 +27,7 @@ function DFTCTemporaryRecordDetail() {
       <span className="text-[12px] font-medium text-[var(--hw-neutral-800)] sm:w-56 flex-shrink-0">{label}</span>
       <span className={`text-[13px] text-[var(--hw-neutral-800)] ${valueCls}`}>{value}</span>
     </div>;
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[900px] mx-auto space-y-5">
+  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
       {
     /* Back */

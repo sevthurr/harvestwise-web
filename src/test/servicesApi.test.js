@@ -1,0 +1,352 @@
+/**
+ * Tests for the admin API service layer (src/services/api/).
+ *
+ * Verifies that each service function issues the correct HTTP request
+ * (method, URL, body) through the shared engine, and that backend errors
+ * propagate as thrown errors with the backend `detail` message.
+ *
+ * `window.fetch` is mocked; no network calls are made.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+import * as authApi from '../services/api/authApi';
+import * as adminApi from '../services/api/adminApi';
+import * as ingestionApi from '../services/api/ingestionApi';
+import * as calendarApi from '../services/api/calendarApi';
+import * as pricesApi from '../services/api/pricesApi';
+import * as analyticsApi from '../services/api/analyticsApi';
+
+const PREFIX = '/api/v1';
+
+/** Capture the last fetch call and return a controllable Response-like object. */
+function mockFetch(response) {
+  let lastArgs = null;
+  const fn = vi.fn(async (...args) => {
+    lastArgs = args;
+    const body = typeof response.body === 'string' ? response.body : response.body;
+    return {
+      ok: response.ok ?? true,
+      status: response.status ?? 200,
+      json: async () => (response.body == null ? null : body),
+    };
+  });
+  fn.lastArgs = () => lastArgs;
+  return fn;
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('authApi', () => {
+  it('uploadProfilePicture POSTs a multipart FormData with the file', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { profile_picture_path: '/pic.png' } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    const res = await authApi.uploadProfilePicture(file);
+
+    const [url, opts] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/auth/profile/picture`);
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeInstanceOf(FormData);
+    expect([...opts.body.entries()].find(([k]) => k === 'file')[1]).toBe(file);
+    expect(res.profile_picture_path).toBe('/pic.png');
+  });
+
+  // `fetchWithTimeout` strips `timeoutMs` before handing options to fetch, so
+  // `opts.timeoutMs` is not observable here. Assert the behaviour instead: the
+  // per-call override must keep the request alive past the shared 15s default
+  // and abort it at 45s, which is exactly what the old code failed to do.
+  it('uploadProfilePicture outlives the shared 15s default and aborts at 45s', async () => {
+    vi.useFakeTimers();
+
+    // Mirrors real fetch: stays pending until its signal aborts.
+    const fetchFn = vi.fn(
+      (url, { signal }) =>
+        new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchFn);
+
+    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    const outcome = authApi
+      .uploadProfilePicture(file)
+      .then(() => 'resolved', (err) => `rejected:${err.name}:${err.message}`);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [, opts] = fetchFn.mock.calls[0];
+    expect(opts.signal.aborted).toBe(false);
+
+    // The shared 15s default must no longer kill the avatar upload.
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(opts.signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(29000);
+    expect(opts.signal.aborted).toBe(false);
+
+    // ...and the override still aborts at 45s, so a hung upload cannot hang the UI.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(opts.signal.aborted).toBe(true);
+    expect(opts.signal.reason).toBeInstanceOf(DOMException);
+    expect(opts.signal.reason.name).toBe('TimeoutError');
+    expect(opts.signal.reason.message).toBe('Request timed out');
+    await expect(outcome).resolves.toBe('rejected:TimeoutError:Request timed out');
+  });
+});
+
+describe('adminApi', () => {
+  it('getDashboard GETs /admin/dashboard and returns the parsed body', async () => {
+    const dashboard = { summary: { uploaded_today: 3 }, sources_requiring_attention: [], recent_audit_logs: [] };
+    const fetchFn = mockFetch({ ok: true, status: 200, body: dashboard });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await adminApi.getDashboard();
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/admin/dashboard`);
+    expect(opts.method).toBe('GET');
+    expect(res.summary.uploaded_today).toBe(3);
+  });
+
+  it('getDataSourceRecords appends page/page_size as query params', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0, page: 2, page_size: 20 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await adminApi.getDataSourceRecords('src-1', { page: 2, page_size: 20 });
+    const [url] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/admin/data-sources/src-1/records`);
+    expect(url).toContain('page=2');
+    expect(url).toContain('page_size=20');
+  });
+
+  it('listRemovalRequests GETs with status and page_size', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0, page: 1, page_size: 100 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await adminApi.listRemovalRequests({ status: 'pending', page_size: 100 });
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/dftc/removal-requests?status=pending&page_size=100`);
+    expect(opts.method).toBe('GET');
+  });
+
+  // URLSearchParams would otherwise serialise an absent filter as "status=undefined".
+  it('listRemovalRequests omits an undefined status filter', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await adminApi.listRemovalRequests({ status: undefined, page_size: 100 });
+    const [url] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/dftc/removal-requests?page_size=100`);
+    expect(url).not.toContain('status=');
+  });
+
+  it('reviewRemovalRequest PATCHes the decision', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { id: 'REQ-1', status: 'approved' } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await adminApi.reviewRemovalRequest('REQ-1', { status: 'approved' });
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/dftc/removal-requests/REQ-1`);
+    expect(opts.method).toBe('PATCH');
+    expect(JSON.parse(opts.body)).toEqual({ status: 'approved' });
+    expect(res.status).toBe('approved');
+  });
+});
+
+describe('ingestionApi', () => {
+  it('uploadFile POSTs FormData with file/data_type/overwrite', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 202, body: { status: 'processing', message: 'accepted' } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const file = new File(['a,b'], 'data.csv', { type: 'text/csv' });
+    const res = await ingestionApi.uploadFile(file, 'bankerohan_daily_retail', false);
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/admin/ingestion/upload`);
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeInstanceOf(FormData);
+    const entries = Object.fromEntries(opts.body.entries());
+    expect(entries.file).toBe(file);
+    expect(entries.data_type).toBe('bankerohan_daily_retail');
+    expect(entries.overwrite).toBe('false');
+    expect(res.status).toBe('processing');
+  });
+
+  it('validateFile POSTs /admin/ingestion/validate with FormData', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: { summary: { total_rows: 10, valid_rows: 8, rejected_rows: 2 }, rows: [] },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const file = new File(['a,b'], 'data.csv', { type: 'text/csv' });
+    const res = await ingestionApi.validateFile(file, 'bankerohan_daily_retail', true);
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/admin/ingestion/validate`);
+    expect(opts.method).toBe('POST');
+    expect(opts.body).toBeInstanceOf(FormData);
+    const entries = Object.fromEntries(opts.body.entries());
+    expect(entries.file).toBe(file);
+    expect(entries.data_type).toBe('bankerohan_daily_retail');
+    expect(entries.overwrite).toBe('true');
+    expect(res.summary.valid_rows).toBe(8);
+  });
+
+  it('getHistory GETs /admin/ingestion/history', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await ingestionApi.getHistory({ page: 1, page_size: 20 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/ingestion/history`);
+  });
+
+  it('getHistoryDetail GETs /admin/ingestion/history/{id}', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { id: 'H-1' } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await ingestionApi.getHistoryDetail('H-1');
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/ingestion/history/H-1`);
+    expect(res.id).toBe('H-1');
+  });
+
+  it('getHistoryRecords GETs /admin/ingestion/history/{id}/records with pagination query params', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { columns: ['Date', 'Commodity'], rows: [], total: 0 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await ingestionApi.getHistoryRecords('IMP-100', { page: 2, page_size: 20 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/ingestion/history/IMP-100/records?page=2&page_size=20`);
+    expect(res.columns).toEqual(['Date', 'Commodity']);
+  });
+});
+
+describe('calendarApi', () => {
+  const event = { event_name: 'Araw ng Dabaw', event_type: 'Holiday', start_date: '2026-03-15', end_date: '2026-03-15' };
+
+  it('createEvent POSTs the event JSON body', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 201, body: { id: 'EV-1', ...event } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await calendarApi.createEvent(event);
+    const [url, opts] = fetchFn.lastArgs();
+
+    expect(url).toContain(`${PREFIX}/admin/calendar/events`);
+    expect(opts.method).toBe('POST');
+    expect(opts.headers['Content-Type']).toBe('application/json');
+    expect(JSON.parse(opts.body)).toEqual(event);
+    expect(res.id).toBe('EV-1');
+  });
+
+  it('deleteEvent issues DELETE to /events/{id}', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: {} });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await calendarApi.deleteEvent('EV-9');
+    const [url, opts] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/calendar/events/EV-9`);
+    expect(opts.method).toBe('DELETE');
+  });
+});
+
+describe('pricesApi', () => {
+  it('getPriceList GETs /prices with is_top10 and page_size', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0, page: 1, page_size: 100 } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await pricesApi.getPriceList({ is_top10: true, page_size: 100 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/prices`);
+    expect(url).toContain('is_top10=true');
+    expect(url).toContain('page_size=100');
+    expect(url).not.toContain('/forecasts');
+  });
+
+  it('getPriceDetail GETs /prices/{id} with price_type and horizon', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: { commodity_id: 'COM-1', forecast: { forecast_midpoint: 80, forecast_date: '2026-08-07' }, recent_records: [] },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await pricesApi.getPriceDetail('COM-1', { price_type: 'dftc_wholesale', horizon: 21, records_limit: 20 });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/prices/COM-1`);
+    expect(url).toContain('price_type=dftc_wholesale');
+    expect(url).toContain('horizon=21');
+    expect(url).toContain('records_limit=20');
+  });
+
+  it('getHistoricalAveragePrices GETs /prices/{id}/historical-averages with frequency, price_type, variety', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: {
+        frequency: 'weekly',
+        commodity_id: 'COM-1',
+        records: [
+          { period_start: '2026-07-06', period_end: '2026-07-12', average_price: 67.86, observation_count: 6 },
+        ],
+      },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const res = await pricesApi.getHistoricalAveragePrices('COM-1', {
+      price_type: 'bangkerohan_retail',
+      frequency: 'weekly',
+      variety: 'Galaxy',
+    });
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/prices/COM-1/historical-averages`);
+    expect(url).toContain('price_type=bangkerohan_retail');
+    expect(url).toContain('frequency=weekly');
+    expect(url).toContain('variety=Galaxy');
+    expect(res.records[0].average_price).toBe(67.86);
+  });
+});
+
+describe('analyticsApi', () => {
+  it('getPriceOutlook requests the selected series and horizon', async () => {
+    const fetchFn = mockFetch({
+      ok: true,
+      status: 200,
+      body: { status: 'processed', classification: 'Favorable', forecast_horizon_days: 14 },
+    });
+    vi.stubGlobal('fetch', fetchFn);
+
+    const result = await analyticsApi.getPriceOutlook('COM-0004', 'dftc_retail', 14);
+    const [url] = fetchFn.lastArgs();
+    expect(url).toContain(`${PREFIX}/admin/analytics/outputs/price-outlook`);
+    expect(url).toContain('commodity_id=COM-0004');
+    expect(url).toContain('price_type_key=dftc_retail');
+    expect(url).toContain('horizon=14');
+    expect(result.classification).toBe('Favorable');
+  });
+});
+
+describe('error propagation', () => {
+  it('throws the backend detail message on a non-2xx response', async () => {
+    const fetchFn = mockFetch({ ok: false, status: 422, body: { detail: 'Weights must sum to 1.0000' } });
+    vi.stubGlobal('fetch', fetchFn);
+
+    await expect(adminApi.getDashboard()).rejects.toThrow('Weights must sum to 1.0000');
+    expect(fetchFn).toHaveBeenCalled();
+  });
+});

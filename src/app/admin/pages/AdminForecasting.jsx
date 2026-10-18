@@ -1,14 +1,10 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
+  ChevronDown,
   Info,
-  Play,
-  ChevronLeft,
-  X,
-  Loader2,
-  CheckCircle2,
-  ChevronDown
+  AlertCircle,
+  X
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -19,130 +15,269 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ReferenceLine,
   Brush
 } from "recharts";
-import { CommodityIllustration } from "../../farmer/components/market/CommodityIllustrations";
-const COMMODITIES = ["Kamatis", "Talong", "Repolyo", "Atsal", "Carrots", "Pipino", "Ampalaya", "Kalabasa", "Lettuce", "Chinese Pechay"];
-const MARKETS = ["Bangkerohan", "DFTC"];
-const PRICE_TYPES = ["Retail", "Wholesale"];
-const HORIZONS = ["7 days", "14 days", "21 days", "28 days"];
-const STATUS_OPTS = ["All", "Successful", "Failed", "Needs Review"];
-const STATUS_STYLE = {
-  Successful: "text-emerald-700",
-  "Needs Review": "text-amber-700",
-  Failed: "text-red-600"
-};
-const OUTLOOK_STYLE = {
-  Favorable: "text-emerald-700",
-  Neutral: "text-[var(--hw-neutral-600)]",
-  Unfavorable: "text-red-600"
-};
-const ALL_HISTORICAL = [
-  { d: "Jun 22", actual: 79 },
-  { d: "Jun 23", actual: 80 },
-  { d: "Jun 24", actual: 80 },
-  { d: "Jun 25", actual: 81 },
-  { d: "Jun 26", actual: 81 },
-  { d: "Jun 27", actual: 82 },
-  { d: "Jun 28", actual: 82 },
-  { d: "Jun 29", actual: 83 },
-  { d: "Jun 30", actual: 82 },
-  { d: "Jul 1", actual: 83 },
-  { d: "Jul 2", actual: 84 },
-  { d: "Jul 3", actual: 83 },
-  { d: "Jul 4", actual: 84 },
-  { d: "Jul 5", actual: 84 },
-  { d: "Jul 6", actual: 82 },
-  { d: "Jul 7", actual: 83 },
-  { d: "Jul 8", actual: 81 },
-  { d: "Jul 9", actual: 83 },
-  { d: "Jul 10", actual: 84 },
-  { d: "Jul 11", actual: 83 },
-  { d: "Jul 12", actual: 84 },
-  { d: "Jul 13", actual: 85 },
-  { d: "Jul 14", actual: 84 },
-  { d: "Jul 15", actual: 85 },
-  { d: "Jul 16", actual: 86 },
-  { d: "Jul 17", actual: 85 },
-  { d: "Jul 18", actual: 85 },
-  { d: "Jul 19", actual: 86 }
+import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
+import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
+import { formatDate, formatPrice } from "../../global/utils/apiTransforms";
+import { filterRecordsByPeriod } from "../../global/utils/priceChartTransforms";
+import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
+import { pricesApi } from "../../../services/api";
+import { formatPriceOutlookExplanation, ADMIN_TEXT_TEMPLATES } from "../utils/textTemplates";
+
+const FALLBACK_MARKETS = ["Bankerohan", "DFTC"];
+
+const FALLBACK_PRICE_TYPES = ["Retail", "Wholesale"];
+const HORIZON_LABELS = ["7 days", "14 days", "21 days", "28 days"];
+
+const FALLBACK_PAIRS = [
+  { commodity: "Ampalaya", variety: "Galaxy" },
+  { commodity: "Atsal", variety: "Smooth Cayene" },
+  { commodity: "Atsal", variety: "Sultan" },
+  { commodity: "Carrots", variety: "Big" },
+  { commodity: "Carrots", variety: "Medium" },
+  { commodity: "Carrots", variety: "Small" },
+  { commodity: "Chinese Petchay", variety: null },
+  { commodity: "Kalabasa", variety: "Suprema" },
+  { commodity: "Kamatis", variety: "Diamante Big" },
+  { commodity: "Lettuce", variety: "Ball" },
+  { commodity: "Lettuce", variety: "Curly" },
+  { commodity: "Pipino", variety: "Mega C" },
+  { commodity: "Repolyo", variety: "Wakamini" },
+  { commodity: "Talong", variety: "Banate King" },
 ];
-const ALL_FORECAST = [
-  { d: "Jul 21", forecast: 87, lo_base: 83, band: 9 },
-  { d: "Jul 22", forecast: 88, lo_base: 84, band: 9 },
-  { d: "Jul 23", forecast: 88, lo_base: 84, band: 9 },
-  { d: "Jul 24", forecast: 89, lo_base: 85, band: 9 },
-  { d: "Jul 25", forecast: 89, lo_base: 85, band: 9 },
-  { d: "Jul 26", forecast: 90, lo_base: 85, band: 10 },
-  { d: "Jul 27", forecast: 90, lo_base: 85, band: 10 },
-  { d: "Jul 28", forecast: 91, lo_base: 86, band: 10 },
-  { d: "Jul 29", forecast: 91, lo_base: 86, band: 10 },
-  { d: "Jul 30", forecast: 91, lo_base: 86, band: 10 },
-  { d: "Jul 31", forecast: 92, lo_base: 87, band: 10 },
-  { d: "Aug 1", forecast: 92, lo_base: 87, band: 10 },
-  { d: "Aug 2", forecast: 91, lo_base: 84, band: 13 },
-  { d: "Aug 3", forecast: 92, lo_base: 85, band: 12 },
-  { d: "Aug 4", forecast: 92, lo_base: 85, band: 12 },
-  { d: "Aug 5", forecast: 93, lo_base: 85, band: 13 },
-  { d: "Aug 6", forecast: 93, lo_base: 85, band: 13 },
-  { d: "Aug 7", forecast: 93, lo_base: 86, band: 12 },
-  { d: "Aug 8", forecast: 94, lo_base: 86, band: 12 },
-  { d: "Aug 9", forecast: 94, lo_base: 86, band: 13 },
-  { d: "Aug 10", forecast: 93, lo_base: 85, band: 13 },
-  { d: "Aug 11", forecast: 94, lo_base: 85, band: 14 },
-  { d: "Aug 12", forecast: 94, lo_base: 85, band: 14 },
-  { d: "Aug 13", forecast: 95, lo_base: 85, band: 15 },
-  { d: "Aug 14", forecast: 95, lo_base: 85, band: 15 },
-  { d: "Aug 15", forecast: 95, lo_base: 84, band: 16 },
-  { d: "Aug 16", forecast: 94, lo_base: 84, band: 15 },
-  { d: "Aug 17", forecast: 94, lo_base: 83, band: 16 }
-];
-const PIVOT = { d: "Jul 20", actual: 86, forecast: 87, lo_base: 83, band: 8, hi: 91 };
-function buildChartData(horizon) {
-  const days = parseInt(horizon);
-  const historical = ALL_HISTORICAL.slice(-Math.min(days, ALL_HISTORICAL.length));
-  const forecast = ALL_FORECAST.slice(0, days).map((p) => ({
-    ...p,
-    hi: p.lo_base !== void 0 && p.band !== void 0 ? p.lo_base + p.band : void 0
-  }));
-  return [...historical, PIVOT, ...forecast];
+
+function uniqueCommodities(pairs) {
+  return [...new Set((pairs || []).map((pair) => pair.commodity).filter(Boolean))];
 }
-const HORIZON_END = {
-  "7 days": "Jul 27, 2026",
-  "14 days": "Aug 3, 2026",
-  "21 days": "Aug 10, 2026",
-  "28 days": "Aug 17, 2026"
+
+function officialVarieties(pairs, commodity) {
+  return (pairs || [])
+    .filter((pair) => pair.commodity === commodity)
+    .map((pair) => pair.variety)
+    .filter((value) => value != null && value !== "");
+}
+
+function parseHorizonDays(horizon) {
+  const days = parseInt(horizon, 10);
+  return [7, 14, 21, 28].includes(days) ? days : 14;
+}
+
+function horizonLabel(days) {
+  return `${days} days`;
+}
+
+function iconLookupName(commodity) {
+  return String(commodity || "").replace(/Petchay/gi, "Pechay");
+}
+
+function formatAxisDate(iso) {
+  if (!iso) return "";
+  const stamp = String(iso).slice(0, 10);
+  const [year, month, day] = stamp.split("-");
+  if (!year || !month || !day) return formatDate(iso) || stamp;
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatSummaryPrice(value) {
+  if (value == null || value === "") return "-/kg";
+  const num = numericPrice(value);
+  if (num == null) return `${formatPrice(value)}/kg`;
+  return `₱${num.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}/kg`;
+}
+
+function formatSummaryPriceRange(lower, upper) {
+  const lo = numericPrice(lower);
+  const hi = numericPrice(upper);
+  if (lo == null && hi == null) return "-/kg";
+  const formatVal = (v) =>
+    v != null
+      ? `₱${v.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+      : "-";
+  return `${formatVal(lo)} – ${formatVal(hi)}/kg`;
+}
+
+function formatChange(percent) {
+  if (percent == null || !Number.isFinite(percent)) return "-";
+  const sign = percent > 0 ? "+" : "";
+  return `${sign}${percent.toFixed(2)}%`;
+}
+
+const RECENT_AVERAGE_WINDOW = 7;
+const OUTLOOK_FAVORABLE_MIN = 5;
+const OUTLOOK_UNFAVORABLE_MAX = -5;
+
+const OUTLOOK_COLORS = {
+  Favorable: "text-emerald-700",
+  Neutral: "text-[var(--hw-neutral-700)]",
+  Unfavorable: "text-red-600",
 };
-const INITIAL_HISTORY = [
-  { id: "r1", generated: "Jul 20, 2026, 6:00 AM", commodity: "Kamatis", variant: "Diamante Big", market: "Bangkerohan", priceType: "Retail", horizon: "14 days", range: "\u20B184\u2013\u20B197", priceOutlook: "Favorable", reliability: "Moderate", records: 247, status: "Successful" },
-  { id: "r2", generated: "Jul 20, 2026, 6:00 AM", commodity: "Talong", variant: "Banate King", market: "Bangkerohan", priceType: "Retail", horizon: "14 days", range: "\u20B157\u2013\u20B166", priceOutlook: "Neutral", reliability: "Moderate", records: 198, status: "Successful" },
-  { id: "r3", generated: "Jul 20, 2026, 6:00 AM", commodity: "Repolyo", variant: "Wakamini", market: "Bangkerohan", priceType: "Retail", horizon: "14 days", range: "\u20B136\u2013\u20B148", priceOutlook: "Favorable", reliability: "Moderate", records: 201, status: "Needs Review" },
-  { id: "r4", generated: "Jul 20, 2026, 6:00 AM", commodity: "Lettuce", variant: "Curly", market: "DFTC", priceType: "Retail", horizon: "14 days", range: "\u20B168\u2013\u20B188", priceOutlook: "Neutral", reliability: "Low", records: 88, status: "Needs Review" },
-  { id: "r5", generated: "Jul 19, 2026, 6:00 AM", commodity: "Kamatis", variant: "Diamante Big", market: "Bangkerohan", priceType: "Retail", horizon: "14 days", range: "\u20B182\u2013\u20B195", priceOutlook: "Neutral", reliability: "Moderate", records: 246, status: "Successful" },
-  { id: "r6", generated: "Jul 19, 2026, 6:00 AM", commodity: "Atsal", variant: "Smooth Cayene", market: "DFTC", priceType: "Retail", horizon: "14 days", range: "\u2014", priceOutlook: "\u2014", reliability: "Low", records: 31, status: "Failed" }
-];
-const METRICS = [
-  { label: "MAE", value: "\u20B13.2/kg", sub: "Mean Absolute Error" },
-  { label: "RMSE", value: "\u20B14.1/kg", sub: "Root Mean Squared Error" },
-  { label: "MAPE", value: "4.8%", sub: "Mean Absolute % Error" },
-  { label: "R\xB2", value: "0.82", sub: "Coefficient of determination" }
-];
-const COMMODITY_ID = {
-  "Kamatis": "kamatis",
-  "Talong": "talong",
-  "Repolyo": "repolyo",
-  "Atsal": "atsal",
-  "Carrots": "carrots",
-  "Pipino": "pipino",
-  "Ampalaya": "ampalaya",
-  "Kalabasa": "kalabasa",
-  "Lettuce": "lettuce",
-  "Chinese Pechay": "pechay"
-};
-const CommodityDropdown = ({ value, options, onChange }) => {
+
+function numericPrice(value) {
+  if (value == null || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function recentAveragePrice(records, window = RECENT_AVERAGE_WINDOW) {
+  const prices = (records || [])
+    .map((row) => numericPrice(row?.prevail_price ?? row?.price))
+    .filter((value) => value != null);
+  const recent = prices.slice(0, window);
+  if (recent.length === 0) return null;
+  return recent.reduce((sum, price) => sum + price, 0) / recent.length;
+}
+
+function forecastChangePercent(midpoint, recentAverage) {
+  const mid = numericPrice(midpoint);
+  const average = numericPrice(recentAverage);
+  if (mid == null || average == null || average === 0) return null;
+  return ((mid - average) / average) * 100;
+}
+
+function priceOutlookFromChange(percent) {
+  if (percent == null || !Number.isFinite(percent)) return null;
+  if (percent > OUTLOOK_FAVORABLE_MIN) return "Favorable";
+  if (percent < OUTLOOK_UNFAVORABLE_MAX) return "Unfavorable";
+  return "Neutral";
+}
+
+function resultExplanationFromForecast({ forecast, latestActual, recentAverage, changePercent, outlook }) {
+  const midpoint = numericPrice(forecast?.forecast_midpoint ?? forecast?.predicted_price);
+  const baseline = numericPrice(recentAverage ?? latestActual);
+
+  return formatPriceOutlookExplanation({
+    midpoint,
+    recentAverage: baseline,
+    changePercent,
+    outlook,
+    customExplanation: forecast?.explanation,
+  });
+}
+
+function isoDate(value) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+}
+
+function normalizeVariety(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "no variety") return "";
+  return normalized;
+}
+
+function toPriceTypeKey(market, priceType) {
+  const marketKey = String(market || "").toLowerCase().includes("dftc")
+    ? "dftc"
+    : "bangkerohan";
+  const typeKey = String(priceType || "").toLowerCase().includes("wholesale")
+    ? "wholesale"
+    : "retail";
+  return `${marketKey}_${typeKey}`;
+}
+
+function catalogPairsFromPriceList(items) {
+  return (items || [])
+    .filter((item) => item?.name)
+    .map((item) => ({
+      commodity: item.name,
+      variety: item.variety || null,
+      commodity_id: item.commodity_id,
+    }));
+}
+
+function findCommodityId(pairs, commodity, variety) {
+  const name = String(commodity || "").trim().toLowerCase();
+  const varietyKey = normalizeVariety(variety);
+  const match = (pairs || []).find((pair) => {
+    if (String(pair.commodity || "").trim().toLowerCase() !== name) return false;
+    return normalizeVariety(pair.variety) === varietyKey;
+  });
+  return match?.commodity_id || null;
+}
+
+function buildChartData(historical, forecastPoint, forecastPoints = []) {
+  const byDate = new Map();
+  for (const row of historical || []) {
+    const date = isoDate(row?.price_date || row?.date);
+    if (!date) continue;
+    const price = row.prevail_price ?? row.price;
+    if (price == null || price === "") continue;
+    const numeric = Number(price);
+    if (!Number.isFinite(numeric)) continue;
+    byDate.set(date, { d: date, actual: numeric });
+  }
+
+  const dailyPoints = Array.isArray(forecastPoints) ? forecastPoints : [];
+  if (dailyPoints.length > 0) {
+    for (const point of dailyPoints) {
+      const forecastDate = isoDate(point?.forecast_date);
+      const midpoint = point?.forecast_midpoint;
+      if (!forecastDate || midpoint == null || midpoint === "") continue;
+      const numeric = Number(midpoint);
+      if (!Number.isFinite(numeric)) continue;
+      const existing = byDate.get(forecastDate) || { d: forecastDate };
+      existing.predicted = numeric;
+      if (point.lower_forecast != null) existing.lower = Number(point.lower_forecast);
+      if (point.upper_forecast != null) existing.upper = Number(point.upper_forecast);
+      byDate.set(forecastDate, existing);
+    }
+  } else {
+    const forecastDate = isoDate(forecastPoint?.forecast_date);
+    const midpoint = forecastPoint?.forecast_midpoint;
+    if (forecastDate && midpoint != null && midpoint !== "") {
+      const numeric = Number(midpoint);
+      if (Number.isFinite(numeric)) {
+        const existing = byDate.get(forecastDate) || { d: forecastDate };
+        existing.predicted = numeric;
+        if (forecastPoint?.lower_forecast != null) existing.lower = Number(forecastPoint.lower_forecast);
+        if (forecastPoint?.upper_forecast != null) existing.upper = Number(forecastPoint.upper_forecast);
+        byDate.set(forecastDate, existing);
+      }
+    }
+  }
+
+  const forecastDate = isoDate(forecastPoint?.forecast_date);
+  const lower = Number(forecastPoint?.lower_forecast);
+  const upper = Number(forecastPoint?.upper_forecast);
+  const hasRange = Number.isFinite(lower) || Number.isFinite(upper);
+  if (forecastDate && hasRange) {
+    const existing = byDate.get(forecastDate) || { d: forecastDate };
+    if (Number.isFinite(lower)) existing.lower = lower;
+    if (Number.isFinite(upper)) existing.upper = upper;
+    byDate.set(forecastDate, existing);
+
+    const anchorDate = [...byDate.keys()].filter((d) => d !== forecastDate).sort().at(-1);
+    if (anchorDate) {
+      const anchor = byDate.get(anchorDate) || { d: anchorDate };
+      if (Number.isFinite(lower)) anchor.lower = lower;
+      if (Number.isFinite(upper)) anchor.upper = upper;
+      byDate.set(anchorDate, anchor);
+    }
+  }
+
+  return [...byDate.values()].sort((a, b) => String(a.d).localeCompare(String(b.d)));
+}
+
+function yDomain(data) {
+  const values = (data || [])
+    .flatMap((point) => [point.actual, point.predicted, point.lower, point.upper])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  if (values.length === 0) return ["auto", "auto"];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = Math.max((max - min) * 0.1, 5);
+  return [Math.max(0, Math.floor(min - pad)), Math.ceil(max + pad)];
+}
+
+const CustomCommodityDropdown = ({ value, options = [], onChange }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+
   useEffect(() => {
     const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
@@ -150,566 +285,647 @@ const CommodityDropdown = ({ value, options, onChange }) => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-  return <div ref={ref} className="relative">
+
+  const selectedName = typeof value === "object" ? value?.name : value || options[0] || "Ampalaya";
+  const selectedIconKey = getCommodityIconKey(null, null, iconLookupName(selectedName));
+
+  return (
+    <div ref={ref} className="relative w-full">
       <button
-    onClick={() => setOpen((o) => !o)}
-    className="flex items-center gap-2 px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:border-[var(--hw-neutral-300)] transition-colors cursor-pointer min-w-[148px]"
-  >
-        {COMMODITY_ID[value] && <CommodityIllustration commodityId={COMMODITY_ID[value]} className="w-5 h-5 flex-shrink-0" />}
-        <span className="flex-1 text-left text-[var(--hw-neutral-800)]">{value}</span>
-        <ChevronDown className="w-3.5 h-3.5 text-[var(--hw-neutral-700)] flex-shrink-0" />
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <CommodityIllustration commodityId={selectedIconKey} className="w-5 h-5 flex-shrink-0" />
+          <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{selectedName}</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden min-w-full">
-          {options.map((opt) => <button
-    key={opt}
-    onClick={() => {
-      onChange(opt);
-      setOpen(false);
-    }}
-    className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-[var(--hw-neutral-50)] transition-colors text-left
-                ${opt === value ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] font-medium" : "text-[var(--hw-neutral-800)]"}`}
-  >
-              {COMMODITY_ID[opt] && <CommodityIllustration commodityId={COMMODITY_ID[opt]} className="w-5 h-5 flex-shrink-0" />}
-              <span>{opt}</span>
-            </button>)}
-        </div>}
-    </div>;
-};
-const tooltipStyle = { backgroundColor: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 };
-const InfoPopover = ({ text }) => {
-  const [open, setOpen] = useState(false);
-  return <span className="relative inline-flex flex-shrink-0">
-      <button
-    onClick={(e) => {
-      e.stopPropagation();
-      setOpen((v) => !v);
-    }}
-    className="p-0.5 text-[var(--hw-neutral-700)] hover:text-blue-500 transition-colors"
-  >
-        <Info className="w-4 h-4" />
-      </button>
-      {open && <>
-          <span className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <span
-    className="absolute left-0 top-full mt-1 z-20 w-72 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-[var(--shadow-lg)] p-3 block text-[13px] text-[var(--hw-neutral-700)] leading-relaxed"
-    onClick={(e) => e.stopPropagation()}
-  >
-            {text}
-          </span>
-        </>}
-    </span>;
-};
-const CommodityIcon = ({ name, size = "sm" }) => <CommodityIllustration
-  commodityId={COMMODITY_ID[name] ?? name.toLowerCase()}
-  className={size === "md" ? "w-10 h-10" : "w-7 h-7"}
-/>;
-const ForecastChart = ({ commodity, market, priceType, horizon, tall }) => {
-  const data = buildChartData(horizon);
-  const days = parseInt(horizon);
-  const endDate = HORIZON_END[horizon] ?? "";
-  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-    <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)] mb-0.5">
-      {commodity} · {market} · {priceType} · {days}-day forecast
-    </p>
-    <p className="text-[12px] text-[var(--hw-neutral-700)] mb-4">
-      Historical prices and forecast range from Jul 20–{endDate} · ₱/kg
-    </p>
-    <div className={tall ? "h-96" : "h-80"}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 4, right: 16, left: 4, bottom: 24 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis
-    dataKey="d"
-    tick={{ fill: "#737373", fontSize: 10 }}
-    stroke="none"
-    interval={Math.floor(data.length / 8)}
-  />
-          <YAxis
-    tick={{ fill: "#737373", fontSize: 10 }}
-    stroke="none"
-    domain={["auto", "auto"]}
-    tickFormatter={(v) => `\u20B1${v}`}
-    width={44}
-  />
-          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => {
-    if (n === "lo_base" || n === "band") return null;
-    return [`\u20B1${v}/kg`, n === "actual" ? "Actual price" : "Forecast midpoint"];
-  }} />
-          {
-    /* Range band: green hi area first, then white lo_base mask on top, then lines on top of everything */
-  }
-          <Area type="monotone" dataKey="hi" stroke="none" fill="#AAD576" fillOpacity={0.28} legendType="none" activeDot={false} connectNulls={false} />
-          <Area type="monotone" dataKey="lo_base" stroke="none" fill="#ffffff" fillOpacity={1} legendType="none" activeDot={false} connectNulls={false} />
-          <Line type="monotone" dataKey="actual" stroke="#245501" strokeWidth={2.5} dot={false} name="actual" connectNulls={false} />
-          <Line type="monotone" dataKey="forecast" stroke="#73A942" strokeWidth={2} strokeDasharray="5 3" dot={false} name="forecast" connectNulls={false} />
-          <ReferenceLine
-    x="Jul 20"
-    stroke="#245501"
-    strokeDasharray="4 4"
-    strokeWidth={1.5}
-    label={{ value: "Jul 20", position: "insideTopRight", fontSize: 10, fill: "#245501" }}
-  />
-          <Brush
-    dataKey="d"
-    height={22}
-    travellerWidth={8}
-    stroke="#d4d4d4"
-    fill="#fafafa"
-    startIndex={0}
-    endIndex={data.length - 1}
-  />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-    <div className="flex items-center gap-5 mt-3 pt-3 border-t border-[var(--hw-neutral-100)]">
-      <div className="flex items-center gap-1.5">
-        <div className="w-5 border-t-2 border-[#245501]" />
-        <span className="text-[12px] text-[var(--hw-neutral-800)]">Actual price</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <div className="w-5 border-t-2 border-dashed border-[#73A942]" />
-        <span className="text-[12px] text-[var(--hw-neutral-800)]">Forecast midpoint</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <div className="w-5 h-3 rounded bg-[#AAD576] opacity-40" />
-        <span className="text-[12px] text-[var(--hw-neutral-800)]">Forecast range</span>
-      </div>
-    </div>
-  </div>;
-};
-const ModelPerformance = () => <section>
-    <div className="flex items-center gap-2 mb-3">
-      <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-800)]">Model Performance</h2>
-      <InfoPopover text="These metrics evaluate forecasting performance using historical test data. Lower MAE, RMSE, and MAPE indicate smaller prediction errors, while R² indicates how well the model explains price variation." />
-    </div>
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {METRICS.map((m) => <div key={m.label} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3">
-          <p className="text-[12px] text-[var(--hw-neutral-700)]">{m.sub}</p>
-          <p className="text-xl font-bold text-[var(--hw-neutral-900)] mt-0.5">{m.value}</p>
-          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)]">{m.label}</p>
-        </div>)}
-    </div>
-  </section>;
-const PriceOutlookCalc = ({ showThreshold }) => <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-4">
-    {showThreshold && <p className="text-[15px] font-semibold text-[var(--hw-neutral-800)]">Price Outlook Calculation</p>}
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-      {[
-  { label: "Lower forecast", value: "\u20B184/kg", color: "" },
-  { label: "Forecast midpoint", value: "\u20B190.50/kg", color: "" },
-  { label: "Upper forecast", value: "\u20B197/kg", color: "" },
-  { label: "Recent average price", value: "\u20B186/kg", color: "" },
-  { label: "Forecast price change", value: "+5.23%", color: "text-emerald-700" },
-  { label: "Result", value: "Favorable", color: "text-emerald-700" }
-].map((f) => <div key={f.label}>
-          <p className="text-[12px] text-[var(--hw-neutral-700)]">{f.label}</p>
-          <p className={`text-[13px] font-semibold mt-0.5 ${f.color || "text-[var(--hw-neutral-800)]"}`}>{f.value}</p>
-        </div>)}
-    </div>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
+          {options.map((opt) => {
+            const optName = typeof opt === "object" ? opt.name : opt;
+            const optIconKey = getCommodityIconKey(null, null, iconLookupName(optName));
+            const isSelected = optName === selectedName;
 
-    {showThreshold && <div>
-        <p className="text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Classification threshold used</p>
-        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)]">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                <th className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-500)]">Condition</th>
-                <th className="px-3 py-2 text-left font-semibold text-[var(--hw-neutral-500)]">Price Outlook</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-              <tr className="bg-emerald-50/60">
-                <td className="px-3 py-2 text-[var(--hw-neutral-700)]">Forecast change &gt; 5%</td>
-                <td className="px-3 py-2 font-semibold text-emerald-700">Favorable</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 text-[var(--hw-neutral-700)]">−5% to 5%</td>
-                <td className="px-3 py-2 font-semibold text-[var(--hw-neutral-600)]">Neutral</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 text-[var(--hw-neutral-700)]">Forecast change &lt; −5%</td>
-                <td className="px-3 py-2 font-semibold text-red-600">Unfavorable</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>}
-
-    <p className="text-[13px] text-[var(--hw-neutral-800)] bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3 border border-[var(--hw-neutral-100)]">
-      The forecast midpoint is higher than the recent average price, so the Price Outlook is classified as{" "}
-      <span className="font-semibold text-emerald-700">Favorable</span>.
-    </p>
-  </div>;
-const GenerateModal = ({ commodity, market, priceType, horizon, onClose, onSuccess, onViewOutput }) => {
-  const [step, setStep] = useState("form");
-  const [successRun, setSuccessRun] = useState(null);
-  const runForecast = () => {
-    setStep("loading");
-    setTimeout(() => {
-      const newRun = {
-        id: `r-new-${Date.now()}`,
-        generated: "Jul 20, 2026, 6:00 AM",
-        commodity,
-        market,
-        priceType,
-        horizon,
-        range: "\u20B184\u2013\u20B197",
-        priceOutlook: "Favorable",
-        reliability: "Moderate",
-        records: 247,
-        status: "Successful"
-      };
-      setSuccessRun(newRun);
-      onSuccess(newRun);
-      setStep("success");
-    }, 2e3);
-  };
-  const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
-  const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
-  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onClick={step !== "loading" ? onClose : void 0} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md">
-
-        {
-    /* Header */
-  }
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-800)]">Generate Forecast</p>
-          {step !== "loading" && <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] transition-colors">
-              <X className="w-4 h-4" />
-            </button>}
-        </div>
-
-        {step === "form" && <>
-            <div className="px-5 py-4 space-y-3">
-              <div className="divide-y divide-[var(--hw-neutral-100)] rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden">
-                {[
-    { label: "Commodity", value: commodity },
-    { label: "Market", value: market },
-    { label: "Price Type", value: priceType },
-    { label: "Forecast Horizon", value: horizon },
-    { label: "Latest available price date", value: "Jul 19, 2026" },
-    { label: "Records available", value: "247" }
-  ].map((f) => <div key={f.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <p className="text-[13px] text-[var(--hw-neutral-800)]">{f.label}</p>
-                    <p className="text-[13px] font-medium text-[var(--hw-neutral-800)]">{f.value}</p>
-                  </div>)}
-              </div>
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                <p className="text-[13px] text-emerald-700">Data is ready for forecasting.</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-              <button onClick={onClose} className={btnSecondary}>Cancel</button>
-              <button onClick={runForecast} className={btnPrimary}>
-                <Play className="w-3.5 h-3.5" />Run Forecast
+            return (
+              <button
+                type="button"
+                key={optName}
+                onClick={() => {
+                  onChange(optName);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
+              >
+                <CommodityIllustration commodityId={optIconKey} className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1 truncate">{optName}</span>
               </button>
-            </div>
-          </>}
-
-        {step === "loading" && <div className="px-5 py-10 flex flex-col items-center gap-3">
-            <Loader2 className="w-9 h-9 text-[var(--hw-green-700)] animate-spin" />
-            <p className="text-[14px] font-medium text-[var(--hw-neutral-700)]">Generating forecast…</p>
-            <p className="text-[12px] text-[var(--hw-neutral-700)]">This may take a few seconds.</p>
-          </div>}
-
-        {step === "success" && <>
-            <div className="px-5 py-7 flex flex-col items-center gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-              </div>
-              <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">Forecast generated successfully.</p>
-              <p className="text-[13px] text-[var(--hw-neutral-800)]">The new run has been added to the Forecast Run History.</p>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-              <button onClick={onClose} className={btnSecondary}>Close</button>
-              <button onClick={() => {
-    onClose();
-    if (successRun) onViewOutput(successRun);
-  }} className={btnPrimary}>
-                View Output
-              </button>
-            </div>
-          </>}
-      </div>
-    </div>;
-};
-function ForecastOutputDetails({ run, onBack }) {
-  const navigate = useNavigate();
-  const sectionLabel = "text-[11px] font-semibold uppercase tracking-widest text-[var(--hw-neutral-700)] mb-3";
-  return <div className="space-y-5">
-    <button
-    onClick={onBack}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors"
-  >
-      <ChevronLeft className="w-4 h-4" />Back to Forecasting
-    </button>
-
-    {
-    /* Output header card */
-  }
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
-      <p className="text-[18px] font-bold text-[var(--hw-neutral-900)] mb-3">Forecast Output Details</p>
-      <div className="flex items-start gap-3">
-        <CommodityIcon name={run.commodity} size="md" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-[var(--hw-neutral-800)]">{run.commodity}</span>
-            {run.variant && <span className="text-[12px] text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)] px-2 py-0.5 rounded-full">{run.variant}</span>}
-            <span className="text-[var(--hw-neutral-300)]">·</span>
-            <span className="text-[13px] text-[var(--hw-neutral-800)]">{run.market}</span>
-            <span className="text-[var(--hw-neutral-300)]">·</span>
-            <span className="text-[13px] text-[var(--hw-neutral-800)]">{run.priceType}</span>
-            <span className="text-[var(--hw-neutral-300)]">·</span>
-            <span className="text-[13px] text-[var(--hw-neutral-800)]">{run.horizon} forecast</span>
-          </div>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <span className="text-[12px] text-[var(--hw-neutral-700)]">ID: <span className="font-mono">{run.id}</span></span>
-            <span className="text-[var(--hw-neutral-200)]">·</span>
-            <span className="text-[12px] text-[var(--hw-neutral-700)]">Generated: {run.generated}</span>
-            <span className="text-[var(--hw-neutral-200)]">·</span>
-            <span className={`text-[12px] font-medium ${STATUS_STYLE[run.status]}`}>{run.status}</span>
-          </div>
+            );
+          })}
         </div>
-      </div>
+      )}
     </div>
-
-    {
-    /* Forecast Summary */
-  }
-    <section>
-      <p className={sectionLabel}>Forecast Summary</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-    { label: "Forecast Range", value: "\u20B184\u2013\u20B197/kg", color: "" },
-    { label: "Forecast Midpoint", value: "\u20B190.50/kg", color: "" },
-    { label: "Recent Average", value: "\u20B186.00/kg", color: "" },
-    { label: "Forecast Change", value: "+5.23%", color: "text-emerald-700" },
-    {
-      label: "Price Outlook",
-      value: run.priceOutlook,
-      color: run.priceOutlook !== "\u2014" ? OUTLOOK_STYLE[run.priceOutlook] : "text-[var(--hw-neutral-700)]"
-    },
-    { label: "Reliability", value: run.reliability, color: "" }
-  ].map((c) => <div key={c.label} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 py-3">
-            <p className="text-[12px] text-[var(--hw-neutral-700)]">{c.label}</p>
-            <p className={`text-[13px] font-semibold mt-0.5 ${c.color || "text-[var(--hw-neutral-900)]"}`}>{c.value}</p>
-          </div>)}
-      </div>
-    </section>
-
-    {
-    /* Forecast Chart */
-  }
-    <section>
-      <p className={sectionLabel}>Forecast Chart</p>
-      <ForecastChart commodity={run.commodity} market={run.market} priceType={run.priceType} horizon={run.horizon} tall />
-    </section>
-
-    {
-    /* Price Outlook Basis */
-  }
-    <section>
-      <p className={sectionLabel}>Price Outlook Basis</p>
-      <PriceOutlookCalc showThreshold />
-    </section>
-
-    {
-    /* Model Performance */
-  }
-    <section>
-      
-      <ModelPerformance />
-    </section>
-
-    {
-    /* Used By */
-  }
-    <section>
-      
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
-        <p className="text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1">Used by: Price Outlook analytical result and Recommendation Engine</p>
-        <p className="text-[13px] text-[var(--hw-neutral-800)]">
-          This forecast output is used as one basis for the Price Outlook module, which later contributes to the adaptive planting advisory.
-        </p>
-      </div>
-    </section>
-
-    {
-    /* Footer actions */
-  }
-    
-  </div>;
-}
-function AdminForecasting() {
-  const [commodity, setCommodity] = useState("Kamatis");
-  const [market, setMarket] = useState("Bangkerohan");
-  const [priceType, setPriceType] = useState("Retail");
-  const [horizon, setHorizon] = useState("14 days");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [showGenModal, setShowGenModal] = useState(false);
-  const [runHistory, setRunHistory] = useState(INITIAL_HISTORY);
-  const [viewOutputRun, setViewOutputRun] = useState(null);
-  const filteredHistory = runHistory.filter(
-    (r) => (statusFilter === "All" || r.status === statusFilter) && r.commodity === commodity && r.market === market && r.priceType === priceType
   );
-  const selectCls = "px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition cursor-pointer";
-  const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
-  if (viewOutputRun) {
-    return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto">
-        <ForecastOutputDetails run={viewOutputRun} onBack={() => setViewOutputRun(null)} />
-      </div>;
-  }
-  return <>
-      {showGenModal && <GenerateModal
-    commodity={commodity}
-    market={market}
-    priceType={priceType}
-    horizon={horizon}
-    onClose={() => setShowGenModal(false)}
-    onSuccess={(run) => setRunHistory((prev) => [run, ...prev])}
-    onViewOutput={(run) => {
-      setShowGenModal(false);
-      setViewOutputRun(run);
-    }}
-  />}
+};
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1240px] mx-auto space-y-5">
+const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const hasVarieties = options.length > 0;
+  const selectedVariety = hasVarieties ? (value || options[0]) : "No Variety";
 
-        {
-    /* Header */
-  }
-        <PageHeader
-    title="Forecasting"
-    description="Generate and review short-term vegetable price forecasts used for Price Outlook."
-    action={<button onClick={() => setShowGenModal(true)} className={btnPrimary}><Play className="w-4 h-4" />Generate Forecast</button>}
-  />
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-        {
-    /* Filters */
-  }
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[12px] text-[var(--hw-neutral-700)] font-medium px-1">Commodity</label>
-            <CommodityDropdown value={commodity} options={COMMODITIES} onChange={setCommodity} />
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => hasVarieties && setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+      >
+        <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{selectedVariety}</span>
+        <ChevronDown className={`w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && hasVarieties && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
+          {options.map((optName) => {
+            const isSelected = optName === selectedVariety;
+
+            return (
+              <button
+                type="button"
+                key={optName}
+                onClick={() => {
+                  onChange(optName);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
+              >
+                <span className="flex-1 truncate">{optName}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+      >
+        <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{value}</span>
+        <ChevronDown className={`w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
+          {options.map((opt) => (
+            <button
+              type="button"
+              key={opt}
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              className={`w-full flex items-center px-3.5 py-2 text-[13px] text-left transition-colors cursor-pointer ${opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                }`}
+            >
+              <span className="flex-1 truncate">{opt}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const tooltipStyle = { backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: 12, fontSize: 12 };
+
+const ForecastChart = ({
+  commodity,
+  variety,
+  market,
+  priceType,
+  horizonDays,
+  historicalRange,
+  onHistoricalRangeChange,
+  horizon,
+  horizonOptions,
+  onHorizonChange,
+  data,
+  loading,
+  empty,
+}) => {
+  const varietyLabel = variety ? ` (${variety})` : "";
+  const hasData = (data || []).length > 0;
+
+  return (
+    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 md:p-8 space-y-4 min-h-[520px] flex flex-col justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[var(--hw-neutral-100)]">
+        <div>
+          <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
+            {commodity ? `${commodity}${varietyLabel} · ${market || "-"} · ${priceType || "-"} · ${horizonDays}-Day Forecast` : "Forecast Chart"}
+          </p>
+          <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+            Historical actual prices vs forecast midpoint and forecast range · ₱/kg
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Historical Range</label>
+            <div className="w-32">
+              <CustomSimpleDropdown
+                value={historicalRange}
+                options={["7 days", "14 days", "21 days", "28 days"]}
+                onChange={onHistoricalRangeChange}
+              />
+            </div>
           </div>
-          {[
-    { label: "Market", value: market, setter: setMarket, opts: MARKETS },
-    { label: "Price Type", value: priceType, setter: setPriceType, opts: PRICE_TYPES },
-    { label: "Forecast Horizon", value: horizon, setter: setHorizon, opts: HORIZONS },
-    { label: "Status", value: statusFilter, setter: setStatusFilter, opts: STATUS_OPTS }
-  ].map((f) => <div key={f.label} className="flex flex-col gap-0.5">
-              <label className="text-[12px] text-[var(--hw-neutral-700)] font-medium px-1">{f.label}</label>
-              <select value={f.value} onChange={(e) => f.setter(e.target.value)} className={selectCls}>
-                {f.opts.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>)}
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Forecast Horizon</label>
+            <div className="w-32">
+              <CustomSimpleDropdown
+                value={horizon}
+                options={horizonOptions}
+                onChange={onHorizonChange}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full flex-1 flex flex-col justify-center my-2 relative">
+        {loading ? (
+          <div className="h-[380px] w-full flex items-center justify-center bg-[var(--hw-neutral-50)] rounded-xl animate-pulse">
+            <span className="text-[13px] text-[var(--hw-neutral-500)] font-medium">Loading forecast...</span>
+          </div>
+        ) : hasData ? (
+          <ForecastPriceTrendChart
+            commodity={commodity}
+            variety={variety}
+            chartData={data}
+            height={380}
+            actualLabel="Actual"
+            forecastLabel="Forecast Midpoint"
+            forecastRangeLabel="Forecast Range"
+            forecastBoundaryLabel="Forecast starts"
+          />
+        ) : (
+          <div className="h-[380px] flex flex-col items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] text-center space-y-1">
+            <p className="font-medium text-[var(--hw-neutral-700)]">No forecast records available</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)]">
+              No price data or forecast available for {commodity}{varietyLabel} in {market}.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+function getUrlParam(key) {
+  if (typeof window === "undefined" || !window.location || !window.location.search) return null;
+  return new URLSearchParams(window.location.search).get(key);
+}
+
+function AdminForecasting() {
+  const alertParam = getUrlParam("alert") || getUrlParam("error");
+  const [dismissedAlert, setDismissedAlert] = useState(false);
+
+  const [pairs, setPairs] = useState(FALLBACK_PAIRS);
+  const [markets, setMarkets] = useState(FALLBACK_MARKETS);
+  const [priceTypes, setPriceTypes] = useState(FALLBACK_PRICE_TYPES);
+  const [horizonOptions, setHorizonOptions] = useState(HORIZON_LABELS);
+
+  const [commodity, setCommodity] = useState(() => getUrlParam("commodity") || "Ampalaya");
+  const [variety, setVariety] = useState(() => getUrlParam("variety") || "Galaxy");
+  const [market, setMarket] = useState("Bankerohan");
+  const [priceType, setPriceType] = useState("Retail");
+  const [historicalRange, setHistoricalRange] = useState("7 days");
+  const [horizon, setHorizon] = useState("7 days");
+
+  const [chartPayload, setChartPayload] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const commodities = useMemo(() => uniqueCommodities(pairs), [pairs]);
+  const variants = useMemo(() => officialVarieties(pairs, commodity), [pairs, commodity]);
+  const horizonDays = parseHorizonDays(horizon);
+  const apiVariety = variants.length === 0 ? null : variety;
+  const selectedCommodityId = useMemo(
+    () => findCommodityId(pairs, commodity, apiVariety),
+    [pairs, commodity, apiVariety]
+  );
+
+
+  useEffect(() => {
+    let active = true;
+    async function loadCatalog() {
+      try {
+        const list = await pricesApi.getPriceList({ is_top10: true, page_size: 100 });
+        if (!active) return;
+        const nextPairs = catalogPairsFromPriceList(list?.items);
+        if (nextPairs.length) {
+          setPairs(nextPairs);
+          setCommodity((current) => {
+            const names = uniqueCommodities(nextPairs);
+            return names.includes(current) ? current : (names[0] || "Ampalaya");
+          });
+        } else {
+          setLoading(false);
+        }
+        setMarkets(FALLBACK_MARKETS);
+        setPriceTypes(FALLBACK_PRICE_TYPES);
+        setHorizonOptions([7, 14, 21, 28].map(horizonLabel));
+        setError(null);
+      } catch (e) {
+        if (active) {
+          setError(e.message || "Failed to load forecast catalog");
+          setPairs(FALLBACK_PAIRS);
+          setChartPayload(null);
+          setLoading(false);
+        }
+      }
+    }
+    loadCatalog();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const nextVariants = officialVarieties(pairs, commodity);
+    if (nextVariants.length === 0) {
+      if (variety != null) setVariety(null);
+      return;
+    }
+    if (!nextVariants.includes(variety)) {
+      setVariety(nextVariants[0]);
+    }
+  }, [commodity, pairs, variety]);
+
+  useEffect(() => {
+    if (!commodity || !market || !priceType) return;
+    const nextVariants = officialVarieties(pairs, commodity);
+    if (nextVariants.length > 0 && (variety == null || !nextVariants.includes(variety))) {
+      return;
+    }
+
+    const commodityId = findCommodityId(pairs, commodity, nextVariants.length === 0 ? null : variety);
+    if (!commodityId) {
+      setChartPayload(null);
+      if ((pairs || []).some((pair) => pair.commodity_id)) {
+        setLoading(false);
+      }
+      return;
+    }
+
+    let active = true;
+    async function loadChart() {
+      setLoading(true);
+      try {
+        const payload = await pricesApi.getPriceDetail(commodityId, {
+          price_type: toPriceTypeKey(market, priceType),
+          horizon: horizonDays,
+          records_limit: 30,
+        });
+        if (!active) return;
+        setChartPayload(payload);
+        setError(null);
+      } catch (e) {
+        if (!active) return;
+        setChartPayload(null);
+        setError(e.message || "Failed to load forecast");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadChart();
+    return () => { active = false; };
+  }, [commodity, variety, market, priceType, horizonDays, pairs]);
+
+  const selectedForecast = chartPayload?.forecast || null;
+  const latestPriceDate = chartPayload?.recent_records?.[0]?.price_date || null;
+  const latestActualPrice = numericPrice(chartPayload?.recent_records?.[0]?.prevail_price);
+  const recentAverage = useMemo(
+    () => recentAveragePrice(chartPayload?.recent_records),
+    [chartPayload]
+  );
+  const lowerForecast = numericPrice(selectedForecast?.lower_forecast);
+  const upperForecast = numericPrice(selectedForecast?.upper_forecast);
+  const forecastMidpoint = numericPrice(
+    selectedForecast?.forecast_midpoint ?? selectedForecast?.predicted_price
+  );
+  const changePercent = useMemo(
+    () => forecastChangePercent(forecastMidpoint, recentAverage ?? latestActualPrice),
+    [forecastMidpoint, recentAverage, latestActualPrice]
+  );
+  const outlook = useMemo(
+    () => priceOutlookFromChange(changePercent),
+    [changePercent]
+  );
+  const resultExplanation = useMemo(
+    () => resultExplanationFromForecast({
+      forecast: selectedForecast,
+      latestActual: latestActualPrice,
+      recentAverage,
+      changePercent,
+      outlook,
+    }),
+    [selectedForecast, latestActualPrice, recentAverage, changePercent, outlook]
+  );
+
+  const historicalDays = parseInt(historicalRange, 10) || 7;
+  const filteredHistorical = useMemo(() => {
+    return filterRecordsByPeriod(chartPayload?.recent_records, `${historicalDays}d`);
+  }, [chartPayload, historicalDays]);
+
+  const chartData = useMemo(
+    () => buildChartData(
+      filteredHistorical,
+      selectedForecast,
+      selectedForecast?.points || []
+    ),
+    [filteredHistorical, selectedForecast]
+  );
+
+  const seriesId = [market, priceType, commodity, apiVariety || "No Variety"].filter(Boolean).join(" / ");
+  const empty = !loading && chartData.length === 0;
+
+  function handleCommodityChange(nextCommodity) {
+    setCommodity(nextCommodity);
+    const nextVariants = officialVarieties(pairs, nextCommodity);
+    setVariety(nextVariants.length === 0 ? null : nextVariants[0]);
+  }
+
+  return (
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Forecasting"
+        description="Review automatically generated short-term vegetable price forecasts used for Price Outlook."
+      />
+
+      {alertParam && !dismissedAlert && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 flex items-center justify-between shadow-[var(--shadow-xs)]">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-900">Pipeline Alert: Forecasting</p>
+              <p className="text-[12px] text-amber-800 mt-0.5">{alertParam}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDismissedAlert(true)}
+            className="text-amber-700 hover:text-amber-900 p-1 rounded-lg hover:bg-amber-100/60 transition-colors cursor-pointer"
+            title="Dismiss alert"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          Unable to load forecast data: {error}
+        </div>
+      )}
+
+      {/* 1. Filter Card */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+        {/* Dropdowns row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+          <div>
+            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Commodity</label>
+            <CustomCommodityDropdown
+              value={commodity}
+              options={commodities}
+              onChange={handleCommodityChange}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Variety</label>
+            <CustomVarietyDropdown
+              value={variety}
+              options={variants}
+              onChange={setVariety}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Market</label>
+            <CustomSimpleDropdown
+              value={market}
+              options={markets}
+              onChange={setMarket}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Price Type</label>
+            <CustomSimpleDropdown
+              value={priceType}
+              options={priceTypes}
+              onChange={setPriceType}
+            />
+          </div>
         </div>
 
-        {
-    /* Selected Forecast Context */
-  }
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
-          <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide mb-3">Selected Forecast Context</p>
-          <div className="flex items-start gap-3">
-            <CommodityIcon name={commodity} />
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-2.5 flex-1">
-              {[
-    { label: "Commodity", value: commodity },
-    { label: "Market", value: market },
-    { label: "Price Type", value: priceType },
-    { label: "Forecast Horizon", value: horizon },
-    { label: "Latest price date", value: "Jul 19, 2026" },
-    { label: "Generated on", value: "Jul 20, 2026, 6:00 AM" },
-    { label: "Records used", value: "247" }
-  ].map((f) => <div key={f.label}>
-                  <p className="text-[12px] text-[var(--hw-neutral-700)]">{f.label}</p>
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-800)] mt-0.5">{f.value}</p>
-                </div>)}
+        {/* Filter context metadata: series identity, dates, official prices */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[11px]">
+          <div>
+            <span className="text-[var(--hw-neutral-400)] font-medium">ID:</span>{" "}
+            <span className="font-semibold text-[var(--hw-neutral-800)] font-mono">{seriesId || "-"}</span>
+          </div>
+          <div>
+            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Date:</span>{" "}
+            <span className="font-semibold text-[var(--hw-neutral-800)]">
+              {selectedForecast?.forecast_date ? formatDate(selectedForecast.forecast_date) : "-"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[var(--hw-neutral-400)] font-medium">Latest Price Date:</span>{" "}
+            <span className="font-semibold text-[var(--hw-neutral-800)]">
+              {chartPayload?.as_of_date ? formatDate(chartPayload.as_of_date) : (latestPriceDate ? formatDate(latestPriceDate) : "-")}
+            </span>
+          </div>
+          <div>
+            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Midpoint:</span>{" "}
+            <span className="font-semibold text-[var(--hw-neutral-800)]">
+              {formatSummaryPrice(selectedForecast?.forecast_midpoint ?? selectedForecast?.predicted_price)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Range:</span>{" "}
+            <span className="font-semibold text-[var(--hw-neutral-800)]">
+              {formatSummaryPriceRange(lowerForecast, upperForecast)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Forecast Summary Container */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
+          <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Forecast Summary</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-[var(--hw-neutral-100)] p-4 sm:p-5">
+          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
+            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Recent Average</p>
+            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
+              {formatSummaryPrice(recentAverage)}
+            </p>
+          </div>
+          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
+            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Lower Forecast</p>
+            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
+              {formatSummaryPrice(lowerForecast)}
+            </p>
+          </div>
+          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
+            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Upper Forecast</p>
+            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
+              {formatSummaryPrice(upperForecast)}
+            </p>
+          </div>
+          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
+            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Forecast Midpoint</p>
+            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
+              {formatSummaryPrice(forecastMidpoint)}
+            </p>
+          </div>
+          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
+            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Forecast Change</p>
+            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
+              {formatChange(changePercent)}
+            </p>
+          </div>
+          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
+            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Price Outlook</p>
+            <p className={`text-[14px] font-bold mt-1.5 text-right ${outlook ? OUTLOOK_COLORS[outlook] : "text-[var(--hw-neutral-700)]"}`}>
+              {outlook || "Not available"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Forecast Chart */}
+      <ForecastChart
+        commodity={commodity}
+        variety={apiVariety}
+        market={market}
+        priceType={priceType}
+        horizonDays={horizonDays}
+        historicalRange={historicalRange}
+        onHistoricalRangeChange={setHistoricalRange}
+        horizon={horizon}
+        horizonOptions={horizonOptions}
+        onHorizonChange={setHorizon}
+        data={chartData}
+        loading={loading}
+        empty={empty}
+      />
+
+      {/* 4. Threshold Applied & Result Explanation (Consistent with Basis Page, No Duplicate Metrics) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        {/* Threshold Applied Card */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
+          </div>
+          <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
+            <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+              <span className="text-[13px] font-bold flex-shrink-0 min-w-[95px] text-emerald-700">Favorable</span>
+              <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Forecast price change &gt; +5%</span>
+            </div>
+            <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+              <span className="text-[13px] font-bold flex-shrink-0 min-w-[95px] text-[var(--hw-neutral-700)]">Neutral</span>
+              <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Forecast price change between −5% and +5%</span>
+            </div>
+            <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+              <span className="text-[13px] font-bold flex-shrink-0 min-w-[95px] text-red-600">Unfavorable</span>
+              <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Forecast price change &lt; −5%</span>
             </div>
           </div>
         </div>
 
-        {
-    /* Summary cards */
-  }
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-    { label: "Run Status", value: "Successful", color: "text-emerald-700" },
-    { label: "Forecast Range", value: "\u20B184\u2013\u20B197/kg", color: "text-[var(--hw-neutral-900)]" },
-    { label: "Forecast Midpoint", value: "\u20B190.50/kg", color: "text-[var(--hw-neutral-900)]" },
-    { label: "Recent Average", value: "\u20B186.00/kg", color: "text-[var(--hw-neutral-900)]" },
-    { label: "Forecast Change", value: "+5.23%", color: "text-emerald-700" },
-    { label: "Price Outlook", value: "Favorable", color: "text-emerald-700" }
-  ].map((c) => <div key={c.label} className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 py-3">
-              <p className="text-[12px] text-[var(--hw-neutral-700)]">{c.label}</p>
-              <p className={`text-[13px] font-semibold mt-0.5 ${c.color}`}>{c.value}</p>
-            </div>)}
-        </div>
-
-        {
-    /* Forecast chart */
-  }
-        <ForecastChart commodity={commodity} market={market} priceType={priceType} horizon={horizon} />
-
-        {
-    /* Price Outlook Calculation */
-  }
-        <section>
-          <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-800)] mb-3">Price Outlook Calculation</h2>
-          <PriceOutlookCalc />
-        </section>
-
-        {
-    /* Model performance */
-  }
-        <ModelPerformance />
-
-        {
-    /* Forecast run history */
-  }
-        <section>
-          <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-800)] mb-3">Forecast Run History</h2>
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            {filteredHistory.length === 0 ? <p className="px-4 py-10 text-center text-[var(--hw-neutral-700)] text-[13px]">No runs match the selected filters.</p> : <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                    <tr>
-                      {["Generated", "Commodity", "Market", "Price Type", "Horizon", "Range", "Price Outlook", "Reliability", "Records", "Status"].map((h) => <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                    {filteredHistory.map((r) => <tr
-    key={r.id}
-    onClick={() => setViewOutputRun(r)}
-    className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-  >
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-600)] whitespace-nowrap">{r.generated}</td>
-                        <td className="px-3 py-2.5">
-                          <p className="font-medium text-[var(--hw-neutral-900)]">{r.commodity}</p>
-                          {r.variant && <p className="text-[11px] text-[var(--hw-neutral-500)]">{r.variant}</p>}
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-600)] whitespace-nowrap">{r.market}</td>
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-600)]">{r.priceType}</td>
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-600)]">{r.horizon}</td>
-                        <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)]">{r.range}</td>
-                        <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${r.priceOutlook !== "\u2014" ? OUTLOOK_STYLE[r.priceOutlook] : "text-[var(--hw-neutral-700)]"}`}>
-                          {r.priceOutlook}
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-600)]">{r.reliability}</td>
-                        <td className="px-3 py-2.5 text-[var(--hw-neutral-600)]">{r.records}</td>
-                        <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${STATUS_STYLE[r.status]}`}>{r.status}</td>
-                      </tr>)}
-                  </tbody>
-                </table>
-              </div>}
+        {/* Result Explanation Card */}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
           </div>
-        </section>
-
+          <div className="p-6 flex-1 flex flex-col justify-center">
+            {loading ? (
+              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Loading result explanation...</p>
+            ) : error ? (
+              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Unable to generate an explanation for this forecast right now.</p>
+            ) : !resultExplanation || resultExplanation === ADMIN_TEXT_TEMPLATES.priceOutlookFallback || resultExplanation.startsWith("An explanation will appear") ? (
+              <div className="py-4 space-y-1.5 max-w-sm mx-auto text-center">
+                <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-500)] flex items-center justify-center mx-auto mb-2">
+                  <Info className="w-5 h-5" />
+                </div>
+                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No Explanation Available</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">
+                  Price Outlook could not be calculated for this forecast.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
+                {resultExplanation}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
-    </>;
+
+      {/* 5. Historical Average Price Section — Informational context only */}
+      <HistoricalAveragePriceSection
+        commodityId={selectedCommodityId || chartPayload?.commodity_id}
+        commodityName={commodity}
+        variety={apiVariety}
+        market={market}
+        priceType={priceType}
+        priceTypeKey={toPriceTypeKey(market, priceType)}
+      />
+    </div>
+  );
 }
+
+
 export {
-  AdminForecasting as default
+  buildChartData,
+  catalogPairsFromPriceList,
+  findCommodityId,
+  forecastChangePercent,
+  parseHorizonDays,
+  priceOutlookFromChange,
+  recentAveragePrice,
+  resultExplanationFromForecast,
+  toPriceTypeKey,
 };
+export { AdminForecasting as default };

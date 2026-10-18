@@ -1,5 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
+import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
+import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   Home,
   FileInput,
@@ -8,20 +11,20 @@ import {
   Bell,
   ChevronDown,
   LogOut,
-  ArrowLeftRight,
-  RefreshCw,
   Settings,
   Info,
+  Loader2,
   User
 } from "lucide-react";
 import { Footer } from "../Footer";
+import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
+import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
+import { UserAvatar } from "../profile/UserAvatar";
+
+
 import { useAuth } from "../../contexts/AuthContext";
-import { TextSizeProvider, useTextSize } from "../../contexts/TextSizeContext";
-const FONT_SIZE_MAP = {
-  small: "13px",
-  medium: "15px",
-  large: "17px"
-};
+import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
+
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
   { id: "input", label: "Submit Data", path: "/dftc/input", Icon: FileInput },
@@ -42,19 +45,20 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 function DFTCMain({ children }) {
-  const { textSize } = useTextSize();
-  return <main className="pt-13 pb-20 md:pb-4 md:ml-[220px]" style={{ fontSize: FONT_SIZE_MAP[textSize] }}>
+  return <main className="pt-13 pb-20 md:pb-4 md:ml-[220px]">
       {children}
     </main>;
 }
 function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const active = getActive(location.pathname);
+  const { user, logout, refreshUser } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
-  const name = user?.name ?? "DFTC Personnel";
+  const active = getActive(location.pathname);
+  const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
+  const staff = user?.staff_profile || user?.staffProfile || {};
+  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
   const initials = getInitials(name);
   useEffect(() => {
     const handler = (e) => {
@@ -69,22 +73,103 @@ function DFTCLayoutInner() {
     setAvatarOpen(false);
     navigate(path);
   };
-  const handleLogout = () => {
+  const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
+  const { processState } = useBackgroundProcess();
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+
+  const isSyncing = isManualSyncing || isFetching > 0;
+
+  // Keep the "Last updated" timestamp in sync when a background process
+  // completes and triggers an automatic live resync.
+  useEffect(() => {
+    if (processState.completed || processState.error) {
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processState.completed, processState.error]);
+
+  const handleResync = async () => {
+    if (isSyncing) return;
+    setIsManualSyncing(true);
+    try {
+      await queryClient.refetchQueries();
+      await queryClient.invalidateQueries();
+      setLastSyncedTime(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    } catch (e) {
+      console.error("Data resync failed:", e);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
+  const handleLogout = async () => {
     setAvatarOpen(false);
-    logout();
+    await logout();
     navigate("/login", { replace: true });
   };
-  return <div className="min-h-screen bg-[var(--hw-neutral-50)]">
 
-      {
-    /* ── Top bar ── */
-  }
+  // Replace the workspace content while the account is still on an
+  // admin-provisioned temporary password. `rotated` is cleared the moment the
+  // POST succeeds: change_password() revokes every session and purges the
+  // cached snapshot before returning, so the next /auth/me can come back 401
+  // and null out `user` — and with no dismiss affordance, a gate derived from
+  // the flag alone would strand the user. The rotation already committed
+  // server-side; refreshUser() only reconciles the cache, so it is best-effort.
+  const [rotated, setRotated] = useState(false);
+  const pendingChangePassword = user?.must_change_password === true && !rotated;
+
+  const { data: unreadData, refetch: refreshUnread } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      try {
+        const res = await getUnreadCount();
+        return res?.unread_count ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
+  const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    if (location.pathname.includes("/notifications")) {
+      queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+    }
+  }, [location.pathname, queryClient]);
+
+  useNotificationEvent("NOTIFICATION_CREATED", () => {
+    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc-unread-notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+    refreshUnread();
+  });
+
+  const handlePasswordRotated = async () => {
+    setRotated(true);
+    try {
+      await refreshUser?.();
+    } catch {
+      // Deliberately swallowed — see above.
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[var(--hw-neutral-50)]">
+      {/* ── Top bar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)] h-13">
         <div className="flex items-center h-13 px-4 gap-3">
-
-          {
-    /* Logo + label */
-  }
+          {/* Logo + label */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <img 
               src="/horizontal-logo.png" 
@@ -101,13 +186,25 @@ function DFTCLayoutInner() {
 
           <div className="flex-1" />
 
-          <div className="hidden lg:flex items-center gap-1.5 text-[var(--hw-neutral-400)] flex-shrink-0">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="text-[12px]">Aug 2, 8:30 AM</span>
-          </div>
+          {/* Resync */}
+          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
-          <button className="relative p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors flex-shrink-0">
+          <button
+            onClick={() => navigate("/dftc/notifications")}
+            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+              location?.pathname?.includes("/notifications")
+                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
+                : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+            }`}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
+          >
             <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {
@@ -118,9 +215,13 @@ function DFTCLayoutInner() {
     onClick={() => setAvatarOpen((v) => !v)}
     className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
   >
-              <div className="w-7 h-7 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[11px] font-bold">
-                {initials}
-              </div>
+              <UserAvatar
+                src={user?.profile_picture_path}
+                initials={initials}
+                alt={name}
+                className="w-7 h-7"
+                textClassName="text-[11px]"
+              />
               <span className="hidden sm:block text-[13px] font-medium text-[var(--hw-neutral-700)] max-w-[100px] truncate">{name}</span>
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
@@ -134,12 +235,16 @@ function DFTCLayoutInner() {
     onClick={() => go("/dftc/profile")}
     className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >
-                  <div className="w-9 h-9 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0">
-                    {initials}
-                  </div>
+                  <UserAvatar
+                    src={user?.profile_picture_path}
+                    initials={initials}
+                    alt={name}
+                    className="w-9 h-9"
+                    textClassName="text-[13px]"
+                  />
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-black truncate">{name}</p>
-                    <p className="text-[12px] text-black">DFTC</p>
+                    <p className="text-[12px] text-black">{roleName}</p>
                   </div>
                 </button>
 
@@ -168,25 +273,6 @@ function DFTCLayoutInner() {
                     Log out
                   </button>
                 </div>
-
-                <div className="border-t border-[var(--hw-neutral-100)]" />
-
-                <div className="py-1">
-                  <button
-    onClick={() => go("/farmer")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
-                    Switch to Farmer View
-                  </button>
-                  <button
-    onClick={() => go("/admin")}
-    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
-  >
-                    <ArrowLeftRight className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
-                    Switch to Admin View
-                  </button>
-                </div>
               </div>}
           </div>
         </div>
@@ -209,40 +295,28 @@ function DFTCLayoutInner() {
               </button>;
   })}
         </nav>
-
-        <div className="p-2 border-t border-[var(--hw-neutral-200)] space-y-0.5">
-          <button
-    onClick={() => navigate("/dftc/profile")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)] transition-colors text-left"
-  >
-            <User className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">Profile</span>
-          </button>
-          <button
-    onClick={() => navigate("/farmer")}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)] transition-colors text-left"
-  >
-            <ArrowLeftRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[13px] font-medium">Farmer View</span>
-          </button>
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            <div className="w-6 h-6 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">{name}</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)]">DFTC</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {
     /* ── Main content ── */
   }
       <DFTCMain>
-        <Outlet />
-        <Footer className="mt-6 mb-2" />
+        {pendingChangePassword ? (
+          <ChangePasswordPanel onRotated={handlePasswordRotated} />
+        ) : (
+          <>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center w-full h-[50vh]">
+                  <Loader2 className="w-6 h-6 text-[var(--hw-green-700)] animate-spin" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
+            <Footer className="mt-6 mb-2" />
+          </>
+        )}
       </DFTCMain>
 
       {
@@ -263,11 +337,10 @@ function DFTCLayoutInner() {
   })}
         </div>
       </nav>
-    </div>;
+    </div>
+  );
 }
-const DFTCLayout = () => <TextSizeProvider storageKey="hw_dftc_text_size">
-    <DFTCLayoutInner />
-  </TextSizeProvider>;
+const DFTCLayout = () => <DFTCLayoutInner />;
 export {
   DFTCLayout
 };
