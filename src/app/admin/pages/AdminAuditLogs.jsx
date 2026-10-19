@@ -44,6 +44,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { adminApi } from "../../../services/api";
 import { createAuditLogsPdf } from "../utils/auditLogsPdf";
 import { formatActorLabel } from "../utils/auditActor";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 // Optional, not useAuth(): this page renders in unit tests without an
 // AuthProvider, and useAuth() throws in that case.
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
@@ -357,16 +358,7 @@ function AdminAuditLogs() {
 
   // Format ISO datetime for display
   function fmtDatetime(isoStr) {
-    if (!isoStr) return "—";
-    try {
-      const d = new Date(isoStr);
-      return d.toLocaleString("en-PH", {
-        year: "numeric", month: "short", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", hour12: true
-      });
-    } catch {
-      return isoStr;
-    }
+    return formatDateTime(isoStr) || "—";
   }
 
   return (

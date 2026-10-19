@@ -19,21 +19,10 @@ import { resolveNotificationRoute } from "../../global/utils/notificationRoutes"
 import { useNotificationEvent } from "../../global/contexts/NotificationStreamContext";
 import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 
 function fmtTimestamp(isoStr) {
-  if (!isoStr) return "";
-  try {
-    return new Date(isoStr).toLocaleString("en-PH", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return isoStr;
-  }
+  return formatDateTime(isoStr) || "";
 }
 
 function AdminNotifications() {

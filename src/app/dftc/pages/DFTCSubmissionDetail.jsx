@@ -5,17 +5,18 @@ import { ChevronLeft, AlertCircle, Loader2, Info } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { apiGet, parseResponse } from "../../global/api";
 import { formatMarketName, formatDateOrMonth } from "./dftcSavedDatasets";
+import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatDateTime(isoStr) {
   if (!isoStr) return "—";
   try {
-    const d = new Date(isoStr);
+    const d = parseApiDateTime(isoStr);
     const month = MONTH_NAMES[d.getMonth()];
     const day = d.getDate();
     const year = d.getFullYear();
-    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila" });
     return `${month} ${day}, ${year} · ${time}`;
   } catch {
     return isoStr;

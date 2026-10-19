@@ -12,11 +12,12 @@ import { useNotificationEvent } from "../../global/contexts/NotificationStreamCo
 import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
 function formatTimestamp(iso) {
   if (!iso) return "";
   try {
-    const d = new Date(iso);
+    const d = parseApiDateTime(iso);
     const now = new Date();
     const diffMs = now - d;
     const diffMins = Math.floor(diffMs / 60000);
@@ -25,7 +26,7 @@ function formatTimestamp(iso) {
     if (diffHrs < 24) return `${diffHrs}h ago`;
     const diffDays = Math.floor(diffHrs / 24);
     if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", timeZone: "Asia/Manila" });
   } catch {
     return "";
   }

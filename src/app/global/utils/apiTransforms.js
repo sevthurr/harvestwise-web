@@ -82,6 +82,26 @@ export function toNumber(value) {
   return parseFloat(value);
 }
 
+/** Parse API datetimes, whose naive values are UTC database timestamps. */
+export function parseApiDateTime(value) {
+  if (!value) return null;
+  const raw = String(value);
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const date = new Date(hasTimezone ? raw : `${raw}Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatApiTime(value) {
+  const date = parseApiDateTime(value);
+  if (!date) return null;
+  return date.toLocaleTimeString("en-PH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila",
+  });
+}
+
 /**
  * Format ISO datetime to human-readable format
  * 
@@ -93,17 +113,18 @@ export function toNumber(value) {
  */
 export function formatDateTime(isoDateTime) {
   if (!isoDateTime) return null;
-  const date = new Date(isoDateTime);
+  const date = parseApiDateTime(isoDateTime);
+  if (!date) return null;
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-    timeZone: 'UTC',
+    timeZone: 'Asia/Manila',
   }) + ' at ' + date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-    timeZone: 'UTC',
+    timeZone: 'Asia/Manila',
   });
 }
 
