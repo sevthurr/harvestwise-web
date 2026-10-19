@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { adminApi } from "../../../services/api";
+import { formatApiTime } from "../../global/utils/apiTransforms";
 
 const QUICK_ACCESS = [
   { Icon: Upload,             label: "Import & Validate",    path: "/admin/import" },
@@ -73,7 +74,7 @@ function AdminDashboard() {
   }));
 
   const todayActivities = (data?.recent_audit_logs || []).map((log) => ({
-    time: log.created_at ? new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
+    time: formatApiTime(log.created_at) || "—",
     activity: log.action || "Activity recorded",
     performedBy: log.actor_name || log.user_id || "—",
     status: "Completed"

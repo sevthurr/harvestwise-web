@@ -233,7 +233,11 @@ const UsersTab = ({ showToast }) => {
   const { data: usersRes, isLoading: loading } = useQuery({
     queryKey: ["adminUsers"],
     queryFn: () => adminApi.listUsers({ page_size: 100 }),
-    staleTime: 1000 * 60 * 5,
+    // Last-login timestamps change outside this page when an account signs in.
+    // Do not keep the user list fresh for five minutes or it will show stale
+    // login times after returning to User Accounts.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const users = usersRes?.items || [];
