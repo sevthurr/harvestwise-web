@@ -67,7 +67,7 @@ function triggerDownload(url, filename) {
 function ArrivalVolumeReportPage({
   pageIndex,
   totalPages,
-  records,
+  rows,
   offset,
   isFirst,
   isLast,
@@ -104,7 +104,7 @@ function ArrivalVolumeReportPage({
           </tr>
         </thead>
         <tbody>
-          {records.map((r, i) => (
+          {rows.map((r, i) => (
             <tr key={`${r.commodity_name}-${r.variety}-${offset + i}`}>
               <td style={cellL({ textAlign: "center", width: 40 })}>{offset + i + 1}</td>
               <td style={cellL()}><strong>{r.commodity_name || "—"}</strong></td>
@@ -116,7 +116,7 @@ function ArrivalVolumeReportPage({
               <td style={cell(DFTC_BG, { fontWeight: "bold" })}>{numStr(r.volume_kg)}</td>
             </tr>
           ))}
-          {records.length === 0 && (
+          {rows.length === 0 && (
             <tr>
               <td colSpan={8} style={{ ...cellL({ textAlign: "center", fontStyle: "italic" }) }}>No volume records for this submission.</td>
             </tr>
@@ -150,14 +150,35 @@ function ArrivalVolumeReportPage({
 
 const ROWS_PER_PAGE = 22;
 
+// A row carries data when any of the three volume columns is non-null. `!= null`
+// rather than truthiness: the entry screen saves 0 as null
+// (DFTCArrivalInput.jsx:1162-1164) but `volume_kg` is written as the computed
+// farm+other, so a commodity the encoder reported as zero arrives as 0.0 — a
+// real reported figure that must count.
+function arrivalRowIsPopulated(row) {
+  return row.farm_source_volume_kg != null
+    || row.other_source_volume_kg != null
+    || row.volume_kg != null;
+}
+
+function countPopulatedArrivalRows(rows) {
+  let n = 0;
+  for (const r of rows) if (arrivalRowIsPopulated(r)) n++;
+  return n;
+}
+
 /**
  * Preview for an arrival-volume submission.
  *
- * Arrival volumes are a different dataset from prevailing prices, so the
- * report body is built separately from the price report — but it is presented
- * through the same DFTCReportShell, so both previews look and behave
- * identically. Records come from the submission's own record lists, so this
- * shows exactly the volumes that submission holds.
+ * Arrival volumes are a different dataset from prevailing prices, so the report
+ * body is built separately from the price report — but it is presented through
+ * the same DFTCReportShell, so both previews look and behave identically.
+ *
+ * Rows are the full commodity catalogue from `/dftc/reports/arrival-preview`,
+ * merged against the submission's volumes server-side on `commodity_id`, so a
+ * commodity the encoder left blank still appears with an empty cell instead of
+ * vanishing from the sheet. The submission detail call remains only for
+ * `submitted_by_name`.
  */
 function DFTCArrivalPreview({ file, onClose }) {
   const [format, setFormat] = useState("IMG");
@@ -177,31 +198,43 @@ function DFTCArrivalPreview({ file, onClose }) {
     enabled: !!submissionId
   });
 
-  // Fall back to the list payload if the detail call has not landed yet.
-  const records = useMemo(() => {
-    const fromDetail = submission
-      ? [...(submission.analytics_records || []), ...(submission.other_records || [])]
-      : [];
-    if (fromDetail.length > 0) return fromDetail;
-    return [...(file.analyticsRecords || []), ...(file.otherRecords || [])];
-  }, [submission, file]);
+  const { data: reportPreviewData, isLoading: previewLoading, isError: previewError } = useQuery({
+    // The submission id is in the key because the report is submission-scoped:
+    // the service worker caches `/api/v1/*` under `NetworkFirst` for 7 days
+    // (client/vite.config.js), and a key without it would pin one submission's
+    // sheet to another's.
+    queryKey: ["dftc-arrival-report-preview", submissionId],
+    queryFn: async () => {
+      const res = await apiGet(
+        `/dftc/reports/arrival-preview?submission_id=${encodeURIComponent(submissionId)}`
+      );
+      return parseResponse(res);
+    },
+    enabled: !!submissionId
+  });
+
+  // Every catalogue commodity, blank where nothing was collected. Merged on
+  // commodity_id by the server — this file does no name matching, so it cannot
+  // paint one variety's volume under another's label (the bug recorded in
+  // documentation/dftc-price-report-blank-cells-and-stale-bundle-2026-10-15.md).
+  const rows = useMemo(() => reportPreviewData?.rows ?? [], [reportPreviewData]);
 
   const totalVolume = useMemo(
-    () => records.reduce((sum, r) => sum + (Number(r.volume_kg) || 0), 0),
-    [records]
+    () => rows.reduce((sum, r) => sum + (Number(r.volume_kg) || 0), 0),
+    [rows]
   );
 
   const reportingDateShort = formatDisplayDateShort(submission?.reporting_date || file.reportingDate);
   const reportingDate = formatDisplayDate(submission?.reporting_date || file.reportingDate);
-  const totalPages = Math.max(1, Math.ceil(records.length / ROWS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
 
   const pages = useMemo(() => {
     const out = [];
     for (let i = 0; i < totalPages; i++) {
-      out.push({ records: records.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE), offset: i * ROWS_PER_PAGE });
+      out.push({ rows: rows.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE), offset: i * ROWS_PER_PAGE });
     }
     return out;
-  }, [records, totalPages]);
+  }, [rows, totalPages]);
 
   async function downloadImages() {
     setDlState("generating-img");
@@ -314,7 +347,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       applyStyle(h2, [6, 7], BANK_BG);
       applyStyle(h2, [8], DFTC_BG);
 
-      records.forEach((r, i) => {
+      rows.forEach((r, i) => {
         const row = ws.addRow([
           i + 1,
           r.commodity_name || "",
@@ -393,7 +426,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       <ArrivalVolumeReportPage
         pageIndex={idx}
         totalPages={totalPages}
-        records={page.records}
+        rows={page.rows}
         offset={page.offset}
         isFirst={idx === 0}
         isLast={idx === totalPages - 1}
@@ -405,7 +438,7 @@ function DFTCArrivalPreview({ file, onClose }) {
   }
 
   function renderPreviewBody() {
-    if (loadError) {
+    if (loadError || previewError) {
       return (
         <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
@@ -413,7 +446,7 @@ function DFTCArrivalPreview({ file, onClose }) {
         </div>
       );
     }
-    if (isLoading && records.length === 0) {
+    if ((isLoading || previewLoading) && rows.length === 0) {
       return (
         <div className="rounded-xl border border-[var(--hw-neutral-200)] bg-white p-8 text-center">
           <p className="text-[13px] text-[var(--hw-neutral-600)]">Loading arrival volumes…</p>
@@ -499,6 +532,16 @@ function DFTCArrivalPreview({ file, onClose }) {
     );
   }
 
+  // Mirrors `countPopulatedPriceRows` in DFTCFilePreview.jsx: the badge counts
+  // rows that carry data, not rows on the sheet. The sheet is now the catalogue,
+  // so `rows.length` would report ~130 and mean nothing to a reader. The
+  // Math.max copies DFTCFilePreview.jsx so the badge never under-reports what
+  // the submission itself holds.
+  const recordsIncluded = Math.max(
+    countPopulatedArrivalRows(rows),
+    Number(file.records) || 0
+  );
+
   return (
     <DFTCReportShell
       title="Preview Arrival Volume"
@@ -507,7 +550,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       metaFields={[
         ["Report ID", submission?.id || file.id || "—"],
         ["Reporting Date", reportingDate],
-        ["Records Included", String(records.length)],
+        ["Records Included", String(recordsIncluded)],
         ["Total Volume", `${numStr(totalVolume)} kg`],
         ["Saved Date", file.savedDate || "—"],
         ["Encoded By", submission?.submitted_by_name || "—"]
@@ -535,4 +578,6 @@ function DFTCArrivalPreview({ file, onClose }) {
   );
 }
 
-export { DFTCArrivalPreview };
+// arrivalRowIsPopulated / countPopulatedArrivalRows / numStr are exported for
+// the regression test in src/test/dftcArrivalReportRows.test.js.
+export { DFTCArrivalPreview, arrivalRowIsPopulated, countPopulatedArrivalRows, numStr };

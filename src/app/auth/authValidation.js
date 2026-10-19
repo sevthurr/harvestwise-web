@@ -37,6 +37,27 @@ export function isValidEmail(raw) {
 }
 
 /**
+ * Domains reserved for development/test fixtures.  Mirror of
+ * BLOCKED_EMAIL_DOMAINS in api/src/modules/dftc/model.py.
+ */
+const BLOCKED_EMAIL_DOMAINS = new Set([
+  "harvestwise.test",
+  "example.test",
+  "localhost.test",
+]);
+
+/**
+ * Returns true when the email belongs to a known development/test domain.
+ * Does NOT reject unknown custom domains — only the explicit blocklist.
+ */
+export function isFakeEmailDomain(raw) {
+  if (!raw) return false;
+  const parts = raw.trim().split("@");
+  if (parts.length !== 2) return false;
+  return BLOCKED_EMAIL_DOMAINS.has(parts[1].toLowerCase());
+}
+
+/**
  * Determines whether user input appears intended as a phone number.
  */
 export function isPhoneInput(raw) {

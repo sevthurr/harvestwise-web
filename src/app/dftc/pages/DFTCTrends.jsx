@@ -942,6 +942,7 @@ function DFTCTrends() {
   const [aDatePreset, setADatePreset] = useState("all");
   const [aCustomFrom, setACustomFrom] = useState("");
   const [aCustomTo, setACustomTo] = useState("");
+  const [aYear, setAYear] = useState(new Date().getFullYear());
   const [aPage, setAPage] = useState(1);
   const [aShowAll, setAShowAll] = useState(false);
   const [showVolumeTypeInfo, setShowVolumeTypeInfo] = useState(false);
@@ -955,10 +956,9 @@ function DFTCTrends() {
   useEffect(() => {
     setAPage(1);
     setAShowAll(false);
-  }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo]);
+  }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo, aYear]);
 
   // Live Price Queries — catalog commodity_id + persisted forecast.points
-  const isInvalidCombo = pMarket === "DFTC Taboan" && pPriceType === "Landing";
   const apiBacked = useMemo(() => isApiBackedPriceSeries(pMarket, pPriceType), [pMarket, pPriceType]);
   const pPriceTypeKey = useMemo(() => toPriceTypeKey(pMarket, pPriceType), [pMarket, pPriceType]);
 
@@ -1017,13 +1017,13 @@ function DFTCTrends() {
         horizon: fHorizon,
         records_limit: 100,
       }),
-    enabled: Boolean(pCommodityId) && apiBacked && !isInvalidCombo,
+    enabled: Boolean(pCommodityId) && apiBacked,
     staleTime: 60 * 1000,
   });
 
   const isPricesLoading =
     isCatalogLoading ||
-    (Boolean(pCommodityId) && apiBacked && !isInvalidCombo && isPriceDetailLoading);
+    (Boolean(pCommodityId) && apiBacked && isPriceDetailLoading);
 
   const varietyDetails = useMemo(() => {
     if (!priceDetailData) return [];
@@ -1115,15 +1115,24 @@ function DFTCTrends() {
     isLoading: isArrivalLoading,
     isError: isArrivalError,
   } = useQuery({
-    queryKey: ["dftc-trends-arrivals", aCommodityId],
-    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId),
+    queryKey: ["dftc-trends-arrivals", aCommodityId, aYear],
+    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId, aYear),
     enabled: activeTab === "arrival" && Boolean(aCommodityId),
     staleTime: 60 * 1000,
   });
 
-  // Use the same live 90-day arrival records and classification as Admin analytics.
+  // Use the full arrival history (all years on record) rather than the 90-day
+  // analysis window. `records` is windowed so the classification and its totals
+  // describe that span; `history_records` is unfiltered and is what the trend
+  // chart and year selector need. Without this the tab silently shows the
+  // window's fallback (most-recent records) under any year the window does not
+  // cover — e.g. selecting 2026 when 2026 has no data renders 2025 figures.
   const rawArrivalRecords = useMemo(() => {
-    return Array.isArray(arrivalQueryData?.records) ? arrivalQueryData.records : [];
+    return Array.isArray(arrivalQueryData?.history_records)
+      ? arrivalQueryData.history_records
+      : Array.isArray(arrivalQueryData?.records)
+        ? arrivalQueryData.records
+        : [];
   }, [arrivalQueryData]);
 
   const filteredArrivalRecords = useMemo(() => {
@@ -1140,9 +1149,12 @@ function DFTCTrends() {
     return rawArrivalRecords.filter((record) => {
       const recordDate = new Date(`${String(record.arrival_date || "").slice(0, 10)}T12:00:00`);
       if (Number.isNaN(recordDate.getTime())) return false;
+      if (!startDate && !endDate && aYear != null && recordDate.getFullYear() !== aYear) {
+        return false;
+      }
       return (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
     });
-  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo]);
+  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo, aYear]);
 
   const aVarietyKeys = useMemo(() => [aCommodity], [aCommodity]);
 
@@ -1314,18 +1326,11 @@ function DFTCTrends() {
               <select value={pPriceType} onChange={(e) => setPPriceType(e.target.value)} className={selectCls + " appearance-none pr-9 cursor-pointer"}>
                 <option>Retail</option>
                 <option>Wholesale</option>
-                <option>Landing</option>
               </select>
               <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
           </div>
         </div>
-        {isInvalidCombo && (
-          <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mt-4 flex items-center gap-2">
-            <AlertCircle size={14} className="text-amber-600 shrink-0" />
-            <span>DFTC Taboan does not record Landing prices. Please change Market or Price Type.</span>
-          </div>
-        )}
       </div>
 
       {/* 2. Price Summary Metrics Strip */}
@@ -1541,7 +1546,7 @@ function DFTCTrends() {
       {/* 1. Filters */}
       <div className={`${cardCls} p-5 md:p-6`}>
         <h2 className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-4">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className={labelCls}>Commodity</label>
             <SearchableCombobox categories={PRICE_CATEGORIES} value={aCommodity} onChange={setACommodity} />
@@ -1594,6 +1599,29 @@ function DFTCTrends() {
                 if (to !== undefined) setACustomTo(to);
               }}
             />
+          </div>
+          <div>
+            <label className={labelCls}>Year</label>
+            <div className="relative">
+              <select
+                value={aYear}
+                onChange={(e) => setAYear(Number(e.target.value))}
+                className={selectCls + " appearance-none pr-9 cursor-pointer"}
+              >
+                {(() => {
+                  const years = new Set();
+                  rawArrivalRecords.forEach((r) => {
+                    const y = parseInt(String(r.arrival_date || "").slice(0, 4), 10);
+                    if (Number.isFinite(y)) years.add(y);
+                  });
+                  const sorted = [...years].sort((a, b) => b - a);
+                  return sorted.length > 0 ? sorted : [new Date().getFullYear()];
+                })().map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+            </div>
           </div>
         </div>
       </div>

@@ -352,6 +352,8 @@ function DFTCUpload() {
     new: 0,
     updated: 0,
     unchanged: 0,
+    skipped: 0,
+    overwritten: 0,
     duplicates: 0,
     missingValues: 0,
     unrecognizedCommodities: 0,
@@ -393,6 +395,8 @@ function DFTCUpload() {
         new: summary.new_rows ?? 0,
         updated: summary.updated_rows ?? 0,
         unchanged: summary.unchanged_rows ?? summary.duplicate_rows ?? 0,
+        skipped: summary.skipped_rows ?? 0,
+        overwritten: summary.overwritten_rows ?? 0,
         duplicates: summary.duplicate_rows ?? 0,
         missingValues: summary.missing_value_rows ?? 0,
         unrecognizedCommodities: summary.unrecognized_commodity_rows ?? 0,
@@ -419,6 +423,11 @@ function DFTCUpload() {
     setValidationResult({
       totalRows: 0,
       valid: 0,
+      new: 0,
+      updated: 0,
+      unchanged: 0,
+      skipped: 0,
+      overwritten: 0,
       duplicates: 0,
       missingValues: 0,
       unrecognizedCommodities: 0,
@@ -537,6 +546,8 @@ function DFTCUpload() {
               isFinished = true;
               setIngestionStatus("success");
               const subId = statusRes?.submission_id || res?.submission_id || null;
+              const rowsSkipped = validationResult.skipped ?? 0;
+              const rowsUpdated = validationResult.updated ?? 0;
               setCompletedImportId(importId);
               setCompletedSummary({
                 fileName: fileName || file?.name || "Uploaded File",
@@ -549,6 +560,8 @@ function DFTCUpload() {
                 totalRows: validationResult.totalRows,
                 validRows: validationResult.valid,
                 rejectedRows: validationResult.rejected,
+                rowsSkipped: rowsSkipped,
+                rowsUpdated: rowsUpdated,
                 fileFormat: file?.name ? ("." + file.name.split(".").pop().toLowerCase()) : ".xlsx",
                 finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
               });
@@ -621,6 +634,8 @@ function DFTCUpload() {
       new: 0,
       updated: 0,
       unchanged: 0,
+      skipped: 0,
+      overwritten: 0,
       duplicates: 0,
       missingValues: 0,
       unrecognizedCommodities: 0,
@@ -638,7 +653,7 @@ function DFTCUpload() {
 
   const filteredTableRows = (tableFilter === "valid" ? validationRows : displayedIssueRows).filter((r) => {
     if (tableFilter === "all") return true;
-    if (tableFilter === "valid") return r.result === "valid" || r.result === "valid_with_warning" || (!r.issues || r.issues.length === 0);
+    if (tableFilter === "valid") return overwrite ? (r.result === "valid" || r.result === "valid_with_warning") : r.result === "valid";
     if (tableFilter === "rejected") return r.result === "rejected";
     if (tableFilter === "warning") return r.result === "valid_with_warning";
     if (tableFilter === "duplicate") return r.issues?.some((i) => i.code === "duplicate");
@@ -811,6 +826,11 @@ function DFTCUpload() {
                   <label htmlFor="overwrite-checkbox" className="text-[13px] font-medium text-[var(--hw-neutral-700)] cursor-pointer">
                     Overwrite existing records (upsert mode)
                   </label>
+                  {overwrite && (
+                    <span className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                      Existing records will be replaced with the values from this file.
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1049,7 +1069,7 @@ function DFTCUpload() {
               <div className="flex flex-wrap gap-3 pt-1">
                 <button
                   onClick={handleImport}
-                  disabled={uploading}
+                  disabled={uploading || validationResult.valid === 0}
                   className="flex-1 min-w-[140px] py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   Import Valid Records ({validationResult.valid})
@@ -1161,6 +1181,18 @@ function DFTCUpload() {
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Records Stored</p>
                   <p className="text-[14px] font-bold text-emerald-700 mt-0.5">
                     {(completedSummary?.recordsImported ?? validationResult.valid).toLocaleString()} records
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Rows Updated</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {(completedSummary?.rowsUpdated ?? 0).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Rows Skipped</p>
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {(completedSummary?.rowsSkipped ?? 0).toLocaleString()}
                   </p>
                 </div>
                 <div>

@@ -419,6 +419,8 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
 
     // Verify empty cells are blank (no dash "—" in price cells)
     const table = screen.getByRole('table');
+    // The review is a complete commodity sheet, not only the rows with input.
+    expect(table).toHaveTextContent('Kamatis');
     const cells = table.querySelectorAll('tbody td');
     const cellTexts = Array.from(cells).map((c) => c.textContent.trim());
     expect(cellTexts).not.toContain('—');

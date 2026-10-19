@@ -59,6 +59,10 @@ const LANGUAGE_OPTIONS = [
 const AccountTab = ({ showToast, onDeleteAccount }) => {
   const { user } = useAuth();
   const { t, formatDate, langCode } = useLanguage();
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/farmer/settings?tab=account`,
+    onResult: () => {},
+  });
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     firstName: "",
@@ -338,9 +342,15 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               value={form.email}
               onChange={set("email")}
               placeholder="farmer@example.com"
-              className={`${inputCls} ${emailError ? "border-red-500 focus:ring-red-500" : ""}`}
+              disabled={googleLink.googleConnected}
+              className={`${inputCls} ${emailError ? "border-red-500 focus:ring-red-500" : ""} ${googleLink.googleConnected ? "bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed" : ""}`}
             />
             {emailError && <p className="mt-1 text-[12px] text-red-600">{emailError}</p>}
+            {googleLink.googleConnected && (
+              <p className="mt-1 text-[12px] text-amber-700">
+                Your account is linked to Google Sign-In. To change your email, update it in your Google account first.
+              </p>
+            )}
           </div>
           <GreenBtn onClick={handlePreSave} disabled={saving} className="w-full sm:w-auto">
             {saving ? t("common.saving", {}, "Saving…") : t("farmer.settings.save_changes", {}, "Save changes")}

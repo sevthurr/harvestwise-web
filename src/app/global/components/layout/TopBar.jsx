@@ -54,7 +54,6 @@ const TopBar = ({
     if (isSyncing) return;
     setIsManualSyncing(true);
     try {
-      await queryClient.refetchQueries();
       await queryClient.invalidateQueries();
       setLastSyncedTime(
         new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
