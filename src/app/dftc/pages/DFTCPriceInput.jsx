@@ -1018,6 +1018,10 @@ function DFTCPriceInput() {
     setUnrenderableCount(0);
     setCarriedDate(null);
 
+    // Today's manual-entry form is intentionally a blank capture surface.
+    // Existing or historical prices must never be copied into the current day.
+    if (date === localToday()) return;
+
     try {
       const snap = await loadPrefillSnapshot(date, stableResolverRef.current);
       // A slow response for a date the user has already moved off of.

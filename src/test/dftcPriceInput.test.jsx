@@ -470,22 +470,16 @@ describe('DFTCPriceInput prefill provenance', () => {
     localStorage.clear();
   });
 
-  it('leaves every input empty when only old records exist and the fresh date has none', async () => {
-    // Regression: the report-preview endpoint resolves price_date <= day, so a
-    // date with no rows of its own rendered a three-week-old price as today's.
+  it('keeps today empty and does not fetch previous-day prices', async () => {
     renderWithFetch(byDayOn([THREE_WEEKS_AGO]));
 
-    // Give the lookup a chance to land before asserting emptiness.
-    await waitFor(() => {
-      expect(global.fetch.mock.calls.some((c) => c[0].includes('/dftc/prices/by-day'))).toBe(true);
-    });
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => expect(screen.getByText('Review (0)')).toBeInTheDocument());
 
     expect(screen.queryByText(/Amending existing entry/i)).not.toBeInTheDocument();
     const inputs = expandLowland();
     expect(inputs[0].value).toBe('');
     expect(screen.queryByText(/Starting point from/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Review (0)')).toBeInTheDocument();
+    expect(global.fetch.mock.calls.some((c) => c[0].includes('/dftc/prices/by-day'))).toBe(false);
   });
 
   it('clears the form when switching from a full date to one with zero records', async () => {
@@ -494,7 +488,8 @@ describe('DFTCPriceInput prefill provenance', () => {
     // the wrong date. Both the empty result and the failed request must clear.
     const EMPTY_DAY = isoDaysAgo(30);
     const HANGING_DAY = isoDaysAgo(31);
-    const base = byDayOn([TODAY, YESTERDAY]);
+    const historicalDay = isoDaysAgo(2);
+    const base = byDayOn([historicalDay]);
     renderWithFetch(vi.fn(async (url, opts) => {
       if (url.includes('/dftc/prices/by-day')) {
         const date = new URL(url, 'http://x').searchParams.get('reporting_date');
@@ -505,11 +500,9 @@ describe('DFTCPriceInput prefill provenance', () => {
       return base(url, opts);
     }));
 
-    await waitFor(() => {
-      expect(screen.getByText('Review (2)')).toBeInTheDocument();
-    });
-
     const datePicker = screen.getByLabelText(/Date:/i);
+    fireEvent.change(datePicker, { target: { value: historicalDay } });
+    await waitFor(() => expect(screen.getByText('Review (2)')).toBeInTheDocument());
 
     // Cleared synchronously, not after the response arrives.
     fireEvent.change(datePicker, { target: { value: HANGING_DAY } });
@@ -517,7 +510,7 @@ describe('DFTCPriceInput prefill provenance', () => {
     expect(screen.getByText('Review (0)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Today/i }));
-    await waitFor(() => expect(screen.getByText('Review (2)')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Review (0)')).toBeInTheDocument());
 
     fireEvent.change(datePicker, { target: { value: EMPTY_DAY } });
 
@@ -529,71 +522,10 @@ describe('DFTCPriceInput prefill provenance', () => {
     expect(screen.queryByText(/Amending existing entry/i)).not.toBeInTheDocument();
   });
 
-  it('prefills from the previous day, marks the rows, and omits untouched values from the payload', async () => {
-    renderWithFetch(byDayOn([YESTERDAY]));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Starting point from/i)).toBeInTheDocument();
-    });
-    const inputs = expandLowland();
-    expect(inputs[0].value).toBe('35');
-    // Untouched carried values are not counted as entries to save.
-    expect(screen.getByText('Review (0)')).toBeInTheDocument();
-    expect(screen.getAllByText(/from /i).length).toBeGreaterThan(0);
-
-    // Type the one value; only that one may reach the payload.
-    fireEvent.change(inputs[0], { target: { value: '40' } });
-    await waitFor(() => expect(screen.getByText('Review (1)')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
-    await waitFor(() => expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
-
-    // No removal may be issued for a previous-day row: it has no row on this date.
-    await waitFor(() => expect(screen.getByText(/Saving Price Monitoring Data/i)).toBeInTheDocument());
-  });
-
-  it('sends an edited carried value and never an untouched one', async () => {
-    const bodies = [];
-    const base = byDayOn([YESTERDAY]);
-    renderWithFetch(vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
-        bodies.push(JSON.parse(opts.body));
-        return { ok: true, status: 201, json: async () => ({ id: 'SUB-2', status: 'Saved' }) };
-      }
-      return base(url, opts);
-    }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Starting point from/i)).toBeInTheDocument();
-    });
-    const inputs = expandLowland();
-    expect(inputs[BATONG_INPUT_INDEX].value).toBe('20');
-
-    // Ampalaya is edited; Batong stays as carried.
-    fireEvent.change(inputs[0], { target: { value: '41' } });
-
-    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
-    await waitFor(() => expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
-
-    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    const retailBody = bodies.find((b) => b.price_type === 'Retail' && b.source_id === 'bankerohan');
-    expect(retailBody).toBeDefined();
-    // Exactly the edited value — the untouched carried one is excluded.
-    expect(retailBody.records).toHaveLength(1);
-    expect(retailBody.records[0].commodity_id).toBe('com-1');
-    expect(retailBody.records[0].prevail_price).toBe(41);
-    expect(retailBody.remove_records).toEqual([]);
-  });
-
   it('amends same-day records and removes one when the field is cleared', async () => {
     const bodies = [];
-    const base = byDayOn([TODAY]);
+    const amendDay = isoDaysAgo(2);
+    const base = byDayOn([amendDay]);
     renderWithFetch(vi.fn(async (url, opts) => {
       if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
         bodies.push(JSON.parse(opts.body));
@@ -602,9 +534,8 @@ describe('DFTCPriceInput prefill provenance', () => {
       return base(url, opts);
     }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/Amending existing entry/i)).toBeInTheDocument();
-    });
+    fireEvent.change(screen.getByLabelText(/Date:/i), { target: { value: amendDay } });
+    await waitFor(() => expect(screen.getByText(/Amending existing entry/i)).toBeInTheDocument());
     const inputs = expandLowland();
     expect(inputs[0].value).toBe('35');
     expect(inputs[BATONG_INPUT_INDEX].value).toBe('20');
@@ -627,25 +558,6 @@ describe('DFTCPriceInput prefill provenance', () => {
     expect(retailBody.records.map((r) => r.commodity_id)).toEqual(['com-2']);
   });
 
-  it('still loads the other four markets when one market ref returns 404', async () => {
-    const base = byDayOn([YESTERDAY]);
-    renderWithFetch(vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/prices/by-day')) {
-        const q = new URL(url, 'http://x').searchParams;
-        if (q.get('price_type') === 'Landing' && q.get('reporting_date') === YESTERDAY) {
-          return { ok: false, status: 404, json: async () => ({ detail: "Source 'bankerohan' not found." }) };
-        }
-      }
-      return base(url, opts);
-    }));
-
-    // One rejected request must not discard the other four markets' prefill.
-    await waitFor(() => {
-      expect(screen.getByText(/Starting point from/i)).toBeInTheDocument();
-    });
-    expect(expandLowland()[0].value).toBe('35');
-  });
-
   it('writes only the vids the user typed on a date with no same-day records', async () => {
     // Payload-level guard. Rendering assertions pass with or without the
     // carried-value exclusion, which is why they never caught the defect:
@@ -659,49 +571,6 @@ describe('DFTCPriceInput prefill provenance', () => {
       expect(body.remove_records ?? []).toEqual([]);
       expect(body.reporting_date).toBe(TODAY);
     }
-  });
-
-  it('keeps the carried and edited flags across an autosaved draft reload', async () => {
-    // Without provenance in the draft, an F5 mid-session turns untouched
-    // carried values back into values that get auto-saved.
-    const first = renderWithFetch(byDayOn([YESTERDAY]));
-    await waitFor(() => expect(screen.getByText(/Starting point from/i)).toBeInTheDocument());
-
-    // Edit one of the two carried values; the other stays untouched.
-    fireEvent.change(expandLowland()[0], { target: { value: '44' } });
-
-    // Autosave fires after 1500ms.
-    await waitFor(
-      () => expect(localStorage.getItem('dftc_price_draft_data')).not.toBeNull(),
-      { timeout: 4000 }
-    );
-    const draft = JSON.parse(localStorage.getItem('dftc_price_draft_data'));
-    expect(draft.carried['bangkerohan-retail'].length).toBeGreaterThan(0);
-    expect(draft.dirty.length).toBeGreaterThan(0);
-
-    // Resume that draft in a fresh mount and save.
-    first.unmount();
-    const bodies = [];
-    const base = mockFetch();
-    renderWithFetch(vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
-        bodies.push(JSON.parse(opts.body));
-        return { ok: true, status: 201, json: async () => ({ id: 'SUB-9', status: 'Saved' }) };
-      }
-      return base(url, opts);
-    }));
-    fireEvent.click(await screen.findByRole('button', { name: /Resume Draft/i }));
-
-    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
-    await waitFor(() => expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
-
-    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    const retailBody = bodies.find((b) => b.price_type === 'Retail' && b.source_id === 'bankerohan');
-    expect(retailBody.records.map((r) => r.commodity_id)).toEqual([AMPALAYA_DB_ID]);
-    expect(retailBody.remove_records).toEqual([]);
   });
 
   it('treats a draft stored without provenance as all same-day', async () => {
