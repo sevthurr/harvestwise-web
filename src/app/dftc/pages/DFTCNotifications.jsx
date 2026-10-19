@@ -19,17 +19,18 @@ import { resolveNotificationRoute } from "../../global/utils/notificationRoutes"
 import { useNotificationEvent } from "../../global/contexts/NotificationStreamContext";
 import { useNotificationReadState } from "../../global/hooks/useNotificationReadState";
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
+import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
 function fmtTimestamp(isoStr) {
   if (!isoStr) return "";
   try {
-    const d = new Date(isoStr);
+    const d = parseApiDateTime(isoStr);
     if (isNaN(d.getTime())) return isoStr;
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila" });
     if (isToday) return `Today · ${timeStr}`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + ` · ${timeStr}`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }) + ` · ${timeStr}`;
   } catch {
     return isoStr;
   }

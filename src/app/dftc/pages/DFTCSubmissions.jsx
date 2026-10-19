@@ -6,6 +6,7 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, parseResponse } from "../../global/api";
 import { getLocalDateString } from "./dftcSavedDatasets";
+import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
 const selectCls = [
   "w-full px-3 py-2 text-[14px] border border-[var(--hw-neutral-200)] rounded-lg bg-white",
@@ -25,12 +26,12 @@ const PAGE_SIZE = 20;
 function formatDateTime(isoStr) {
   if (!isoStr) return "—";
   try {
-    const d = new Date(isoStr);
+    const d = parseApiDateTime(isoStr);
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const month = months[d.getMonth()];
     const day = d.getDate();
     const year = d.getFullYear();
-    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila" });
     return `${month} ${day}, ${year} · ${time}`;
   } catch {
     return isoStr;
