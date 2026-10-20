@@ -42,6 +42,7 @@ export function isValidEmail(raw) {
  */
 const BLOCKED_EMAIL_DOMAINS = new Set([
   "harvestwise.test",
+  "harvestwise.internal",
   "example.test",
   "localhost.test",
 ]);

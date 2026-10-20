@@ -789,7 +789,7 @@ function DFTCTrends() {
     const allCommodities = PRICE_CATEGORIES.flatMap((c) => c.commodities);
     return (
       allCommodities.find(
-        (c) => c.toLowerCase() === lower || getCommoditySlug(c) === lower
+        (c) => c.toLowerCase() === lower || toId(c) === lower
       ) || paramVal
     );
   };
@@ -973,6 +973,20 @@ function DFTCTrends() {
     [catalogData]
   );
 
+  // Price tab only: the analytics catalog is the supported set — commodities
+  // outside it have no trend data. Fall back to the full list while the
+  // catalog is still loading (or unavailable) so the control is never blank;
+  // the arrival/production tabs query by name and keep PRICE_CATEGORIES.
+  const priceCommodityCategories = useMemo(() => {
+    if (isCatalogLoading || catalogPairs.length === 0) return PRICE_CATEGORIES;
+    return PRICE_CATEGORIES.map((cat) => ({
+      ...cat,
+      commodities: cat.commodities.filter(
+        (c) => catalogPairsForCommodity(catalogPairs, c).length > 0
+      ),
+    })).filter((cat) => cat.commodities.length > 0);
+  }, [catalogPairs, isCatalogLoading]);
+
   const pAvailableVarieties = useMemo(
     () => getAvailableVarietiesForCommodity(catalogPairs, pCommodity, pMarket, pPriceType),
     [catalogPairs, pCommodity, pMarket, pPriceType]
@@ -1115,8 +1129,8 @@ function DFTCTrends() {
     isLoading: isArrivalLoading,
     isError: isArrivalError,
   } = useQuery({
-    queryKey: ["dftc-trends-arrivals", aCommodityId, aYear],
-    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId, aYear),
+    queryKey: ["dftc-trends-arrivals", aCommodityId],
+    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId),
     enabled: activeTab === "arrival" && Boolean(aCommodityId),
     staleTime: 60 * 1000,
   });
@@ -1281,7 +1295,7 @@ function DFTCTrends() {
           <div>
             <label className={labelCls}>Commodity</label>
             <SearchableCombobox
-              categories={PRICE_CATEGORIES}
+              categories={priceCommodityCategories}
               value={pCommodity}
               onChange={(c) => {
                 setPCommodity(c);

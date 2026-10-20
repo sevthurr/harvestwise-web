@@ -267,16 +267,11 @@ function DFTCHistory() {
   }, [highlightParam]);
 
   // Live Query from backend API
-  const { data: submissionsData, isLoading } = useQuery({
+  const { data: submissionsData, isLoading, isError, refetch } = useQuery({
     queryKey: ["dftc-submissions"],
     queryFn: async () => {
-      try {
-        const res = await apiGet("/dftc/submissions?page_size=100");
-        return parseResponse(res);
-      } catch (err) {
-        console.error("DFTC SUBMISSIONS FETCH ERROR:", err);
-        return null;
-      }
+      const res = await apiGet("/dftc/submissions?page_size=100");
+      return parseResponse(res);
     },
     staleTime: 0,
     refetchOnMount: "always"
@@ -362,6 +357,12 @@ function DFTCHistory() {
   useEffect(() => {
     setPage(1);
   }, [datasetType, savedBy, datePreset, customFrom, customTo]);
+
+  // Data can shrink after a resync; keep `page` inside the current range.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [filtered.length, page]);
 
   // Smooth scroll to highlighted dataset row
   useEffect(() => {
@@ -477,13 +478,27 @@ function DFTCHistory() {
         )}
       </div>
 
+      {/* Error banner */}
+      {isError && (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Submission history could not be loaded. Please try again later.
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="ml-3 font-medium text-red-800 underline underline-offset-2 hover:opacity-70 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Result count */}
       <p className="text-[13px] text-[var(--hw-neutral-800)]">
         {isLoading ? (
           <span className="inline-flex items-center gap-1.5 text-[var(--hw-neutral-500)]">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets...
           </span>
-        ) : hasFilter ? (
+        ) : isError && !submissionsData ? null : hasFilter ? (
           `${filtered.length} result${filtered.length !== 1 ? "s" : ""} · filtered`
         ) : (
           `${rawRows.length} datasets`
@@ -491,12 +506,15 @@ function DFTCHistory() {
       </p>
 
       {/* Skeleton / Loading */}
-      {isLoading ? (
+      {isLoading && !submissionsData ? (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-6 space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-10 bg-[var(--hw-neutral-100)] rounded-lg animate-pulse" />
           ))}
         </div>
+      ) : isError && !submissionsData ? (
+        /* Error state — the alert banner above carries the message */
+        null
       ) : filtered.length === 0 ? (
         /* Empty state */
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] py-12 text-center">

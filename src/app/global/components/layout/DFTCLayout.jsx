@@ -98,8 +98,8 @@ function DFTCLayoutInner() {
     if (isSyncing) return;
     setIsManualSyncing(true);
     try {
-      await queryClient.refetchQueries();
-      await queryClient.invalidateQueries();
+      await queryClient.refetchQueries(undefined, { throwOnError: true });
+      await queryClient.invalidateQueries(undefined, { throwOnError: true });
       setLastSyncedTime(
         new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       );
