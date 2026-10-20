@@ -7,15 +7,9 @@
  * date with nothing recorded on it therefore filled the form with an older day's
  * numbers, which the user then saved as today's price.
  *
- * This module queries GET /dftc/prices/by-day, which matches one exact date,
- * and keeps provenance explicit:
- *   - same-day records  → amending; loaded and saved like anything else
- *   - previous-day ones  → a starting point only; the page commits them solely
- *                         when the user edits them.
- *
- * Per-tab rule: a market tab that has ANY same-day record never receives a
- * previous-day carry, so a tab never mixes provenance. The rule and the request
- * count are the same code — flip CARRIES_ONLY_INTO_EMPTY_TABS to change both.
+ * This module queries GET /dftc/prices/by-day, which matches one exact date.
+ * It never falls back to an earlier date: a missing day must remain empty so
+ * an older price cannot be mistaken for a new observation.
  */
 
 import { apiGet, parseResponse } from "../../global/api";
@@ -28,8 +22,6 @@ export const MARKET_TABS = [
   { id: "dftc-retail", label: "DFTC Retail", market: "DFTC Taboan", priceType: "Retail", sourceId: "dftc" },
   { id: "dftc-wholesale", label: "DFTC Wholesale", market: "DFTC Taboan", priceType: "Wholesale", sourceId: "dftc" }
 ];
-
-const CARRIES_ONLY_INTO_EMPTY_TABS = true;
 
 const emptyTabsById = () => Object.fromEntries(MARKET_TABS.map((t) => [t.id, new Map()]));
 
@@ -93,11 +85,8 @@ function collect(items, resolveCommodityId) {
 /**
  * Build the prefill snapshot for one date.
  *
- * Phase 1 fetches the selected date for all 5 tabs in parallel. Phase 2 fetches
- * the previous calendar day only for tabs whose phase-1 result came back empty,
- * so an amend day costs 5 requests, not 10. Promise.allSettled throughout: a
- * market whose source ref cannot be resolved (404) must not zero out the other
- * four.
+ * The selected date is fetched for all 5 tabs in parallel. Promise.allSettled
+ * keeps one unavailable market from discarding the other four.
  */
 export async function buildPrefillSnapshot(date, resolveCommodityId) {
   const snapshot = {
@@ -120,22 +109,6 @@ export async function buildPrefillSnapshot(date, resolveCommodityId) {
     snapshot.unrenderableCount += unrenderable;
   });
 
-  const prevDate = CARRIES_ONLY_INTO_EMPTY_TABS ? previousIsoDate(date) : null;
-  const emptyTabs = prevDate ? MARKET_TABS.filter((t) => snapshot.sameDayByTab[t.id].size === 0) : [];
-
-  if (emptyTabs.length > 0) {
-    const carryResults = await Promise.allSettled(emptyTabs.map((tab) => fetchDay(tab, prevDate)));
-    emptyTabs.forEach((tab, i) => {
-      const res = carryResults[i];
-      if (res.status !== "fulfilled") return;
-      const { map, unrenderable, count } = collect(res.value, resolveCommodityId);
-      snapshot.carriedByTab[tab.id] = map;
-      snapshot.carriedCount += count;
-      snapshot.unrenderableCount += unrenderable;
-    });
-  }
-
-  snapshot.previousDate = prevDate;
   return snapshot;
 }
 

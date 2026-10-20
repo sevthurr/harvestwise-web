@@ -99,9 +99,9 @@ const ProfitCalcAccordion = ({
           {[
     { label: t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest"), value: `${qty} kg` },
     { label: t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost"), value: formatPeso(totalCost) },
-    { label: hasFarmgate ? t("farmer.factors.profitability.farmgate_price_label", {}, "Farmgate price") : t("farmer.factors.profitability.market_price_reference", {}, "Market price reference"), value: `\u20B1${sellingBasis}/kg` },
-    { label: t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover"), value: `\u20B1${costToRecover}/kg` },
-    { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label", {}, "Profit per kg")} (\u20B1${sellingBasis} \u2212 \u20B1${costToRecover})`, value: `\u20B1${margin}/kg`, bold: true }
+    { label: hasFarmgate ? t("farmer.factors.profitability.farmgate_price_label", {}, "Farmgate price") : t("farmer.factors.profitability.market_price_reference", {}, "Market price reference"), value: `₱${Number(sellingBasis).toFixed(2)}/kg` },
+    { label: t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover"), value: `₱${costToRecover}/kg` },
+    { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label", {}, "Profit per kg")} (₱${Number(sellingBasis).toFixed(2)} − ₱${costToRecover})`, value: `₱${margin}/kg`, bold: true }
   ].map((r) => <div key={r.label} className="flex items-center justify-between gap-3 text-[12px]">
               <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
               <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
@@ -112,6 +112,35 @@ const ProfitCalcAccordion = ({
         </div>}
     </div>;
 };
+
+function formatHoldReason(reason, t) {
+  if (!reason) return "-";
+  if (!t) return reason;
+  const lower = String(reason).toLowerCase();
+  if (lower.includes("market") || lower.includes("palengke")) {
+    return t("farmer.cropCycle.hold_reason_market", {}, "Naghulat nga moayo ang kondisyon sa palengke");
+  }
+  if (lower.includes("weather") || lower.includes("panahon")) {
+    return t("farmer.cropCycle.hold_reason_weather", {}, "Kondisyon sa panahon");
+  }
+  if (lower.includes("budget") || lower.includes("input")) {
+    return t("farmer.cropCycle.hold_reason_budget", {}, "Kulang ang budget o materyales");
+  }
+  if (lower.includes("seed") || lower.includes("binhi") || lower.includes("material")) {
+    return t("farmer.cropCycle.hold_reason_seed", {}, "Wala pa available ang binhi o materyales");
+  }
+  if (lower.includes("labor") || lower.includes("trabahador") || lower.includes("land") || lower.includes("yuta")) {
+    return t("farmer.cropCycle.hold_reason_labor", {}, "Wala pa available ang trabahador o yuta");
+  }
+  if (lower.includes("time") || lower.includes("reassess") || lower.includes("panahon para")) {
+    return t("farmer.cropCycle.hold_reason_time", {}, "Kinahanglan pa og panahon para susihon pag-usab");
+  }
+  if (lower.includes("other") || lower.includes("laing")) {
+    return t("farmer.cropCycle.hold_reason_other", {}, "Laing rason");
+  }
+  return reason;
+}
+
 function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
@@ -151,14 +180,14 @@ function CropCycleDetailPage() {
             { label: crop.commodityName || "Draft" },
           ]}
         />
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="bg-white border border-[var(--hw-neutral-200)] rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex items-start gap-3">
-            <Clock className="w-6 h-6 text-amber-700 flex-shrink-0 mt-0.5" />
+            <Clock className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <h2 className="text-lg font-bold text-amber-900">
+              <h2 className="text-lg font-bold text-[var(--hw-neutral-900)]">
                 {t("farmer.draft.incomplete_title", {}, "Assessment Draft – Incomplete")}
               </h2>
-              <p className="text-sm text-amber-800">
+              <p className="text-sm text-[var(--hw-neutral-600)]">
                 {t(
                   "farmer.draft.incomplete_desc",
                   {},
@@ -412,18 +441,20 @@ function CropCycleDetailPage() {
         </div>
 
         {/* ── On Hold reason — shown between header and advisory ── */}
-        {crop.isOnHold && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex items-start gap-3">
-            <PauseCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+        {crop.isOnHold && <div className="bg-white border border-[var(--hw-neutral-200)] rounded-2xl px-4 py-3.5 flex items-start gap-3">
+            <PauseCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-[13px] font-semibold text-amber-700">{t("farmer.advisory.labels.on_hold", {}, "On hold")}</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}: {crop.holdReason || "-"}</p>
-              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
+              <p className="text-[13px] font-bold text-amber-700">{t("farmer.advisory.labels.on_hold", {}, "On hold")}</p>
+              <p className="text-[13px] text-[var(--hw-neutral-900)]">
+                <span className="text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}:</span> {formatHoldReason(crop.holdReason, t)}
+              </p>
+              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-500)]">{t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
             </div>
           </div>}
 
         {/* ── 2. Main advice — white card, colored foreground only ── */}
         {isActive && (
-          <div className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 ${advisoryCfg?.border || "border-[var(--hw-neutral-200)]"}`}>
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
             <div className={`flex items-center gap-2 mb-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
               {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
               <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
@@ -434,7 +465,7 @@ function CropCycleDetailPage() {
             {displayImmediateActions.map((act, idx) => {
               const text = renderComposedMessage(act, langCode);
               return text ? (
-                <p key={act.key || idx} className={`text-[13px] font-medium mt-1.5 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+                <p key={act.key || idx} className="text-[13px] text-[var(--hw-neutral-700)] font-medium leading-relaxed mt-1.5">
                   {text}
                 </p>
               ) : null;
@@ -501,7 +532,7 @@ function CropCycleDetailPage() {
               </div>
               <div>
                 <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.price_basis", {}, "Price basis")}</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis ? `₱${sellingBasis}/kg` : t("farmer.advisory.not_available")}</p>
+                <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis ? `₱${Number(sellingBasis).toFixed(2)}/kg` : t("farmer.advisory.not_available")}</p>
               </div>
               <div>
                 <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>

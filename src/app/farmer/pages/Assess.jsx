@@ -99,7 +99,8 @@ const StepActions = ({
               onClick={onRetry}
               className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-red-800 underline hover:text-red-900"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Try again
+              <RefreshCw className="w-3.5 h-3.5" />
+              {t ? t("common.try_again", {}, "Sulayi Pag-usab") : "Sulayi Pag-usab"}
             </button>
           )}
         </div>
@@ -506,10 +507,15 @@ function AssessPage() {
     setAdvisoryResponse(null);
     try {
       const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
-      const baseCropName = selectedCommodity?.name || data.commodity;
+      const baseCropName = data.commodityName || selectedCommodity?.name || data.commodity;
       const cropName = data.variant ? `${baseCropName} ${data.variant}` : baseCropName;
       const totalCost = getTotalCost(data);
       const yieldKg = Number(data.harvestQuantity) || 1;
+
+      setData((prev) => ({
+        ...prev,
+        commodityName: baseCropName,
+      }));
 
       const payload = {
         crop_name: cropName,
@@ -517,6 +523,7 @@ function AssessPage() {
         expected_harvest_date: data.harvestDate,
         total_production_cost: Number(totalCost),
         expected_yield_kg: yieldKg,
+        crop_stage: "before_planting",
       };
 
       const res = await apiPost("/advisory/plan", payload);
@@ -656,17 +663,19 @@ function AssessPage() {
         <div className={`md:grid gap-8 ${showSidePanel ? "md:grid-cols-[1fr_280px]" : ""}`}>
           <div className="space-y-6">
             {(data.isDraft || data.draftId) && (
-              <div className="flex items-center justify-between p-3.5 bg-amber-50/90 border border-amber-300 rounded-2xl text-amber-950 shadow-xs">
-                <div className="flex items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
-                    <FileText className="w-3.5 h-3.5 text-amber-800" />
-                    {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Incomplete")}
-                  </span>
-                  <p className="text-xs sm:text-sm font-medium text-amber-900">
+              <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-amber-100/80 flex items-center justify-center flex-shrink-0 text-amber-700">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800">
+                    {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Dili Kompleto")}
+                  </p>
+                  <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">
                     {t(
                       "farmer.assess.draft_banner_notice",
                       {},
-                      "You are continuing an unfinished assessment. Review, edit, and complete Step 1 before continuing."
+                      "Gipadayon nimo ang wala pa nahuman nga assessment. Rebyuha, usba, ug kompletoha ang Step 1 bago mopadayon."
                     )}
                   </p>
                 </div>

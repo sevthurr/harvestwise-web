@@ -58,7 +58,7 @@ function DFTCLayoutInner() {
   const active = getActive(location.pathname);
   const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
   const staff = user?.staff_profile || user?.staffProfile || {};
-  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
+  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix || user?.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
   const initials = getInitials(name);
   useEffect(() => {
     const handler = (e) => {
@@ -98,8 +98,8 @@ function DFTCLayoutInner() {
     if (isSyncing) return;
     setIsManualSyncing(true);
     try {
-      await queryClient.refetchQueries();
-      await queryClient.invalidateQueries();
+      await queryClient.refetchQueries(undefined, { throwOnError: true });
+      await queryClient.invalidateQueries(undefined, { throwOnError: true });
       setLastSyncedTime(
         new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       );

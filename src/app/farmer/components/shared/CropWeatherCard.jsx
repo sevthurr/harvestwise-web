@@ -315,8 +315,8 @@ export const CropWeatherCard = ({ crop, isHighlighted }) => {
       <div className="flex items-start gap-3 p-4 pb-3">
         <CommodityIllustration commodityId={crop.crop_id} className="w-9 h-9 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{displayName}</p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)]">
+          <p className="text-[14px] font-bold text-black">{displayName}</p>
+          <p className="text-[12px] text-black">
             {advisory.statusLabel}: {advisory.statusVal}
           </p>
           {rc && (
@@ -325,19 +325,19 @@ export const CropWeatherCard = ({ crop, isHighlighted }) => {
               <p className="text-[13px] font-semibold leading-snug">{advisory.headline}</p>
             </div>
           )}
-          <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{advisory.dateRange}</p>
+          <p className="text-[12px] text-black mt-0.5">{advisory.dateRange}</p>
         </div>
       </div>
 
       {/* Actions */}
       <div className="px-4 pb-3 space-y-1.5">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-2">
+        <p className="text-[12px] font-bold text-black uppercase tracking-wide mb-2">
           {t("farmer.factors.weather.recommended_actions_title", {}, "Recommended actions")}
         </p>
         {advisory.actions.map((action, i) => (
           <div key={i} className="flex items-start gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--hw-neutral-900)] flex-shrink-0 mt-1.5" />
-            <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">{action}</p>
+            <span className="w-1.5 h-1.5 rounded-full bg-black flex-shrink-0 mt-1.5" />
+            <p className="text-[13px] text-black leading-snug">{action}</p>
           </div>
         ))}
       </div>
@@ -345,7 +345,7 @@ export const CropWeatherCard = ({ crop, isHighlighted }) => {
       {/* Why */}
       {advisory.why && (
         <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)]">
-          <p className="text-[12px] text-[var(--hw-neutral-900)] italic">"{advisory.why}"</p>
+          <p className="text-[12px] text-black italic">"{advisory.why}"</p>
         </div>
       )}
     </div>

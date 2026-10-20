@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 
 const DEFAULT_SOURCES = [
@@ -13,6 +14,15 @@ const EMPTY_SOURCES = [
 ];
 
 export function ProductionSourcePieChart({ data, height = 300, outerRadius, showEmpty = false }) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const chartData = data && data.length > 0 && !showEmpty
     ? data
     : EMPTY_SOURCES;
@@ -28,15 +38,15 @@ export function ProductionSourcePieChart({ data, height = 300, outerRadius, show
         color: d.color || DEFAULT_SOURCES[i % DEFAULT_SOURCES.length].color
       }));
 
-  // Dynamically compute safe radius based on container height so it fits cleanly without top/bottom clipping
+  // Dynamically compute safe radius based on container height and viewport width so it fits cleanly
   const maxSafeRadius = Math.max(50, Math.floor((height - 70) / 2));
-  const effectiveRadius = outerRadius ?? Math.min(maxSafeRadius, 105);
+  const effectiveRadius = outerRadius ?? (isMobile ? Math.min(maxSafeRadius, 72) : Math.min(maxSafeRadius, 105));
   const emptyRadius = Math.max(40, effectiveRadius - 10);
 
   return (
     <div className="w-full flex flex-col items-center">
       <ResponsiveContainer width="100%" height={height}>
-        <PieChart margin={{ top: 12, right: 30, bottom: 12, left: 30 }}>
+        <PieChart margin={{ top: 8, right: isMobile ? 12 : 30, bottom: 8, left: isMobile ? 12 : 30 }}>
           <Pie
             data={renderData}
             cx="50%"
@@ -46,7 +56,11 @@ export function ProductionSourcePieChart({ data, height = 300, outerRadius, show
             paddingAngle={0}
             dataKey="value"
             labelLine={!isEmpty}
-            label={isEmpty ? false : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            label={
+              isEmpty
+                ? false
+                : ({ percent }) => `${(percent * 100).toFixed(0)}%`
+            }
           >
             {renderData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -68,15 +82,15 @@ export function ProductionSourcePieChart({ data, height = 300, outerRadius, show
       </ResponsiveContainer>
 
       {/* Legend / Breakdown List */}
-      <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-[11px] text-[var(--hw-neutral-800)]">
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-[11px] text-black">
         {(isEmpty ? DEFAULT_SOURCES : chartData).map((s, index) => {
           const item = chartData.find((d) => d.name === s.name);
           const val = item ? item.value : 0;
           return (
-            <div key={s.name} className="flex items-center gap-1.5 bg-[var(--hw-neutral-50)] px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-100)]">
+            <div key={s.name} className="flex items-center gap-1.5 bg-[var(--hw-neutral-50)] px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)]">
               <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: s.color || DEFAULT_SOURCES[index % DEFAULT_SOURCES.length].color }} />
-              <span className="font-medium text-[var(--hw-neutral-700)]">{s.name}</span>
-              <span className="font-bold text-[var(--hw-neutral-900)]">
+              <span className="font-medium text-black">{s.name}</span>
+              <span className="font-bold text-black">
                 {isEmpty ? "0%" : `${val}%`}
               </span>
             </div>

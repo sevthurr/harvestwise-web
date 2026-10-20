@@ -189,7 +189,7 @@ const Step3ProductionCosts = ({ data, onChange, errors }) => {
       <div className="bg-[var(--hw-green-50)] border border-[var(--hw-green-400)] rounded-2xl px-4 py-3 space-y-0.5">
         {data.commodity && <p className="text-xs text-[var(--hw-green-800)] font-semibold">
             {t("farmer.prices.category_vegetables", {}, "Vegetable")}: {(() => {
-              const n = COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name ?? "";
+              const n = data.commodityName || COMMODITY_OPTIONS.find((c) => c.id === data.commodity)?.name || (data.commodity && !data.commodity.startsWith("COM-") ? data.commodity : "");
               return data.variant ? `${n} (${data.variant})` : n;
             })()}
           </p>}

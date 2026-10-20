@@ -34,20 +34,45 @@ const AboutContent = () => (
 
 const FAQsContent = () => {
   const [open, setOpen] = useState(0);
+  const { t } = useLanguage();
+
+  const faqs = [
+    {
+      q: t("farmer.about.faq1_q", {}, "How do I update my farm location?"),
+      a: t("farmer.about.faq1_a", {}, 'Go to Settings → Farm Profile and tap "Use my location" to detect your location automatically, or update the City, District, and Barangay fields manually.')
+    },
+    {
+      q: t("farmer.about.faq2_q", {}, "How do I change my preferred crops?"),
+      a: t("farmer.about.faq2_a", {}, "Go to Settings → Farm Profile and select or deselect crops from the crop list. You can also update your preferred variety for each crop.")
+    },
+    {
+      q: t("farmer.about.faq3_q", {}, "Why do advisories change?"),
+      a: t("farmer.about.faq3_a", {}, "Advisories are updated based on current market prices, weather conditions, and seasonal crop data. Changes reflect the latest available information.")
+    },
+    {
+      q: t("farmer.about.faq4_q", {}, "Can I use HarvestWise with limited internet?"),
+      a: t("farmer.about.faq4_a", {}, 'Yes. HarvestWise stores recent prices, forecasts, and advisories for offline use. Tap "Sync now" in Settings → Preferences to update your offline data when you have a connection.')
+    },
+    {
+      q: t("farmer.about.faq5_q", {}, "How does HarvestWise get price data?"),
+      a: t("farmer.about.faq5_a", {}, "Price data is collected from the Davao City Farmers Market Authority (DFTC) and updated regularly. Prices reflect retail and wholesale market conditions.")
+    }
+  ];
+
   return (
     <div className="space-y-2">
-      {FAQS.map((faq, i) => (
+      {faqs.map((faq, i) => (
         <div key={i} className="border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
           <button
             type="button"
             onClick={() => setOpen(open === i ? null : i)}
-            className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
+            className="w-full flex items-center justify-between px-3.5 sm:px-4 py-3 sm:py-3.5 text-left hover:bg-[var(--hw-neutral-50)] transition-colors gap-2"
           >
-            <span className="text-[15px] font-medium text-black pr-3">{faq.q}</span>
+            <span className="text-[14px] sm:text-[15px] font-medium text-black pr-2 leading-snug">{faq.q}</span>
             <ChevronDown className={`w-4 h-4 text-black flex-shrink-0 transition-transform ${open === i ? "rotate-180" : ""}`} />
           </button>
           {open === i && (
-            <p className="px-4 pb-4 text-[14px] text-black leading-relaxed border-t border-[var(--hw-neutral-100)]">
+            <p className="px-3.5 sm:px-4 py-3 sm:pb-4 text-[13px] sm:text-[14px] text-[var(--hw-neutral-800)] leading-relaxed border-t border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]/50">
               {faq.a}
             </p>
           )}

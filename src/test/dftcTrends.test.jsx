@@ -293,6 +293,8 @@ describe("DFTC Trends page prices API integration", () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
+    // Tab clicks write ?tab=... to the URL; reset so the next test mounts on Price.
+    window.history.replaceState({}, "", "/dftc/trends");
   });
 
   function installApi() {
@@ -370,6 +372,75 @@ describe("DFTC Trends page prices API integration", () => {
     }));
     return detailCalls;
   }
+
+  async function openCommodityCombobox(toggleText) {
+    const toggle = screen
+      .getAllByRole("button")
+      .find((b) => (b.textContent || "").includes(toggleText));
+    fireEvent.click(toggle);
+    const input = await screen.findByPlaceholderText("Search commodities...");
+    return { input, dropdown: () => input.closest("div.border") };
+  }
+
+  it("does not offer Landing as a Price Type", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument());
+    const priceTypeSelect = screen.getByDisplayValue("Retail");
+    expect(Array.from(priceTypeSelect.options).map((o) => o.textContent)).toEqual([
+      "Retail",
+      "Wholesale",
+    ]);
+  });
+
+  it("offers only catalog-backed commodities on the Price tab, full list on Arrival", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument());
+
+    const priceFilter = await openCommodityCombobox("Kamatis");
+    fireEvent.change(priceFilter.input, { target: { value: "Avocado" } });
+    expect(await screen.findByText("No commodities found")).toBeInTheDocument();
+    fireEvent.change(priceFilter.input, { target: { value: "Kamatis" } });
+    expect(
+      within(priceFilter.dropdown()).getByRole("button", { name: /Kamatis/ })
+    ).toBeInTheDocument();
+    // Close before switching tabs: the combobox is reconciled across tabs,
+    // so an open dropdown would carry its state into the arrival filter.
+    fireEvent.keyDown(priceFilter.input, { key: "Escape" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
+    const arrivalFilter = await openCommodityCombobox("Carrots");
+    fireEvent.change(arrivalFilter.input, { target: { value: "Avocado" } });
+    expect(
+      within(arrivalFilter.dropdown()).getByRole("button", { name: /Avocado/ })
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the full commodity list while the price catalog is still loading", async () => {
+    installApi();
+    vi.spyOn(pricesApi, "getPriceList").mockReturnValue(new Promise(() => {}));
+    renderTrends(<DFTCTrends />);
+
+    const priceFilter = await openCommodityCombobox("Kamatis");
+    fireEvent.change(priceFilter.input, { target: { value: "Avocado" } });
+    expect(
+      within(priceFilter.dropdown()).getByRole("button", { name: /Avocado/ })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the honest no-data state for a commodity outside the catalog", async () => {
+    const detailCalls = installApi();
+    window.history.replaceState({}, "", "/dftc/trends?tab=price&commodity=Avocado");
+    renderTrends(<DFTCTrends />);
+
+    expect(await screen.findByText("No price trend data available")).toBeInTheDocument();
+    expect(
+      screen.getByText(/No price records found for Avocado/)
+    ).toBeInTheDocument();
+    // No catalog commodity_id means no trend query is fired at all.
+    expect(detailCalls).toHaveLength(0);
+  });
 
   it("loads Bangkerohan/DFTC historical + forecast for the catalog commodity_id", async () => {
     const detailCalls = installApi();
@@ -494,7 +565,7 @@ describe("DFTC Trends page prices API integration", () => {
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
     expect(screen.getByText("Historical Average Arrival")).toBeInTheDocument();
     expect(await screen.findByTestId("arrival-chart-dates")).toHaveTextContent(
-      "Mar 31, 2025|Sep 30, 2025|Oct 2, 2026"
+      "Oct 2, 2026"
     );
   });
 

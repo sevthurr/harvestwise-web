@@ -13,14 +13,14 @@ const TEXT_SIZE_OPTIONS = [
   { value: "medium", label: "Medium" },
   { value: "large", label: "Large" }
 ];
-const Card = ({ children, className = "" }) => <div className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-5 ${className}`}>
+const Card = ({ children, className = "" }) => <div className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 sm:p-5 ${className}`}>
     {children}
   </div>;
-const SectionTitle = ({ children }) => <h2 className="text-[15px] font-semibold text-black mb-4">{children}</h2>;
-const SectionLabel = ({ children }) => <p className="text-[12px] font-semibold text-black uppercase tracking-wide mb-3">{children}</p>;
-const Field = ({ label, value }) => <div className="space-y-0.5">
-    <p className="text-[12px] font-semibold text-black uppercase tracking-wide">{label}</p>
-    <div className="text-[15px] text-black">{value || <span className="text-[var(--hw-neutral-300)]">—</span>}</div>
+const SectionTitle = ({ children, className = "" }) => <h2 className={`text-[15px] sm:text-[16px] font-semibold text-black mb-4 ${className}`}>{children}</h2>;
+const SectionLabel = ({ children, className = "" }) => <p className={`text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide mb-3 ${className}`}>{children}</p>;
+const Field = ({ label, value, className = "" }) => <div className={`space-y-0.5 ${className}`}>
+    <p className="text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide">{label}</p>
+    <div className="text-[14px] sm:text-[15px] font-medium text-black break-words">{value || <span className="text-[var(--hw-neutral-300)]">—</span>}</div>
   </div>;
 const FieldLabel = ({ htmlFor, children, optional }) => <label htmlFor={htmlFor} className="block text-[14px] font-semibold text-black mb-1.5">
     {children}

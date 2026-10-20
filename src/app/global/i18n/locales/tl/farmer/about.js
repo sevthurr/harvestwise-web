@@ -1,6 +1,6 @@
 export const about = {
   title: "Tungkol sa HarvestWise",
-  help_faqs: "Tulong at FAQs",
+  help_faqs: "Tulong at mga Karaniwang Tanong (FAQs)",
   contact_support: "Makipag-ugnayan sa Suporta",
   privacy_policy: "Patakaran sa Privacy",
   terms_conditions: "Mga Tuntunin at Kundisyon",
@@ -10,5 +10,15 @@ export const about = {
   form_send: "Ipadala ang mensahe",
   message_sent: "Naipadala na ang mensahe",
   send_another: "Magpadala ng iba",
-  version_info: "Bersyon 1.0.0 — prototype build"
+  version_info: "Bersyon 1.0.0 — prototype build",
+  faq1_q: "Paano ko ia-update ang lokasyon ng aking sakahan?",
+  faq1_a: "Pumunta sa Settings → Profile ng Sakahan at i-tap ang \"Gamitin ang aking lokasyon\" upang awtomatikong matukoy ang iyong lokasyon, o manu-manong baguhin ang mga field ng Lungsod, Distrito, at Barangay.",
+  faq2_q: "Paano ko papalitan ang aking mga gustong pananim?",
+  faq2_a: "Pumunta sa Settings → Profile ng Sakahan at piliin o alisin ang mga pananim mula sa listahan. Maaari mo ring baguhin ang iyong gustong barayti para sa bawat pananim.",
+  faq3_q: "Bakit nagbabago ang mga abiso sa pagtatanim?",
+  faq3_a: "Ina-update ang mga abiso batay sa kasalukuyang presyo sa merkado, lagay ng panahon, at datos sa panahon ng pananim. Ipinapakita ng mga pagbabago ang pinakabagong impormasyon sa kasalukuyan.",
+  faq4_q: "Maaari ko bang gamitin ang HarvestWise kahit mahina o walang internet?",
+  faq4_a: "Oo. Iniimbak ng HarvestWise ang mga pinakabagong presyo, pagtataya, at mga abiso upang magamit kahit offline. Pindutin ang \"I-sync ngayon\" sa Settings → Mga Kagustuhan upang i-update ang iyong data kapag may koneksyon ka na sa internet.",
+  faq5_q: "Saan kinukuha ng HarvestWise ang datos ng presyo?",
+  faq5_a: "Kinukuha ang datos ng presyo mula sa Davao City Farmers Market Authority (DFTC) at regular itong ina-update. Sinasalamin ng mga presyo ang aktwal na kalagayan ng merkado para sa retail at wholesale.",
 };

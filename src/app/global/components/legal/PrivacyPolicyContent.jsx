@@ -10,7 +10,7 @@ export function PrivacyPolicyContent() {
   const s10 = t("legal.privacy.sections.s10", {}, {});
 
   return (
-    <div className="space-y-4 text-[12px] leading-relaxed text-[var(--hw-neutral-800,#1f2937)]">
+    <div className="space-y-4 text-[12px] leading-relaxed text-[var(--hw-neutral-800,#1f2937)] [&_p]:text-[12px] [&_h2]:text-[12px] [&_li]:text-[12px] [&_strong]:text-[12px] [&_a]:text-[12px] font-sans">
       {/* Introduction */}
       <div className="space-y-2">
         <p>{t("legal.privacy.intro_p1")}</p>
@@ -311,7 +311,7 @@ export function PrivacyPolicyContent() {
               {t("legal.privacy.sections.s14.address_line1", {}, "University of Mindanao (UM) Matina Campus")}, {t("legal.privacy.sections.s14.address_line2", {}, "University of Mindanao Drive, Matina Pangi Road, Matina Crossing")}, {t("legal.privacy.sections.s14.address_line3", {}, "Davao City, 8000 Davao del Sur, Philippines")}
             </p>
           </div>
-          <p className="text-[11px] text-[var(--hw-neutral-500,#6b7280)] pt-1">
+          <p className="text-[12px] text-[var(--hw-neutral-500,#6b7280)] pt-1">
             {t("legal.privacy.sections.s14.footer_note")}
           </p>
         </div>

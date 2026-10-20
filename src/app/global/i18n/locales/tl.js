@@ -36,6 +36,7 @@ export const tl = {
     loading: "Naglo-load...",
     saving: "Sine-save...",
     view_all: "Tingnan lahat",
+    filter_all: "Lahat",
     see_details: "Tingnan ang detalye",
     none: "Wala",
     not_applicable: "Hindi Aplikable",
@@ -343,7 +344,16 @@ export const tl = {
       assessment_result_title: "Resulta ng Pagsusuri"
     },
 
+    draft: {
+      card_action: "Hindi pa tapos ang assessment – Na-save ang Step 1 draft",
+      continue_btn: "Ipagpatuloy ang draft",
+      card_notice: "Kasalukuyang ginagawa ang draft assessment",
+      incomplete_title: "Draft ng Assessment – Hindi Pa Kumpleto"
+    },
+
     phases: {
+      draft: "Draft – Hindi Kumpleto",
+      drafts_tab: "Mga Draft",
       planning: "Pagpaplano",
       on_hold: "Naka-hold",
       planted: "Natanim Na",
@@ -466,8 +476,8 @@ export const tl = {
         recent_average_price_label: "Karaniwang Presyo sa Nakaraang Panahon",
         estimated_price_label: "Tinatayang Presyo",
         expected_price_change_label: "Inaasahang Pagbabago sa Presyo",
-        past_days_average_sub: "Karaniwang presyo sa nakaraang {days} araw",
-        possible_price_range_sub: "Posibleng saklaw ng presyo",
+        past_days_average_sub: "Nakaraang {days} araw",
+        possible_price_range_sub: "Posibleng saklaw",
         compared_with_recent_avg_sub: "Kung ihahambing sa karaniwang presyo sa nakaraang {days} araw",
         next_days_sub_simple: "Susunod na {days} araw",
         about_the_same: "Halos pareho",
@@ -480,6 +490,7 @@ export const tl = {
         horizon_days_option: "{days} araw",
         historical_range_label: "Nakaraang Panahon",
         forecast_starts: "Simula ng tantiya",
+        zoom_pan_help: "I-scroll para mag-zoom · i-drag ang bar para mag-pan",
         historical_avg_title: "Karaniwang Presyo sa mga Nakaraang Panahon",
         historical_avg_subtitle: "Karaniwang naitalang presyo bawat linggo o buwan · ₱/kg",
         historical_avg_frequency: "Dalas",
@@ -489,10 +500,45 @@ export const tl = {
         historical_avg_dynamic: "Ang karaniwang naitalang presyo noong {period} ay ₱{price}/kg.",
         historical_avg_empty: "Walang available na datos ng karaniwang presyo sa mga nakaraang panahon para sa pagpiling ito.",
         historical_avg_error: "Hindi ma-load ang datos ng karaniwang presyo sa mga nakaraang panahon. Subukan muli.",
-        historical_avg_limited: "Limitado pa ang available na historical na datos para sa pagpiling ito.",
         historical_avg_tooltip_price: "Karaniwang presyo",
         historical_avg_tooltip_observations: "Mga naitalang obserbasyon",
-        previous_year: "Nakaraang Taon"
+        previous_year: "Nakaraang Taon",
+        historical_seasonal_average_label: "Karaniwang Presyo sa Panahon ng Ani",
+        macro_baseline_label: "Karaniwan sa Nakalipas na mga Taon",
+        data_source_label: "Batayan ng Presyo",
+        seasonal_source: "Presyo sa Nakaraang Ani",
+        fallback_source: "Nakaraang Karaniwang Presyo",
+        forecast_source: "Tinatayang Presyo",
+        observed_source: "Presyo sa Pamilihan",
+        standard_source: "Datos sa Pamilihan",
+        stage_planning: "Yugto 1: Pagpaplano",
+        stage_planting: "Yugto 2: Pagtatanim",
+        stage_near_harvest: "Yugto 3: Malapit nang Mag-ani",
+        stage_harvest: "Yugto 4: Pag-aani",
+        stage_active: "Kasalukuyang Yugto ng Pananim",
+        plant_to_harvest_period: "Panahon ng Pagtatanim hanggang Pag-aani",
+        your_planting_window: "Iskedyul ng Iyong Pagtatanim",
+        historical_seasonal_notice: "Karaniwang presyo sa nakaraang ani: ₱{price}/kg (karaniwan sa nakalipas na mga taon: ₱{baseline}/kg).",
+        historical_seasonal_explanation: "Ang karaniwang presyo sa panahon ng ani (₱{price}/kg) ay {pct} kumpara sa karaniwan sa nakalipas na mga taon (₱{baseline}/kg), kaya {classification} ang kalagayan ng presyo.",
+        next_days_option: "Susunod na {days} araw",
+        last_days_option: "Nakaraang {days} araw",
+        stage2_forecast_unavailable_title: "Walang Impormasyon sa Pagtataya: ",
+        stage2_forecast_unavailable_desc: "Ang iyong pananim ay nasa yugto pa ng pagtatanim, at ang inaasahang petsa ng pag-aani ay lampas sa 28-araw na abot-tanaw ng pagtataya. Ang kasalukuyang pagsusuri ay batay sa karaniwang presyo sa nakaraang ani. Awtomatikong lalabas ang pagtataya sa presyo kapag pumasok na sa 28-araw bago mag-ani.",
+        stage2_historical_notice: "Stage 2 batayan sa presyo sa nakaraang ani: ₱{price}/kg (karaniwan sa nakalipas na mga taon: ₱{baseline}/kg). Walang impormasyon sa pagtataya lampas sa 28-araw.",
+        stage2_dual_notice: "Stage 2 dalawahang pagsusuri: Tinatayang presyo sa pag-aani ay ₱{price}/kg ({forecastOutlook}), kasama ang karaniwang presyo sa nakaraang ani na ₱{historicalPrice}/kg ({historicalOutlook}).",
+        vs_baseline: "laban sa baseline",
+        forecast_classification: "Klasipikasyon ng Pagtataya",
+        historical_seasonal_info_title: "Impormasyon sa Nakaraang Pag-aani",
+        harvest_season_avg: "Karaniwan sa pag-aani",
+        historical_benchmark: "Batayan sa nakaraang mga taon",
+        vs_macro_baseline: "laban sa karaniwan sa nakaraang mga taon",
+        historical_classification: "Klasipikasyon Noon",
+        preserved_historical_benchmark: "Batayan sa nakaraang datos",
+        forecast_baseline_label: "Batayan ng Pagtataya",
+        forecast_price_change_label: "Pagbabago sa Tinatayang Presyo",
+        historical_seasonal_avg_label: "Karaniwang Presyo sa Pag-aani",
+        historical_change_label: "Pagbabago sa Presyo Noon",
+        price_reference_notice: "Batayan ng presyo: ₱{price}/kg (baseline: ₱{baseline}/kg)."
       },
 
 
@@ -775,7 +821,9 @@ export const tl = {
       analyzing_plan: "Sinusuri ang plano ng pananim...",
       see_advisory: "Tingnan ang advisory",
       save_draft: "I-save ang draft",
-      what_this_means: "Ano ang ibig sabihin nito",       saving_draft: "Sinusuri ang draft..."
+      what_this_means: "Ano ang ibig sabihin nito",
+      saving_draft: "Sinusuri ang draft...",
+      unspecified_crop: "Pananim"
     },
 
     errors: {

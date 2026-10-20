@@ -168,40 +168,16 @@ const FORECAST_TABLE_PAGE_SIZE = 7;
  * - pagination state is scoped to the table and resets when the forecast changes.
  */
 function ForecastDataTable({ items, commodityName = null }) {
-  const { langCode, effectiveLanguage } = useLanguage();
-  const currentLang = effectiveLanguage || langCode || "ceb";
   const [page, setPage] = useState(1);
 
-  const columns = useMemo(() => {
-    if (currentLang === "ceb") {
-      return [
-        { key: "day", label: "Adlaw" },
-        { key: "temp", label: "Temperatura" },
-        { key: "rain", label: "Ulan" },
-        { key: "humidity", label: "Kaumog" },
-        { key: "wind", label: "Kusog sa Hangin" },
-        { key: "condition", label: "Kahimtang" },
-      ];
-    }
-    if (currentLang === "tl") {
-      return [
-        { key: "day", label: "Araw" },
-        { key: "temp", label: "Temperatura" },
-        { key: "rain", label: "Ulan" },
-        { key: "humidity", label: "Halumigmig" },
-        { key: "wind", label: "Bilis ng Hangin" },
-        { key: "condition", label: "Kondisyon" },
-      ];
-    }
-    return [
-      { key: "day", label: "Day" },
-      { key: "temp", label: "Temp Range" },
-      { key: "rain", label: "Rainfall" },
-      { key: "humidity", label: "Humidity" },
-      { key: "wind", label: "Wind Speed" },
-      { key: "condition", label: "Condition" },
-    ];
-  }, [currentLang]);
+  const columns = useMemo(() => [
+    { key: "day", label: "Day" },
+    { key: "temp", label: "Temp Range" },
+    { key: "rain", label: "Rainfall" },
+    { key: "humidity", label: "Humidity" },
+    { key: "wind", label: "Wind Speed" },
+    { key: "condition", label: "Condition" },
+  ], []);
 
   // Table-only fields (humidity / wind / condition) are normalized here rather than
   // in the shared card memo, so the farmer path does no extra work.
@@ -210,9 +186,7 @@ function ForecastDataTable({ items, commodityName = null }) {
       items.map((day, i) => {
         const humidity = day.humidity ?? day.humidity_pct;
         const windSpeed = day.wind_speed_max_kmh ?? day.windSpeed;
-        const relativeLabel = i === 0
-          ? (currentLang === "ceb" ? "Karon" : currentLang === "tl" ? "Ngayon" : "Today")
-          : day.dayLabel || `+${i}d`;
+        const relativeLabel = i === 0 ? "Today" : day.dayLabel || `+${i}d`;
         return {
           key: `${day.formattedDate}-${relativeLabel}`,
           dayName: relativeLabel,
@@ -226,7 +200,7 @@ function ForecastDataTable({ items, commodityName = null }) {
           suitability: day.suitability,
         };
       }),
-    [items, currentLang]
+    [items]
   );
 
   const totalPages = Math.ceil(rows.length / FORECAST_TABLE_PAGE_SIZE) || 1;
@@ -238,26 +212,11 @@ function ForecastDataTable({ items, commodityName = null }) {
     setPage(1);
   }, [items]);
 
-  const tableTitle = currentLang === "ceb"
-    ? "Datos sa Tagna sa Panahon"
-    : currentLang === "tl"
-    ? "Datos ng Ulat Panahon"
-    : "Forecast Data";
-
-  const tableSubtitle = currentLang === "ceb"
-    ? "Inadlaw nga mga parametro sa panahon nga gigamit sa pagsusi sa risk."
-    : currentLang === "tl"
-    ? "Pang-araw-araw na mga datos ng panahon na ginagamit sa pagsusuri ng panganib."
-    : "Per-day weather parameters used to classify weather risk.";
-
-  const showingText = currentLang === "ceb"
-    ? `Gipakita ang ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} sa ${rows.length} ka adlaw`
-    : currentLang === "tl"
-    ? `Ipinapakita ang ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} ng ${rows.length} araw`
-    : `Showing ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} of ${rows.length} days`;
-
-  const prevText = currentLang === "ceb" ? "Miagi" : currentLang === "tl" ? "Nakaraan" : "Prev";
-  const nextText = currentLang === "ceb" ? "Sunod" : currentLang === "tl" ? "Susunod" : "Next";
+  const tableTitle = "Forecast Data";
+  const tableSubtitle = "Per-day weather parameters used to classify weather risk.";
+  const showingText = `Showing ${start + 1}–${Math.min(start + FORECAST_TABLE_PAGE_SIZE, rows.length)} of ${rows.length} days`;
+  const prevText = "Prev";
+  const nextText = "Next";
 
   return (
     <div className="border-t border-[var(--hw-neutral-100)] pt-4 space-y-2.5">
@@ -290,11 +249,7 @@ function ForecastDataTable({ items, commodityName = null }) {
                 evaluateSuitability(day, commodityName) ||
                 "Suitable";
               const suitCfg = SUITABILITY_STYLES[suitKey] || SUITABILITY_STYLES.Suitable;
-              const label = currentLang === "ceb"
-                ? (suitCfg.labelCeb || suitCfg.shortCeb)
-                : currentLang === "tl"
-                ? (suitCfg.labelTl || suitCfg.shortTl)
-                : (suitCfg.labelEn || suitKey);
+              const label = suitCfg.labelEn || suitKey;
 
               return (
                 <tr key={day.key} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
@@ -558,27 +513,25 @@ export function WeatherForecastOutlook({
     : "Field Readiness & Outlook";
 
   return (
-    <div
-      className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-5 sm:p-6 md:p-8 space-y-4 ${className}`}
-    >
-      {/* Header */}
+    <div className={`space-y-3.5 sm:space-y-4 ${className}`}>
+      {/* Header — unconfined in content area */}
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
         <div>
-          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+          <h3 className="text-[13px] sm:text-[14px] font-bold text-black uppercase tracking-wide">
             {title || defaultTitle}
-          </p>
+          </h3>
           {subtitle && (
-            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+            <p className="text-[12px] text-black mt-0.5">
               {subtitle}
             </p>
           )}
         </div>
       </div>
 
-      {/* Cards Container */}
+      {/* Cards Container — unconfined in content area */}
       {items.length > 0 ? (
         <div
-          className="flex gap-2.5 sm:gap-3 overflow-x-auto p-1.5 pb-2.5 -m-1.5 select-none no-scrollbar [&::-webkit-scrollbar]:hidden"
+          className="flex gap-2 sm:gap-2.5 overflow-x-auto py-2 -my-2 px-1.5 sm:px-2 select-none no-scrollbar [&::-webkit-scrollbar]:hidden"
           style={{
             scrollbarWidth: "none",
             msOverflowStyle: "none",
@@ -601,35 +554,35 @@ export function WeatherForecastOutlook({
                 type="button"
                 onClick={() => handleCardClick(i)}
                 aria-pressed={isSelected}
-                className={`flex-shrink-0 flex flex-col items-center gap-1.5 sm:gap-2 rounded-2xl px-3 sm:px-4 py-4 sm:py-5 min-w-[86px] sm:min-w-[90px] transition-all cursor-pointer text-left
+                className={`flex-shrink-0 flex flex-col items-center gap-1 rounded-xl sm:rounded-2xl px-2 sm:px-2.5 py-2.5 sm:py-3 min-w-[68px] sm:min-w-[74px] transition-all cursor-pointer text-left
                   ${
                     isSelected
-                      ? "ring-2 ring-[var(--hw-green-700)] bg-emerald-50/40 border border-[var(--hw-green-600)] shadow-sm"
-                      : "bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-100)]"
+                      ? "ring-2 ring-[var(--hw-green-700)] bg-emerald-50/70 border border-[var(--hw-green-600)] shadow-sm"
+                      : "bg-white border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)]"
                   }
                 `}
               >
-                <p className={`text-[13px] font-bold text-center ${isSelected ? "text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)]"}`}>
+                <p className={`text-[11.5px] sm:text-[12px] font-bold text-center truncate w-full ${isSelected ? "text-[var(--hw-green-800)]" : "text-black"}`}>
                   {day.dayName}
                 </p>
-                <p className="text-[11px] text-[var(--hw-neutral-500)] font-medium text-center -mt-0.5">
+                <p className="text-[10px] text-black font-medium text-center truncate w-full -mt-0.5">
                   {day.formattedDate}
                 </p>
 
-                <div className="w-9 h-9 my-0.5 flex items-center justify-center text-2xl select-none">
+                <div className="w-7 h-7 my-0.5 flex items-center justify-center text-xl select-none">
                   {day.visual}
                 </div>
 
                 <div className="text-center">
-                  <p className="text-[15px] font-bold text-[var(--hw-neutral-900)]">
+                  <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
                     {day.tempMax != null ? `${day.tempMax}°` : "-°"}
                   </p>
-                  <p className="text-[12px] text-[var(--hw-neutral-500)] font-medium">
+                  <p className="text-[10.5px] sm:text-[11px] text-black font-medium leading-tight">
                     {day.tempMin != null ? `${day.tempMin}°` : "-°"}
                   </p>
                 </div>
 
-                <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] mt-0.5">
+                <p className="text-[11px] font-semibold text-black mt-0.5">
                   {day.rainfallMm != null
                     ? `${day.rainfallMm}mm`
                     : day.rainPct != null
@@ -638,7 +591,7 @@ export function WeatherForecastOutlook({
                 </p>
 
                 {daySuitCfg && (
-                  <div className={`flex items-center gap-1 mt-1 text-[10px] font-semibold ${daySuitCfg.text}`}>
+                  <div className={`flex items-center gap-1 mt-0.5 text-[9.5px] font-semibold truncate ${daySuitCfg.text}`}>
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${daySuitCfg.dot}`} />
                     <span>{suitabilityLabel}</span>
                   </div>
@@ -648,25 +601,25 @@ export function WeatherForecastOutlook({
           })}
         </div>
       ) : (
-        <div className="py-8 text-center text-[var(--hw-neutral-500)] text-[13px] bg-[var(--hw-neutral-50)]/50 rounded-xl border border-dashed border-[var(--hw-neutral-200)]">
+        <div className="py-8 text-center text-black text-[13px] bg-white rounded-xl border border-dashed border-[var(--hw-neutral-200)]">
           {emptyMessage || defaultEmptyMsg}
         </div>
       )}
 
-      {/* ── Details Container Below Weather Cards (No Badges, Strict Green/Yellow/Red Colors) ── */}
+      {/* ── Details Container Below Weather Cards (In its own card container) ── */}
       {selectedDay && (
-        <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] space-y-3.5 transition-all animate-fadeIn">
-          {/* Top Bar: Selected Date and Optional Commodity Suitability (Clean text and icon, no badge style) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--hw-neutral-200)]">
+        <div className="mt-4 sm:mt-5 p-4 sm:p-5 rounded-2xl bg-white border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] space-y-4 transition-all">
+          {/* Top Bar: Selected Date and Optional Commodity Suitability */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--hw-neutral-100)]">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-[var(--hw-green-100)] text-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
                 <Calendar className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
+                <p className="text-[13px] sm:text-[14px] font-bold text-black">
                   {getFullDayLabel(selectedDay.rawDate, selectedDay.dayName, selectedDay.index, currentLang)}
                 </p>
-                <p className="text-[11px] text-[var(--hw-neutral-500)]">
+                <p className="text-[11px] sm:text-[12px] text-black mt-0.5">
                   {detailsTitle}
                 </p>
               </div>
@@ -686,42 +639,42 @@ export function WeatherForecastOutlook({
           {/* 3 Parameter Breakdown Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* 1. Temperature Card */}
-            <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-1.5 shadow-[var(--shadow-xs)]">
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-1.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)]">
+                <div className="flex items-center gap-1.5 text-black">
                   <Thermometer className={`w-4 h-4 flex-shrink-0 ${tempIconColor}`} />
                   <span className="text-[12px] font-bold uppercase tracking-wider">{tempSectionTitle}</span>
                 </div>
-                <span className="text-[13px] font-bold text-[var(--hw-neutral-800)]">
+                <span className="text-[13px] font-bold text-black">
                   {selectedDay.tempMax != null ? `${selectedDay.tempMax}°C` : "-"} / {selectedDay.tempMin != null ? `${selectedDay.tempMin}°C` : "-"}
                 </span>
               </div>
-              <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed pt-1">
+              <p className="text-[13px] text-black leading-relaxed pt-1">
                 {tempNote}
               </p>
             </div>
 
             {/* 2. Rainfall Card */}
-            <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-1.5 shadow-[var(--shadow-xs)]">
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-1.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)]">
+                <div className="flex items-center gap-1.5 text-black">
                   <CloudRain className={`w-4 h-4 flex-shrink-0 ${rainIconColor}`} />
                   <span className="text-[12px] font-bold uppercase tracking-wider">{rainSectionTitle}</span>
                 </div>
-                <span className="text-[13px] font-bold text-[var(--hw-neutral-800)]">
+                <span className="text-[13px] font-bold text-black">
                   {selectedDay.rainfallMm} mm
                   {selectedDay.rainPct != null ? ` · ${selectedDay.rainPct}%` : ""}
                 </span>
               </div>
-              <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed pt-1">
+              <p className="text-[13px] text-black leading-relaxed pt-1">
                 {rainNote}
               </p>
             </div>
 
             {/* 3. Guidance / Field Outlook Card */}
-            <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-1.5 shadow-[var(--shadow-xs)]">
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-3.5 space-y-1.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)]">
+                <div className="flex items-center gap-1.5 text-black">
                   {commodityName ? (
                     <Sprout className={`w-4 h-4 flex-shrink-0 ${guidanceIconColor}`} />
                   ) : (
@@ -730,12 +683,12 @@ export function WeatherForecastOutlook({
                   <span className="text-[12px] font-bold uppercase tracking-wider">{guidanceSectionTitle}</span>
                 </div>
                 {selectedDay.humidity != null && (
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+                  <span className="text-[12px] font-semibold text-black">
                     RH: {selectedDay.humidity}%
                   </span>
                 )}
               </div>
-              <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed pt-1">
+              <p className="text-[13px] text-black leading-relaxed pt-1">
                 {guidanceNote}
               </p>
             </div>

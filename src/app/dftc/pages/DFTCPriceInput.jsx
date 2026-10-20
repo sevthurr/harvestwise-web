@@ -1018,6 +1018,10 @@ function DFTCPriceInput() {
     setUnrenderableCount(0);
     setCarriedDate(null);
 
+    // Today's manual-entry form is intentionally a blank capture surface.
+    // Existing or historical prices must never be copied into the current day.
+    if (date === localToday()) return;
+
     try {
       const snap = await loadPrefillSnapshot(date, stableResolverRef.current);
       // A slow response for a date the user has already moved off of.
@@ -1286,38 +1290,33 @@ function DFTCPriceInput() {
           const dftcWholesaleField = getField("dftc-wholesale", v.id);
           const dftcRetailField = getField("dftc-retail", v.id);
 
-          const hasAny = hasValue(bankLandingField) ||
-            hasValue(bankWholesaleField) ||
-            hasValue(bankRetailField) ||
-            hasValue(dftcWholesaleField) ||
-            hasValue(dftcRetailField);
-
-          if (hasAny) {
-            const uom = bankRetailField.uom || bankWholesaleField.uom || bankLandingField.uom || dftcRetailField.uom || dftcWholesaleField.uom || "kg";
-            const skipped = {
-              bankLanding: isUntouchedCarried("bangkerohan-landing", v.id),
-              bankWholesale: isUntouchedCarried("bangkerohan-wholesale", v.id),
-              bankRetail: isUntouchedCarried("bangkerohan-retail", v.id),
-              dftcWholesale: isUntouchedCarried("dftc-wholesale", v.id),
-              dftcRetail: isUntouchedCarried("dftc-retail", v.id)
-            };
-            const anyCarried = MARKET_TABS.some((t) => carriedRef.current[t.id]?.has(v.id));
-            catRows.push({
-              no: vi === 0 ? itemNumber++ : "",
-              cat,
-              com,
-              v,
-              vi,
-              uom,
-              carriedDate: anyCarried ? carriedDate : null,
-              skipped,
-              bankLanding: bankLandingField.prevailing,
-              bankWholesale: bankWholesaleField.prevailing,
-              bankRetail: bankRetailField.prevailing,
-              dftcWholesale: dftcWholesaleField.prevailing,
-              dftcRetail: dftcRetailField.prevailing
-            });
-          }
+          // The review is the complete monitoring sheet. Keep catalog rows even
+          // when every market field is blank so an entry in one commodity does
+          // not hide the remaining commodities from the report.
+          const uom = bankRetailField.uom || bankWholesaleField.uom || bankLandingField.uom || dftcRetailField.uom || dftcWholesaleField.uom || "kg";
+          const skipped = {
+            bankLanding: isUntouchedCarried("bangkerohan-landing", v.id),
+            bankWholesale: isUntouchedCarried("bangkerohan-wholesale", v.id),
+            bankRetail: isUntouchedCarried("bangkerohan-retail", v.id),
+            dftcWholesale: isUntouchedCarried("dftc-wholesale", v.id),
+            dftcRetail: isUntouchedCarried("dftc-retail", v.id)
+          };
+          const anyCarried = MARKET_TABS.some((t) => carriedRef.current[t.id]?.has(v.id));
+          catRows.push({
+            no: vi === 0 ? itemNumber++ : "",
+            cat,
+            com,
+            v,
+            vi,
+            uom,
+            carriedDate: anyCarried ? carriedDate : null,
+            skipped,
+            bankLanding: bankLandingField.prevailing,
+            bankWholesale: bankWholesaleField.prevailing,
+            bankRetail: bankRetailField.prevailing,
+            dftcWholesale: dftcWholesaleField.prevailing,
+            dftcRetail: dftcRetailField.prevailing
+          });
         });
       });
       if (catRows.length > 0) {

@@ -10,5 +10,15 @@ export const about = {
   form_send: "Send message",
   message_sent: "Message sent",
   send_another: "Send another",
-  version_info: "Version 1.0.0 — prototype build"
+  version_info: "Version 1.0.0 — prototype build",
+  faq1_q: "How do I update my farm location?",
+  faq1_a: "Go to Settings → Farm Profile and tap \"Use my location\" to detect your location automatically, or update the City, District, and Barangay fields manually.",
+  faq2_q: "How do I change my preferred crops?",
+  faq2_a: "Go to Settings → Farm Profile and select or deselect crops from the crop list. You can also update your preferred variety for each crop.",
+  faq3_q: "Why do advisories change?",
+  faq3_a: "Advisories are updated based on current market prices, weather conditions, and seasonal crop data. Changes reflect the latest available information.",
+  faq4_q: "Can I use HarvestWise with limited internet?",
+  faq4_a: "Yes. HarvestWise stores recent prices, forecasts, and advisories for offline use. Tap \"Sync now\" in Settings → Preferences to update your offline data when you have a connection.",
+  faq5_q: "How does HarvestWise get price data?",
+  faq5_a: "Price data is collected from the Davao City Farmers Market Authority (DFTC) and updated regularly. Prices reflect retail and wholesale market conditions.",
 };

@@ -342,8 +342,8 @@ function ConfirmFinalizeArrivalModal({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-[var(--hw-green-200)] bg-[var(--hw-green-50)]">
-              <span className="text-[13px] font-medium text-[var(--hw-green-800)]">Total Commodities Entered</span>
-              <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{totalRecords} commodities</span>
+              <span className="text-[13px] font-medium text-[var(--hw-green-800)]">Total Source Values Entered</span>
+              <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{totalRecords} inputs</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[12px] text-[var(--hw-neutral-700)] bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-200)]">
@@ -1118,17 +1118,49 @@ export default function DFTCArrivalInput() {
     return enteredRows.filter((r) => r.otherVal > 0).length;
   }, [enteredRows]);
 
+  // enteredRows stays one record per commodity because it is also the save
+  // payload, so a commodity with both sources filled counts once there but
+  // fills two source cells. The review counts cells.
+  const totalSourceValueCount = farmEnteredCount + otherEnteredCount;
+
+  // The review is the complete monitoring sheet, so it walks the full catalogue
+  // rather than enteredRows — that one is the save payload and the printed
+  // totals, which must stay limited to commodities that carry a volume.
+  const catalogueReviewRows = useMemo(() => {
+    const list = [];
+    PRICE_CATEGORIES.forEach((cat) => {
+      getAllCommodities(cat).forEach((com) => {
+        getVariants(com).forEach((v, vi) => {
+          const f = getField(v.id);
+          const farmVal = parseFloat(f.farmSource) || 0;
+          const otherVal = parseFloat(f.otherSource) || 0;
+          list.push({
+            cat,
+            com,
+            v,
+            vi,
+            uom: f.uom || "kg",
+            farmVal,
+            otherVal,
+            combined: farmVal + otherVal
+          });
+        });
+      });
+    });
+    return list;
+  }, [fields, customCommodities, customVariants]);
+
   // Consolidated review rows grouped by category
   const consolidatedReviewGroups = useMemo(() => {
     const groups = [];
     PRICE_CATEGORIES.forEach((cat) => {
-      const rows = enteredRows.filter((r) => r.cat.id === cat.id);
+      const rows = catalogueReviewRows.filter((r) => r.cat.id === cat.id);
       if (rows.length > 0) {
         groups.push({ cat, rows });
       }
     });
     return groups;
-  }, [enteredRows]);
+  }, [catalogueReviewRows]);
 
   // Filtered review groups based on summary card clicks
   const filteredReviewGroups = useMemo(() => {
@@ -1248,7 +1280,7 @@ export default function DFTCArrivalInput() {
       setIsSaving(false);
       navigate("/dftc/input", {
         state: {
-          successMsg: `${dataName} saved successfully (${totalSaved} arrival records recorded).`,
+          successMsg: `${dataName} saved successfully (${totalSaved} commodity records, ${totalSourceValueCount} source values across Farm Source and Other Sources).`,
           justSavedType: "arrival",
           justSavedDate: effectivePeriodInfo.iso,
           justSavedAt: new Date().toISOString(),
@@ -1346,7 +1378,7 @@ export default function DFTCArrivalInput() {
                 reviewFilter === "all" ? "text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-900)] hover:text-[var(--hw-green-700)]"
               }`}
             >
-              Total Commodities Entered: <strong className="text-[var(--hw-green-700)]">{totalEnteredCount}</strong>
+              Total Source Values Entered: <strong className="text-[var(--hw-green-700)]">{totalSourceValueCount}</strong>
               {reviewFilter !== "all" && (
                 <span className="ml-2 text-[12px] font-normal text-[var(--hw-green-700)] underline">
                   (Show All)
@@ -1361,7 +1393,7 @@ export default function DFTCArrivalInput() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px]">
             {[
-              { id: "all", label: "Combined Overall Volume", count: totalEnteredCount },
+              { id: "all", label: "Combined Overall Volume", count: totalSourceValueCount },
               { id: "farm", label: "Farm Source", count: farmEnteredCount },
               { id: "other", label: "Other Sources", count: otherEnteredCount }
             ].map((card) => {
@@ -1645,7 +1677,7 @@ export default function DFTCArrivalInput() {
               disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError)}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalEnteredCount} commodities)
+              Save {dataName} ({totalSourceValueCount} inputs)
             </button>
           </div>
 
@@ -1685,7 +1717,7 @@ export default function DFTCArrivalInput() {
           {confirmOpen && (
             <ConfirmFinalizeArrivalModal
               periodLabel={effectivePeriodInfo.label}
-              totalRecords={totalEnteredCount}
+              totalRecords={totalSourceValueCount}
               totalVolume={totalCombinedVolume}
               farmVolume={totalFarmVolume}
               otherVolume={totalOtherVolume}
@@ -1763,7 +1795,7 @@ export default function DFTCArrivalInput() {
               className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               title="Review Entered Data"
             >
-              Review ({totalEnteredCount})
+              Review ({totalSourceValueCount})
             </button>
           </div>
         </div>
@@ -2190,7 +2222,7 @@ export default function DFTCArrivalInput() {
             Ready to review entered arrival volume?
           </h3>
           <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-            {totalEnteredCount} commodity record{totalEnteredCount === 1 ? "" : "s"} entered across Farm Source and Other Sources.
+            {totalSourceValueCount} source value{totalSourceValueCount === 1 ? "" : "s"} entered across Farm Source and Other Sources.
           </p>
         </div>
         <button
@@ -2205,7 +2237,7 @@ export default function DFTCArrivalInput() {
           <span>Review Entered Data</span>
           {totalEnteredCount > 0 && (
             <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold">
-              {totalEnteredCount}
+              {totalSourceValueCount}
             </span>
           )}
         </button>

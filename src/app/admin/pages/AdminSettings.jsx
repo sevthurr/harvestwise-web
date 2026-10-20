@@ -31,6 +31,10 @@ const TABS = [
 
 const AccountTab = ({ showToast }) => {
   const { user, refreshUser } = useAuth();
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/admin/settings?tab=account`,
+    onResult: () => {},
+  });
   const staff = user?.staff_profile || user?.staffProfile || {};
   const [form, setForm] = useState({
     firstName: staff?.first_name || staff?.firstName || user?.first_name || user?.firstName || "",
@@ -170,9 +174,15 @@ const AccountTab = ({ showToast }) => {
               placeholder="admin@example.com"
               value={form.email}
               onChange={set("email")}
-              className={`${inputCls} ${emailInvalid ? "border-red-500 focus:ring-red-500" : ""}`}
+              disabled={googleLink.googleConnected}
+              className={`${inputCls} ${emailInvalid ? "border-red-500 focus:ring-red-500" : ""} ${googleLink.googleConnected ? "bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed" : ""}`}
             />
             {emailInvalid && <p className="mt-1 text-[12px] text-red-600">Enter a valid email address.</p>}
+            {googleLink.googleConnected && (
+              <p className="mt-1 text-[12px] text-amber-700">
+                Your account is linked to Google Sign-In. To change your email, update it in your Google account first.
+              </p>
+            )}
           </div>
           <div>
             <FieldLabel htmlFor="adm-role">Role</FieldLabel>

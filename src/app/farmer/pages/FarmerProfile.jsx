@@ -57,12 +57,10 @@ function FarmerProfile() {
   const locationDisplay = locationParts.length > 0 ? locationParts.join(", ") : "—";
 
   const preferredCrops = profile?.preferredCrops || [];
-  const primarySellingMethod = profile?.sellingMethods?.[0]?.label || "—";
-  const usualSellingArea = profile?.usualSellingAreaOrBuyer || "—";
 
   if (loading) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
         <div className="space-y-1 mb-2">
           <Skeleton className="h-7 w-32 rounded" />
           <Skeleton className="h-4 w-60 rounded" />
@@ -82,30 +80,32 @@ function FarmerProfile() {
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
       <PageHeader
         title={t("farmer.profile.title", {}, "Profile")}
         description={t("farmer.profile.subtitle", {}, "Your personal and farm information.")}
       />
 
       {/* ── Section 1: Profile Header ── */}
-      <Card>
-        <div className="flex items-start gap-4">
-          <ProfileAvatar initials={initials} src={user?.profile_picture_path} alt={fullName} />
+      <Card className="p-3.5 sm:p-5">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="flex items-center xs:items-start gap-3 sm:gap-4 min-w-0 flex-1">
+            <ProfileAvatar initials={initials} src={user?.profile_picture_path} alt={fullName} />
 
-          <div className="flex-1 min-w-0 pt-0.5">
-            <p className="text-[20px] font-bold text-black leading-snug">{fullName}</p>
-            <p className="text-[14px] text-[var(--hw-neutral-600)]">{t("farmer.navigation.farmer_role", {}, "Farmer")}</p>
-            <div className="flex items-center gap-1 mt-1.5">
-              <MapPin className="w-3.5 h-3.5 text-black flex-shrink-0" />
-              <span className="text-[13px] text-black truncate">{locationDisplay}</span>
+            <div className="flex-1 min-w-0 pt-0.5">
+              <p className="text-[17px] xs:text-[19px] sm:text-[20px] font-bold text-black leading-snug break-words">{fullName}</p>
+              <p className="text-[13px] sm:text-[14px] text-[var(--hw-neutral-600)]">{t("farmer.navigation.farmer_role", {}, "Farmer")}</p>
+              <div className="flex items-start gap-1.5 mt-1 sm:mt-1.5">
+                <MapPin className="w-3.5 h-3.5 text-[var(--hw-neutral-600)] flex-shrink-0 mt-0.5" />
+                <span className="text-[12px] sm:text-[13px] text-black break-words leading-snug">{locationDisplay}</span>
+              </div>
             </div>
           </div>
 
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=account")}
-            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline flex-shrink-0"
+            className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline flex-shrink-0 whitespace-nowrap pt-0.5"
           >
             {t("farmer.profile.edit_in_settings", {}, "Edit Profile")}
           </button>
@@ -113,54 +113,54 @@ function FarmerProfile() {
       </Card>
 
       {/* ── Section 2: Personal Information ── */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <SectionTitle>{t("farmer.settings.personal_info", {}, "Personal Information")}</SectionTitle>
+      <Card className="p-3.5 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <SectionTitle className="mb-0 text-[14px] sm:text-[16px] font-bold">{t("farmer.settings.personal_info", {}, "Personal Information")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=account")}
-            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
+            className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline whitespace-nowrap"
           >
             {t("common.edit", {}, "Edit")}
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+        <div className="grid grid-cols-2 gap-x-3.5 sm:gap-x-6 gap-y-3.5 sm:gap-y-5">
           <Field label={t("farmer.settings.first_name", {}, "First Name")} value={firstName || "—"} />
           <Field label={t("farmer.settings.last_name", {}, "Last Name")} value={lastName || "—"} />
           <Field label={t("farmer.settings.middle_name", {}, "Middle Name")} value={middleName || "—"} />
           <Field label="Suffix" value={suffix || "—"} />
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">{t("farmer.settings.phone_number", {}, "Phone Number")}</p>
+            <p className="text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide">{t("farmer.settings.phone_number", {}, "Phone Number")}</p>
             <div className="flex items-center gap-2">
-              <Phone className="w-3.5 h-3.5 text-black" />
-              <span className="text-[15px] text-black">{phone}</span>
+              <Phone className="w-3.5 h-3.5 text-[var(--hw-neutral-700)] flex-shrink-0" />
+              <span className="text-[14px] sm:text-[15px] font-medium text-black break-words">{phone}</span>
             </div>
           </div>
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">{t("farmer.settings.email_address", {}, "Email")}</p>
-            <div className="flex items-center gap-2">
-              <Mail className="w-3.5 h-3.5 text-black" />
-              <span className="text-[15px] text-black truncate">{email}</span>
+            <p className="text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide">{t("farmer.settings.email_address", {}, "Email")}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <Mail className="w-3.5 h-3.5 text-[var(--hw-neutral-700)] flex-shrink-0" />
+              <span className="text-[14px] sm:text-[15px] font-medium text-black truncate">{email}</span>
             </div>
           </div>
         </div>
       </Card>
 
       {/* ── Section 3: Farm Profile ── */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <SectionTitle>{t("farmer.settings.farm_location", {}, "Farm Location")}</SectionTitle>
+      <Card className="p-3.5 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <SectionTitle className="mb-0 text-[14px] sm:text-[16px] font-bold">{t("farmer.settings.farm_location", {}, "Farm Location")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=farm")}
-            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
+            className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline whitespace-nowrap"
           >
             {t("common.edit", {}, "Edit")}
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div className="grid grid-cols-2 gap-x-3.5 sm:gap-x-6 gap-y-3 sm:gap-y-4">
           <Field label={t("onboarding.barangay", {}, "Barangay")} value={barangay || "—"} />
           <Field label={t("onboarding.district", {}, "District")} value={district || "—"} />
           <Field label={t("onboarding.city", {}, "City")} value={city || "—"} />
@@ -170,55 +170,37 @@ function FarmerProfile() {
       </Card>
 
       {/* ── Section 4: Crop Preferences ── */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <SectionTitle>{t("farmer.settings.preferred_crops", {}, "Preferred Crops")}</SectionTitle>
+      <Card className="p-3.5 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <SectionTitle className="mb-0 text-[14px] sm:text-[16px] font-bold">{t("farmer.settings.preferred_crops", {}, "Preferred Crops")}</SectionTitle>
           <button
             type="button"
             onClick={() => navigate("/farmer/settings?tab=farm")}
-            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
+            className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline whitespace-nowrap"
           >
             {t("common.edit", {}, "Edit")}
           </button>
         </div>
         {preferredCrops.length === 0 ? (
-          <p className="text-[14px] text-[var(--hw-neutral-500)] italic py-1">No preferred crops selected.</p>
+          <p className="text-[13px] sm:text-[14px] text-[var(--hw-neutral-500)] italic py-1">No preferred crops selected.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
             {preferredCrops.map((crop) => {
               const name = crop.commodityName || crop.name || "Crop";
               const variety = crop.varietyName || "Default";
               const iconKey = getCommodityIconKey(crop.commodityId, null, name);
               return (
-                <div key={crop.id || crop.commodityId || name} className="flex items-center gap-3">
+                <div key={crop.id || crop.commodityId || name} className="flex items-center gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
                   <CommodityIllustration commodityId={iconKey || crop.commodityId} className="w-8 h-8 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-medium text-black">{name}</p>
-                    <p className="text-[13px] text-[var(--hw-neutral-600)]">{variety}</p>
+                    <p className="text-[14px] sm:text-[15px] font-medium text-black truncate">{name}</p>
+                    <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-600)] truncate">{variety}</p>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </Card>
-
-      {/* ── Section 5: Selling Preference ── */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <SectionTitle>{t("farmer.settings.selling_method", {}, "Selling Method")}</SectionTitle>
-          <button
-            type="button"
-            onClick={() => navigate("/farmer/settings?tab=farm")}
-            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline -mt-4"
-          >
-            {t("common.edit", {}, "Edit")}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          <Field label={t("farmer.settings.selling_method", {}, "Selling Method")} value={primarySellingMethod} />
-          <Field label={t("farmer.settings.selling_buyer", {}, "Usual Selling Area / Buyer")} value={usualSellingArea} />
-        </div>
       </Card>
     </div>
   );

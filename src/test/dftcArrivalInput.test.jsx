@@ -199,6 +199,32 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     });
   });
 
+  it('counts filled source cells, not commodity rows, on the review summary', async () => {
+    renderDFTCArrivalInput();
+
+    const lowlandBtn = screen.getByText(/Lowland Vegetables/i).closest('button');
+    fireEvent.click(lowlandBtn);
+
+    const inputs = screen.getAllByPlaceholderText('0');
+    fireEvent.change(inputs[0], { target: { value: '1000' } });
+    fireEvent.change(inputs[1], { target: { value: '500' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Total Source Values Entered: 2/i })).toBeInTheDocument();
+    });
+
+    // One commodity, two filled source cells — the summary counts cells, so the
+    // combined card matches Farm Source + Other Sources.
+    expect(screen.getByRole('button', { name: /Combined Overall Volume 2 entered/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Farm Source 1 entered/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Other Sources 1 entered/i })).toBeInTheDocument();
+
+    // Saving is still one commodity record, carrying both source columns.
+    expect(screen.getByRole('button', { name: /Save DFTC Arrival Volume.*\(1 commodities\)/i })).toBeInTheDocument();
+  });
+
   it('displays the official DFTC Arrival Volume Table without hardcoded (kg) in headers', async () => {
     renderDFTCArrivalInput();
 
@@ -223,6 +249,9 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
       // Check total row matching Excel sheet
       expect(screen.getByText('TOTAL')).toBeInTheDocument();
     });
+
+    // The review is a complete commodity sheet, not only the rows with input.
+    expect(screen.getByRole('table')).toHaveTextContent('Kamatis');
   });
 
   it('submits arrival volume with searchable DFTC personnel and shows saving loading overlay', async () => {

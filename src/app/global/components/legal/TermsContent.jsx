@@ -9,7 +9,7 @@ export function TermsContent() {
   const s14 = t("legal.terms.sections.s14", {}, {});
 
   return (
-    <div className="space-y-4 text-[12px] leading-relaxed text-[var(--hw-neutral-800,#1f2937)]">
+    <div className="space-y-4 text-[12px] leading-relaxed text-[var(--hw-neutral-800,#1f2937)] [&_p]:text-[12px] [&_h2]:text-[12px] [&_li]:text-[12px] [&_strong]:text-[12px] [&_a]:text-[12px] font-sans">
       {/* Introduction */}
       <div className="space-y-2">
         <p>{t("legal.terms.intro_p1")}</p>
