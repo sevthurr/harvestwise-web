@@ -21,6 +21,8 @@ export const crops = {
   confirm_details_monitoring: "Kumpirmaha ang imong detalye aron masugdan ang pagmonitor sa {displayName}.",
   actual_planting_date: "Aktuwal nga petsa sa pagtanom",
   actual_planted_area: "Aktuwal nga gitanom nga sukod (sq m)",
-  updated_expected_harvest: "Gi-update nga gilaom nga petsa sa ani",
-  confirm_planted: "Kumpirmaha — natanom na nako kini"
+  confirm_planted: "Kumpirmaha — natanom na nako kini",
+  saved_as_plan: "na-save isip plano sa tanom",
+  marked_as_planted: "namarkahan nga gitanom na ug nagtubo",
+  saved_on_hold: "na-save ug gipadaplin una"
 };

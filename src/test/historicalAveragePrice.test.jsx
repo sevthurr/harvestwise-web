@@ -264,7 +264,7 @@ describe("HistoricalAveragePriceSection component", () => {
     expect(screen.getByTestId("planting-window-line")).toBeInTheDocument();
   });
 
-  it("shows prompt and does not fabricate a planting window when no planting date is selected", async () => {
+  it("does not display planting prompt or fabricate a planting window when no planting date is selected", async () => {
     vi.spyOn(pricesApi, "getHistoricalAveragePrices").mockResolvedValue({
       frequency: "weekly",
       commodity_id: "COM-1",
@@ -281,11 +281,12 @@ describe("HistoricalAveragePriceSection component", () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Select a planned planting date in Crop Assessment to see your planting window highlighted/)
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("historical-line-chart")).toBeInTheDocument();
     });
 
+    expect(
+      screen.queryByText(/Select a planned planting date in Crop Assessment to see your planting window highlighted/)
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("planting-window-area")).not.toBeInTheDocument();
     expect(screen.queryByText(/Your Planned Planting Window/)).not.toBeInTheDocument();
   });
@@ -354,7 +355,8 @@ describe("HistoricalAveragePriceSection component", () => {
     expect(area.getAttribute("data-x2")).toBe("Aug 17–23");
 
     const line = screen.getByTestId("planting-window-line");
-    expect(line.getAttribute("data-label")).toBe("🌱 Plant-to-Harvest Period");
+    expect(line).toBeInTheDocument();
+    expect(line.getAttribute("data-x")).toBe("Jul 27 – Aug 2");
   });
 
   it("aligns plant-to-harvest period to the previous year when multi-year historical records exist", async () => {
@@ -385,7 +387,7 @@ describe("HistoricalAveragePriceSection component", () => {
       />
     );
 
-    // Badge indicates Previous Year and shows 2025 dates
+    // Context text indicates Previous Year and shows 2025 dates
     await waitFor(() => {
       expect(screen.getByText(/Plant-to-Harvest Period \(Previous Year\): Sep 1 – Oct 19, 2025/)).toBeInTheDocument();
     });
@@ -397,7 +399,8 @@ describe("HistoricalAveragePriceSection component", () => {
     expect(area.getAttribute("data-x2")).toBe("Oct 13–19");
 
     const line = screen.getByTestId("planting-window-line");
-    expect(line.getAttribute("data-label")).toBe("🌱 Plant-to-Harvest (Previous Year)");
+    expect(line).toBeInTheDocument();
+    expect(line.getAttribute("data-x")).toBe("Sep 1–7");
 
     // Dynamic explanation reflects the average price for the previous year's plant-to-harvest period
     expect(screen.getByText(/The average recorded price for Sep 1 – Oct 19, 2025 was ₱67.55\/kg\./)).toBeInTheDocument();

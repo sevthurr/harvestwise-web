@@ -21,6 +21,8 @@ export const crops = {
   confirm_details_monitoring: "Confirm your details to start monitoring {displayName}.",
   actual_planting_date: "Actual planting date",
   actual_planted_area: "Actual planted area (sq m)",
-  updated_expected_harvest: "Updated expected harvest date",
-  confirm_planted: "Confirm — I planted this"
+  confirm_planted: "Confirm — I planted this",
+  saved_as_plan: "saved as a crop plan",
+  marked_as_planted: "marked as planted and growing",
+  saved_on_hold: "saved and put on hold"
 };

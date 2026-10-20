@@ -44,6 +44,7 @@ vi.mock("recharts", () => ({
   Cell: () => null,
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
   ReferenceLine: () => null,
+  Brush: () => null,
 }));
 
 describe("Farmer detailed factors use Admin analytics data", () => {

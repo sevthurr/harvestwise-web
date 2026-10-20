@@ -184,67 +184,22 @@ async function saveFarmProfile() {
   return JSON.parse(h.puts[0]);
 }
 
-describe("FarmerSettings farm profile — selling_method_ids", () => {
-  it("resolves the selected label to its id", async () => {
+describe("FarmerSettings farm profile — selling methods removal", () => {
+  it("does not render selling method options and does not include selling_method_ids in payload", async () => {
     renderFarmTab();
-    // Deliberately not the first row: an index-based lookup would coincidentally
-    // agree here and the test would pass against a broken implementation.
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Palengke / Retail (Local Market)" })
-    );
-
-    const body = await saveFarmProfile();
-    expect(body.selling_method_ids).toEqual(["SLM-0002"]);
-  });
-
-  it("omits the key entirely when the lookup fails, rather than clearing", async () => {
-    h.failSellingMethods = true;
-    renderFarmTab();
-
-    // The fallback labels render, but none of them is a real selling_method row.
-    const fallback = await screen.findByRole("button", { name: "Directly in the market" });
-    await userEvent.click(fallback);
-
-    const body = await saveFarmProfile();
-    // Absence, not []. Sending [] here would delete a correctly-saved method
-    // because one fetch failed.
-    expect(body).not.toHaveProperty("selling_method_ids");
-    // And the farmer must not be told a write happened when none did.
-    expect(await screen.findByText(/options could not be loaded/i)).toBeInTheDocument();
-  });
-
-  it("omits the key when a non-empty lookup does not contain the saved label", async () => {
-    // The stale-cache case. The list is present but predates the label that
-    // GET /farmer/profile now reports, so that option is not rendered at all
-    // and the farmer never touches it — `selling.method` still names a label
-    // `find` cannot resolve.
-    h.sellingMethods = SEEDED.filter((m) => m.id !== "SLM-0003");
-    renderFarmTab();
-
-    await screen.findByRole("button", { name: TRADING });
+    await screen.findByText("Preferred Crops");
+    expect(screen.queryByText(/Selling Method/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Usual selling area or buyer/i)).not.toBeInTheDocument();
 
     const body = await saveFarmProfile();
     expect(body).not.toHaveProperty("selling_method_ids");
-  });
-
-  it("sends [] when the farmer deselects the already-selected option", async () => {
-    renderFarmTab();
-
-    // SLM-0003 comes from GET /farmer/profile, so it renders pre-selected.
-    await userEvent.click(
-      await screen.findByRole("button", { name: COOPERATIVE })
-    );
-
-    const body = await saveFarmProfile();
-    // An empty selection is a real deselect and must clear, not be omitted.
-    expect(body.selling_method_ids).toEqual([]);
+    expect(body).not.toHaveProperty("usual_selling_area_or_buyer");
   });
 });
 
 describe("FarmerSettings farm profile — preferred_crops", () => {
   it("maps every saved crop name to its commodity id", async () => {
     h.profile = profileBody({
-      selling: [{ id: "SLM-0003", label: "Cooperative / Association" }],
       crops: [{ commodity_id: "COM-0002", commodity_name: "Ampalaya", variety_name: null }],
     });
     renderFarmTab();
@@ -264,7 +219,7 @@ describe("FarmerSettings farm profile — preferred_crops", () => {
     h.failPrices = true;
     renderFarmTab();
 
-    await screen.findByRole("button", { name: TRADING });
+    await screen.findByText("Preferred Crops");
 
     const body = await saveFarmProfile();
     // availableCrops is empty, so nameToId resolves nothing. Sending [] would
@@ -281,7 +236,7 @@ describe("FarmerSettings farm profile — preferred_crops", () => {
     h.priceItems = TOP_PRICES.filter((c) => c.name !== "Ampalaya");
     renderFarmTab();
 
-    await screen.findByRole("button", { name: "Tomato" });
+    await screen.findByText("Preferred Crops");
 
     const body = await saveFarmProfile();
     expect(body).not.toHaveProperty("preferred_crops");

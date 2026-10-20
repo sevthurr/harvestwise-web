@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import * as RechartsModule from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronDown, Calendar, Info } from "lucide-react";
@@ -105,33 +105,28 @@ function CustomTooltip({
 
   return (
     <div className="bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3 min-w-[210px] z-50 pointer-events-none space-y-1.5">
-      <div className="text-[11px] font-semibold text-[var(--hw-neutral-800)] mb-1 pb-1 border-b border-[var(--hw-neutral-100)] flex items-center justify-between gap-2">
+      <div className="text-[11px] font-semibold text-black mb-1 pb-1 border-b border-[var(--hw-neutral-100)] flex items-center justify-between gap-2">
         <span>{periodLabel}</span>
-        {isInsideWindow && (
-          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300 shrink-0">
-            {highlightLabel}
-          </span>
-        )}
       </div>
-      <div className="text-[11px] font-medium text-[var(--hw-neutral-500)] mb-2">
+      <div className="text-[11px] font-medium text-black mb-2">
         {title} · Historical Average · ₱/kg
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-[#2563eb]" />
-            <span className="text-[12px] font-medium text-[var(--hw-neutral-800)]">
+            <span className="text-[12px] font-medium text-black">
               {priceLabel}
             </span>
           </div>
-          <span className="text-[12px] font-bold text-[var(--hw-neutral-900)]">
+          <span className="text-[12px] font-bold text-black">
             ₱{Number(point.average_price).toFixed(2)}/kg
           </span>
         </div>
         {point.observation_count != null && (
-          <div className="flex items-center justify-between gap-3 text-[11px] text-[var(--hw-neutral-500)] pt-1 border-t border-[var(--hw-neutral-100)]">
+          <div className="flex items-center justify-between gap-3 text-[11px] text-black pt-1 border-t border-[var(--hw-neutral-100)]">
             <span>{observationsLabel}:</span>
-            <span className="font-semibold text-[var(--hw-neutral-700)]">
+            <span className="font-semibold text-black">
               {point.observation_count}
             </span>
           </div>
@@ -449,126 +444,271 @@ export function HistoricalAveragePriceSection({
     );
   }, [hasData, validDataPoints, frequency, plantingHighlight, t]);
 
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const chartHeight = isMobile ? Math.min(height, 270) : height;
+
+  const displayMarketName = marketName === "Bangkerohan Public Market" ? "Bangkerohan" : marketName;
+
+  const containerRef = useRef(null);
+  const touchDistRef = useRef(null);
+  const [range, setRange] = useState({ start: 0, end: 0 });
+
+  useEffect(() => {
+    const len = chartData.length;
+    if (len === 0) {
+      setRange((prev) => (prev.start === 0 && prev.end === 0 ? prev : { start: 0, end: 0 }));
+      return;
+    }
+    let nextStart = 0;
+    let nextEnd = len - 1;
+
+    if (frequency === "weekly") {
+      const indicesCount = plantingHighlight?.indices ? (plantingHighlight.indices.size ?? plantingHighlight.indices.length ?? 0) : 0;
+      if (indicesCount > 0) {
+        const minIdx = Math.min(...plantingHighlight.indices);
+        const maxIdx = Math.max(...plantingHighlight.indices);
+        const windowSpan = maxIdx - minIdx + 1;
+        const buffer = Math.max(4, Math.round(windowSpan * 0.4));
+        const targetSpan = Math.max(windowSpan + buffer * 2, 16);
+        const center = (minIdx + maxIdx) / 2;
+        nextStart = Math.max(0, Math.floor(center - targetSpan / 2));
+        nextEnd = Math.min(len - 1, nextStart + targetSpan - 1);
+        if (nextEnd === len - 1) {
+          nextStart = Math.max(0, nextEnd - targetSpan + 1);
+        }
+        if (nextStart === 0) {
+          nextEnd = Math.min(len - 1, nextStart + targetSpan - 1);
+        }
+        nextStart = Math.min(nextStart, Math.max(0, minIdx - 1));
+        nextEnd = Math.max(nextEnd, Math.min(len - 1, maxIdx + 1));
+      } else {
+        const defaultWeeks = 8;
+        nextStart = Math.max(0, len - defaultWeeks);
+        nextEnd = len - 1;
+      }
+    } else if (frequency === "monthly") {
+      const indicesCount = plantingHighlight?.indices ? (plantingHighlight.indices.size ?? plantingHighlight.indices.length ?? 0) : 0;
+      if (indicesCount > 0) {
+        const minIdx = Math.min(...plantingHighlight.indices);
+        const maxIdx = Math.max(...plantingHighlight.indices);
+        const buffer = 2;
+        const targetSpan = Math.max(maxIdx - minIdx + 1 + buffer * 2, 6);
+        const center = (minIdx + maxIdx) / 2;
+        nextStart = Math.max(0, Math.floor(center - targetSpan / 2));
+        nextEnd = Math.min(len - 1, nextStart + targetSpan - 1);
+        if (nextEnd === len - 1) {
+          nextStart = Math.max(0, nextEnd - targetSpan + 1);
+        }
+        if (nextStart === 0) {
+          nextEnd = Math.min(len - 1, nextStart + targetSpan - 1);
+        }
+        nextStart = Math.min(nextStart, Math.max(0, minIdx - 1));
+        nextEnd = Math.max(nextEnd, Math.min(len - 1, maxIdx + 1));
+      } else {
+        nextStart = 0;
+        nextEnd = len - 1;
+      }
+    } else {
+      nextStart = 0;
+      nextEnd = len - 1;
+    }
+    setRange((prev) => (prev.start === nextStart && prev.end === nextEnd ? prev : { start: nextStart, end: nextEnd }));
+  }, [chartData.length, frequency, plantingHighlight?.x1, plantingHighlight?.x2]);
+
+  // Wheel zoom
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const len = chartData.length;
+    function onWheel(e) {
+      e.preventDefault();
+      setRange((prev) => {
+        if (len < 3) return prev;
+        const r = prev.end - prev.start;
+        const step = Math.max(1, Math.round(r * 0.15));
+        if (e.deltaY < 0) {
+          return {
+            start: Math.min(prev.start + step, prev.end - 2),
+            end: Math.max(prev.end - step, prev.start + 2),
+          };
+        }
+        return {
+          start: Math.max(0, prev.start - step),
+          end: Math.min(len - 1, prev.end + step),
+        };
+      });
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [chartData.length]);
+
+  // Touch pinch-zoom with non-passive listener to prevent browser viewport scaling
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    function onTouchStart(e) {
+      if (e.touches.length === 2) {
+        touchDistRef.current = Math.hypot(
+          e.touches[1].clientX - e.touches[0].clientX,
+          e.touches[1].clientY - e.touches[0].clientY
+        );
+      }
+    }
+
+    function onTouchMove(e) {
+      if (e.touches.length === 2 && touchDistRef.current !== null) {
+        if (e.cancelable) e.preventDefault();
+        const newDist = Math.hypot(
+          e.touches[1].clientX - e.touches[0].clientX,
+          e.touches[1].clientY - e.touches[0].clientY
+        );
+        const scale = newDist / touchDistRef.current;
+        if (scale > 0 && Math.abs(scale - 1) > 0.02) {
+          const len = chartData.length;
+          setRange((prev) => {
+            const center = (prev.start + prev.end) / 2;
+            const currentSpan = prev.end - prev.start;
+            const newSpan = Math.max(2, Math.min(len - 1, Math.round(currentSpan / scale)));
+            const newStart = Math.max(0, Math.round(center - newSpan / 2));
+            return { start: newStart, end: Math.min(len - 1, newStart + newSpan) };
+          });
+          touchDistRef.current = newDist;
+        }
+      }
+    }
+
+    function onTouchEnd() {
+      touchDistRef.current = null;
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [chartData.length]);
+
   return (
-    <section className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 md:p-6 space-y-4 ${className}`}>
+    <section className={`bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5 md:p-6 space-y-3.5 sm:space-y-4 ${className}`}>
       {/* Header with Title and Frequency Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--hw-neutral-100)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-[var(--hw-neutral-100)]">
         <div>
-          <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
+          <h3 className="text-[15px] sm:text-[16px] font-bold text-black tracking-tight leading-snug">
             {title}
           </h3>
-          <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-            {fullCropName} · {marketName} · {priceTypeName} · {frequency === "weekly" ? weeklyOptionLabel : monthlyOptionLabel} · ₱/kg
+          <p className="text-[12px] sm:text-[13px] text-black mt-0.5">
+            {fullCropName} · {displayMarketName} · {priceTypeName} · ₱/kg
           </p>
         </div>
 
         {/* Local Frequency Selector - Always interactive across all states */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 pt-0.5 sm:pt-0">
+          <label className="text-[12px] font-semibold text-black whitespace-nowrap">
             {frequencyLabel}:
           </label>
           <div className="relative">
             <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value)}
-              className="h-8 pl-3 pr-8 text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer transition-colors appearance-none"
+              className="h-8 pl-3 pr-8 text-[12px] font-semibold text-black bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer transition-colors appearance-none"
             >
               <option value="weekly">{weeklyOptionLabel}</option>
               <option value="monthly">{monthlyOptionLabel}</option>
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-500)] pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-black pointer-events-none" />
           </div>
         </div>
       </div>
 
-      {/* Planting Window Legend Badge or Unselected Prompt */}
+      {/* Planting Window Period Context (Plain text, no badge) */}
       {plantingHighlight ? (
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-[12px] font-semibold text-emerald-800 self-start shadow-xs">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0"></span>
-          <span>
-            {plantingHighlight.badgeTitle}: {plantingHighlight.label}
-          </span>
-        </div>
-      ) : (
-        !["near_harvest", "pre_harvest", "pre-harvest", "preharvest", "harvest", "harvesting", "harvested"].includes(String(cropStage || "").toLowerCase().trim()) &&
-        !plantingDate &&
-        !plantingWindowStart && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] text-[11px] text-[var(--hw-neutral-600)] self-start">
-            <Info className="w-3.5 h-3.5 shrink-0 text-[var(--hw-neutral-400)]" />
-            <span>
-              {t(
-                "farmer.factors.price.no_planting_window_prompt",
-                {},
-                "Select a planned planting date in Crop Assessment to see your planting window highlighted on this historical timeline."
-              )}
-            </span>
-          </div>
-        )
-      )}
+        <p className="text-[12px] sm:text-[13px] font-medium text-black">
+          {plantingHighlight.badgeTitle}: {plantingHighlight.label}
+        </p>
+      ) : null}
 
-      {/* Plotting Region — Permanent container height matching ForecastPriceTrendChart (380px) across all states */}
-      <div className="w-full flex flex-col justify-center" style={{ minHeight: `${height}px` }}>
+      {/* Plotting Region — Permanent container height matching ForecastPriceTrendChart across all states */}
+      <div className="w-full flex flex-col justify-center" style={{ minHeight: `${chartHeight}px` }}>
         {isQueryBusy ? (
           <div
             className="w-full flex flex-col items-center justify-center bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] space-y-3 animate-pulse"
-            style={{ height: `${height}px` }}
+            style={{ height: `${chartHeight}px` }}
           >
-            <Calendar className="w-6 h-6 text-[var(--hw-neutral-400)]" />
-            <p className="text-[13px] font-medium text-[var(--hw-neutral-500)]">
+            <Calendar className="w-6 h-6 text-black" />
+            <p className="text-[13px] font-medium text-black">
               {t("common.loading", {}, "Loading...")}
             </p>
           </div>
         ) : isError ? (
           <div
             className="w-full flex flex-col items-center justify-center p-6 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-center space-y-2"
-            style={{ height: `${height}px` }}
+            style={{ height: `${chartHeight}px` }}
           >
             <AlertCircle className="w-6 h-6 text-red-500 mb-1" />
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
+            <p className="text-[13px] font-semibold text-black">
               {errorMessage}
             </p>
           </div>
         ) : isEmpty ? (
           <div
             className="w-full flex flex-col items-center justify-center p-6 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-center space-y-2"
-            style={{ height: `${height}px` }}
+            style={{ height: `${chartHeight}px` }}
           >
-            <AlertCircle className="w-6 h-6 text-[var(--hw-neutral-400)] mb-1" />
-            <p className="text-[13px] font-medium text-[var(--hw-neutral-700)] max-w-md">
+            <AlertCircle className="w-6 h-6 text-black mb-1" />
+            <p className="text-[13px] font-medium text-black max-w-md">
               {emptyMessage}
             </p>
           </div>
         ) : (
-          <div className="w-full space-y-2">
+          <div
+            ref={containerRef}
+            style={{ touchAction: "pan-y" }}
+            className="w-full space-y-1"
+          >
             {isSinglePoint && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-800 font-medium">
                 <Info className="w-3.5 h-3.5 shrink-0 text-blue-600" />
                 <span>{limitedDataMessage}</span>
               </div>
             )}
-            <div className="w-full" style={{ height: `${height}px` }}>
+            <div className="w-full" style={{ height: `${chartHeight}px` }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={chartData}
-                  margin={{ top: 12, right: 16, left: 0, bottom: 6 }}
+                  margin={{ top: 16, right: isMobile ? 12 : 20, left: isMobile ? -2 : 4, bottom: 8 }}
                 >
                   <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--hw-neutral-100)" />
                   <XAxis
                     dataKey="tickLabel"
-                    tick={{ fontSize: 11, fill: "#1f2937" }}
+                    tick={{ fontSize: isMobile ? 10 : 11, fill: "#000000" }}
                     tickLine={false}
                     axisLine={false}
                     dy={6}
-                    minTickGap={20}
+                    minTickGap={16}
                     interval="preserveStartEnd"
                   />
                   <YAxis
                     domain={yDomain}
-                    tick={{ fontSize: 11, fill: "#1f2937" }}
+                    tick={{ fontSize: isMobile ? 10 : 11, fill: "#000000" }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `\u20B1${v}`}
-                    width={55}
+                    width={isMobile ? 48 : 55}
                   />
                   <Tooltip
                     content={
@@ -583,13 +723,21 @@ export function HistoricalAveragePriceSection({
                       />
                     }
                   />
-                  {chartData.length > 16 && (
+                  {chartData.length > 0 && (
                     <Brush
                       dataKey="tickLabel"
-                      height={18}
-                      stroke="#94a3b8"
-                      fill="#f8fafc"
-                      travellerWidth={8}
+                      startIndex={range.start}
+                      endIndex={range.end}
+                      onChange={(r) =>
+                        setRange({
+                          start: r.startIndex ?? 0,
+                          end: r.endIndex ?? Math.max(0, chartData.length - 1),
+                        })
+                      }
+                      height={isMobile ? 22 : 28}
+                      fill="#f9fafb"
+                      stroke="#cbd5e1"
+                      travellerWidth={isMobile ? 16 : 10}
                     />
                   )}
                   {/* Visually highlighted planting-season window (Section 4) */}
@@ -611,14 +759,6 @@ export function HistoricalAveragePriceSection({
                       stroke="#16a34a"
                       strokeWidth={2}
                       strokeDasharray="3 3"
-                      label={{
-                        value: plantingHighlight.lineLabel,
-                        position: "insideTopLeft",
-                        fill: "#15803d",
-                        fontSize: 11,
-                        fontWeight: "bold",
-                        offset: 4,
-                      }}
                     />
                   )}
                   {/* Straight line graph with breaks for missing periods (type="linear", connectNulls={false}) */}
@@ -645,6 +785,9 @@ export function HistoricalAveragePriceSection({
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            <p className="text-center text-[10px] text-black mt-1.5">
+              {t("farmer.factors.price.zoom_pan_help", {}, "Scroll to zoom · drag bar to pan")}
+            </p>
           </div>
         )}
       </div>
@@ -653,12 +796,12 @@ export function HistoricalAveragePriceSection({
       <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3.5 space-y-1.5 border border-[var(--hw-neutral-100)]">
         {/* Dynamic real-data statement only shown on success */}
         {dynamicExplanation && (
-          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] leading-relaxed">
+          <p className="text-[13px] font-semibold text-black leading-relaxed">
             {dynamicExplanation}
           </p>
         )}
         {/* Generic informational statement always shown */}
-        <p className="text-[12px] text-[var(--hw-neutral-600)] leading-relaxed">
+        <p className="text-[12px] text-black leading-relaxed">
           {genericExplanation}
         </p>
       </div>

@@ -58,7 +58,7 @@ export function LegalModal({
     >
       <div
         ref={modalRef}
-        className="w-full max-w-3xl sm:max-w-4xl max-h-[85vh] bg-white rounded-xl border border-[var(--hw-neutral-200,#e5e7eb)] shadow-[0_12px_36px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden text-[12px]"
+        className="w-full max-w-3xl sm:max-w-4xl max-h-[85vh] bg-white rounded-xl border border-[var(--hw-neutral-200,#e5e7eb)] shadow-[0_12px_36px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden text-[12px] font-sans"
       >
         {/* Minimal Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--hw-neutral-100,#f3f4f6)] bg-[var(--hw-neutral-50,#f9fafb)] flex-shrink-0">
@@ -102,26 +102,16 @@ export function LegalModal({
         </div>
 
         {/* Minimal Full-Text Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-3 leading-relaxed text-[var(--hw-neutral-800,#1f2937)] text-[12px]">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-3 leading-relaxed text-[var(--hw-neutral-800,#1f2937)] text-[12px] [&_p]:text-[12px] [&_h2]:text-[12px] [&_li]:text-[12px] [&_strong]:text-[12px] [&_a]:text-[12px] [&_span]:text-[12px] font-sans">
           {children}
         </div>
 
-        {/* Minimal Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--hw-neutral-100,#f3f4f6)] bg-[var(--hw-neutral-50,#f9fafb)] flex-shrink-0">
-          {footer ? (
-            footer
-          ) : (
-            <div className="w-full flex justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="h-7 px-3 text-[11px] font-medium text-[var(--hw-neutral-700,#374151)] bg-white border border-[var(--hw-neutral-200,#e5e7eb)] hover:bg-[var(--hw-neutral-100,#f3f4f6)] rounded transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Footer (only shown when custom footer action buttons are passed) */}
+        {footer ? (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--hw-neutral-100,#f3f4f6)] bg-[var(--hw-neutral-50,#f9fafb)] flex-shrink-0">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );

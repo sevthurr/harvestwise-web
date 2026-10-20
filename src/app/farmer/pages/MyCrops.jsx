@@ -51,18 +51,19 @@ function profitRange(crop) {
   }
   return null;
 }
-function nextActionText(crop) {
-  if (crop.phase === "draft" || crop.status === "Draft") {
-    return "Assessment incomplete – Step 1 draft saved";
+function nextActionText(crop, t) {
+  if (crop.phase === "draft" || crop.status === "Draft" || crop.isDraft) {
+    return t ? t("farmer.draft.card_action", {}, "Assessment incomplete – Step 1 draft saved") : "Assessment incomplete – Step 1 draft saved";
   }
   if (crop.nextMilestone) return crop.nextMilestone;
+  if (!t) return "";
   const map = {
-    planning: "Review plan before planting",
-    "on-hold": "Reassess before planting",
-    growing: "Check drainage this week",
-    "pre-harvest": "Prepare for harvest soon",
-    harvested: "Record harvest and selling price",
-    completed: "Crop cycle completed"
+    planning: t("farmer.monitoring.action_planning_1", {}, "Rebyuha ang plano bago magtanom"),
+    "on-hold": t("farmer.cropCard.resume_when_improved", {}, "Ipadayon kung moarang-arang ang palengke"),
+    growing: t("farmer.monitoring.action_growing_1", {}, "Susiha ang drainage karong semanaha"),
+    "pre-harvest": t("farmer.monitoring.action_pre_harvest_3", {}, "Pangandam na para sa ting-ani"),
+    harvested: t("farmer.monitoring.action_harvested_3", {}, "Irekord ang ani ug presyo sa pagbaligya"),
+    completed: t("farmer.cropCard.cycle_completed", {}, "Nahuman na ang siklo sa tanom")
   };
   return map[crop.phase] ?? "";
 }
@@ -74,63 +75,69 @@ const MyCropCard = ({ crop, onView, isPreferred = false }) => {
   const action = isDraft
     ? t("farmer.draft.card_action", {}, "Assessment incomplete – Step 1 draft saved")
     : crop.isOnHold
-    ? "Resume when market conditions improve"
+    ? t("farmer.cropCard.resume_when_improved", {}, "Ipadayon kung moarang-arang ang palengke")
     : crop.phase === "completed"
-    ? "Crop cycle completed"
-    : nextActionText(crop);
+    ? t("farmer.cropCard.cycle_completed", {}, "Nahuman na ang siklo sa tanom")
+    : nextActionText(crop, t);
   const displayName = crop.commodityName ? (crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName) : "-";
-  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-      {/* Top: icon + name + status */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-11 h-11 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="font-semibold text-[var(--hw-neutral-900)] leading-tight truncate">
-              {displayName}
-            </p>
-            {isPreferred && (
-              <PreferredStar className="w-3.5 h-3.5 text-amber-500" />
-            )}
+  return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden flex flex-col justify-between">
+      <div>
+        {/* Top: icon + name + status */}
+        <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <CommodityIllustration commodityId={crop.commodity} commodityName={crop.commodityName} baseName={crop.commodityName} className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="font-bold text-[14px] sm:text-[15px] text-[var(--hw-neutral-900)] leading-tight truncate">
+                  {displayName}
+                </p>
+                {isPreferred && (
+                  <PreferredStar className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex-shrink-0">
+            <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
           </div>
         </div>
-        <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
-      </div>
 
-      {/* Details */}
-      <div className="px-4 pb-3 space-y-1.5">
-        <div className="flex items-center justify-between text-[13px]">
-          <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.harvest_on", {}, "Harvest on")}</span>
-          <span className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestDate || "-"}</span>
-        </div>
-        <div className="flex items-center justify-between text-[13px]">
-          <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.current_price", {}, "Current price")}</span>
-          <span className="font-medium text-[var(--hw-neutral-900)]">
-            {currentPrice != null
-              ? `₱${Number(currentPrice).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg`
-              : "-/kg"}
-          </span>
-        </div>
-        {crop.phase === "completed" && crop.actualSellingPrice ? (
+        {/* Details */}
+        <div className="px-4 pb-3 space-y-1.5">
           <div className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.sold_at", {}, "Sold at")}</span>
-            <span className="font-medium text-[var(--hw-neutral-900)]">₱{crop.actualSellingPrice}/kg</span>
+            <span className="text-[var(--hw-neutral-600)]">{t("farmer.crops.harvest_on", {}, "Harvest on")}</span>
+            <span className="font-medium text-[var(--hw-neutral-900)]">{crop.harvestDate || "-"}</span>
           </div>
-        ) : (
           <div className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--hw-neutral-900)]">{t("farmer.crops.estimated_profit", {}, "Estimated Profit")}</span>
-            <span className="font-semibold text-emerald-700">{profit || "-"}</span>
+            <span className="text-[var(--hw-neutral-600)]">{t("farmer.crops.current_price", {}, "Current price")}</span>
+            <span className="font-medium text-[var(--hw-neutral-900)]">
+              {currentPrice != null
+                ? `₱${Number(currentPrice).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg`
+                : "-/kg"}
+            </span>
           </div>
-        )}
+          {crop.phase === "completed" && crop.actualSellingPrice ? (
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-[var(--hw-neutral-600)]">{t("farmer.crops.sold_at", {}, "Sold at")}</span>
+              <span className="font-medium text-[var(--hw-neutral-900)]">₱{crop.actualSellingPrice}/kg</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-[var(--hw-neutral-600)]">{t("farmer.crops.estimated_profit", {}, "Estimated Profit")}</span>
+              <span className="font-bold text-emerald-700">{profit || "-"}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Next action + view button */}
-      <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between gap-3">
-        <p className="text-[12px] text-[var(--hw-neutral-900)] leading-snug flex-1">{action || "-"}</p>
+      <div className="px-4 py-2.5 sm:py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between gap-2 bg-[var(--hw-neutral-50)]/50">
+        <p className="text-[12px] text-[var(--hw-neutral-600)] leading-snug flex-1 line-clamp-1">{action || "-"}</p>
         <button
           onClick={() => onView(crop.id)}
-          className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+          className="flex-shrink-0 inline-flex items-center gap-0.5 text-[12px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
         >
-          {isDraft ? t("farmer.draft.continue_btn", {}, "Continue draft") : t("farmer.crops.view_crop", {}, "View crop")}
+          <span>{isDraft ? t("farmer.draft.continue_btn", {}, "Ipadayon ang draft") : t("farmer.crops.view_crop", {}, "Tan-awa ang tanom")}</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -252,7 +259,7 @@ function MyCropsPage() {
     [allCrops, stageFilter]
   );
   const tabCount = (tab) => allCrops.filter((c) => matchesStage(c, tab)).length;
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+  return <div className="px-3.5 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
 
         {/* Draft Saved Toast */}
         {toastMessage && (
@@ -279,18 +286,18 @@ function MyCropsPage() {
         )}
 
         {/* Page header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+            <h1 className="text-[20px] sm:text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
               {t("nav.my_crops", {}, "My Crops")}
             </h1>
-            <p className="text-[15px] text-[var(--hw-neutral-900)] mt-1">
+            <p className="text-[13px] sm:text-[14px] text-[var(--hw-neutral-600)] mt-0.5">
               {t("farmer.crops.subtitle", {}, "Track your crop plans, planted crops, and harvest records.")}
             </p>
           </div>
           <button
             onClick={() => navigate("/farmer/assess")}
-            className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-[var(--shadow-xs)]"
+            className="self-start sm:self-auto flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] sm:text-sm font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
           >
             <Plus className="w-4 h-4" />
             <span>{t("farmer.crops.add_crop_btn", {}, "Add crop")}</span>
@@ -298,20 +305,27 @@ function MyCropsPage() {
         </div>
 
         {/* Stage filter chips */}
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
           {STAGE_TABS.map((tab) => {
             const count = tabCount(tab.id);
             const isActive = stageFilter === tab.id;
-            return <button
-              key={tab.id}
-              onClick={() => setStageFilter(tab.id)}
-              className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${isActive ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
-            >
-              {t(tab.key, {}, tab.label)}
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-green-600 text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]"}`}>
-                {count}
-              </span>
-            </button>;
+            const tabLabel = tab.id === "all" ? t("common.filter_all", {}, "Tanan") : t(tab.key, {}, tab.label);
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setStageFilter(tab.id)}
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] sm:text-[13px] font-medium border transition-colors ${
+                  isActive
+                    ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
+                    : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
+                }`}
+              >
+                <span>{tabLabel}</span>
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-green-600 text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]"}`}>
+                  {count}
+                </span>
+              </button>
+            );
           })}
         </div>
 

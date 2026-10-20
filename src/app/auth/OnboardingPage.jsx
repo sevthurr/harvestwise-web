@@ -13,22 +13,12 @@ import { useFarmLocation } from "../global/hooks/useFarmLocation";
 import { FARMER_PROFILE_KEY, loadFarmerOfflineData } from "../global/hooks/useFarmerPrefetch";
 
 // ---------------------------------------------------------------------------
-// Selling methods are fetched from GET /farmer/selling-methods.
-// SELLING_OPTIONS.backendLabel contains the exact seeded label for exact matching.
-//
 // Commodities are fetched from GET /farmer/commodities (active, is_top10=true).
 // The picker renders the fetched list; crops are submitted as real DB PKs.
 // The static HW_COMMODITY_ITEMS list is kept as fallback while the fetch loads.
 // ---------------------------------------------------------------------------
 
 const ONBOARDING_CROPS = HW_COMMODITY_ITEMS.map((c) => ({ id: c.id, name: c.name }));
-
-const SELLING_OPTIONS = [
-  { id: "farmgate", labelKey: "onboarding.selling_farmgate", label: "To a buyer using farmgate price",  backendLabel: "Direct to Consumers / Farm Gate" },
-  { id: "market",   labelKey: "onboarding.selling_market",   label: "Directly in the market",           backendLabel: "Palengke / Retail (Local Market)" },
-  { id: "trader",   labelKey: "onboarding.selling_trader",   label: "Through a trader",                 backendLabel: "Trader / Viajero (Wholesale)" },
-  { id: "unsure",   labelKey: "onboarding.selling_unsure",   label: "Not sure yet",                     backendLabel: null },
-];
 
 // ---------------------------------------------------------------------------
 // SVG illustrations (unchanged from original)
@@ -77,18 +67,6 @@ const CropsSVG = () => (
     <path d="M82 50 Q90 46 92 40 Q84 40 82 50Z" fill="#4ade80" />
     <circle cx="42" cy="60" r="2" fill="#92400e" opacity="0.3" />
     <circle cx="68" cy="60" r="2" fill="#92400e" opacity="0.3" />
-  </svg>
-);
-
-const SellingSVG = () => (
-  <svg viewBox="0 0 110 75" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-28 h-20 mx-auto">
-    <rect x="12" y="32" width="86" height="34" rx="5" fill="#dcfce7" />
-    <rect x="8" y="22" width="94" height="16" rx="5" fill="#166534" />
-    {[16, 28, 40, 52, 64, 76, 88].map((x, i) => <path key={i} d={`M${x} 38 Q${x+6} 44 ${x+12} 38`} stroke="#22c55e" strokeWidth="2" fill="none" />)}
-    <rect x="24" y="8" width="5" height="26" rx="2" fill="#166534" />
-    <rect x="81" y="8" width="5" height="26" rx="2" fill="#166534" />
-    <rect x="22" y="44" width="66" height="18" rx="4" fill="white" stroke="#86efac" strokeWidth="1.5" />
-    <text x="44" y="57" fontSize="13" fontWeight="700" fill="#166534" fontFamily="sans-serif">₱ Sell</text>
   </svg>
 );
 
@@ -171,7 +149,7 @@ export const NavButtons = ({ step, onBack, onContinue, continueLabel, disabled =
 // ---------------------------------------------------------------------------
 // Step components
 // ---------------------------------------------------------------------------
-const TOTAL = 4;
+const TOTAL = 3;
 
 const Step1 = ({ data, onLanguageSelect, onContinue, onSkip, langError }) => {
   const { t } = useLanguage();
@@ -333,7 +311,7 @@ export const Step2 = ({ data, onChange, onContinue, onBack }) => {
   );
 };
 
-const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities }) => {
+const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitting, submitError }) => {
   const { t } = useLanguage();
   // Use fetched commodities (real DB IDs) when available; fall back to static slugs
   const cropList = fetchedCommodities.length > 0
@@ -417,61 +395,18 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities }) => {
         </div>
       )}
 
-      <div className="mt-6">
-        <NavButtons step={3} onBack={onBack} onContinue={onContinue} />
-      </div>
-    </StepCard>
-  );
-};
-
-const Step4 = ({ data, onChange, onContinue, onBack, submitting, submitError }) => {
-  const { t } = useLanguage();
-  return (
-    <StepCard>
-      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
-        {t("common.step_indicator", { current: 4, total: TOTAL }, `Step 4 of ${TOTAL}`)}
-      </p>
-      <SellingSVG />
-      <h2 className="mt-5 text-[20px] font-bold text-[var(--hw-neutral-900)]">
-        {t("onboarding.step4_title", {}, "How do you usually sell your harvest?")}
-      </h2>
-      <p className="mt-1.5 text-[15px] text-[var(--hw-neutral-500)]">
-        {t("onboarding.step4_desc", {}, "This helps improve possible profit estimates later.")}
-      </p>
-      <div className="mt-6 space-y-3">
-        {SELLING_OPTIONS.map((opt) => (
-          <OptionChip
-            key={opt.id}
-            label={t(opt.labelKey, {}, opt.label)}
-            selected={data.sellingMethod === opt.id}
-            onClick={() => onChange({ sellingMethod: opt.id })}
-          />
-        ))}
-      </div>
-      <div className="mt-5 space-y-1.5">
-        <label htmlFor="sellingArea" className="flex items-center gap-1.5 text-[14px] font-semibold text-[var(--hw-neutral-700)]">
-          {t("onboarding.selling_buyer_label", {}, "Usual selling area or buyer type")}
-          <span className="text-[12px] text-[var(--hw-neutral-400)] font-normal">{t("onboarding.optional", {}, "(optional)")}</span>
-        </label>
-        <input
-          id="sellingArea"
-          type="text"
-          value={data.sellingArea}
-          onChange={(e) => onChange({ sellingArea: e.target.value })}
-          placeholder={t("onboarding.selling_buyer_placeholder", {}, "Ex. Bangkerohan market, direct buyer")}
-          className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
-        />
-      </div>
       {submitError && (
         <p role="alert" className="mt-3 text-[13px] text-red-600 font-medium">{submitError}</p>
       )}
+
       <div className="mt-6">
         <NavButtons
-          step={4}
+          step={3}
           onBack={onBack}
           onContinue={onContinue}
           continueLabel={t("onboarding.finish_setup", {}, "Finish setup")}
           disabled={submitting}
+          loading={submitting}
         />
       </div>
     </StepCard>
@@ -489,14 +424,6 @@ const SetupComplete = ({ data, onDone }) => {
     return t("common.lang_en", {}, "English");
   };
 
-  const getSellingLabel = (method) => {
-    if (method === "farmgate") return t("onboarding.selling_label_farmgate", {}, "To a buyer (farmgate)");
-    if (method === "market") return t("onboarding.selling_label_market", {}, "Directly in the market");
-    if (method === "trader") return t("onboarding.selling_label_trader", {}, "Through a trader");
-    if (method === "unsure") return t("onboarding.selling_label_unsure", {}, "Not sure yet");
-    return t("onboarding.summary_not_set", {}, "Not set");
-  };
-
   return (
     <StepCard>
       <CompleteSVG />
@@ -511,7 +438,6 @@ const SetupComplete = ({ data, onDone }) => {
           { label: t("onboarding.summary_language", {}, "Language"),       value: getLangLabel(data.language) },
           { label: t("onboarding.summary_location", {}, "Farm location"),  value: locationLine },
           { label: t("onboarding.summary_crops", {}, "Selected crops"), value: selectedCropNames.length ? selectedCropNames.join(", ") : t("onboarding.summary_not_set", {}, "Not set") },
-          { label: t("onboarding.summary_selling", {}, "Selling method"), value: data.sellingMethod ? getSellingLabel(data.sellingMethod) : t("onboarding.summary_not_set", {}, "Not set") },
         ].map((row) => (
           <div key={row.label} className="flex justify-between gap-3 text-[14px] py-2.5">
             <span className="text-[var(--hw-neutral-500)] flex-shrink-0">{row.label}</span>
@@ -548,8 +474,6 @@ const INITIAL = {
   latitude: null,
   longitude: null,
   crops: {},
-  sellingMethod: "",
-  sellingArea: "",
 };
 
 function OnboardingPage() {
@@ -562,8 +486,6 @@ function OnboardingPage() {
   const [langError, setLangError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  // Selling methods fetched from backend: [{id, label}]
-  const [sellingMethods, setSellingMethods] = useState([]);
   // Commodities fetched from backend: [{id, name}] — real DB PKs for crop submission
   const [fetchedCommodities, setFetchedCommodities] = useState([]);
 
@@ -577,11 +499,6 @@ function OnboardingPage() {
 
   // Fetch lookup data on mount
   useEffect(() => {
-    apiGet("/api/v1/farmer/selling-methods")
-      .then(parseResponse)
-      .then(setSellingMethods)
-      .catch(() => { /* non-fatal */ });
-
     apiGet("/api/v1/farmer/commodities")
       .then(parseResponse)
       .then(setFetchedCommodities)
@@ -589,7 +506,7 @@ function OnboardingPage() {
   }, []);
 
   const patch = (d) => setData((prev) => ({ ...prev, ...d }));
-  const next  = () => setStep((s) => (s < 5 ? s + 1 : 5));
+  const next  = () => setStep((s) => (s < 4 ? s + 1 : 4));
   const prev  = () => setStep((s) => (s > 1 ? s - 1 : 1));
 
   const handleLanguageSelect = async (langId) => {
@@ -616,12 +533,6 @@ function OnboardingPage() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      // Exact match using the seeded label stored in SELLING_OPTIONS.backendLabel
-      const selectedOption = SELLING_OPTIONS.find((o) => o.id === data.sellingMethod);
-      const selectedMethod = selectedOption?.backendLabel
-        ? sellingMethods.find((m) => m.label === selectedOption.backendLabel)
-        : null;
-
       // Build a name → id map from fetched commodities for crop submission
       const commodityIdByName = Object.fromEntries(
         fetchedCommodities.map((c) => [c.name, c.id])
@@ -644,9 +555,7 @@ function OnboardingPage() {
         ...(data.latitude != null && { latitude: data.latitude }),
         ...(data.longitude != null && { longitude: data.longitude }),
         ...(data.farmSize    && { farm_size: parseFloat(data.farmSize) || undefined }),
-        ...(data.sellingArea && { usual_selling_area_or_buyer: data.sellingArea }),
         preferred_crops: preferredCrops,
-        selling_method_ids: selectedMethod ? [selectedMethod.id] : [],
       };
 
       const res = await apiPost("/api/v1/farmer/onboarding", payload);
@@ -660,7 +569,7 @@ function OnboardingPage() {
       queryClient.invalidateQueries({ queryKey: ["weather"] });
       await refreshUser?.();
       loadFarmerOfflineData(queryClient).catch(() => {});
-      setStep(5);
+      setStep(4);
     } catch (err) {
       setSubmitError(err.message || t("onboarding.save_error", {}, "Failed to save. Please try again."));
     } finally {
@@ -677,10 +586,10 @@ function OnboardingPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
 
-      {/* Progress dots (steps 1–4 only) */}
-      {step < 5 && (
+      {/* Progress dots (steps 1–3 only) */}
+      {step < 4 && (
         <div className="flex gap-1.5 mb-6">
-          {[1, 2, 3, 4].map((s) => (
+          {[1, 2, 3].map((s) => (
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -695,18 +604,18 @@ function OnboardingPage() {
 
       {step === 1 && <Step1 data={data} onLanguageSelect={handleLanguageSelect} onContinue={next} langError={langError} />}
       {step === 2 && <Step2 data={data} onChange={patch} onContinue={next} onBack={prev} />}
-      {step === 3 && <Step3 data={data} onChange={patch} onContinue={next} onBack={prev} fetchedCommodities={fetchedCommodities} />}
-      {step === 4 && (
-        <Step4
+      {step === 3 && (
+        <Step3
           data={data}
           onChange={patch}
           onContinue={submitOnboarding}
           onBack={prev}
+          fetchedCommodities={fetchedCommodities}
           submitting={submitting}
           submitError={submitError}
         />
       )}
-      {step === 5 && <SetupComplete data={data} onDone={done} />}
+      {step === 4 && <SetupComplete data={data} onDone={done} />}
 
       <Footer className="mt-4" />
     </div>

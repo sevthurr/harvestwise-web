@@ -40,13 +40,6 @@ const TABS = [
   { id: "preferences", label: "Preferences", key: "farmer.settings.tab_preferences" }
 ];
 
-const DEFAULT_SELLING_OPTIONS = [
-  "To a buyer using farmgate price",
-  "Directly in the market",
-  "Through a trader",
-  "Not sure yet"
-];
-
 const LANGUAGE_OPTIONS = [
   { value: "ceb", label: "Bisaya" },
   { value: "en", label: "English" },
@@ -360,12 +353,12 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
 
       <Card>
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">Danger Zone</p>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[14px] font-semibold text-black">{t("farmer.settings.request_deletion_title", {}, "Request account removal")}</p>
-            <p className="text-[13px] text-black">{t("farmer.settings.request_deletion_desc", {}, "Account removal is processed after verification. Requests are reviewed by the HarvestWise team.")}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] sm:text-[15px] font-semibold text-black">{t("farmer.settings.request_deletion_title", {}, "Request account removal")}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed mt-0.5">{t("farmer.settings.request_deletion_desc", {}, "Account removal is processed after verification. Requests are reviewed by the HarvestWise team.")}</p>
             {removalStatus && (
-              <p className="text-[13px] text-black mt-1">
+              <p className="text-[13px] text-black mt-1.5">
                 {t("farmer.settings.removal_status_label", {}, "Request status")}:{" "}
                 <span className={`font-semibold ${removalStatusColor}`}>
                   {removalStatusLabel}
@@ -373,7 +366,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               </p>
             )}
             {removalInGrace && (
-              <p className="text-[13px] text-amber-700 mt-1">
+              <p className="text-[13px] text-amber-700 mt-1.5 leading-snug">
                 {t(
                   "farmer.settings.removal_grace_note",
                   { date: removalGraceDueAt ? formatDate(removalGraceDueAt) : "—" },
@@ -382,18 +375,18 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               </p>
             )}
             {removalFulfilledAt && (
-              <p className="text-[13px] text-[var(--hw-neutral-500)] mt-1">
+              <p className="text-[13px] text-[var(--hw-neutral-500)] mt-1.5 leading-snug">
                 {t("farmer.settings.removal_completed_note", {}, "Your account removal request has been fulfilled.")}
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          <div className="flex flex-col items-stretch sm:items-end gap-2 w-full sm:w-auto flex-shrink-0 pt-1 sm:pt-0">
             {removalInGrace && (
               <button
                 type="button"
                 onClick={handleCancelRemoval}
                 disabled={cancellingRemoval}
-                className="h-8 px-3 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-xl sm:rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {cancellingRemoval
                   ? t("common.saving", {}, "Saving…")
@@ -404,7 +397,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
               type="button"
               onClick={() => setShowDeleteModal(true)}
               disabled={removalBlocked}
-              className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl sm:rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               {removalStatus === "rejected"
                 ? t("farmer.settings.request_again_btn", {}, "Request Again")
@@ -417,7 +410,7 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
             type="button"
             onClick={handleExportData}
             disabled={exportingData}
-            className="h-8 px-3 text-[13px] font-medium text-[var(--hw-green-800)] border border-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-[var(--hw-green-800)] border border-[var(--hw-green-700)] rounded-xl sm:rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {exportingData
               ? t("common.saving", {}, "Saving…")
@@ -557,11 +550,10 @@ const SecurityTab = ({ showToast }) => {
 /* -------------------------------------------------------------------------- */
 /* 3. Farm Profile Tab                                                        */
 /* -------------------------------------------------------------------------- */
-const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops, sellingOptions, sellingMethods, showToast, onSaved }) => {
+const FarmTabForm = ({ initialLoc, initialCrops, availableCrops, showToast, onSaved }) => {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [crops, setCrops] = useState(initialCrops || {});
-  const [selling, setSelling] = useState(initialSelling || { method: "", area: "" });
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
@@ -593,26 +585,12 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
       // Build preferred_crops from the crops grid
       // crops = { [commodityName]: varietyLabel }
       // availableCrops = [{ id, name, baseName }]
-      //
-      // Same rule as selling_method_ids below: the backend reads an explicit []
-      // as "clear these", so an unresolved grid must send nothing at all.
-      // availableCrops comes from `/prices?is_top10=true&page_size=50`, which is
-      // paginated, Redis-cached and market-driven — it can be empty on a failed
-      // fetch and it can legitimately omit a crop the farmer already saved.
       const nameToId = Object.fromEntries(availableCrops.map((c) => [c.name, c.id]));
       const resolvedCrops = Object.entries(crops).filter(([name]) => nameToId[name]);
       // Sending the list is only safe when every saved crop survived the lookup.
       // One dropped name would otherwise be deleted from the database.
       const cropsResolved =
         availableCrops.length > 0 && resolvedCrops.length === Object.keys(crops).length;
-
-      // The API stores selling methods by id; the UI works in labels.
-      // Without a complete lookup we cannot resolve, so leave the key out
-      // entirely rather than clearing the farmer's saved methods. An empty
-      // selection is a real deselect and must still clear.
-      const selectedMethod = sellingMethods.find((m) => m.label === selling.method);
-      const methodResolved =
-        sellingMethods.length > 0 && (selling.method === "" || Boolean(selectedMethod));
 
       const payload = {
         city: locationState.city || "Davao City",
@@ -623,15 +601,11 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
         location_name: null,
         latitude: locationState.latitude != null ? locationState.latitude : null,
         longitude: locationState.longitude != null ? locationState.longitude : null,
-        usual_selling_area_or_buyer: selling.area ? selling.area.trim() : null,
         ...(cropsResolved && {
           preferred_crops: resolvedCrops.map(([name, variety]) => ({
             commodity_id: nameToId[name],
             ...(variety ? { preferred_variety_name: variety } : {}),
           })),
-        }),
-        ...(methodResolved && {
-          selling_method_ids: selectedMethod ? [selectedMethod.id] : [],
         }),
       };
       const res = await apiPut("/farmer/profile", payload);
@@ -720,53 +694,6 @@ const FarmTabForm = ({ initialLoc, initialCrops, initialSelling, availableCrops,
         )}
       </Card>
 
-      <Card>
-        <SectionLabel>{t("farmer.settings.selling_method", {}, "Selling Method")}</SectionLabel>
-        {sellingMethods.length === 0 && (
-          // The fallback labels below are placeholders, not real rows in
-          // selling_method, so nothing picked here can be saved. Say so instead
-          // of letting a successful save report a write that never happened.
-          <p className="mb-3 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            {t("farmer.settings.selling_options_unavailable", {}, "Selling method options could not be loaded. Your current choice is saved and unchanged, but you cannot change it until the list loads.")}
-          </p>
-        )}
-        <div className="space-y-2 mb-3">
-          {sellingOptions.map((opt) => {
-            const isSelected = selling.method === opt;
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => setSelling((s) => ({ ...s, method: isSelected ? "" : opt }))}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-[14px] font-medium transition-all text-left ${
-                  isSelected
-                    ? "bg-[var(--hw-green-50)] border-[var(--hw-green-700)] text-[var(--hw-green-900)]"
-                    : "bg-white border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)]"
-                }`}
-              >
-                {opt}
-                {isSelected && (
-                  <div className="w-5 h-5 rounded-full bg-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
-                    <Check className="w-3 h-3 text-white" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div>
-          <FieldLabel htmlFor="f-area" optional>{t("farmer.settings.selling_buyer", {}, "Usual selling area or buyer")}</FieldLabel>
-          <input
-            id="f-area"
-            type="text"
-            value={selling.area}
-            onChange={(e) => setSelling((s) => ({ ...s, area: e.target.value }))}
-            placeholder="e.g. Bangkerohan market, direct buyer"
-            className={inputCls}
-          />
-        </div>
-      </Card>
-
       <GreenBtn onClick={() => setShowSaveModal(true)} disabled={saving} className="w-full">
         {saving ? t("common.saving", {}, "Saving…") : t("farmer.settings.save_changes", {}, "Save changes")}
       </GreenBtn>
@@ -788,9 +715,6 @@ const FarmTab = ({ showToast }) => {
   const [loading, setLoading] = useState(true);
   const [initialData, setInitialData] = useState(null);
   const [availableCrops, setAvailableCrops] = useState([]);
-  const [sellingOptions, setSellingOptions] = useState(DEFAULT_SELLING_OPTIONS);
-  // [{ id, label }] — needed to turn the selected label into the id the API stores.
-  const [sellingMethods, setSellingMethods] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -798,10 +722,9 @@ const FarmTab = ({ showToast }) => {
     async function loadData() {
       try {
         setLoading(true);
-        const [profileRes, cropsRes, smRes] = await Promise.allSettled([
+        const [profileRes, cropsRes] = await Promise.allSettled([
           apiGet("/farmer/profile"),
           apiGet("/prices?is_top10=true&page_size=50"),
-          apiGet("/farmer/selling-methods"),
         ]);
 
         if (profileRes.status === "fulfilled" && profileRes.value.ok && active) {
@@ -828,10 +751,6 @@ const FarmTab = ({ showToast }) => {
               longitude: camel.longitude != null ? camel.longitude : null,
             },
             crops: cropMap,
-            selling: {
-              method: camel.sellingMethods?.[0]?.label || "",
-              area: camel.usualSellingAreaOrBuyer || "",
-            },
           });
         }
 
@@ -854,15 +773,6 @@ const FarmTab = ({ showToast }) => {
           });
           const topList = Array.from(baseMap.values());
           if (topList.length > 0) setAvailableCrops(topList);
-        }
-
-        if (smRes.status === "fulfilled" && smRes.value.ok && active) {
-          const smData = await parseResponse(smRes.value);
-          if (Array.isArray(smData) && smData.length > 0) {
-            const methods = smData.map((sm) => ({ id: sm.id, label: sm.label }));
-            setSellingMethods(methods);
-            setSellingOptions(methods.map((sm) => sm.label));
-          }
         }
       } catch (err) {
         console.warn("Could not load farm profile:", err);
@@ -908,10 +818,7 @@ const FarmTab = ({ showToast }) => {
     <FarmTabForm
       initialLoc={initialData.loc}
       initialCrops={initialData.crops}
-      initialSelling={initialData.selling}
       availableCrops={availableCrops}
-      sellingOptions={sellingOptions}
-      sellingMethods={sellingMethods}
       showToast={showToast}
       onSaved={handleSaved}
     />
