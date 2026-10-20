@@ -34,11 +34,11 @@ export function CostBreakdownPieChart({ expenses = [], height = 300 }) {
             cx="50%"
             cy="50%"
             innerRadius={0}
-            outerRadius={85}
+            outerRadius={70}
             paddingAngle={0}
             dataKey="value"
             labelLine={true}
-            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
           >
             {validExpenses.map((entry, index) => (
               <Cell key={`cost-cell-${index}`} fill={entry.color} />

@@ -44,7 +44,7 @@ const Footer = ({ className = "", lang }) => {
         <button
           type="button"
           onClick={() => setModal("privacy")}
-          className="hover:underline hover:text-black transition-colors cursor-pointer"
+          className="text-[11px] hover:underline hover:text-black transition-colors cursor-pointer"
         >
           {privacyLabel}
         </button>
@@ -52,7 +52,7 @@ const Footer = ({ className = "", lang }) => {
         <button
           type="button"
           onClick={() => setModal("terms")}
-          className="hover:underline hover:text-black transition-colors cursor-pointer"
+          className="text-[11px] hover:underline hover:text-black transition-colors cursor-pointer"
         >
           {termsLabel}
         </button>

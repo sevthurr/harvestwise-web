@@ -454,15 +454,23 @@ export function composeAdvisoryBadge(advisoryCode, cropStage) {
   const stage = normalizeLifecycleStage(cropStage);
   const adv = String(advisoryCode || '').toLowerCase().trim();
 
-  if (stage === 'planning') {
-    if (adv === 'recommended') return { key: 'farmer.advisory.labels.recommended', type: 'recommended' };
-    if (adv === 'proceed_with_caution' || adv === 'caution') return { key: 'farmer.advisory.labels.proceed_with_caution', type: 'caution' };
-    if (adv === 'avoid_for_now' || adv === 'avoid') return { key: 'farmer.advisory.labels.avoid_for_now', type: 'avoid' };
-  } else {
-    // Post-planting
-    if (adv === 'recommended') return { key: 'farmer.advisory.labels.recommended', type: 'recommended' };
-    if (adv === 'proceed_with_caution' || adv === 'caution') return { key: 'farmer.advisory.labels.proceed_with_caution', type: 'caution' };
-    if (adv === 'avoid_for_now' || adv === 'avoid' || adv === 'high_risk') return { key: 'farmer.advisory.labels.high_risk', type: 'high_risk' };
+  // Rule:
+  // Green = Recommended
+  // Yellow = Proceed with Caution
+  // Red = Avoid For Now (or High Risk for post-planting)
+
+  if (adv === 'avoid_for_now' || adv === 'avoid' || adv === 'high_risk' || adv === 'unfavorable' || adv === 'severe' || adv === 'red') {
+    return {
+      key: stage === 'planning' ? 'farmer.advisory.labels.avoid_for_now' : 'farmer.advisory.labels.high_risk',
+      type: 'avoid',
+    };
+  }
+
+  if (adv === 'proceed_with_caution' || adv === 'caution' || adv === 'watch' || adv === 'marginal' || adv === 'yellow' || adv === 'conservative') {
+    return {
+      key: 'farmer.advisory.labels.proceed_with_caution',
+      type: 'caution',
+    };
   }
 
   return { key: 'farmer.advisory.labels.recommended', type: 'recommended' };

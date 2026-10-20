@@ -22,6 +22,7 @@ export const profitability = {
   "profitability_unavailable_crop": "Walang datos ng kita sa {crop_name} ngayon.",
   "profitability_unavailable_generic": "Walang datos ng kita ngayon.",
   title: "Tinatayang Kita",
+  based_on_seasonal: "Batay sa pangkasaysayang pana-panahong presyo",
   based_on_forecast_market: "Base sa tinatayang presyo sa palengke",
   based_on_farmgate: "Base sa tinatayang presyong farmgate",
   forecast_price_reference: "Batayan ng tinatayang presyo",

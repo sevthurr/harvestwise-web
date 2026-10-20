@@ -529,8 +529,8 @@ function CommodityDetailPage() {
           className="w-full flex items-center justify-between gap-3 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[var(--hw-neutral-100)] rounded-xl flex-shrink-0">
-              <BarChart2 className="w-4 h-4 text-[var(--hw-neutral-900)]" />
+            <div className="w-10 h-10 rounded-full bg-[var(--hw-green-50)] flex items-center justify-center flex-shrink-0">
+              <BarChart2 className="w-5 h-5 text-[var(--hw-green-700)]" />
             </div>
             <div>
               <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.view_price_trend", {}, "View price trend details")}</p>

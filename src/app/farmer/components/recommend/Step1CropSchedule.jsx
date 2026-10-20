@@ -119,7 +119,7 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
                   type="button"
                   onClick={() => {
                     const defId = c.varietyMap?.['medium'] || c.defaultCommodityId || c.id;
-                    onChange({ commodity: c.id, variant: "", commodityId: defId });
+                    onChange({ commodity: c.id, commodityName: c.name, variant: "", commodityId: defId });
                   }}
                   className={`
                     flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all
@@ -179,7 +179,15 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
           )}
 
           <p className="text-[12px] text-[var(--hw-neutral-700)] text-center mt-1">
-            {COMMODITY_PAGES.length > 0 ? page + 1 : 0} of {COMMODITY_PAGES.length} · {commodityOptions.length} vegetables
+            {t(
+              "farmer.assess.page_of_total_vegetables",
+              {
+                current: COMMODITY_PAGES.length > 0 ? page + 1 : 0,
+                total: COMMODITY_PAGES.length,
+                count: commodityOptions.length,
+              },
+              `${COMMODITY_PAGES.length > 0 ? page + 1 : 0} of ${COMMODITY_PAGES.length} · ${commodityOptions.length} vegetables`
+            )}
           </p>
         </div>
 

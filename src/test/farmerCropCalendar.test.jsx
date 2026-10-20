@@ -17,6 +17,9 @@ vi.mock("../app/global/contexts/AuthContext", () => ({
 // Mock the API calls
 vi.mock("../app/global/api", () => ({
   apiGet: vi.fn((url) => {
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
     if (url.includes("/market/calendar")) {
       return Promise.resolve({
         ok: true,
@@ -25,6 +28,11 @@ vi.mock("../app/global/api", () => ({
             items: [
               {
                 calendar_date: "2026-09-15",
+                holiday_name: "Payday",
+                is_payday: true,
+              },
+              {
+                calendar_date: `${ym}-15`,
                 holiday_name: "Payday",
                 is_payday: true,
               },
@@ -89,7 +97,14 @@ vi.mock("../app/global/api", () => ({
                 temperature_min: 24,
               },
               {
-                date: "2026-09-29",
+                date: `${ym}-28`,
+                rainfall_mm: 18.0,
+                suitability: "Storm",
+                temperature_max: 30,
+                temperature_min: 24,
+              },
+              {
+                date: `${ym}-29`,
                 rainfall_mm: 0,
                 suitability: "Hot",
                 temperature_max: 34,
@@ -236,16 +251,26 @@ describe("Farmer Crop Calendar Page", () => {
     expect(day28Btn).toBeInTheDocument();
     fireEvent.click(day28Btn);
 
-    // Verify details container appears with date title and 3 cards
+    // Verify details container appears with date title and weather note
     expect(
       await screen.findByText(/Daily Calendar & Farming Details|Inadlaw nga Detalye sa Kalendaryo ug Pag-uma/i)
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(/Weather Note|Pahinumdom sa Panahon/i).length
     ).toBeGreaterThanOrEqual(1);
+
+    // When there is no crop schedule on this day, the empty crop schedule card is omitted
     expect(
-      screen.getAllByText(/Crop Schedule|Iskedyul sa Tanom/i).length
-    ).toBeGreaterThanOrEqual(1);
+      screen.queryByText(/No crop schedule on this date|Walay iskedyul sa tanom niining petsaha/i)
+    ).not.toBeInTheDocument();
+    // When there is no market event on this day, the empty market note card is omitted
+    expect(
+      screen.queryByText(/Regular trading day|Normal nga adlaw sa pamatigayon/i)
+    ).not.toBeInTheDocument();
+
+    // Now click day 15 (which has Payday event in mock)
+    const day15Btn = await screen.findByRole("button", { name: /15/i });
+    fireEvent.click(day15Btn);
     expect(
       screen.getAllByText(/Market Note|Pahinumdom sa (?:palengke|merkado)|Panahon sa sweldo/i).length
     ).toBeGreaterThanOrEqual(1);
@@ -280,7 +305,7 @@ describe("Farmer Crop Calendar Page", () => {
       // The section is present, but the only crop is "Avoid for Now", so it must
       // not be surfaced as a good crop to plant (the curated fallback is empty-data only).
       expect(
-        await screen.findByText(/Good crops to plant|Maayong mga tanom/i)
+        await screen.findByText(/Good crops to plant|Maayong itanom|Maayong mga tanom/i)
       ).toBeInTheDocument();
       expect(
         await screen.findByText(

@@ -1,6 +1,6 @@
 export const about = {
   title: "Bahin sa HarvestWise",
-  help_faqs: "Tabang ug FAQs",
+  help_faqs: "Tabang ug mga Pangutana (FAQs)",
   contact_support: "Kontaka ang Suporta",
   privacy_policy: "Patakaran sa Pribasidad",
   terms_conditions: "Mga Termino ug Kondisyon",
@@ -10,5 +10,15 @@ export const about = {
   form_send: "Ipadala ang mensahe",
   message_sent: "Napadala na ang mensahe",
   send_another: "Magpadala og lain",
-  version_info: "Bersyon 1.0.0 — prototype build"
+  version_info: "Bersyon 1.0.0 — prototype build",
+  faq1_q: "Unsaon nako pag-update sa lokasyon sa akong umahan?",
+  faq1_a: "Adto sa Settings → Profile sa Umahan unya i-tap ang \"Gamita ang akong lokasyon\" aron awtomatikong makuha ang imong lokasyon, o mano-manong usba ang mga field sa Siyudad, Distrito, ug Barangay.",
+  faq2_q: "Unsaon nako pag-ilis sa akong mga paboritong tanom?",
+  faq2_a: "Adto sa Settings → Profile sa Umahan unya pilia o tangtanga ang mga tanom gikan sa listahan. Mahimo sab nimong usbon ang klase o variety nga gusto nimo itanom sa matag gulay.",
+  faq3_q: "Nganong mausab man ang mga tambag o advisory sa pagtanom?",
+  faq3_a: "Ang mga tambag ma-update base sa kasamtangang presyo sa merkado, kahimtang sa panahon, ug datos sa ting-ani. Ang mga kausaban nagpakita sa pinakabag-ong impormasyon nga anaa.",
+  faq4_q: "Magamit ba nako ang HarvestWise bisan hinay o walay internet?",
+  faq4_a: "Oo. Ginatago sa HarvestWise ang mga bag-ong presyo, forecast, ug mga tambag aron magamit gihapon bisan offline ka. Pindota ang \"I-sync karon\" sa Settings → Mga Kagustuhan aron ma-update ang datos kung makakonektar ka na sa internet.",
+  faq5_q: "Asa gikan ang datos sa presyo sa HarvestWise?",
+  faq5_a: "Ang datos sa presyo nakolekta gikan sa Davao City Farmers Market Authority (DFTC) ug kanunay kining gina-update. Ang mga presyo nagpakita sa tinuod nga kahimtang sa merkado para sa retail ug wholesale.",
 };

@@ -1149,6 +1149,7 @@ function AdminAnalyticsBasis() {
       commodityName: selectedCommodity,
       weatherError,
       weatherLoading,
+      lang: "en",
     });
 
     return {

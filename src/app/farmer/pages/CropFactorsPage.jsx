@@ -5,11 +5,12 @@ import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { getPhaseConfig } from "../components/crops/types";
-import { normalizePhaseCode, PHASE_CODES } from "../utils/farmerCodes";
+import { normalizePhaseCode, PHASE_CODES, normalizeAdvisoryCode, ADVISORY_CODES } from "../utils/farmerCodes";
 import { apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
+import { CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
@@ -129,7 +130,9 @@ function CropFactorsPage() {
   const arrivalTabData = {
     arrivalPressure: arrivalData?.status === "processed" ? arrivalData.classification : null,
     currentVolumeKg: arrivalData?.current_arrival_kg ?? null,
-    records: arrivalData?.records || [],
+    records: (arrivalData?.history_records && arrivalData.history_records.length > 0)
+      ? arrivalData.history_records
+      : (arrivalData?.records || []),
     averageArrivalKg: arrivalData?.average_arrival_kg ?? null,
     quartileThresholds: arrivalData?.quartile_thresholds || null,
     sourceBreakdown: arrivalData?.source_breakdown || {},
@@ -194,9 +197,48 @@ function CropFactorsPage() {
   const phaseConfig = crop.phase ? getPhaseConfig(crop.phase) : null;
   const phaseLabel = phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null;
 
+  const rawRec = planAdvisoryData?.recommendation || planAdvisoryData?.final_assessment || crop?.advisory || null;
+  const normalizedAdv = normalizeAdvisoryCode(rawRec);
+
+  const isAvoid =
+    normalizedAdv === ADVISORY_CODES.AVOID_FOR_NOW ||
+    /avoid|risk|unfavorable|ayaw|dili|panganib/i.test(rawRec || "");
+
+  const isCaution =
+    !isAvoid &&
+    (normalizedAdv === ADVISORY_CODES.PROCEED_WITH_CAUTION ||
+     /caution|watch|marginal|bantay|mag-ingat/i.test(rawRec || ""));
+
+  const isRecommended = !isAvoid && !isCaution;
+
+  const advisoryText = isAvoid
+    ? t("farmer.advisory.labels.avoid_for_now", {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
+    : isCaution
+    ? t("farmer.advisory.labels.proceed_with_caution", {}, t("farmer.advisory.recommendation_caution", {}, "Proceed with Caution"))
+    : t("farmer.advisory.labels.recommended", {}, t("farmer.advisory.recommendation_recommended", {}, "Recommended"));
+
+  let statusConfig = {
+    Icon: XCircle,
+    iconColor: "text-red-600",
+    textColor: "text-red-700",
+  };
+  if (isCaution) {
+    statusConfig = {
+      Icon: AlertCircle,
+      iconColor: "text-amber-500",
+      textColor: "text-amber-700",
+    };
+  } else if (isRecommended) {
+    statusConfig = {
+      Icon: CheckCircle2,
+      iconColor: "text-[var(--hw-green-700)]",
+      textColor: "text-[var(--hw-green-800)]",
+    };
+  }
+  const StatusIcon = statusConfig.Icon;
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+    <div className="px-2 xs:px-3.5 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
       {/* Breadcrumb */}
       <Breadcrumb
         items={[
@@ -206,23 +248,32 @@ function CropFactorsPage() {
         ]}
       />
 
-      {/* Page title */}
-      <div className="flex items-center gap-3">
-        <CommodityIllustration
-          commodityId={commodityIdentifier}
-          commodityName={crop.commodityName}
-          baseName={crop.commodityName}
-          className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0"
-        />
-        <div className="min-w-0">
-          <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-tight">
-            {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
-          </h1>
-          <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5">
-            {t("farmer.advisory.market_analysis_crop_plan", {}, "Market analysis for your crop plan")}
-            {phaseLabel ? ` · ${phaseLabel}` : ""}
-          </p>
+      {/* Page title & Emphasized Final Advisory */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 pb-1">
+        <div className="flex items-center gap-3 min-w-0">
+          <CommodityIllustration
+            commodityId={commodityIdentifier}
+            commodityName={crop.commodityName}
+            baseName={crop.commodityName}
+            className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0"
+          />
+          <div className="min-w-0">
+            <h1 className="text-[17px] sm:text-[20px] font-bold text-black leading-tight">
+              {crop.commodityName} — {t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}
+            </h1>
+          </div>
         </div>
+        {advisoryText && (
+          <div className="inline-flex items-center gap-2 self-start sm:self-auto py-1">
+            <span className="text-[11px] sm:text-[12px] font-semibold text-black uppercase tracking-wide">
+              {t("farmer.advisory.assessment_result_title", {}, "Assessment Result")}:
+            </span>
+            <span className={`inline-flex items-center gap-1.5 text-[13px] sm:text-[14px] font-bold ${statusConfig.textColor}`}>
+              <StatusIcon className={`w-4 h-4 flex-shrink-0 ${statusConfig.iconColor}`} />
+              {advisoryText}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Factor tabs */}
@@ -237,6 +288,7 @@ function CropFactorsPage() {
         cropStage={resolvedCropStage}
         plantingDate={state?.plantingDate || crop.rawPlantingDate || crop.plantingDate || planAdvisoryData?.planting_date}
         expectedHarvestDate={state?.expectedHarvestDate || crop.rawHarvestDate || crop.harvestDate || planAdvisoryData?.expected_harvest_date}
+        plantingSeason={state?.plantingSeason || crop.plantingSeason || null}
         moduleResults={state?.moduleResults || planAdvisoryData?.module_results}
         plantingWindowStart={state?.plantingWindowStart || planAdvisoryData?.planting_window_start}
         plantingWindowEnd={state?.plantingWindowEnd || planAdvisoryData?.planting_window_end}

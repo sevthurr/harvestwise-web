@@ -1,5 +1,5 @@
 export const profile = {
-  title: "Profile ng Magsasaka",
+  title: "Profile",
   subtitle: "Ang iyong personal na impormasyon at mga detalye ng sakahan.",
   edit_in_settings: "Baguhin sa Settings",
   personal_details: "Personal na mga Detalye",

@@ -36,6 +36,7 @@ export const en = {
     loading: "Loading...",
     saving: "Saving...",
     view_all: "View all",
+    filter_all: "All",
     see_details: "See details",
     none: "None",
     not_applicable: "Not Applicable",
@@ -344,7 +345,16 @@ export const en = {
       assessment_result_title: "Assessment Result"
     },
 
+    draft: {
+      card_action: "Assessment incomplete – Step 1 draft saved",
+      continue_btn: "Continue draft",
+      card_notice: "Draft assessment in progress",
+      incomplete_title: "Assessment Draft – Incomplete"
+    },
+
     phases: {
+      draft: "Draft – Incomplete",
+      drafts_tab: "Drafts",
       planning: "Planning",
       on_hold: "On Hold",
       planted: "Planted",
@@ -467,8 +477,8 @@ export const en = {
         recent_average_price_label: "Recent Average Price",
         estimated_price_label: "Estimated Price",
         expected_price_change_label: "Expected Price Change",
-        past_days_average_sub: "Past {days}-day average",
-        possible_price_range_sub: "Possible price range",
+        past_days_average_sub: "Past {days} days",
+        possible_price_range_sub: "Possible range",
         compared_with_recent_avg_sub: "Compared with the recent {days}-day average",
         next_days_sub_simple: "Next {days} days",
         about_the_same: "About the same",
@@ -481,6 +491,7 @@ export const en = {
         horizon_days_option: "{days} days",
         historical_range_label: "Historical Range",
         forecast_starts: "Forecast starts",
+        zoom_pan_help: "Scroll to zoom · drag bar to pan",
         historical_avg_title: "Historical Average Price",
         historical_avg_subtitle: "Average recorded actual price by week or month · ₱/kg",
         historical_avg_frequency: "Frequency",
@@ -490,10 +501,45 @@ export const en = {
         historical_avg_dynamic: "The average recorded price for {period} was ₱{price}/kg.",
         historical_avg_empty: "No historical average price data is available for this selection.",
         historical_avg_error: "Historical average price data could not be loaded. Please try again.",
-        historical_avg_limited: "Limited historical data is available for this selection.",
         historical_avg_tooltip_price: "Average price",
         historical_avg_tooltip_observations: "Recorded observations",
-        previous_year: "Previous Year"
+        previous_year: "Previous Year",
+        historical_seasonal_average_label: "Historical Seasonal Average Price",
+        macro_baseline_label: "Multi-Year Macro Baseline",
+        data_source_label: "Price Basis",
+        seasonal_source: "Historical Seasonal",
+        fallback_source: "Historical Fallback",
+        forecast_source: "Forecasting",
+        observed_source: "Observed Market",
+        standard_source: "Market Data",
+        stage_planning: "Stage 1: Planning",
+        stage_planting: "Stage 2: Planting",
+        stage_near_harvest: "Stage 3: Near Harvest",
+        stage_harvest: "Stage 4: Harvest",
+        stage_active: "Active Crop Stage",
+        plant_to_harvest_period: "Plant-to-Harvest Period",
+        your_planting_window: "Your Planned Planting Window",
+        historical_seasonal_notice: "Historical seasonal price reference: ₱{price}/kg (multi-year macro baseline: ₱{baseline}/kg).",
+        historical_seasonal_explanation: "Historical seasonal average price (₱{price}/kg) for expected harvest season is {pct} relative to multi-year macro baseline (₱{baseline}/kg), classified as {classification}.",
+        next_days_option: "Next {days} days",
+        last_days_option: "Last {days} days",
+        stage2_forecast_unavailable_title: "Forecast Information Unavailable: ",
+        stage2_forecast_unavailable_desc: "Your crop is in the planting stage, but the expected harvest date is beyond the validated 28-day forecast horizon (or valid forecast data is not yet available). Current Price Outlook is based on historical seasonal data. Forecast data will automatically become available when your crop enters the 28-day harvest window.",
+        stage2_historical_notice: "Stage 2 historical seasonal price reference: ₱{price}/kg (multi-year macro baseline: ₱{baseline}/kg). Forecast information is unavailable beyond the 28-day horizon.",
+        stage2_dual_notice: "Stage 2 dual assessment: Forecasted harvest price is ₱{price}/kg ({forecastOutlook}), alongside historical seasonal average of ₱{historicalPrice}/kg ({historicalOutlook}).",
+        vs_baseline: "vs. baseline",
+        forecast_classification: "Forecast Classification",
+        historical_seasonal_info_title: "Historical Seasonal Information",
+        harvest_season_avg: "Harvest season avg",
+        historical_benchmark: "Multi-year macro baseline",
+        vs_macro_baseline: "vs. macro baseline",
+        historical_classification: "Historical Classification",
+        preserved_historical_benchmark: "Preserved historical benchmark",
+        forecast_baseline_label: "Forecast Baseline",
+        forecast_price_change_label: "Forecast Price Change",
+        historical_seasonal_avg_label: "Historical Seasonal Average Price",
+        historical_change_label: "Historical Price Change",
+        price_reference_notice: "Price reference: ₱{price}/kg (baseline: ₱{baseline}/kg)."
       },
 
 
@@ -817,7 +863,9 @@ export const en = {
       analyzing_plan: "Analyzing crop plan...",
       see_advisory: "See advisory",
       save_draft: "Save draft",
-      what_this_means: "What this means",       saving_draft: "Saving draft..."
+      what_this_means: "What this means",
+      saving_draft: "Saving draft...",
+      unspecified_crop: "Crop"
     },
 
     errors: {

@@ -10,17 +10,17 @@ const PhasePill = ({ phase, isOnHold }) => {
   const phaseCode = normalizePhaseCode(phase);
   if (phaseCode === PHASE_CODES.DRAFT || phase === "draft") {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300">
-        <Clock className="w-3 h-3" />
-        {t("farmer.phases.draft", {}, "Draft – Incomplete")}
+      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-700">
+        <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+        <span>{t("farmer.phases.draft", {}, "Draft – Incomplete")}</span>
       </span>
     );
   }
   if (isOnHold || phaseCode === PHASE_CODES.ON_HOLD) {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200">
-        <PauseCircle className="w-3 h-3" />
-        {t("farmer.phases.on_hold")}
+      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-700">
+        <PauseCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+        <span>{t("farmer.phases.on_hold", {}, "On-Hold")}</span>
       </span>
     );
   }
@@ -29,11 +29,11 @@ const PhasePill = ({ phase, isOnHold }) => {
     const ph = getPhaseConfig(PHASE_CODES.PRE_HARVEST);
     const Icon2 = planted.icon;
     return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${planted.color} ${planted.bg} ${planted.border} border`}>
-        <Icon2 className="w-3 h-3" />
-        {t("farmer.phases.planted")}
-        <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${ph.color} ${ph.bg}`}>
-          {t("farmer.phases.pre_harvest")}
+      <span className={`inline-flex items-center gap-1 text-[12px] font-semibold ${planted.color}`}>
+        <Icon2 className="w-3.5 h-3.5 flex-shrink-0" />
+        <span>{t("farmer.phases.planted")}</span>
+        <span className={`text-[11px] font-bold ${ph.color}`}>
+          ({t("farmer.phases.pre_harvest")})
         </span>
       </span>
     );
@@ -41,9 +41,9 @@ const PhasePill = ({ phase, isOnHold }) => {
   const cfg = getPhaseConfig(phaseCode);
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color} ${cfg.bg} ${cfg.border} border`}>
-      <Icon className="w-3 h-3" />
-      {t(cfg.labelKey || "farmer.phases.completed")}
+    <span className={`inline-flex items-center gap-1 text-[12px] font-semibold ${cfg.color}`}>
+      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+      <span>{t(cfg.labelKey || "farmer.phases.completed")}</span>
     </span>
   );
 };

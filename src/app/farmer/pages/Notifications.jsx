@@ -132,30 +132,30 @@ function NotificationsPage() {
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="text-[22px] font-bold text-black">
             {t("farmer.notifications.title", {}, "Notifications")}
           </h1>
-          <p className="text-[14px] text-[var(--hw-neutral-600)] mt-0.5">
-            {t(
-              "farmer.notifications.subtitle",
-              {},
-              "Stay updated on crop alerts, weather updates, and market movements."
-            )}
-          </p>
+          {hasUnread && (
+            <button
+              type="button"
+              onClick={() => markAllMutation.mutate()}
+              disabled={markAllMutation.isPending}
+              className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] flex-shrink-0 disabled:opacity-50 cursor-pointer"
+            >
+              <CheckCheck className="w-4 h-4" />
+              <span>{t("farmer.notifications.mark_all_read", {}, "Mark all read")}</span>
+            </button>
+          )}
         </div>
-        {hasUnread && (
-          <button
-            type="button"
-            onClick={() => markAllMutation.mutate()}
-            disabled={markAllMutation.isPending}
-            className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] flex-shrink-0 disabled:opacity-50 cursor-pointer"
-          >
-            <CheckCheck className="w-4 h-4" />
-            {t("farmer.notifications.mark_all_read", {}, "Mark all read")}
-          </button>
-        )}
+        <p className="text-[13px] sm:text-[14px] text-[var(--hw-neutral-600)] leading-snug">
+          {t(
+            "farmer.notifications.subtitle",
+            {},
+            "Stay updated on crop alerts, weather updates, and market movements."
+          )}
+        </p>
       </div>
 
       {/* Filter Tabs */}
@@ -163,7 +163,7 @@ function NotificationsPage() {
         <button
           type="button"
           onClick={() => setFilter("all")}
-          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
             filter === "all"
               ? "bg-[var(--hw-green-700)] text-white shadow-xs"
               : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
@@ -184,7 +184,7 @@ function NotificationsPage() {
         <button
           type="button"
           onClick={() => setFilter("preferred")}
-          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
             filter === "preferred"
               ? "bg-[var(--hw-green-700)] text-white shadow-xs"
               : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
@@ -206,7 +206,7 @@ function NotificationsPage() {
         <button
           type="button"
           onClick={() => setFilter("unread")}
-          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-1.5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
             filter === "unread"
               ? "bg-[var(--hw-green-700)] text-white shadow-xs"
               : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
@@ -231,13 +231,13 @@ function NotificationsPage() {
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-[var(--hw-neutral-200)] animate-pulse"
+              className="flex items-start gap-3 sm:gap-3.5 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-[var(--hw-neutral-200)] animate-pulse"
             >
               <div className="w-9 h-9 rounded-xl bg-[var(--hw-neutral-200)] flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0 space-y-2">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-start justify-between gap-2">
                   <div className="h-4 bg-[var(--hw-neutral-200)] rounded w-1/3" />
-                  <div className="h-3 bg-[var(--hw-neutral-100)] rounded w-16" />
+                  <div className="h-3 bg-[var(--hw-neutral-100)] rounded w-14" />
                 </div>
                 <div className="h-3.5 bg-[var(--hw-neutral-100)] rounded w-4/5" />
               </div>
@@ -297,7 +297,7 @@ function NotificationsPage() {
               <div
                 key={item.id}
                 onClick={() => handleCardClick(item)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-start gap-3 sm:gap-3.5 ${
                   isRead(item)
                     ? "bg-white border-[var(--hw-neutral-200)] opacity-80 hover:opacity-100 hover:border-[var(--hw-neutral-300)]"
                     : "bg-white border-[var(--hw-neutral-300)] shadow-[var(--shadow-xs)] hover:border-[var(--hw-neutral-400)]"
@@ -309,25 +309,25 @@ function NotificationsPage() {
                   fallbackTitle={item.title}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p
-                        className={`text-[14px] leading-snug ${
-                          isRead(item)
-                            ? "font-medium text-[var(--hw-neutral-700)]"
-                            : "font-bold text-[var(--hw-neutral-900)]"
-                        }`}
-                      >
-                        {localizedTitle}
-                      </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p
+                      className={`text-[14px] leading-snug ${
+                        isRead(item)
+                          ? "font-medium text-[var(--hw-neutral-700)]"
+                          : "font-bold text-[var(--hw-neutral-900)]"
+                      }`}
+                    >
+                      <span>{localizedTitle}</span>
                       {isPreferredItem && (
-                        <PreferredStar className="w-3.5 h-3.5" title="Preferred Crop" />
+                        <span className="inline-flex items-center ml-1.5 align-middle">
+                          <PreferredStar className="w-3.5 h-3.5" title="Preferred Crop" />
+                        </span>
                       )}
                       {!isRead(item) && (
-                        <span className="w-2 h-2 rounded-full bg-[var(--hw-green-600)] flex-shrink-0" />
+                        <span className="inline-block w-2 h-2 rounded-full bg-[var(--hw-green-600)] ml-1.5 align-middle flex-shrink-0" />
                       )}
-                    </div>
-                    <span className="text-[11px] text-[var(--hw-neutral-500)] flex-shrink-0">
+                    </p>
+                    <span className="text-[11px] text-[var(--hw-neutral-500)] flex-shrink-0 mt-0.5 whitespace-nowrap">
                       {formatTimestamp(item.created_at)}
                     </span>
                   </div>

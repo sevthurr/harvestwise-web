@@ -10,10 +10,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("../app/farmer/components/recommend/useCommodityCatalog.js", () => ({
-  useCommodityCatalog: vi.fn(),
-  durationForOption: vi.fn(),
-}));
+vi.mock("../app/farmer/components/recommend/useCommodityCatalog.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useCommodityCatalog: vi.fn(),
+    durationForOption: vi.fn(),
+  };
+});
 
 vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   useLanguage: () => ({

@@ -1,5 +1,5 @@
 export const profile = {
-  title: "Farmer Profile",
+  title: "Profile",
   subtitle: "Your personal and farm information.",
   edit_in_settings: "Edit in Settings",
   personal_details: "Personal Details",

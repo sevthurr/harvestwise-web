@@ -59,7 +59,7 @@ export const calendar = {
   check_a_crop: "Susiha ang usa ka tanom",
   empty_weather_note: "Wala pay available nga pahibalo sa panahon karon.",
   updated_recent: "Gi-update karon sa 7:30 AM",
-  good_crops_month_title: "Maayong mga tanom nga itanom karong {month}",
+  good_crops_month_title: "Maayong itanom karong {month}",
   view_all_crops: "Tan-awa ang tanang tanom",
   variety_count_single: "1 ka klase",
   variety_count_plural: "{count} ka mga klase",

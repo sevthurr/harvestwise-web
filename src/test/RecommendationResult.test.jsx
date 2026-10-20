@@ -41,6 +41,18 @@ vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", () => ({
   CommodityIllustration: () => <span data-testid="commodity-illustration" />,
 }));
 
+vi.mock("../app/farmer/components/recommend/useCommodityCatalog.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useCommodityCatalog: () => ({
+      options: [],
+      isLoading: false,
+      catalog: [],
+    }),
+  };
+});
+
 import { RecommendationResult } from "../app/farmer/components/recommend/RecommendationResult.jsx";
 
 const advisoryResponse = {
