@@ -61,7 +61,7 @@ function DFTCReportShell({
   return (
     <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] flex flex-col w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-[var(--hw-neutral-100)] bg-white">
+      <div className="flex items-center gap-3 px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)] bg-white">
         <button
           onClick={onClose}
           className="p-1.5 -ml-1 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors"
@@ -69,30 +69,30 @@ function DFTCReportShell({
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h2 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">{title}</h2>
+        <h2 className="text-[15px] sm:text-[16px] font-bold text-[var(--hw-neutral-900)] min-w-0 leading-snug">{title}</h2>
       </div>
 
       {/* Report metadata */}
-      <div className="px-4 md:px-6 py-3.5 border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]/50">
-        <p className="font-semibold text-[15px] text-[var(--hw-neutral-900)] mb-2">{subtitle}</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-2">
+      <div className="px-3 sm:px-4 md:px-6 py-2.5 sm:py-3.5 border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]/50">
+        <p className="font-semibold text-[13.5px] sm:text-[15px] text-[var(--hw-neutral-900)] mb-1.5 sm:mb-2 break-words">{subtitle}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-2.5 sm:gap-x-4 gap-y-1.5 sm:gap-y-2">
           {metaFields.map(([label, val]) => (
             <div key={label} className="min-w-0">
-              <span className="text-[11px] font-medium text-[var(--hw-neutral-600)] block">{label}:</span>
-              <span className="text-[12px] font-medium text-[var(--hw-neutral-900)] truncate block" title={val}>{val}</span>
+              <span className="text-[10.5px] sm:text-[11px] font-medium text-[var(--hw-neutral-600)] block">{label}:</span>
+              <span className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-900)] truncate block" title={val}>{val}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Format tabs */}
-      <div className="px-4 md:px-6 py-3 border-b border-[var(--hw-neutral-100)]">
-        <div className="flex gap-2">
+      <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-[var(--hw-neutral-100)]">
+        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {formats.map((f) => (
             <button
               key={f}
               onClick={() => onFormatChange(f)}
-              className={`px-4 py-2 rounded-xl border text-[13px] font-medium transition-colors ${format === f ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)] text-[var(--hw-green-800)]" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"}`}
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border text-[12.5px] sm:text-[13px] font-medium whitespace-nowrap transition-colors ${format === f ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)] text-[var(--hw-green-800)] shadow-xs" : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"}`}
             >
               {f}
             </button>
@@ -101,7 +101,7 @@ function DFTCReportShell({
       </div>
 
       {/* Preview body */}
-      <div className="p-3 md:p-6 bg-[var(--hw-neutral-50)]">{children}</div>
+      <div className="p-1.5 sm:p-3 md:p-6 bg-[var(--hw-neutral-50)] overflow-x-auto">{children}</div>
 
 
       {/* Error state */}
@@ -116,10 +116,10 @@ function DFTCReportShell({
       )}
 
       {/* Action bar */}
-      <div className="px-4 md:px-6 py-4 border-t border-[var(--hw-neutral-100)] flex items-center justify-between gap-3 bg-white">
+      <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-[var(--hw-neutral-100)] flex items-center justify-between gap-2 sm:gap-3 bg-white">
         <button
           onClick={onClose}
-          className="py-2.5 px-5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+          className="py-2.5 px-4 sm:px-5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors"
         >
           Back
         </button>

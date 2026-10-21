@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
 import { PAGE_CATEGORY_GROUPS } from "./dftcReportCategories";
+import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -224,48 +225,52 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
 function PDFPreviewContent({ personnel, reportDate, categories }) {
   const total = PAGE_CATEGORY_GROUPS.length;
   return (
-    <div className="space-y-5">
-      {PAGE_CATEGORY_GROUPS.map((group, idx) => {
-        const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
-        return (
-          <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
-              <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {total}</span>
-              <span className="text-[12px] text-[var(--hw-neutral-800)]">A4 Landscape</span>
+    <DFTCPreviewZoomContainer label="PDF Document (A4 Landscape)">
+      <div className="space-y-5">
+        {PAGE_CATEGORY_GROUPS.map((group, idx) => {
+          const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
+          return (
+            <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
+                <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {total}</span>
+                <span className="text-[12px] text-[var(--hw-neutral-800)]">A4 Landscape</span>
+              </div>
+              <div>
+                <DFTCReportPage pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <DFTCReportPage pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </DFTCPreviewZoomContainer>
   );
 }
 
 function ExcelPreviewContent({ personnel, reportDate, reportDateShort, categories }) {
   const total = PAGE_CATEGORY_GROUPS.length;
   return (
-    <div className="rounded-xl overflow-hidden border border-[var(--hw-neutral-300)] bg-white">
-      <div className="bg-[#217346] px-4 py-2 flex items-center gap-2">
-        <span className="text-white text-[12px] font-semibold">Microsoft Excel</span>
-        <span className="text-green-200 text-[12px] truncate">— DFTC-Price-Monitoring-{reportDateShort}.xlsx</span>
+    <DFTCPreviewZoomContainer label="Microsoft Excel Workbook">
+      <div className="rounded-xl overflow-hidden border border-[var(--hw-neutral-300)] bg-white">
+        <div className="bg-[#217346] px-4 py-2 flex items-center gap-2">
+          <span className="text-white text-[12px] font-semibold">Microsoft Excel</span>
+          <span className="text-green-200 text-[12px] truncate">— DFTC-Price-Monitoring-{reportDateShort}.xlsx</span>
+        </div>
+        <div className="bg-[#f3f3f3] border-b border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-2">
+          <span className="text-[12px] text-[var(--hw-neutral-700)] font-medium">A1</span>
+          <span className="text-[var(--hw-neutral-700)] text-[12px]">fx</span>
+          <span className="text-[12px] text-[var(--hw-neutral-800)] truncate">DAVAO FOOD TERMINAL COMPLEX PRICE MONITORING</span>
+        </div>
+        <div className="bg-white">
+          {PAGE_CATEGORY_GROUPS.map((group, idx) => {
+            const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
+            return <DFTCReportPage key={idx} pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />;
+          })}
+        </div>
+        <div className="bg-[#f3f3f3] border-t border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-1">
+          <div className="px-3 py-0.5 bg-white border border-b-0 border-[var(--hw-neutral-300)] rounded-t text-[12px] font-medium text-[#217346] -mb-1.5">Price Monitoring</div>
+        </div>
       </div>
-      <div className="bg-[#f3f3f3] border-b border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-2">
-        <span className="text-[12px] text-[var(--hw-neutral-700)] font-medium">A1</span>
-        <span className="text-[var(--hw-neutral-700)] text-[12px]">fx</span>
-        <span className="text-[12px] text-[var(--hw-neutral-800)] truncate">DAVAO FOOD TERMINAL COMPLEX PRICE MONITORING</span>
-      </div>
-      <div className="overflow-x-auto bg-white">
-        {PAGE_CATEGORY_GROUPS.map((group, idx) => {
-          const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
-          return <DFTCReportPage key={idx} pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />;
-        })}
-      </div>
-      <div className="bg-[#f3f3f3] border-t border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-1">
-        <div className="px-3 py-0.5 bg-white border border-b-0 border-[var(--hw-neutral-300)] rounded-t text-[12px] font-medium text-[#217346] -mb-1.5">Price Monitoring</div>
-      </div>
-    </div>
+    </DFTCPreviewZoomContainer>
   );
 }
 
@@ -300,9 +305,9 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
         </button>
       </div>
 
-      <div className="border border-[var(--hw-neutral-300)] rounded-xl bg-white overflow-x-auto shadow-sm">
+      <DFTCPreviewZoomContainer label={`Image ${page + 1} of ${total}`}>
         <DFTCReportPage pageIndex={page} totalPages={total} categories={currentCats} isFirst={page === 0} isLast={page === total - 1} reportDate={reportDate} personnel={page === total - 1 ? personnel : void 0} />
-      </div>
+      </DFTCPreviewZoomContainer>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="p-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl">

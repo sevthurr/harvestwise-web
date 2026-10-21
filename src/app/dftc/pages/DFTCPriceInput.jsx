@@ -735,6 +735,14 @@ function DFTCPriceInput() {
 
   // On first open, all category sections start collapsed
   const [collapsed, setCollapsed] = useState(() => new Set(PRICE_CATEGORIES.map((c) => c.id)));
+  const [collapsedComs, setCollapsedComs] = useState(() => new Set());
+  const toggleCommodity = (id) =>
+    setCollapsedComs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [customVariants, setCustomVariants] = useState({});
   const [addingVariant, setAddingVariant] = useState(null);
   const [variantInput, setVariantInput] = useState("");
@@ -757,6 +765,28 @@ function DFTCPriceInput() {
   const [draftDismissed, setDraftDismissed] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
+  const reviewScrollRef = useRef(null);
+
+  // Slide the review table to the filtered market column so it is visible without manual scrolling
+  useEffect(() => {
+    if (!reviewMode) return;
+    const el = reviewScrollRef.current;
+    if (!el) return;
+    if (reviewFilter === "all") {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    // Small timeout to allow DOM to settle if reviewMode just activated
+    const timer = setTimeout(() => {
+      const targetTh = el.querySelector(`[data-col="${reviewFilter}"]`);
+      if (!targetTh) return;
+      const containerRect = el.getBoundingClientRect();
+      const thRect = targetTh.getBoundingClientRect();
+      const scrollOffset = thRect.left - containerRect.left + el.scrollLeft;
+      el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [reviewFilter, reviewMode]);
   const [dataName, setDataName] = useState(() => `DFTC Price Monitoring — ${formatDateLabel(localToday())}`);
   const [saved, setSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -1316,8 +1346,20 @@ function DFTCPriceInput() {
   function toggleCategory(catId) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(catId)) next.delete(catId);
-      else next.add(catId);
+      if (next.has(catId)) {
+        next.delete(catId);
+      } else {
+        next.add(catId);
+        // Also collapse its commodities
+        const cat = PRICE_CATEGORIES.find((c) => c.id === catId);
+        if (cat) {
+          setCollapsedComs((cPrev) => {
+            const cNext = new Set(cPrev);
+            getAllCommodities(cat).forEach((com) => cNext.add(com.id));
+            return cNext;
+          });
+        }
+      }
       return next;
     });
   }
@@ -1327,8 +1369,14 @@ function DFTCPriceInput() {
   function toggleCollapseAll() {
     if (allCollapsed) {
       setCollapsed(new Set());
+      setCollapsedComs(new Set());
     } else {
       setCollapsed(new Set(PRICE_CATEGORIES.map((c) => c.id)));
+      const comIds = new Set();
+      PRICE_CATEGORIES.forEach((cat) => {
+        getAllCommodities(cat).forEach((com) => comIds.add(com.id));
+      });
+      setCollapsedComs(comIds);
     }
   }
 
@@ -1625,7 +1673,7 @@ function DFTCPriceInput() {
   // ═══════════════════════════════════════════════════════════════════════════
   if (reviewMode) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
         {/* Back and Title Header */}
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -1652,8 +1700,8 @@ function DFTCPriceInput() {
         </DFTCNotificationBanner>
 
         {/* Summary Badges Card — Clickable to filter details */}
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 mb-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hw-neutral-100)] pb-3 mb-3">
+        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-4 sm:mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hw-neutral-100)] pb-2.5 mb-2.5 sm:pb-3 sm:mb-3">
             <button
               type="button"
               onClick={() => setReviewFilter("all")}
@@ -1673,7 +1721,7 @@ function DFTCPriceInput() {
               <strong className="text-[var(--hw-neutral-900)]">{formatDateLabel(selectedDate)}, {enteredTime}</strong>
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-[12px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2.5 text-[12px]">
             {[
               { id: "bangkerohan-retail", label: "Bangkerohan Retail", count: tabBreakdown["bangkerohan-retail"] || 0 },
               { id: "bangkerohan-wholesale", label: "Bangkerohan Wholesale", count: tabBreakdown["bangkerohan-wholesale"] || 0 },
@@ -1687,7 +1735,9 @@ function DFTCPriceInput() {
                   key={card.id}
                   type="button"
                   onClick={() => setReviewFilter((prev) => (prev === card.id ? "all" : card.id))}
-                  className={`text-left rounded-xl p-3 border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                  className={`text-left rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:p-3 border transition-all cursor-pointer flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 ${
+                    card.id === "dftc-wholesale" ? "col-span-2 sm:col-span-1" : ""
+                  } ${
                     isSelected
                       ? "bg-white border-[var(--hw-neutral-400)] shadow-md ring-1 ring-black/5"
                       : "bg-[var(--hw-neutral-50)] border-[var(--hw-neutral-200)] hover:bg-white hover:shadow-xs"
@@ -1697,7 +1747,7 @@ function DFTCPriceInput() {
                   <span className={`block text-[11px] sm:text-[12px] leading-snug ${isSelected ? "text-[var(--hw-neutral-900)] font-bold" : "text-[var(--hw-neutral-700)] font-medium"}`}>
                     {card.label}
                   </span>
-                  <span className="text-[13px] font-bold text-[var(--hw-neutral-900)] whitespace-nowrap text-right shrink-0">
+                  <span className="text-[12px] sm:text-[13px] font-bold text-[var(--hw-neutral-900)] whitespace-nowrap text-right shrink-0">
                     {card.count} entered
                   </span>
                 </button>
@@ -1720,7 +1770,7 @@ function DFTCPriceInput() {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" ref={reviewScrollRef}>
             <table className="w-full text-[12px] border-collapse" style={{ minWidth: 720 }}>
               <thead>
                 <tr>
@@ -1765,6 +1815,7 @@ function DFTCPriceInput() {
                     return (
                       <th
                         key={h.id}
+                        data-col={h.id}
                         style={{
                           background: BANK_BG,
                           border: isFiltered ? "2px solid #166534" : "1px solid #999",
@@ -1789,6 +1840,7 @@ function DFTCPriceInput() {
                     return (
                       <th
                         key={h.id}
+                        data-col={h.id}
                         style={{
                           background: DFTC_BG,
                           border: isFiltered ? "2px solid #166534" : "1px solid #999",
@@ -1896,22 +1948,22 @@ function DFTCPriceInput() {
           </div>
 
           {/* Encoded by / Reviewed by Footer (matching Image 5) */}
-          <div className="p-4 sm:p-5 border-t border-[var(--hw-neutral-200)] bg-white grid grid-cols-1 sm:grid-cols-2 gap-6 text-[12px]">
+          <div className="p-3.5 sm:p-5 border-t border-[var(--hw-neutral-200)] bg-white grid grid-cols-2 gap-3 sm:gap-6 text-[12px]">
             <div>
               <p className="font-semibold text-black">Encoded by:</p>
-              <p className="font-bold text-black mt-2 text-[13px] uppercase">{encodedBy}</p>
-              <p className="text-[var(--hw-neutral-700)] text-[12px]">{encodedByRole}</p>
+              <p className="font-bold text-black mt-1 sm:mt-2 text-[12px] sm:text-[13px] uppercase truncate">{encodedBy}</p>
+              <p className="text-[var(--hw-neutral-700)] text-[11px] sm:text-[12px] truncate">{encodedByRole}</p>
             </div>
             <div>
               <p className="font-semibold text-black">Reviewed by:</p>
-              <p className="font-bold text-black mt-2 text-[13px] uppercase">{reviewedBy}</p>
-              <p className="text-[var(--hw-neutral-700)] text-[12px]">{reviewedByRole}</p>
+              <p className="font-bold text-black mt-1 sm:mt-2 text-[12px] sm:text-[13px] uppercase truncate">{reviewedBy}</p>
+              <p className="text-[var(--hw-neutral-700)] text-[11px] sm:text-[12px] truncate">{reviewedByRole}</p>
             </div>
           </div>
         </div>
 
         {/* Save Card */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
           <label htmlFor="report-data-name-input" className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Report Data Name</label>
           <input
             id="report-data-name-input"
@@ -2055,27 +2107,27 @@ function DFTCPriceInput() {
   // ENTRY MODE: All Market Tabs + Past/Today Date Picker + Unified Inputs
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
       {/* Draft restore banner */}
       {hasDraft && !draftDismissed && (
         <DFTCNotificationBanner
           variant="warning"
           title="Continue your saved draft"
           description="An unfinished entry was found on this device."
-          className="mb-5"
+          className="mb-3 sm:mb-4"
           actions={
             <>
               <button
                 type="button"
                 onClick={discardDraft}
-                className="text-[12px] text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
+                className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
               >
                 Discard Draft
               </button>
               <button
                 type="button"
                 onClick={restoreDraft}
-                className="font-semibold text-amber-600 underline hover:text-amber-700 text-[12px] cursor-pointer"
+                className="font-semibold text-amber-600 underline hover:text-amber-700 text-[11.5px] sm:text-[12px] cursor-pointer"
               >
                 Resume Draft
               </button>
@@ -2090,7 +2142,7 @@ function DFTCPriceInput() {
           variant="info"
           title="Amending existing entry"
           description={`${sameDayCount} existing price records were loaded for ${formatDateLabel(selectedDate)}. Adjust values you need to change, or switch tabs to add more.`}
-          className="mb-5"
+          className="mb-3 sm:mb-4"
         />
       )}
 
@@ -2113,18 +2165,18 @@ function DFTCPriceInput() {
 
       {/* Header: Back Button, Title, SaveStatusIndicator, Top Hyperlink Review Button */}
       <div className="space-y-3 mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => navigate("/dftc/input", { state: { restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter } })}
-              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
+              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer shrink-0"
               title="Back to Submit Data"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Price Data</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--hw-neutral-900)] truncate">Add Price Data</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
             <SaveStatusIndicator />
             {/* Top Hyperlink button navigating directly to review mode like the bottom button */}
             <button
@@ -2134,7 +2186,7 @@ function DFTCPriceInput() {
                 setReviewMode(true);
               }}
               disabled={totalEnteredCount === 0}
-              className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
               Review ({totalEnteredCount})
@@ -2145,8 +2197,8 @@ function DFTCPriceInput() {
         {/* Tab Navigation for Markets & Price Types + Editable Date Picker (no future dates) */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
           {/* Market / Price-Type Tabs filling available width before the date button */}
-          <div className="flex-1 min-w-0 flex rounded-xl sm:rounded-full border border-[var(--hw-neutral-200)] overflow-x-auto bg-white shadow-[var(--shadow-xs)]">
-            {MARKET_TABS.map((tab) => {
+          <div className="flex-1 min-w-0 grid grid-cols-6 sm:flex rounded-lg border border-[var(--hw-neutral-200)] overflow-hidden bg-white shadow-[var(--shadow-xs)]">
+            {MARKET_TABS.map((tab, ti) => {
               const active = activeTabId === tab.id;
               const count = getTabCount(tab.id);
               return (
@@ -2154,13 +2206,13 @@ function DFTCPriceInput() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTabId(tab.id)}
-                  className={`flex-1 min-w-[125px] sm:min-w-0 py-2.5 px-2 sm:px-3 text-[12px] sm:text-[13px] font-medium transition-colors text-center whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 border-r last:border-r-0 border-[var(--hw-neutral-200)] ${
+                  className={`${ti < 3 ? "col-span-2 border-b sm:border-b-0" : "col-span-3"} ${ti === 2 ? "border-r-0 sm:border-r" : "border-r"} sm:flex-1 sm:min-w-0 py-2 sm:py-2.5 px-1.5 sm:px-3 text-[11.5px] sm:text-[13px] leading-tight font-medium transition-colors text-center cursor-pointer flex items-center justify-center gap-1 sm:gap-1.5 last:border-r-0 border-[var(--hw-neutral-200)] ${
                     active
                       ? "bg-[var(--hw-green-700)] text-white font-semibold"
                       : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
                   }`}
                 >
-                  <span className="truncate">{tab.label}</span>
+                  <span className="sm:truncate">{tab.label}</span>
                   {count > 0 && (
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shrink-0 ${
@@ -2176,7 +2228,7 @@ function DFTCPriceInput() {
           </div>
 
           {/* Editable Date Picker (Cannot enter data for future dates) */}
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] self-start lg:self-auto">
+          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] self-end lg:self-auto">
             <Calendar className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0" />
             <label htmlFor="price-date-picker" className="text-[12px] font-medium text-[var(--hw-neutral-700)] shrink-0">
               Date:
@@ -2192,7 +2244,7 @@ function DFTCPriceInput() {
                   handleDateChange(localToday());
                 }
               }}
-              className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
+              className="w-[118px] sm:w-auto text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
             />
             {selectedDate !== localToday() && (
               <button
@@ -2210,16 +2262,16 @@ function DFTCPriceInput() {
       {/* Price Table Card */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden mb-5">
         {/* Toolbar */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[var(--hw-neutral-200)]">
+        <div className="px-2.5 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-2 border-b border-[var(--hw-neutral-200)] overflow-x-auto">
           {/* Search */}
-          <div className="relative flex-1 min-w-[160px]">
+          <div className="relative flex-1 min-w-[70px] sm:min-w-[160px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search commodity or variant"
-              className="w-full pl-8 pr-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
+              placeholder="Search"
+              className="w-full pl-8 pr-2 sm:pr-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -2231,10 +2283,13 @@ function DFTCPriceInput() {
           {/* Add Commodity */}
           <button
             onClick={() => setAddCommodityOpen(true)}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+            aria-label="Add Commodity"
+            title="Add Commodity"
+            className="shrink-0 flex items-center gap-1 xs:gap-1.5 px-2 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[11px] sm:text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add Commodity
+            <span className="hidden xs:inline sm:hidden">Add</span>
+            <span className="hidden sm:inline">Add Commodity</span>
           </button>
 
           {/* Show All / Entered Only */}
@@ -2243,9 +2298,9 @@ function DFTCPriceInput() {
               <button
                 key={m}
                 onClick={() => setShowMode(m)}
-                className={`px-3 py-2 text-[12px] font-medium transition-colors cursor-pointer ${showMode === m ? "bg-[var(--hw-neutral-900)] text-white" : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"}`}
+                className={`px-1.5 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10.5px] xs:text-[11px] sm:text-[12px] font-medium whitespace-nowrap transition-colors cursor-pointer ${showMode === m ? "bg-[var(--hw-neutral-900)] text-white font-semibold" : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"}`}
               >
-                {m === "all" ? "Show All" : "Show Entered Only"}
+                {m === "all" ? "All" : "Entered"}
               </button>
             ))}
           </div>
@@ -2253,9 +2308,12 @@ function DFTCPriceInput() {
           {/* Collapse All / Expand All */}
           <button
             onClick={toggleCollapseAll}
-            className="shrink-0 px-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+            title={allCollapsed ? "Expand All" : "Collapse All"}
+            aria-label={allCollapsed ? "Expand All" : "Collapse All"}
+            className="shrink-0 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer flex items-center gap-1"
           >
-            {allCollapsed ? "Expand All" : "Collapse All"}
+            <span className="sm:hidden">{allCollapsed ? "Expand" : "Collapse"}</span>
+            <span className="hidden sm:inline">{allCollapsed ? "Expand All" : "Collapse All"}</span>
           </button>
         </div>
 
@@ -2297,19 +2355,23 @@ function DFTCPriceInput() {
 
               {!isCol && catCommodities.map((com) => {
                 const variants = getVariants(com).filter((v) => matchesVariant(com, v));
+                const colCom = collapsedComs.has(com.id);
                 return (
                   <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                     {/* Commodity Header */}
-                    <div className="px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)]">
-                      <div className="flex items-center gap-2">
+                    <div
+                      onClick={() => toggleCommodity(com.id)}
+                      className="px-3 sm:px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)] cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
                         {com.isHW && hasHWIcon(com.name)
                           ? <CommodityIllustration commodityId={hwId(com.name)} className="w-5 h-5 shrink-0" />
                           : <Leaf className={`w-4 h-4 shrink-0 ${com.isHW ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`} />}
-                        <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{com.name}</span>
+                        <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">{com.name}</span>
                         {com.isHW && (
                           <button
                             type="button"
-                            onClick={() => setHwInfoId(com.id)}
+                            onClick={(e) => { e.stopPropagation(); setHwInfoId(com.id); }}
                             className="text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)]"
                             title="HarvestWise Supported Commodity"
                           >
@@ -2318,17 +2380,20 @@ function DFTCPriceInput() {
                         )}
                         <button
                           type="button"
-                          onClick={() => setCoverageOpen(true)}
+                          onClick={(e) => { e.stopPropagation(); setCoverageOpen(true); }}
                           className="text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)]"
                           title="About Analytics Coverage"
                         >
                           <Info className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      {colCom
+                        ? <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />
+                        : <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />}
                     </div>
 
                     {/* Variant Rows */}
-                    {variants.map((v) => {
+                    {!colCom && variants.map((v) => {
                       const f = getField(activeTabId, v.id);
                       return (
                         <div key={v.id}>
@@ -2409,7 +2474,7 @@ function DFTCPriceInput() {
                     })}
 
                     {/* Add Variant Button */}
-                    {showMode === "all" && (
+                    {!colCom && showMode === "all" && (
                       <div className="px-4 py-2 border-b border-[var(--hw-neutral-50)]">
                         {addingVariant === com.id ? (
                           <div className="flex items-center gap-2">
