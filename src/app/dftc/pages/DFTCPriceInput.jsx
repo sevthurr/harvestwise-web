@@ -31,7 +31,7 @@ import {
 } from "./dftcPricePrefill";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
-import { apiGet, apiPost, parseResponse } from "../../global/api";
+import { apiDelete, apiGet, apiPost, apiPut, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 
 function hwId(name) {
@@ -802,6 +802,19 @@ function DFTCPriceInput() {
   const [carriedDate, setCarriedDate] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // Shared-draft bookkeeping. `draftMetaRef` mirrors prefilledRef but carries the
+  // per-cell draft metadata (server version + last editor) so autosave can send
+  // an optimistic-concurrency check and a 409 can be attributed to a person.
+  const draftMetaRef = useRef(emptyTabMaps());
+  // The day has already been finalized; the button becomes "Re-finalize" and a
+  // finalize must bump the submission version rather than create a new one.
+  const [draftFinalized, setDraftFinalized] = useState(false);
+  // Human-readable 409 attribution shown next to the offending tab.
+  const [draftConflict, setDraftConflict] = useState("");
+  // "tabId|vid" pairs currently being written to the server, so a cell can show
+  // an in-flight indicator without blocking the rest of the grid.
+  const [draftSavingCells, setDraftSavingCells] = useState(() => new Set());
+
   /** True only for a previous-day value the user has not touched. */
   const isUntouchedCarried = useCallback(
     (tabId, vid) =>
@@ -900,7 +913,14 @@ function DFTCPriceInput() {
         const hasLocalDraft = (() => {
           try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
         })();
-        if (!hasLocalDraft) await loadDayPrefill(selectedDate, { preserveEdits: true });
+        // Read the date at fire time, not from the first-render closure: this
+        // continuation resumes after the catalog await, and the user may have
+        // already picked a different day. Using the stale date would issue a
+        // second prefill for today that takes a higher sequence number and
+        // overwrites the day the user actually selected.
+        if (!hasLocalDraft && !cancelled) {
+          await loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
+        }
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
@@ -909,21 +929,142 @@ function DFTCPriceInput() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Resolve one form field to the exact draft-cell key the server expects.
+  // Returns null when the field is empty (a cleared cell is a DELETE, not a PUT).
+  function draftCellFor(tabId, vid, live) {
+    // Read from the live snapshot, never from this function's render closure:
+    // the debounced autosave fires after the edit's setState has committed, so
+    // a closure captured at schedule time still holds the pre-edit tabFields.
+    const f = live.tabFields[tabId]?.[vid];
+    if (!f || !hasValue(f)) return null;
+    const { com, v } = findCommodityAndVariant(vid);
+    const commodity_id = resolveCommodityId(com, v);
+    if (!commodity_id) return null;
+    const tab = MARKET_TABS.find((t) => t.id === tabId);
+    if (!tab) return null;
+    return {
+      reporting_date: live.selectedDate,
+      commodity_id,
+      source_id: tab.sourceId,
+      price_type: tab.priceType,
+      uom: f.uom || "kg",
+      price_min: f.low ?? null,
+      price_max: f.high ?? null,
+      prevail_price: f.prevailing ?? null,
+      observation_status: "Reported value",
+      expected_version: draftMetaRef.current[tabId]?.get(vid)?.version ?? null,
+    };
+  }
+
+  // Push every dirty field to the shared draft. One request per cell so two
+  // inputters never overwrite each other wholesale, and a 409 on one cell does
+  // not discard the rest. Best-effort: a failure keeps the localStorage fallback
+  // and surfaces a message rather than losing the typed value.
+  const pushDraftCells = useCallback(async () => {
+    // The debounce fires after this callback was created. draftRef.current is
+    // re-assigned every render and always holds the latest committed state, so
+    // read it here instead of closing over selectedDate/tabFields. Otherwise a
+    // single edit pushes nothing and the last edit of a burst is lost.
+    const live = draftRef.current;
+    if (isFutureDate(live.selectedDate)) return;
+    const pending = [];
+    const cleared = [];
+    for (const tab of MARKET_TABS) {
+      for (const [vid, f] of Object.entries(live.tabFields[tab.id] || {})) {
+        if (!dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
+        const tabMeta = MARKET_TABS.find((t) => t.id === tab.id);
+        const cell = draftCellFor(tab.id, vid, live);
+        if (cell) {
+          pending.push({ key: `${tab.id}|${vid}`, cell });
+        } else if (tabMeta) {
+          // Edited to empty. Only a cell that exists in the draft needs a
+          // DELETE; a field that was never drafted has nothing to remove.
+          const meta = draftMetaRef.current[tab.id]?.get(vid);
+          const { com, v } = findCommodityAndVariant(vid);
+          const commodity_id = meta?.commodity_id ?? resolveCommodityId(com, v);
+          if (meta && commodity_id) {
+            cleared.push({
+              key: `${tab.id}|${vid}`,
+              params: {
+                reporting_date: live.selectedDate,
+                commodity_id,
+                source_id: tabMeta.sourceId,
+                price_type: tabMeta.priceType,
+              },
+            });
+          }
+        }
+      }
+    }
+    if (pending.length === 0 && cleared.length === 0) return;
+
+    setDraftSavingCells(new Set([...pending, ...cleared].map((p) => p.key)));
+    let conflict = "";
+    for (const { key, params } of cleared) {
+      try {
+        const qs = new URLSearchParams(params).toString();
+        await apiDelete(`/dftc/price-draft/cell?${qs}`);
+        const tabId = key.split("|")[0];
+        const vid = key.slice(tabId.length + 1);
+        draftMetaRef.current[tabId]?.delete(vid);
+      } catch (err) {
+        if (err?.status === 409 || err?.statusCode === 409) {
+          conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
+        } else {
+          console.error("Draft cell delete failed:", err);
+        }
+      }
+    }
+    for (const { key, cell } of pending) {
+      try {
+        const res = await parseResponse(await apiPut("/dftc/price-draft/cell", cell));
+        const tabId = key.split("|")[0];
+        const vid = key.slice(tabId.length + 1);
+        if (res?.version !== undefined && draftMetaRef.current[tabId]) {
+          draftMetaRef.current[tabId].set(vid, {
+            commodity_id: res.commodity_id,
+            uom: res.uom,
+            version: res.version,
+            updatedBy: res.updated_by_user_id,
+          });
+        }
+      } catch (err) {
+        if (err?.status === 409 || err?.statusCode === 409) {
+          conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
+        } else {
+          console.error("Draft cell autosave failed:", err);
+        }
+      }
+    }
+    setDraftSavingCells(new Set());
+    if (conflict) setDraftConflict(conflict);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
     // Any edit means the user is acting on the failure notice.
     setSaveError("");
+    setDraftConflict("");
     setSaveStatus("saving");
     saveTimer.current = setTimeout(() => {
-      setSaveStatus("saved");
       try {
         localStorage.setItem("dftc_price_draft", "true");
         localStorage.setItem("dftc_price_draft_data", JSON.stringify(draftRef.current));
-      } catch { }
+        if (navigator.onLine === false) {
+          setSaveStatus("offline");
+        } else {
+          setSaveStatus("saved");
+        }
+      } catch {
+        setSaveStatus("saved");
+      }
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 30000);
+      // Server-side shared draft. Fire-and-forget so typing never blocks; the
+      // local fallback above already covers an offline or failing connection.
+      pushDraftCells().catch(() => { });
     }, 1500);
-  }, []);
+  }, [pushDraftCells]);
 
   // Timers scheduled above outlive unmount and fire setState/navigate on a dead
   // tree, which leaks navigation into whatever screen the user moved to.
@@ -1018,14 +1159,50 @@ function DFTCPriceInput() {
     setUnrenderableCount(0);
     setCarriedDate(null);
 
-    // Today's manual-entry form is intentionally a blank capture surface.
-    // Existing or historical prices must never be copied into the current day.
-    if (date === localToday()) return;
+    // Today's manual-entry form loads the shared draft so both inputters see the
+    // same in-progress cells. (Drafts are server-side now; the old "today is a
+    // blank capture surface" rule no longer applies.)
+    // (early return removed)
 
     try {
+      // The shared draft is the source of truth for the selected day's in-progress
+      // cells (it holds both inputters' work). The recorded-price snapshot below is
+      // only a fallback for a date whose draft has not been started yet; a draft
+      // cell always wins over a snapshot cell for the same variant.
+      let draftByTab = emptyTabFields();
+      let draftMeta = emptyTabMaps();
+      let draftFinalized = false;
+      try {
+        const draftRes = await apiGet(`/dftc/price-draft?reporting_date=${date}`);
+        const draftData = await parseResponse(draftRes);
+        if (draftData && Array.isArray(draftData.cells)) {
+          draftFinalized = draftData.status === "saved";
+          if (draftData.cells.length) {
+            const { resolveVid } = await import("./dftcPricePrefill");
+            for (const cell of draftData.cells) {
+              const tab = MARKET_TABS.find(
+                (t) => t.sourceId === cell.source_id && t.priceType === cell.price_type,
+              );
+              if (!tab) continue;
+              const vid = resolveVid(cell.commodity_id, stableResolverRef.current);
+              if (!vid) continue;
+              draftByTab[tab.id][vid] = priceField(cell.prevail_price, cell.uom);
+              draftMeta[tab.id].set(vid, {
+                commodity_id: cell.commodity_id,
+                uom: cell.uom,
+                version: cell.version,
+                updatedBy: cell.updated_by_user_id,
+              });
+            }
+          }
+        }
+      } catch { /* draft load is best-effort */ }
+
       const snap = await loadPrefillSnapshot(date, stableResolverRef.current);
       // A slow response for a date the user has already moved off of.
       if (!snap || seq !== prefillSeqRef.current) return;
+
+      setDraftFinalized(draftFinalized);
 
       const nextPrefilled = emptyTabMaps();
       const nextCarried = emptyTabSets();
@@ -1039,6 +1216,17 @@ function DFTCPriceInput() {
         for (const [vid, entry] of snap.carriedByTab[tab.id] ?? []) {
           prefillByTab[tab.id][vid] = priceField(entry.price, entry.uom);
           nextCarried[tab.id].add(vid);
+        }
+      }
+
+      // Layer the draft on top: a draft cell replaces the snapshot value and its
+      // per-cell metadata becomes the prefill tracking (used for version checks).
+      draftMetaRef.current = draftMeta;
+      for (const tab of MARKET_TABS) {
+        for (const [vid, field] of Object.entries(draftByTab[tab.id] ?? {})) {
+          prefillByTab[tab.id][vid] = field;
+          nextPrefilled[tab.id].set(vid, draftMeta[tab.id].get(vid));
+          nextCarried[tab.id].delete(vid);
         }
       }
 
@@ -1345,7 +1533,10 @@ function DFTCPriceInput() {
   }, [consolidatedReviewRows, reviewFilter]);
 
   // ── Finalize & Save All Tabs ──
-  async function handleSave() {
+
+  // Finalize: promote the shared draft into price_record + a submission.
+  // the day once, atomically, server-side, over every inputter's cells.
+  async function finalizeDraft() {
     if (isFutureDate(selectedDate)) {
       setDateError("Reporting date cannot be after today.");
       return;
@@ -1353,151 +1544,68 @@ function DFTCPriceInput() {
     setDateError("");
     setSaveError("");
     setIsSaving(true);
-    setSaveProgress(15);
-    setSaveProgressStage("Validating price entries...");
-    let totalSaved = 0;
-    let dropped = 0;
-    const failedTabs = [];
+    setSaveProgress(30);
+    setSaveProgressStage("Sending the day's prices...");
 
-    let tabIndex = 0;
-    let sessionSubmissionId = null;
-    for (const tab of MARKET_TABS) {
-      tabIndex++;
-      setSaveProgress(15 + Math.round((tabIndex / MARKET_TABS.length) * 65));
-      setSaveProgressStage(`Saving ${tab.label} records...`);
-      const tabMap = tabFields[tab.id] || {};
-      // An untouched previous-day value is a starting point, not an entry:
-      // committing it would save yesterday's price as today's.
-      const tabEntered = Object.entries(tabMap).filter(([vid, f]) => hasValue(f) && !isUntouchedCarried(tab.id, vid));
-      // prefilledRef holds same-day rows only, so carried vids can never reach
-      // remove_records — there is no row on this date to delete.
-      const prefillMap = prefilledRef.current[tab.id] || new Map();
-      const removedCommodities = [];
+    // Flush any not-yet-autosaved cell first so review and finalize see the same
+    // values that are on screen.
+    try {
+      await pushDraftCells();
+    } catch { /* covered by the finalize error below */ }
 
-      for (const [vid, info] of prefillMap.entries()) {
-        if (!hasValue(tabMap[vid])) {
-          removedCommodities.push(info.commodity_id);
-        }
-      }
-
-      if (tabEntered.length === 0 && removedCommodities.length === 0) {
-        continue;
-      }
-
-      const records = [];
-      for (const [vid, f] of tabEntered) {
-        const { cat, com, v } = findCommodityAndVariant(vid);
-        if (!com) continue;
-        const commodity_id = resolveCommodityId(com, v);
-        const base = {
-          variety: v?.name || "Base",
-          uom: f.uom || "kg",
-          sample_prices: parseValid(f.samples),
-          prevail_price: f.prevailing,
-          observation_status: "Reported value"
-        };
-
-        if (commodity_id) {
-          records.push({ commodity_id, ...base });
-        } else {
-          const registered = await registerCommodity({
-            name: com.name,
-            category: cat?.name || "Others",
-            variety: v?.name || "Base",
-            unit_of_measure: f.uom || "kg"
-          });
-          if (registered?.id) {
-            try { catalogRef.current?.set(nameSlug(com.name), registered.id); } catch { }
-            records.push({ commodity_id: registered.id, ...base });
-          } else {
-            dropped += 1;
-          }
-        }
-      }
-
-      const payload = {
-        data_type: "price",
-        source_id: tab.sourceId,
-        price_type: tab.priceType,
-        reporting_date: selectedDate,
-        records,
-        remove_records: removedCommodities,
-        ...(sessionSubmissionId ? { submission_id: sessionSubmissionId } : {})
-      };
+    setSaveProgress(70);
+    setSaveProgressStage("Consolidating price monitoring records...");
+    try {
+      const res = await parseResponse(
+        await apiPost("/dftc/price-draft/finalize", { reporting_date: selectedDate }),
+      );
+      const count = res?.record_count ?? 0;
 
       try {
-        const res = await parseResponse(await apiPost("/dftc/submissions/manual", payload));
-        if (!sessionSubmissionId && res?.submission?.id) {
-          sessionSubmissionId = res.submission.id;
-        }
-        totalSaved += records.length;
-      } catch (err) {
-        console.error(`Failed to save submission for ${tab.label}:`, err);
-        // Carry the real reason. The bare label produced "check your
-        // connection" for every failure, including backend 500s and timeouts.
-        failedTabs.push(
-          err?.message ? `${tab.label} — ${err.message}` : tab.label
+        localStorage.setItem(
+          `dftc_report_personnel_${selectedDate}`,
+          JSON.stringify({ encodedBy, encodedByRole, reviewedBy, reviewedByRole }),
         );
-      }
-    }
+        localStorage.removeItem("dftc_price_draft");
+        localStorage.removeItem("dftc_price_draft_data");
+      } catch { }
 
-    // Never report success when a market failed. Records are written as
-    // idempotent upserts, so staying on the page and letting the user retry is
-    // safe — navigating away would silently drop that market's prices and
-    // discard the local draft that holds the retyped values.
-    if (failedTabs.length > 0) {
+      setHasDraft(false);
+      setDraftFinalized(true);
+      setSaved(true);
+      setSaveProgress(100);
+      setSaveProgressStage("Price monitoring data saved successfully!");
+      clearPrefillCache();
+      queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
+      queryClient.invalidateQueries({ queryKey: ["prices"] });
+
+      navTimer.current = setTimeout(() => {
+        setIsSaving(false);
+        navigate("/dftc/input", {
+          state: {
+            successMsg: `${dataName} saved successfully (${count} price records across all markets).`,
+            restoreMarketFilter: navState?.restoreMarketFilter,
+            restoreDataTypeFilter: navState?.restoreDataTypeFilter,
+            justSavedType: "price",
+            justSavedDate: selectedDate,
+            justSavedAt: new Date().toISOString(),
+          },
+        });
+      }, 900);
+    } catch (err) {
+      // Stay on the page: the draft is intact server-side, so the user retries
+      // without retyping. Never navigate away on a failed finalize.
+      setIsSaving(false);
       setSaveError(
-        `Could not save ${failedTabs.length} of ${MARKET_TABS.length} markets: ${failedTabs.join("; ")}. ` +
-        `Your entries are still on this page — resolve the reason above and press Save again.`
+        err?.message
+          ? `Could not finalize: ${err.message}`
+          : "Could not finalize the day's prices. Your entries are safe — try again.",
       );
-      setIsSaving(false);
-      return;
     }
-
-    setSaveProgress(92);
-    setSaveProgressStage("Consolidating price monitoring records...");
-
-    try {
-      localStorage.setItem(
-        `dftc_report_personnel_${selectedDate}`,
-        JSON.stringify({
-          encodedBy,
-          encodedByRole,
-          reviewedBy,
-          reviewedByRole
-        })
-      );
-      localStorage.removeItem("dftc_price_draft");
-      localStorage.removeItem("dftc_price_draft_data");
-    } catch { }
-
-    setHasDraft(false);
-    setSaved(true);
-    setSaveProgress(100);
-    setSaveProgressStage("Price monitoring data saved successfully!");
-    // Without this the session memo would serve the pre-save snapshot to the
-    // next mount, so a freshly saved day would reload its own previous values.
-    clearPrefillCache();
-    queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
-    queryClient.invalidateQueries({ queryKey: ["prices"] });
-
-    navTimer.current = setTimeout(() => {
-      setIsSaving(false);
-      navigate("/dftc/input", {
-        state: {
-          successMsg: `${dataName} saved successfully (${totalSaved} price records across all markets).`,
-          restoreMarketFilter: navState?.restoreMarketFilter,
-          restoreDataTypeFilter: navState?.restoreDataTypeFilter,
-          justSavedType: "price",
-          justSavedDate: selectedDate,
-          justSavedAt: new Date().toISOString()
-        }
-      });
-    }, 900);
   }
 
   function SaveStatusIndicator() {
@@ -1839,6 +1947,15 @@ function DFTCPriceInput() {
           </div>
 
           <div className="pt-2">
+            {draftConflict && (
+              <div
+                role="alert"
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {draftConflict}
+              </div>
+            )}
             {saveError && (
               <div
                 role="alert"
@@ -1863,7 +1980,9 @@ function DFTCPriceInput() {
               disabled={totalEnteredCount === 0 || isSaving}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalEnteredCount} records)
+              {draftFinalized
+                ? `Re-finalize ${dataName} (${totalEnteredCount} records)`
+                : `Finalize ${dataName} (${totalEnteredCount} records)`}
             </button>
           </div>
 
@@ -1914,15 +2033,14 @@ function DFTCPriceInput() {
               onClose={() => setConfirmOpen(false)}
               onConfirm={() => {
                 setConfirmOpen(false);
-                // handleSave can reject outside its own try (registerCommodity at
-                // the top of the loop); without this the modal freezes on
-                // "Saving" forever.
-                handleSave().catch((err) => {
-                  console.error("DFTC price save failed:", err);
+                // finalizeDraft owns its own error handling; this catch only
+                // guards a rejection outside its internal try.
+                finalizeDraft().catch((err) => {
+                  console.error("DFTC price finalize failed:", err);
                   setIsSaving(false);
                   setSaveError(
-                    `Could not save: ${err?.message || "unexpected error"}. ` +
-                    `Your entries are still on this page — press Save again.`
+                    `Could not finalize: ${err?.message || "unexpected error"}. ` +
+                    `Your entries are still on this page — press Finalize again.`
                   );
                 });
               }}

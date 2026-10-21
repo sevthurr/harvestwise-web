@@ -59,6 +59,18 @@ const THREE_WEEKS_AGO = isoDaysAgo(21);
 function byDayOn(dates) {
   const set = new Set(dates);
   return vi.fn(async (url) => {
+    if (url.includes('/dftc/price-draft')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: null,
+          reporting_date: new URL(url, 'http://x').searchParams.get('reporting_date'),
+          status: 'draft',
+          cells: []
+        })
+      };
+    }
     if (url.includes('/dftc/prices/by-day')) {
       const q = new URL(url, 'http://x').searchParams;
       const bangkerohanRetail =
@@ -99,9 +111,29 @@ function expandLowland() {
 async function saveAndCapture(fetchImpl) {
   const bodies = [];
   global.fetch = vi.fn(async (url, opts) => {
-    if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
+    if (url.includes('/dftc/price-draft/finalize') && opts?.method === 'POST') {
       bodies.push(JSON.parse(opts.body));
-      return { ok: true, status: 201, json: async () => ({ id: 'SUB-1', status: 'Saved' }) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'SUB-1',
+          source_id: 'SRC-0001',
+          data_type: 'price',
+          price_type: null,
+          reporting_date: TODAY,
+          submission_method: 'Manual Input',
+          submitted_by_user_id: 'USR-1',
+          submitted_by_name: null,
+          last_edited_by_user_id: 'USR-1',
+          status: 'Saved',
+          saved_at: new Date().toISOString(),
+          validation_completed_at: null,
+          generated_report_id: null,
+          created_at: new Date().toISOString(),
+          record_count: 1,
+        }),
+      };
     }
     return fetchImpl(url, opts);
   });
@@ -109,7 +141,7 @@ async function saveAndCapture(fetchImpl) {
   fireEvent.change(expandLowland()[0], { target: { value: '25' } });
   fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
   await waitFor(() => expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument());
-  fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Finalize DFTC Price Monitoring/i }));
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
   await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
@@ -152,6 +184,19 @@ function mockFetch() {
           reporting_date: new URL(url, 'http://x').searchParams.get('reporting_date'),
           items: [],
           total: 0
+        })
+      };
+    }
+    // Shared draft for the day. Empty by default: no cells, status "draft".
+    if (url.includes('/dftc/price-draft')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: null,
+          reporting_date: new URL(url, 'http://x').searchParams.get('reporting_date'),
+          status: 'draft',
+          cells: []
         })
       };
     }
@@ -270,16 +315,59 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
       expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument();
       expect(screen.getByText(/BANKEROHAN MARKET/i)).toBeInTheDocument();
       expect(screen.getByText(/DFTC TABOAN/i)).toBeInTheDocument();
-      expect(screen.getByText(/Save DFTC Price Monitoring/i)).toBeInTheDocument();
+      expect(screen.getByText(/Finalize DFTC Price Monitoring/i)).toBeInTheDocument();
     });
   });
 
   it('allows entering and saving Bangkerohan Landing prices to the database', async () => {
     let capturedBody = null;
+    const cells = [];
     global.fetch = vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        cells.push(JSON.parse(opts.body));
+        const body = JSON.parse(opts.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-1',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 1,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      }
+      if (url.includes('/dftc/price-draft/finalize') && opts?.method === 'POST') {
         capturedBody = JSON.parse(opts.body);
-        return { ok: true, status: 201, json: async () => ({ id: 'SUB-101', status: 'Saved' }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'SUB-101',
+            source_id: 'SRC-0001',
+            data_type: 'price',
+            price_type: null,
+            reporting_date: TODAY,
+            submission_method: 'Manual Input',
+            submitted_by_user_id: 'USR-1',
+            submitted_by_name: null,
+            last_edited_by_user_id: 'USR-1',
+            status: 'Saved',
+            saved_at: new Date().toISOString(),
+            validation_completed_at: null,
+            generated_report_id: null,
+            created_at: new Date().toISOString(),
+            record_count: 1,
+          }),
+        };
       }
       return mockFetch()(url, opts);
     });
@@ -307,8 +395,8 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
       expect(screen.getByText('₱25.00')).toBeInTheDocument();
     });
 
-    // Save
-    const saveBtn = screen.getByRole('button', { name: /Save DFTC Price Monitoring/i });
+    // Finalize the shared draft.
+    const saveBtn = screen.getByRole('button', { name: /Finalize DFTC Price Monitoring/i });
     fireEvent.click(saveBtn);
 
     // Confirm Modal
@@ -317,20 +405,49 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
     const finalizeBtn = screen.getByRole('button', { name: /Finalize & Save/i });
     fireEvent.click(finalizeBtn);
 
+    // finalize posts the reporting date; the per-cell truth (source, price_type,
+    // price) travels on the draft-cell PUTs that precede it.
     await waitFor(() => {
       expect(capturedBody).not.toBeNull();
-      expect(capturedBody.price_type).toBe('Landing');
-      expect(capturedBody.source_id).toBe('bankerohan');
-      expect(capturedBody.records[0].prevail_price).toBe(25);
     });
+    expect(capturedBody.reporting_date).toBe(TODAY);
+
+    await waitFor(() => {
+      expect(cells.length).toBeGreaterThan(0);
+    });
+    const landingCell = cells.find((c) => c.price_type === 'Landing');
+    expect(landingCell).toBeTruthy();
+    expect(landingCell.source_id).toBe('bankerohan');
+    expect(landingCell.prevail_price).toBe(25);
   });
 
-  it('does not navigate away or claim success when a market fails to save', async () => {
-    // Regression: a failed market POST was swallowed by a bare console.error,
-    // so the page still navigated to /dftc/input reporting "saved successfully"
-    // even though that market's prices never reached the database.
+  it('does not navigate away or claim success when finalize fails', async () => {
+    // Regression: a failed write was swallowed by a bare console.error, so the
+    // page still navigated to /dftc/input reporting "saved successfully" even
+    // though that day's prices never reached the database.
     global.fetch = vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-1',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 1,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      }
+      if (url.includes('/dftc/price-draft/finalize') && opts?.method === 'POST') {
         return { ok: false, status: 500, json: async () => ({ detail: 'Internal error' }) };
       }
       return mockFetch()(url, opts);
@@ -357,13 +474,13 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
     // its assertions; clear the spy so this test only sees its own navigation.
     mockNavigate.mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Finalize DFTC Price Monitoring/i }));
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
 
     // The failure must be surfaced, not swallowed.
     await waitFor(() => {
-      expect(screen.getByText(/Could not save 1 of 5 markets/i)).toBeInTheDocument();
+      expect(screen.getByText(/Could not finalize/i)).toBeInTheDocument();
     });
 
     // The success path navigates on a 900ms timer, so wait past that window
@@ -449,8 +566,8 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
     fireEvent.change(searchInput, { target: { value: 'Hermoso' } });
     expect(screen.getAllByText(/CHRISTIAN JOEY PAUL M\. HERMOSO/i).length).toBeGreaterThanOrEqual(1);
 
-    // Click Save button and confirm to test loading popup
-    const saveBtn = screen.getByRole('button', { name: /Save DFTC Price Monitoring/i });
+    // Click Finalize and confirm to test loading popup
+    const saveBtn = screen.getByRole('button', { name: /Finalize DFTC Price Monitoring/i });
     fireEvent.click(saveBtn);
     const confirmCheckbox = screen.getByRole('checkbox');
     fireEvent.click(confirmCheckbox);
@@ -472,7 +589,10 @@ describe('DFTCPriceInput prefill provenance', () => {
     localStorage.clear();
   });
 
-  it('keeps today empty and does not fetch previous-day prices', async () => {
+  it('keeps a day with no draft or records empty and does not carry prices forward', async () => {
+    // Reversed by the shared-draft change: today is no longer a blank capture
+    // surface. What still holds is that a day with neither a draft nor records
+    // renders empty, and that no previous-day price is carried into it.
     renderWithFetch(byDayOn([THREE_WEEKS_AGO]));
 
     await waitFor(() => expect(screen.getByText('Review (0)')).toBeInTheDocument());
@@ -481,7 +601,6 @@ describe('DFTCPriceInput prefill provenance', () => {
     const inputs = expandLowland();
     expect(inputs[0].value).toBe('');
     expect(screen.queryByText(/Starting point from/i)).not.toBeInTheDocument();
-    expect(global.fetch.mock.calls.some((c) => c[0].includes('/dftc/prices/by-day'))).toBe(false);
   });
 
   it('clears the form when switching from a full date to one with zero records', async () => {
@@ -524,14 +643,95 @@ describe('DFTCPriceInput prefill provenance', () => {
     expect(screen.queryByText(/Amending existing entry/i)).not.toBeInTheDocument();
   });
 
-  it('amends same-day records and removes one when the field is cleared', async () => {
-    const bodies = [];
+  it('amends a draft cell and deletes it when the field is cleared', async () => {
+    // The meaningful clear case: the cell already exists in the SHARED DRAFT
+    // (another inputter put it there, or it was autosaved earlier). Clearing it
+    // must remove it from the draft with a DELETE, not leave a stale value for
+    // finalize to resurrect. A cell that only came from a record prefill has no
+    // draft row, so clearing it correctly sends nothing.
+    const puts = [];
+    const deletes = [];
+    const finalizes = [];
     const amendDay = isoDaysAgo(2);
     const base = byDayOn([amendDay]);
     renderWithFetch(vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
-        bodies.push(JSON.parse(opts.body));
-        return { ok: true, status: 201, json: async () => ({ id: 'SUB-3', status: 'Saved' }) };
+      // The shared draft holds one Ampalaya cell for the day being amended.
+      if (url.includes('/dftc/price-draft?') && (opts?.method ?? 'GET') === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DRF-1',
+            reporting_date: amendDay,
+            status: 'draft',
+            cells: [
+              {
+                id: 'DCL-1',
+                commodity_id: AMPALAYA_DB_ID,
+                source_id: 'bankerohan',
+                price_type: 'Retail',
+                uom: 'kg',
+                price_min: 35,
+                price_max: 35,
+                prevail_price: 35,
+                observation_status: 'Reported value',
+                version: 1,
+                updated_by_user_id: 'USR-9',
+                updated_at: new Date().toISOString(),
+              },
+            ],
+          }),
+        };
+      }
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        puts.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-2',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 2,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      }
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'DELETE') {
+        deletes.push(new URL(url, 'http://x').searchParams);
+        return { ok: true, status: 204, json: async () => ({}) };
+      }
+      if (url.includes('/dftc/price-draft/finalize') && opts?.method === 'POST') {
+        finalizes.push(JSON.parse(opts.body));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'SUB-3',
+            source_id: 'SRC-0001',
+            data_type: 'price',
+            price_type: null,
+            reporting_date: amendDay,
+            submission_method: 'Manual Input',
+            submitted_by_user_id: 'USR-1',
+            submitted_by_name: null,
+            last_edited_by_user_id: 'USR-1',
+            status: 'Saved',
+            saved_at: new Date().toISOString(),
+            validation_completed_at: null,
+            generated_report_id: null,
+            created_at: new Date().toISOString(),
+            record_count: 1,
+          }),
+        };
       }
       return base(url, opts);
     }));
@@ -539,38 +739,70 @@ describe('DFTCPriceInput prefill provenance', () => {
     fireEvent.change(screen.getByLabelText(/Date:/i), { target: { value: amendDay } });
     await waitFor(() => expect(screen.getByText(/Amending existing entry/i)).toBeInTheDocument());
     const inputs = expandLowland();
+    // The draft cell (35) wins over the record prefill for the same variant.
     expect(inputs[0].value).toBe('35');
     expect(inputs[BATONG_INPUT_INDEX].value).toBe('20');
-    // Same-day values count as entries; there is no previous-day carry here.
     expect(screen.getByText('Review (2)')).toBeInTheDocument();
 
+    // Clear the drafted cell. Its key is in the shared draft, so this must DELETE
+    // it rather than push a PUT.
     fireEvent.change(inputs[0], { target: { value: '' } });
     await waitFor(() => expect(screen.getByText('Review (1)')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
     await waitFor(() => expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Finalize DFTC Price Monitoring/i }));
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
 
-    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    const retailBody = bodies.find((b) => b.price_type === 'Retail' && b.source_id === 'bankerohan');
-    // The cleared row is deleted; the untouched sibling is re-saved, not deleted.
-    expect(retailBody.remove_records).toEqual([AMPALAYA_DB_ID]);
-    expect(retailBody.records.map((r) => r.commodity_id)).toEqual(['com-2']);
+    // Clear -> DELETE for the drafted Ampalaya cell; never a PUT for it.
+    await waitFor(() => expect(deletes.length).toBeGreaterThan(0), { timeout: 3000 });
+    expect(deletes.some((q) => q.get('commodity_id') === AMPALAYA_DB_ID)).toBe(true);
+    expect(puts.some((p) => p.commodity_id === AMPALAYA_DB_ID)).toBe(false);
+    await waitFor(() => expect(finalizes.length).toBeGreaterThan(0));
   });
 
   it('writes only the vids the user typed on a date with no same-day records', async () => {
     // Payload-level guard. Rendering assertions pass with or without the
     // carried-value exclusion, which is why they never caught the defect:
     // the numbers were on screen either way, and the wrong ones got saved.
-    const bodies = await saveAndCapture(byDayOn([YESTERDAY]));
+    // Under the shared-draft flow the per-cell PUT is the payload that matters:
+    // an untouched previous-day value must never be written.
+    const puts = [];
+    const base = byDayOn([YESTERDAY]);
+    global.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        puts.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-1',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 1,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      }
+      return base(url, opts);
+    });
 
-    for (const body of bodies) {
-      const ids = body.records.map((r) => r.commodity_id).sort();
-      expect(ids).toEqual([AMPALAYA_DB_ID]);
-      // Nothing from the previous day may be deleted on this date.
-      expect(body.remove_records ?? []).toEqual([]);
+    renderWithFetch(global.fetch);
+    fireEvent.change(expandLowland()[0], { target: { value: '25' } });
+
+    // The autosave debounce is 1500ms, so the default 1000ms waitFor is too short.
+    await waitFor(() => expect(puts.length).toBeGreaterThan(0), { timeout: 3000 });
+    for (const body of puts) {
+      expect(body.commodity_id).toBe(AMPALAYA_DB_ID);
       expect(body.reporting_date).toBe(TODAY);
     }
   });
@@ -597,28 +829,52 @@ describe('DFTCPriceInput prefill provenance', () => {
       })
     );
 
-    const bodies = [];
+    const puts = [];
     const base = mockFetch();
-    renderWithFetch(vi.fn(async (url, opts) => {
-      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
-        bodies.push(JSON.parse(opts.body));
-        return { ok: true, status: 201, json: async () => ({ id: 'SUB-8', status: 'Saved' }) };
+    global.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        puts.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-1',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 1,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
       }
       return base(url, opts);
-    }));
+    });
+    renderWithFetch(global.fetch);
 
     fireEvent.click(await screen.findByRole('button', { name: /Resume Draft/i }));
     await waitFor(() => expect(screen.getByText('Review (1)')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
-    await waitFor(() => expect(screen.getByText('Add Price Data — Review')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Price Monitoring/i }));
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
+    // The restored value is present but the category is still collapsed, exactly
+    // as an ordinary prefill leaves it — expand it to reach the input.
+    const inputs = expandLowland();
+    expect(inputs[0].value).toBe('30');
 
-    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
-    const retailBody = bodies.find((b) => b.price_type === 'Retail' && b.source_id === 'bankerohan');
-    expect(retailBody.records.map((r) => r.commodity_id)).toEqual([AMPALAYA_DB_ID]);
+    // Touch the restored value so the autosave flushes it to the shared draft.
+    // The value must differ: React suppresses onChange for a no-op change, so
+    // retyping '30' would never dirty the cell.
+    fireEvent.change(inputs[0], { target: { value: '31' } });
+
+    // The autosave debounce is 1500ms, so the default 1000ms waitFor is too short.
+    await waitFor(() => expect(puts.length).toBeGreaterThan(0), { timeout: 3000 });
+    expect(puts.map((p) => p.commodity_id)).toEqual([AMPALAYA_DB_ID]);
+    expect(puts[0].prevail_price).toBe(31);
   });
 });
 
