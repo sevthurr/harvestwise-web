@@ -49,7 +49,7 @@ function formatMonthYear(dateStr) {
 function SortableHeader({ label, col, sort, onSort }) {
   const active = sort.col === col;
   return (
-    <th className="px-4 py-3 text-left whitespace-nowrap cursor-pointer select-none group" onClick={() => onSort(col)}>
+    <th className="px-2.5 sm:px-4 py-3 text-left whitespace-nowrap cursor-pointer select-none group" onClick={() => onSort(col)}>
       <div className="flex items-center gap-1">
         <span className={`text-[13px] font-semibold ${active ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-800)] group-hover:text-[var(--hw-neutral-900)]"}`}>
           {label}
@@ -67,7 +67,7 @@ function SortableHeader({ label, col, sort, onSort }) {
 }
 
 function StaticHeader({ label }) {
-  return <th className="px-4 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">{label}</th>;
+  return <th className="px-2.5 sm:px-4 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">{label}</th>;
 }
 
 function TablePagination({ page, totalPages, totalRows, onPage }) {
@@ -433,14 +433,14 @@ function DFTCCommodityRecords() {
 
   if (previewFile) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
         <DFTCFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
       </div>
     );
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       {/* Back button */}
       <button onClick={goBack} className="flex items-center gap-1.5 text-[14px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)] transition-colors">
         <ChevronLeft className="w-4 h-4" />

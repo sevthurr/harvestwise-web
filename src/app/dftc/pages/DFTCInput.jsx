@@ -450,14 +450,14 @@ export default function DFTCInput() {
     // an arrival row from opening a price report for the same date.
     const PreviewComponent = previewFile.isArrival ? DFTCArrivalPreview : DFTCFilePreview;
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto">
         <PreviewComponent file={previewFile} onClose={() => setPreviewFile(null)} />
       </div>
     );
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto space-y-8 md:space-y-10">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto space-y-6 md:space-y-10">
       {successMessage && (
         <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 shadow-xs">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -474,45 +474,45 @@ export default function DFTCInput() {
       />
 
       {/* Action cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 md:gap-6">
         <button
           onClick={() => navigate("/dftc/price-input")}
-          className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 sm:p-6 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-all active:scale-[.99] flex items-center gap-4 cursor-pointer"
+          className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-6 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-all active:scale-[.99] flex items-center gap-3 sm:gap-4 cursor-pointer"
         >
-          <div className="p-3.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
+          <div className="p-2.5 sm:p-3.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
             <PenLine className="w-6 h-6 text-[var(--hw-green-700)]" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[15px] text-[var(--hw-neutral-900)]">Input Price Data</p>
-            <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5 leading-snug">Encode price data gathered from the market.</p>
+            <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-0 leading-snug">Encode price data gathered from the market.</p>
           </div>
           <ChevronRight className="w-5 h-5 text-[var(--hw-neutral-400)] shrink-0" />
         </button>
 
         <button
           onClick={() => navigate("/dftc/arrival-input")}
-          className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 sm:p-6 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-all active:scale-[.99] flex items-center gap-4 cursor-pointer"
+          className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-6 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-all active:scale-[.99] flex items-center gap-3 sm:gap-4 cursor-pointer"
         >
-          <div className="p-3.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
+          <div className="p-2.5 sm:p-3.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
             <Truck className="w-6 h-6 text-[var(--hw-green-700)]" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[15px] text-[var(--hw-neutral-900)]">Input Arrival Volume</p>
-            <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5 leading-snug">Encode commodity arrival volumes.</p>
+            <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-0 leading-snug">Encode commodity arrival volumes.</p>
           </div>
           <ChevronRight className="w-5 h-5 text-[var(--hw-neutral-400)] shrink-0" />
         </button>
 
         <button
           onClick={() => navigate("/dftc/upload")}
-          className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 sm:p-6 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-all active:scale-[.99] flex items-center gap-4 cursor-pointer"
+          className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-6 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-all active:scale-[.99] flex items-center gap-3 sm:gap-4 cursor-pointer"
         >
-          <div className="p-3.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
+          <div className="p-2.5 sm:p-3.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
             <Upload className="w-6 h-6 text-[var(--hw-green-700)]" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[15px] text-[var(--hw-neutral-900)]">Upload Data</p>
-            <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5 leading-snug">Import an existing Excel or CSV dataset.</p>
+            <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-0 leading-snug">Import an existing Excel or CSV dataset.</p>
           </div>
           <ChevronRight className="w-5 h-5 text-[var(--hw-neutral-400)] shrink-0" />
         </button>
@@ -535,74 +535,148 @@ export default function DFTCInput() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                <tr>
-                  {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Draft Status", "Records", ""].map((h) => (
-                    <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                {visibleDrafts.map((draft) => {
-                  const param = (highlightedDraftId || "").toLowerCase();
-                  const draftId = (draft.id || "").toLowerCase();
-                  const dataType = (draft.dataType || "").toLowerCase();
-                  const isHighlighted = Boolean(
-                    highlightedDraftId &&
-                    (draftId === param ||
-                      (param.includes("price") && (draftId.includes("price") || dataType.includes("price"))) ||
-                      (param.includes("arrival") && (draftId.includes("arrival") || dataType.includes("arrival"))) ||
-                      draftId.includes(param))
-                  );
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                  <tr>
+                    {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Draft Status", "Records", ""].map((h) => (
+                      <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                  {visibleDrafts.map((draft) => {
+                    const param = (highlightedDraftId || "").toLowerCase();
+                    const draftId = (draft.id || "").toLowerCase();
+                    const dataType = (draft.dataType || "").toLowerCase();
+                    const isHighlighted = Boolean(
+                      highlightedDraftId &&
+                      (draftId === param ||
+                        (param.includes("price") && (draftId.includes("price") || dataType.includes("price"))) ||
+                        (param.includes("arrival") && (draftId.includes("arrival") || dataType.includes("arrival"))) ||
+                        draftId.includes(param))
+                    );
 
-                  return (
-                    <tr
-                      key={draft.id}
-                      id={`draft-row-${draft.id}`}
-                      onClick={() => handleSelectDraft(draft)}
-                      className={`cursor-pointer transition-all duration-700 ease-out ${
-                        isHighlighted
-                          ? "bg-emerald-50/90 font-medium"
-                          : "hover:bg-amber-50/40"
-                      }`}
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[13px] ${isHighlighted ? "text-[var(--hw-green-800)] font-bold" : "text-[var(--hw-neutral-900)] font-medium"}`}>
-                            {draft.dataName}
-                          </span>
-                          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
-                            Draft
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.dataType}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.market}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.submissionMethod}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
-                      <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
-                      <td className="px-5 py-4 text-right">
+                    return (
+                      <tr
+                        key={draft.id}
+                        id={`draft-row-${draft.id}`}
+                        onClick={() => handleSelectDraft(draft)}
+                        className={`cursor-pointer transition-all duration-700 ease-out ${
+                          isHighlighted
+                            ? "bg-emerald-50/90 font-medium"
+                            : "hover:bg-amber-50/40"
+                        }`}
+                      >
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[13px] ${isHighlighted ? "text-[var(--hw-green-800)] font-bold" : "text-[var(--hw-neutral-900)] font-medium"}`}>
+                              {draft.dataName}
+                            </span>
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                              Draft
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.dataType}</td>
+                        <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.market}</td>
+                        <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.submissionMethod}</td>
+                        <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
+                        <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
+                        <td className="px-5 py-4 text-right">
+                          {(draft.id === "local-price-draft" || draft.id === "local-arrival-draft") && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteModalDraft(draft);
+                              }}
+                              className="p-2 rounded-lg text-[var(--hw-neutral-400)] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete draft"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards for Today's Draft */}
+            <div className="block md:hidden space-y-3">
+              {visibleDrafts.map((draft) => {
+                const param = (highlightedDraftId || "").toLowerCase();
+                const draftId = (draft.id || "").toLowerCase();
+                const dataType = (draft.dataType || "").toLowerCase();
+                const isHighlighted = Boolean(
+                  highlightedDraftId &&
+                  (draftId === param ||
+                    (param.includes("price") && (draftId.includes("price") || dataType.includes("price"))) ||
+                    (param.includes("arrival") && (draftId.includes("arrival") || dataType.includes("arrival"))) ||
+                    draftId.includes(param))
+                );
+
+                return (
+                  <div
+                    key={draft.id}
+                    id={`draft-card-${draft.id}`}
+                    onClick={() => handleSelectDraft(draft)}
+                    className={`rounded-2xl border p-4 text-left shadow-[var(--shadow-xs)] transition-all cursor-pointer ${
+                      isHighlighted
+                        ? "bg-emerald-50/90 border-[var(--hw-green-600)] ring-1 ring-[var(--hw-green-600)]"
+                        : "bg-white border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] active:scale-[.99]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[14px] leading-snug font-semibold ${isHighlighted ? "text-[var(--hw-green-900)]" : "text-[var(--hw-neutral-900)]"}`}>
+                          {draft.dataName}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="px-2 py-0.5 text-[10.5px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                          Draft
+                        </span>
                         {(draft.id === "local-price-draft" || draft.id === "local-arrival-draft") && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteModalDraft(draft);
                             }}
-                            className="p-2 rounded-lg text-[var(--hw-neutral-400)] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-[var(--hw-neutral-400)] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                             title="Delete draft"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[var(--hw-neutral-600)]">
+                      <span>{draft.dataType}</span>
+                      <span className="text-[var(--hw-neutral-300)]">•</span>
+                      <span>{draft.market}</span>
+                      {draft.submissionMethod && (
+                        <>
+                          <span className="text-[var(--hw-neutral-300)]">•</span>
+                          <span>{draft.submissionMethod}</span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[12px]">
+                      <span className="text-[var(--hw-neutral-500)]">{draft.savedDate || "Unsaved draft"}</span>
+                      <span className="font-semibold text-[var(--hw-neutral-900)]">{draft.records} records</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 
@@ -675,25 +749,33 @@ export default function DFTCInput() {
             </div>
 
             {/* Mobile cards */}
-            <div className="block md:hidden space-y-3.5">
+            <div className="block md:hidden space-y-3">
               {displayedSavedData.map((file) => (
                 <button
                   key={file.id}
                   onClick={() => handleSelectFile(file)}
-                  className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.99] cursor-pointer"
+                  className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.99] cursor-pointer group"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] leading-snug">{file.dataName}</p>
+                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
+                      {file.dataName}
+                    </p>
                     {file.isNew && (
-                      <span className="shrink-0 text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-1.5 py-0.5 leading-none">New</span>
+                      <span className="text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-2 py-0.5 leading-none shrink-0">
+                        New
+                      </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[var(--hw-neutral-600)]">
-                    <span>{file.dataType}</span>
-                    <span>•</span>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-[var(--hw-neutral-600)]">
+                    <span className="font-medium text-[var(--hw-neutral-700)]">{file.dataType}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
                     <span>{file.market}</span>
-                    <span>•</span>
-                    <span>{file.submissionMethod || file.entryMethod}</span>
+                    {(file.submissionMethod || file.entryMethod) && (
+                      <>
+                        <span className="text-[var(--hw-neutral-300)]">•</span>
+                        <span>{file.submissionMethod || file.entryMethod}</span>
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[12px]">
                     <span className="text-[var(--hw-neutral-500)]">{file.savedDate}</span>

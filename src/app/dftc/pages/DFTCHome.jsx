@@ -175,21 +175,21 @@ function DFTCHome() {
   if (previewFile) {
     const PreviewComponent = previewFile.isArrival ? DFTCArrivalPreview : DFTCFilePreview;
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto">
         <PreviewComponent file={previewFile} onClose={() => setPreviewFile(null)} />
       </div>
     );
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       <PageHeader
         title={`Good ${getTimeOfDay()}, ${roleName}`}
         description="Review today's market-data activity and continue encoding or uploading records."
       />
 
       {/* ── Operational Summary Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <DFTCKpiCard
           label="Price Records Today"
           value={priceRecordsTodayVal}
@@ -246,12 +246,12 @@ function DFTCHome() {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
         <button
           onClick={() => navigate("/dftc/price-input")}
-          className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors flex items-center gap-4"
+          className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors flex items-center gap-3 sm:gap-4"
         >
-          <div className="p-2.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
+          <div className="p-2 sm:p-2.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
             <PenLine className="w-5 h-5 text-[var(--hw-green-700)]" />
           </div>
           <div className="min-w-0 flex-1">
@@ -262,9 +262,9 @@ function DFTCHome() {
         </button>
         <button
           onClick={() => navigate("/dftc/arrival-input")}
-          className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors flex items-center gap-4"
+          className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors flex items-center gap-3 sm:gap-4"
         >
-          <div className="p-2.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
+          <div className="p-2 sm:p-2.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
             <Truck className="w-5 h-5 text-[var(--hw-green-700)]" />
           </div>
           <div className="min-w-0 flex-1">
@@ -275,9 +275,9 @@ function DFTCHome() {
         </button>
         <button
           onClick={() => navigate("/dftc/upload")}
-          className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors flex items-center gap-4"
+          className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 text-left hover:border-[var(--hw-neutral-300)] hover:bg-[var(--hw-neutral-50)] transition-colors flex items-center gap-3 sm:gap-4"
         >
-          <div className="p-2.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
+          <div className="p-2 sm:p-2.5 bg-[var(--hw-green-50)] rounded-xl shrink-0">
             <Upload className="w-5 h-5 text-[var(--hw-green-700)]" />
           </div>
           <div className="min-w-0 flex-1">
@@ -289,7 +289,7 @@ function DFTCHome() {
       </div>
 
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
+        <div className="px-3.5 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)] flex items-start sm:items-center justify-between gap-3">
           <div>
             <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
             <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
@@ -298,7 +298,7 @@ function DFTCHome() {
           </div>
           <button
             onClick={() => navigate("/dftc/submissions")}
-            className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0"
+            className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0 text-right"
           >
             View Data History
           </button>
@@ -320,31 +320,47 @@ function DFTCHome() {
             No saved datasets from the last 7 days. Encoded or uploaded datasets will appear here.
           </div>
         ) : (
-          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[345px] overflow-y-auto">
+          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[320px] sm:max-h-[360px] overflow-y-auto">
             {recentSaved.map((row) => (
               <button
                 key={row.id}
                 onClick={() => handleSelectFile(row)}
-                className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                className="w-full px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-start sm:items-center gap-2.5 sm:gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer group"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">{row.name}</p>
-                    {row.isToday && (
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
-                        Today
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <p className="text-[13.5px] sm:text-[14px] font-semibold sm:font-medium text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
+                      {row.name}
+                    </p>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {row.isToday && (
+                        <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
+                          Today
+                        </span>
+                      )}
+                      <span className="sm:hidden text-[11px] font-medium text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)] px-1.5 py-0.5 rounded">
+                        {row.submissionId || row.id}
                       </span>
-                    )}
+                    </div>
                   </div>
-                  <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
-                    {row.market} · {row.entryMethod} · {row.savedAt}
-                  </p>
+
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-1 sm:mt-0.5">
+                    <span className="font-medium text-[var(--hw-neutral-700)]">{row.market}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{row.entryMethod}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{row.savedAt}</span>
+                  </div>
                 </div>
-                <div className="shrink-0 text-right">
+
+                <div className="hidden sm:block shrink-0 text-right">
                   <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.submissionId || row.id}</p>
-                  <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 capitalize">{row.status}</p>
+                  <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 font-medium capitalize">{row.status}</p>
                 </div>
-                <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />
+
+                <div className="flex sm:flex-col items-center sm:items-end justify-center self-center shrink-0">
+                  <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-600)] transition-colors" />
+                </div>
               </button>
             ))}
           </div>
@@ -352,7 +368,7 @@ function DFTCHome() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <p className="font-semibold text-[var(--hw-neutral-900)]">Price Movement</p>
             <TrendingUp className="w-4 h-4 text-[var(--hw-neutral-400)]" />
@@ -364,7 +380,7 @@ function DFTCHome() {
               No price movement data available yet.
             </div>
           ) : (
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-64 sm:max-h-72 overflow-y-auto pr-1">
               {(homeData?.price_movement || []).map((item) => (
                 <button
                   key={item.commodity_id}

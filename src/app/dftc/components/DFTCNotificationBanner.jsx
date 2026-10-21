@@ -32,24 +32,24 @@ export default function DFTCNotificationBanner({
 
   return (
     <div
-      className={`bg-white border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] rounded-xl px-4 py-3 flex items-start sm:items-center justify-between gap-3.5 ${className}`}
+      className={`bg-white border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between gap-2.5 sm:gap-3.5 ${className}`}
       role="status"
     >
-      <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
-        <ResolvedIcon className={`w-4 h-4 shrink-0 mt-0.5 sm:mt-0 ${iconColor}`} />
-        <div className="min-w-0 text-[12px] leading-relaxed">
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+        <ResolvedIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${iconColor}`} />
+        <div className="min-w-0 text-[11.5px] sm:text-[12px] leading-snug">
           {title && (
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] leading-snug">
+            <p className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] leading-snug truncate">
               {title}
             </p>
           )}
           {description && (
-            <p className={`${title ? "text-[var(--hw-neutral-600)] mt-0.5" : "text-[var(--hw-neutral-800)]"}`}>
+            <p className={`leading-tight ${title ? "text-[var(--hw-neutral-600)] mt-0.5" : "text-[var(--hw-neutral-800)]"}`}>
               {description}
             </p>
           )}
           {children && (
-            <div className={`${title ? "text-[var(--hw-neutral-600)] mt-0.5" : "text-[var(--hw-neutral-800)]"}`}>
+            <div className={`leading-tight ${title ? "text-[var(--hw-neutral-600)] mt-0.5" : "text-[var(--hw-neutral-800)]"}`}>
               {children}
             </div>
           )}
@@ -57,7 +57,7 @@ export default function DFTCNotificationBanner({
       </div>
 
       {actions && (
-        <div className="flex items-center gap-2.5 shrink-0 self-center">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 text-[11px] sm:text-[12px]">
           {actions}
         </div>
       )}

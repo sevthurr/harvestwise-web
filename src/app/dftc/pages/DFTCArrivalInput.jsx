@@ -698,6 +698,14 @@ export default function DFTCArrivalInput() {
   const [fields, setFields] = useState({});
 
   // Category collapsed state: starts collapsed initially
+  const [collapsedComs, setCollapsedComs] = useState(() => new Set());
+  const toggleCommodity = (id) =>
+    setCollapsedComs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [collapsed, setCollapsed] = useState(() => new Set(PRICE_CATEGORIES.map((c) => c.id)));
   const [customVariants, setCustomVariants] = useState({});
   const [customCommodities, setCustomCommodities] = useState({});
@@ -719,6 +727,27 @@ export default function DFTCArrivalInput() {
   const [draftDismissed, setDraftDismissed] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
+  const reviewScrollRef = useRef(null);
+
+  // Slide the review table to the filtered source column so it is visible without manual scrolling
+  useEffect(() => {
+    if (!reviewMode) return;
+    const el = reviewScrollRef.current;
+    if (!el) return;
+    if (reviewFilter === "all") {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    const timer = setTimeout(() => {
+      const targetTh = el.querySelector(`[data-col="${reviewFilter}"]`);
+      if (!targetTh) return;
+      const containerRect = el.getBoundingClientRect();
+      const thRect = targetTh.getBoundingClientRect();
+      const scrollOffset = thRect.left - containerRect.left + el.scrollLeft;
+      el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [reviewFilter, reviewMode]);
   const [dataName, setDataName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState(0);
@@ -960,8 +989,19 @@ export default function DFTCArrivalInput() {
   function toggleCategory(catId) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(catId)) next.delete(catId);
-      else next.add(catId);
+      if (next.has(catId)) {
+        next.delete(catId);
+      } else {
+        next.add(catId);
+        const cat = PRICE_CATEGORIES.find((c) => c.id === catId);
+        if (cat) {
+          setCollapsedComs((cPrev) => {
+            const cNext = new Set(cPrev);
+            getAllCommodities(cat).forEach((com) => cNext.add(com.id));
+            return cNext;
+          });
+        }
+      }
       return next;
     });
   }
@@ -971,8 +1011,14 @@ export default function DFTCArrivalInput() {
   function toggleCollapseAll() {
     if (allCollapsed) {
       setCollapsed(new Set());
+      setCollapsedComs(new Set());
     } else {
       setCollapsed(new Set(PRICE_CATEGORIES.map((c) => c.id)));
+      const comIds = new Set();
+      PRICE_CATEGORIES.forEach((cat) => {
+        getAllCommodities(cat).forEach((com) => comIds.add(com.id));
+      });
+      setCollapsedComs(comIds);
     }
   }
 
@@ -1305,7 +1351,7 @@ export default function DFTCArrivalInput() {
   // ── RENDER REVIEW MODE ─────────────────────────────────────────────────────
   if (reviewMode) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
         {/* Top bar with back button */}
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -1337,7 +1383,7 @@ export default function DFTCArrivalInput() {
         )}
 
         {/* Summary Badges Card — Clickable to filter details (Matching Add Price Data Review) */}
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 mb-5">
+        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-4 sm:mb-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hw-neutral-100)] pb-3 mb-3">
             <button
               type="button"
@@ -1359,7 +1405,7 @@ export default function DFTCArrivalInput() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2.5 text-[12px]">
             {[
               { id: "all", label: "Combined Overall Volume", count: totalEnteredCount },
               { id: "farm", label: "Farm Source", count: farmEnteredCount },
@@ -1371,7 +1417,9 @@ export default function DFTCArrivalInput() {
                   key={card.id}
                   type="button"
                   onClick={() => setReviewFilter((prev) => (prev === card.id ? "all" : card.id))}
-                  className={`text-left rounded-xl p-3 border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                  className={`text-left rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:p-3 border transition-all cursor-pointer flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 ${
+                    card.id === "all" ? "col-span-2 sm:col-span-1" : ""
+                  } ${
                     isSelected
                       ? "bg-white border-[var(--hw-neutral-400)] shadow-md ring-1 ring-black/5"
                       : "bg-[var(--hw-neutral-50)] border-[var(--hw-neutral-200)] hover:bg-white hover:shadow-xs"
@@ -1391,7 +1439,7 @@ export default function DFTCArrivalInput() {
         </div>
 
         {/* Official DFTC Table Container */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-6 mb-6">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 sm:p-6 mb-6">
           <div className="text-center mb-4">
             <h2 className="text-[14px] sm:text-[15px] font-bold text-black uppercase tracking-wide">
               Davao Food Terminal Complex
@@ -1404,7 +1452,7 @@ export default function DFTCArrivalInput() {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" ref={reviewScrollRef}>
             <table className="w-full text-[12px] border-collapse bg-white" style={{ minWidth: 720 }}>
               <thead>
                 <tr>
@@ -1413,6 +1461,7 @@ export default function DFTCArrivalInput() {
                   <th rowSpan={2} style={{ background: EXCEL_HEADER_BG, border: EXCEL_BORDER, padding: "6px 8px", width: 64, textAlign: "center", fontWeight: "bold" }}>Unit</th>
                   <th
                     colSpan={2}
+                    data-col="farm"
                     style={{
                       background: EXCEL_FARM_BG,
                       border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER,
@@ -1427,6 +1476,7 @@ export default function DFTCArrivalInput() {
                   </th>
                   <th
                     colSpan={2}
+                    data-col="other"
                     style={{
                       background: EXCEL_OTHER_BG,
                       border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER,
@@ -1564,20 +1614,20 @@ export default function DFTCArrivalInput() {
           </div>
 
           {/* Personnel Signatures Block */}
-          <div className="mt-8 pt-6 border-t border-[var(--hw-neutral-200)] flex flex-col sm:flex-row items-center justify-between gap-6 px-4">
-            <div className="text-center sm:text-left">
+          <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-[var(--hw-neutral-200)] grid grid-cols-2 gap-3 sm:gap-6 px-1 sm:px-4 text-[12px]">
+            <div>
               <span className="text-[11px] text-[var(--hw-neutral-500)] uppercase font-semibold block mb-1">Encoded by:</span>
-              <p className="text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide">
+              <p className="text-[12px] sm:text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide truncate">
                 {encodedBy || "—"}
               </p>
-              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5">{encodedByRole || ""}</p>
+              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5 truncate">{encodedByRole || ""}</p>
             </div>
-            <div className="text-center sm:text-right">
+            <div className="text-right">
               <span className="text-[11px] text-[var(--hw-neutral-500)] uppercase font-semibold block mb-1">Reviewed by:</span>
-              <p className="text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide">
+              <p className="text-[12px] sm:text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide truncate">
                 {reviewedBy || "—"}
               </p>
-              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5">{reviewedByRole || ""}</p>
+              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5 truncate">{reviewedByRole || ""}</p>
             </div>
           </div>
         </div>
@@ -1704,7 +1754,7 @@ export default function DFTCArrivalInput() {
 
   // ── RENDER DATA INPUT MODE ─────────────────────────────────────────────────
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
       {/* Draft restoration banner */}
       {hasDraft && !draftDismissed && (
         <DFTCNotificationBanner
@@ -1733,25 +1783,20 @@ export default function DFTCArrivalInput() {
       )}
 
       {/* Top Header */}
-      <div className="space-y-3 mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <div className="space-y-1 mb-3.5 sm:mb-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => navigate("/dftc/input")}
-              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
+              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer shrink-0"
               title="Back to Submit Data"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Arrival Volume</h1>
-              <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-                Record commodity arrival volumes dropped at DFTC ({effectivePeriodInfo.label})
-              </p>
-            </div>
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--hw-neutral-900)] truncate">Add Arrival Volume</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
             <SaveStatusIndicator />
             <button
               type="button"
@@ -1760,116 +1805,124 @@ export default function DFTCArrivalInput() {
                 setReviewMode(true);
               }}
               disabled={totalEnteredCount === 0}
-              className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
               Review ({totalEnteredCount})
             </button>
           </div>
         </div>
+        <p className="text-[12px] text-[var(--hw-neutral-600)] pl-7 sm:pl-8 leading-snug">
+          Record commodity arrival volumes dropped at DFTC ({effectivePeriodInfo.label})
+        </p>
+      </div>
 
-        {/* Controls Bar: Frequency (Daily / Weekly / Monthly) + Date/Period selection (NO source tabs) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 p-3 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">Period:</span>
-            <div className="flex rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5">
-              {[
-                { id: "daily", label: "Daily" },
-                { id: "weekly", label: "Weekly" },
-                { id: "monthly", label: "Monthly" }
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPeriodType(p.id)}
-                  className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-colors cursor-pointer ${
-                    periodType === p.id
-                      ? "bg-[var(--hw-green-700)] text-white font-semibold shadow-xs"
-                      : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-white/60"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+      {/* Controls Bar: Frequency (Daily / Weekly / Monthly) + Date/Period selection (NO source tabs) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] mb-4">
+        <div className="flex items-center justify-between sm:justify-start gap-2">
+          <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)] shrink-0">Period:</span>
+          <div className="flex rounded-lg border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5 flex-1 sm:flex-none">
+            {[
+              { id: "daily", label: "Daily" },
+              { id: "weekly", label: "Weekly" },
+              { id: "monthly", label: "Monthly" }
+            ].map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPeriodType(p.id)}
+                className={`flex-1 sm:flex-none px-3 py-1 text-[11.5px] sm:text-[12px] font-medium rounded-md transition-colors cursor-pointer text-center ${
+                  periodType === p.id
+                    ? "bg-[var(--hw-green-700)] text-white font-semibold shadow-xs"
+                    : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-white/60"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {periodType === "daily" && (
-              <div className="relative inline-flex items-center gap-2">
-                <label htmlFor="arrival-date-input" className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  Date:
-                </label>
+        <div className="flex items-center justify-between sm:justify-end gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--hw-neutral-100)]">
+          {periodType === "daily" && (
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+              <label htmlFor="arrival-date-input" className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">
+                Date:
+              </label>
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+                <Calendar className="w-3.5 h-3.5 text-[var(--hw-neutral-500)] shrink-0" />
                 <input
                   id="arrival-date-input"
                   type="date"
                   max={localToday()}
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                  className="w-[118px] sm:w-auto text-[12px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {periodType === "weekly" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Week:</span>
-                  <select
-                    id="arrival-week-select"
-                    aria-label="Select week of month"
-                    value={activeWeekObj.weekNum}
-                    onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}
-                    className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                  >
-                    {availableWeeks.map((w) => (
-                      <option key={w.weekNum} value={w.weekNum}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Month:</span>
-                  <select
-                    id="arrival-month-select"
-                    aria-label="Select month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                  >
-                    {MONTHS.map((m) => (
-                      <option key={m.val} value={m.val}>{m.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Year:</span>
-                  <select
-                    id="arrival-year-select"
-                    aria-label="Select year"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                  >
-                    {["2025", "2026", "2027"].map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
+          {periodType === "weekly" && (
+            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Week:</span>
+                <select
+                  id="arrival-week-select"
+                  aria-label="Select week of month"
+                  value={activeWeekObj.weekNum}
+                  onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                >
+                  {availableWeeks.map((w) => (
+                    <option key={w.weekNum} value={w.weekNum}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
 
-            {periodType === "monthly" && (
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Monthly Report Period:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
+                <select
+                  id="arrival-month-select"
+                  aria-label="Select month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                >
+                  {MONTHS.map((m) => (
+                    <option key={m.val} value={m.val}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Year:</span>
+                <select
+                  id="arrival-year-select"
+                  aria-label="Select year"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                >
+                  {["2025", "2026", "2027"].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {periodType === "monthly" && (
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+              <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
+              <div className="flex items-center gap-1.5">
                 <select
                   id="arrival-monthly-month-select"
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
                 >
                   {MONTHS.map((m) => (
                     <option key={m.val} value={m.val}>{m.name}</option>
@@ -1879,31 +1932,31 @@ export default function DFTCArrivalInput() {
                   id="arrival-monthly-year-select"
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
                 >
                   {["2025", "2026", "2027"].map((y) => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Table Card (matching Add Price Data) */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden mb-6">
         {/* Toolbar */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[var(--hw-neutral-200)]">
+        <div className="px-2.5 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-2 border-b border-[var(--hw-neutral-200)] overflow-x-auto">
           {/* Search */}
-          <div className="relative flex-1 min-w-[160px]">
+          <div className="relative flex-1 min-w-[70px] sm:min-w-[160px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search commodity or variant"
-              className="w-full pl-8 pr-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
+              placeholder="Search"
+              className="w-full pl-8 pr-2 sm:pr-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
             {searchQuery && (
               <button
@@ -1920,10 +1973,13 @@ export default function DFTCArrivalInput() {
           <button
             type="button"
             onClick={() => setAddCommodityOpen(true)}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+            aria-label="Add Commodity"
+            title="Add Commodity"
+            className="shrink-0 flex items-center gap-1 xs:gap-1.5 px-2 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[11px] sm:text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Commodity</span>
+            <span className="hidden xs:inline sm:hidden">Add</span>
+            <span className="hidden sm:inline">Add Commodity</span>
           </button>
 
           {/* Show All / Entered Only */}
@@ -1933,13 +1989,13 @@ export default function DFTCArrivalInput() {
                 key={m}
                 type="button"
                 onClick={() => setShowMode(m)}
-                className={`px-3 py-2 text-[12px] font-medium transition-colors cursor-pointer ${
+                className={`px-1.5 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10.5px] xs:text-[11px] sm:text-[12px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   showMode === m
                     ? "bg-[var(--hw-neutral-900)] text-white font-semibold"
                     : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
                 }`}
               >
-                {m === "all" ? "Show All" : "Show Entered Only"}
+                {m === "all" ? "All" : "Entered"}
               </button>
             ))}
           </div>
@@ -1948,9 +2004,12 @@ export default function DFTCArrivalInput() {
           <button
             type="button"
             onClick={toggleCollapseAll}
-            className="shrink-0 px-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+            title={allCollapsed ? "Expand All" : "Collapse All"}
+            aria-label={allCollapsed ? "Expand All" : "Collapse All"}
+            className="shrink-0 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer flex items-center gap-1"
           >
-            {allCollapsed ? "Expand All" : "Collapse All"}
+            <span className="sm:hidden">{allCollapsed ? "Expand" : "Collapse"}</span>
+            <span className="hidden sm:inline">{allCollapsed ? "Expand All" : "Collapse All"}</span>
           </button>
         </div>
 
@@ -2014,23 +2073,27 @@ export default function DFTCArrivalInput() {
 
                   {catCommodities.map((com) => {
                     const variants = getVariants(com).filter((v) => matchesVariant(com, v));
+                    const colCom = collapsedComs.has(com.id);
                     return (
                       <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                         {/* Commodity Header with Icon (matching Image 1) */}
-                        <div className="px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)]">
-                          <div className="flex items-center gap-2">
+                        <div
+                          onClick={() => toggleCommodity(com.id)}
+                          className="px-3 sm:px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)] cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
                             {com.isHW && hasHWIcon(com.name) ? (
                               <CommodityIllustration commodityId={hwId(com.name)} className="w-5 h-5 shrink-0" />
                             ) : (
                               <Leaf className={`w-4 h-4 shrink-0 ${com.isHW ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`} />
                             )}
-                            <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                            <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
                               {com.name}
                             </span>
                             {com.isHW && (
                               <button
                                 type="button"
-                                onClick={() => setHwInfoId(com.id)}
+                                onClick={(e) => { e.stopPropagation(); setHwInfoId(com.id); }}
                                 className="text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] cursor-pointer"
                                 title="HarvestWise Supported Commodity"
                               >
@@ -2039,17 +2102,20 @@ export default function DFTCArrivalInput() {
                             )}
                             <button
                               type="button"
-                              onClick={() => setCoverageOpen(true)}
+                              onClick={(e) => { e.stopPropagation(); setCoverageOpen(true); }}
                               className="text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] cursor-pointer"
                               title="About Analytics Coverage"
                             >
                               <Info className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                          {colCom
+                            ? <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />
+                            : <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />}
                         </div>
 
                         {/* Variant Rows */}
-                        {variants.map((v) => {
+                        {!colCom && variants.map((v) => {
                           const f = getField(v.id);
                           const farmVal = parseFloat(f.farmSource) || 0;
                           const otherVal = parseFloat(f.otherSource) || 0;
@@ -2130,7 +2196,7 @@ export default function DFTCArrivalInput() {
                         })}
 
                         {/* Add Variant Button */}
-                        {showMode === "all" && (
+                        {!colCom && showMode === "all" && (
                           <div className="px-4 py-2 border-b border-[var(--hw-neutral-50)]">
                             {addingVariant === com.id ? (
                               <div className="flex items-center gap-2">
