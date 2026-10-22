@@ -374,7 +374,34 @@ function AssessPage() {
     setDraftLoading(false);
     const pre = searchParams.get("commodity");
     if (pre) {
-      setData((d) => ({ ...d, commodity: pre }));
+      const existingCropDraft = Array.isArray(crops) ? crops.find((c) =>
+        (c.phase === "draft" || c.status === "Draft" || c.isDraft) &&
+        (c.commodityId === pre || c.commodity === pre || (c.commodityName || "").toLowerCase() === pre.toLowerCase())
+      ) : null;
+
+      if (existingCropDraft) {
+        setData({
+          ...DEFAULT_ASSESSMENT,
+          commodity: existingCropDraft.commodity || pre,
+          commodityId: existingCropDraft.commodityId || existingCropDraft.commodity || pre,
+          commodityName: existingCropDraft.commodityName || "",
+          variant: existingCropDraft.variant || existingCropDraft.variety || "",
+          plantingDate: existingCropDraft.rawPlantingDate || existingCropDraft.plantingDate || "",
+          harvestDate: existingCropDraft.rawHarvestDate || existingCropDraft.harvestDate || "",
+          farmArea: existingCropDraft.farmArea ?? "",
+          farmAreaUnit: existingCropDraft.farmAreaUnit || "sqm",
+          harvestQuantity: existingCropDraft.harvestQuantity ?? "",
+          costMethod: existingCropDraft.costMethod || "simple",
+          simpleCost: existingCropDraft.costMethod !== "detailed" ? (existingCropDraft.totalCost || "") : "",
+          expenses: existingCropDraft.expenses && existingCropDraft.expenses.length > 0 ? existingCropDraft.expenses : makeDefaultExpenses(),
+          useFarmgate: Boolean(existingCropDraft.farmgatePrice && existingCropDraft.farmgatePrice > 0),
+          farmgatePrice: existingCropDraft.farmgatePrice ?? "",
+          draftId: existingCropDraft.id,
+          isDraft: true,
+        });
+      } else {
+        setData((d) => ({ ...d, commodity: pre }));
+      }
       setView("assessment");
       setStep(1);
     }
@@ -411,18 +438,17 @@ function AssessPage() {
     setSavingDraft(true);
     setDraftStatus(null);
 
-    const draftSnapshot = {
-      ...data,
-      isDraft: true,
-    };
-    try {
-      localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
-      setLocalDraft(draftSnapshot);
-    } catch {
-      // ignore
-    }
-
     if (!data.commodity) {
+      const draftSnapshot = {
+        ...data,
+        isDraft: true,
+      };
+      try {
+        localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
+        setLocalDraft(draftSnapshot);
+      } catch {
+        // ignore
+      }
       setSavingDraft(false);
       navigate("/farmer/crops", {
         state: {
@@ -438,11 +464,28 @@ function AssessPage() {
     }
 
     try {
-      const res = await apiPost("/crop-plans/draft", buildDraftPayload(data));
+      const targetCommId = data.commodityId || data.commodity;
+      const existingCropDraft = data.draftId ? null : (Array.isArray(crops) ? crops.find((c) =>
+        (c.phase === "draft" || c.status === "Draft" || c.isDraft) &&
+        (c.commodityId === targetCommId || c.commodity === targetCommId || c.commodity === data.commodity || (data.commodityName && (c.commodityName || "").toLowerCase().trim() === data.commodityName.toLowerCase().trim()))
+      ) : null);
+
+      const effectiveDraftId = data.draftId || existingCropDraft?.id || null;
+      const payload = buildDraftPayload({ ...data, draftId: effectiveDraftId });
+
+      const res = await apiPost("/crop-plans/draft", payload);
       if (!res.ok) {
         throw new Error("Failed to save draft");
       }
       const saved = await parseResponse(res);
+
+      try {
+        localStorage.removeItem("harvestwise_assessment_draft");
+        setLocalDraft(null);
+      } catch {
+        // ignore
+      }
+
       setData((d) => ({
         ...d,
         draftId: saved.id,
@@ -460,6 +503,16 @@ function AssessPage() {
         },
       });
     } catch (_err) {
+      const offlineSnapshot = {
+        ...data,
+        isDraft: true,
+      };
+      try {
+        localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(offlineSnapshot));
+        setLocalDraft(offlineSnapshot);
+      } catch {
+        // ignore
+      }
       navigate("/farmer/crops", {
         state: {
           draftSaved: true,

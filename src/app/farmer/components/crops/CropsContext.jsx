@@ -14,7 +14,7 @@ const CropsContext = createContext(null);
  * day for viewers at or west of UTC — so a plan dated the 27th would display as
  * the 26th. See parseLocalDate.
  */
-function formatLocalDate(isoDate) {
+export function formatLocalDate(isoDate) {
   const parsed = parseLocalDate(isoDate);
   if (!parsed) return null;
   return parsed.toLocaleDateString("en-US", {
@@ -45,14 +45,35 @@ export function normalizeCropPlan(raw, pricesMap) {
   const variant = commodity.variety || item.variety || item.variant || null;
   const commodityId = item.commodityId || commodity.id || (typeof item.commodity === "string" ? item.commodity : "") || "";
 
-  const productionCosts = Array.isArray(item.productionCosts) ? item.productionCosts : [];
-  const totalCost = productionCosts.length > 0
-    ? productionCosts.reduce((sum, c) => sum + Number(c.amount || 0), 0)
-    : Number(item.productionCost || item.totalCost || 0);
+  const rawProductionCosts = Array.isArray(item.productionCosts) ? item.productionCosts : [];
+  const productionCosts = rawProductionCosts.map((c, i) => ({
+    id: c.id || String(i + 1),
+    cropPlanId: c.cropPlanId || item.id,
+    category: c.category || "Additional",
+    amount: Number(c.amount || 0),
+    costType: c.costType || c.cost_type || "initial",
+    createdAt: c.createdAt || c.created_at || null,
+  }));
+
+  const initialCostsList = productionCosts.filter((c) => c.costType !== "additional");
+  const additionalCostsList = productionCosts.filter((c) => c.costType === "additional");
+
+  const addedCosts = additionalCostsList.reduce((sum, c) => sum + c.amount, 0);
+
+  let initialCost = 0;
+  if (initialCostsList.length > 0) {
+    initialCost = initialCostsList.reduce((sum, c) => sum + c.amount, 0);
+  } else if (productionCosts.length > 0) {
+    initialCost = Math.max(0, productionCosts.reduce((sum, c) => sum + c.amount, 0) - addedCosts);
+  } else {
+    initialCost = Number(item.productionCost || item.totalCost || 0);
+  }
+
+  const totalCost = initialCost + addedCosts;
 
   const costMethod = item.costEntryMode === "detailed" ? "detailed" : "simple";
   const expenses = (productionCosts || []).map((c, i) => ({
-    id: String(i + 1),
+    id: c.id || String(i + 1),
     name: c.category || "Additional",
     amount: Number(c.amount || 0),
     isCustom: true,
@@ -132,6 +153,9 @@ export function normalizeCropPlan(raw, pricesMap) {
     expenses,
     farmgatePrice,
     totalCost,
+    initialCost,
+    addedCosts,
+    productionCosts,
     productionCost: totalCost,
     breakEvenPrice: breakEven,
     breakevenPricePerKg: breakEven,
@@ -252,17 +276,48 @@ const CropsProvider = ({ children }) => {
   }, [queryClient]);
 
   const addCostApi = useCallback(
-    async (planId, { category, amount, costType = "additional" }) => {
+    async (planId, { category = "Additional", amount, costType = "additional" }) => {
       const res = await apiPost(`/crop-plans/${planId}/costs`, {
-        category,
+        category: category || "Additional",
         amount,
         cost_type: costType,
       });
       const data = await parseResponse(res);
+      const newCost = toCamelCase(data);
+      queryClient.setQueryData(["farmer", "crops"], (old) => {
+        if (!old) return old;
+        return old.map((c) => {
+          if (c.id !== planId) return c;
+          const costItem = {
+            id: newCost.id || `PDC-tmp-${Date.now()}`,
+            cropPlanId: planId,
+            category: newCost.category || category || "Additional",
+            amount: Number(newCost.amount || amount || 0),
+            costType: newCost.costType || costType,
+            createdAt: newCost.createdAt || new Date().toISOString(),
+          };
+          const updatedCosts = [...(c.productionCosts || []), costItem];
+          const newAddedCosts = (c.addedCosts || 0) + Number(costItem.amount || 0);
+          const initial = c.initialCost != null ? c.initialCost : Math.max(0, (c.totalCost || 0) - (c.addedCosts || 0));
+          const newTotal = initial + newAddedCosts;
+          const qty = c.harvestQuantity || c.expectedHarvestQty || 1;
+          const newBreakEven = qty > 0 ? Math.ceil(newTotal / qty) : c.breakEvenPrice;
+          return {
+            ...c,
+            productionCosts: updatedCosts,
+            initialCost: initial,
+            addedCosts: newAddedCosts,
+            totalCost: newTotal,
+            productionCost: newTotal,
+            breakEvenPrice: newBreakEven,
+            breakevenPricePerKg: newBreakEven,
+          };
+        });
+      });
       await refreshCrops();
       return data;
     },
-    [refreshCrops]
+    [queryClient, refreshCrops]
   );
 
   const updateCropStatusApi = useCallback(

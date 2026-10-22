@@ -163,6 +163,76 @@ describe("CommodityDetail price detail caching", () => {
       expect(calls).toHaveLength(1);
     });
   });
+
+  it("fetches extended records and displays records in modal when View more records is clicked", async () => {
+    const client = makeClient();
+    const initialRecords = [
+      { record_id: "r1", price_date: "2026-10-12", prevail_price: 90, change: -5 },
+      { record_id: "r2", price_date: "2026-10-11", prevail_price: 95, change: 5 },
+      { record_id: "r3", price_date: "2026-10-10", prevail_price: 90, change: 5 },
+      { record_id: "r4", price_date: "2026-10-09", prevail_price: 85, change: -5 },
+      { record_id: "r5", price_date: "2026-10-08", prevail_price: 90, change: 0 },
+    ];
+    const extendedRecords = [
+      ...initialRecords,
+      { record_id: "r6", price_date: "2026-10-07", prevail_price: 90, change: 0 },
+      { record_id: "r7", price_date: "2026-10-06", prevail_price: 90, change: 0 },
+    ];
+
+    client.setQueryData(
+      priceDetailKey("COM-0001", "bangkerohan_retail", BUNDLE_DETAIL_PERIOD),
+      {
+        commodityId: "COM-0001",
+        name: "Ampalaya",
+        variety: "Galaxy",
+        selectedPriceType: "bangkerohan_retail",
+        currentPrice: 90,
+        unitOfMeasure: "kg",
+        recentRecords: initialRecords,
+        forecast: { horizonDays: 7, trend: "Rising" },
+      }
+    );
+
+    apiGet.mockImplementation(async (url) => {
+      if (String(url).includes("/records")) {
+        return { ok: true, status: 200 };
+      }
+      return { ok: true, status: 200 };
+    });
+    parseResponse.mockImplementation(async (res) => {
+      return extendedRecords;
+    });
+
+    const user = userEvent.setup();
+    renderPage(client);
+
+    await waitFor(() => expect(screen.getAllByText("Ampalaya").length).toBeGreaterThan(0));
+
+    // Initially modal is not open
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("View more records")).toBeInTheDocument();
+
+    // Click "View more records"
+    await user.click(screen.getByText("View more records"));
+
+    // Verify it called /records endpoint
+    await waitFor(() => {
+      const recordsCall = apiGet.mock.calls.find(([url]) =>
+        String(url).includes("/prices/COM-0001/records")
+      );
+      expect(recordsCall).toBeDefined();
+    });
+
+    // Modal dialog should now be open displaying records and count
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText("7 records")).toBeInTheDocument();
+    });
+
+    // Close the modal
+    await user.click(screen.getByText("Close"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
 
 /**

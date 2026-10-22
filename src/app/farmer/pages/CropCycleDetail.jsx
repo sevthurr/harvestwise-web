@@ -21,7 +21,8 @@ import {
   Eye,
   Scale,
   PhilippinePeso,
-  Clock
+  Clock,
+  RefreshCw
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -147,8 +148,10 @@ function CropCycleDetailPage() {
   const { t, langCode } = useLanguage();
   const { crops, updateCrop, updateCropStatusApi, addCostApi, logHarvestApi, refreshCrops } = useCrops();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState("update-phase");
   const [addCostOpen, setAddCostOpen] = useState(false);
   const [additionalCost, setAdditionalCost] = useState("");
+  const [isSubmittingCost, setIsSubmittingCost] = useState(false);
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
@@ -242,8 +245,10 @@ function CropCycleDetailPage() {
           phase: action.phase,
           lastUpdated: "Just now",
           isOnHold: false,
-          ...action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {},
-          ...action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}
+          ...(action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {}),
+          ...(action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}),
+          ...(action.fields?.actualPlantedArea != null && action.fields?.actualPlantedArea !== "" ? { farmArea: Number(action.fields.actualPlantedArea) } : {}),
+          ...(action.fields?.expectedHarvestQty != null && action.fields?.expectedHarvestQty !== "" ? { harvestQuantity: Number(action.fields.expectedHarvestQty) } : {})
         });
       } else if (action.kind === "hold") {
         await updateCropStatusApi(crop.id, "On Hold", action.reason);
@@ -255,7 +260,8 @@ function CropCycleDetailPage() {
           lastUpdated: "Just now"
         });
       } else if (action.kind === "resume") {
-        await updateCropStatusApi(crop.id, "Planning");
+        const resumeStatus = statusMap[crop.phase] || (crop.plantingDate ? "Planted" : "Planning");
+        await updateCropStatusApi(crop.id, resumeStatus);
         updateCrop(crop.id, {
           isOnHold: false,
           lastUpdated: "Just now"
@@ -266,13 +272,38 @@ function CropCycleDetailPage() {
       setActionError(err.message || "Action failed. Please try again.");
     }
   };
-  const extraCost = typeof additionalCost === "number" ? additionalCost : 0;
-  const updatedTotalCost = crop.totalCost + extraCost;
+
+  const handleAddCostSubmit = async () => {
+    const val = Number(additionalCost);
+    if (!val || val <= 0 || isNaN(val)) return;
+    setIsSubmittingCost(true);
+    setActionError(null);
+    try {
+      await addCostApi(crop.id, {
+        category: "Additional",
+        amount: val,
+        costType: "additional",
+      });
+      setAdditionalCost("");
+      setAddCostOpen(false);
+    } catch (err) {
+      setActionError(err.message || "Failed to add cost. Please try again.");
+    } finally {
+      setIsSubmittingCost(false);
+    }
+  };
+
+  const totalCost = crop.totalCost || 0;
+  const initialCost = crop.initialCost != null ? crop.initialCost : Math.max(0, totalCost - (crop.addedCosts || 0));
+  const addedCosts = crop.addedCosts || 0;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 1;
-  const costToRecover = Math.ceil(updatedTotalCost / qty);
+  const costToRecover = crop.breakEvenPrice || (totalCost > 0 && qty > 0 ? Math.ceil(totalCost / qty) : 0);
+  const additionalCostsList = (crop.productionCosts || []).filter(
+    (c) => c.costType === "additional"
+  );
 
   // Real backend advisory query from existing POST /api/v1/advisory/plan
-  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
+  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && qty > 0);
   const commodityIdentifier = crop.commodityId || crop.commodity;
   const phaseCode = normalizePhaseCode(crop.phase);
   const explicitStage = crop.phase ? (
@@ -283,7 +314,7 @@ function CropCycleDetailPage() {
   ) : null;
 
   const { data: planAdvisoryData } = useQuery({
-    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
+    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, totalCost, qty, explicitStage],
     queryFn: async () => {
       try {
         const pDate = new Date(crop.plantingDate);
@@ -294,7 +325,7 @@ function CropCycleDetailPage() {
           crop_name: crop.commodityName,
           planting_date: pDateStr,
           expected_harvest_date: hDateStr,
-          total_production_cost: updatedTotalCost,
+          total_production_cost: totalCost,
           expected_yield_kg: qty,
           crop_stage: explicitStage,
         };
@@ -424,9 +455,12 @@ function CropCycleDetailPage() {
                   <div className="mt-1"><PhasePill phase={crop.phase} isOnHold={crop.isOnHold} /></div>
                 </div>
                 <button
-    onClick={() => setDrawerOpen(true)}
-    className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--hw-green-50)]"
-  >
+                  onClick={() => {
+                    setDrawerMode("update-phase");
+                    setDrawerOpen(true);
+                  }}
+                  className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--hw-green-50)]"
+                >
                   <Pencil className="w-3.5 h-3.5" />{t("farmer.cropCycle.update_phase", {}, "Update phase")}
                 </button>
               </div>
@@ -510,7 +544,7 @@ function CropCycleDetailPage() {
             {margin > 0 ? (
               <ProfitCalcAccordion
                 qty={qty}
-                totalCost={updatedTotalCost}
+                totalCost={totalCost}
                 sellingBasis={sellingBasis}
                 costToRecover={costToRecover}
                 hasFarmgate={hasFarmgate}
@@ -524,7 +558,7 @@ function CropCycleDetailPage() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
               <div>
                 <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost")}</p>
-                <p className="font-medium text-[var(--hw-neutral-900)]">{updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : t("farmer.advisory.not_available")}</p>
+                <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : t("farmer.advisory.not_available")}</p>
               </div>
               <div>
                 <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest")}</p>
@@ -617,7 +651,11 @@ function CropCycleDetailPage() {
               </p>
               {!addCostOpen && (
                 <button
-                  onClick={() => setAddCostOpen(true)}
+                  type="button"
+                  onClick={() => {
+                    setAdditionalCost("");
+                    setAddCostOpen(true);
+                  }}
                   className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -628,23 +666,50 @@ function CropCycleDetailPage() {
 
             {addCostOpen && (
               <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-2">
-                <label className="block text-[13px] font-medium text-[var(--hw-neutral-900)]">
-                  {t("farmer.cropCycle.additional_cost", {}, "Additional cost (₱)")}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[13px] font-medium text-[var(--hw-neutral-900)]">
+                    {t("farmer.cropCycle.additional_cost", {}, "Additional cost (₱)")}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddCostOpen(false);
+                      setAdditionalCost("");
+                    }}
+                    className="text-xs text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-700)]"
+                  >
+                    {t("common.cancel", {}, "Cancel")}
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="number"
-                    min="0"
+                    min="1"
+                    step="any"
                     value={additionalCost}
-                    onChange={(e) => setAdditionalCost(e.target.value === "" ? "" : Number(e.target.value))}
+                    onChange={(e) => setAdditionalCost(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCostSubmit();
+                      }
+                    }}
                     placeholder="e.g. 500"
-                    className="flex-1 px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
+                    disabled={isSubmittingCost}
+                    className="flex-1 px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white disabled:opacity-50"
+                    autoFocus
                   />
                   <button
-                    onClick={() => setAddCostOpen(false)}
-                    className="px-3 py-2 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+                    type="button"
+                    onClick={handleAddCostSubmit}
+                    disabled={isSubmittingCost || !additionalCost || Number(additionalCost) <= 0}
+                    className="px-3 py-2 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[40px]"
                   >
-                    <Check className="w-4 h-4" />
+                    {isSubmittingCost ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -652,18 +717,50 @@ function CropCycleDetailPage() {
 
             <div className="divide-y divide-[var(--hw-neutral-100)]">
               {[
-                { label: t("farmer.cropCycle.estimated_cost", {}, "Estimated cost"), value: updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : "-" },
-                { label: t("farmer.cropCycle.added_costs", {}, "Added costs"), value: extraCost > 0 ? formatPeso(extraCost) : "-" },
-                { label: t("farmer.cropCycle.total_recorded_cost", {}, "Total recorded cost"), value: updatedTotalCost > 0 ? formatPeso(updatedTotalCost) : "-", bold: true },
+                { label: t("farmer.cropCycle.estimated_cost", {}, "Estimated cost"), value: initialCost > 0 ? formatPeso(initialCost) : "-" },
+                {
+                  key: "added_costs",
+                  label: t("farmer.cropCycle.added_costs", {}, "Added costs"),
+                  value: addedCosts > 0 ? formatPeso(addedCosts) : "-",
+                },
+                { label: t("farmer.cropCycle.total_recorded_cost", {}, "Total recorded cost"), value: totalCost > 0 ? formatPeso(totalCost) : "-", bold: true },
                 { label: t("farmer.cropCycle.expected_harvest_volume", {}, "Expected harvest volume"), value: crop.harvestQuantity ? `${crop.harvestQuantity} kg` : "- kg" },
                 { label: t("farmer.cropCycle.cost_to_recover_per_kg", {}, "Cost to recover per kg"), value: costToRecover > 0 ? `₱${costToRecover}/kg` : "-/kg", bold: true },
                 { label: t("farmer.cropCycle.forecasted_price_ref", {}, "Forecasted price reference"), value: forecastLo != null && forecastHi != null ? `₱${forecastLo}–₱${forecastHi}/kg` : "-/kg" },
                 { label: t("farmer.cropCycle.current_market_price", {}, "Current market price"), value: currentPrice != null ? `₱${currentPrice}/kg` : "-/kg" },
                 { label: t("farmer.cropCycle.estimated_farmgate_price", {}, "Estimated farmgate price"), value: hasFarmgate ? `₱${farmgatePrice}/kg` : t("farmer.cropCycle.not_set", {}, "Not set"), muted: !hasFarmgate }
               ].map((r) => (
-                <div key={r.label} className="flex items-center justify-between py-2.5 gap-3">
-                  <p className="text-[13px] text-[var(--hw-neutral-900)]">{r.label}</p>
-                  <p className={`text-[13px] flex-shrink-0 ${r.bold ? "font-bold text-[var(--hw-neutral-900)]" : r.muted ? "text-[var(--hw-neutral-400)] italic" : "font-medium text-[var(--hw-neutral-900)]"}`}>{r.value}</p>
+                <div key={r.label}>
+                  <div className="flex items-center justify-between py-2.5 gap-3">
+                    <p className="text-[13px] text-[var(--hw-neutral-900)]">{r.label}</p>
+                    <p className={`text-[13px] flex-shrink-0 ${r.bold ? "font-bold text-[var(--hw-neutral-900)]" : r.muted ? "text-[var(--hw-neutral-400)] italic" : "font-medium text-[var(--hw-neutral-900)]"}`}>{r.value}</p>
+                  </div>
+                  {r.key === "added_costs" && additionalCostsList.length > 0 && (
+                    <div className="bg-[var(--hw-neutral-50)] rounded-xl p-2.5 mb-2 space-y-1.5 border border-[var(--hw-neutral-200)]/60">
+                      <div className="flex items-center justify-between text-xs font-semibold text-[var(--hw-neutral-600)] px-1">
+                        <span>{t("farmer.cropCycle.added_cost_records", {}, "Added cost records")}</span>
+                        <span>{additionalCostsList.length} {additionalCostsList.length === 1 ? "entry" : "entries"}</span>
+                      </div>
+                      <div className="divide-y divide-[var(--hw-neutral-200)]/50">
+                        {additionalCostsList.map((c, idx) => {
+                          const dateStr = c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
+                          return (
+                            <div key={c.id || idx} className="flex items-center justify-between py-1.5 px-1 text-xs">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-[var(--hw-neutral-800)]">{c.category || "Additional cost"}</span>
+                                {dateStr && (
+                                  <span className="text-[10px] text-[var(--hw-neutral-500)]">{dateStr}</span>
+                                )}
+                              </div>
+                              <span className="font-semibold text-[var(--hw-green-700)]">
+                                +{formatPeso(c.amount)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -760,7 +857,10 @@ function CropCycleDetailPage() {
             {normalizePhaseCode(crop.phase) === PHASE_CODES.PRE_HARVEST && (
               <div className="pt-2 flex flex-wrap gap-2">
                 <button
-                  onClick={() => setDrawerOpen(true)}
+                  onClick={() => {
+                    setDrawerMode("update-phase");
+                    setDrawerOpen(true);
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
                 >
                   {t("farmer.crops.btn_start_harvesting", {}, "Start Harvesting")}
@@ -776,10 +876,41 @@ function CropCycleDetailPage() {
             {normalizePhaseCode(crop.phase) === PHASE_CODES.PLANNING && (
               <div className="pt-2 flex flex-wrap gap-2">
                 <button
-                  onClick={() => setDrawerOpen(true)}
+                  onClick={() => {
+                    setDrawerMode("confirm-planting");
+                    setDrawerOpen(true);
+                  }}
                   className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
                 >
                   {t("farmer.crops.btn_confirm_planting", {}, "Confirm Planting")}
+                </button>
+              </div>
+            )}
+            {normalizePhaseCode(crop.phase) === PHASE_CODES.GROWING && (
+              <div className="pt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setDrawerMode("update-phase");
+                    setDrawerOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {t("farmer.cropCycle.update_phase", {}, "Update phase")}
+                </button>
+              </div>
+            )}
+            {crop.isOnHold && (
+              <div className="pt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setDrawerMode("update-phase");
+                    setDrawerOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  {t("common.continue", {}, "Continue")}
                 </button>
               </div>
             )}
@@ -805,7 +936,10 @@ function CropCycleDetailPage() {
                   ))}
                 </div>
                 <button
-                  onClick={() => setDrawerOpen(true)}
+                  onClick={() => {
+                    setDrawerMode("update-phase");
+                    setDrawerOpen(true);
+                  }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
                 >
                   <Check className="w-4 h-4" />
@@ -863,11 +997,12 @@ function CropCycleDetailPage() {
         )}
 
       <UpdatePhaseDrawer
-    open={drawerOpen}
-    crop={crop}
-    onClose={() => setDrawerOpen(false)}
-    onConfirm={handleDrawerAction}
-  />
+        open={drawerOpen}
+        crop={crop}
+        mode={drawerMode}
+        onClose={() => setDrawerOpen(false)}
+        onConfirm={handleDrawerAction}
+      />
     </div>;
 }
 export {

@@ -16,6 +16,7 @@ export const prices = {
   unit_label: "Yunit",
   clear: "I-clear",
   apply: "I-apply",
+  save: "I-save",
   forecast_period: "Panahon ng pagtataya {period}:",
   forecast_horizon: "Tagal ng pagtataya: {days} araw:",
   trend_rising: "Tumataas",

@@ -32,3 +32,11 @@ export async function getHistoricalAveragePrices(commodityId, params = {}) {
   return parseResponse(await apiGet(`/prices/${commodityId}/historical-averages${suffix}`));
 }
 
+export async function getPriceRecords(commodityId, params = {}) {
+  const qs = new URLSearchParams();
+  if (params.price_type) qs.set("price_type", params.price_type);
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return parseResponse(await apiGet(`/prices/${commodityId}/records${suffix}`));
+}
+

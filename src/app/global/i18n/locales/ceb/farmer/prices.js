@@ -16,6 +16,7 @@ export const prices = {
   unit_label: "Yunit",
   clear: "I-clear",
   apply: "I-apply",
+  save: "I-save",
   forecast_period: "Panahon sa forecast {period}:",
   forecast_horizon: "Gitas-on sa forecast: {days} ka adlaw:",
   trend_rising: "Nagasaka",
