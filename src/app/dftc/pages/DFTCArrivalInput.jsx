@@ -28,6 +28,7 @@ import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/componen
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
+import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -47,18 +48,42 @@ const COMMODITY_NAME_OVERRIDES = {
   "Kamote tops / Galay": "Kamote Tops"
 };
 
+/**
+ * The key a commodity or variety name is looked up by.
+ *
+ * Diacritics are folded: the DB spells a Saging variety "Senorita" and the
+ * static mirror spells it "Señorita". Without folding they are two identities
+ * for one variety — the sheet would offer it twice, and the mirror's row would
+ * not resolve to the DB row. `normalizeKey` is the same folding the price
+ * preview uses to match an uploaded workbook.
+ */
 function nameSlug(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return normalizeKey(name).replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-const CATEGORY_OPTIONS = [
-  { id: "lowland", name: "Lowland Vegetables" },
-  { id: "highland", name: "Highland Vegetables" },
-  { id: "spices", name: "Spices" },
-  { id: "rootcrops", name: "Rootcrops" },
-  { id: "fruits", name: "Fruits" },
-  { id: "others", name: "Others" }
-];
+// The categories a new commodity can be filed under. Derived from the same list
+// the grid renders, so an id here is always an id the grid reads: a hand-written
+// list drifted from it ("lowland" vs "lowland-vegetables") and the commodity was
+// filed in a bucket nothing renders, so it never appeared for anyone.
+const CATEGORY_OPTIONS = PRICE_CATEGORIES.map((c) => ({ id: c.id, name: c.name }));
+
+// Drafts written before the ids were derived filed Lowland/Highland under
+// legacy bucket keys the grid never reads; they are mapped by category name and
+// merged into the derived category so a restored draft still shows them.
+const LEGACY_CATEGORY_NAMES = { lowland: "Lowland Vegetables", highland: "Highland Vegetables" };
+
+function migrateDraftCommodities(commodities) {
+  const next = { ...commodities };
+  Object.entries(LEGACY_CATEGORY_NAMES).forEach(([legacyId, name]) => {
+    const legacy = next[legacyId];
+    if (!legacy?.length) return;
+    const targetId = PRICE_CATEGORIES.find((c) => c.name === name)?.id;
+    if (!targetId) return;
+    delete next[legacyId];
+    next[targetId] = [...next[targetId] ?? [], ...legacy];
+  });
+  return next;
+}
 
 const MONTHS = [
   { val: "01", name: "January" },
@@ -184,7 +209,7 @@ function fmtKg(val) {
 // ─── AddCommodityModal ───────────────────────────────────────────────────────
 function AddCommodityModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("lowland");
+  const [categoryId, setCategoryId] = useState(CATEGORY_OPTIONS[0].id);
   const [variant, setVariant] = useState("");
   const [uom, setUom] = useState("kg");
   const [error, setError] = useState("");
@@ -735,7 +760,7 @@ export default function DFTCArrivalInput() {
     const el = reviewScrollRef.current;
     if (!el) return;
     if (reviewFilter === "all") {
-      el.scrollTo({ left: 0, behavior: "smooth" });
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: 0, behavior: "smooth" });
       return;
     }
     const timer = setTimeout(() => {
@@ -744,7 +769,7 @@ export default function DFTCArrivalInput() {
       const containerRect = el.getBoundingClientRect();
       const thRect = targetTh.getBoundingClientRect();
       const scrollOffset = thRect.left - containerRect.left + el.scrollLeft;
-      el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
     }, 50);
     return () => clearTimeout(timer);
   }, [reviewFilter, reviewMode]);
@@ -754,6 +779,14 @@ export default function DFTCArrivalInput() {
   const [saveProgressStage, setSaveProgressStage] = useState("Validating arrival records...");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
+  // The DB catalogue items behind the map above. Kept so a row can be placed
+  // for a commodity the static mirror has never heard of.
+  const catalogItemsRef = useRef([]);
+  // The rows the grid gained from the DB catalogue.
+  const catalogRowsRef = useRef([]);
+  // Bumped whenever a catalogue row is added, so the grid re-renders and any
+  // memo that walks the catalogue is invalidated.
+  const [catalogRowsVersion, setCatalogRowsVersion] = useState(0);
 
   // DFTC Personnel from database
   const [staffList, setStaffList] = useState([]);
@@ -885,12 +918,100 @@ export default function DFTCArrivalInput() {
           }
         }
         catalogRef.current = map;
+        catalogItemsRef.current = items;
+        addCatalogRows(catalogItemsRef.current);
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Rows the grid gained from the DB catalogue ────────────────────────────
+  /** Identity of a rendered row: its commodity and its variety, by name. */
+  function variantIdentity(commodityName, variantName) {
+    return `${nameSlug(commodityName)}|${nameSlug(variantName)}`;
+  }
+
+  /**
+   * Turn a DB catalogue item into a row the grid can render.
+   *
+   * An item whose name is a commodity of the static mirror is a new VARIANT of
+   * it. An item with a name the mirror does not have is a new COMMODITY and
+   * needs a category of ours to sit in. Returns null when neither applies.
+   */
+  function buildCatalogRow(item) {
+    const baseName = COMMODITY_NAME_OVERRIDES[item.name] ?? item.name;
+    const baseSlug = nameSlug(baseName);
+
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of cat.commodities) {
+        if (nameSlug(COMMODITY_NAME_OVERRIDES[com.name] ?? com.name) !== baseSlug) continue;
+        return {
+          commodityId: com.id,
+          commodityName: com.name,
+          categoryId: cat.id,
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
+          variantName: item.variety || "Base",
+          dbId: item.id
+        };
+      }
+    }
+
+    const cat = PRICE_CATEGORIES.find(
+      (c) => c.name.toLowerCase() === (item.category ?? "").toLowerCase()
+    );
+    if (!cat) return null;
+    return {
+      commodityId: baseSlug,
+      commodityName: baseName,
+      categoryId: cat.id,
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
+      variantName: item.variety || "Base",
+      dbId: item.id
+    };
+  }
+
+  /** The identities of every variant the grid renders right now. */
+  function renderedIdentities() {
+    const ids = new Set();
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of getAllCommodities(cat)) {
+        for (const v of getVariants(com)) {
+          ids.add(variantIdentity(com.name, v.name));
+        }
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Add the grid rows for the catalogue items.
+   *
+   * A row is added only when the grid renders no variant with the same
+   * identity (commodity name + variety name). Dedupe by identity, not by id:
+   * the mirror's row and the catalogue's row for the same thing must not both
+   * render, and the row this user added at runtime carries a different id but
+   * the same variety.
+   */
+  function addCatalogRows(items) {
+    const identities = renderedIdentities();
+    const added = [];
+    for (const item of items) {
+      const row = buildCatalogRow(item);
+      // The catalogue holds the commodity but the grid has no category of ours
+      // for it: there is nowhere to put the row.
+      if (!row) continue;
+      const identity = variantIdentity(row.commodityName, row.variantName);
+      if (identities.has(identity)) continue;
+      identities.add(identity);
+      added.push(row);
+    }
+    if (added.length === 0) return 0;
+    catalogRowsRef.current = [...catalogRowsRef.current, ...added];
+    setCatalogRowsVersion((v) => v + 1);
+    return added.length;
+  }
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -932,7 +1053,7 @@ export default function DFTCArrivalInput() {
         if (d.selectedYear) setSelectedYear(d.selectedYear);
         if (d.fields) setFields(d.fields);
         if (d.customVariants) setCustomVariants(d.customVariants);
-        if (d.customCommodities) setCustomCommodities(d.customCommodities);
+        if (d.customCommodities) setCustomCommodities(migrateDraftCommodities(d.customCommodities));
       }
     } catch { }
     setDraftDismissed(true);
@@ -1022,12 +1143,45 @@ export default function DFTCArrivalInput() {
     }
   }
 
+  /**
+   * The commodities of one category: the static mirror, the rows this user
+   * added at runtime, and a block for every catalogue commodity the grid does
+   * not have yet.
+   */
   function getAllCommodities(cat) {
-    return [...cat.commodities, ...customCommodities[cat.id] ?? []];
+    const rendered = [...cat.commodities, ...customCommodities[cat.id] ?? []];
+    const present = new Set(rendered.map((c) => c.id));
+    const presentNames = new Set(rendered.map((c) => nameSlug(COMMODITY_NAME_OVERRIDES[c.name] ?? c.name)));
+    const fromCatalog = [];
+    for (const row of catalogRowsRef.current) {
+      if (row.categoryId !== cat.id) continue;
+      // One block per commodity, even when the catalogue holds several
+      // varieties of it.
+      if (present.has(row.commodityId)) continue;
+      // A commodity this user added at runtime carries a different id but the
+      // same name: it must not gain a second header.
+      if (presentNames.has(nameSlug(row.commodityName))) continue;
+      present.add(row.commodityId);
+      presentNames.add(nameSlug(row.commodityName));
+      fromCatalog.push({ id: row.commodityId, name: row.commodityName, isHW: false, variants: [] });
+    }
+    return [...rendered, ...fromCatalog];
   }
 
+  /**
+   * The variants of one commodity: the static mirror, the rows this user added
+   * at runtime, and the catalogue rows that belong to this commodity.
+   */
   function getVariants(com) {
-    return [...com.variants, ...customVariants[com.id] ?? []];
+    const rendered = [...com.variants, ...customVariants[com.id] ?? []];
+    const identities = new Set(rendered.map((v) => variantIdentity(com.name, v.name)));
+    const fromCatalog = catalogRowsRef.current
+      .filter((row) => row.commodityId === com.id)
+      // The row this user added at runtime carries a different id but the same
+      // variety: it must not show up twice.
+      .filter((row) => !identities.has(variantIdentity(row.commodityName, row.variantName)))
+      .map((row) => ({ id: row.variantId, name: row.variantName }));
+    return [...rendered, ...fromCatalog];
   }
 
   function commitVariant(commodityId) {
@@ -1139,7 +1293,7 @@ export default function DFTCArrivalInput() {
       });
     });
     return list;
-  }, [fields, customCommodities, customVariants]);
+  }, [fields, customCommodities, customVariants, catalogRowsVersion]);
 
   const totalEnteredCount = enteredRows.length;
 
@@ -1194,7 +1348,7 @@ export default function DFTCArrivalInput() {
       });
     });
     return list;
-  }, [fields, customCommodities, customVariants]);
+  }, [fields, customCommodities, customVariants, catalogRowsVersion]);
 
   // Consolidated review rows grouped by category
   const consolidatedReviewGroups = useMemo(() => {
@@ -1233,7 +1387,16 @@ export default function DFTCArrivalInput() {
 
     const records = [];
     for (const r of enteredRows) {
+      const baseName = COMMODITY_NAME_OVERRIDES?.[r.com.name] ?? r.com.name;
+      const baseKey = nameSlug(baseName);
+      const variantName = r.v.name;
+      const variantKey = variantName && variantName !== "Base"
+        ? `${baseKey}-${nameSlug(variantName)}`
+        : baseKey;
+      const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
+
       let commodity_id = resolveCommodityId(r.com, r.v);
+
       const base = {
         variety: r.v.name,
         uom: r.uom || "kg",
@@ -1243,25 +1406,39 @@ export default function DFTCArrivalInput() {
         observation_status: "Reported value"
       };
 
-      if (!commodity_id) {
-        commodity_id = catalogRef.current?.get(nameSlug(r.com.name)) ?? r.com.id;
-      }
-
-      if (commodity_id) {
-        records.push({ commodity_id, ...base });
-      } else {
+      // Register custom-added commodities / new varieties on the fly so their
+      // volumes reach the DB instead of being silently dropped as unknown ids.
+      if (!variantKnown) {
         const registered = await registerCommodity({
-          name: r.com.name,
+          name: baseName,
           category: r.cat.name,
           variety: r.v.name === "Base" ? null : r.v.name,
           unit_of_measure: r.uom || "kg"
         });
         if (registered?.id) {
-          try { catalogRef.current?.set(nameSlug(r.com.name), registered.id); } catch { }
-          records.push({ commodity_id: registered.id, ...base });
-        } else if (r.com.id) {
-          records.push({ commodity_id: r.com.id, ...base });
+          commodity_id = registered.id;
+          try {
+            if (catalogRef.current) {
+              // The base key already points at the parent commodity's row:
+              // overwriting it would send the parent's own volumes to the
+              // newly registered variety.
+              if (!catalogRef.current.has(baseKey)) {
+                catalogRef.current.set(baseKey, registered.id);
+              }
+              catalogRef.current.set(variantKey, registered.id);
+            }
+          } catch { /* ignore */ }
         }
+      }
+
+      if (!commodity_id) {
+        // The catalog is keyed by the override-resolved DB name, not the UI
+        // label: "Pak choi / Bok choy" is stored as "Pakchoy/Bokchoy".
+        commodity_id = catalogRef.current?.get(baseKey) ?? r.com.id;
+      }
+
+      if (commodity_id) {
+        records.push({ commodity_id, ...base });
       }
     }
 

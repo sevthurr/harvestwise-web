@@ -18,7 +18,8 @@ import {
   ArrowLeft,
   Calendar,
   FileText,
-  Loader2
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import {
   PRICE_CATEGORIES,
@@ -27,7 +28,8 @@ import {
 import {
   MARKET_TABS,
   clearPrefillCache,
-  loadPrefillSnapshot
+  loadPrefillSnapshot,
+  resolveDraftCellTargets
 } from "./dftcPricePrefill";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
@@ -56,14 +58,11 @@ function nameSlug(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-const CATEGORY_OPTIONS = [
-  { id: "lowland", name: "Lowland Vegetables" },
-  { id: "highland", name: "Highland Vegetables" },
-  { id: "spices", name: "Spices" },
-  { id: "rootcrops", name: "Rootcrops" },
-  { id: "fruits", name: "Fruits" },
-  { id: "others", name: "Others" }
-];
+// The categories a new commodity can be filed under. Derived from the same list
+// the form renders, so an id here is always an id the form reads: a hand-written
+// list drifted from it ("lowland" vs "lowland-vegetables") and the commodity was
+// filed in a bucket nothing renders, so it never appeared for anyone.
+const CATEGORY_OPTIONS = PRICE_CATEGORIES.map((c) => ({ id: c.id, name: c.name }));
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -95,6 +94,48 @@ function carriedSourceDate(carried, tabId, vid, date) {
 /** Field shape for a single stored prevailing price. */
 function priceField(price, uom = "kg") {
   return { samples: [String(price), "", "", "", ""], uom, low: price, high: price, prevailing: price };
+}
+
+/** True when two form fields hold the same price, samples, and unit. */
+function sameField(a, b) {
+  if (!a || !b) return a === b;
+  if (a.uom !== b.uom) return false;
+  if (a.low !== b.low || a.high !== b.high || a.prevailing !== b.prevailing) return false;
+  const sa = a.samples ?? [];
+  const sb = b.samples ?? [];
+  if (sa.length !== sb.length) return false;
+  for (let i = 0; i < sa.length; i += 1) {
+    if (sa[i] !== sb[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Merge synced draft cells into a tab-field map.
+ *
+ * Pure on purpose: it returns the next map AND whether anything actually
+ * changed, so the caller can keep the previous state object when there is no
+ * news (a poll that finds nothing must not re-render the grid) and can report
+ * the change without waiting for React to run the state updater.
+ *
+ * `targets` and `removed` must already exclude the fields this user owns.
+ */
+function mergeDraftTargets(base, targets, removed) {
+  const next = {};
+  for (const tab of MARKET_TABS) next[tab.id] = { ...(base?.[tab.id] || {}) };
+  let changed = false;
+  for (const { tab, vid, cell } of targets) {
+    const field = priceField(cell.prevail_price, cell.uom);
+    if (sameField(next[tab.id][vid], field)) continue;
+    next[tab.id][vid] = field;
+    changed = true;
+  }
+  for (const [tabId, vid] of removed) {
+    if (!Object.prototype.hasOwnProperty.call(next[tabId], vid)) continue;
+    delete next[tabId][vid];
+    changed = true;
+  }
+  return { next, changed };
 }
 
 function formatDateLabel(iso) {
@@ -175,7 +216,7 @@ function fmt(val) {
 // ─── AddCommodityModal ───────────────────────────────────────────────────────
 function AddCommodityModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("lowland");
+  const [categoryId, setCategoryId] = useState(CATEGORY_OPTIONS[0].id);
   const [variant, setVariant] = useState("");
   const [uom, setUom] = useState("kg");
   const [error, setError] = useState("");
@@ -773,7 +814,7 @@ function DFTCPriceInput() {
     const el = reviewScrollRef.current;
     if (!el) return;
     if (reviewFilter === "all") {
-      el.scrollTo({ left: 0, behavior: "smooth" });
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: 0, behavior: "smooth" });
       return;
     }
     // Small timeout to allow DOM to settle if reviewMode just activated
@@ -783,7 +824,7 @@ function DFTCPriceInput() {
       const containerRect = el.getBoundingClientRect();
       const thRect = targetTh.getBoundingClientRect();
       const scrollOffset = thRect.left - containerRect.left + el.scrollLeft;
-      el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
     }, 50);
     return () => clearTimeout(timer);
   }, [reviewFilter, reviewMode]);
@@ -797,6 +838,20 @@ function DFTCPriceInput() {
   const [dateError, setDateError] = useState("");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
+  // The DB catalogue items behind the map above. Kept so a row can be placed
+  // for a commodity the static mirror has never heard of.
+  const catalogItemsRef = useRef([]);
+  // The rows the form gained from the DB catalogue. Only the rows the shared
+  // draft references are ever added: the catalogue holds far more commodities
+  // than the price sheet.
+  const catalogRowsRef = useRef([]);
+  // Bumped whenever a catalogue row is added, so the form re-renders and any
+  // memo that walks the catalogue is invalidated.
+  const [catalogRowsVersion, setCatalogRowsVersion] = useState(0);
+  // Commodity ids the catalogue holds but the form has no category for: there
+  // is nowhere to put the row, so a draft that references one must not
+  // re-fetch the catalogue on every poll.
+  const unplaceableRef = useRef(new Set());
   // Stable identity for the commodity resolver: the prefill module keys its
   // session memo on it, so a fresh closure per render would defeat the cache.
   // It only reads catalogRef, which never changes identity.
@@ -804,6 +859,21 @@ function DFTCPriceInput() {
   if (stableResolverRef.current === null) {
     stableResolverRef.current = (com, v) => resolveCommodityId(com, v);
   }
+  // The variant resolver reads the custom commodity/variant state, so the
+  // memoised autosave must call the CURRENT render's copy: a variety added at
+  // runtime is invisible to the closure the callback was created in, and the
+  // price would land on the parent commodity instead of its own row.
+  const findCommodityRef = useRef(() => ({ cat: null, com: null, v: null }));
+  findCommodityRef.current = findCommodityAndVariant;
+  // The commodity and variant lists read the runtime additions through a ref
+  // for the same reason: an async continuation must see the rows of the
+  // current render, not the ones render #1 closed over.
+  const customRowsRef = useRef({ customCommodities: {}, customVariants: {} });
+  customRowsRef.current = { customCommodities, customVariants };
+  // The draft resolver adds a row the form is missing, so it must run the
+  // CURRENT render's copy: the memoised resync closure is render #1's.
+  const resolveDraftCellsRef = useRef(async () => []);
+  resolveDraftCellsRef.current = resolveDraftCells;
 
   // DFTC Personnel from database
   const [staffList, setStaffList] = useState([]);
@@ -844,6 +914,8 @@ function DFTCPriceInput() {
   // "tabId|vid" pairs currently being written to the server, so a cell can show
   // an in-flight indicator without blocking the rest of the grid.
   const [draftSavingCells, setDraftSavingCells] = useState(() => new Set());
+  // In-flight flag for the manual "Resync" pull of the shared draft.
+  const [resyncing, setResyncing] = useState(false);
 
   /** True only for a previous-day value the user has not touched. */
   const isUntouchedCarried = useCallback(
@@ -928,18 +1000,9 @@ function DFTCPriceInput() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await parseResponse(await apiGet("/dftc/commodities"));
+        const items = await fetchCatalogItems();
         if (cancelled) return;
-        const items = Array.isArray(data) ? data : data?.items ?? [];
-        const map = new Map();
-        for (const row of items) {
-          const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
-          map.set(nameSlug(baseName), row.id);
-          if (row.variety) {
-            map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
-          }
-        }
-        catalogRef.current = map;
+        applyCatalogItems(items);
         const hasLocalDraft = (() => {
           try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
         })();
@@ -959,33 +1022,6 @@ function DFTCPriceInput() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Resolve one form field to the exact draft-cell key the server expects.
-  // Returns null when the field is empty (a cleared cell is a DELETE, not a PUT).
-  function draftCellFor(tabId, vid, live) {
-    // Read from the live snapshot, never from this function's render closure:
-    // the debounced autosave fires after the edit's setState has committed, so
-    // a closure captured at schedule time still holds the pre-edit tabFields.
-    const f = live.tabFields[tabId]?.[vid];
-    if (!f || !hasValue(f)) return null;
-    const { com, v } = findCommodityAndVariant(vid);
-    const commodity_id = resolveCommodityId(com, v);
-    if (!commodity_id) return null;
-    const tab = MARKET_TABS.find((t) => t.id === tabId);
-    if (!tab) return null;
-    return {
-      reporting_date: live.selectedDate,
-      commodity_id,
-      source_id: tab.sourceId,
-      price_type: tab.priceType,
-      uom: f.uom || "kg",
-      price_min: f.low ?? null,
-      price_max: f.high ?? null,
-      prevail_price: f.prevailing ?? null,
-      observation_status: "Reported value",
-      expected_version: draftMetaRef.current[tabId]?.get(vid)?.version ?? null,
-    };
-  }
-
   // Push every dirty field to the shared draft. One request per cell so two
   // inputters never overwrite each other wholesale, and a 409 on one cell does
   // not discard the rest. Best-effort: a failure keeps the localStorage fallback
@@ -1003,14 +1039,62 @@ function DFTCPriceInput() {
       for (const [vid, f] of Object.entries(live.tabFields[tab.id] || {})) {
         if (!dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
         const tabMeta = MARKET_TABS.find((t) => t.id === tab.id);
-        const cell = draftCellFor(tab.id, vid, live);
-        if (cell) {
-          pending.push({ key: `${tab.id}|${vid}`, cell });
+        const { cat, com, v } = findCommodityRef.current(vid);
+        const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
+        const baseKey = nameSlug(baseName);
+        const variantName = v?.name;
+        const variantKey = variantName && variantName !== "Base"
+          ? `${baseKey}-${nameSlug(variantName)}`
+          : baseKey;
+        const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
+        const hasValCell = hasValue(f);
+
+        if (hasValCell) {
+          let commodity_id = (catalogRef.current &&
+            (catalogRef.current.get(variantKey) ?? catalogRef.current.get(baseKey))) ?? null;
+          // Register custom-added commodities / new varieties on the fly so
+          // their prices reach the DB instead of being skipped as unknown ids.
+          if (!variantKnown && com) {
+            const registered = await registerCommodity({
+              name: baseName,
+              category: cat?.name,
+              variety: variantName && variantName !== "Base" ? variantName : null,
+              unit_of_measure: f.uom || "kg",
+            });
+            if (registered?.id) {
+              commodity_id = registered.id;
+              try {
+                if (catalogRef.current) {
+                  // The base key already points at the parent commodity's row:
+                  // overwriting it would send the parent's own prices to the
+                  // newly registered variety.
+                  if (!catalogRef.current.has(baseKey)) {
+                    catalogRef.current.set(baseKey, registered.id);
+                  }
+                  catalogRef.current.set(variantKey, registered.id);
+                }
+              } catch { /* ignore */ }
+            }
+          }
+          if (commodity_id) {
+            const cell = {
+              reporting_date: live.selectedDate,
+              commodity_id,
+              source_id: tabMeta.sourceId,
+              price_type: tabMeta.priceType,
+              uom: f.uom || "kg",
+              price_min: f.low ?? null,
+              price_max: f.high ?? null,
+              prevail_price: f.prevailing ?? null,
+              observation_status: "Reported value",
+              expected_version: draftMetaRef.current[tab.id]?.get(vid)?.version ?? null,
+            };
+            pending.push({ key: `${tab.id}|${vid}`, cell });
+          }
         } else if (tabMeta) {
           // Edited to empty. Only a cell that exists in the draft needs a
           // DELETE; a field that was never drafted has nothing to remove.
           const meta = draftMetaRef.current[tab.id]?.get(vid);
-          const { com, v } = findCommodityAndVariant(vid);
           const commodity_id = meta?.commodity_id ?? resolveCommodityId(com, v);
           if (meta && commodity_id) {
             cleared.push({
@@ -1069,6 +1153,114 @@ function DFTCPriceInput() {
     setDraftSavingCells(new Set());
     if (conflict) setDraftConflict(conflict);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pull the shared draft for the selected day and merge it into the form
+  // without a reload, so the other inputter's numbers show up on their own.
+  // A field this user typed into is never overwritten: their edit wins, and it
+  // must still be able to 409 on the next autosave.
+  const syncSharedDraft = useCallback(async () => {
+    // Read the live date, never a render closure: the poll fires long after
+    // the last render, and the user may have picked another day since.
+    const date = draftRef.current.selectedDate;
+    if (!date) return false;
+
+    let data;
+    try {
+      data = await parseResponse(await apiGet(`/dftc/price-draft?reporting_date=${date}`));
+    } catch {
+      // Offline or a server error: keep what is on screen and say nothing.
+      return false;
+    }
+    if (!data || !Array.isArray(data.cells)) return false;
+    // The user may have switched days while the request was in flight. A
+    // response for the old day must never land on the new one's form.
+    if (draftRef.current.selectedDate !== date) return false;
+
+    // A cell whose commodity the form has no row for is healed here: the
+    // catalogue is refreshed and the missing row added before the cells are
+    // resolved.
+    const targets = await resolveDraftCellsRef.current(data.cells);
+    // Identity of every cell the server still holds. A cell this page cannot
+    // render is still there, so it must not be mistaken for a deleted one.
+    // The identity is written twice: exactly as the server sent it, and
+    // normalized to the tab's market key, so the comparison below always uses
+    // the same spelling the tabs use.
+    const remoteCells = new Set();
+    for (const cell of data.cells) {
+      remoteCells.add(`${cell.source_key || cell.source_id}|${cell.price_type}|${cell.commodity_id}`);
+    }
+    for (const { tab, cell } of targets) {
+      remoteCells.add(`${tab.sourceId}|${tab.price_type}|${cell.commodity_id}`);
+    }
+
+    // 1. Refresh the per-cell metadata of every cell we accept. A dirty field
+    //    keeps its own version so the next autosave can still detect a clash.
+    for (const { tab, vid, cell } of targets) {
+      if (dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
+      const map = draftMetaRef.current[tab.id];
+      if (!map) continue;
+      map.set(vid, {
+        commodity_id: cell.commodity_id,
+        uom: cell.uom,
+        version: cell.version,
+        updatedBy: cell.updated_by_user_id,
+      });
+      // A synced value is a draft cell, never a carried-over one.
+      carriedRef.current[tab.id]?.delete(vid);
+    }
+
+    // 2. A cell the server no longer holds was cleared by the other inputter.
+    const removed = [];
+    for (const tab of MARKET_TABS) {
+      const map = draftMetaRef.current[tab.id];
+      if (!map) continue;
+      for (const [vid, meta] of Array.from(map.entries())) {
+        if (dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
+        if (!meta?.commodity_id) continue;
+        if (remoteCells.has(`${tab.sourceId}|${tab.priceType}|${meta.commodity_id}`)) continue;
+        map.delete(vid);
+        removed.push([tab.id, vid]);
+      }
+    }
+
+    // 3. Merge the values into the form. A field this user owns is skipped
+    //    entirely: neither its value nor its version is touched.
+    const fresh = targets.filter(({ tab, vid }) => !dirtyRef.current.has(`${tab.id}|${vid}`));
+    const gone = removed.filter(([tabId, vid]) => !dirtyRef.current.has(`${tabId}|${vid}`));
+
+    // When nothing changed the previous state object is returned unchanged, so
+    // a poll with no news does not re-render the grid.
+    const preview = mergeDraftTargets(draftRef.current.tabFields, fresh, gone);
+    let changed = false;
+    setTabFields((prev) => {
+      const { next, changed: didChange } = mergeDraftTargets(prev, fresh, gone);
+      changed = changed || didChange;
+      return didChange ? next : prev;
+    });
+
+    // The other inputter finalized the day. Never un-finalize it.
+    if (data.status === "saved") setDraftFinalized(true);
+
+    return changed || preview.changed;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The shared draft changes while the other inputter works. Pull it on a
+  // timer so their numbers appear without a reload. The interval is cleared on
+  // unmount and whenever the day is finalized (nothing left to sync).
+  const syncRef = useRef(syncSharedDraft);
+  useEffect(() => { syncRef.current = syncSharedDraft; }, [syncSharedDraft]);
+
+  useEffect(() => {
+    if (draftFinalized) return;
+    const id = setInterval(() => {
+      // A hidden tab or an offline device must not spend the user's battery
+      // on a request nobody is waiting for.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      syncRef.current().catch(() => { });
+    }, 10000);
+    return () => clearInterval(id);
+  }, [draftFinalized]);
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1208,14 +1400,10 @@ function DFTCPriceInput() {
         if (draftData && Array.isArray(draftData.cells)) {
           draftFinalized = draftData.status === "saved";
           if (draftData.cells.length) {
-            const { resolveVid } = await import("./dftcPricePrefill");
-            for (const cell of draftData.cells) {
-              const tab = MARKET_TABS.find(
-                (t) => t.sourceId === cell.source_id && t.priceType === cell.price_type,
-              );
-              if (!tab) continue;
-              const vid = resolveVid(cell.commodity_id, stableResolverRef.current);
-              if (!vid) continue;
+            // Same healing as the live resync: a commodity the form has no
+            // row for yet gets one before the cells are resolved.
+            const resolved = await resolveDraftCellsRef.current(draftData.cells);
+            for (const { tab, vid, cell } of resolved) {
               draftByTab[tab.id][vid] = priceField(cell.prevail_price, cell.uom);
               draftMeta[tab.id].set(vid, {
                 commodity_id: cell.commodity_id,
@@ -1380,12 +1568,207 @@ function DFTCPriceInput() {
     }
   }
 
-  function getAllCommodities(cat) {
-    return [...cat.commodities, ...customCommodities[cat.id] ?? []];
+  // ── DB catalogue ──────────────────────────────────────────────────────────
+  // The catalogue is fetched once and reused: the mount effect, the day loader
+  // and the resync all go through these two helpers, so there is exactly one
+  // implementation of the fetch and one of the id map.
+  async function fetchCatalogItems() {
+    const data = await parseResponse(await apiGet("/dftc/commodities"));
+    return Array.isArray(data) ? data : data?.items ?? [];
   }
 
+  function applyCatalogItems(items) {
+    const map = new Map();
+    for (const row of items) {
+      const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
+      map.set(nameSlug(baseName), row.id);
+      if (row.variety) {
+        map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
+      }
+    }
+    catalogRef.current = map;
+    catalogItemsRef.current = items;
+    return map;
+  }
+
+  /**
+   * The commodities of one category: the static mirror, the rows this user
+   * added at runtime, and a block for every catalogue row whose commodity the
+   * form does not have yet.
+   */
+  function getAllCommodities(cat) {
+    const customs = customRowsRef.current.customCommodities[cat.id] ?? [];
+    const present = new Set([...cat.commodities, ...customs].map((c) => c.id));
+    const fromCatalog = [];
+    for (const row of catalogRowsRef.current) {
+      if (row.categoryId !== cat.id) continue;
+      // One block per commodity, even when the catalogue holds several
+      // varieties of it.
+      if (present.has(row.commodityId)) continue;
+      present.add(row.commodityId);
+      fromCatalog.push({ id: row.commodityId, name: row.commodityName, isHW: false, variants: [] });
+    }
+    return [...cat.commodities, ...customs, ...fromCatalog];
+  }
+
+  /**
+   * The variants of one commodity: the static mirror, the rows this user added
+   * at runtime, and the catalogue rows that belong to this commodity.
+   */
   function getVariants(com) {
-    return [...com.variants, ...customVariants[com.id] ?? []];
+    const customs = customRowsRef.current.customVariants[com.id] ?? [];
+    const fromCatalog = catalogRowsRef.current
+      .filter((row) => row.commodityId === com.id)
+      .map((row) => ({ id: row.variantId, name: row.variantName }));
+    return [...com.variants, ...customs, ...fromCatalog];
+  }
+
+  // ── Rows the form gained from the DB catalogue ────────────────────────────
+  /** Identity of a rendered row: its commodity and its variety, by name. */
+  function variantIdentity(commodityName, variantName) {
+    return `${nameSlug(commodityName)}|${nameSlug(variantName)}`;
+  }
+
+  /** The identities of every variant the form renders right now. */
+  function renderedIdentities() {
+    const ids = new Set();
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of getAllCommodities(cat)) {
+        for (const v of getVariants(com)) {
+          ids.add(variantIdentity(com.name, v.name));
+        }
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Turn a DB catalogue item into a row the form can render.
+   *
+   * An item whose name is a commodity of the static mirror is a new VARIANT of
+   * it. An item with a name the mirror does not have is a new COMMODITY and
+   * needs a category of ours to sit in. Returns null when neither applies.
+   */
+  function buildCatalogRow(item) {
+    const baseName = COMMODITY_NAME_OVERRIDES[item.name] ?? item.name;
+    const baseSlug = nameSlug(baseName);
+
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of cat.commodities) {
+        if (nameSlug(COMMODITY_NAME_OVERRIDES[com.name] ?? com.name) !== baseSlug) continue;
+        return {
+          commodityId: com.id,
+          commodityName: com.name,
+          categoryId: cat.id,
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
+          variantName: item.variety || "Base",
+          dbId: item.id,
+        };
+      }
+    }
+
+    const cat = PRICE_CATEGORIES.find(
+      (c) => c.name.toLowerCase() === (item.category ?? "").toLowerCase()
+    );
+    if (!cat) return null;
+    return {
+      commodityId: baseSlug,
+      commodityName: baseName,
+      categoryId: cat.id,
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
+      variantName: item.variety || "Base",
+      dbId: item.id,
+    };
+  }
+
+  /**
+   * Add the form rows for the catalogue items behind `commodityIds`.
+   *
+   * A row is added only when the form renders no variant with the same
+   * identity (commodity name + variety name). Dedupe by identity, not by id:
+   * the row this user added at runtime carries a different id but the same
+   * variety, and it must not show up twice.
+   */
+  function addCatalogRows(commodityIds, items) {
+    const identities = renderedIdentities();
+    const added = [];
+    for (const dbId of commodityIds) {
+      const item = items.find((i) => i.id === dbId);
+      if (!item) continue;
+      const row = buildCatalogRow(item);
+      if (!row) {
+        // The catalogue holds the commodity but the form has no category of
+        // ours for it: there is nowhere to put the row.
+        unplaceableRef.current.add(dbId);
+        continue;
+      }
+      const identity = variantIdentity(row.commodityName, row.variantName);
+      if (identities.has(identity)) continue;
+      identities.add(identity);
+      added.push(row);
+    }
+    if (added.length === 0) return 0;
+    catalogRowsRef.current = [...catalogRowsRef.current, ...added];
+    setCatalogRowsVersion((v) => v + 1);
+    return added.length;
+  }
+
+  /** Every (commodity, variant) pair the form can render, right now. */
+  function buildCatalogue() {
+    const pairs = [];
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of getAllCommodities(cat)) {
+        for (const v of getVariants(com)) {
+          pairs.push({ com, v });
+        }
+      }
+    }
+    return pairs;
+  }
+
+  /** The commodity ids of the draft cells the form cannot render (yet). */
+  function unresolvedCommodityIds(cells, pairs) {
+    const ids = [];
+    for (const cell of Array.isArray(cells) ? cells : []) {
+      const id = cell?.commodity_id;
+      if (!id || ids.includes(id)) continue;
+      if (pairs.some(({ com, v }) => resolveCommodityId(com, v) === id)) continue;
+      ids.push(id);
+    }
+    return ids;
+  }
+
+  /**
+   * Resolve the shared draft's cells onto the form.
+   *
+   * A cell for a commodity the form has no row for is dropped by the resolver.
+   * That is what happens when the other inputter registered a commodity or a
+   * variety at runtime: the static mirror does not know it. The catalogue is
+   * refreshed once, the missing rows are added, and the cells are resolved
+   * again, so the other inputter's number reaches the screen. A refresh that
+   * fails keeps everything that is already on screen.
+   */
+  async function resolveDraftCells(cells) {
+    const resolver = stableResolverRef.current;
+    const catalogue = buildCatalogue();
+    const targets = resolveDraftCellTargets(cells, resolver, catalogue);
+    const unresolved = unresolvedCommodityIds(cells, catalogue)
+      .filter((id) => !unplaceableRef.current.has(id));
+    if (unresolved.length === 0) return targets;
+
+    let items;
+    try {
+      items = await fetchCatalogItems();
+    } catch {
+      // Offline or a server error: keep what is on screen.
+      return targets;
+    }
+    applyCatalogItems(items);
+    addCatalogRows(unresolved, catalogItemsRef.current);
+    // Re-resolve even when no row was added: the refresh alone can make an
+    // existing row resolvable — the row this user added at runtime for a
+    // variety the catalogue now knows by id.
+    return resolveDraftCellTargets(cells, resolver, buildCatalogue());
   }
 
   function commitVariant(commodityId) {
@@ -1560,7 +1943,7 @@ function DFTCPriceInput() {
       }
     });
     return rows;
-  }, [tabFields, customCommodities, customVariants, carriedDate]);
+  }, [tabFields, customCommodities, customVariants, carriedDate, catalogRowsVersion]);
 
   // Filtered review rows based on clicked summary card
   const filteredReviewRows = useMemo(() => {
@@ -2279,6 +2662,24 @@ function DFTCPriceInput() {
               </button>
             )}
           </div>
+
+          {/* Resync shared draft */}
+          <button
+            type="button"
+            onClick={() => {
+              setResyncing(true);
+              // A failed pull must clear the in-flight state without surfacing
+              // anything: the form simply keeps what it already shows.
+              syncSharedDraft().catch(() => {}).finally(() => setResyncing(false));
+            }}
+            disabled={resyncing}
+            aria-label="Resync shared draft"
+            title="Resync shared draft"
+            className="shrink-0 flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {resyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            <span>Resync</span>
+          </button>
 
           {/* Add Commodity */}
           <button

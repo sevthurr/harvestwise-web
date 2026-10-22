@@ -7,10 +7,10 @@
  * price types on every tap is gone, which means the page's useQuery is now the
  * only fetcher — so the cache-MISS path is the load-bearing one and needs a test.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router";
 
 import {
@@ -53,9 +53,9 @@ const DETAIL = {
   forecast: { horizon_days: 7, trend: "Rising" },
 };
 
-function makeClient() {
+function makeClient(queryDefaults = {}) {
   return new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    defaultOptions: { queries: { retry: false, gcTime: 0, ...queryDefaults } },
   });
 }
 
@@ -71,6 +71,11 @@ function renderPage(client) {
   );
 }
 
+// Every call the detail query makes, regardless of which market/period chip
+// asked for it.
+const detailCalls = () =>
+  apiGet.mock.calls.filter(([url]) => String(url).includes("/prices/COM-0001?"));
+
 let CommodityDetail;
 
 beforeEach(async () => {
@@ -78,6 +83,12 @@ beforeEach(async () => {
   apiGet.mockResolvedValue({ ok: true, status: 200 });
   parseResponse.mockResolvedValue({ items: [] });
   CommodityDetail = (await import("../app/farmer/pages/CommodityDetail.jsx")).default;
+});
+
+afterEach(() => {
+  // onlineManager is global. Leaving it offline would poison every other
+  // test file that runs on this worker.
+  onlineManager.setOnline(true);
 });
 
 describe("CommodityDetail price detail caching", () => {
@@ -151,6 +162,98 @@ describe("CommodityDetail price detail caching", () => {
       );
       expect(calls).toHaveLength(1);
     });
+  });
+});
+
+/**
+ * Offline / error messaging.
+ *
+ * The page used to copy the query's data into useState and rendered
+ * "Commodity not found." whenever that copy was empty — which is also what
+ * happens on a device with no connection, because the request never reaches
+ * the server. A farmer in the field was therefore told their crop does not
+ * exist while standing in a field with no signal. The message now has to tell
+ * "this commodity does not exist" (a real 404) apart from "I could not load
+ * this right now".
+ *
+ * Both offline shapes are covered, because the app's global network mode is
+ * being changed in parallel: "online" (the default) pauses the query and
+ * never fires it, while "always" fires it and lets it fail at the network
+ * level.
+ */
+describe("CommodityDetail offline and error states", () => {
+  const OFFLINE_NOTICE =
+    "You're offline — this price isn't saved on this device yet.";
+  const LOAD_FAILED =
+    "We couldn't load this price. Check your connection and try again.";
+
+  it("does not claim the commodity is missing when the query is paused offline", async () => {
+    onlineManager.setOnline(false);
+    const client = makeClient();
+
+    renderPage(client);
+
+    await waitFor(() =>
+      expect(screen.getByText(OFFLINE_NOTICE)).toBeInTheDocument()
+    );
+    expect(screen.queryByText("Commodity not found.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Back to Prices" })
+    ).toBeInTheDocument();
+    // A paused query never fires, so no cached copy was ever looked up.
+    expect(detailCalls()).toHaveLength(0);
+  });
+
+  it("does not claim the commodity is missing when the request fails at the network level", async () => {
+    const client = makeClient({ networkMode: "always" });
+    apiGet.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    renderPage(client);
+
+    await waitFor(() =>
+      expect(screen.getByText(OFFLINE_NOTICE)).toBeInTheDocument()
+    );
+    expect(screen.queryByText("Commodity not found.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("shows 'Commodity not found.' only when the server answers 404", async () => {
+    const client = makeClient();
+    apiGet.mockImplementation(async (url) =>
+      String(url).includes("/prices/COM-0001?")
+        ? { ok: false, status: 404 }
+        : { ok: true, status: 200 }
+    );
+
+    renderPage(client);
+
+    await waitFor(() =>
+      expect(screen.getByText("Commodity not found.")).toBeInTheDocument()
+    );
+    expect(screen.queryByText(OFFLINE_NOTICE)).toBeNull();
+    expect(screen.queryByText(LOAD_FAILED)).toBeNull();
+  });
+
+  it("shows a generic failure message and retries on a server error", async () => {
+    const client = makeClient();
+    apiGet.mockImplementation(async (url) =>
+      String(url).includes("/prices/COM-0001?")
+        ? { ok: false, status: 500 }
+        : { ok: true, status: 200 }
+    );
+
+    renderPage(client);
+
+    await waitFor(() => expect(screen.getByText(LOAD_FAILED)).toBeInTheDocument());
+    expect(screen.queryByText("Commodity not found.")).toBeNull();
+    expect(detailCalls()).toHaveLength(1);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    // The Retry button is wired to the query's refetch, not to a page reload.
+    await waitFor(() => expect(detailCalls()).toHaveLength(2));
   });
 });
 

@@ -196,6 +196,17 @@ const CropsProvider = ({ children }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  // Crop plans are per-farmer data: GET /crop-plans answers with the caller's
+  // own plans and rejects every role outside (SuperAdmin, Farmer).
+  //
+  // The gate is the ROLE, not the presence of a session. This provider is
+  // mounted above the router, so it also runs on /login and in the admin and
+  // DFTC workspaces. Gating on "is there a user" stopped the pre-login 401 but
+  // still fired GET /crop-plans for every logged-in role — a guaranteed 403 for
+  // DFTC and an out-of-scope read for admin, which gets the active-plan count
+  // from the admin dashboard KPI instead.
+  const isFarmerSession = (user?.role?.role_name || "").toLowerCase() === "farmer";
+
   const { data: crops = [], isLoading: loading } = useQuery({
     queryKey: ["farmer", "crops"],
     queryFn: async () => {
@@ -211,9 +222,10 @@ const CropsProvider = ({ children }) => {
       return transformCropItems(rawItems, pricesMap);
     },
     // This provider is mounted above the router, so it runs on /login too.
-    // Without a session the request is a guaranteed 401; gating on the user
-    // keeps it at 0 requests until login and auto-fetches once enabled flips.
-    enabled: Boolean(user?.id),
+    // Without a farmer session the request is a guaranteed 401/403; gating on
+    // the role keeps it at 0 requests until a farmer signs in and auto-fetches
+    // once enabled flips.
+    enabled: isFarmerSession,
     staleTime: 1000 * 60 * 30,
     refetchOnMount: true,
   });

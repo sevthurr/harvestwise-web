@@ -46,8 +46,8 @@ function AdminDashboard() {
   const { data, error: queryErr } = useQuery({
     queryKey: ["adminDashboard"],
     queryFn: () => adminApi.getDashboard({ _t: Date.now() }),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 30000,
+    refetchOnMount: true,
     refetchInterval: 30000,
   });
 

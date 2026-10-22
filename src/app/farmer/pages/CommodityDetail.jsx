@@ -51,9 +51,8 @@ function CommodityDetailPage() {
   const [period, setPeriod] = useState(7);
   const [showMore, setShowMore] = useState(false);
 
-  // API integration - fetch commodity details
-  const [commodity, setCommodity] = useState(null);
-  const [priceDetail, setPriceDetail] = useState(null);
+  // The only piece of detail state that cannot be derived from the query:
+  // "View more" replaces the records with a longer list fetched on demand.
   const [priceRecords, setPriceRecords] = useState([]);
 
   // No prefetch here on purpose: the login bundle (/farmer/daily-snapshot) already
@@ -110,13 +109,26 @@ function CommodityDetailPage() {
   const priceTypeKey = PRICE_TYPE_KEY[market];
 
   // Fetch detailed price data with React Query
-  const { data: detailData, isLoading: loading } = useQuery({
+  const {
+    data: detailData,
+    isLoading: loading,
+    error: detailError,
+    fetchStatus,
+    refetch: refetchDetail,
+  } = useQuery({
     queryKey: ["prices", "detail", commodityId, priceTypeKey, period],
     queryFn: async () => {
       const response = await apiGet(
         `/prices/${commodityId}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
       );
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        // The HTTP status is the only thing that tells "this commodity does not
+        // exist" (404) apart from "the request never reached the server" (a
+        // network-level failure carries no status at all).
+        const httpError = new Error(`HTTP error! status: ${response.status}`);
+        httpError.status = response.status;
+        throw httpError;
+      }
       const data = await parseResponse(response);
       return toCamelCase(data);
     },
@@ -125,20 +137,37 @@ function CommodityDetailPage() {
     placeholderData: (previousData) => previousData,
   });
 
-  useEffect(() => {
-    if (detailData) {
-      setCommodity({
-        id: detailData.commodityId,
-        name: detailData.name || '–',
-        baseName: detailData.baseName,
-        variety: detailData.variety,
-        icon: detailData.icon,
-        unitOfMeasure: detailData.unitOfMeasure || 'kg'
-      });
-      setPriceDetail(detailData);
-      setPriceRecords(detailData.recentRecords || []);
-    }
+  // Derived straight from the query's data. Copying it into useState through a
+  // useEffect left commodity/priceDetail null on the first render, so the
+  // "not found" branch could flash even when the data was already cached.
+  const commodity = useMemo(() => {
+    if (!detailData) return null;
+    return {
+      id: detailData.commodityId,
+      name: detailData.name || '–',
+      baseName: detailData.baseName,
+      variety: detailData.variety,
+      icon: detailData.icon,
+      unitOfMeasure: detailData.unitOfMeasure || 'kg'
+    };
   }, [detailData]);
+
+  useEffect(() => {
+    if (detailData) setPriceRecords(detailData.recentRecords || []);
+  }, [detailData]);
+
+  // Offline detection. Three independent signals, because the app's global
+  // network mode decides which one fires:
+  //   - navigator.onLine === false → the browser knows there is no connection
+  //   - fetchStatus === "paused"   → React Query's "online" mode refuses to fire
+  //   - an error with no status    → the request failed at the network level
+  // A 404 is the opposite case: it proves the server answered.
+  const detailErrorStatus = detailError?.status;
+  const isNotFound = detailErrorStatus === 404;
+  const isOffline =
+    (typeof navigator !== "undefined" && navigator.onLine === false) ||
+    fetchStatus === "paused" ||
+    (detailError != null && typeof detailErrorStatus !== "number");
 
   // Fetch extended records when "View more" is clicked
   const fetchMoreRecords = async () => {
@@ -165,7 +194,7 @@ function CommodityDetailPage() {
     setShowMore(!showMore);
   };
 
-  const forecast = priceDetail?.forecast || {};
+  const forecast = detailData?.forecast || {};
   const cfg = DIR_CFG[forecast.trend] || DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const uom = commodity?.unitOfMeasure || 'kg';
@@ -326,7 +355,15 @@ function CommodityDetailPage() {
   }, [familyVariants, market, uom, commodity, commodityId, detailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
 
   // Loading state (only show full screen skeleton on cold start if NO data exists in cache)
-  if (loading && !detailData && !priceDetail) {
+  //
+  // `loading` is React Query's isLoading — true only while a request is
+  // genuinely in flight. Between the first render and the fetch being kicked
+  // off the query reports fetchStatus "idle", and that frame is loading too,
+  // so it is covered here as well. A paused query (offline) and an errored
+  // query are neither: they fall through to the message branch below instead
+  // of spinning forever.
+  const isLoadingDetail = loading || (Boolean(commodityId) && fetchStatus === "idle");
+  if (isLoadingDetail && !detailData && !detailError) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
         {/* Breadcrumb Skeleton */}
@@ -360,14 +397,44 @@ function CommodityDetailPage() {
     );
   }
 
-  // Error state - commodity not found
-  if (!commodity || !priceDetail) {
+  // Error state. "Commodity not found." is reserved for a real 404 — an
+  // offline device or a server error gets its own message and a retry, so the
+  // farmer is never told a crop does not exist just because the network is
+  // down.
+  if (!commodity) {
     return (
       <div className="px-4 py-8 text-center">
-        <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/farmer/prices")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
-          Back to Prices
-        </button>
+        {isNotFound ? (
+          <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
+        ) : (
+          <p className="text-[var(--hw-neutral-900)]">
+            {isOffline
+              ? t(
+                  "farmer.commodityDetail.offline_notice",
+                  {},
+                  "You're offline — this price isn't saved on this device yet."
+                )
+              : t(
+                  "farmer.commodityDetail.load_failed",
+                  {},
+                  "We couldn't load this price. Check your connection and try again."
+                )}
+          </p>
+        )}
+        <div className="mt-3 flex flex-col items-center gap-2">
+          {!isNotFound && (
+            <button
+              onClick={() => refetchDetail()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--hw-green-700)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--hw-green-800)]"
+            >
+              <RefreshCw className="w-4 h-4" aria-hidden="true" />
+              {t("farmer.commodityDetail.btn_retry", {}, "Retry")}
+            </button>
+          )}
+          <button onClick={() => navigate("/farmer/prices")} className="text-sm font-medium text-[var(--hw-green-700)]">
+            Back to Prices
+          </button>
+        </div>
       </div>
     );
   }

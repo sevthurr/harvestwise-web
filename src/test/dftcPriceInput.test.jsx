@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DFTCPriceInput from '../app/dftc/pages/DFTCPriceInput';
@@ -55,19 +55,24 @@ const THREE_WEEKS_AGO = isoDaysAgo(21);
  * by-day returns records for the dates in `dates`, but only for the Bangkerohan
  * Retail tab. The other four tabs stay empty, which keeps the per-tab carry rule
  * observable and the counts unambiguous.
+ *
+ * `draftCellsByDate` optionally supplies the shared draft's cells per date. The
+ * array is read when the response is built, so a test can push a cell into it
+ * after the first load to play the part of the other inputter.
  */
-function byDayOn(dates) {
+function byDayOn(dates, draftCellsByDate = {}) {
   const set = new Set(dates);
   return vi.fn(async (url) => {
     if (url.includes('/dftc/price-draft')) {
+      const date = new URL(url, 'http://x').searchParams.get('reporting_date');
       return {
         ok: true,
         status: 200,
         json: async () => ({
           id: null,
-          reporting_date: new URL(url, 'http://x').searchParams.get('reporting_date'),
+          reporting_date: date,
           status: 'draft',
-          cells: []
+          cells: draftCellsByDate[date] ?? []
         })
       };
     }
@@ -875,6 +880,442 @@ describe('DFTCPriceInput prefill provenance', () => {
     await waitFor(() => expect(puts.length).toBeGreaterThan(0), { timeout: 3000 });
     expect(puts.map((p) => p.commodity_id)).toEqual([AMPALAYA_DB_ID]);
     expect(puts[0].prevail_price).toBe(31);
+  });
+});
+
+describe('DFTCPriceInput runtime commodity registration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearPrefillCache();
+    global.fetch = mockFetch();
+    localStorage.clear();
+  });
+
+  /** The commodity block (header + variant rows) of one commodity. */
+  function commodityBlock(name) {
+    return screen.getByText(name).closest('div.cursor-pointer').parentElement;
+  }
+
+  it('registers a variety added at runtime and writes its price to the new commodity id', async () => {
+    // A variety the user adds at runtime is not in the catalog, so the page
+    // must register it before its price can be written. The resolver used to
+    // read the first render's closure, where the new variety did not exist:
+    // the registration never happened and the price landed on the PARENT
+    // commodity's row instead.
+    const registrations = [];
+    const puts = [];
+    const base = mockFetch();
+    global.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/commodities') && opts?.method === 'POST') {
+        const body = JSON.parse(opts.body);
+        registrations.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'COM-9999',
+            name: body.name,
+            variety: body.variety,
+            category: body.category,
+            unit_of_measure: body.unit_of_measure,
+          }),
+        };
+      }
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        puts.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-1',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 1,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      }
+      return base(url, opts);
+    });
+
+    renderWithFetch(global.fetch);
+    expandLowland();
+
+    // Add the "Milky Wave" variety under Ampalaya.
+    const block = commodityBlock('Ampalaya');
+    fireEvent.click(within(block).getByRole('button', { name: '+ Add Variant' }));
+    fireEvent.change(
+      within(block).getByPlaceholderText('Enter variety, grade, size, or descriptor'),
+      { target: { value: 'Milky Wave' } }
+    );
+    fireEvent.click(within(block).getByRole('button', { name: 'Add' }));
+
+    // The new variant is rendered after Galaxy, so its first sample input is
+    // the sixth one in this commodity block.
+    const inputs = within(block).getAllByPlaceholderText('0.00');
+    expect(inputs.length).toBe(10);
+    fireEvent.change(inputs[5], { target: { value: '45' } });
+
+    // The autosave debounce is 1500ms, so the default 1000ms waitFor is too short.
+    await waitFor(() => expect(registrations.length).toBeGreaterThan(0), { timeout: 3000 });
+    expect(registrations[0].name).toBe('Ampalaya');
+    expect(registrations[0].variety).toBe('Milky Wave');
+
+    await waitFor(() => expect(puts.length).toBeGreaterThan(0), { timeout: 3000 });
+    expect(puts[0].commodity_id).toBe('COM-9999');
+    expect(puts[0].prevail_price).toBe(45);
+    // The parent commodity's row must not receive the new variety's price.
+    expect(puts.some((p) => p.commodity_id === AMPALAYA_DB_ID)).toBe(false);
+  });
+});
+
+describe('DFTCPriceInput shared draft resync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearPrefillCache();
+    global.fetch = mockFetch();
+    localStorage.clear();
+  });
+
+  /** A shared-draft cell as the server returns it. */
+  function draftCell(overrides = {}) {
+    return {
+      id: 'DCL-9',
+      commodity_id: AMPALAYA_DB_ID,
+      source_id: 'bankerohan',
+      source_key: 'bankerohan',
+      price_type: 'Retail',
+      uom: 'kg',
+      price_min: 42,
+      price_max: 42,
+      prevail_price: 42,
+      observation_status: 'Reported value',
+      version: 3,
+      updated_by_user_id: 'USR-9',
+      updated_at: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  it("Resync pulls the other inputter's draft cell into the form", async () => {
+    // The other inputter saves a cell into the shared draft after this page has
+    // loaded. Resync must bring it in without a reload.
+    const remoteCells = [];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(base);
+
+    const inputs = expandLowland();
+    // The day load has landed: the recorded price for the day is on screen.
+    await waitFor(() => expect(inputs[0].value).toBe('35'));
+
+    remoteCells.push(draftCell());
+
+    fireEvent.click(screen.getByRole('button', { name: /Resync shared draft/i }));
+
+    await waitFor(() => expect(inputs[0].value).toBe('42'));
+  });
+
+  it('Resync does not overwrite a field the local user edited', async () => {
+    const remoteCells = [];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(base);
+
+    const inputs = expandLowland();
+    await waitFor(() => expect(inputs[0].value).toBe('35'));
+
+    // The local user types their own price. A remote value must not touch it.
+    fireEvent.change(inputs[0], { target: { value: '11' } });
+    expect(inputs[0].value).toBe('11');
+
+    remoteCells.push(
+      draftCell(),
+      draftCell({ id: 'DCL-10', commodity_id: 'com-2', prevail_price: 77, price_min: 77, price_max: 77 }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Resync shared draft/i }));
+
+    // The untouched cell lands, so the merge has run.
+    await waitFor(() => expect(inputs[BATONG_INPUT_INDEX].value).toBe('77'));
+    // The field the local user edited still holds their value.
+    expect(inputs[0].value).toBe('11');
+  });
+
+  it('Resync refreshes the stored cell version', async () => {
+    // The version the server handed out is what the next autosave sends back
+    // as expected_version. A stale one makes the server answer 409.
+    const puts = [];
+    const remoteCells = [];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/price-draft/cell') && opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        puts.push(body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'DCL-2',
+            commodity_id: body.commodity_id,
+            source_id: body.source_id,
+            price_type: body.price_type,
+            uom: body.uom,
+            price_min: body.price_min,
+            price_max: body.price_max,
+            prevail_price: body.prevail_price,
+            observation_status: body.observation_status,
+            version: 4,
+            updated_by_user_id: 'USR-1',
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      }
+      return base(url, opts);
+    }));
+
+    const inputs = expandLowland();
+    await waitFor(() => expect(inputs[0].value).toBe('35'));
+
+    remoteCells.push(draftCell());
+
+    fireEvent.click(screen.getByRole('button', { name: /Resync shared draft/i }));
+    await waitFor(() => expect(inputs[0].value).toBe('42'));
+
+    // Editing the synced cell flushes it to the shared draft.
+    fireEvent.change(inputs[0], { target: { value: '45' } });
+
+    // The autosave debounce is 1500ms, so the default 1000ms waitFor is too short.
+    await waitFor(() => expect(puts.length).toBeGreaterThan(0), { timeout: 3000 });
+    expect(puts[0].expected_version).toBe(3);
+  });
+
+  it('pulls the shared draft on a timer', async () => {
+    // The poll is the whole point for the second inputter: their numbers have
+    // to arrive without anyone touching the page.
+    vi.useFakeTimers();
+    try {
+      const remoteCells = [];
+      const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+      renderWithFetch(base);
+
+      const inputs = expandLowland();
+      // Let the mount load settle: the recorded price for the day is on screen.
+      for (let i = 0; i < 20 && inputs[0].value !== '35'; i += 1) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      }
+      expect(inputs[0].value).toBe('35');
+
+      remoteCells.push(draftCell());
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+
+      expect(inputs[0].value).toBe('42');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('DFTCPriceInput rows gained from the DB catalogue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearPrefillCache();
+    global.fetch = mockFetch();
+    localStorage.clear();
+  });
+
+  /** The commodity block (header + variant rows) of one commodity. */
+  function commodityBlock(name) {
+    return screen.getByText(name).closest('div.cursor-pointer').parentElement;
+  }
+
+  /** A shared-draft cell as the server returns it. */
+  function draftCell(overrides = {}) {
+    return {
+      id: 'DCL-9',
+      commodity_id: AMPALAYA_DB_ID,
+      source_id: 'bankerohan',
+      source_key: 'bankerohan',
+      price_type: 'Retail',
+      uom: 'kg',
+      price_min: 42,
+      price_max: 42,
+      prevail_price: 42,
+      observation_status: 'Reported value',
+      version: 3,
+      updated_by_user_id: 'USR-9',
+      updated_at: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  /** The catalogue the server answers with; the test may add to it later. */
+  function catalogFetch(items, baseFetch) {
+    return vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/commodities')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ items: [...items] })
+        };
+      }
+      return baseFetch(url, opts);
+    });
+  }
+
+  it("the other inputter's new variety appears with its price", async () => {
+    // The other inputter registered "Ampalaya / Milky Wave" and priced it.
+    // The static mirror has no such variety, so this form has no row for it
+    // either: the row has to come from the catalogue, carrying their number.
+    const remoteCells = [
+      draftCell({
+        id: 'DCL-21',
+        commodity_id: 'com-9',
+        prevail_price: 45,
+        price_min: 45,
+        price_max: 45
+      })
+    ];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(catalogFetch([
+      { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-2', name: 'Batong', variety: 'Negrostar', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-9', name: 'Ampalaya', variety: 'Milky Wave', category: 'Lowland Vegetables', unit_of_measure: 'kg' }
+    ], base));
+
+    expandLowland();
+    const block = commodityBlock('Ampalaya');
+
+    // The new variety has a row of its own, holding the other inputter's
+    // price: Galaxy keeps 35 (the recorded price), Milky Wave shows 45.
+    await waitFor(() => {
+      const inputs = within(block).getAllByPlaceholderText('0.00');
+      expect(inputs.length).toBe(10);
+      expect(inputs[0].value).toBe('35');
+      expect(inputs[5].value).toBe('45');
+    });
+  });
+
+  it('a new commodity name appears in its category', async () => {
+    // A commodity NAME the mirror has never heard of. It has no row either,
+    // so the catalogue has to place it — in the category the catalogue names.
+    const remoteCells = [
+      draftCell({
+        id: 'DCL-22',
+        commodity_id: 'com-10',
+        prevail_price: 30,
+        price_min: 30,
+        price_max: 30
+      })
+    ];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(catalogFetch([
+      { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-2', name: 'Batong', variety: 'Negrostar', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-10', name: 'Siling Labuyo', variety: 'Labuyo', category: 'Spices', unit_of_measure: 'kg' }
+    ], base));
+
+    // Every category starts collapsed; open the one the commodity belongs to.
+    fireEvent.click(screen.getByText(/^Spices$/i).closest('button'));
+
+    // The row only exists once the draft has been read and the catalogue has
+    // been consulted, so wait for it.
+    await waitFor(() => {
+      const block = commodityBlock('Siling Labuyo');
+      const inputs = within(block).getAllByPlaceholderText('0.00');
+      expect(inputs.length).toBe(5);
+      expect(inputs[0].value).toBe('30');
+    });
+  });
+
+  it("the local user's own new variety is not duplicated", async () => {
+    // The same variety, added on both sides. The local row carries a
+    // generated id (custom-...) and the catalogue row a slug (ampalaya-
+    // milky-wave), so the dedupe has to be by identity, not by id.
+    const catalogItems = [
+      { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-2', name: 'Batong', variety: 'Negrostar', category: 'Lowland Vegetables', unit_of_measure: 'kg' }
+    ];
+    const remoteCells = [];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(catalogFetch(catalogItems, base));
+
+    expandLowland();
+    const block = commodityBlock('Ampalaya');
+
+    // This user adds the variety themselves.
+    fireEvent.click(within(block).getByRole('button', { name: '+ Add Variant' }));
+    fireEvent.change(
+      within(block).getByPlaceholderText('Enter variety, grade, size, or descriptor'),
+      { target: { value: 'Milky Wave' } }
+    );
+    fireEvent.click(within(block).getByRole('button', { name: 'Add' }));
+
+    await waitFor(() =>
+      expect(within(block).getAllByPlaceholderText('0.00').length).toBe(10)
+    );
+
+    // The catalogue learns the variety and the shared draft carries its
+    // price: the resync must land that price on the ONE row that exists.
+    catalogItems.push({
+      id: 'com-9',
+      name: 'Ampalaya',
+      variety: 'Milky Wave',
+      category: 'Lowland Vegetables',
+      unit_of_measure: 'kg'
+    });
+    remoteCells.push(draftCell({
+      id: 'DCL-23',
+      commodity_id: 'com-9',
+      prevail_price: 45,
+      price_min: 45,
+      price_max: 45
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Resync shared draft/i }));
+
+    await waitFor(() => {
+      const inputs = within(block).getAllByPlaceholderText('0.00');
+      expect(inputs[5].value).toBe('45');
+    });
+    // Still two variants: Galaxy and the user's own Milky Wave. The
+    // catalogue row was not added a second time.
+    expect(within(block).getAllByPlaceholderText('0.00').length).toBe(10);
+  });
+});
+
+describe('DFTCPriceInput a commodity added at runtime lands in a category the form renders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearPrefillCache();
+    global.fetch = mockFetch();
+    localStorage.clear();
+  });
+
+  it('shows the new commodity instead of filing it where nothing renders it', async () => {
+    // The modal offered category ids ("lowland") that PRICE_CATEGORIES does
+    // not use ("lowland-vegetables"), so the commodity was filed in a bucket
+    // the form never reads: it appeared for nobody, and its price could
+    // never be entered, so no other inputter could ever see it either.
+    renderWithFetch(mockFetch());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Commodity' }));
+    const modal = screen.getByText('Add New Commodity').closest('div.fixed');
+    fireEvent.change(
+      within(modal).getByPlaceholderText('e.g. Batong (Negrostar)'),
+      { target: { value: 'Satsuma' } }
+    );
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add Commodity' }));
+
+    expandLowland();
+    await waitFor(() => expect(screen.getByText('Satsuma')).toBeTruthy());
   });
 });
 

@@ -44,7 +44,8 @@ function DFTCHome() {
       const res = await apiGet("/dftc/submissions?page=1&page_size=50");
       return parseResponse(res);
     },
-    refetchOnMount: "always"
+    staleTime: 30000,
+    refetchOnMount: true
   });
 
   const { data: homeData, isLoading: loadingHome } = useQuery({
@@ -53,7 +54,8 @@ function DFTCHome() {
       const res = await apiGet("/dftc/home");
       return parseResponse(res);
     },
-    refetchOnMount: "always"
+    staleTime: 30000,
+    refetchOnMount: true
   });
 
   const kpis = homeData?.kpis || {};
@@ -83,7 +85,8 @@ function DFTCHome() {
       return parseResponse(res);
     },
     enabled: !!todayStr,
-    refetchOnMount: "always"
+    staleTime: 30000,
+    refetchOnMount: true
   });
 
   const todayReportRecordCount = useMemo(() => {
