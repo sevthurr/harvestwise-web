@@ -457,11 +457,11 @@ export function composeAdvisoryBadge(advisoryCode, cropStage) {
   // Rule:
   // Green = Recommended
   // Yellow = Proceed with Caution
-  // Red = Avoid For Now (or High Risk for post-planting)
+  // Red = Avoid For Now
 
   if (adv === 'avoid_for_now' || adv === 'avoid' || adv === 'high_risk' || adv === 'unfavorable' || adv === 'severe' || adv === 'red') {
     return {
-      key: stage === 'planning' ? 'farmer.advisory.labels.avoid_for_now' : 'farmer.advisory.labels.high_risk',
+      key: 'farmer.advisory.labels.avoid_for_now',
       type: 'avoid',
     };
   }

@@ -21,6 +21,7 @@ import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { getCategoryFor } from "../../global/data/commodities";
 import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
@@ -30,7 +31,19 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", bg: "bg-[var(--hw-neutral-50)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
-
+function getDirectionFromData(trendDetail, fallbackForecast) {
+  const forecast = trendDetail?.forecast || fallbackForecast;
+  if (!forecast || !forecast.trend) return null;
+  const forecastPrice = forecast.forecast_midpoint != null
+    ? Number(forecast.forecast_midpoint)
+    : (forecast.forecastMidpoint != null ? Number(forecast.forecastMidpoint) : null);
+  const records = trendDetail?.recent_records || trendDetail?.recentRecords || [];
+  if (trendDetail) {
+    const hasForecast = records.length > 0 && forecastPrice != null;
+    return hasForecast ? forecast.trend : null;
+  }
+  return forecastPrice != null ? forecast.trend : null;
+}
 
 const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
 
@@ -43,7 +56,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
   if (!open) return null;
 
   const chip = (active) =>
-    `px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${
+    `px-3.5 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${
       active
         ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
         : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
@@ -66,11 +79,11 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-80 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
+      <div className="fixed inset-0 z-[60] bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-x-0 bottom-0 z-[70] md:inset-y-0 md:right-0 md:left-auto md:w-80 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[88vh] md:max-h-none">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)] flex-shrink-0">
           <p className="font-semibold text-[var(--hw-neutral-900)]">{t("farmer.prices.filter_and_sort", {}, "Filter & Sort")}</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)]">
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -82,7 +95,16 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
             <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.sort_by", {}, "Sort by")}</p>
             <div className="flex flex-col gap-2">
               {sortOptions.map(([v, label]) => (
-                <button key={v} onClick={() => setDraft((d) => ({ ...d, sortBy: v }))} className={chip(draft.sortBy === v)}>
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setDraft((d) => ({ ...d, sortBy: v }))}
+                  className={`w-full py-2.5 px-4 rounded-full text-[13px] font-medium border transition-colors text-center ${
+                    draft.sortBy === v
+                      ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
+                      : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
+                  }`}
+                >
                   {label}
                 </button>
               ))}
@@ -94,7 +116,12 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
             <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.direction_label", {}, "Price direction")}</p>
             <div className="flex flex-wrap gap-2">
               {directionOptions.map(([v, label]) => (
-                <button key={v} onClick={() => setDraft((d) => ({ ...d, direction: v }))} className={chip(draft.direction === v)}>
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setDraft((d) => ({ ...d, direction: v }))}
+                  className={chip(draft.direction === v)}
+                >
                   {label}
                 </button>
               ))}
@@ -107,7 +134,12 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
               <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mb-2">{t("farmer.prices.category_label", {}, "Category")}</p>
               <div className="flex flex-wrap gap-2">
                 {["All", ...categories].map((v) => (
-                  <button key={v} onClick={() => setDraft((d) => ({ ...d, category: v }))} className={chip(draft.category === v)}>
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setDraft((d) => ({ ...d, category: v }))}
+                    className={chip(draft.category === v)}
+                  >
                     {v}
                   </button>
                 ))}
@@ -115,21 +147,26 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
             </div>
           )}
 
-
         </div>
 
-        <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3">
+        <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3 flex-shrink-0 bg-white">
           <button
-            onClick={() => setDraft(DEFAULT_FILTER)}
-            className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+            type="button"
+            onClick={() => {
+              setDraft(DEFAULT_FILTER);
+              onApply(DEFAULT_FILTER);
+            }}
+            className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
           >
-            {t("farmer.prices.clear", {}, "Clear")}
+            {t("farmer.prices.clear", {}, t("common.clear", {}, "Clear"))}
           </button>
           <button
+            type="button"
             onClick={() => onApply(draft)}
-            className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-[var(--shadow-xs)]"
+            aria-label="Save filter"
           >
-            <Check className="w-4 h-4" />{t("farmer.prices.apply", {}, "Apply")}
+            <Check className="w-4 h-4" />{t("farmer.prices.save", {}, t("common.save", {}, "Save"))}
           </button>
         </div>
       </div>
@@ -140,15 +177,8 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
 const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) => {
   const { t } = useLanguage();
   const unit = commodity.unitOfMeasure || 'kg';
-  const forecast = data.trendDetail?.forecast;
-  const forecastPrice = forecast?.forecast_midpoint != null
-    ? Number(forecast.forecast_midpoint)
-    : null;
-  const hasForecast = (data.trendDetail?.recent_records?.length ?? 0) > 0
-    && forecastPrice != null;
-  const direction = hasForecast ? forecast.trend : null;
-  const horizonDays = hasForecast ? forecast.horizon_days : 7;
-
+  const direction = data.direction ?? getDirectionFromData(data.trendDetail, commodity.forecast);
+  const hasForecast = Boolean(direction);
   const cfg = direction ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const outlook = hasForecast
@@ -239,6 +269,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
       {/* Action footer */}
       <div className="flex items-center justify-end pt-0.5">
         <button
+          type="button"
           onClick={() => onViewDetails(commodity.id)}
           className="inline-flex items-center gap-0.5 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
         >
@@ -297,6 +328,7 @@ function PricesPage() {
         baseName = baseName.split(' (')[0].trim();
       }
       const uom = camelItem.unitOfMeasure || 'kg';
+      const cat = camelItem.category || getCategoryFor(baseName) || getCategoryFor(camelItem.name) || null;
       const itemPrices = {
         bangkerohanRetail: camelItem.prices?.bangkerohanRetail ?? null,
         bangkerohanWholesale: camelItem.prices?.bangkerohanWholesale ?? null,
@@ -307,7 +339,7 @@ function PricesPage() {
       const variantItem = {
         id: camelItem.commodityId,
         name: camelItem.name,
-        category: camelItem.category,
+        category: cat,
         variety: camelItem.variety,
         unitOfMeasure: uom,
         displayData: itemPrices,
@@ -318,15 +350,20 @@ function PricesPage() {
           id: camelItem.commodityId,
           name: baseName,
           baseName: baseName,
-          category: camelItem.category,
+          category: cat,
           unitOfMeasure: uom,
           isTop10: true,
           displayData: { ...itemPrices },
           variants: [variantItem],
+          forecast: camelItem.forecast || null,
         });
       } else {
         const existing = baseMap.get(baseName);
         existing.variants.push(variantItem);
+
+        if (!existing.category && cat) {
+          existing.category = cat;
+        }
 
         const existingHasPrice = [
           existing.displayData.bangkerohanRetail,
@@ -391,7 +428,7 @@ function PricesPage() {
     + (filter.category !== "All" ? 1 : 0);
 
   const categories = useMemo(() => {
-    const set = new Set();
+    const set = new Set(["Highland Vegetables", "Lowland Vegetables", "Spices"]);
     commodities.forEach((c) => { if (c.category) set.add(c.category); });
     return [...set].sort();
   }, [commodities]);
@@ -399,22 +436,26 @@ function PricesPage() {
   const visible = useMemo(() => {
     let list = commodities.map(commodity => {
       const data = commodity.displayData;
+      const trendInfo = priceTrendByCommodity.get(commodity.id) || {};
+      const direction = getDirectionFromData(trendInfo.trendDetail, commodity.forecast);
+
       return {
         ...commodity,
         displayData: {
           ...(data || {
-          bangkerohanRetail: null,
-          bangkerohanWholesale: null,
-          dftcRetail: null,
-          dftcWholesale: null,
+            bangkerohanRetail: null,
+            bangkerohanWholesale: null,
+            dftcRetail: null,
+            dftcWholesale: null,
           }),
-          ...(priceTrendByCommodity.get(commodity.id) || {}),
+          ...trendInfo,
+          direction,
         },
       };
     });
     
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       list = list.filter((c) => (c.name || '').toLowerCase().includes(q));
     }
     
@@ -429,18 +470,47 @@ function PricesPage() {
     const secondaryCompare = (a, b) => {
       const ORDER_RISING = { Rising: 0, Stable: 1, Falling: 2 };
       const ORDER_FALLING = { Falling: 0, Stable: 1, Rising: 2 };
-      if (filter.sortBy === "rising-first") return (ORDER_RISING[a.displayData.direction] ?? 1) - (ORDER_RISING[b.displayData.direction] ?? 1);
-      if (filter.sortBy === "falling-first") return (ORDER_FALLING[a.displayData.direction] ?? 1) - (ORDER_FALLING[b.displayData.direction] ?? 1);
+      if (filter.sortBy === "rising-first") {
+        const orderA = a.displayData.direction in ORDER_RISING ? ORDER_RISING[a.displayData.direction] : 3;
+        const orderB = b.displayData.direction in ORDER_RISING ? ORDER_RISING[b.displayData.direction] : 3;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.name || '').localeCompare(b.name || '');
+      }
+      if (filter.sortBy === "falling-first") {
+        const orderA = a.displayData.direction in ORDER_FALLING ? ORDER_FALLING[a.displayData.direction] : 3;
+        const orderB = b.displayData.direction in ORDER_FALLING ? ORDER_FALLING[b.displayData.direction] : 3;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.name || '').localeCompare(b.name || '');
+      }
       if (filter.sortBy === "price-low" || filter.sortBy === "price-high") {
-        const priceA = a.displayData.bangkerohanRetail ?? a.displayData.dftcRetail ?? Infinity;
-        const priceB = b.displayData.bangkerohanRetail ?? b.displayData.dftcRetail ?? Infinity;
-        return filter.sortBy === "price-low" ? priceA - priceB : priceB - priceA;
+        const getPrice = (c) => {
+          const d = c.displayData;
+          const p = d.bangkerohanRetail ?? d.dftcRetail ?? d.bangkerohanWholesale ?? d.dftcWholesale;
+          return p != null ? Number(p) : null;
+        };
+        const priceA = getPrice(a);
+        const priceB = getPrice(b);
+        if (priceA == null && priceB == null) return (a.name || '').localeCompare(b.name || '');
+        if (priceA == null) return 1;
+        if (priceB == null) return -1;
+        if (priceA !== priceB) {
+          return filter.sortBy === "price-low" ? priceA - priceB : priceB - priceA;
+        }
+        return (a.name || '').localeCompare(b.name || '');
       }
       return (a.name || '').localeCompare(b.name || '');
     };
 
     return sortWithPreferredFirst(list, preferredCrops, secondaryCompare);
   }, [searchQuery, filter, commodities, priceTrendByCommodity, preferredCrops]);
+
+  const sortLabelMap = {
+    "name": t("farmer.prices.sort_name", {}, "Commodity name (A–Z)"),
+    "rising-first": t("farmer.prices.sort_rising_first", {}, "Price rising first"),
+    "falling-first": t("farmer.prices.sort_falling_first", {}, "Price falling first"),
+    "price-low": t("farmer.prices.sort_price_low", {}, "Lowest price first"),
+    "price-high": t("farmer.prices.sort_price_high", {}, "Highest price first"),
+  };
   
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -471,6 +541,7 @@ function PricesPage() {
             />
             {searchQuery && (
               <button
+                type="button"
                 onClick={() => setSearchQuery("")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)]"
               >
@@ -479,6 +550,8 @@ function PricesPage() {
             )}
           </div>
           <button
+            type="button"
+            aria-label="Open filter drawer"
             onClick={() => setFilterOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)] transition-colors text-[14px] font-medium shadow-[var(--shadow-xs)] flex-shrink-0"
           >
@@ -492,12 +565,86 @@ function PricesPage() {
           </button>
         </div>
 
+        {/* Active filter tags */}
+        {activeCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+              {t("farmer.prices.active_filters", {}, "Active filters:")}
+            </span>
+            {filter.sortBy !== "name" && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+                {sortLabelMap[filter.sortBy] || filter.sortBy}
+                <button
+                  type="button"
+                  onClick={() => setFilter((f) => ({ ...f, sortBy: "name" }))}
+                  className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
+                  aria-label="Remove sort filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {filter.direction !== "All" && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+                {filter.direction}
+                <button
+                  type="button"
+                  onClick={() => setFilter((f) => ({ ...f, direction: "All" }))}
+                  className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
+                  aria-label="Remove direction filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {filter.category !== "All" && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+                {filter.category}
+                <button
+                  type="button"
+                  onClick={() => setFilter((f) => ({ ...f, category: "All" }))}
+                  className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
+                  aria-label="Remove category filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setFilter(DEFAULT_FILTER)}
+              className="text-[12px] font-medium text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] underline ml-1 cursor-pointer"
+            >
+              {t("farmer.prices.clear_all", {}, "Clear all")}
+            </button>
+          </div>
+        )}
+
         {/* Cards grid */}
         {loading ? (
           <SkeletonPriceGrid count={6} />
         ) : visible.length === 0 ? (
           searchQuery.trim() ? (
             <MarketEmptyState query={searchQuery} />
+          ) : activeCount > 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
+                <SlidersHorizontal className="w-8 h-8 text-[var(--hw-neutral-400)]" />
+              </div>
+              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
+                {t("farmer.emptyStates.no_filter_matches", {}, "No commodities match the selected filter")}
+              </p>
+              <p className="text-sm text-[var(--hw-neutral-500)] mb-4">
+                {t("farmer.emptyStates.try_clearing_filters", {}, "Try adjusting or clearing your filters to see more results.")}
+              </p>
+              <button
+                type="button"
+                onClick={() => setFilter(DEFAULT_FILTER)}
+                className="px-4 py-2 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+              >
+                {t("farmer.prices.clear_filters", {}, "Clear filters")}
+              </button>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16">
               <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Check, PauseCircle, Play, ChevronDown } from "lucide-react";
 import { PHASE_CONFIG, PHASE_TRANSITIONS, formatPeso } from "./types";
+import { PHASE_CODES, normalizePhaseCode } from "../../utils/farmerCodes";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { suggestHarvestDate, getCropDuration } from "../recommend/types";
 
@@ -31,13 +32,17 @@ const UpdatePhaseDrawer = ({
   open,
   crop,
   onClose,
-  onConfirm
+  onConfirm,
+  mode = "update-phase",
 }) => {
   const { t } = useLanguage();
-  const transitions = PHASE_TRANSITIONS[crop.phase] ?? [];
-  const [selectedPhase, setSelectedPhase] = useState(
-    transitions.length === 1 ? transitions[0] : null
-  );
+  const normPhase = normalizePhaseCode(crop?.phase) || crop?.phase;
+  const transitions = PHASE_TRANSITIONS[normPhase] ?? PHASE_TRANSITIONS[crop?.phase] ?? [];
+  const isCompleted = normPhase === PHASE_CODES.COMPLETED || crop?.phase === "completed";
+  const [selectedPhase, setSelectedPhase] = useState(() => {
+    if (mode === "confirm-planting") return "growing";
+    return transitions.length === 1 ? transitions[0] : null;
+  });
   const [fields, setFields] = useState({});
   const [view, setView] = useState("main");
   const [holdReason, setHoldReason] = useState("");
@@ -49,6 +54,18 @@ const UpdatePhaseDrawer = ({
 
   useEffect(() => {
     if (!open || !crop) return;
+    if (mode === "hold") {
+      setView("hold-reason");
+    } else {
+      setView("main");
+    }
+    setHoldReason("");
+    setHoldOther("");
+    if (mode === "confirm-planting") {
+      setSelectedPhase("growing");
+    } else if (transitions.length === 1) {
+      setSelectedPhase(transitions[0]);
+    }
     const initialPlanting = toDateInputValue(crop.rawPlantingDate || crop.plantingDate) || new Date().toISOString().split("T")[0];
     const initialArea = crop.farmArea ?? "";
     let initialHarvest = toDateInputValue(crop.rawHarvestDate || crop.harvestDate);
@@ -231,9 +248,9 @@ const UpdatePhaseDrawer = ({
   if (view === "hold-reason") {
     return (
       <>
-        <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-        <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[90vh] md:max-h-none">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
+        <div className="fixed inset-x-0 bottom-0 z-[70] md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-2xl flex flex-col max-h-[85vh] md:max-h-full">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)] flex-shrink-0">
             <p className="font-semibold text-[var(--hw-neutral-900)]">
               {t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}
             </p>
@@ -288,20 +305,28 @@ const UpdatePhaseDrawer = ({
             </div>
           </div>
 
-          <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3">
+          <div className="px-5 py-3.5 pb-6 md:pb-4 border-t border-[var(--hw-neutral-200)] flex gap-3 flex-shrink-0 bg-white">
             <button
-              onClick={() => setView("main")}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+              type="button"
+              onClick={() => {
+                if (mode === "hold") {
+                  onClose();
+                } else {
+                  setView("main");
+                }
+              }}
+              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors text-center"
             >
               {t("common.cancel", {}, "Cancel")}
             </button>
             <button
+              type="button"
               onClick={handleHoldConfirm}
               disabled={!holdValid}
-              className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="flex-1 py-2.5 px-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-xs"
             >
-              <PauseCircle className="w-4 h-4" />
-              {t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}
+              <PauseCircle className="w-4 h-4 text-amber-600" />
+              <span>{t("common.confirm", {}, "Confirm")}</span>
             </button>
           </div>
         </div>
@@ -311,11 +336,13 @@ const UpdatePhaseDrawer = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="fixed inset-x-0 bottom-0 z-50 md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[90vh] md:max-h-none">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)]">
+      <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-x-0 bottom-0 z-[70] md:inset-y-0 md:right-0 md:left-auto md:w-96 bg-white rounded-t-2xl md:rounded-none md:rounded-l-2xl shadow-2xl flex flex-col max-h-[85vh] md:max-h-full">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-200)] flex-shrink-0">
           <p className="font-semibold text-[var(--hw-neutral-900)]">
-            {t("farmer.cropCycle.update_phase_title", {}, "Update crop phase")}
+            {mode === "confirm-planting"
+              ? t("farmer.crops.btn_confirm_planting", {}, "Confirm Planting")
+              : t("farmer.cropCycle.update_phase_title", {}, "Update crop phase")}
           </p>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors">
             <X className="w-5 h-5 text-[var(--hw-neutral-500)]" />
@@ -391,7 +418,7 @@ const UpdatePhaseDrawer = ({
           )}
 
           {/* Put on hold — only when NOT already on hold and not completed */}
-          {!crop.isOnHold && crop.phase !== "completed" && (
+          {!crop.isOnHold && !isCompleted && (
             <div className="pt-1 border-t border-[var(--hw-neutral-100)]">
               <button
                 onClick={() => setView("hold-reason")}
@@ -410,32 +437,48 @@ const UpdatePhaseDrawer = ({
             </div>
           )}
 
-          {transitions.length === 0 && !crop.isOnHold && crop.phase === "completed" && (
+          {transitions.length === 0 && !crop.isOnHold && isCompleted && (
             <p className="text-sm text-[var(--hw-neutral-900)]">
               {t("farmer.cropCycle.no_transitions", {}, "No further phase transitions are available for this crop.")}
             </p>
           )}
         </div>
 
-        {/* Footer — only for phase transition confirm */}
-        {transitions.length > 0 && (
-          <div className="px-5 py-4 border-t border-[var(--hw-neutral-200)] flex gap-3">
+        {/* Sticky Action Footer */}
+        <div className="px-5 py-3.5 pb-6 md:pb-4 border-t border-[var(--hw-neutral-200)] bg-white flex items-center gap-3 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors text-center"
+          >
+            {t("common.cancel", {}, "Cancel")}
+          </button>
+          {(transitions.length > 0 || mode === "confirm-planting") && (
             <button
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-            >
-              {t("common.cancel", {}, "Cancel")}
-            </button>
-            <button
+              type="button"
               onClick={handlePhaseConfirm}
               disabled={!selectedPhase}
-              className="flex-1 py-2.5 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-sm"
             >
               <Check className="w-4 h-4" />
-              {t("common.confirm", {}, "Confirm")}
+              <span>
+                {mode === "confirm-planting"
+                  ? t("farmer.crops.btn_confirm_planting", {}, "Confirm Planting")
+                  : t("farmer.cropCycle.update_status", {}, "Update status")}
+              </span>
             </button>
-          </div>
-        )}
+          )}
+          {crop.isOnHold && transitions.length === 0 && (
+            <button
+              type="button"
+              onClick={handleResume}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <Play className="w-4 h-4" />
+              <span>{t("common.continue", {}, "Continue")}</span>
+            </button>
+          )}
+        </div>
       </div>
     </>
   );

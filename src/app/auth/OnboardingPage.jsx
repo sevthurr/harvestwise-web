@@ -376,11 +376,11 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitt
             return (
               <div key={cropName} className="flex items-center gap-3">
                 <span className="text-[14px] font-medium text-[var(--hw-neutral-700)] min-w-0 flex-1 truncate">{cropName}</span>
-                <div className="relative flex-shrink-0">
+                <div className="relative flex-shrink-0 w-36">
                   <select
                     value={data.crops[cropName]}
                     onChange={(e) => setVariety(cropName, e.target.value)}
-                    className="h-9 pl-3 pr-8 text-[13px] font-medium text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] appearance-none"
+                    className="w-full h-9 pl-3 pr-8 text-[13px] font-medium text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] appearance-none cursor-pointer truncate"
                   >
                     <option value="">{t("onboarding.variety_default", {}, "Default")}</option>
                     {variants.map((v) => <option key={v} value={v}>{v}</option>)}

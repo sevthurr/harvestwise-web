@@ -672,11 +672,11 @@ const FarmTabForm = ({ initialLoc, initialCrops, availableCrops, showToast, onSa
               return (
                 <div key={name} className="flex items-center gap-3">
                   <span className="text-[13px] text-black flex-1 truncate">{name}</span>
-                  <div className="relative flex-shrink-0">
+                  <div className="relative flex-shrink-0 w-36">
                     <select
                       value={crops[name] || ""}
                       onChange={(e) => setCrops((p) => ({ ...p, [name]: e.target.value }))}
-                      className="h-9 pl-3 pr-8 text-[13px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] appearance-none"
+                      className="w-full h-9 pl-3 pr-8 text-[13px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] appearance-none cursor-pointer truncate"
                     >
                       <option value="">Default</option>
                       {vars.map((v) => (
