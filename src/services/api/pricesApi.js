@@ -6,6 +6,9 @@ export async function getPriceList(params = {}) {
   if (params.page != null) qs.set("page", String(params.page));
   if (params.page_size != null) qs.set("page_size", String(params.page_size));
   if (params.is_top10 != null) qs.set("is_top10", String(params.is_top10));
+  if (params.include_supported_varieties != null) {
+    qs.set("include_supported_varieties", String(params.include_supported_varieties));
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return parseResponse(await apiGet(`/prices${suffix}`));
 }

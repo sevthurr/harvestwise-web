@@ -8,8 +8,10 @@ import { ForecastPriceTrendChart } from "../../global/components/shared/Forecast
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
+import { normalizeCommodityLabel } from "../../global/utils/priceChartTransforms";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
+import * as dftcApi from "../../../services/api/dftcApi";
 import { apiGet, parseResponse } from "../../global/api";
 import { getClassificationTextColor } from "./dftcClassificationColors";
 import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
@@ -958,24 +960,54 @@ function DFTCTrends() {
     [catalogData]
   );
 
+  // Widened catalogue: every variety of a top-10 commodity, including rows
+  // whose own is_top10 flag is false. Falls back to the top-10 catalogue until
+  // the widened query resolves (or if it fails) so the Price tab keeps working.
+  const { data: supportedCatalogData } = useQuery({
+    queryKey: ["dftc-trends-price-catalog-supported"],
+    queryFn: () =>
+      pricesApi.getPriceList({ include_supported_varieties: true, page_size: 100 }),
+    staleTime: 60 * 1000,
+  });
+
+  const priceCatalogPairs = useMemo(() => {
+    const widened = catalogPairsFromPriceList(supportedCatalogData?.items);
+    return widened.length > 0 ? widened : catalogPairs;
+  }, [supportedCatalogData, catalogPairs]);
+
   // Price tab only: the analytics catalog is the supported set — commodities
   // outside it have no trend data. Fall back to the full list while the
   // catalog is still loading (or unavailable) so the control is never blank;
-  // the arrival/production tabs query by name and keep PRICE_CATEGORIES.
+  // the production tab keeps PRICE_CATEGORIES and the arrival tab uses the
+  // commodity catalog.
   const priceCommodityCategories = useMemo(() => {
-    if (isCatalogLoading || catalogPairs.length === 0) return PRICE_CATEGORIES;
+    if (isCatalogLoading || priceCatalogPairs.length === 0) return PRICE_CATEGORIES;
     return PRICE_CATEGORIES.map((cat) => ({
       ...cat,
       commodities: cat.commodities.filter(
-        (c) => catalogPairsForCommodity(catalogPairs, c).length > 0
+        (c) => catalogPairsForCommodity(priceCatalogPairs, c).length > 0
       ),
     })).filter((cat) => cat.commodities.length > 0);
-  }, [catalogPairs, isCatalogLoading]);
+  }, [priceCatalogPairs, isCatalogLoading]);
 
-  const pAvailableVarieties = useMemo(
-    () => getAvailableVarietiesForCommodity(catalogPairs, pCommodity, pMarket, pPriceType),
-    [catalogPairs, pCommodity, pMarket, pPriceType]
-  );
+  const pAvailableVarieties = useMemo(() => {
+    const priced = getAvailableVarietiesForCommodity(
+      priceCatalogPairs,
+      pCommodity,
+      pMarket,
+      pPriceType
+    );
+    // A variety added later has no price record yet, so the price filter drops
+    // it — every variety of the commodity must stay visible and selectable.
+    const every = getAvailableVarietiesForCommodity(priceCatalogPairs, pCommodity);
+    const seen = new Set(
+      priced.map((c) => (c.isNoVariety ? "__NO_VARIETY__" : c.value))
+    );
+    const extras = every.filter(
+      (c) => !seen.has(c.isNoVariety ? "__NO_VARIETY__" : c.value)
+    );
+    return [...priced, ...extras];
+  }, [priceCatalogPairs, pCommodity, pMarket, pPriceType]);
 
   const selectedVarietyValue = useMemo(
     () => pickDefaultVariety(pAvailableVarieties, pVariety),
@@ -984,7 +1016,7 @@ function DFTCTrends() {
 
   const selectedCatalogPair = useMemo(() => {
     if (!pAvailableVarieties.length) {
-      const matches = catalogPairsForCommodity(catalogPairs, pCommodity);
+      const matches = catalogPairsForCommodity(priceCatalogPairs, pCommodity);
       return matches[0] || null;
     }
     const matched = pAvailableVarieties.find((c) =>
@@ -992,15 +1024,15 @@ function DFTCTrends() {
     );
     if (matched) {
       return (
-        catalogPairs.find((p) => p.commodity_id === matched.commodity_id) || {
+        priceCatalogPairs.find((p) => p.commodity_id === matched.commodity_id) || {
           commodity: pCommodity,
           variety: matched.value,
           commodity_id: matched.commodity_id,
         }
       );
     }
-    return catalogPairsForCommodity(catalogPairs, pCommodity)[0] || null;
-  }, [pAvailableVarieties, selectedVarietyValue, catalogPairs, pCommodity]);
+    return catalogPairsForCommodity(priceCatalogPairs, pCommodity)[0] || null;
+  }, [pAvailableVarieties, selectedVarietyValue, priceCatalogPairs, pCommodity]);
 
   const pCommodityId = selectedCatalogPair?.commodity_id || null;
   const seriesKey = pCommodity;
@@ -1105,18 +1137,59 @@ function DFTCTrends() {
   const pPageRows = pTableRows.slice((pPage - 1) * PAGE_SIZE, pPage * PAGE_SIZE);
 
   // Live Arrival Volume Query
-  const aCommodityId = useMemo(
-    () => findCommodityId(catalogPairs, aCommodity, "") || aCommodity,
-    [catalogPairs, aCommodity]
-  );
+  // The arrival tab covers every commodity, not only the top-10 ones, so the
+  // scope comes from the DFTC commodity catalog. The top-10 price catalog
+  // cannot resolve a commodity that has no top-10 row.
+  const { data: commodityCatalog, isLoading: isCommodityCatalogLoading } = useQuery({
+    queryKey: ["dftc-trends-commodity-catalog"],
+    queryFn: () => dftcApi.getCommodityCatalog(),
+    staleTime: 60 * 1000,
+  });
+
+  const arrivalCommodityCategories = useMemo(() => {
+    const items = commodityCatalog?.items || [];
+    if (!items.length) return PRICE_CATEGORIES;
+    const byCategory = new Map();
+    items.forEach((item) => {
+      const name = item?.name;
+      if (!name) return;
+      const category = item.category || "Others";
+      if (!byCategory.has(category)) byCategory.set(category, new Set());
+      byCategory.get(category).add(name);
+    });
+    return [...byCategory.entries()].map(([category, names]) => ({
+      id: toId(category),
+      name: category,
+      commodities: [...names].sort((a, b) => a.localeCompare(b)),
+    }));
+  }, [commodityCatalog]);
+
+  const aCommodityId = useMemo(() => {
+    const target = normalizeCommodityLabel(aCommodity);
+    const row = (commodityCatalog?.items || []).find(
+      (item) => normalizeCommodityLabel(item?.name) === target
+    );
+    // No catalog row — the endpoint resolves an exact commodity name too.
+    return row?.id || aCommodity;
+  }, [commodityCatalog, aCommodity]);
+
   const {
     data: arrivalQueryData,
     isLoading: isArrivalLoading,
     isError: isArrivalError,
   } = useQuery({
     queryKey: ["dftc-trends-arrivals", aCommodityId],
-    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId),
-    enabled: activeTab === "arrival" && Boolean(aCommodityId),
+    queryFn: () =>
+      analyticsApi.getArrivalPressure(aCommodityId, null, null, {
+        aggregateVarieties: true,
+      }),
+    enabled:
+      activeTab === "arrival" &&
+      Boolean(aCommodityId) &&
+      // Wait for the catalog: before it resolves the id is the raw commodity
+      // name, which the endpoint cannot resolve for a name that only exists
+      // per variety — the request would 404 and flash an error banner.
+      !isCommodityCatalogLoading,
     staleTime: 60 * 1000,
   });
 
@@ -1549,7 +1622,7 @@ function DFTCTrends() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
           <div className="col-span-2 sm:col-span-1">
             <label className={labelCls}>Commodity</label>
-            <SearchableCombobox categories={PRICE_CATEGORIES} value={aCommodity} onChange={setACommodity} />
+            <SearchableCombobox categories={arrivalCommodityCategories} value={aCommodity} onChange={setACommodity} />
           </div>
           <div className="col-span-1">
             <label className="flex items-center gap-1 text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1">
