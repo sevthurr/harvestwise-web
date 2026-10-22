@@ -14,6 +14,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
+import { formatDate } from "../../global/utils/apiTransforms";
 
 const EditForm = ({ user, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -258,14 +259,14 @@ function AdminUserDetails() {
   };
 
   const infoRow = (label, value) => (
-    <div key={label} className="flex items-start justify-between py-3 gap-4">
-      <span className="text-[14px] font-semibold text-black flex-shrink-0">{label}</span>
-      <span className="text-[14px] text-black text-right">{value || "—"}</span>
+    <div key={label} className="flex flex-col xs:flex-row xs:items-center justify-between py-2.5 sm:py-3 gap-1 xs:gap-4">
+      <span className="text-[13px] sm:text-[14px] font-semibold text-black flex-shrink-0">{label}</span>
+      <span className="text-[13px] sm:text-[14px] text-black text-left xs:text-right break-words">{value || "—"}</span>
     </div>
   );
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
       {/* Back */}
       <button
         type="button"
@@ -277,63 +278,55 @@ function AdminUserDetails() {
       </button>
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-[22px] font-bold text-black">{user.name || "User Details"}</h1>
-          <p className="text-[15px] text-black mt-0.5">
+          <h1 className="text-[20px] sm:text-[22px] font-bold text-black">{user.name || "User Details"}</h1>
+          <p className="text-[14px] sm:text-[15px] text-black mt-0.5">
             {user.roleName || "-"} · {user.is_active ? "Active" : "Inactive"}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          {!editing && <GhostBtn onClick={() => setEditing(true)}>Edit</GhostBtn>}
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           {user.is_active ? (
             <button
               type="button"
               onClick={() => setDisableModal(true)}
-              className="h-11 px-5 flex items-center text-[14px] font-semibold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+              className="flex-1 sm:flex-initial h-11 px-5 flex items-center justify-center text-[14px] font-semibold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
             >
               Disable account
             </button>
           ) : (
-            <GreenBtn onClick={() => setEnableModal(true)}>Enable account</GreenBtn>
+            <GreenBtn onClick={() => setEnableModal(true)} className="flex-1 sm:flex-initial justify-center">Enable account</GreenBtn>
           )}
         </div>
       </div>
 
-      {/* Edit form */}
-      {editing && <EditForm user={user} onSave={handleSaveEdit} onCancel={() => setEditing(false)} />}
-
       {/* Account Information */}
-      {!editing && (
-        <Card>
-          <SectionLabel>Account Information</SectionLabel>
-          <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {infoRow("First Name", user.first_name || "-")}
-            {infoRow("Middle Name", user.middle_name || "—")}
-            {infoRow("Last Name", user.last_name || "-")}
-            {infoRow("Suffix", user.suffix && user.suffix !== "None" ? user.suffix : "—")}
-            {infoRow("Email", user.email || "-")}
-            {infoRow("Phone Number", user.phone || "-")}
-            {infoRow("Role", user.roleName || "-")}
-            {infoRow("Status", user.is_active ? "Active" : "Inactive")}
-          </div>
-        </Card>
-      )}
+      <Card>
+        <SectionLabel>Account Information</SectionLabel>
+        <div className="divide-y divide-[var(--hw-neutral-100)]">
+          {infoRow("First Name", user.first_name || "-")}
+          {infoRow("Middle Name", user.middle_name || "—")}
+          {infoRow("Last Name", user.last_name || "-")}
+          {infoRow("Suffix", user.suffix && user.suffix !== "None" ? user.suffix : "—")}
+          {infoRow("Email", user.email || "-")}
+          {infoRow("Phone Number", user.phone || "-")}
+          {infoRow("Role", user.roleName || "-")}
+          {infoRow("Status", user.is_active ? "Active" : "Inactive")}
+        </div>
+      </Card>
 
       {/* Access Information */}
-      {!editing && (
-        <Card>
-          <SectionLabel>Access Information</SectionLabel>
-          <div className="divide-y divide-[var(--hw-neutral-100)]">
-            {infoRow("Role", user.roleName || "-")}
-            {infoRow("Account status", user.is_active ? "Active" : "Inactive")}
-            {infoRow("Date created", user.created_at ? new Date(user.created_at).toLocaleDateString("en-PH") : "-")}
-          </div>
-        </Card>
-      )}
+      <Card>
+        <SectionLabel>Access Information</SectionLabel>
+        <div className="divide-y divide-[var(--hw-neutral-100)]">
+          {infoRow("Role", user.roleName || "-")}
+          {infoRow("Account status", user.is_active ? "Active" : "Inactive")}
+          {infoRow("Date created", user.created_at ? formatDate(user.created_at) : "-")}
+        </div>
+      </Card>
 
       {/* Role-specific Information */}
-      {!editing && user.roleName === "Farmer" && (
+      {user.roleName === "Farmer" && (
         <Card>
           <SectionLabel>Farm Information</SectionLabel>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
@@ -342,7 +335,7 @@ function AdminUserDetails() {
         </Card>
       )}
 
-      {!editing && user.roleName === "DFTC" && (
+      {user.roleName === "DFTC" && (
         <Card>
           <SectionLabel>DFTC Information</SectionLabel>
           <div className="divide-y divide-[var(--hw-neutral-100)]">

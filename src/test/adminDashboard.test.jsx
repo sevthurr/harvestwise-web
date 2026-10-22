@@ -29,6 +29,7 @@ const DASHBOARD = {
   notification_bell_count: 2,
   recent_audit_logs: [
     { id: 'log-1', user_id: 'USR-1', action: 'login', details: null, ip_address: null, created_at: '2026-08-31T01:00:00Z' },
+    { id: 'log-2', user_id: 'USR-2', actor_name: 'Kaye Mayugba', action: 'analytics.outputs_computed', details: null, ip_address: null, created_at: '2026-08-31T03:26:00Z' },
   ],
 };
 
@@ -81,9 +82,13 @@ describe('AdminDashboard', () => {
     expect(screen.getByText('148')).toBeInTheDocument();
     expect(screen.getAllByText('Sources Requiring Attention').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Registered Farmers')).toBeInTheDocument();
-    expect(screen.getByText('45')).toBeInTheDocument();
-    expect(screen.getByText('Active Crop Plans')).toBeInTheDocument();
-    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.queryByText('Active Crop Plans')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Quick Access/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Import & Validate')).toBeInTheDocument();
+    expect(screen.getByText('Weights & Thresholds')).toBeInTheDocument();
+    expect(screen.getByText('Manage Users')).toBeInTheDocument();
+    expect(screen.getByText('Audit Logs')).toBeInTheDocument();
+    expect(screen.getAllByText('Analytics Outputs Computed').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders sources requiring attention from the dashboard payload', async () => {

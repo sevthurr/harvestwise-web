@@ -55,20 +55,20 @@ const AccordionItem = React.forwardRef(({ id, label, isOpen, onToggle }, ref) =>
   return (
     <div
       ref={ref}
-      className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] overflow-hidden"
+      className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] overflow-hidden"
     >
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
+        className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors"
       >
-        <span className="text-[16px] font-semibold text-black">{label}</span>
+        <span className="text-[15px] sm:text-[16px] font-semibold text-black">{label}</span>
         <ChevronDown
           className={`w-5 h-5 text-black flex-shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
       {isOpen && (
-        <div className="px-5 pb-5 pt-4 border-t border-[var(--hw-neutral-100)] text-[15px] text-black leading-relaxed">
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-3 sm:pt-4 border-t border-[var(--hw-neutral-100)] text-[14px] sm:text-[15px] text-black leading-relaxed">
           <Content />
         </div>
       )}
@@ -97,7 +97,7 @@ function AdminAbout() {
   const toggle = (id) => setOpenId((prev) => (prev === id ? "about" : id));
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
       <PageHeader
         title="About"
         description="Information and frequently asked questions."

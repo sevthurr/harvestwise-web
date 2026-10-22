@@ -289,46 +289,55 @@ const UsersTab = ({ showToast }) => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
+    <div className="space-y-3.5 sm:space-y-4">
+      {/* Control bar: Search, Role filters, Add User button */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
+        {/* Search */}
+        <div className="relative flex-1 max-w-full sm:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)] pointer-events-none" />
           <input
             type="text"
             placeholder="Search by name, email, or phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 pl-9 pr-3.5 text-[13px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)]/20 focus:border-[var(--hw-green-700)] transition-shadow placeholder:text-[var(--hw-neutral-400)]"
+            className="w-full h-9.5 pl-9 pr-3.5 text-[13px] text-black bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)]/20 focus:border-[var(--hw-green-700)] transition text-[var(--hw-neutral-800)] placeholder:text-[var(--hw-neutral-400)]"
           />
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex gap-1.5 flex-wrap">
+
+        {/* Role Filters + Add User */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {["All", "Farmer", "DFTC"].map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setRoleFilter(r)}
-                className={`h-9 px-3.5 text-[13px] font-medium rounded-xl border transition-colors cursor-pointer ${
+                className={`h-8.5 px-3 text-[12px] sm:text-[13px] font-medium rounded-xl border transition-colors cursor-pointer shrink-0 ${
                   roleFilter === r
-                    ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)]"
-                    : "bg-white text-black border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
+                    ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)] shadow-xs"
+                    : "bg-white text-[var(--hw-neutral-700)] border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
                 }`}
               >
                 {r}
               </button>
             ))}
           </div>
-          <GreenBtn onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4" />
-            Add User
-          </GreenBtn>
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-1.5 h-8.5 px-3 sm:px-3.5 text-[12px] sm:text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs cursor-pointer shrink-0 ml-auto sm:ml-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add User</span>
+          </button>
         </div>
       </div>
 
       {/* Mobile cards */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-2.5 md:hidden">
         {filtered.map((u) => {
           const hl = (highlightedUser || "").toLowerCase();
+          const fullName = `${u.first_name || ""} ${u.last_name || ""}`.trim() || "-";
           const userMatcher = `${u.id} ${u.email || ""} ${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
           const isHighlighted = Boolean(
             hl &&
@@ -336,6 +345,7 @@ const UsersTab = ({ showToast }) => {
              u.id.toLowerCase() === hl ||
              (u.email && u.email.toLowerCase() === hl))
           );
+          const initials = `${(u.first_name?.[0] || "").toUpperCase()}${(u.last_name?.[0] || "").toUpperCase()}` || "U";
 
           return (
             <button
@@ -344,26 +354,45 @@ const UsersTab = ({ showToast }) => {
               data-user-row={userMatcher}
               type="button"
               onClick={() => navigate(`/admin/system/user/${u.id}`)}
-              className={`w-full text-left rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_1px_6px_rgba(0,0,0,0.06)] p-4 space-y-1 transition-colors duration-500 cursor-pointer ${
+              className={`w-full text-left rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-3.5 transition-colors duration-300 cursor-pointer ${
                 isHighlighted
-                  ? "bg-emerald-50/70 font-medium"
+                  ? "bg-emerald-50/70"
                   : "bg-white hover:bg-[var(--hw-neutral-50)]"
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[15px] font-semibold text-black">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</p>
-                <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" />
-              </div>
-              <p className="text-[13px] text-black">{u.email || "-"}</p>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-[13px] text-black font-medium">{u.role?.role_name || "-"}</span>
-                <span className="text-[12px] text-black">{u.is_active ? "Active" : "Inactive"}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] text-[var(--hw-green-800)] flex items-center justify-center font-bold text-[12px] shrink-0">
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] truncate">
+                      {fullName}
+                    </p>
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold shrink-0 ${u.is_active ? "text-emerald-700" : "text-[var(--hw-neutral-500)]"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${u.is_active ? "bg-emerald-500" : "bg-[var(--hw-neutral-400)]"}`} />
+                      {u.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] text-[var(--hw-neutral-600)] mt-0.5 truncate">
+                    <span className="font-medium text-[var(--hw-green-800)] bg-[var(--hw-green-50)] px-1.5 py-0.5 rounded text-[11px]">
+                      {u.role?.role_name || "-"}
+                    </span>
+                    {u.email && u.email !== "-" && (
+                      <>
+                        <span className="text-[var(--hw-neutral-300)]">·</span>
+                        <span className="truncate">{u.email}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0 self-center" />
               </div>
             </button>
           );
         })}
         {filtered.length === 0 && (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-8 text-center space-y-1.5">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] p-8 text-center space-y-1.5">
             <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center text-[var(--hw-neutral-400)] mx-auto mb-2">
               <Inbox className="w-5 h-5" />
             </div>
@@ -552,13 +581,13 @@ const AccountRequestsTab = ({ showToast }) => {
     }
   };
 
-  const reviewButtons = (r) => (
-    <div className="flex items-center gap-2">
+  const reviewButtons = (r, isMobile = false) => (
+    <div className={`flex items-center gap-2 ${isMobile ? "w-full pt-1" : ""}`}>
       <button
         type="button"
         disabled={!isOpen(r.status)}
         onClick={() => setConfirm({ request: r, status: "approved" })}
-        className="h-8 px-3 text-[12px] font-semibold text-[var(--hw-green-800)] border border-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className={`${isMobile ? "flex-1 h-9" : "h-8 px-3"} text-[12px] font-semibold text-[var(--hw-green-800)] border border-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
       >
         Approve
       </button>
@@ -566,7 +595,7 @@ const AccountRequestsTab = ({ showToast }) => {
         type="button"
         disabled={!isOpen(r.status)}
         onClick={() => setConfirm({ request: r, status: "rejected" })}
-        className="h-8 px-3 text-[12px] font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className={`${isMobile ? "flex-1 h-9" : "h-8 px-3"} text-[12px] font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors`}
       >
         Reject
       </button>
@@ -631,7 +660,7 @@ const AccountRequestsTab = ({ showToast }) => {
                 Reviewed by {displayUser(r.reviewed_by_user_id)} on {formatRemovalDate(r.reviewed_at)}
               </p>
             )}
-            {reviewButtons(r)}
+            {reviewButtons(r, true)}
           </div>
         ))}
         {requests.length === 0 && (
@@ -1111,7 +1140,7 @@ function AdminSystemManagement() {
   const showToast = (msg) => setToastMsg(msg);
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
       <PageHeader
         title="System Management"
         description="Manage users, security, and system health."

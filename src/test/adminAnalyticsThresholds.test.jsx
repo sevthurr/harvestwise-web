@@ -142,4 +142,63 @@ describe('AdminAnalytics Price Outlook threshold save', () => {
 
     await screen.findByText('Saved!');
   });
+
+  it('opens Profitability modal and saves updated percentage thresholds with correct preview font size', async () => {
+    analyticsApi.listThresholds.mockResolvedValue({
+      items: [
+        { id: 'TH-1', module_name: 'Price Outlook', rules: STORED_RULES },
+        { id: 'TH-PROF', module_name: 'Profitability', rules: [] },
+      ],
+      total: 2,
+    });
+    analyticsApi.listThresholdRules.mockResolvedValue({ items: [] });
+
+    renderPage();
+
+    await screen.findByText(/Lower Forecast ≥ 110% of Break-even Price/i);
+
+    fireEvent.click(screen.getByTitle('Edit Profitability Thresholds'));
+
+    expect(screen.getByText('Edit Profitability Thresholds')).toBeInTheDocument();
+
+    // Verify Decision Rule Preview is present with reduced font size (text-[10px]) and black text
+    const previewHeader = screen.getByText(/decision rule preview/i);
+    expect(previewHeader).toBeInTheDocument();
+    expect(previewHeader.className).toContain('text-[9.5px]');
+    expect(previewHeader.className).toContain('text-black');
+
+    const favInput = screen.getByLabelText('Favorable Threshold Percentage');
+
+    // Change threshold from 110 to 115
+    fireEvent.change(favInput, { target: { value: '115' } });
+
+    // Preview should dynamically show 115% with reduced text-[10px] size
+    const updatedPreview = screen.getByText(/Lower Forecast ≥ 115% of Break-even Price/i);
+    expect(updatedPreview).toBeInTheDocument();
+    expect(updatedPreview.className).toContain('text-[10px]');
+    expect(updatedPreview.className).toContain('text-black');
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(analyticsApi.createThresholdRule).toHaveBeenCalledTimes(2));
+
+    expect(analyticsApi.createThresholdRule).toHaveBeenCalledWith(
+      'TH-PROF',
+      expect.objectContaining({
+        classification: 'Favorable',
+        operator: '>=',
+        threshold_value: 115,
+        display_text: 'Lower Forecast ≥ 115% of Break-even Price',
+      })
+    );
+    expect(analyticsApi.createThresholdRule).toHaveBeenCalledWith(
+      'TH-PROF',
+      expect.objectContaining({
+        classification: 'Unfavorable',
+        operator: '<',
+        threshold_value: 100,
+        display_text: 'Upper Forecast < Break-even Price',
+      })
+    );
+  });
 });
