@@ -6,6 +6,9 @@ export async function getPriceList(params = {}) {
   if (params.page != null) qs.set("page", String(params.page));
   if (params.page_size != null) qs.set("page_size", String(params.page_size));
   if (params.is_top10 != null) qs.set("is_top10", String(params.is_top10));
+  if (params.include_supported_varieties != null) {
+    qs.set("include_supported_varieties", String(params.include_supported_varieties));
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return parseResponse(await apiGet(`/prices${suffix}`));
 }
@@ -27,5 +30,13 @@ export async function getHistoricalAveragePrices(commodityId, params = {}) {
   if (params.start_offset_days != null) qs.set("start_offset_days", String(params.start_offset_days));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return parseResponse(await apiGet(`/prices/${commodityId}/historical-averages${suffix}`));
+}
+
+export async function getPriceRecords(commodityId, params = {}) {
+  const qs = new URLSearchParams();
+  if (params.price_type) qs.set("price_type", params.price_type);
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return parseResponse(await apiGet(`/prices/${commodityId}/records${suffix}`));
 }
 

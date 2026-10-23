@@ -18,7 +18,8 @@ import {
   ArrowLeft,
   Calendar,
   FileText,
-  Loader2
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import {
   PRICE_CATEGORIES,
@@ -27,11 +28,12 @@ import {
 import {
   MARKET_TABS,
   clearPrefillCache,
-  loadPrefillSnapshot
+  loadPrefillSnapshot,
+  resolveDraftCellTargets
 } from "./dftcPricePrefill";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
-import { apiGet, apiPost, parseResponse } from "../../global/api";
+import { apiDelete, apiGet, apiPost, apiPut, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 
 function hwId(name) {
@@ -56,14 +58,11 @@ function nameSlug(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-const CATEGORY_OPTIONS = [
-  { id: "lowland", name: "Lowland Vegetables" },
-  { id: "highland", name: "Highland Vegetables" },
-  { id: "spices", name: "Spices" },
-  { id: "rootcrops", name: "Rootcrops" },
-  { id: "fruits", name: "Fruits" },
-  { id: "others", name: "Others" }
-];
+// The categories a new commodity can be filed under. Derived from the same list
+// the form renders, so an id here is always an id the form reads: a hand-written
+// list drifted from it ("lowland" vs "lowland-vegetables") and the commodity was
+// filed in a bucket nothing renders, so it never appeared for anyone.
+const CATEGORY_OPTIONS = PRICE_CATEGORIES.map((c) => ({ id: c.id, name: c.name }));
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -95,6 +94,48 @@ function carriedSourceDate(carried, tabId, vid, date) {
 /** Field shape for a single stored prevailing price. */
 function priceField(price, uom = "kg") {
   return { samples: [String(price), "", "", "", ""], uom, low: price, high: price, prevailing: price };
+}
+
+/** True when two form fields hold the same price, samples, and unit. */
+function sameField(a, b) {
+  if (!a || !b) return a === b;
+  if (a.uom !== b.uom) return false;
+  if (a.low !== b.low || a.high !== b.high || a.prevailing !== b.prevailing) return false;
+  const sa = a.samples ?? [];
+  const sb = b.samples ?? [];
+  if (sa.length !== sb.length) return false;
+  for (let i = 0; i < sa.length; i += 1) {
+    if (sa[i] !== sb[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Merge synced draft cells into a tab-field map.
+ *
+ * Pure on purpose: it returns the next map AND whether anything actually
+ * changed, so the caller can keep the previous state object when there is no
+ * news (a poll that finds nothing must not re-render the grid) and can report
+ * the change without waiting for React to run the state updater.
+ *
+ * `targets` and `removed` must already exclude the fields this user owns.
+ */
+function mergeDraftTargets(base, targets, removed) {
+  const next = {};
+  for (const tab of MARKET_TABS) next[tab.id] = { ...(base?.[tab.id] || {}) };
+  let changed = false;
+  for (const { tab, vid, cell } of targets) {
+    const field = priceField(cell.prevail_price, cell.uom);
+    if (sameField(next[tab.id][vid], field)) continue;
+    next[tab.id][vid] = field;
+    changed = true;
+  }
+  for (const [tabId, vid] of removed) {
+    if (!Object.prototype.hasOwnProperty.call(next[tabId], vid)) continue;
+    delete next[tabId][vid];
+    changed = true;
+  }
+  return { next, changed };
 }
 
 function formatDateLabel(iso) {
@@ -175,7 +216,7 @@ function fmt(val) {
 // ─── AddCommodityModal ───────────────────────────────────────────────────────
 function AddCommodityModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("lowland");
+  const [categoryId, setCategoryId] = useState(CATEGORY_OPTIONS[0].id);
   const [variant, setVariant] = useState("");
   const [uom, setUom] = useState("kg");
   const [error, setError] = useState("");
@@ -735,6 +776,14 @@ function DFTCPriceInput() {
 
   // On first open, all category sections start collapsed
   const [collapsed, setCollapsed] = useState(() => new Set(PRICE_CATEGORIES.map((c) => c.id)));
+  const [collapsedComs, setCollapsedComs] = useState(() => new Set());
+  const toggleCommodity = (id) =>
+    setCollapsedComs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [customVariants, setCustomVariants] = useState({});
   const [addingVariant, setAddingVariant] = useState(null);
   const [variantInput, setVariantInput] = useState("");
@@ -757,6 +806,28 @@ function DFTCPriceInput() {
   const [draftDismissed, setDraftDismissed] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
+  const reviewScrollRef = useRef(null);
+
+  // Slide the review table to the filtered market column so it is visible without manual scrolling
+  useEffect(() => {
+    if (!reviewMode) return;
+    const el = reviewScrollRef.current;
+    if (!el) return;
+    if (reviewFilter === "all") {
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    // Small timeout to allow DOM to settle if reviewMode just activated
+    const timer = setTimeout(() => {
+      const targetTh = el.querySelector(`[data-col="${reviewFilter}"]`);
+      if (!targetTh) return;
+      const containerRect = el.getBoundingClientRect();
+      const thRect = targetTh.getBoundingClientRect();
+      const scrollOffset = thRect.left - containerRect.left + el.scrollLeft;
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [reviewFilter, reviewMode]);
   const [dataName, setDataName] = useState(() => `DFTC Price Monitoring — ${formatDateLabel(localToday())}`);
   const [saved, setSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -767,6 +838,20 @@ function DFTCPriceInput() {
   const [dateError, setDateError] = useState("");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
+  // The DB catalogue items behind the map above. Kept so a row can be placed
+  // for a commodity the static mirror has never heard of.
+  const catalogItemsRef = useRef([]);
+  // The rows the form gained from the DB catalogue. Only the rows the shared
+  // draft references are ever added: the catalogue holds far more commodities
+  // than the price sheet.
+  const catalogRowsRef = useRef([]);
+  // Bumped whenever a catalogue row is added, so the form re-renders and any
+  // memo that walks the catalogue is invalidated.
+  const [catalogRowsVersion, setCatalogRowsVersion] = useState(0);
+  // Commodity ids the catalogue holds but the form has no category for: there
+  // is nowhere to put the row, so a draft that references one must not
+  // re-fetch the catalogue on every poll.
+  const unplaceableRef = useRef(new Set());
   // Stable identity for the commodity resolver: the prefill module keys its
   // session memo on it, so a fresh closure per render would defeat the cache.
   // It only reads catalogRef, which never changes identity.
@@ -774,6 +859,21 @@ function DFTCPriceInput() {
   if (stableResolverRef.current === null) {
     stableResolverRef.current = (com, v) => resolveCommodityId(com, v);
   }
+  // The variant resolver reads the custom commodity/variant state, so the
+  // memoised autosave must call the CURRENT render's copy: a variety added at
+  // runtime is invisible to the closure the callback was created in, and the
+  // price would land on the parent commodity instead of its own row.
+  const findCommodityRef = useRef(() => ({ cat: null, com: null, v: null }));
+  findCommodityRef.current = findCommodityAndVariant;
+  // The commodity and variant lists read the runtime additions through a ref
+  // for the same reason: an async continuation must see the rows of the
+  // current render, not the ones render #1 closed over.
+  const customRowsRef = useRef({ customCommodities: {}, customVariants: {} });
+  customRowsRef.current = { customCommodities, customVariants };
+  // The draft resolver adds a row the form is missing, so it must run the
+  // CURRENT render's copy: the memoised resync closure is render #1's.
+  const resolveDraftCellsRef = useRef(async () => []);
+  resolveDraftCellsRef.current = resolveDraftCells;
 
   // DFTC Personnel from database
   const [staffList, setStaffList] = useState([]);
@@ -801,6 +901,21 @@ function DFTCPriceInput() {
   const [unrenderableCount, setUnrenderableCount] = useState(0);
   const [carriedDate, setCarriedDate] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Shared-draft bookkeeping. `draftMetaRef` mirrors prefilledRef but carries the
+  // per-cell draft metadata (server version + last editor) so autosave can send
+  // an optimistic-concurrency check and a 409 can be attributed to a person.
+  const draftMetaRef = useRef(emptyTabMaps());
+  // The day has already been finalized; the button becomes "Re-finalize" and a
+  // finalize must bump the submission version rather than create a new one.
+  const [draftFinalized, setDraftFinalized] = useState(false);
+  // Human-readable 409 attribution shown next to the offending tab.
+  const [draftConflict, setDraftConflict] = useState("");
+  // "tabId|vid" pairs currently being written to the server, so a cell can show
+  // an in-flight indicator without blocking the rest of the grid.
+  const [draftSavingCells, setDraftSavingCells] = useState(() => new Set());
+  // In-flight flag for the manual "Resync" pull of the shared draft.
+  const [resyncing, setResyncing] = useState(false);
 
   /** True only for a previous-day value the user has not touched. */
   const isUntouchedCarried = useCallback(
@@ -885,22 +1000,20 @@ function DFTCPriceInput() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await parseResponse(await apiGet("/dftc/commodities"));
+        const items = await fetchCatalogItems();
         if (cancelled) return;
-        const items = Array.isArray(data) ? data : data?.items ?? [];
-        const map = new Map();
-        for (const row of items) {
-          const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
-          map.set(nameSlug(baseName), row.id);
-          if (row.variety) {
-            map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
-          }
-        }
-        catalogRef.current = map;
+        applyCatalogItems(items);
         const hasLocalDraft = (() => {
           try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
         })();
-        if (!hasLocalDraft) await loadDayPrefill(selectedDate, { preserveEdits: true });
+        // Read the date at fire time, not from the first-render closure: this
+        // continuation resumes after the catalog await, and the user may have
+        // already picked a different day. Using the stale date would issue a
+        // second prefill for today that takes a higher sequence number and
+        // overwrites the day the user actually selected.
+        if (!hasLocalDraft && !cancelled) {
+          await loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
+        }
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
@@ -909,21 +1022,271 @@ function DFTCPriceInput() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Push every dirty field to the shared draft. One request per cell so two
+  // inputters never overwrite each other wholesale, and a 409 on one cell does
+  // not discard the rest. Best-effort: a failure keeps the localStorage fallback
+  // and surfaces a message rather than losing the typed value.
+  const pushDraftCells = useCallback(async () => {
+    // The debounce fires after this callback was created. draftRef.current is
+    // re-assigned every render and always holds the latest committed state, so
+    // read it here instead of closing over selectedDate/tabFields. Otherwise a
+    // single edit pushes nothing and the last edit of a burst is lost.
+    const live = draftRef.current;
+    if (isFutureDate(live.selectedDate)) return;
+    const pending = [];
+    const cleared = [];
+    for (const tab of MARKET_TABS) {
+      for (const [vid, f] of Object.entries(live.tabFields[tab.id] || {})) {
+        if (!dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
+        const tabMeta = MARKET_TABS.find((t) => t.id === tab.id);
+        const { cat, com, v } = findCommodityRef.current(vid);
+        const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
+        const baseKey = nameSlug(baseName);
+        const variantName = v?.name;
+        const variantKey = variantName && variantName !== "Base"
+          ? `${baseKey}-${nameSlug(variantName)}`
+          : baseKey;
+        const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
+        const hasValCell = hasValue(f);
+
+        if (hasValCell) {
+          let commodity_id = (catalogRef.current &&
+            (catalogRef.current.get(variantKey) ?? catalogRef.current.get(baseKey))) ?? null;
+          // Register custom-added commodities / new varieties on the fly so
+          // their prices reach the DB instead of being skipped as unknown ids.
+          if (!variantKnown && com) {
+            const registered = await registerCommodity({
+              name: baseName,
+              category: cat?.name,
+              variety: variantName && variantName !== "Base" ? variantName : null,
+              unit_of_measure: f.uom || "kg",
+            });
+            if (registered?.id) {
+              commodity_id = registered.id;
+              try {
+                if (catalogRef.current) {
+                  // The base key already points at the parent commodity's row:
+                  // overwriting it would send the parent's own prices to the
+                  // newly registered variety.
+                  if (!catalogRef.current.has(baseKey)) {
+                    catalogRef.current.set(baseKey, registered.id);
+                  }
+                  catalogRef.current.set(variantKey, registered.id);
+                }
+              } catch { /* ignore */ }
+            }
+          }
+          if (commodity_id) {
+            const cell = {
+              reporting_date: live.selectedDate,
+              commodity_id,
+              source_id: tabMeta.sourceId,
+              price_type: tabMeta.priceType,
+              uom: f.uom || "kg",
+              price_min: f.low ?? null,
+              price_max: f.high ?? null,
+              prevail_price: f.prevailing ?? null,
+              observation_status: "Reported value",
+              expected_version: draftMetaRef.current[tab.id]?.get(vid)?.version ?? null,
+            };
+            pending.push({ key: `${tab.id}|${vid}`, cell });
+          }
+        } else if (tabMeta) {
+          // Edited to empty. Only a cell that exists in the draft needs a
+          // DELETE; a field that was never drafted has nothing to remove.
+          const meta = draftMetaRef.current[tab.id]?.get(vid);
+          const commodity_id = meta?.commodity_id ?? resolveCommodityId(com, v);
+          if (meta && commodity_id) {
+            cleared.push({
+              key: `${tab.id}|${vid}`,
+              params: {
+                reporting_date: live.selectedDate,
+                commodity_id,
+                source_id: tabMeta.sourceId,
+                price_type: tabMeta.priceType,
+              },
+            });
+          }
+        }
+      }
+    }
+    if (pending.length === 0 && cleared.length === 0) return;
+
+    setDraftSavingCells(new Set([...pending, ...cleared].map((p) => p.key)));
+    let conflict = "";
+    for (const { key, params } of cleared) {
+      try {
+        const qs = new URLSearchParams(params).toString();
+        await apiDelete(`/dftc/price-draft/cell?${qs}`);
+        const tabId = key.split("|")[0];
+        const vid = key.slice(tabId.length + 1);
+        draftMetaRef.current[tabId]?.delete(vid);
+      } catch (err) {
+        if (err?.status === 409 || err?.statusCode === 409) {
+          conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
+        } else {
+          console.error("Draft cell delete failed:", err);
+        }
+      }
+    }
+    for (const { key, cell } of pending) {
+      try {
+        const res = await parseResponse(await apiPut("/dftc/price-draft/cell", cell));
+        const tabId = key.split("|")[0];
+        const vid = key.slice(tabId.length + 1);
+        if (res?.version !== undefined && draftMetaRef.current[tabId]) {
+          draftMetaRef.current[tabId].set(vid, {
+            commodity_id: res.commodity_id,
+            uom: res.uom,
+            version: res.version,
+            updatedBy: res.updated_by_user_id,
+          });
+        }
+      } catch (err) {
+        if (err?.status === 409 || err?.statusCode === 409) {
+          conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
+        } else {
+          console.error("Draft cell autosave failed:", err);
+        }
+      }
+    }
+    setDraftSavingCells(new Set());
+    if (conflict) setDraftConflict(conflict);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pull the shared draft for the selected day and merge it into the form
+  // without a reload, so the other inputter's numbers show up on their own.
+  // A field this user typed into is never overwritten: their edit wins, and it
+  // must still be able to 409 on the next autosave.
+  const syncSharedDraft = useCallback(async () => {
+    // Read the live date, never a render closure: the poll fires long after
+    // the last render, and the user may have picked another day since.
+    const date = draftRef.current.selectedDate;
+    if (!date) return false;
+
+    let data;
+    try {
+      data = await parseResponse(await apiGet(`/dftc/price-draft?reporting_date=${date}`));
+    } catch {
+      // Offline or a server error: keep what is on screen and say nothing.
+      return false;
+    }
+    if (!data || !Array.isArray(data.cells)) return false;
+    // The user may have switched days while the request was in flight. A
+    // response for the old day must never land on the new one's form.
+    if (draftRef.current.selectedDate !== date) return false;
+
+    // A cell whose commodity the form has no row for is healed here: the
+    // catalogue is refreshed and the missing row added before the cells are
+    // resolved.
+    const targets = await resolveDraftCellsRef.current(data.cells);
+    // Identity of every cell the server still holds. A cell this page cannot
+    // render is still there, so it must not be mistaken for a deleted one.
+    // The identity is written twice: exactly as the server sent it, and
+    // normalized to the tab's market key, so the comparison below always uses
+    // the same spelling the tabs use.
+    const remoteCells = new Set();
+    for (const cell of data.cells) {
+      remoteCells.add(`${cell.source_key || cell.source_id}|${cell.price_type}|${cell.commodity_id}`);
+    }
+    for (const { tab, cell } of targets) {
+      remoteCells.add(`${tab.sourceId}|${tab.price_type}|${cell.commodity_id}`);
+    }
+
+    // 1. Refresh the per-cell metadata of every cell we accept. A dirty field
+    //    keeps its own version so the next autosave can still detect a clash.
+    for (const { tab, vid, cell } of targets) {
+      if (dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
+      const map = draftMetaRef.current[tab.id];
+      if (!map) continue;
+      map.set(vid, {
+        commodity_id: cell.commodity_id,
+        uom: cell.uom,
+        version: cell.version,
+        updatedBy: cell.updated_by_user_id,
+      });
+      // A synced value is a draft cell, never a carried-over one.
+      carriedRef.current[tab.id]?.delete(vid);
+    }
+
+    // 2. A cell the server no longer holds was cleared by the other inputter.
+    const removed = [];
+    for (const tab of MARKET_TABS) {
+      const map = draftMetaRef.current[tab.id];
+      if (!map) continue;
+      for (const [vid, meta] of Array.from(map.entries())) {
+        if (dirtyRef.current.has(`${tab.id}|${vid}`)) continue;
+        if (!meta?.commodity_id) continue;
+        if (remoteCells.has(`${tab.sourceId}|${tab.priceType}|${meta.commodity_id}`)) continue;
+        map.delete(vid);
+        removed.push([tab.id, vid]);
+      }
+    }
+
+    // 3. Merge the values into the form. A field this user owns is skipped
+    //    entirely: neither its value nor its version is touched.
+    const fresh = targets.filter(({ tab, vid }) => !dirtyRef.current.has(`${tab.id}|${vid}`));
+    const gone = removed.filter(([tabId, vid]) => !dirtyRef.current.has(`${tabId}|${vid}`));
+
+    // When nothing changed the previous state object is returned unchanged, so
+    // a poll with no news does not re-render the grid.
+    const preview = mergeDraftTargets(draftRef.current.tabFields, fresh, gone);
+    let changed = false;
+    setTabFields((prev) => {
+      const { next, changed: didChange } = mergeDraftTargets(prev, fresh, gone);
+      changed = changed || didChange;
+      return didChange ? next : prev;
+    });
+
+    // The other inputter finalized the day. Never un-finalize it.
+    if (data.status === "saved") setDraftFinalized(true);
+
+    return changed || preview.changed;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The shared draft changes while the other inputter works. Pull it on a
+  // timer so their numbers appear without a reload. The interval is cleared on
+  // unmount and whenever the day is finalized (nothing left to sync).
+  const syncRef = useRef(syncSharedDraft);
+  useEffect(() => { syncRef.current = syncSharedDraft; }, [syncSharedDraft]);
+
+  useEffect(() => {
+    if (draftFinalized) return;
+    const id = setInterval(() => {
+      // A hidden tab or an offline device must not spend the user's battery
+      // on a request nobody is waiting for.
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      syncRef.current().catch(() => { });
+    }, 10000);
+    return () => clearInterval(id);
+  }, [draftFinalized]);
+
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
     // Any edit means the user is acting on the failure notice.
     setSaveError("");
+    setDraftConflict("");
     setSaveStatus("saving");
     saveTimer.current = setTimeout(() => {
-      setSaveStatus("saved");
       try {
         localStorage.setItem("dftc_price_draft", "true");
         localStorage.setItem("dftc_price_draft_data", JSON.stringify(draftRef.current));
-      } catch { }
+        if (navigator.onLine === false) {
+          setSaveStatus("offline");
+        } else {
+          setSaveStatus("saved");
+        }
+      } catch {
+        setSaveStatus("saved");
+      }
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 30000);
+      // Server-side shared draft. Fire-and-forget so typing never blocks; the
+      // local fallback above already covers an offline or failing connection.
+      pushDraftCells().catch(() => { });
     }, 1500);
-  }, []);
+  }, [pushDraftCells]);
 
   // Timers scheduled above outlive unmount and fire setState/navigate on a dead
   // tree, which leaks navigation into whatever screen the user moved to.
@@ -1018,14 +1381,46 @@ function DFTCPriceInput() {
     setUnrenderableCount(0);
     setCarriedDate(null);
 
-    // Today's manual-entry form is intentionally a blank capture surface.
-    // Existing or historical prices must never be copied into the current day.
-    if (date === localToday()) return;
+    // Today's manual-entry form loads the shared draft so both inputters see the
+    // same in-progress cells. (Drafts are server-side now; the old "today is a
+    // blank capture surface" rule no longer applies.)
+    // (early return removed)
 
     try {
+      // The shared draft is the source of truth for the selected day's in-progress
+      // cells (it holds both inputters' work). The recorded-price snapshot below is
+      // only a fallback for a date whose draft has not been started yet; a draft
+      // cell always wins over a snapshot cell for the same variant.
+      let draftByTab = emptyTabFields();
+      let draftMeta = emptyTabMaps();
+      let draftFinalized = false;
+      try {
+        const draftRes = await apiGet(`/dftc/price-draft?reporting_date=${date}`);
+        const draftData = await parseResponse(draftRes);
+        if (draftData && Array.isArray(draftData.cells)) {
+          draftFinalized = draftData.status === "saved";
+          if (draftData.cells.length) {
+            // Same healing as the live resync: a commodity the form has no
+            // row for yet gets one before the cells are resolved.
+            const resolved = await resolveDraftCellsRef.current(draftData.cells);
+            for (const { tab, vid, cell } of resolved) {
+              draftByTab[tab.id][vid] = priceField(cell.prevail_price, cell.uom);
+              draftMeta[tab.id].set(vid, {
+                commodity_id: cell.commodity_id,
+                uom: cell.uom,
+                version: cell.version,
+                updatedBy: cell.updated_by_user_id,
+              });
+            }
+          }
+        }
+      } catch { /* draft load is best-effort */ }
+
       const snap = await loadPrefillSnapshot(date, stableResolverRef.current);
       // A slow response for a date the user has already moved off of.
       if (!snap || seq !== prefillSeqRef.current) return;
+
+      setDraftFinalized(draftFinalized);
 
       const nextPrefilled = emptyTabMaps();
       const nextCarried = emptyTabSets();
@@ -1039,6 +1434,17 @@ function DFTCPriceInput() {
         for (const [vid, entry] of snap.carriedByTab[tab.id] ?? []) {
           prefillByTab[tab.id][vid] = priceField(entry.price, entry.uom);
           nextCarried[tab.id].add(vid);
+        }
+      }
+
+      // Layer the draft on top: a draft cell replaces the snapshot value and its
+      // per-cell metadata becomes the prefill tracking (used for version checks).
+      draftMetaRef.current = draftMeta;
+      for (const tab of MARKET_TABS) {
+        for (const [vid, field] of Object.entries(draftByTab[tab.id] ?? {})) {
+          prefillByTab[tab.id][vid] = field;
+          nextPrefilled[tab.id].set(vid, draftMeta[tab.id].get(vid));
+          nextCarried[tab.id].delete(vid);
         }
       }
 
@@ -1128,8 +1534,20 @@ function DFTCPriceInput() {
   function toggleCategory(catId) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(catId)) next.delete(catId);
-      else next.add(catId);
+      if (next.has(catId)) {
+        next.delete(catId);
+      } else {
+        next.add(catId);
+        // Also collapse its commodities
+        const cat = PRICE_CATEGORIES.find((c) => c.id === catId);
+        if (cat) {
+          setCollapsedComs((cPrev) => {
+            const cNext = new Set(cPrev);
+            getAllCommodities(cat).forEach((com) => cNext.add(com.id));
+            return cNext;
+          });
+        }
+      }
       return next;
     });
   }
@@ -1139,17 +1557,218 @@ function DFTCPriceInput() {
   function toggleCollapseAll() {
     if (allCollapsed) {
       setCollapsed(new Set());
+      setCollapsedComs(new Set());
     } else {
       setCollapsed(new Set(PRICE_CATEGORIES.map((c) => c.id)));
+      const comIds = new Set();
+      PRICE_CATEGORIES.forEach((cat) => {
+        getAllCommodities(cat).forEach((com) => comIds.add(com.id));
+      });
+      setCollapsedComs(comIds);
     }
   }
 
-  function getAllCommodities(cat) {
-    return [...cat.commodities, ...customCommodities[cat.id] ?? []];
+  // ── DB catalogue ──────────────────────────────────────────────────────────
+  // The catalogue is fetched once and reused: the mount effect, the day loader
+  // and the resync all go through these two helpers, so there is exactly one
+  // implementation of the fetch and one of the id map.
+  async function fetchCatalogItems() {
+    const data = await parseResponse(await apiGet("/dftc/commodities"));
+    return Array.isArray(data) ? data : data?.items ?? [];
   }
 
+  function applyCatalogItems(items) {
+    const map = new Map();
+    for (const row of items) {
+      const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
+      map.set(nameSlug(baseName), row.id);
+      if (row.variety) {
+        map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
+      }
+    }
+    catalogRef.current = map;
+    catalogItemsRef.current = items;
+    return map;
+  }
+
+  /**
+   * The commodities of one category: the static mirror, the rows this user
+   * added at runtime, and a block for every catalogue row whose commodity the
+   * form does not have yet.
+   */
+  function getAllCommodities(cat) {
+    const customs = customRowsRef.current.customCommodities[cat.id] ?? [];
+    const present = new Set([...cat.commodities, ...customs].map((c) => c.id));
+    const fromCatalog = [];
+    for (const row of catalogRowsRef.current) {
+      if (row.categoryId !== cat.id) continue;
+      // One block per commodity, even when the catalogue holds several
+      // varieties of it.
+      if (present.has(row.commodityId)) continue;
+      present.add(row.commodityId);
+      fromCatalog.push({ id: row.commodityId, name: row.commodityName, isHW: false, variants: [] });
+    }
+    return [...cat.commodities, ...customs, ...fromCatalog];
+  }
+
+  /**
+   * The variants of one commodity: the static mirror, the rows this user added
+   * at runtime, and the catalogue rows that belong to this commodity.
+   */
   function getVariants(com) {
-    return [...com.variants, ...customVariants[com.id] ?? []];
+    const customs = customRowsRef.current.customVariants[com.id] ?? [];
+    const fromCatalog = catalogRowsRef.current
+      .filter((row) => row.commodityId === com.id)
+      .map((row) => ({ id: row.variantId, name: row.variantName }));
+    return [...com.variants, ...customs, ...fromCatalog];
+  }
+
+  // ── Rows the form gained from the DB catalogue ────────────────────────────
+  /** Identity of a rendered row: its commodity and its variety, by name. */
+  function variantIdentity(commodityName, variantName) {
+    return `${nameSlug(commodityName)}|${nameSlug(variantName)}`;
+  }
+
+  /** The identities of every variant the form renders right now. */
+  function renderedIdentities() {
+    const ids = new Set();
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of getAllCommodities(cat)) {
+        for (const v of getVariants(com)) {
+          ids.add(variantIdentity(com.name, v.name));
+        }
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Turn a DB catalogue item into a row the form can render.
+   *
+   * An item whose name is a commodity of the static mirror is a new VARIANT of
+   * it. An item with a name the mirror does not have is a new COMMODITY and
+   * needs a category of ours to sit in. Returns null when neither applies.
+   */
+  function buildCatalogRow(item) {
+    const baseName = COMMODITY_NAME_OVERRIDES[item.name] ?? item.name;
+    const baseSlug = nameSlug(baseName);
+
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of cat.commodities) {
+        if (nameSlug(COMMODITY_NAME_OVERRIDES[com.name] ?? com.name) !== baseSlug) continue;
+        return {
+          commodityId: com.id,
+          commodityName: com.name,
+          categoryId: cat.id,
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
+          variantName: item.variety || "Base",
+          dbId: item.id,
+        };
+      }
+    }
+
+    const cat = PRICE_CATEGORIES.find(
+      (c) => c.name.toLowerCase() === (item.category ?? "").toLowerCase()
+    );
+    if (!cat) return null;
+    return {
+      commodityId: baseSlug,
+      commodityName: baseName,
+      categoryId: cat.id,
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
+      variantName: item.variety || "Base",
+      dbId: item.id,
+    };
+  }
+
+  /**
+   * Add the form rows for the catalogue items behind `commodityIds`.
+   *
+   * A row is added only when the form renders no variant with the same
+   * identity (commodity name + variety name). Dedupe by identity, not by id:
+   * the row this user added at runtime carries a different id but the same
+   * variety, and it must not show up twice.
+   */
+  function addCatalogRows(commodityIds, items) {
+    const identities = renderedIdentities();
+    const added = [];
+    for (const dbId of commodityIds) {
+      const item = items.find((i) => i.id === dbId);
+      if (!item) continue;
+      const row = buildCatalogRow(item);
+      if (!row) {
+        // The catalogue holds the commodity but the form has no category of
+        // ours for it: there is nowhere to put the row.
+        unplaceableRef.current.add(dbId);
+        continue;
+      }
+      const identity = variantIdentity(row.commodityName, row.variantName);
+      if (identities.has(identity)) continue;
+      identities.add(identity);
+      added.push(row);
+    }
+    if (added.length === 0) return 0;
+    catalogRowsRef.current = [...catalogRowsRef.current, ...added];
+    setCatalogRowsVersion((v) => v + 1);
+    return added.length;
+  }
+
+  /** Every (commodity, variant) pair the form can render, right now. */
+  function buildCatalogue() {
+    const pairs = [];
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of getAllCommodities(cat)) {
+        for (const v of getVariants(com)) {
+          pairs.push({ com, v });
+        }
+      }
+    }
+    return pairs;
+  }
+
+  /** The commodity ids of the draft cells the form cannot render (yet). */
+  function unresolvedCommodityIds(cells, pairs) {
+    const ids = [];
+    for (const cell of Array.isArray(cells) ? cells : []) {
+      const id = cell?.commodity_id;
+      if (!id || ids.includes(id)) continue;
+      if (pairs.some(({ com, v }) => resolveCommodityId(com, v) === id)) continue;
+      ids.push(id);
+    }
+    return ids;
+  }
+
+  /**
+   * Resolve the shared draft's cells onto the form.
+   *
+   * A cell for a commodity the form has no row for is dropped by the resolver.
+   * That is what happens when the other inputter registered a commodity or a
+   * variety at runtime: the static mirror does not know it. The catalogue is
+   * refreshed once, the missing rows are added, and the cells are resolved
+   * again, so the other inputter's number reaches the screen. A refresh that
+   * fails keeps everything that is already on screen.
+   */
+  async function resolveDraftCells(cells) {
+    const resolver = stableResolverRef.current;
+    const catalogue = buildCatalogue();
+    const targets = resolveDraftCellTargets(cells, resolver, catalogue);
+    const unresolved = unresolvedCommodityIds(cells, catalogue)
+      .filter((id) => !unplaceableRef.current.has(id));
+    if (unresolved.length === 0) return targets;
+
+    let items;
+    try {
+      items = await fetchCatalogItems();
+    } catch {
+      // Offline or a server error: keep what is on screen.
+      return targets;
+    }
+    applyCatalogItems(items);
+    addCatalogRows(unresolved, catalogItemsRef.current);
+    // Re-resolve even when no row was added: the refresh alone can make an
+    // existing row resolvable — the row this user added at runtime for a
+    // variety the catalogue now knows by id.
+    return resolveDraftCellTargets(cells, resolver, buildCatalogue());
   }
 
   function commitVariant(commodityId) {
@@ -1324,7 +1943,7 @@ function DFTCPriceInput() {
       }
     });
     return rows;
-  }, [tabFields, customCommodities, customVariants, carriedDate]);
+  }, [tabFields, customCommodities, customVariants, carriedDate, catalogRowsVersion]);
 
   // Filtered review rows based on clicked summary card
   const filteredReviewRows = useMemo(() => {
@@ -1345,7 +1964,10 @@ function DFTCPriceInput() {
   }, [consolidatedReviewRows, reviewFilter]);
 
   // ── Finalize & Save All Tabs ──
-  async function handleSave() {
+
+  // Finalize: promote the shared draft into price_record + a submission.
+  // the day once, atomically, server-side, over every inputter's cells.
+  async function finalizeDraft() {
     if (isFutureDate(selectedDate)) {
       setDateError("Reporting date cannot be after today.");
       return;
@@ -1353,151 +1975,68 @@ function DFTCPriceInput() {
     setDateError("");
     setSaveError("");
     setIsSaving(true);
-    setSaveProgress(15);
-    setSaveProgressStage("Validating price entries...");
-    let totalSaved = 0;
-    let dropped = 0;
-    const failedTabs = [];
+    setSaveProgress(30);
+    setSaveProgressStage("Sending the day's prices...");
 
-    let tabIndex = 0;
-    let sessionSubmissionId = null;
-    for (const tab of MARKET_TABS) {
-      tabIndex++;
-      setSaveProgress(15 + Math.round((tabIndex / MARKET_TABS.length) * 65));
-      setSaveProgressStage(`Saving ${tab.label} records...`);
-      const tabMap = tabFields[tab.id] || {};
-      // An untouched previous-day value is a starting point, not an entry:
-      // committing it would save yesterday's price as today's.
-      const tabEntered = Object.entries(tabMap).filter(([vid, f]) => hasValue(f) && !isUntouchedCarried(tab.id, vid));
-      // prefilledRef holds same-day rows only, so carried vids can never reach
-      // remove_records — there is no row on this date to delete.
-      const prefillMap = prefilledRef.current[tab.id] || new Map();
-      const removedCommodities = [];
+    // Flush any not-yet-autosaved cell first so review and finalize see the same
+    // values that are on screen.
+    try {
+      await pushDraftCells();
+    } catch { /* covered by the finalize error below */ }
 
-      for (const [vid, info] of prefillMap.entries()) {
-        if (!hasValue(tabMap[vid])) {
-          removedCommodities.push(info.commodity_id);
-        }
-      }
-
-      if (tabEntered.length === 0 && removedCommodities.length === 0) {
-        continue;
-      }
-
-      const records = [];
-      for (const [vid, f] of tabEntered) {
-        const { cat, com, v } = findCommodityAndVariant(vid);
-        if (!com) continue;
-        const commodity_id = resolveCommodityId(com, v);
-        const base = {
-          variety: v?.name || "Base",
-          uom: f.uom || "kg",
-          sample_prices: parseValid(f.samples),
-          prevail_price: f.prevailing,
-          observation_status: "Reported value"
-        };
-
-        if (commodity_id) {
-          records.push({ commodity_id, ...base });
-        } else {
-          const registered = await registerCommodity({
-            name: com.name,
-            category: cat?.name || "Others",
-            variety: v?.name || "Base",
-            unit_of_measure: f.uom || "kg"
-          });
-          if (registered?.id) {
-            try { catalogRef.current?.set(nameSlug(com.name), registered.id); } catch { }
-            records.push({ commodity_id: registered.id, ...base });
-          } else {
-            dropped += 1;
-          }
-        }
-      }
-
-      const payload = {
-        data_type: "price",
-        source_id: tab.sourceId,
-        price_type: tab.priceType,
-        reporting_date: selectedDate,
-        records,
-        remove_records: removedCommodities,
-        ...(sessionSubmissionId ? { submission_id: sessionSubmissionId } : {})
-      };
+    setSaveProgress(70);
+    setSaveProgressStage("Consolidating price monitoring records...");
+    try {
+      const res = await parseResponse(
+        await apiPost("/dftc/price-draft/finalize", { reporting_date: selectedDate }),
+      );
+      const count = res?.record_count ?? 0;
 
       try {
-        const res = await parseResponse(await apiPost("/dftc/submissions/manual", payload));
-        if (!sessionSubmissionId && res?.submission?.id) {
-          sessionSubmissionId = res.submission.id;
-        }
-        totalSaved += records.length;
-      } catch (err) {
-        console.error(`Failed to save submission for ${tab.label}:`, err);
-        // Carry the real reason. The bare label produced "check your
-        // connection" for every failure, including backend 500s and timeouts.
-        failedTabs.push(
-          err?.message ? `${tab.label} — ${err.message}` : tab.label
+        localStorage.setItem(
+          `dftc_report_personnel_${selectedDate}`,
+          JSON.stringify({ encodedBy, encodedByRole, reviewedBy, reviewedByRole }),
         );
-      }
-    }
+        localStorage.removeItem("dftc_price_draft");
+        localStorage.removeItem("dftc_price_draft_data");
+      } catch { }
 
-    // Never report success when a market failed. Records are written as
-    // idempotent upserts, so staying on the page and letting the user retry is
-    // safe — navigating away would silently drop that market's prices and
-    // discard the local draft that holds the retyped values.
-    if (failedTabs.length > 0) {
+      setHasDraft(false);
+      setDraftFinalized(true);
+      setSaved(true);
+      setSaveProgress(100);
+      setSaveProgressStage("Price monitoring data saved successfully!");
+      clearPrefillCache();
+      queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
+      queryClient.invalidateQueries({ queryKey: ["prices"] });
+
+      navTimer.current = setTimeout(() => {
+        setIsSaving(false);
+        navigate("/dftc/input", {
+          state: {
+            successMsg: `${dataName} saved successfully (${count} price records across all markets).`,
+            restoreMarketFilter: navState?.restoreMarketFilter,
+            restoreDataTypeFilter: navState?.restoreDataTypeFilter,
+            justSavedType: "price",
+            justSavedDate: selectedDate,
+            justSavedAt: new Date().toISOString(),
+          },
+        });
+      }, 900);
+    } catch (err) {
+      // Stay on the page: the draft is intact server-side, so the user retries
+      // without retyping. Never navigate away on a failed finalize.
+      setIsSaving(false);
       setSaveError(
-        `Could not save ${failedTabs.length} of ${MARKET_TABS.length} markets: ${failedTabs.join("; ")}. ` +
-        `Your entries are still on this page — resolve the reason above and press Save again.`
+        err?.message
+          ? `Could not finalize: ${err.message}`
+          : "Could not finalize the day's prices. Your entries are safe — try again.",
       );
-      setIsSaving(false);
-      return;
     }
-
-    setSaveProgress(92);
-    setSaveProgressStage("Consolidating price monitoring records...");
-
-    try {
-      localStorage.setItem(
-        `dftc_report_personnel_${selectedDate}`,
-        JSON.stringify({
-          encodedBy,
-          encodedByRole,
-          reviewedBy,
-          reviewedByRole
-        })
-      );
-      localStorage.removeItem("dftc_price_draft");
-      localStorage.removeItem("dftc_price_draft_data");
-    } catch { }
-
-    setHasDraft(false);
-    setSaved(true);
-    setSaveProgress(100);
-    setSaveProgressStage("Price monitoring data saved successfully!");
-    // Without this the session memo would serve the pre-save snapshot to the
-    // next mount, so a freshly saved day would reload its own previous values.
-    clearPrefillCache();
-    queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
-    queryClient.invalidateQueries({ queryKey: ["prices"] });
-
-    navTimer.current = setTimeout(() => {
-      setIsSaving(false);
-      navigate("/dftc/input", {
-        state: {
-          successMsg: `${dataName} saved successfully (${totalSaved} price records across all markets).`,
-          restoreMarketFilter: navState?.restoreMarketFilter,
-          restoreDataTypeFilter: navState?.restoreDataTypeFilter,
-          justSavedType: "price",
-          justSavedDate: selectedDate,
-          justSavedAt: new Date().toISOString()
-        }
-      });
-    }, 900);
   }
 
   function SaveStatusIndicator() {
@@ -1517,7 +2056,7 @@ function DFTCPriceInput() {
   // ═══════════════════════════════════════════════════════════════════════════
   if (reviewMode) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
         {/* Back and Title Header */}
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -1544,8 +2083,8 @@ function DFTCPriceInput() {
         </DFTCNotificationBanner>
 
         {/* Summary Badges Card — Clickable to filter details */}
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 mb-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hw-neutral-100)] pb-3 mb-3">
+        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-4 sm:mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hw-neutral-100)] pb-2.5 mb-2.5 sm:pb-3 sm:mb-3">
             <button
               type="button"
               onClick={() => setReviewFilter("all")}
@@ -1565,7 +2104,7 @@ function DFTCPriceInput() {
               <strong className="text-[var(--hw-neutral-900)]">{formatDateLabel(selectedDate)}, {enteredTime}</strong>
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-[12px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2.5 text-[12px]">
             {[
               { id: "bangkerohan-retail", label: "Bangkerohan Retail", count: tabBreakdown["bangkerohan-retail"] || 0 },
               { id: "bangkerohan-wholesale", label: "Bangkerohan Wholesale", count: tabBreakdown["bangkerohan-wholesale"] || 0 },
@@ -1579,7 +2118,9 @@ function DFTCPriceInput() {
                   key={card.id}
                   type="button"
                   onClick={() => setReviewFilter((prev) => (prev === card.id ? "all" : card.id))}
-                  className={`text-left rounded-xl p-3 border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                  className={`text-left rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:p-3 border transition-all cursor-pointer flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 ${
+                    card.id === "dftc-wholesale" ? "col-span-2 sm:col-span-1" : ""
+                  } ${
                     isSelected
                       ? "bg-white border-[var(--hw-neutral-400)] shadow-md ring-1 ring-black/5"
                       : "bg-[var(--hw-neutral-50)] border-[var(--hw-neutral-200)] hover:bg-white hover:shadow-xs"
@@ -1589,7 +2130,7 @@ function DFTCPriceInput() {
                   <span className={`block text-[11px] sm:text-[12px] leading-snug ${isSelected ? "text-[var(--hw-neutral-900)] font-bold" : "text-[var(--hw-neutral-700)] font-medium"}`}>
                     {card.label}
                   </span>
-                  <span className="text-[13px] font-bold text-[var(--hw-neutral-900)] whitespace-nowrap text-right shrink-0">
+                  <span className="text-[12px] sm:text-[13px] font-bold text-[var(--hw-neutral-900)] whitespace-nowrap text-right shrink-0">
                     {card.count} entered
                   </span>
                 </button>
@@ -1612,7 +2153,7 @@ function DFTCPriceInput() {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" ref={reviewScrollRef}>
             <table className="w-full text-[12px] border-collapse" style={{ minWidth: 720 }}>
               <thead>
                 <tr>
@@ -1657,6 +2198,7 @@ function DFTCPriceInput() {
                     return (
                       <th
                         key={h.id}
+                        data-col={h.id}
                         style={{
                           background: BANK_BG,
                           border: isFiltered ? "2px solid #166534" : "1px solid #999",
@@ -1681,6 +2223,7 @@ function DFTCPriceInput() {
                     return (
                       <th
                         key={h.id}
+                        data-col={h.id}
                         style={{
                           background: DFTC_BG,
                           border: isFiltered ? "2px solid #166534" : "1px solid #999",
@@ -1788,22 +2331,22 @@ function DFTCPriceInput() {
           </div>
 
           {/* Encoded by / Reviewed by Footer (matching Image 5) */}
-          <div className="p-4 sm:p-5 border-t border-[var(--hw-neutral-200)] bg-white grid grid-cols-1 sm:grid-cols-2 gap-6 text-[12px]">
+          <div className="p-3.5 sm:p-5 border-t border-[var(--hw-neutral-200)] bg-white grid grid-cols-2 gap-3 sm:gap-6 text-[12px]">
             <div>
               <p className="font-semibold text-black">Encoded by:</p>
-              <p className="font-bold text-black mt-2 text-[13px] uppercase">{encodedBy}</p>
-              <p className="text-[var(--hw-neutral-700)] text-[12px]">{encodedByRole}</p>
+              <p className="font-bold text-black mt-1 sm:mt-2 text-[12px] sm:text-[13px] uppercase truncate">{encodedBy}</p>
+              <p className="text-[var(--hw-neutral-700)] text-[11px] sm:text-[12px] truncate">{encodedByRole}</p>
             </div>
             <div>
               <p className="font-semibold text-black">Reviewed by:</p>
-              <p className="font-bold text-black mt-2 text-[13px] uppercase">{reviewedBy}</p>
-              <p className="text-[var(--hw-neutral-700)] text-[12px]">{reviewedByRole}</p>
+              <p className="font-bold text-black mt-1 sm:mt-2 text-[12px] sm:text-[13px] uppercase truncate">{reviewedBy}</p>
+              <p className="text-[var(--hw-neutral-700)] text-[11px] sm:text-[12px] truncate">{reviewedByRole}</p>
             </div>
           </div>
         </div>
 
         {/* Save Card */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
           <label htmlFor="report-data-name-input" className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Report Data Name</label>
           <input
             id="report-data-name-input"
@@ -1839,6 +2382,15 @@ function DFTCPriceInput() {
           </div>
 
           <div className="pt-2">
+            {draftConflict && (
+              <div
+                role="alert"
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {draftConflict}
+              </div>
+            )}
             {saveError && (
               <div
                 role="alert"
@@ -1863,7 +2415,9 @@ function DFTCPriceInput() {
               disabled={totalEnteredCount === 0 || isSaving}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalEnteredCount} records)
+              {draftFinalized
+                ? `Re-finalize ${dataName} (${totalEnteredCount} records)`
+                : `Finalize ${dataName} (${totalEnteredCount} records)`}
             </button>
           </div>
 
@@ -1914,15 +2468,14 @@ function DFTCPriceInput() {
               onClose={() => setConfirmOpen(false)}
               onConfirm={() => {
                 setConfirmOpen(false);
-                // handleSave can reject outside its own try (registerCommodity at
-                // the top of the loop); without this the modal freezes on
-                // "Saving" forever.
-                handleSave().catch((err) => {
-                  console.error("DFTC price save failed:", err);
+                // finalizeDraft owns its own error handling; this catch only
+                // guards a rejection outside its internal try.
+                finalizeDraft().catch((err) => {
+                  console.error("DFTC price finalize failed:", err);
                   setIsSaving(false);
                   setSaveError(
-                    `Could not save: ${err?.message || "unexpected error"}. ` +
-                    `Your entries are still on this page — press Save again.`
+                    `Could not finalize: ${err?.message || "unexpected error"}. ` +
+                    `Your entries are still on this page — press Finalize again.`
                   );
                 });
               }}
@@ -1937,27 +2490,27 @@ function DFTCPriceInput() {
   // ENTRY MODE: All Market Tabs + Past/Today Date Picker + Unified Inputs
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
       {/* Draft restore banner */}
       {hasDraft && !draftDismissed && (
         <DFTCNotificationBanner
           variant="warning"
           title="Continue your saved draft"
           description="An unfinished entry was found on this device."
-          className="mb-5"
+          className="mb-3 sm:mb-4"
           actions={
             <>
               <button
                 type="button"
                 onClick={discardDraft}
-                className="text-[12px] text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
+                className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
               >
                 Discard Draft
               </button>
               <button
                 type="button"
                 onClick={restoreDraft}
-                className="font-semibold text-amber-600 underline hover:text-amber-700 text-[12px] cursor-pointer"
+                className="font-semibold text-amber-600 underline hover:text-amber-700 text-[11.5px] sm:text-[12px] cursor-pointer"
               >
                 Resume Draft
               </button>
@@ -1972,7 +2525,7 @@ function DFTCPriceInput() {
           variant="info"
           title="Amending existing entry"
           description={`${sameDayCount} existing price records were loaded for ${formatDateLabel(selectedDate)}. Adjust values you need to change, or switch tabs to add more.`}
-          className="mb-5"
+          className="mb-3 sm:mb-4"
         />
       )}
 
@@ -1995,18 +2548,18 @@ function DFTCPriceInput() {
 
       {/* Header: Back Button, Title, SaveStatusIndicator, Top Hyperlink Review Button */}
       <div className="space-y-3 mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => navigate("/dftc/input", { state: { restoreMarketFilter: navState?.restoreMarketFilter, restoreDataTypeFilter: navState?.restoreDataTypeFilter } })}
-              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
+              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer shrink-0"
               title="Back to Submit Data"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Price Data</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--hw-neutral-900)] truncate">Add Price Data</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
             <SaveStatusIndicator />
             {/* Top Hyperlink button navigating directly to review mode like the bottom button */}
             <button
@@ -2016,7 +2569,7 @@ function DFTCPriceInput() {
                 setReviewMode(true);
               }}
               disabled={totalEnteredCount === 0}
-              className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
               Review ({totalEnteredCount})
@@ -2027,8 +2580,8 @@ function DFTCPriceInput() {
         {/* Tab Navigation for Markets & Price Types + Editable Date Picker (no future dates) */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
           {/* Market / Price-Type Tabs filling available width before the date button */}
-          <div className="flex-1 min-w-0 flex rounded-xl sm:rounded-full border border-[var(--hw-neutral-200)] overflow-x-auto bg-white shadow-[var(--shadow-xs)]">
-            {MARKET_TABS.map((tab) => {
+          <div className="flex-1 min-w-0 grid grid-cols-6 sm:flex rounded-lg border border-[var(--hw-neutral-200)] overflow-hidden bg-white shadow-[var(--shadow-xs)]">
+            {MARKET_TABS.map((tab, ti) => {
               const active = activeTabId === tab.id;
               const count = getTabCount(tab.id);
               return (
@@ -2036,13 +2589,13 @@ function DFTCPriceInput() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTabId(tab.id)}
-                  className={`flex-1 min-w-[125px] sm:min-w-0 py-2.5 px-2 sm:px-3 text-[12px] sm:text-[13px] font-medium transition-colors text-center whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 border-r last:border-r-0 border-[var(--hw-neutral-200)] ${
+                  className={`${ti < 3 ? "col-span-2 border-b sm:border-b-0" : "col-span-3"} ${ti === 2 ? "border-r-0 sm:border-r" : "border-r"} sm:flex-1 sm:min-w-0 py-2 sm:py-2.5 px-1.5 sm:px-3 text-[11.5px] sm:text-[13px] leading-tight font-medium transition-colors text-center cursor-pointer flex items-center justify-center gap-1 sm:gap-1.5 last:border-r-0 border-[var(--hw-neutral-200)] ${
                     active
                       ? "bg-[var(--hw-green-700)] text-white font-semibold"
                       : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
                   }`}
                 >
-                  <span className="truncate">{tab.label}</span>
+                  <span className="sm:truncate">{tab.label}</span>
                   {count > 0 && (
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shrink-0 ${
@@ -2058,7 +2611,7 @@ function DFTCPriceInput() {
           </div>
 
           {/* Editable Date Picker (Cannot enter data for future dates) */}
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] self-start lg:self-auto">
+          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] self-end lg:self-auto">
             <Calendar className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0" />
             <label htmlFor="price-date-picker" className="text-[12px] font-medium text-[var(--hw-neutral-700)] shrink-0">
               Date:
@@ -2074,7 +2627,7 @@ function DFTCPriceInput() {
                   handleDateChange(localToday());
                 }
               }}
-              className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
+              className="w-[118px] sm:w-auto text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
             />
             {selectedDate !== localToday() && (
               <button
@@ -2092,16 +2645,16 @@ function DFTCPriceInput() {
       {/* Price Table Card */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden mb-5">
         {/* Toolbar */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[var(--hw-neutral-200)]">
+        <div className="px-2.5 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-2 border-b border-[var(--hw-neutral-200)] overflow-x-auto">
           {/* Search */}
-          <div className="relative flex-1 min-w-[160px]">
+          <div className="relative flex-1 min-w-[70px] sm:min-w-[160px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search commodity or variant"
-              className="w-full pl-8 pr-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
+              placeholder="Search"
+              className="w-full pl-8 pr-2 sm:pr-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -2110,13 +2663,34 @@ function DFTCPriceInput() {
             )}
           </div>
 
+          {/* Resync shared draft */}
+          <button
+            type="button"
+            onClick={() => {
+              setResyncing(true);
+              // A failed pull must clear the in-flight state without surfacing
+              // anything: the form simply keeps what it already shows.
+              syncSharedDraft().catch(() => {}).finally(() => setResyncing(false));
+            }}
+            disabled={resyncing}
+            aria-label="Resync shared draft"
+            title="Resync shared draft"
+            className="shrink-0 flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {resyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            <span>Resync</span>
+          </button>
+
           {/* Add Commodity */}
           <button
             onClick={() => setAddCommodityOpen(true)}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+            aria-label="Add Commodity"
+            title="Add Commodity"
+            className="shrink-0 flex items-center gap-1 xs:gap-1.5 px-2 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[11px] sm:text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add Commodity
+            <span className="hidden xs:inline sm:hidden">Add</span>
+            <span className="hidden sm:inline">Add Commodity</span>
           </button>
 
           {/* Show All / Entered Only */}
@@ -2125,9 +2699,9 @@ function DFTCPriceInput() {
               <button
                 key={m}
                 onClick={() => setShowMode(m)}
-                className={`px-3 py-2 text-[12px] font-medium transition-colors cursor-pointer ${showMode === m ? "bg-[var(--hw-neutral-900)] text-white" : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"}`}
+                className={`px-1.5 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10.5px] xs:text-[11px] sm:text-[12px] font-medium whitespace-nowrap transition-colors cursor-pointer ${showMode === m ? "bg-[var(--hw-neutral-900)] text-white font-semibold" : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"}`}
               >
-                {m === "all" ? "Show All" : "Show Entered Only"}
+                {m === "all" ? "All" : "Entered"}
               </button>
             ))}
           </div>
@@ -2135,9 +2709,12 @@ function DFTCPriceInput() {
           {/* Collapse All / Expand All */}
           <button
             onClick={toggleCollapseAll}
-            className="shrink-0 px-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+            title={allCollapsed ? "Expand All" : "Collapse All"}
+            aria-label={allCollapsed ? "Expand All" : "Collapse All"}
+            className="shrink-0 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer flex items-center gap-1"
           >
-            {allCollapsed ? "Expand All" : "Collapse All"}
+            <span className="sm:hidden">{allCollapsed ? "Expand" : "Collapse"}</span>
+            <span className="hidden sm:inline">{allCollapsed ? "Expand All" : "Collapse All"}</span>
           </button>
         </div>
 
@@ -2179,19 +2756,23 @@ function DFTCPriceInput() {
 
               {!isCol && catCommodities.map((com) => {
                 const variants = getVariants(com).filter((v) => matchesVariant(com, v));
+                const colCom = collapsedComs.has(com.id);
                 return (
                   <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                     {/* Commodity Header */}
-                    <div className="px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)]">
-                      <div className="flex items-center gap-2">
+                    <div
+                      onClick={() => toggleCommodity(com.id)}
+                      className="px-3 sm:px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)] cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
                         {com.isHW && hasHWIcon(com.name)
                           ? <CommodityIllustration commodityId={hwId(com.name)} className="w-5 h-5 shrink-0" />
                           : <Leaf className={`w-4 h-4 shrink-0 ${com.isHW ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`} />}
-                        <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{com.name}</span>
+                        <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">{com.name}</span>
                         {com.isHW && (
                           <button
                             type="button"
-                            onClick={() => setHwInfoId(com.id)}
+                            onClick={(e) => { e.stopPropagation(); setHwInfoId(com.id); }}
                             className="text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)]"
                             title="HarvestWise Supported Commodity"
                           >
@@ -2200,17 +2781,20 @@ function DFTCPriceInput() {
                         )}
                         <button
                           type="button"
-                          onClick={() => setCoverageOpen(true)}
+                          onClick={(e) => { e.stopPropagation(); setCoverageOpen(true); }}
                           className="text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)]"
                           title="About Analytics Coverage"
                         >
                           <Info className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      {colCom
+                        ? <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />
+                        : <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />}
                     </div>
 
                     {/* Variant Rows */}
-                    {variants.map((v) => {
+                    {!colCom && variants.map((v) => {
                       const f = getField(activeTabId, v.id);
                       return (
                         <div key={v.id}>
@@ -2291,7 +2875,7 @@ function DFTCPriceInput() {
                     })}
 
                     {/* Add Variant Button */}
-                    {showMode === "all" && (
+                    {!colCom && showMode === "all" && (
                       <div className="px-4 py-2 border-b border-[var(--hw-neutral-50)]">
                         {addingVariant === com.id ? (
                           <div className="flex items-center gap-2">

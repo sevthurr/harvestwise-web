@@ -3,7 +3,7 @@ export const advisory = {
     "recommended": "Maganda ang Kondisyon",
     "proceed_with_caution": "Maaaring Magpatuloy, Pero Mag-ingat",
     "avoid_for_now": "Huwag Munang Itanim",
-    "high_risk": "Mataas ang Panganib",
+    "high_risk": "Huwag Munang Itanim",
     "planning": "Pagpaplano",
     "growing": "Lumalaki",
     "planted": "Natanim",

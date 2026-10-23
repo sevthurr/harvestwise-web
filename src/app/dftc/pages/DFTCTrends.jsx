@@ -8,8 +8,10 @@ import { ForecastPriceTrendChart } from "../../global/components/shared/Forecast
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
+import { normalizeCommodityLabel } from "../../global/utils/priceChartTransforms";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
+import * as dftcApi from "../../../services/api/dftcApi";
 import { apiGet, parseResponse } from "../../global/api";
 import { getClassificationTextColor } from "./dftcClassificationColors";
 import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
@@ -100,8 +102,8 @@ function formatCustomDateLabel(from, to) {
 }
 
 const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]";
-const labelCls = "block text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1.5";
-const selectCls = "w-full px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-600)] transition-colors";
+const labelCls = "block text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1";
+const selectCls = "w-full truncate px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-600)] transition-colors";
 const PAGE_SIZE = 20;
 
 function SearchableCombobox({ categories, value, onChange }) {
@@ -171,17 +173,17 @@ function SearchableCombobox({ categories, value, onChange }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none hover:border-[var(--hw-neutral-400)] transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none hover:border-[var(--hw-neutral-400)] transition-colors cursor-pointer"
         >
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             {selectedIconKey ? (
-              <CommodityIllustration commodityId={selectedIconKey} className="w-5 h-5 shrink-0" />
+              <CommodityIllustration commodityId={selectedIconKey} className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             ) : (
-              <Leaf className="w-4 h-4 text-[var(--hw-green-600)] shrink-0" />
+              <Leaf className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--hw-green-600)] shrink-0" />
             )}
             <span className="truncate font-medium">{value}</span>
           </div>
-          <ChevronDown size={14} className="shrink-0 text-[var(--hw-neutral-500)] ml-2" />
+          <ChevronDown size={13} className="shrink-0 text-[var(--hw-neutral-500)] ml-1 sm:ml-1.5" />
         </button>
       ) : (
         <div className="border border-[var(--hw-green-600)] rounded-xl bg-white shadow-lg overflow-hidden z-50 relative">
@@ -302,14 +304,14 @@ function DateSelect({ preset, customFrom, customTo, onChange }) {
           setDropOpen(!dropOpen);
           setPopOpen(false);
         }}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
       >
         <span className="truncate font-medium">{displayLabel}</span>
-        <ChevronDown size={14} className={`shrink-0 text-[var(--hw-neutral-500)] ml-2 transition-transform ${dropOpen ? "rotate-180" : ""}`} />
+        <ChevronDown size={13} className={`shrink-0 text-[var(--hw-neutral-500)] ml-1 transition-transform ${dropOpen ? "rotate-180" : ""}`} />
       </button>
 
       {dropOpen && (
-        <div className="absolute top-full left-0 mt-1.5 z-50 w-full min-w-[160px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-full min-w-[160px] max-w-[calc(100vw-2rem)] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
           {options.map((opt) => (
             <button
               key={opt.key}
@@ -428,7 +430,7 @@ function PeriodSelect({ preset, customFrom, customTo, onChange }) {
       </button>
 
       {dropOpen && (
-        <div className="absolute top-full left-0 mt-1.5 z-50 w-full min-w-[160px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-full min-w-[160px] max-w-[calc(100vw-2rem)] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
           {options.map((opt) => (
             <button
               key={opt.key}
@@ -524,17 +526,17 @@ function HistoricalRangeSelect({ preset, customFrom, customTo, onChange }) {
   const displayLabel = selected?.label || getDateLabel(preset, customFrom, customTo);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white text-[var(--hw-neutral-800)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+        className="h-8 w-full sm:w-auto px-2.5 sm:px-3 text-[12px] font-medium text-black bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg flex items-center justify-between sm:justify-start gap-2 focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] transition-colors cursor-pointer whitespace-nowrap"
       >
-        <span className="font-medium">{displayLabel}</span>
-        <ChevronDown size={12} className={`text-[var(--hw-neutral-500)] transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="font-medium whitespace-nowrap">{displayLabel}</span>
+        <ChevronDown size={13} className={`text-black shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full right-0 mt-1.5 z-50 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 min-w-[130px] w-full sm:w-36 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
           {options.map((opt) => (
             <button
               key={opt.key}
@@ -543,8 +545,8 @@ function HistoricalRangeSelect({ preset, customFrom, customTo, onChange }) {
                 onChange(opt.key);
                 setOpen(false);
               }}
-              className={`w-full text-left px-4 py-2 text-[12px] transition-colors cursor-pointer ${
-                preset === opt.key ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              className={`w-full text-left px-3.5 py-1.5 text-[12px] whitespace-nowrap transition-colors cursor-pointer ${
+                preset === opt.key ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-black hover:bg-[var(--hw-neutral-50)]"
               }`}
             >
               {opt.label}
@@ -577,17 +579,17 @@ function ForecastHorizonSelect({ value, onChange }) {
   const selected = options.find((o) => o.v === value);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white text-[var(--hw-neutral-800)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+        className="h-8 w-full sm:w-auto px-2.5 sm:px-3 text-[12px] font-medium text-black bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg flex items-center justify-between sm:justify-start gap-2 focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] transition-colors cursor-pointer whitespace-nowrap"
       >
-        <span className="font-medium">{selected?.label ?? "Select"}</span>
-        <ChevronDown size={12} className={`text-[var(--hw-neutral-500)] transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="font-medium whitespace-nowrap">{selected?.label ?? "Select"}</span>
+        <ChevronDown size={13} className={`text-black shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full right-0 mt-1.5 z-50 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+        <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-1.5 z-50 min-w-[130px] w-full sm:w-36 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
           {options.map((opt) => (
             <button
               key={opt.v}
@@ -596,8 +598,8 @@ function ForecastHorizonSelect({ value, onChange }) {
                 onChange(opt.v);
                 setOpen(false);
               }}
-              className={`w-full text-left px-4 py-2 text-[12px] transition-colors cursor-pointer ${
-                value === opt.v ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              className={`w-full text-left px-3.5 py-1.5 text-[12px] whitespace-nowrap transition-colors cursor-pointer ${
+                value === opt.v ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-black hover:bg-[var(--hw-neutral-50)]"
               }`}
             >
               {opt.label}
@@ -672,7 +674,7 @@ function Pagination({ page, totalPages, totalRows, onPage }) {
 
 function TabNav({ tab, onChange }) {
   return (
-    <div className="flex border-b border-[var(--hw-neutral-200)]">
+    <div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {[
         { id: "price", label: "Price Trends", icon: TrendingUp },
         { id: "arrival", label: "Arrival Volume Trends", icon: BarChart3 },
@@ -684,13 +686,13 @@ function TabNav({ tab, onChange }) {
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
-            className={`flex items-center gap-2 px-6 py-3.5 text-[13px] font-semibold border-b-2 transition-colors cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-6 py-2.5 sm:py-3.5 text-[12px] sm:text-[13px] font-semibold border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
               active
                 ? "border-[var(--hw-green-700)] text-[var(--hw-green-800)] bg-[var(--hw-green-50)]/30"
                 : "border-transparent text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
             }`}
           >
-            <Icon className={`w-4 h-4 ${active ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`} />
+            <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${active ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`} />
             <span>{t.label}</span>
           </button>
         );
@@ -701,28 +703,13 @@ function TabNav({ tab, onChange }) {
 
 function SummaryStripSkeleton({ columns = 5 }) {
   return (
-    <div className={`${cardCls} p-5 md:p-6`}>
-      <div className={`grid grid-cols-1 sm:grid-cols-2 ${columns === 5 ? "lg:grid-cols-5" : columns === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-6`}>
-        {Array.from({ length: columns }).map((_, i) => (
-          <div key={i} className={`${i !== 0 ? "lg:border-l-2 lg:border-[var(--hw-neutral-200)] lg:pl-5" : "lg:pl-0"} space-y-3`}>
-            <div className="h-3 w-28 bg-[var(--hw-neutral-200)] rounded animate-pulse" />
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <div className="h-3 w-16 bg-[var(--hw-neutral-100)] rounded animate-pulse" />
-                <div className="h-3.5 w-14 bg-[var(--hw-neutral-200)] rounded animate-pulse" />
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="h-3 w-20 bg-[var(--hw-neutral-100)] rounded animate-pulse" />
-                <div className="h-3.5 w-14 bg-[var(--hw-neutral-200)] rounded animate-pulse" />
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="h-3 w-14 bg-[var(--hw-neutral-100)] rounded animate-pulse" />
-                <div className="h-3.5 w-14 bg-[var(--hw-neutral-200)] rounded animate-pulse" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className={`grid grid-cols-2 ${columns === 5 ? "sm:grid-cols-3 lg:grid-cols-5" : columns === 4 ? "lg:grid-cols-4" : "sm:grid-cols-3"} gap-2 sm:gap-2.5`}>
+      {Array.from({ length: columns }).map((_, i) => (
+        <div key={i} className={`bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 sm:p-3.5 space-y-2 ${columns === 5 && i === 4 ? "col-span-2 sm:col-span-1" : ""}`}>
+          <div className="h-2.5 w-20 bg-[var(--hw-neutral-200)] rounded animate-pulse" />
+          <div className="h-4 w-16 bg-[var(--hw-neutral-100)] rounded animate-pulse" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -973,24 +960,54 @@ function DFTCTrends() {
     [catalogData]
   );
 
+  // Widened catalogue: every variety of a top-10 commodity, including rows
+  // whose own is_top10 flag is false. Falls back to the top-10 catalogue until
+  // the widened query resolves (or if it fails) so the Price tab keeps working.
+  const { data: supportedCatalogData } = useQuery({
+    queryKey: ["dftc-trends-price-catalog-supported"],
+    queryFn: () =>
+      pricesApi.getPriceList({ include_supported_varieties: true, page_size: 100 }),
+    staleTime: 60 * 1000,
+  });
+
+  const priceCatalogPairs = useMemo(() => {
+    const widened = catalogPairsFromPriceList(supportedCatalogData?.items);
+    return widened.length > 0 ? widened : catalogPairs;
+  }, [supportedCatalogData, catalogPairs]);
+
   // Price tab only: the analytics catalog is the supported set — commodities
   // outside it have no trend data. Fall back to the full list while the
   // catalog is still loading (or unavailable) so the control is never blank;
-  // the arrival/production tabs query by name and keep PRICE_CATEGORIES.
+  // the production tab keeps PRICE_CATEGORIES and the arrival tab uses the
+  // commodity catalog.
   const priceCommodityCategories = useMemo(() => {
-    if (isCatalogLoading || catalogPairs.length === 0) return PRICE_CATEGORIES;
+    if (isCatalogLoading || priceCatalogPairs.length === 0) return PRICE_CATEGORIES;
     return PRICE_CATEGORIES.map((cat) => ({
       ...cat,
       commodities: cat.commodities.filter(
-        (c) => catalogPairsForCommodity(catalogPairs, c).length > 0
+        (c) => catalogPairsForCommodity(priceCatalogPairs, c).length > 0
       ),
     })).filter((cat) => cat.commodities.length > 0);
-  }, [catalogPairs, isCatalogLoading]);
+  }, [priceCatalogPairs, isCatalogLoading]);
 
-  const pAvailableVarieties = useMemo(
-    () => getAvailableVarietiesForCommodity(catalogPairs, pCommodity, pMarket, pPriceType),
-    [catalogPairs, pCommodity, pMarket, pPriceType]
-  );
+  const pAvailableVarieties = useMemo(() => {
+    const priced = getAvailableVarietiesForCommodity(
+      priceCatalogPairs,
+      pCommodity,
+      pMarket,
+      pPriceType
+    );
+    // A variety added later has no price record yet, so the price filter drops
+    // it — every variety of the commodity must stay visible and selectable.
+    const every = getAvailableVarietiesForCommodity(priceCatalogPairs, pCommodity);
+    const seen = new Set(
+      priced.map((c) => (c.isNoVariety ? "__NO_VARIETY__" : c.value))
+    );
+    const extras = every.filter(
+      (c) => !seen.has(c.isNoVariety ? "__NO_VARIETY__" : c.value)
+    );
+    return [...priced, ...extras];
+  }, [priceCatalogPairs, pCommodity, pMarket, pPriceType]);
 
   const selectedVarietyValue = useMemo(
     () => pickDefaultVariety(pAvailableVarieties, pVariety),
@@ -999,7 +1016,7 @@ function DFTCTrends() {
 
   const selectedCatalogPair = useMemo(() => {
     if (!pAvailableVarieties.length) {
-      const matches = catalogPairsForCommodity(catalogPairs, pCommodity);
+      const matches = catalogPairsForCommodity(priceCatalogPairs, pCommodity);
       return matches[0] || null;
     }
     const matched = pAvailableVarieties.find((c) =>
@@ -1007,15 +1024,15 @@ function DFTCTrends() {
     );
     if (matched) {
       return (
-        catalogPairs.find((p) => p.commodity_id === matched.commodity_id) || {
+        priceCatalogPairs.find((p) => p.commodity_id === matched.commodity_id) || {
           commodity: pCommodity,
           variety: matched.value,
           commodity_id: matched.commodity_id,
         }
       );
     }
-    return catalogPairsForCommodity(catalogPairs, pCommodity)[0] || null;
-  }, [pAvailableVarieties, selectedVarietyValue, catalogPairs, pCommodity]);
+    return catalogPairsForCommodity(priceCatalogPairs, pCommodity)[0] || null;
+  }, [pAvailableVarieties, selectedVarietyValue, priceCatalogPairs, pCommodity]);
 
   const pCommodityId = selectedCatalogPair?.commodity_id || null;
   const seriesKey = pCommodity;
@@ -1120,18 +1137,59 @@ function DFTCTrends() {
   const pPageRows = pTableRows.slice((pPage - 1) * PAGE_SIZE, pPage * PAGE_SIZE);
 
   // Live Arrival Volume Query
-  const aCommodityId = useMemo(
-    () => findCommodityId(catalogPairs, aCommodity, "") || aCommodity,
-    [catalogPairs, aCommodity]
-  );
+  // The arrival tab covers every commodity, not only the top-10 ones, so the
+  // scope comes from the DFTC commodity catalog. The top-10 price catalog
+  // cannot resolve a commodity that has no top-10 row.
+  const { data: commodityCatalog, isLoading: isCommodityCatalogLoading } = useQuery({
+    queryKey: ["dftc-trends-commodity-catalog"],
+    queryFn: () => dftcApi.getCommodityCatalog(),
+    staleTime: 60 * 1000,
+  });
+
+  const arrivalCommodityCategories = useMemo(() => {
+    const items = commodityCatalog?.items || [];
+    if (!items.length) return PRICE_CATEGORIES;
+    const byCategory = new Map();
+    items.forEach((item) => {
+      const name = item?.name;
+      if (!name) return;
+      const category = item.category || "Others";
+      if (!byCategory.has(category)) byCategory.set(category, new Set());
+      byCategory.get(category).add(name);
+    });
+    return [...byCategory.entries()].map(([category, names]) => ({
+      id: toId(category),
+      name: category,
+      commodities: [...names].sort((a, b) => a.localeCompare(b)),
+    }));
+  }, [commodityCatalog]);
+
+  const aCommodityId = useMemo(() => {
+    const target = normalizeCommodityLabel(aCommodity);
+    const row = (commodityCatalog?.items || []).find(
+      (item) => normalizeCommodityLabel(item?.name) === target
+    );
+    // No catalog row — the endpoint resolves an exact commodity name too.
+    return row?.id || aCommodity;
+  }, [commodityCatalog, aCommodity]);
+
   const {
     data: arrivalQueryData,
     isLoading: isArrivalLoading,
     isError: isArrivalError,
   } = useQuery({
     queryKey: ["dftc-trends-arrivals", aCommodityId],
-    queryFn: () => analyticsApi.getArrivalPressure(aCommodityId),
-    enabled: activeTab === "arrival" && Boolean(aCommodityId),
+    queryFn: () =>
+      analyticsApi.getArrivalPressure(aCommodityId, null, null, {
+        aggregateVarieties: true,
+      }),
+    enabled:
+      activeTab === "arrival" &&
+      Boolean(aCommodityId) &&
+      // Wait for the catalog: before it resolves the id is the raw commodity
+      // name, which the endpoint cannot resolve for a name that only exists
+      // per variety — the request would 404 and flash an error banner.
+      !isCommodityCatalogLoading,
     staleTime: 60 * 1000,
   });
 
@@ -1289,9 +1347,9 @@ function DFTCTrends() {
   const priceTrendsTab = (
     <div className="space-y-6">
       {/* 1. Filters */}
-      <div className={`${cardCls} p-5 md:p-6`}>
-        <h2 className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-4">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`${cardCls} p-3 sm:p-4 md:p-5`}>
+        <h2 className="text-[11px] sm:text-[12px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-2 sm:mb-2.5">Filters</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
           <div>
             <label className={labelCls}>Commodity</label>
             <SearchableCombobox
@@ -1309,7 +1367,7 @@ function DFTCTrends() {
               <select
                 value={selectedVarietyValue === null ? "__NO_VARIETY__" : (selectedVarietyValue || "")}
                 onChange={(e) => setPVariety(e.target.value === "__NO_VARIETY__" ? null : e.target.value)}
-                className={selectCls + " appearance-none pr-9 cursor-pointer"}
+                className={selectCls + " appearance-none pr-7 sm:pr-8 cursor-pointer"}
                 disabled={pAvailableVarieties.length === 0}
               >
                 {pAvailableVarieties.map((choice) => (
@@ -1321,126 +1379,48 @@ function DFTCTrends() {
                   </option>
                 ))}
               </select>
-              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+              <ChevronDown size={13} className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
           </div>
           <div>
             <label className={labelCls}>Market</label>
             <div className="relative">
-              <select value={pMarket} onChange={(e) => setPMarket(e.target.value)} className={selectCls + " appearance-none pr-9 cursor-pointer"}>
+              <select value={pMarket} onChange={(e) => setPMarket(e.target.value)} className={selectCls + " appearance-none pr-7 sm:pr-8 cursor-pointer"}>
                 <option>Bankerohan Public Market</option>
                 <option>DFTC Taboan</option>
               </select>
-              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+              <ChevronDown size={13} className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
           </div>
           <div>
             <label className={labelCls}>Price Type</label>
             <div className="relative">
-              <select value={pPriceType} onChange={(e) => setPPriceType(e.target.value)} className={selectCls + " appearance-none pr-9 cursor-pointer"}>
+              <select value={pPriceType} onChange={(e) => setPPriceType(e.target.value)} className={selectCls + " appearance-none pr-7 sm:pr-8 cursor-pointer"}>
                 <option>Retail</option>
                 <option>Wholesale</option>
               </select>
-              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+              <ChevronDown size={13} className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
           </div>
         </div>
+
       </div>
 
-      {/* 2. Price Summary Metrics Strip */}
-      {isPricesLoading ? (
-        <SummaryStripSkeleton columns={5} />
-      ) : (
-        <div className={`${cardCls} p-5 md:p-6`}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-            {[
-              {
-                title: "Recent Average Price",
-                renderVal: (v) => (
-                  <span className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
-                    {v.recentAvg != null ? `₱${v.recentAvg.toFixed(2)}/kg` : "—"}
-                  </span>
-                )
-              },
-              {
-                title: "Lower Forecast",
-                renderVal: (v) => (
-                  <span className="text-[13px] font-bold text-amber-700">
-                    {v.lo != null ? `₱${v.lo.toFixed(2)}/kg` : "—"}
-                  </span>
-                )
-              },
-              {
-                title: "Forecast Midpoint",
-                renderVal: (v) => (
-                  <span className="text-[13px] font-bold text-[var(--hw-neutral-900)]">
-                    {v.avgMid != null ? `₱${v.avgMid.toFixed(2)}/kg` : "—"}
-                  </span>
-                )
-              },
-              {
-                title: "Upper Forecast",
-                renderVal: (v) => (
-                  <span className="text-[13px] font-bold text-emerald-700">
-                    {v.hi != null ? `₱${v.hi.toFixed(2)}/kg` : "—"}
-                  </span>
-                )
-              },
-              {
-                title: "Forecast Price Change",
-                renderVal: (v) => {
-                  if (v.change == null || !Number.isFinite(v.change)) {
-                    return (
-                      <span className="text-[12px] font-bold text-[var(--hw-neutral-500)]">
-                        —
-                      </span>
-                    );
-                  }
-                  const rounded = Math.abs(v.change).toFixed(1);
-                  const isZero = Number(rounded) === 0;
-                  const isPositive = v.change > 0 && !isZero;
-                  const isNegative = v.change < 0 && !isZero;
-
-                  return (
-                    <span
-                      className={`text-[12px] font-bold ${
-                        isPositive
-                          ? "text-emerald-700"
-                          : isNegative
-                          ? "text-rose-600"
-                          : "text-[var(--hw-neutral-700)]"
-                      }`}
-                    >
-                      {isPositive ? "↑ " : isNegative ? "↓ " : ""}{rounded}%
-                    </span>
-                  );
-                }
-              }
-            ].map(({ title, renderVal }, idx) => (
-              <div key={title} className={`${idx !== 0 ? "lg:border-l-2 lg:border-[var(--hw-neutral-200)] lg:pl-5" : "lg:pl-0"} flex flex-col justify-between`}>
-                <div className="text-[11px] font-bold text-[var(--hw-neutral-500)] uppercase tracking-wider mb-2">{title}</div>
-                {priceSummaryRows(pVarietySummaries, renderVal, pShowAll, setPShowAll)}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Single Unified Price Trend Chart Card */}
+      {/* 2. Single Unified Price Trend Chart Card */}
       {isPricesLoading ? (
         <ChartCardSkeleton height={380} />
       ) : (
-        <div className={`${cardCls} p-6 md:p-8 space-y-4`}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[var(--hw-neutral-100)]">
+        <div className={`${cardCls} p-3 sm:p-4 md:p-6 lg:p-8 space-y-3 sm:space-y-4`}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 sm:pb-3 border-b border-[var(--hw-neutral-100)]">
             <div>
-              <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Price Trend</h3>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+              <h3 className="text-[14px] sm:text-[15px] font-bold text-black">Price Trend</h3>
+              <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] mt-0.5 leading-snug">
                 {pMarket} · {pPriceType} · {catalogVarietyLabel} · Next {fHorizon} days price outlook · ₱/kg
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Historical Range</span>
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+                <span className="text-[11px] sm:text-[12px] font-medium text-black whitespace-nowrap">Historical Range</span>
                 <HistoricalRangeSelect
                   preset={pDatePreset}
                   customFrom={pCustomFrom}
@@ -1452,8 +1432,8 @@ function DFTCTrends() {
                   }}
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Forecast Horizon</span>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+                <span className="text-[11px] sm:text-[12px] font-medium text-black whitespace-nowrap">Forecast Horizon</span>
                 <ForecastHorizonSelect value={fHorizon} onChange={setFHorizon} />
               </div>
             </div>
@@ -1466,23 +1446,102 @@ function DFTCTrends() {
               chartData={pChartData}
               varieties={varieties}
               colors={varietyColors}
-              height={380}
+              height={typeof window !== "undefined" && window.innerWidth < 640 ? 280 : 380}
               actualLabel="Actual price"
               forecastLabel="Forecast"
               forecastRangeLabel="Forecast range"
               forecastBoundaryLabel="Forecast starts"
             />
           ) : (
-            <div className="py-16 text-center flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center mb-3">
-                <TrendingUp className="w-6 h-6 text-[var(--hw-neutral-400)]" />
+            <div className="py-12 sm:py-16 text-center flex flex-col items-center justify-center">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center mb-3">
+                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--hw-neutral-400)]" />
               </div>
-              <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No price trend data available</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] max-w-xs mt-1">
+              <p className="text-[13.5px] sm:text-[14px] font-semibold text-[var(--hw-neutral-800)]">No price trend data available</p>
+              <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] max-w-xs mt-1">
                 No price records found for {pCommodity} ({pPriceType}) in {pMarket} within the selected period.
               </p>
             </div>
           )}
+
+          {/* Price Summary Metrics Tiles (Farmer View Basis style, inside chart card) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 pt-3 border-t border-[var(--hw-neutral-100)]">
+            {[
+              {
+                title: "Recent Average Price",
+                renderVal: (v) => (
+                  <span className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black">
+                    {v.recentAvg != null ? `₱${v.recentAvg.toFixed(2)}/kg` : "—"}
+                  </span>
+                )
+              },
+              {
+                title: "Lower Forecast",
+                renderVal: (v) => (
+                  <span className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-amber-700">
+                    {v.lo != null ? `₱${v.lo.toFixed(2)}/kg` : "—"}
+                  </span>
+                )
+              },
+              {
+                title: "Forecast Midpoint",
+                renderVal: (v) => (
+                  <span className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black">
+                    {v.avgMid != null ? `₱${v.avgMid.toFixed(2)}/kg` : "—"}
+                  </span>
+                )
+              },
+              {
+                title: "Upper Forecast",
+                renderVal: (v) => (
+                  <span className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-emerald-700">
+                    {v.hi != null ? `₱${v.hi.toFixed(2)}/kg` : "—"}
+                  </span>
+                )
+              },
+              {
+                title: "Forecast Price Change",
+                colSpan: "col-span-2 sm:col-span-1",
+                renderVal: (v) => {
+                  if (v.change == null || !Number.isFinite(v.change)) {
+                    return (
+                      <span className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-[var(--hw-neutral-500)]">
+                        —
+                      </span>
+                    );
+                  }
+                  const rounded = Math.abs(v.change).toFixed(1);
+                  const isZero = Number(rounded) === 0;
+                  const isPositive = v.change > 0 && !isZero;
+                  const isNegative = v.change < 0 && !isZero;
+
+                  return (
+                    <span
+                      className={`text-[13px] sm:text-[14px] md:text-[15px] font-bold ${
+                        isPositive
+                          ? "text-emerald-700"
+                          : isNegative
+                          ? "text-rose-600"
+                          : "text-black"
+                      }`}
+                    >
+                      {isPositive ? "↑ " : isNegative ? "↓ " : ""}{rounded}%
+                    </span>
+                  );
+                }
+              }
+            ].map(({ title, colSpan, renderVal }) => (
+              <div
+                key={title}
+                className={`bg-[var(--hw-neutral-50)] rounded-xl p-2.5 sm:p-3 flex flex-col justify-between min-w-0 border border-[var(--hw-neutral-100)] ${colSpan || ""}`}
+              >
+                <p className="text-[10px] sm:text-[11px] font-semibold text-black uppercase tracking-wide mb-1 leading-tight line-clamp-2">
+                  {title}
+                </p>
+                <div>{priceSummaryRows(pVarietySummaries, renderVal, pShowAll, setPShowAll)}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1498,18 +1557,18 @@ function DFTCTrends() {
 
       {/* 4. Recent Price Records Table */}
 
-      <div className="space-y-3">
-        <h3 className="text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Price Records</h3>
+      <div className="space-y-2.5 sm:space-y-3">
+        <h3 className="text-[13.5px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Price Records</h3>
         {isPricesLoading ? (
           <TableSkeleton cols={8} rows={5} />
         ) : (
           <div className={`${cardCls} overflow-hidden`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
+            <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
+              <table className="w-full min-w-[620px] text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
                     {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
+                      <th key={h} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -1525,14 +1584,14 @@ function DFTCTrends() {
                   ) : (
                     pPageRows.map((row, i) => (
                       <tr key={i}>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.date}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-900)] font-semibold">{pCommodity}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)]">{row.variety || "—"}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-600)]">{getCommodityCategory(pCommodity)}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">{pMarket}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)]">{pPriceType}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-600)]">kg</td>
-                        <td className="px-4 py-3 font-bold text-[var(--hw-neutral-900)]">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.date}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-900)] font-semibold whitespace-nowrap">{pCommodity}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">{row.variety || "—"}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-600)] whitespace-nowrap">{getCommodityCategory(pCommodity)}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">{pMarket}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">{pPriceType}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-600)] whitespace-nowrap">kg</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-bold text-[var(--hw-neutral-900)] whitespace-nowrap">
                           {row.price != null ? `₱${row.price.toFixed(2)}` : "—"}
                         </td>
                       </tr>
@@ -1542,7 +1601,7 @@ function DFTCTrends() {
               </table>
             </div>
             {pPageRows.length > 0 && (
-              <div className="px-4 pb-4">
+              <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
                 <Pagination page={pPage} totalPages={pTotalPages} totalRows={pTableRows.length} onPage={setPPage} />
               </div>
             )}
@@ -1556,26 +1615,26 @@ function DFTCTrends() {
   // Arrival Volume Trends Tab Content
   // ─────────────────────────────────────────────────────────────────────────────
   const arrivalTrendsTab = (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 1. Filters */}
-      <div className={`${cardCls} p-5 md:p-6`}>
-        <h2 className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-4">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
+      <div className={`${cardCls} p-3 sm:p-4 md:p-5`}>
+        <h2 className="text-[11px] sm:text-[12px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-2 sm:mb-2.5">Filters</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+          <div className="col-span-2 sm:col-span-1">
             <label className={labelCls}>Commodity</label>
-            <SearchableCombobox categories={PRICE_CATEGORIES} value={aCommodity} onChange={setACommodity} />
+            <SearchableCombobox categories={arrivalCommodityCategories} value={aCommodity} onChange={setACommodity} />
           </div>
-          <div>
-            <label className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1.5">
-              Arrival Volume Type
-              <div className="relative inline-block">
+          <div className="col-span-1">
+            <label className="flex items-center gap-1 text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1">
+              <span className="truncate">Arrival Type</span>
+              <div className="relative inline-block shrink-0">
                 <button
                   type="button"
                   onMouseEnter={() => setShowVolumeTypeInfo(true)}
                   onMouseLeave={() => setShowVolumeTypeInfo(false)}
                   className="text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
                 >
-                  <Info size={13} />
+                  <Info size={12} />
                 </button>
                 {showVolumeTypeInfo && (
                   <div className="absolute left-0 top-6 z-50 w-64 bg-[var(--hw-neutral-900)] text-white border border-[var(--hw-neutral-800)] rounded-xl shadow-xl p-3 text-[11px] space-y-1.5 pointer-events-none">
@@ -1593,15 +1652,15 @@ function DFTCTrends() {
               </div>
             </label>
             <div className="relative">
-              <select value={aVolumeType} onChange={(e) => setAVolumeType(e.target.value)} className={selectCls + " appearance-none pr-9 cursor-pointer"}>
+              <select value={aVolumeType} onChange={(e) => setAVolumeType(e.target.value)} className={selectCls + " appearance-none pr-7 sm:pr-8 cursor-pointer"}>
                 <option>Combined Total</option>
                 <option>Farm Source</option>
                 <option>Other Source</option>
               </select>
-              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+              <ChevronDown size={13} className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
           </div>
-          <div>
+          <div className="col-span-1">
             <label className={labelCls}>Period</label>
             <PeriodSelect
               preset={aDatePreset}
@@ -1641,93 +1700,55 @@ function DFTCTrends() {
       </div>
 
       {isArrivalError && (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3.5 sm:p-4 text-xs sm:text-sm text-red-700">
           Arrival analytics could not be loaded. Please try again later.
         </div>
       )}
 
-      {/* 2. Arrival Volume Summary Metrics Strip */}
-      {isArrivalLoading ? (
-        <SummaryStripSkeleton columns={4} />
-      ) : (
-        <div className={`${cardCls} p-5 md:p-6 space-y-5`}>
-          {arrivalQueryData?.classification && (
+      {/* Arrival Pressure Classification Banner (Farmer View Basis style, above charts) */}
+      {arrivalQueryData?.classification && (
+        <div className="flex items-start sm:items-center justify-between gap-3 px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white shadow-[var(--shadow-xs)]">
+          <div className="flex items-start sm:items-center gap-3">
+            <BarChart3 className="w-5 h-5 text-[var(--hw-green-700)] flex-shrink-0 mt-0.5 sm:mt-0" />
             <div>
-              <div className="text-[11px] font-bold text-[var(--hw-neutral-500)] uppercase tracking-wider">
+              <p className="text-[11px] sm:text-[12px] font-bold text-black uppercase tracking-wider">
                 Arrival Pressure Classification
-              </div>
-              <div className={`mt-1 text-lg font-bold ${getClassificationTextColor(arrivalQueryData.classification)}`}>
+              </p>
+              <div className={`mt-0.5 text-[15px] sm:text-base font-bold ${getClassificationTextColor(arrivalQueryData.classification)}`}>
                 {arrivalQueryData.classification}
                 {arrivalQueryData.data_is_stale && (
-                  <span className="ml-2 text-xs font-medium text-amber-700">Historical data</span>
+                  <span className="ml-2 text-[11px] sm:text-xs font-medium text-amber-700">(Historical data)</span>
                 )}
               </div>
             </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                title: "Latest Arrival Volume",
-                val: arrivalQueryData?.current_arrival_kg != null
-                  ? `${Number(arrivalQueryData.current_arrival_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
-                  : "—",
-                color: "text-[var(--hw-neutral-900)]"
-              },
-              {
-                title: "Arrival-Window Farm Source Total",
-                val: arrivalQueryData?.source_breakdown?.farm_source_volume_kg != null
-                  ? `${Number(arrivalQueryData.source_breakdown.farm_source_volume_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
-                  : "—",
-                color: "text-[var(--hw-green-700)]"
-              },
-              {
-                title: "Arrival-Window Other Source Total",
-                val: arrivalQueryData?.source_breakdown?.other_source_volume_kg != null
-                  ? `${Number(arrivalQueryData.source_breakdown.other_source_volume_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
-                  : "—",
-                color: "text-amber-700"
-              },
-              {
-                title: "Historical Average Arrival",
-                val: arrivalQueryData?.average_arrival_kg != null
-                  ? `${Number(arrivalQueryData.average_arrival_kg).toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`
-                  : "—",
-                color: "text-[var(--hw-neutral-900)]"
-              }
-            ].map(({ title, val, color }, idx) => (
-              <div key={title} className={`${idx !== 0 ? "sm:border-l-2 sm:border-[var(--hw-neutral-200)] sm:pl-5" : "sm:pl-0"} flex flex-col justify-between`}>
-                <div className="text-[11px] font-bold text-[var(--hw-neutral-500)] uppercase tracking-wider mb-2">{title}</div>
-                <div className={`text-xl sm:text-2xl font-bold tracking-tight ${color}`}>{val}</div>
-              </div>
-            ))}
           </div>
         </div>
       )}
 
-      {/* 3. Visualizations: Both Bar Chart & Pie Chart (matching Admin Arrival Pressure) */}
+      {/* 2. Visualizations with integrated summary cards */}
       {isArrivalLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 items-stretch">
           <ChartCardSkeleton height={300} />
           <ChartCardSkeleton height={300} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 items-stretch">
           {/* Card 1: Arrival Volume Trend Bar Chart */}
-          <div className={`${cardCls} p-6 md:p-8 flex flex-col justify-between`}>
+          <div className={`${cardCls} p-3.5 sm:p-5 md:p-6 lg:p-8 flex flex-col justify-between space-y-3`}>
             <div>
-              <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)] mb-0.5">Arrival Volume Trend</h3>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] mb-4">
+              <h3 className="text-[14px] sm:text-[15px] font-bold text-[var(--hw-neutral-900)] mb-0.5">Arrival Volume Trend</h3>
+              <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] mb-3 sm:mb-4">
                 {aCommodity} · {aVolumeType} · {aPeriodLabel} · kg
               </p>
             </div>
 
             {aChartData.length === 0 ? (
-              <div className="w-full flex-1 flex flex-col justify-center items-center py-16 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center mb-3">
-                  <BarChart3 className="w-6 h-6 text-[var(--hw-neutral-400)]" />
+              <div className="w-full flex-1 flex flex-col justify-center items-center py-12 sm:py-16 text-center">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center mb-3">
+                  <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--hw-neutral-400)]" />
                 </div>
-                <p className="text-[14px] font-semibold text-[var(--hw-neutral-800)]">No arrival volume data available</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] max-w-xs mt-1">
+                <p className="text-[13px] sm:text-[14px] font-semibold text-[var(--hw-neutral-800)]">No arrival volume data available</p>
+                <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] max-w-xs mt-1">
                   {arrivalQueryData?.message || `No arrival-volume records for ${aCommodity} within the selected date range.`}
                 </p>
               </div>
@@ -1737,17 +1758,41 @@ function DFTCTrends() {
                 chartData={aChartData}
                 varietyKeys={aVarietyKeys}
                 sourceType={aVolumeType}
-                height={300}
+                height={typeof window !== "undefined" && window.innerWidth < 640 ? 250 : 300}
                 quartileThresholds={arrivalQueryData?.quartile_thresholds}
               />
             )}
+
+            {/* In-card summary stat tiles (Farmer View Basis style) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-3 border-t border-[var(--hw-neutral-100)] mt-auto">
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  Latest Arrival Volume
+                </p>
+                <p className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
+                  {arrivalQueryData?.current_arrival_kg != null
+                    ? `${Number(arrivalQueryData.current_arrival_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
+                    : "—"}
+                </p>
+              </div>
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  Historical Average Arrival
+                </p>
+                <p className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
+                  {arrivalQueryData?.average_arrival_kg != null
+                    ? `${Number(arrivalQueryData.average_arrival_kg).toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`
+                    : "—"}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Card 2: Arrival Volume Sources Distribution Pie Chart */}
-          <div className={`${cardCls} p-6 md:p-8 flex flex-col justify-between`}>
+          <div className={`${cardCls} p-3.5 sm:p-5 md:p-6 lg:p-8 flex flex-col justify-between space-y-3`}>
             <div>
-              <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)] mb-0.5">Arrival Volume Sources Distribution</h3>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] mb-4">
+              <h3 className="text-[14px] sm:text-[15px] font-bold text-[var(--hw-neutral-900)] mb-0.5">Arrival Volume Sources Distribution</h3>
+              <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] mb-3 sm:mb-4">
                 Arrival volume breakdown by origin (Farm Source vs Other Sources).
               </p>
             </div>
@@ -1756,31 +1801,55 @@ function DFTCTrends() {
               {aSourcesBreakdown.length > 0 ? (
                 <ArrivalSourcePieChart
                   data={aSourcesBreakdown}
-                  height={300}
+                  height={typeof window !== "undefined" && window.innerWidth < 640 ? 250 : 300}
                 />
               ) : (
-                <p className="py-16 text-center text-sm text-[var(--hw-neutral-500)]">
+                <p className="py-12 sm:py-16 text-center text-xs sm:text-sm text-[var(--hw-neutral-500)]">
                   No arrival source data available.
                 </p>
               )}
+            </div>
+
+            {/* In-card summary stat tiles (Farmer View Basis style) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-3 border-t border-[var(--hw-neutral-100)] mt-auto">
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  Arrival Farm Total
+                </p>
+                <p className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-[var(--hw-green-700)] leading-tight">
+                  {arrivalQueryData?.source_breakdown?.farm_source_volume_kg != null
+                    ? `${Number(arrivalQueryData.source_breakdown.farm_source_volume_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
+                    : "—"}
+                </p>
+              </div>
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  Arrival Other Total
+                </p>
+                <p className="text-[13px] sm:text-[14px] md:text-[15px] font-bold text-amber-700 leading-tight">
+                  {arrivalQueryData?.source_breakdown?.other_source_volume_kg != null
+                    ? `${Number(arrivalQueryData.source_breakdown.other_source_volume_kg).toLocaleString("en-US", { maximumFractionDigits: 1 })} kg`
+                    : "—"}
+                </p>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* 4. Recent Arrival Volume Records Table */}
-      <div className="space-y-3">
-        <h3 className="text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Arrival Volume Records</h3>
+      <div className="space-y-2.5 sm:space-y-3">
+        <h3 className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Arrival Volume Records</h3>
         {isArrivalLoading ? (
           <TableSkeleton cols={7} rows={5} />
         ) : (
           <div className={`${cardCls} overflow-hidden`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
+            <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
+              <table className="w-full min-w-[620px] text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
                     {["Period / Month", "Commodity", "Variety", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
+                      <th key={h} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
                     ))}
@@ -1789,19 +1858,19 @@ function DFTCTrends() {
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                   {aPageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                      <td colSpan={7} className="px-4 py-10 sm:py-12 text-center text-[12px] sm:text-[13px] text-[var(--hw-neutral-500)]">
                         No arrival-volume records for the selected commodity and date range.
                       </td>
                     </tr>
                   ) : (
                     aPageRows.map((row, i) => (
                       <tr key={i}>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.month}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-900)] font-semibold">{aCommodity}</td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-700)]">{row.variety || "—"}</td>
-                        <td className="px-4 py-3 text-[var(--hw-green-700)] font-medium">{formatVol(row.farm)}</td>
-                        <td className="px-4 py-3 text-amber-700 font-medium">{formatVol(row.other)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.month}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-900)] font-semibold whitespace-nowrap">{aCommodity}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">{row.variety || "—"}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-green-700)] font-medium whitespace-nowrap">{formatVol(row.farm)}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-amber-700 font-medium whitespace-nowrap">{formatVol(row.other)}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <span className={`font-bold ${row.inconsistent ? "text-amber-700" : "text-[var(--hw-neutral-900)]"}`}>
                               {formatVol(row.combined)}
@@ -1816,7 +1885,7 @@ function DFTCTrends() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-[var(--hw-neutral-600)]">kg</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-600)] whitespace-nowrap">kg</td>
                       </tr>
                     ))
                   )}
@@ -1824,7 +1893,7 @@ function DFTCTrends() {
               </table>
             </div>
             {aPageRows.length > 0 && (
-              <div className="px-4 pb-4">
+              <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
                 <Pagination page={aPage} totalPages={aTotalPages} totalRows={aTableRows.length} onPage={setAPage} />
               </div>
             )}
@@ -1836,13 +1905,13 @@ function DFTCTrends() {
 
   return (
     <div className="min-h-screen bg-[var(--hw-neutral-50)]">
-      <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8">
+      <div className="max-w-[1440px] mx-auto px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-3 sm:py-5 pb-24 md:pb-8">
         <PageHeader
           title="Market Trends"
           description="Explore price, arrival-volume, and seasonal-production trends at DFTC markets."
-          className="mb-6"
+          className="mb-4 sm:mb-6"
         />
-        <div className={`${cardCls} mb-6 overflow-hidden`}>
+        <div className={`${cardCls} mb-4 sm:mb-6 overflow-hidden`}>
           <TabNav tab={activeTab} onChange={handleTabChange} />
         </div>
         {activeTab === "price"
@@ -1863,7 +1932,7 @@ function DFTCTrends() {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
             onClick={closeAlertModal}
           >
             <div
@@ -1871,7 +1940,7 @@ function DFTCTrends() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-[var(--hw-neutral-100)] flex items-start justify-between gap-4">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-5 border-b border-[var(--hw-neutral-100)] flex items-start justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span
@@ -1883,13 +1952,13 @@ function DFTCTrends() {
                     >
                       <AlertCircle className="w-4 h-4" />
                     </span>
-                    <h3 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+                    <h3 className="text-[15px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">
                       {activeAlertModal === "volatility"
                         ? "Price Volatility Alerts"
                         : "High Arrival Commodities"}
                     </h3>
                   </div>
-                  <p className="text-[13px] text-[var(--hw-neutral-600)]">
+                  <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-600)]">
                     {activeAlertModal === "volatility"
                       ? "Check the trend for these commodities experiencing sharp price swings (>10%)."
                       : "Check the trend for these commodities currently with high arrival volume (≥Q3)."}

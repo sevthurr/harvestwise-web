@@ -276,4 +276,117 @@ describe("Step 1 Assessment Draft Saving and Continuation", () => {
     expect(screen.getByRole("button", { name: /Back to My Crops/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Start new assessment/i })).toBeInTheDocument();
   });
+
+  it("cleans up stale localStorage drafts and prevents duplicates when crops already has the draft", async () => {
+    const { default: MyCropsPage } = await import("../app/farmer/pages/MyCrops");
+    const { useCrops } = await import("../app/farmer/components/crops/CropsContext");
+
+    const existingServerDraft = {
+      id: "CRP-0016",
+      commodity: "COM-0003",
+      commodityId: "COM-0003",
+      commodityName: "Kalabasa",
+      variant: "Suprema",
+      variety: "Suprema",
+      harvestDate: "Jan 16, 2027",
+      currentPrice: 42.37,
+      status: "Draft",
+      phase: "draft",
+      isDraft: true,
+    };
+
+    useCrops.mockReturnValue({
+      crops: [existingServerDraft],
+      loading: false,
+      refreshCrops: vi.fn(),
+    });
+
+    // Stale draft left in localStorage from prior session
+    localStorage.setItem(
+      "harvestwise_assessment_draft",
+      JSON.stringify({
+        commodity: "kalabasa",
+        commodityId: "COM-0003",
+        commodityName: "Kalabasa",
+        harvestDate: "2027-01-16",
+        isDraft: true,
+        draftId: null,
+      })
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/farmer/crops"]}>
+          <MyCropsPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    // Only one Kalabasa draft card should exist, not two!
+    await waitFor(() => {
+      const draftCards = screen.getAllByText(/Kalabasa/i);
+      expect(draftCards.length).toBe(1);
+    });
+
+    // The stale localStorage entry should have been cleaned up
+    expect(localStorage.getItem("harvestwise_assessment_draft")).toBeNull();
+  });
+
+  it("updates existing draft and clears localStorage when save draft succeeds", async () => {
+    const { default: AssessPage } = await import("../app/farmer/pages/Assess");
+    const { useCrops } = await import("../app/farmer/components/crops/CropsContext");
+    const { apiPost, parseResponse } = await import("../app/global/api");
+
+    const existingServerDraft = {
+      id: "CRP-0016",
+      commodity: "COM-0003",
+      commodityId: "COM-0003",
+      commodityName: "Kalabasa",
+      variant: "Suprema",
+      variety: "Suprema",
+      plantingDate: "2026-10-15",
+      harvestDate: "2027-01-16",
+      status: "Draft",
+      phase: "draft",
+      isDraft: true,
+    };
+
+    const refreshCropsMock = vi.fn();
+    useCrops.mockReturnValue({
+      crops: [existingServerDraft],
+      loading: false,
+      refreshCrops: refreshCropsMock,
+    });
+
+    apiPost.mockResolvedValue({ ok: true, status: 200 });
+    parseResponse.mockResolvedValue({ id: "CRP-0016", status: "Draft" });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/farmer/assess?resumeDraft=CRP-0016"]}>
+          <AssessPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Save draft/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save draft/i }));
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith(
+        "/crop-plans/draft",
+        expect.objectContaining({
+          plan_id: "CRP-0016",
+          commodity_id: "COM-0003",
+        })
+      );
+      // Verify localStorage is cleared
+      expect(localStorage.getItem("harvestwise_assessment_draft")).toBeNull();
+    });
+  });
 });

@@ -21,7 +21,20 @@ const SEVEN_DAYS = 1000 * 60 * 60 * 24 * 7;
 export function shouldRetry(failureCount, error) {
   const status = error?.status;
   if (typeof status === 'number' && status >= 400 && status < 500) return false;
+  // A network-level failure (no HTTP status — the request never reached the
+  // server) while the browser is offline cannot succeed on a retry: the
+  // service worker has already answered from its runtime cache, or there was
+  // nothing to answer with. Retrying only delays the error by the backoff.
+  if (typeof status !== 'number' && isBrowserOffline()) return false;
   return failureCount < 3;
+}
+
+/**
+ * True only when the browser reports being offline. `navigator` is absent in
+ * non-browser environments (tests, SSR), where offline is not a thing.
+ */
+function isBrowserOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 export const queryClient = new QueryClient({
@@ -30,6 +43,15 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 30,        // 30 min before data is considered stale
       gcTime: SEVEN_DAYS,                // keep in memory for 7 days
       retry: shouldRetry,
+      // The offline layer is the service worker: vite.config.js caches every
+      // /api/v1/ GET under NetworkFirst for 7 days. React Query's default
+      // networkMode ('online') refuses to issue the request at all while the
+      // browser reports offline, so the service worker is never consulted and
+      // its cached response can never be read. 'always' lets the request go
+      // out so the service worker can answer it from cache.
+      // Mutations keep the default, so a half-written save is never attempted
+      // while offline.
+      networkMode: 'always',
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,           // refresh when farmer comes back online
       refetchOnMount: false,

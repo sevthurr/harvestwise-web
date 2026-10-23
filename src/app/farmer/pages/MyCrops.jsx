@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Sprout, ChevronRight, CheckCircle2, X } from "lucide-react";
-import { useCrops } from "../components/crops/CropsContext";
+import { useCrops, formatLocalDate } from "../components/crops/CropsContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { PhasePill } from "../components/crops/CropCard";
@@ -216,14 +216,40 @@ function MyCropsPage() {
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || !parsed.isDraft) return null;
-      if (parsed.draftId && crops.some((c) => c.id === parsed.draftId)) return null;
+
+      // 1. If draftId is present and already in crops, skip
+      if (parsed.draftId && crops.some((c) => c.id === parsed.draftId)) {
+        try { localStorage.removeItem("harvestwise_assessment_draft"); } catch {}
+        return null;
+      }
+
+      // 2. If crops already has an assessment draft for the same commodity, skip to prevent duplicates
+      const parsedCommodityId = parsed.commodityId || parsed.commodity;
+      const parsedName = (parsed.commodityName || "").toLowerCase().trim();
+      if (
+        crops.some((c) => {
+          if (c.phase !== "draft" && c.status !== "Draft" && !c.isDraft) return false;
+          if (parsed.draftId && c.id === parsed.draftId) return true;
+          if (parsedCommodityId && (c.commodityId === parsedCommodityId || c.commodity === parsedCommodityId)) return true;
+          if (parsedName && (c.commodityName || "").toLowerCase().trim() === parsedName) return true;
+          return false;
+        })
+      ) {
+        try { localStorage.removeItem("harvestwise_assessment_draft"); } catch {}
+        return null;
+      }
+
       return {
         id: parsed.draftId || "local_draft",
         commodity: parsed.commodity || "",
+        commodityId: parsed.commodityId || parsed.commodity || "",
         commodityName: parsed.commodityName || (parsed.commodity ? (parsed.commodity.charAt(0).toUpperCase() + parsed.commodity.slice(1)) : "Unspecified Crop"),
         variant: parsed.variant || "",
-        plantingDate: parsed.plantingDate || null,
-        harvestDate: parsed.harvestDate || null,
+        variety: parsed.variant || "",
+        plantingDate: formatLocalDate(parsed.plantingDate) || parsed.plantingDate || null,
+        harvestDate: formatLocalDate(parsed.harvestDate) || parsed.harvestDate || null,
+        rawPlantingDate: parsed.plantingDate || null,
+        rawHarvestDate: parsed.harvestDate || null,
         harvestQuantity: parsed.harvestQuantity ? Number(parsed.harvestQuantity) : 0,
         totalCost: parsed.totalCost || parsed.simpleCost ? Number(parsed.totalCost || parsed.simpleCost) : 0,
         currentPrice: null,

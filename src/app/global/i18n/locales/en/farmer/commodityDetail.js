@@ -28,6 +28,9 @@ export const commodityDetail = {
   btn_view_another: "View another crop",
   not_available: "Price details not available.",
   back_to_prices: "Back to Prices",
+  offline_notice: "You're offline — this price isn't saved on this device yet.",
+  load_failed: "We couldn't load this price. Check your connection and try again.",
+  btn_retry: "Retry",
   price_trend_details: "Price Trend Details",
   assess_crop_btn: "Assess this crop",
   select_variety: "Select a variety"

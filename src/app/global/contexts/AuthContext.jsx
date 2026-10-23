@@ -36,8 +36,13 @@ export function AuthProvider({ children }) {
   // /auth/me nests the role as { role: { role_name } } — reading a top-level
   // `role_name` yields undefined, and roleHome() then defaults to '/farmer',
   // which seeded the farmer bundle for every role (403s on /farmer/*).
+  //
+  // The bundle carries the farmer's own crop plans, so the gate is an explicit
+  // Farmer check. roleHome() maps any unknown or missing role name to
+  // '/farmer', and the fallback path inside loadFarmerOfflineData requests
+  // /crop-plans — so a session without a readable role must not seed it.
   const seedFarmerOffline = (me) => {
-    if (me && roleHome(me.role?.role_name) === '/farmer') {
+    if ((me?.role?.role_name || '').toLowerCase() === 'farmer') {
       loadFarmerOfflineData(queryClient).catch(() => {});
     }
   };

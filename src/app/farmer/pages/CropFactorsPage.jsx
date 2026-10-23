@@ -10,7 +10,8 @@ import { apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
-import { CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
+import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
 
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
@@ -197,7 +198,16 @@ function CropFactorsPage() {
   const phaseConfig = crop.phase ? getPhaseConfig(crop.phase) : null;
   const phaseLabel = phaseConfig ? t(phaseConfig.labelKey, {}, crop.phase) : null;
 
-  const rawRec = planAdvisoryData?.recommendation || planAdvisoryData?.final_assessment || crop?.advisory || null;
+  const rawRec =
+    state?.advisoryCode ||
+    state?.rawAdvisory ||
+    state?.planAdvisoryData?.advisory?.advisory ||
+    planAdvisoryData?.advisory?.advisory ||
+    crop?.advisoryCategory ||
+    crop?.advisory ||
+    planAdvisoryData?.recommendation ||
+    planAdvisoryData?.final_assessment ||
+    null;
   const normalizedAdv = normalizeAdvisoryCode(rawRec);
 
   const isAvoid =
@@ -211,20 +221,31 @@ function CropFactorsPage() {
 
   const isRecommended = !isAvoid && !isCaution;
 
-  const advisoryText = isAvoid
-    ? t("farmer.advisory.labels.avoid_for_now", {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
+  const effectiveAdvisoryCode = isAvoid
+    ? ADVISORY_CODES.AVOID_FOR_NOW
     : isCaution
-    ? t("farmer.advisory.labels.proceed_with_caution", {}, t("farmer.advisory.recommendation_caution", {}, "Proceed with Caution"))
-    : t("farmer.advisory.labels.recommended", {}, t("farmer.advisory.recommendation_recommended", {}, "Recommended"));
+    ? ADVISORY_CODES.PROCEED_WITH_CAUTION
+    : ADVISORY_CODES.RECOMMENDED;
+
+  const badge = composeAdvisoryBadge(effectiveAdvisoryCode, resolvedCropStage);
+
+  const advisoryText =
+    state?.advisoryLabel ||
+    (rawRec ? t(badge.key) : null) ||
+    (isAvoid
+      ? t("farmer.advisory.labels.avoid_for_now", {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
+      : isCaution
+      ? t("farmer.advisory.labels.proceed_with_caution", {}, t("farmer.advisory.recommendation_caution", {}, "Proceed with Caution"))
+      : t("farmer.advisory.labels.recommended", {}, t("farmer.advisory.recommendation_recommended", {}, "Recommended")));
 
   let statusConfig = {
-    Icon: XCircle,
+    Icon: AlertCircle,
     iconColor: "text-red-600",
     textColor: "text-red-700",
   };
   if (isCaution) {
     statusConfig = {
-      Icon: AlertCircle,
+      Icon: AlertTriangle,
       iconColor: "text-amber-500",
       textColor: "text-amber-700",
     };
