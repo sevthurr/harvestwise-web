@@ -198,7 +198,7 @@ function dimensionDetail(dimension, score, evidence, rules) {
       }
       if (e.timeliness_basis === "latest_year") {
         return e.latest_year != null
-          ? `Latest production year is ${e.latest_year} (${plural(e.years_old, "year")} old). Scored 1.00 when at most 1 year old, otherwise 0.20.`
+          ? `Latest production year is ${e.latest_year} with ${e.latest_year_quarters ?? "some"} of 4 quarters available (${plural(e.years_old, "year")} old). Scored 1.00 when at most 1 year old, otherwise 0.20.`
           : "No production year on record (score 0.20).";
       }
       if (e.age_days == null) {
