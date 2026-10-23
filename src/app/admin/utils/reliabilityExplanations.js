@@ -23,6 +23,7 @@ export const DIMENSION_LABELS = {
 export const FALLBACK_RELIABILITY_RULES = {
   dimension_weights: { availability: 0.4, timeliness: 0.3, validity: 0.3 },
   stale_after_days: 14,
+  timeliness_floor_after_days: 90,
   no_data_timeliness: 0.05,
   floor: 0.1,
   low_threshold: 0.4,
@@ -206,7 +207,7 @@ function dimensionDetail(dimension, score, evidence, rules) {
       }
       return e.age_days <= stale
         ? `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — within the ${stale}-day limit, so it scores 1.00.`
-        : `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — past the ${stale}-day limit. The score drops linearly to ${fmt2(rules.no_data_timeliness)} at ${stale * 2} days.`;
+        : `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — past the ${stale}-day limit. The score drops linearly to ${fmt2(rules.no_data_timeliness)} at ${rules.timeliness_floor_after_days ?? stale * 2} days.`;
 
     case "validity":
       return e.available > 0
@@ -268,6 +269,6 @@ export function buildReliabilityRuleLines(rules) {
   const w = r.dimension_weights;
   return [
     `Reliability score = ${DIMENSION_ORDER.map((d) => `${fmt2(w[d])} × ${DIMENSION_LABELS[d]}`).join(" + ")}, each dimension scored 0.00–1.00 and the result never lower than ${fmt2(r.floor)}.`,
-    `Timeliness is 1.00 when the latest record is at most ${r.stale_after_days} days old, then falls linearly to ${fmt2(r.no_data_timeliness)} at ${r.stale_after_days * 2} days.`,
+    `Timeliness is 1.00 when the latest record is at most ${r.stale_after_days} days old, then falls linearly to ${fmt2(r.no_data_timeliness)} at ${r.timeliness_floor_after_days ?? r.stale_after_days * 2} days.`,
   ];
 }
