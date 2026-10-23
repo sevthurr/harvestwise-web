@@ -370,9 +370,11 @@ function DFTCUpload() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [ingestionStatus, setIngestionStatus] = useState("idle");
   const fileRef = useRef(null);
+  const validationAbortRef = useRef(null);
   const mountedRef = useRef(true);
   useEffect(() => () => {
     mountedRef.current = false;
+    validationAbortRef.current?.abort();
   }, []);
 
   const runValidation = async (targetFile, dt, isOverwrite) => {
@@ -384,10 +386,13 @@ function DFTCUpload() {
       return;
     }
     const mappedType = DATA_TYPE_MAP[targetDt] || targetDt;
+    validationAbortRef.current?.abort();
+    const controller = new AbortController();
+    validationAbortRef.current = controller;
     setValidating(true);
     setUploadError("");
     try {
-      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite);
+      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite, { signal: controller.signal });
       const summary = res?.summary || {};
       setValidationResult({
         totalRows: summary.total_rows ?? 0,
@@ -406,14 +411,20 @@ function DFTCUpload() {
       setStep("validated");
       setCurrentStep(1);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Validation error:", err);
       setUploadError("We couldn't validate this file. Please try again.");
     } finally {
-      setValidating(false);
+      if (validationAbortRef.current === controller) {
+        validationAbortRef.current = null;
+        setValidating(false);
+      }
     }
   };
 
   const processFile = async (selected) => {
+    validationAbortRef.current?.abort();
+    setValidating(false);
     setFile(selected);
     setFileName(selected.name);
     setUploadError("");
@@ -536,13 +547,15 @@ function DFTCUpload() {
       if (importId) {
         let isFinished = false;
         let attempts = 0;
-        while (!isFinished && attempts < 60) {
+        while (!isFinished && attempts < 300) {
           attempts++;
           await new Promise((r) => setTimeout(r, 2000));
           if (!mountedRef.current) return;
           try {
             const statusRes = await ingestionApi.getHistoryDetail(importId);
-            if (statusRes?.status === "completed" || statusRes?.status === "success") {
+            const forecastFailed = statusRes?.status === "completed_with_forecast_error";
+            const forecastPending = statusRes?.status === "waiting_for_complete_series";
+            if (statusRes?.status === "completed" || statusRes?.status === "success" || forecastFailed || forecastPending) {
               isFinished = true;
               setIngestionStatus("success");
               const subId = statusRes?.submission_id || res?.submission_id || null;
@@ -566,8 +579,21 @@ function DFTCUpload() {
                 finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
               });
               setImportProgress(100);
-              setUploadMessage(`Import completed successfully! Stored ${statusRes.records_imported || 0} records.`);
-              finishProcess(`Stored ${statusRes.records_imported || 0} records`);
+              setUploadMessage(
+                forecastPending
+                  ? "Data stored. Forecast is waiting for the remaining complete price series."
+                  : forecastFailed
+                  ? `Data stored, but forecast generation failed. Stored ${statusRes.records_imported || 0} records.`
+                  : `Import and forecast completed successfully! Stored ${statusRes.records_imported || 0} records.`
+              );
+              finishProcess(
+                forecastPending
+                  ? "Data stored; forecast waiting"
+                  : forecastFailed
+                  ? "Data stored; forecast failed"
+                  : `Stored ${statusRes.records_imported || 0} records`,
+                forecastFailed
+              );
               setStep("stored");
               setCurrentStep(4);
               queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
@@ -577,8 +603,6 @@ function DFTCUpload() {
               queryClient.invalidateQueries({ queryKey: ["dftc-home"] });
               queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
               queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
-              queryClient.invalidateQueries();
-              queryClient.refetchQueries();
             } else if (statusRes?.status === "failed") {
               isFinished = true;
               setIngestionStatus("failed");
@@ -586,12 +610,14 @@ function DFTCUpload() {
               finishProcess(statusRes.error_message || "Import failed", true);
               setStep("validated");
               setCurrentStep(1);
-              queryClient.invalidateQueries();
-              queryClient.refetchQueries();
-            } else {
-              const pct = Math.min(90, 20 + attempts * 3);
+            } else if (statusRes?.status === "forecasting") {
+              const pct = Math.min(95, 75 + Math.min(20, attempts));
               setImportProgress(pct);
-              updateProgress(pct, `Processing records... (${attempts * 2}s)`);
+              updateProgress(pct, "Generating forecast…");
+            } else {
+              const pct = Math.min(70, 20 + attempts * 2);
+              setImportProgress(pct);
+              updateProgress(pct, `Processing records… (${attempts * 2}s)`);
             }
           } catch (statusErr) {
             console.warn("Status poll error:", statusErr);
@@ -612,6 +638,9 @@ function DFTCUpload() {
   };
 
   const handleReset = () => {
+    validationAbortRef.current?.abort();
+    validationAbortRef.current = null;
+    setValidating(false);
     setStep("form");
     setFileName("");
     setCurrentStep(0);

@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
@@ -349,15 +348,7 @@ const ISSUE_CODE_LABELS = {
 };
 
 function AdminImport() {
-  const queryClient = useQueryClient();
-  let navigate;
-  try {
-    navigate = useNavigate();
-  } catch {
-    navigate = (path) => {
-      if (typeof window !== "undefined") window.location.href = path;
-    };
-  }
+  const navigate = useNavigate();
   const [step, setStep] = useState("form");
   const [completedImportId, setCompletedImportId] = useState(null);
   const [completedSummary, setCompletedSummary] = useState(null);
@@ -399,9 +390,11 @@ function AdminImport() {
   const [ingestionStatus, setIngestionStatus] = useState("idle"); // "idle" | "processing" | "success" | "failed"
   const [ingestionRecord, setIngestionRecord] = useState(null);
   const fileRef = useRef(null);
+  const validationAbortRef = useRef(null);
   const mountedRef = useRef(true);
   useEffect(() => () => {
     mountedRef.current = false;
+    validationAbortRef.current?.abort();
   }, []);
 
   const runValidation = async (targetFile, dt, isOverwrite) => {
@@ -413,10 +406,13 @@ function AdminImport() {
       return;
     }
     const mappedType = DATA_TYPE_MAP[targetDt] || targetDt;
+    validationAbortRef.current?.abort();
+    const controller = new AbortController();
+    validationAbortRef.current = controller;
     setValidating(true);
     setUploadError("");
     try {
-      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite);
+      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite, { signal: controller.signal });
       const summary = res?.summary || {};
       setValidationResult({
         totalRows: summary.total_rows ?? 0,
@@ -433,14 +429,20 @@ function AdminImport() {
       setStep("validated");
       setCurrentStep(1);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Validation error:", err);
       setUploadError("We couldn't validate this file. Please try again.");
     } finally {
-      setValidating(false);
+      if (validationAbortRef.current === controller) {
+        validationAbortRef.current = null;
+        setValidating(false);
+      }
     }
   };
 
   const processFile = async (selected) => {
+    validationAbortRef.current?.abort();
+    setValidating(false);
     setFile(selected);
     setFileName(selected.name);
     setUploadError("");
@@ -526,9 +528,13 @@ function AdminImport() {
       setUploadError("Select a dataset type before importing.");
       return;
     }
-    if (validationResult.rejected > 0) {
-      setUploadError("The file contains rejected rows. Fix the validation errors before importing.");
-
+    // Only block on hard rejections (invalid data) — not pure duplicate rejections,
+    // which the backend will simply skip when overwrite is off.
+    const hardRejected = validationRows.filter(
+      (r) => r.result === "rejected" && !r.issues?.some((i) => i.code === "duplicate")
+    ).length;
+    if (hardRejected > 0) {
+      setUploadError(`The file contains ${hardRejected} row(s) with errors (invalid dates, missing fields, etc.). Fix or remove them before importing.`);
       setStep("validated");
       setCurrentStep(1);
       return;
@@ -553,13 +559,15 @@ function AdminImport() {
       if (importId) {
         let isFinished = false;
         let attempts = 0;
-        while (!isFinished && attempts < 60) {
+        while (!isFinished && attempts < 300) {
           attempts++;
           await new Promise((r) => setTimeout(r, 2000));
           if (!mountedRef.current) return;
           try {
             const statusRes = await ingestionApi.getHistoryDetail(importId);
-            if (statusRes?.status === "completed" || statusRes?.status === "success") {
+            const forecastFailed = statusRes?.status === "completed_with_forecast_error";
+            const forecastPending = statusRes?.status === "waiting_for_complete_series";
+            if (statusRes?.status === "completed" || statusRes?.status === "success" || forecastFailed || forecastPending) {
               isFinished = true;
               setIngestionStatus("success");
               setCompletedImportId(importId);
@@ -577,21 +585,27 @@ function AdminImport() {
                 finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
               });
               setImportProgress(100);
-              setUploadMessage(`Import completed successfully! Stored ${statusRes.records_imported || 0} records.`);
+              setUploadMessage(
+                forecastPending
+                  ? "Data stored. Forecast is waiting for the remaining complete price series."
+                  : forecastFailed
+                  ? `Data stored, but forecast generation failed. Stored ${statusRes.records_imported || 0} records.`
+                  : `Import and forecast completed successfully! Stored ${statusRes.records_imported || 0} records.`
+              );
               setStep("stored");
               setCurrentStep(4);
-              queryClient.invalidateQueries();
-              queryClient.refetchQueries();
             } else if (statusRes?.status === "failed") {
               isFinished = true;
               setIngestionStatus("failed");
               setUploadError(statusRes.error_message || "Background ingestion task failed.");
               setStep("validated");
               setCurrentStep(1);
-              queryClient.invalidateQueries();
-              queryClient.refetchQueries();
+            } else if (statusRes?.status === "forecasting") {
+              const pct = Math.min(95, 75 + Math.min(20, attempts));
+              setImportProgress(pct);
+              setUploadMessage("Generating forecast…");
             } else {
-              const pct = Math.min(90, 20 + attempts * 3);
+              const pct = Math.min(70, 20 + attempts * 2);
               setImportProgress(pct);
             }
           } catch (statusErr) {
@@ -609,6 +623,9 @@ function AdminImport() {
   };
 
   const handleReset = () => {
+    validationAbortRef.current?.abort();
+    validationAbortRef.current = null;
+    setValidating(false);
     setStep("form");
     setFileName("");
     setCurrentStep(0);

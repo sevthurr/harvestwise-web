@@ -2,7 +2,7 @@
 // Modules basis pages.
 //
 // The classification comes from the API (api/src/modules/advisory/
-// reliability.py): five quality dimensions are scored 0.00-1.00, combined with
+// reliability.py): three quality dimensions are scored 0.00-1.00, combined with
 // fixed weights into a reliability factor/score, and the factor is mapped onto the
 // High / Moderate / Limited / Low bands. The API also returns the per-dimension
 // scores, the raw counts/dates behind them (`reliability_evidence`) and the
@@ -11,19 +11,17 @@
 
 export const RELIABILITY_LEVELS = ["High", "Moderate", "Limited", "Low"];
 
-export const DIMENSION_ORDER = ["completeness", "timeliness", "coverage", "granularity", "consistency"];
+export const DIMENSION_ORDER = ["availability", "timeliness", "validity"];
 
 export const DIMENSION_LABELS = {
-  completeness: "Completeness",
+  availability: "Availability",
   timeliness: "Timeliness",
-  coverage: "Coverage",
-  granularity: "Granularity",
-  consistency: "Consistency",
+  validity: "Validity",
 };
 
 // Mirrors reliability.py in case an older payload carries no rules.
 export const FALLBACK_RELIABILITY_RULES = {
-  dimension_weights: { completeness: 0.3, timeliness: 0.3, coverage: 0.2, granularity: 0.1, consistency: 0.1 },
+  dimension_weights: { availability: 0.4, timeliness: 0.3, validity: 0.3 },
   stale_after_days: 14,
   no_data_timeliness: 0.05,
   floor: 0.1,
@@ -180,9 +178,9 @@ function dimensionDetail(dimension, score, evidence, rules) {
   const stale = rules.stale_after_days;
 
   switch (dimension) {
-    case "completeness":
+    case "availability":
       return e.available > 0
-        ? `${e.available} ${unit} on file with the required fields present (score 1.00; 0.00 when none).`
+        ? `${e.available} of ${e.required} required distinct ${unit} (${Math.round(Math.min(1, e.available / (e.required || 1)) * 100)}%).`
         : `No ${unit} found (score 0.00).`;
 
     case "timeliness":
@@ -206,14 +204,10 @@ function dimensionDetail(dimension, score, evidence, rules) {
         ? `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — within the ${stale}-day limit, so it scores 1.00.`
         : `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — past the ${stale}-day limit. The score drops linearly to ${fmt2(rules.no_data_timeliness)} at ${stale * 2} days.`;
 
-    case "coverage":
-      return `${e.available} of ${e.required} required ${unit} (${Math.round(Math.min(1, e.available / (e.required || 1)) * 100)}%). Score = records available ÷ records required, capped at 1.00.`;
-
-    case "granularity":
-      return `${e.available} ${unit}; ${e.granularity_full_at} or more scores 1.00, fewer scores 0.50.`;
-
-    case "consistency":
-      return "No consistency issues are tracked for this module, so it keeps the default 1.00.";
+    case "validity":
+      return e.available > 0
+        ? `${e.available} usable ${unit}; required values, formats, ranges, and duplicate checks passed.`
+        : `No usable ${unit} found (score 0.00).`;
 
     default:
       return "";

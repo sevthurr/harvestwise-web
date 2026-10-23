@@ -25,7 +25,7 @@ vi.mock('../services/api', () => ({
           { label: 'Low', min: 0.0, max: 0.39, description: 'Reliability factor below 0.40 (never lower than the 0.10 floor). Neutral default.' },
         ],
         reliability_rules: {
-          dimension_weights: { completeness: 0.3, timeliness: 0.3, coverage: 0.2, granularity: 0.1, consistency: 0.1 },
+          dimension_weights: { availability: 0.4, timeliness: 0.3, validity: 0.3 },
           stale_after_days: 14,
           no_data_timeliness: 0.05,
           floor: 0.1,
@@ -40,17 +40,14 @@ vi.mock('../services/api', () => ({
           reliability_factor: 0.92,
           reliability_status: 'High',
           reliability_dimensions: {
-            completeness: 1.0,
+            availability: 1.0,
             timeliness: 1.0,
-            coverage: 1.0,
-            granularity: 1.0,
-            consistency: 1.0,
+            validity: 1.0,
           },
           reliability_evidence: {
             unit: 'records',
             available: 14,
             required: 14,
-            granularity_full_at: 14,
             latest_date: '2026-09-24',
             age_days: 3,
             timeliness_basis: 'latest_record',

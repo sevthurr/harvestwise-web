@@ -7,6 +7,31 @@ const BackgroundProcessContext = createContext(null);
 
 const VERIFY_TIMEOUT = 15000;
 
+// Ingestion changes data-backed views, not authentication, settings, or every
+// mounted query in the application. Keeping this list explicit prevents one
+// completed upload from refetching unrelated pages and exhausting the API.
+const INGESTION_QUERY_PREFIXES = [
+  ["adminDashboard"],
+  ["adminDataSources"],
+  ["adminApiSyncSources"],
+  ["adminHistory"],
+  ["adminDataSourceRecords"],
+  ["dftc"],
+  ["dftc-submissions"],
+  ["dftc-home"],
+  ["dftc-notifications"],
+  ["dftc-report-preview"],
+  ["prices"],
+  ["farmer"],
+  ["dashboard"],
+  ["advisory"],
+  ["weather"],
+  ["recommendations"],
+  ["monthly-recommendations"],
+  ["marketCalendar"],
+  ["notifications"],
+];
+
 async function verifyImportStatus(importId) {
   const poll = ingestionApi.getHistoryDetail(importId);
   const timeout = new Promise((_, reject) =>
@@ -14,7 +39,13 @@ async function verifyImportStatus(importId) {
   );
   const result = await Promise.race([poll, timeout]);
   const status = result?.status;
-  if (status === "completed" || status === "success" || status === "failed") {
+  if (
+    status === "completed" ||
+    status === "success" ||
+    status === "failed" ||
+    status === "completed_with_forecast_error" ||
+    status === "waiting_for_complete_series"
+  ) {
     return status;
   }
   return "processing";
@@ -74,10 +105,11 @@ export const BackgroundProcessProvider = ({ children }) => {
       statusText: message,
     }));
 
-    queryClient.invalidateQueries();
-    // Force-refetch every currently mounted query so all visible pages update
-    // live as soon as the background process finishes (no manual per-page sync).
-    queryClient.refetchQueries();
+    if (!isError) {
+      for (const queryKey of INGESTION_QUERY_PREFIXES) {
+        queryClient.invalidateQueries({ queryKey });
+      }
+    }
 
     // Auto-hide completed badge after 4 seconds
     setTimeout(() => {
@@ -117,6 +149,10 @@ export const BackgroundProcessProvider = ({ children }) => {
               if (!importDetail) return;
               if (importDetail === "completed" || importDetail === "success") {
                 finishProcess(`Updated: ${eventData.filename || "Data Ingestion"}`);
+              } else if (importDetail === "completed_with_forecast_error") {
+                finishProcess("Data stored; forecast generation failed", true);
+              } else if (importDetail === "waiting_for_complete_series") {
+                finishProcess("Data stored; forecast waiting for complete series");
               } else if (importDetail === "failed") {
                 finishProcess(eventData.error || "Ingestion failed", true);
               }

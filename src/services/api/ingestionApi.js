@@ -15,7 +15,7 @@ export async function uploadFile(file, dataType, overwrite = false) {
   );
 }
 
-export async function validateFile(file, dataType, overwrite = false) {
+export async function validateFile(file, dataType, overwrite = false, options = {}) {
   const form = new FormData();
   form.append("file", file);
   if (dataType) {
@@ -26,6 +26,10 @@ export async function validateFile(file, dataType, overwrite = false) {
     await apiFetch("/admin/ingestion/validate", {
       method: "POST",
       body: form,
+      signal: options.signal,
+      // Validation runs heavy DB work; give it more headroom than the global
+      // 15 s default. Regular requests keep the short cap.
+      timeoutMs: options.timeoutMs ?? 120000,
     })
   );
 }

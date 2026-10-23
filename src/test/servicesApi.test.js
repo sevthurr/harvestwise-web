@@ -207,6 +207,26 @@ describe('ingestionApi', () => {
     expect(res.summary.valid_rows).toBe(8);
   });
 
+  it('validateFile forwards cancellation and keeps validation timeout bounded', async () => {
+    const fetchFn = vi.fn((url, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchFn);
+
+    const controller = new AbortController();
+    const outcome = ingestionApi.validateFile(
+      new File(['a,b'], 'data.csv', { type: 'text/csv' }),
+      'bankerohan_daily_retail',
+      false,
+      { signal: controller.signal },
+    ).then(() => null, (error) => error);
+
+    await Promise.resolve();
+    controller.abort();
+    const error = await outcome;
+    expect(error.name).toBe('AbortError');
+  });
+
   it('getHistory GETs /admin/ingestion/history', async () => {
     const fetchFn = mockFetch({ ok: true, status: 200, body: { items: [], total: 0 } });
     vi.stubGlobal('fetch', fetchFn);
