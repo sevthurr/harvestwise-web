@@ -21,8 +21,7 @@ vi.mock('../services/api', () => ({
       basis_inputs: {
         reliability_bands: [
           { label: 'High', min: 0.85, max: 1.0, description: 'Reliability factor of 0.85 to 1.00. Records are complete and fresh; base weight is scaled by at least 0.85.' },
-          { label: 'Moderate', min: 0.65, max: 0.84, description: 'Reliability factor of 0.65 to 0.84. Usable but aging or thin; weight scaled by 0.65 to 0.84.' },
-          { label: 'Limited', min: 0.4, max: 0.64, description: 'Reliability factor of 0.40 to 0.64. Indicative only; weight scaled by 0.40 to 0.64.' },
+          { label: 'Moderate', min: 0.40, max: 0.84, description: 'Reliability factor of 0.40 to 0.84. Usable but aging or partial records; module weight scaled down.' },
           { label: 'Low', min: 0.0, max: 0.39, description: 'Reliability factor below 0.40 (never lower than the 0.10 floor). Neutral default.' },
         ],
         reliability_rules: {
@@ -31,6 +30,7 @@ vi.mock('../services/api', () => ({
           no_data_timeliness: 0.05,
           floor: 0.1,
           low_threshold: 0.4,
+          high_threshold: 0.85,
         },
         price_outlook: {
           recent_average_price: 78.5,
@@ -104,7 +104,7 @@ describe('AdminAnalyticsBasis Data Reliability', () => {
         latest_year: 2026,
         years_old: 0,
       },
-    })).toMatch(/42 quarterly PSA production records are on file from 2016 through 2026/);
+    })).toMatch(/42 usable quarterly production observations are available/);
   });
 
   it('explains the classification with the factor and a templated explanation', async () => {
@@ -120,7 +120,9 @@ describe('AdminAnalyticsBasis Data Reliability', () => {
     expect(screen.getByText('0.9200')).toBeDefined();
 
     // The card explanation is a concise 2-sentence summary quoting real values.
-    expect(screen.getByText(/14 price records are on file with the latest entry 3 days old \(within the 14-day limit\)\. Sufficiency and timeliness criteria are satisfied, so the module's advisory weight is applied in full\./)).toBeDefined();
+    expect(screen.getByText(/14 price records are on file\. Latest price: 2026-09-24\. Within freshness requirements\. Sufficiency and timeliness criteria are satisfied, so full module weight is applied\./)).toBeDefined();
+    expect(screen.queryByText(/14-day limit/)).toBeNull();
+    expect(screen.queryByText(/weekday|weekend/i)).toBeNull();
     expect(screen.queryByText('High 0.85–1.00')).toBeNull();
 
     // The details list has moved into the modal, so it is not directly on the card.
@@ -142,22 +144,40 @@ describe('AdminAnalyticsBasis Data Reliability', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Score Breakdown')).toBeDefined();
-    expect(within(dialog).getByText(/Completeness/)).toBeDefined();
-    expect(within(dialog).getByText(/14 records on file with the required fields present/)).toBeDefined();
-    expect(within(dialog).getByText(/Timeliness/)).toBeDefined();
-    expect(within(dialog).getByText(/within the 14-day limit, so it scores 1\.00/)).toBeDefined();
+    expect(within(dialog).getAllByText(/Availability/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/14 of 14 required distinct records/)).toBeDefined();
+    expect(within(dialog).getAllByText(/Timeliness/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/3 days old \(score 1\.00\)/)).toBeDefined();
+    expect(within(dialog).queryByText(/14-day limit/)).toBeNull();
     expect(within(dialog).getByText(/Calculation:/)).toBeDefined();
 
     expect(within(dialog).getByText('Classification Bands')).toBeDefined();
     expect(within(dialog).getByText('0.85–1.00')).toBeDefined();
-    expect(within(dialog).getByText('0.65–0.84')).toBeDefined();
-    expect(within(dialog).getByText('0.40–0.64')).toBeDefined();
+    expect(within(dialog).getByText('0.40–0.84')).toBeDefined();
     expect(within(dialog).getByText('0.00–0.39')).toBeDefined();
-    expect(within(dialog).getByText('Complete and fresh records; module weight applied in full (≥0.85).')).toBeDefined();
-    expect(within(dialog).getByText('Insufficient records; falls back to neutral default (0.10 floor).')).toBeDefined();
+    expect(within(dialog).getByText('Data meets reliability requirements; full module weight.')).toBeDefined();
+    expect(within(dialog).getByText('Major data limitations; neutral fallback is used.')).toBeDefined();
 
     fireEvent.click(within(dialog).getByLabelText('Close'));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('renders three Scoring Rules accordions, collapsed and independently expandable', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByText('View explanation'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText('Scoring Rules')).toBeDefined();
+    const avail = within(dialog).getByRole('button', { name: /Availability \(40%\)/ });
+    const time = within(dialog).getByRole('button', { name: /Timeliness \(30%\)/ });
+    const valid = within(dialog).getByRole('button', { name: /Validity \(30%\)/ });
+    [avail, time, valid].forEach((b) => expect(b.getAttribute('aria-expanded')).toBe('false'));
+
+    fireEvent.click(time);
+    expect(time.getAttribute('aria-expanded')).toBe('true');
+    expect(avail.getAttribute('aria-expanded')).toBe('false');
+    expect(valid.getAttribute('aria-expanded')).toBe('false');
+    expect(within(dialog).getByText(/Scoring rules metadata unavailable/)).toBeDefined();
   });
 
   it('falls back to the built-in bands when the server sends none', async () => {
@@ -176,6 +196,6 @@ describe('AdminAnalyticsBasis Data Reliability', () => {
     fireEvent.click(await screen.findByText('View explanation'));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('0.85–1.00')).toBeDefined();
-    expect(within(dialog).getByText('Complete and fresh records; module weight applied in full (≥0.85).')).toBeDefined();
+    expect(within(dialog).getByText('Data meets reliability requirements; full module weight.')).toBeDefined();
   });
 });

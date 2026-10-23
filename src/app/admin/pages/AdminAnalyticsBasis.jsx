@@ -676,6 +676,19 @@ const priceOutlookSourceLabel = (source) =>
 // Modal showing full Data Reliability details (dimensions, calculation)
 // followed by a minimal table with Reliability bands and short explanations.
 const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimensions, evidence, rules, onClose }) => {
+  const [expandedSection, setExpandedSection] = useState({
+    availability: false,
+    timeliness: false,
+    validity: false,
+  });
+
+  const toggleSection = (dim) => {
+    setExpandedSection((prev) => ({
+      ...prev,
+      [dim]: !prev[dim],
+    }));
+  };
+
   const exp = buildReliabilityExplanation({
     resultId,
     level,
@@ -690,6 +703,279 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
     ...b,
     shortDescription: SHORT_BAND_EXPLANATIONS[b.label] || b.description || "-",
   }));
+
+  const e = evidence || {};
+  const modulePolicy = rules?.module_policies?.[resultId] || null;
+
+  // Helper to determine current assessment value summary text per dimension
+  const getCurrentAssessmentText = (dim) => {
+    const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+    if (resultId === "price-outlook") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : (e.observed_reporting_days != null ? e.observed_reporting_days : "-");
+        const req = e.required != null ? e.required : (e.expected_reporting_days != null ? e.expected_reporting_days : "-");
+        return `${obs} of ${req} expected reporting days have usable price observations. Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const lat = e.latest_date || "N/A";
+        const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : 0);
+        return `Latest observation: ${lat}. Missed reporting days: ${missed}. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const usable = e.usable_records != null ? e.usable_records : (e.valid_records != null ? e.valid_records : "-");
+        return `${usable} usable price observations were included in the reliability assessment. Validity: ${scoreVal}.`;
+      }
+    } else if (resultId === "arrival-pressure") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : (e.available_months != null ? e.available_months : "-");
+        const req = e.required != null ? e.required : 12;
+        return `${obs} of ${req} monthly arrival observations are available. Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const lat = e.latest_arrival_month || e.latest_date || "N/A";
+        const elapsed = e.elapsed_calendar_months != null ? e.elapsed_calendar_months : "-";
+        return `Latest observation: ${lat}. Age: ${elapsed} calendar months. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const usable = e.usable_records != null ? e.usable_records : (e.valid_records != null ? e.valid_records : "-");
+        return `${usable} usable monthly arrival observations recorded with positive or non-null volume. Validity: ${scoreVal}.`;
+      }
+    } else if (resultId === "historical-production") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : "-";
+        const req = e.required != null ? e.required : 20;
+        return `${obs} usable quarters are available (target: ${req} quarters / 5 years). Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const lat = e.latest_period || (e.latest_year ? `${e.latest_year} ${e.latest_quarter || ""}`.trim() : "N/A");
+        const overdue = e.days_overdue != null ? e.days_overdue : 0;
+        const missing = e.earliest_missing_period || "subsequent quarter";
+        const statusText = overdue === 0 ? `${missing} is not overdue` : `${missing} is ${overdue} days overdue`;
+        return `Latest production period: ${lat}. ${statusText}. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const usable = e.usable_records != null ? e.usable_records : "-";
+        return `${usable} usable quarters with reported positive volume. Validity: ${scoreVal}.`;
+      }
+    } else if (resultId === "weather-risk") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : "-";
+        const req = e.required != null ? e.required : 14;
+        return `${obs} of ${req} forecast days are available in the 14-day window. Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const age = e.age_hours != null ? `${e.age_hours} hours old` : (e.unverified_freshness ? "timestamp unverified" : "fresh");
+        return `Forecast retrieval age: ${age}. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const obs = e.valid_records != null ? e.valid_records : (e.available != null ? e.available : "-");
+        return `${obs} forecast dates with verified meteorological metrics. Validity: ${scoreVal}.`;
+      }
+    }
+    return `Evaluated score: ${scoreVal}.`;
+  };
+
+  // Helper to check if a bracket row is active
+  const isBracketActive = (dim, bracket) => {
+    if (resultId === "price-outlook" && dim === "timeliness") {
+      const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : null);
+      if (missed == null) return false;
+      if (bracket.min != null && bracket.max != null) {
+        return missed >= bracket.min && missed <= bracket.max;
+      }
+      if (bracket.min != null && bracket.max == null) {
+        return missed >= bracket.min;
+      }
+    } else if (resultId === "arrival-pressure") {
+      if (dim === "availability") {
+        const count = e.available != null ? e.available : e.available_months;
+        if (count == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return count >= bracket.min && count <= bracket.max;
+        }
+      }
+      if (dim === "timeliness") {
+        const elapsed = e.elapsed_calendar_months;
+        if (elapsed == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return elapsed >= bracket.min && elapsed <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return elapsed >= bracket.min;
+        }
+      }
+    } else if (resultId === "historical-production") {
+      if (dim === "availability") {
+        const count = e.available;
+        if (count == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return count >= bracket.min && count <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return count >= bracket.min;
+        }
+      }
+      if (dim === "timeliness") {
+        const overdue = e.days_overdue;
+        if (overdue == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return overdue >= bracket.min && overdue <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return overdue >= bracket.min;
+        }
+      }
+    } else if (resultId === "weather-risk" && dim === "timeliness") {
+      if (e.unverified_freshness && bracket.min == null) {
+        return true;
+      }
+      const hours = e.age_hours;
+      if (hours == null) return false;
+      if (bracket.min != null && bracket.max != null) {
+        return hours >= bracket.min && hours <= bracket.max;
+      }
+      if (bracket.min != null && bracket.max == null) {
+        return hours >= bracket.min;
+      }
+    }
+    return false;
+  };
+
+  const renderScoringTable = (dim) => {
+    const dimTitle = dim.charAt(0).toUpperCase() + dim.slice(1);
+    const policy = modulePolicy?.[dim];
+
+    if (!policy) {
+      return (
+        <p className="text-[12px] text-[var(--hw-neutral-600)] italic">
+          Scoring rules metadata unavailable for this dimension.
+        </p>
+      );
+    }
+
+    if (policy.rule_type === "brackets" && policy.brackets) {
+      return (
+        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
+          <table className="w-full text-left text-[12px]">
+            <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+              <tr>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  Condition / Evidence Range
+                </th>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  {dimTitle}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+              {policy.brackets.map((b, idx) => {
+                const active = isBracketActive(dim, b);
+                return (
+                  <tr
+                    key={idx}
+                    className={active ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]" : "text-black"}
+                  >
+                    <td className="px-3 sm:px-4 py-1.5 align-top">
+                      <div>
+                        {b.condition}
+                        {b.safeguard && (
+                          <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
+                            * {b.safeguard}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
+                      {typeof b.score === "number" ? b.score.toFixed(2) : b.score}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (policy.rule_type === "ratio") {
+      const obs = e.available != null ? e.available : "-";
+      const req = e.required != null ? e.required : "-";
+      const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+
+      return (
+        <div className="space-y-2 mt-2">
+          <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)]">
+            <table className="w-full text-left text-[12px]">
+              <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                <tr>
+                  <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                    Formula / Calculation
+                  </th>
+                  <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                    {dimTitle}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+                <tr className="bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]">
+                  <td className="px-3 sm:px-4 py-2 align-top">
+                    <div>{policy.formula}</div>
+                    <div className="text-[11px] font-normal text-[var(--hw-green-800)] mt-0.5">
+                      Actual evidence: {obs} usable of {req} required {policy.unit} = {scoreVal}
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-4 py-2 align-top whitespace-nowrap">
+                    {scoreVal}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11.5px] text-[var(--hw-neutral-600)] leading-relaxed">
+            {policy.description}
+          </p>
+        </div>
+      );
+    }
+
+    if (policy.rule_type === "rule_based" && policy.checks) {
+      return (
+        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
+          <table className="w-full text-left text-[12px]">
+            <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+              <tr>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  Condition / Rule
+                </th>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  {dimTitle}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+              {policy.checks.map((chk, idx) => (
+                <tr key={idx} className="text-black">
+                  <td className="px-3 sm:px-4 py-1.5 align-top">
+                    <div>{chk.condition}</div>
+                    {chk.safeguard && (
+                      <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
+                        * {chk.safeguard}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
+                    {typeof chk.score === "number" ? chk.score.toFixed(2) : chk.score}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div
@@ -723,7 +1009,7 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
                 {exp.rows.map((row) => (
                   <li key={row.key} className="text-[13px] text-black leading-relaxed">
                     <span className="font-semibold">{row.label}</span>{" "}
-                    {row.score} (weight {row.weight}) &mdash; {row.detail}
+                    {Number(row.score).toFixed(2)} (weight {Number(row.weight).toFixed(2)}) &mdash; {row.detail}
                   </li>
                 ))}
               </ul>
@@ -758,6 +1044,45 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Expandable Scoring Rules Section */}
+          <div className="space-y-3 pt-2 border-t border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-black uppercase tracking-wider">Scoring Rules</p>
+            <div className="space-y-2">
+              {[
+                { key: "availability", label: "Availability (40%)" },
+                { key: "timeliness", label: "Timeliness (30%)" },
+                { key: "validity", label: "Validity (30%)" },
+              ].map(({ key, label }) => {
+                const isOpen = !!expandedSection[key];
+                return (
+                  <div key={key} className="rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden">
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleSection(key)}
+                      className="w-full flex items-center justify-between px-3.5 sm:px-4 py-2.5 text-left bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] transition-colors cursor-pointer"
+                    >
+                      <span className="text-[13px] font-semibold text-black">{label}</span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-black transition-transform duration-200 ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="p-3 sm:p-4 bg-white border-t border-[var(--hw-neutral-200)] space-y-2">
+                        <p className="text-[12.5px] text-black font-medium leading-relaxed">
+                          {getCurrentAssessmentText(key)}
+                        </p>
+                        {renderScoringTable(key)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
