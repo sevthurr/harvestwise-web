@@ -44,6 +44,13 @@ import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 
+const PRODUCTION_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
+const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
+
+function currentQuarter() {
+  return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+}
+
 const ARRIVAL_SOURCE_OPTIONS = [
   { value: "overall", label: "Overall", subtitle: "Overall (Farm + Other)" },
   { value: "farm", label: "Farm Source", subtitle: "Farm Source" },
@@ -967,13 +974,15 @@ function AdminAnalyticsBasis() {
     });
   }, [commodityRecords, allWeatherRules]);
 
-  const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
-    resultId === "historical-production" && !!selectedCommodityRecord?.id,
-    selectedCommodityRecord?.id
-  );
-
   const [priceOutlookHorizon, setPriceOutlookHorizon] = useState(14);
   const [showReliabilityBands, setShowReliabilityBands] = useState(false);
+  const [productionQuarter, setProductionQuarter] = useState(currentQuarter);
+
+  const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
+    resultId === "historical-production" && !!selectedCommodityRecord?.id,
+    selectedCommodityRecord?.id,
+    productionQuarter
+  );
 
   const { data: priceOutlook, error: priceOutlookError } = usePriceOutlook(
     resultId === "price-outlook" && !!selectedCommodityRecord?.id,
@@ -1131,6 +1140,24 @@ function AdminAnalyticsBasis() {
       ? `${leanQ}${leanProfile?.calendar_period ? ` (${leanProfile.calendar_period})` : ""}${leanProfile?.classification ? ` — ${leanProfile.classification}` : ""}`
       : "-";
 
+    // When a quarter filter is active, build per-year bars from records.
+    // When no filter, show all quarters' average bars (existing behaviour).
+    const rawRecords = productionSummary?.records || [];
+    const quarterRecords = productionQuarter
+      ? rawRecords
+          .filter((r) => r.reference_quarter === productionQuarter && r.volume_produced != null)
+          .sort((a, b) => Number(a.reference_year) - Number(b.reference_year))
+          .map((r) => ({
+            quarter: String(r.reference_year),
+            average_production_mt: Number(r.volume_produced),
+            classification: null,   // individual years don't carry a classification
+          }))
+      : profiles.map((p) => ({
+          quarter: p.quarter,
+          average_production_mt: p.average_production_mt,
+          classification: p.classification,
+        }));
+
     return {
       ...result,
       outputId: productionSummary?.source_commodity_id || "-",
@@ -1159,11 +1186,9 @@ function AdminAnalyticsBasis() {
         { classification: "Upper Middle", rule: `Seasonal ratio ≥ ${Number(quartiles.q2).toFixed(4)} and < ${Number(quartiles.q3).toFixed(4)}` },
         { classification: "High", rule: `Seasonal ratio ≥ ${Number(quartiles.q3).toFixed(4)}` }
       ] : result.thresholds,
-      productionVolumes: profiles.length > 0
-        ? profiles.map((p) => ({ season: p.quarter, quarter: p.quarter, average_production_mt: p.average_production_mt, volume: p.average_production_mt, classification: p.classification, seasonal_ratio: p.seasonal_ratio }))
-        : (productionSummary?.seasonal_totals || []),
+      productionVolumes: quarterRecords,
       productionSources: productionSummary?.source_areas || [],
-      records: (productionSummary?.records || []).map((record) => ({
+      records: rawRecords.map((record) => ({
         Year: record.reference_year,
         Quarter: record.reference_quarter,
         Commodity: selectedCommodity,
@@ -1177,7 +1202,7 @@ function AdminAnalyticsBasis() {
         : (productionError || productionSummary?.message || (productionLoading ? "Loading historical production data…" : "No historical production data is available for this scope.")),
       basisMissing: isProcessed ? null : (productionError || productionSummary?.message || null)
     };
-  }, [result, resultId, productionSummary, productionError, productionLoading, selectedCommodity, selectedVariety]);
+  }, [result, resultId, productionSummary, productionError, productionLoading, selectedCommodity, selectedVariety, productionQuarter]);
   const priceResult = useMemo(() => {
     if (resultId !== "price-outlook") return null;
     const processed = priceOutlook?.status === "processed";
@@ -1687,13 +1712,56 @@ function AdminAnalyticsBasis() {
           <>
             {/* Typical Quarterly Production Volume Bar Chart */}
             <div className={vizCardClass}>
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Typical Quarterly Production Volume</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">PSA Data · Q1–Q4</p>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[var(--hw-neutral-100)]">
+                <div>
+                  <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                    {productionQuarter
+                      ? `${productionQuarter} Production by Year · ${QUARTER_NAMES[productionQuarter]}`
+                      : "Typical Quarterly Production Volume"}
+                  </p>
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                    {productionQuarter
+                      ? `PSA Data · ${productionQuarter} records across all years`
+                      : "PSA Data · Q1–Q4 historical averages"}
+                  </p>
+                </div>
+                {/* Harvest Season filter */}
+                <div className="flex flex-col gap-1 shrink-0">
+                  <span className="text-[11px] font-semibold text-[var(--hw-neutral-700)]">Harvest Season</span>
+                  <div className="flex items-center gap-1.5">
+                    {PRODUCTION_QUARTERS.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        aria-pressed={productionQuarter === q}
+                        onClick={() => setProductionQuarter((prev) => (prev === q ? null : q))}
+                        className={`px-2.5 py-1.5 text-[11.5px] font-semibold rounded-lg border transition-colors ${
+                          productionQuarter === q
+                            ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)] text-[var(--hw-green-800)]"
+                            : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
+                        }`}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="w-full flex-1 flex flex-col justify-center">
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={displayResult.productionVolumes?.length ? displayResult.productionVolumes.map((row) => ({ quarter: row.quarter || row.season, volume: row.average_production_mt || 0, level: row.classification })) : quarterlyGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={72}>
+                  <BarChart
+                    data={
+                      displayResult.productionVolumes?.length
+                        ? displayResult.productionVolumes.map((row) => ({
+                            quarter: row.quarter,
+                            volume: row.average_production_mt || 0,
+                            level: row.classification,
+                          }))
+                        : quarterlyGhostData
+                    }
+                    margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
+                    barSize={72}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="quarter" tick={{ fontSize: 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
                     <YAxis hide domain={[0, "auto"]} />
@@ -1701,27 +1769,46 @@ function AdminAnalyticsBasis() {
                       <RechartsTooltip
                         formatter={(val, _name, props) => [
                           `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT${props.payload?.level ? ` (${props.payload.level})` : ""}`,
-                          "Avg Production"
+                          productionQuarter ? "Production" : "Avg Production"
                         ]}
                       />
                     )}
-                    <Bar dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"} radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"}>
-                      {displayResult.productionVolumes?.length > 0 && displayResult.productionVolumes.map((entry, index) => {
-                        const barColor =
-                          entry.classification === "High" ? "#dc2626" :
-                            entry.classification === "Upper Middle" ? "#d97706" :
-                              entry.classification === "Lower Middle" ? "#2563eb" :
-                                "#16a34a";
-                        return <Cell key={`cell-${index}`} fill={barColor} />;
-                      })}
+                    <Bar
+                      dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"}
+                      radius={[6, 6, 0, 0]}
+                      fill="#2f7d32"
+                      stroke="#cbd5e1"
+                      strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"}
+                    >
+                      {displayResult.productionVolumes?.length > 0 &&
+                        displayResult.productionVolumes.map((entry, index) => {
+                          // Per-year bars (quarter filter active): single green colour;
+                          // All-quarter bars: classification colour.
+                          const barColor = productionQuarter
+                            ? "var(--hw-green-700, #2f7d32)"
+                            : entry.classification === "High"
+                            ? "#dc2626"
+                            : entry.classification === "Upper Middle"
+                            ? "#d97706"
+                            : entry.classification === "Lower Middle"
+                            ? "#2563eb"
+                            : "#16a34a";
+                          return <Cell key={`cell-${index}`} fill={barColor} />;
+                        })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                {!displayResult.productionVolumes?.length && <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
-                  <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-                    No production data available.
-                  </span>
-                </div>}
+                {!displayResult.productionVolumes?.length && (
+                  <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
+                    <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
+                      {productionLoading
+                        ? "Loading production data…"
+                        : productionQuarter
+                        ? `No ${productionQuarter} records found.`
+                        : "No production data available."}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

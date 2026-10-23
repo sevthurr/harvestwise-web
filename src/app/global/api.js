@@ -374,7 +374,18 @@ export async function parseResponse(res) {
     } else if (Array.isArray(body?.detail) && body.detail.length) {
       // 422 validation errors: surface the field messages, not the objects.
       detail = body.detail
-        .map((d) => (d && typeof d === "object" ? `${d.loc?.join(".") || "request"}: ${d.msg || "invalid"}` : String(d)))
+        .map((d) => {
+          if (!d || typeof d !== "object") return String(d);
+          const location = d.loc?.join(".") || "request";
+          const message = String(d.msg || "invalid");
+          if (
+            location.split(".").includes("email") &&
+            /valid email|special-use|reserved name|email address/i.test(message)
+          ) {
+            return "Enter a valid email address.";
+          }
+          return `${location}: ${message}`;
+        })
         .join("; ");
     }
   } catch { /* ignore parse error */ }

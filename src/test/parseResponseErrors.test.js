@@ -60,6 +60,19 @@ describe('parseResponse error messages', () => {
     expect(msg).toContain('query.page: Input should be greater than or equal to 1');
   });
 
+  it('uses a friendly message for reserved or malformed email addresses', async () => {
+    const msg = await messageOf(422, {
+      detail: [
+        {
+          loc: ['body', 'email'],
+          msg: 'value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.',
+        },
+      ],
+    });
+
+    expect(msg).toBe('Enter a valid email address.');
+  });
+
   it('falls back to the status when detail is a plain object', async () => {
     await expect(messageOf(500, { detail: { reason: 'boom' } })).resolves.toBe(
       'Request failed (500)'
