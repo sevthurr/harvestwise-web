@@ -164,6 +164,22 @@ function CropCycleDetailPage() {
       setFarmgatePrice(crop.farmgatePrice);
     }
   }, [crop?.id, crop?.farmgatePrice]);
+
+  const [harvestProgressQty, setHarvestProgressQty] = useState(() =>
+    crop?.actualHarvestQty ?? crop?.partialHarvestQty ?? ""
+  );
+  useEffect(() => {
+    const val = crop?.actualHarvestQty ?? crop?.partialHarvestQty ?? "";
+    setHarvestProgressQty(val);
+  }, [crop?.id, crop?.actualHarvestQty, crop?.partialHarvestQty]);
+
+  const expectedTotalVolume = crop?.harvestQuantity || crop?.expectedHarvestQty || 0;
+  const parsedHarvestProgress = harvestProgressQty !== "" && !isNaN(Number(harvestProgressQty))
+    ? Number(harvestProgressQty)
+    : 0;
+  const remainingExpected = expectedTotalVolume > 0
+    ? Math.max(0, expectedTotalVolume - parsedHarvestProgress)
+    : "";
   if (!crop) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">{t ? t("farmer.empty.crop_not_found") : "Crop not found."}</p>
@@ -235,20 +251,105 @@ function CropCycleDetailPage() {
     try {
       if (action.kind === "phase") {
         const targetStatus = statusMap[action.phase] || "Planning";
-        if (targetStatus === "Completed" && action.fields?.finalQtySold && action.fields?.avgSellingPrice) {
-          const harvestDate = action.fields.actualHarvestDate || new Date().toISOString().split('T')[0];
-          await logHarvestApi(crop.id, harvestDate, action.fields.finalQtySold, action.fields.avgSellingPrice);
+        const isComp = targetStatus === "Completed";
+        const addCostNum = action.fields?.additionalCost != null && action.fields?.additionalCost !== ""
+          ? Number(action.fields.additionalCost)
+          : (action.fields?.updatedTotalCost != null && action.fields?.updatedTotalCost !== "" ? Number(action.fields.updatedTotalCost) : 0);
+        const actualHarvestQtyVal = action.fields?.actualHarvestedQty != null && action.fields?.actualHarvestedQty !== ""
+          ? Number(action.fields.actualHarvestedQty)
+          : null;
+        const actualHarvestDateVal = action.fields?.actualHarvestDate || new Date().toISOString().split("T")[0];
+
+        const compDate = action.fields?.completionDate || action.fields?.actualHarvestDate || new Date().toISOString().split('T')[0];
+        const finalQty = action.fields?.finalQtySold != null && action.fields?.finalQtySold !== ""
+          ? Number(action.fields.finalQtySold)
+          : (actualHarvestQtyVal ?? crop.actualHarvestQty ?? crop.harvestQuantity ?? 0);
+        const avgPrice = action.fields?.avgSellingPrice != null && action.fields?.avgSellingPrice !== ""
+          ? Number(action.fields.avgSellingPrice)
+          : (crop.actualSellingPrice ?? null);
+        const finalCost = action.fields?.finalProductionCost != null && action.fields?.finalProductionCost !== ""
+          ? Number(action.fields.finalProductionCost)
+          : (crop.totalCost || 0);
+        const notesText = action.fields?.notes ? String(action.fields.notes).trim() : null;
+
+        if (isComp) {
+          if (finalQty > 0) {
+            await logHarvestApi(crop.id, compDate, finalQty, avgPrice, {
+              finalProductionCost: finalCost,
+              notes: notesText,
+            });
+          } else {
+            await updateCropStatusApi(crop.id, "Completed", null, {
+              actualHarvestDate: compDate,
+              actualHarvestQty: finalQty > 0 ? finalQty : undefined,
+              actualSellingPricePerKg: avgPrice != null ? avgPrice : undefined,
+              finalProductionCost: finalCost,
+              notes: notesText,
+            });
+          }
         } else {
-          await updateCropStatusApi(crop.id, targetStatus);
+          await updateCropStatusApi(crop.id, targetStatus, null, {
+            additionalCost: addCostNum > 0 ? addCostNum : undefined,
+            actualHarvestQty: actualHarvestQtyVal,
+            actualHarvestDate: actualHarvestDateVal,
+          });
+          if (addCostNum > 0) {
+            try {
+              await addCostApi(crop.id, {
+                category: "Additional",
+                amount: addCostNum,
+                costType: "additional",
+              });
+            } catch {
+              // Already saved via updateCropStatusApi
+            }
+          }
         }
+
+        const newAddedCosts = (crop.addedCosts || 0) + (addCostNum > 0 ? addCostNum : 0);
+        const initialC = crop.initialCost != null ? crop.initialCost : Math.max(0, (crop.totalCost || 0) - (crop.addedCosts || 0));
+        const newTotalCost = initialC + newAddedCosts;
+        const cropYield = crop.harvestQuantity || crop.expectedHarvestQty || 1;
+        const newBreakEven = cropYield > 0 ? Math.ceil(newTotalCost / cropYield) : crop.breakEvenPrice;
+
+        if (actualHarvestQtyVal != null) {
+          setHarvestProgressQty(actualHarvestQtyVal);
+        } else if (isComp && finalQty > 0) {
+          setHarvestProgressQty(finalQty);
+        }
+
         updateCrop(crop.id, {
           phase: action.phase,
+          status: targetStatus,
           lastUpdated: "Just now",
           isOnHold: false,
-          ...(action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {}),
-          ...(action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}),
-          ...(action.fields?.actualPlantedArea != null && action.fields?.actualPlantedArea !== "" ? { farmArea: Number(action.fields.actualPlantedArea) } : {}),
-          ...(action.fields?.expectedHarvestQty != null && action.fields?.expectedHarvestQty !== "" ? { harvestQuantity: Number(action.fields.expectedHarvestQty) } : {})
+          ...(isComp ? {
+            totalCost: finalCost,
+            productionCost: finalCost,
+            actualHarvestQty: finalQty > 0 ? finalQty : (crop.actualHarvestQty ?? crop.harvestQuantity),
+            harvestQuantity: finalQty > 0 ? finalQty : crop.harvestQuantity,
+            actualSellingPrice: avgPrice != null ? avgPrice : crop.actualSellingPrice,
+            sellingPrice: avgPrice != null ? avgPrice : crop.actualSellingPrice,
+            actualHarvestDate: compDate,
+            harvestDate: compDate,
+            ...(notesText ? { notes: notesText } : {}),
+          } : {
+            ...(addCostNum > 0 ? {
+              addedCosts: newAddedCosts,
+              totalCost: newTotalCost,
+              productionCost: newTotalCost,
+              breakEvenPrice: newBreakEven,
+              breakevenPricePerKg: newBreakEven,
+            } : {}),
+            ...(actualHarvestQtyVal != null ? {
+              actualHarvestQty: actualHarvestQtyVal,
+              partialHarvestQty: actualHarvestQtyVal,
+            } : {}),
+            ...(action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {}),
+            ...(action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}),
+            ...(action.fields?.actualPlantedArea != null && action.fields?.actualPlantedArea !== "" ? { farmArea: Number(action.fields.actualPlantedArea) } : {}),
+            ...(action.fields?.expectedHarvestQty != null && action.fields?.expectedHarvestQty !== "" ? { harvestQuantity: Number(action.fields.expectedHarvestQty) } : {})
+          })
         });
       } else if (action.kind === "hold") {
         await updateCropStatusApi(crop.id, "On Hold", action.reason);
@@ -348,7 +449,10 @@ function CropCycleDetailPage() {
   const hasFarmgate = typeof farmgatePrice === "number" && farmgatePrice > 0;
   const currentCropStage = explicitStage || planAdvisoryData?.crop_stage || "before_planting";
   const isPlanning = currentCropStage === "before_planting" || phaseCode === PHASE_CODES.PLANNING;
-  const useForecast = !isPlanning && [PHASE_CODES.GROWING, PHASE_CODES.ON_HOLD].includes(phaseCode);
+  const useForecast = !isPlanning && (
+    [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST, PHASE_CODES.ON_HOLD].includes(phaseCode) ||
+    currentCropStage === "near_harvest"
+  );
   const basePrice = hasFarmgate
     ? farmgatePrice
     : (isPlanning
@@ -516,6 +620,10 @@ function CropCycleDetailPage() {
                     plantingWindowStart: planAdvisoryData?.planting_window_start,
                     plantingWindowEnd: planAdvisoryData?.planting_window_end,
                     plantingWindowLabel: planAdvisoryData?.planting_window_label,
+                    advisoryCode,
+                    rawAdvisory,
+                    advisoryLabel,
+                    planAdvisoryData,
                   },
                 })
               }
@@ -920,20 +1028,42 @@ function CropCycleDetailPage() {
                   {t("farmer.cropCycle.harvest_progress", {}, "Harvest progress")}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: t("farmer.cropCycle.qty_harvested", {}, "Qty harvested (kg)"), ph: "e.g. 450" },
-                    { label: t("farmer.cropCycle.remaining_expected", {}, "Remaining expected (kg)"), ph: "e.g. 150" }
-                  ].map((f) => (
-                    <div key={f.label}>
-                      <p className="text-xs text-[var(--hw-neutral-900)] mb-1">{f.label}</p>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder={f.ph}
-                        className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
-                      />
-                    </div>
-                  ))}
+                  <div>
+                    <label htmlFor="harvest-qty-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
+                      {t("farmer.cropCycle.qty_harvested", {}, "Qty harvested (kg)")}
+                    </label>
+                    <input
+                      id="harvest-qty-input"
+                      type="number"
+                      min="0"
+                      value={harvestProgressQty}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? "" : Number(e.target.value);
+                        setHarvestProgressQty(val);
+                        if (val !== "") {
+                          updateCrop(crop.id, {
+                            actualHarvestQty: val,
+                            partialHarvestQty: val,
+                          });
+                        }
+                      }}
+                      placeholder="e.g. 450"
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="harvest-remaining-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
+                      {t("farmer.cropCycle.remaining_expected", {}, "Remaining expected (kg)")}
+                    </label>
+                    <input
+                      id="harvest-remaining-input"
+                      type="number"
+                      readOnly
+                      value={remainingExpected}
+                      placeholder="e.g. 150"
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-700)] cursor-default"
+                    />
+                  </div>
                 </div>
                 <button
                   onClick={() => {
@@ -964,6 +1094,7 @@ function CropCycleDetailPage() {
                 { label: t("farmer.cropCycle.harvest_quantity", {}, "Harvest quantity"), value: crop.actualHarvestQty ? `${crop.actualHarvestQty} kg` : `${crop.harvestQuantity} kg (planned)` },
                 { label: t("farmer.cropCycle.selling_price", {}, "Selling price"), value: crop.actualSellingPrice ? `₱${crop.actualSellingPrice}/kg` : "—" },
                 { label: t("farmer.cropCycle.total_cost", {}, "Total cost"), value: formatPeso(crop.totalCost) },
+                ...(crop.notes ? [{ label: t("farmer.cropCycle.notes", {}, "Notes"), value: crop.notes }] : []),
                 {
                   label: t("farmer.cropCycle.est_profit_loss", {}, "Estimated profit / loss"),
                   value: crop.actualHarvestQty && crop.actualSellingPrice ? `${crop.actualHarvestQty * crop.actualSellingPrice - crop.totalCost >= 0 ? "+" : ""}${formatPeso(crop.actualHarvestQty * crop.actualSellingPrice - crop.totalCost)}` : "—",
