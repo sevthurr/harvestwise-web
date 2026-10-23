@@ -242,7 +242,15 @@ function FactorDetailPage() {
   const cleanTitle = (title && !title.toLowerCase().startsWith("this crop")) ? title : null;
   const displayTitle = cleanTitle || `${commodityName || t("farmer.common.unspecified_crop", {}, "Tanom")} — ${t("farmer.advisory.detailed_factors_title", {}, "Detailed Factors")}`;
 
-  const rawAdv = advisoryCode || state?.advisoryCode || state?.advisoryPayload?.advisory?.advisory || state?.resultData?.advisoryCategory || null;
+  const rawAdv =
+    advisoryCode ||
+    state?.advisoryCode ||
+    state?.rawAdvisory ||
+    state?.advisoryPayload?.advisory?.advisory ||
+    state?.planAdvisoryData?.advisory?.advisory ||
+    state?.resultData?.advisoryCategory ||
+    state?.resultData?.advisory ||
+    null;
   const normalizedAdv = normalizeAdvisoryCode(rawAdv);
   const advTextStr = String(advisoryLabel || (subtitle && subtitle.includes("·") ? subtitle.split("·")[1].trim() : subtitle) || "").toLowerCase();
 

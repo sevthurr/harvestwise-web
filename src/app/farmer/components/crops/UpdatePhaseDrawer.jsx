@@ -76,14 +76,31 @@ const UpdatePhaseDrawer = ({
       }
     }
 
+    const overallTotalCost = crop?.totalCost != null && crop?.totalCost !== ""
+      ? Number(crop.totalCost)
+      : (crop?.productionCost != null && crop?.productionCost !== ""
+          ? Number(crop.productionCost)
+          : (Array.isArray(crop?.productionCosts) && crop.productionCosts.length > 0
+              ? crop.productionCosts.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+              : 0));
+    const initialCompletionDate = toDateInputValue(crop.actualHarvestDate)
+      || toDateInputValue(crop.rawHarvestDate || crop.harvestDate)
+      || new Date().toISOString().split("T")[0];
+
     setFields({
       actualPlantingDate: initialPlanting,
       actualPlantedArea: initialArea,
       updatedHarvestDate: initialHarvest,
       expectedHarvestQty: crop.expectedHarvestQty ?? crop.harvestQuantity ?? "",
       actualHarvestDate: toDateInputValue(crop.actualHarvestDate) || new Date().toISOString().split("T")[0],
-      actualHarvestedQty: crop.actualHarvestQty ?? "",
-      finalProductionCost: crop.totalCost ?? "",
+      actualHarvestedQty: crop.actualHarvestQty ?? crop.partialHarvestQty ?? "",
+      completionDate: initialCompletionDate,
+      finalProductionCost: overallTotalCost > 0 ? overallTotalCost : (crop.totalCost ?? ""),
+      finalQtySold: crop.actualHarvestQty ?? crop.partialHarvestQty ?? crop.harvestQuantity ?? "",
+      avgSellingPrice: crop.actualSellingPrice ?? (crop.farmgatePrice != null ? crop.farmgatePrice : ""),
+      notes: crop.notes ?? "",
+      updatedTotalCost: "",
+      additionalCost: "",
     });
   }, [open, crop?.id]);
 
@@ -108,7 +125,17 @@ const UpdatePhaseDrawer = ({
 
   const handlePhaseConfirm = () => {
     if (!selectedPhase) return;
-    onConfirm({ kind: "phase", phase: selectedPhase, fields });
+    const addCost = fields.updatedTotalCost !== "" && fields.updatedTotalCost != null
+      ? Number(fields.updatedTotalCost)
+      : (fields.additionalCost !== "" && fields.additionalCost != null ? Number(fields.additionalCost) : null);
+    onConfirm({
+      kind: "phase",
+      phase: selectedPhase,
+      fields: {
+        ...fields,
+        additionalCost: addCost,
+      },
+    });
   };
 
   const handleHoldConfirm = () => {
@@ -194,51 +221,120 @@ const UpdatePhaseDrawer = ({
       );
     }
     if (selectedPhase === "completed") {
+      const overallTotalCost = crop?.totalCost != null && crop?.totalCost !== ""
+        ? Number(crop.totalCost)
+        : (crop?.productionCost != null && crop?.productionCost !== ""
+            ? Number(crop.productionCost)
+            : (Array.isArray(crop?.productionCosts) && crop.productionCosts.length > 0
+                ? crop.productionCosts.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+                : 0));
       const qty = typeof fields.finalQtySold === "number" ? fields.finalQtySold : null;
       const price = typeof fields.avgSellingPrice === "number" ? fields.avgSellingPrice : null;
-      const cost = typeof fields.finalProductionCost === "number" ? fields.finalProductionCost : crop.totalCost;
+      const cost = typeof fields.finalProductionCost === "number" ? fields.finalProductionCost : overallTotalCost;
       const revenue = qty !== null && price !== null ? qty * price : null;
       const profitLoss = revenue !== null ? revenue - cost : null;
+      const hasAddedCosts = (crop?.addedCosts || 0) > 0;
+      const initialCostEst = crop?.initialCost != null ? crop.initialCost : Math.max(0, overallTotalCost - (crop?.addedCosts || 0));
+
       return (
         <div className="space-y-4">
-          <Field label={t("farmer.cropCycle.final_qty_sold", {}, "Final quantity sold (kg)")}>
-            <input type="number" min="0" value={fields.finalQtySold ?? ""} onChange={(e) => set({ finalQtySold: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="e.g. 560" className={inputCls} />
+          <Field id="finalQtySold" label={t("farmer.cropCycle.final_qty_sold", {}, "Final quantity sold (kg)")}>
+            <input
+              id="finalQtySold"
+              type="number"
+              min="0"
+              value={fields.finalQtySold ?? ""}
+              onChange={(e) => set({ finalQtySold: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder={crop.harvestQuantity ? `e.g. ${crop.harvestQuantity}` : "e.g. 560"}
+              className={inputCls}
+            />
           </Field>
-          <Field label={t("farmer.cropCycle.avg_selling_price", {}, "Average selling price (₱/kg)")}>
-            <input type="number" min="0" value={fields.avgSellingPrice ?? ""} onChange={(e) => set({ avgSellingPrice: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="e.g. 78" className={inputCls} />
+          <Field id="avgSellingPrice" label={t("farmer.cropCycle.avg_selling_price", {}, "Average selling price (₱/kg)")}>
+            <input
+              id="avgSellingPrice"
+              type="number"
+              min="0"
+              value={fields.avgSellingPrice ?? ""}
+              onChange={(e) => set({ avgSellingPrice: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder={crop.farmgatePrice ? `e.g. ${crop.farmgatePrice}` : "e.g. 78"}
+              className={inputCls}
+            />
           </Field>
-          <Field label={t("farmer.cropCycle.final_production_cost", {}, "Final production cost (₱)")}>
-            <input type="number" min="0" value={fields.finalProductionCost ?? ""} onChange={(e) => set({ finalProductionCost: e.target.value === "" ? "" : Number(e.target.value) })} placeholder={String(crop.totalCost)} className={inputCls} />
-          </Field>
-          <Field label={t("farmer.cropCycle.completion_date", {}, "Completion date")}>
-            <input type="date" value={fields.completionDate ?? ""} onChange={(e) => set({ completionDate: e.target.value })} className={inputCls} />
-          </Field>
-          <Field label={t("farmer.cropCycle.notes_opt", {}, "Notes — optional")}>
-            <textarea value={fields.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} placeholder={t("farmer.cropCycle.notes_placeholder", {}, "Any observations about this crop cycle…")} rows={2} className={`${inputCls} resize-none`} />
-          </Field>
-          {revenue !== null && (
-            <div className="bg-[var(--hw-neutral-50)] rounded-xl px-4 py-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--hw-neutral-900)]">
-                  {t("farmer.cropCycle.est_gross_revenue", {}, "Estimated gross revenue")}
-                </span>
-                <span className="font-semibold text-[var(--hw-neutral-900)]">{formatPeso(revenue)}</span>
-              </div>
-              {profitLoss !== null && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--hw-neutral-900)]">
-                    {t("farmer.cropCycle.est_profit_loss", {}, "Estimated profit / loss")}
-                  </span>
-                  <span className={`font-semibold ${profitLoss >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                    {profitLoss >= 0 ? "+" : ""}{formatPeso(profitLoss)}
-                  </span>
-                </div>
-              )}
-              <p className="text-xs text-[var(--hw-neutral-700)]">
-                {t("farmer.cropCycle.all_amounts_estimates", {}, "All amounts are estimates.")}
+          <Field id="finalProductionCost" label={t("farmer.cropCycle.final_production_cost", {}, "Final production cost (₱)")}>
+            <input
+              id="finalProductionCost"
+              type="number"
+              min="0"
+              value={fields.finalProductionCost ?? ""}
+              onChange={(e) => set({ finalProductionCost: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder={String(overallTotalCost || 0)}
+              className={inputCls}
+            />
+            {hasAddedCosts ? (
+              <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
+                {t(
+                  "farmer.cropCycle.final_cost_breakdown_hint",
+                  { initial: formatPeso(initialCostEst), added: formatPeso(crop.addedCosts) },
+                  `Reflects overall total: estimated cost (${formatPeso(initialCostEst)}) + added costs (${formatPeso(crop.addedCosts)})`
+                )}
               </p>
+            ) : (
+              <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
+                {t("farmer.cropCycle.final_cost_hint", {}, "Reflects the overall total for final production cost.")}
+              </p>
+            )}
+          </Field>
+          <Field id="completionDate" label={t("farmer.cropCycle.completion_date", {}, "Completion date")}>
+            <input
+              id="completionDate"
+              type="date"
+              value={fields.completionDate ?? ""}
+              onChange={(e) => set({ completionDate: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+          <Field id="notes" label={t("farmer.cropCycle.notes_opt", {}, "Notes — optional")}>
+            <textarea
+              id="notes"
+              value={fields.notes ?? ""}
+              onChange={(e) => set({ notes: e.target.value })}
+              placeholder={t("farmer.cropCycle.notes_placeholder", {}, "Any observations about this crop cycle…")}
+              rows={2}
+              className={`${inputCls} resize-none`}
+            />
+          </Field>
+
+          <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)]/70 rounded-xl px-4 py-3 space-y-2">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-[var(--hw-neutral-600)]">
+                {t("farmer.cropCycle.final_production_cost", {}, "Final production cost")}
+              </span>
+              <span className="font-semibold text-[var(--hw-neutral-900)]">{formatPeso(cost)}</span>
             </div>
-          )}
+            {revenue !== null && (
+              <>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-[var(--hw-neutral-600)]">
+                    {t("farmer.cropCycle.est_gross_revenue", {}, "Estimated gross revenue")}
+                  </span>
+                  <span className="font-semibold text-[var(--hw-neutral-900)]">{formatPeso(revenue)}</span>
+                </div>
+                {profitLoss !== null && (
+                  <div className="flex justify-between items-center text-sm pt-1 border-t border-[var(--hw-neutral-200)]">
+                    <span className="font-medium text-[var(--hw-neutral-900)]">
+                      {t("farmer.cropCycle.est_profit_loss", {}, "Estimated profit / loss")}
+                    </span>
+                    <span className={`font-bold ${profitLoss >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                      {profitLoss >= 0 ? "+" : ""}{formatPeso(profitLoss)}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+            <p className="text-[11px] text-[var(--hw-neutral-500)]">
+              {t("farmer.cropCycle.all_amounts_estimates", {}, "All amounts are estimates for decision-support records.")}
+            </p>
+          </div>
         </div>
       );
     }
@@ -464,7 +560,9 @@ const UpdatePhaseDrawer = ({
               <span>
                 {mode === "confirm-planting"
                   ? t("farmer.crops.btn_confirm_planting", {}, "Confirm Planting")
-                  : t("farmer.cropCycle.update_status", {}, "Update status")}
+                  : (selectedPhase === "completed"
+                      ? t("common.confirm", {}, "Confirm")
+                      : t("farmer.cropCycle.update_status", {}, "Update status"))}
               </span>
             </button>
           )}

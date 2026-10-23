@@ -170,6 +170,9 @@ export function normalizeCropPlan(raw, pricesMap) {
         : rawStatus === "On Hold"
           ? "Resume when market conditions improve"
           : item.nextMilestone || null,
+    advisoryCategory: item.advisoryCategory || item.advisory || item.advisory_category || null,
+    advisory: item.advisory || item.advisoryCategory || item.advisory_category || null,
+    notes: item.notes || (Array.isArray(item.cropCalendarEntries) ? item.cropCalendarEntries.find((e) => e.notes)?.notes : null) || null,
     lastUpdated: item.updatedAt
       ? new Date(item.updatedAt).toLocaleString("en-US", {
           month: "short",
@@ -321,9 +324,27 @@ const CropsProvider = ({ children }) => {
   );
 
   const updateCropStatusApi = useCallback(
-    async (planId, targetStatus, holdReason = null) => {
+    async (planId, targetStatus, holdReason = null, extra = {}) => {
       const body = { target_status: targetStatus };
       if (holdReason) body.hold_reason = holdReason;
+      if (extra?.additionalCost != null || extra?.additional_cost != null) {
+        body.additional_cost = Number(extra.additionalCost ?? extra.additional_cost);
+      }
+      if (extra?.actualHarvestQty != null || extra?.actual_harvest_qty != null) {
+        body.actual_harvest_qty = Number(extra.actualHarvestQty ?? extra.actual_harvest_qty);
+      }
+      if (extra?.actualHarvestDate != null || extra?.actual_harvest_date != null) {
+        body.actual_harvest_date = extra.actualHarvestDate ?? extra.actual_harvest_date;
+      }
+      if (extra?.actualSellingPricePerKg != null || extra?.actual_selling_price_per_kg != null) {
+        body.actual_selling_price_per_kg = Number(extra.actualSellingPricePerKg ?? extra.actual_selling_price_per_kg);
+      }
+      if (extra?.finalProductionCost != null || extra?.final_production_cost != null) {
+        body.final_production_cost = Number(extra.finalProductionCost ?? extra.final_production_cost);
+      }
+      if (extra?.notes) {
+        body.notes = String(extra.notes).trim();
+      }
       const res = await apiPut(`/crop-plans/${planId}/status`, body);
       const data = await parseResponse(res);
       await refreshCrops();
@@ -333,12 +354,19 @@ const CropsProvider = ({ children }) => {
   );
 
   const logHarvestApi = useCallback(
-    async (planId, harvestDate, harvestQty, sellingPricePerKg = null) => {
-      const res = await apiPost(`/crop-plans/${planId}/harvest`, {
+    async (planId, harvestDate, harvestQty, sellingPricePerKg = null, extra = {}) => {
+      const payload = {
         actual_harvest_date: harvestDate,
         actual_harvest_qty: harvestQty,
         actual_selling_price_per_kg: sellingPricePerKg,
-      });
+      };
+      if (extra?.finalProductionCost != null || extra?.final_production_cost != null) {
+        payload.final_production_cost = Number(extra.finalProductionCost ?? extra.final_production_cost);
+      }
+      if (extra?.notes) {
+        payload.notes = String(extra.notes).trim();
+      }
+      const res = await apiPost(`/crop-plans/${planId}/harvest`, payload);
       const data = await parseResponse(res);
       await refreshCrops();
       return data;

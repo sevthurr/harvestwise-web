@@ -741,16 +741,41 @@ function PriceDetailView({
     const refPrice = source.reference_price ?? (isStageSpecific ? null : source.forecast_midpoint);
     const basePrice = source.comparison_baseline ?? (isStageSpecific ? null : (source.current_prevailing_price ?? source.recent_average_price));
 
+    const isNearHarvest = effectiveCropStage === "near_harvest";
+    const availableForecastMidpoint = source.forecast_midpoint ?? (
+      priceDetailData?.forecast?.points?.length > 0
+        ? (priceDetailData.forecast.points[0].midpoint ?? priceDetailData.forecast.points[0].price)
+        : null
+    );
+
+    let finalRefPrice = refPrice;
+    let finalBasePrice = basePrice;
+    let finalPriceReferenceType = source.price_reference_type || (source.forecast_midpoint ? "forecast" : "historical_seasonal");
+    let finalPriceReferenceLabel = source.price_reference_label || (isStageSpecific ? "Reference Price" : t("farmer.factors.price.estimated_price_label", {}, "Estimated Price"));
+    let finalIsFallback = Boolean(source.is_fallback);
+
+    if (isNearHarvest && (availableForecastMidpoint != null || finalPriceReferenceType === "forecast")) {
+      if (availableForecastMidpoint != null) {
+        finalRefPrice = availableForecastMidpoint;
+      }
+      if (finalBasePrice == null) {
+        finalBasePrice = source.macro_baseline_price ?? source.recent_average_price;
+      }
+      finalPriceReferenceType = "forecast";
+      finalPriceReferenceLabel = t("farmer.factors.price.forecast_harvest_price", {}, "Forecasted Price");
+      finalIsFallback = false;
+    }
+
     const percentChange = source.forecast_price_change_pct != null
       ? source.forecast_price_change_pct
-      : ((refPrice != null && basePrice != null && basePrice > 0)
-          ? ((refPrice - basePrice) / basePrice) * 100
+      : ((finalRefPrice != null && finalBasePrice != null && finalBasePrice > 0)
+          ? ((finalRefPrice - finalBasePrice) / finalBasePrice) * 100
           : (source.forecast_midpoint != null && source.recent_average_price != null && source.recent_average_price > 0)
             ? ((source.forecast_midpoint - source.recent_average_price) / source.recent_average_price) * 100
             : null);
 
-    const diff = (refPrice != null && basePrice != null)
-      ? (refPrice - basePrice)
+    const diff = (finalRefPrice != null && finalBasePrice != null)
+      ? (finalRefPrice - finalBasePrice)
       : ((source.forecast_midpoint != null && source.recent_average_price != null) ? (source.forecast_midpoint - source.recent_average_price) : null);
 
     const histPct = source.historical_price_change_pct != null
@@ -765,29 +790,30 @@ function PriceDetailView({
     );
     const fcPct = source.forecast_price_change_pct != null
       ? source.forecast_price_change_pct
-      : (source.price_reference_type === "forecast" ? percentChange : null);
+      : (finalPriceReferenceType === "forecast" ? percentChange : null);
     const fcClass = source.forecast_price_outlook || (
-      source.price_reference_type === "forecast"
-        ? classification
+      finalPriceReferenceType === "forecast"
+        ? (classification !== "neutral" ? classification : (fcPct != null ? (fcPct > 5.0 ? "favorable" : fcPct < -5.0 ? "unfavorable" : "neutral") : "neutral"))
         : (fcPct != null ? (fcPct > 5.0 ? "favorable" : fcPct < -5.0 ? "unfavorable" : "neutral") : null)
     );
     const hasEligibleFc = Boolean(
       source.has_eligible_forecast ||
-      (effectiveCropStage === "during_planting" && source.price_reference_type === "forecast")
+      (isNearHarvest && (availableForecastMidpoint != null || finalPriceReferenceType === "forecast")) ||
+      (effectiveCropStage === "during_planting" && finalPriceReferenceType === "forecast")
     );
 
     return {
       status: "processed",
-      classification,
+      classification: finalPriceReferenceType === "forecast" && fcClass ? fcClass : classification,
       percentChange,
-      referencePrice: refPrice,
-      comparisonBaseline: basePrice,
+      referencePrice: finalRefPrice,
+      comparisonBaseline: finalBasePrice,
       absoluteChange: diff,
-      priceReferenceType: source.price_reference_type || (source.forecast_midpoint ? "forecast" : "historical_seasonal"),
-      priceReferenceLabel: source.price_reference_label || (isStageSpecific ? "Reference Price" : t("farmer.factors.price.estimated_price_label", {}, "Estimated Price")),
-      comparisonBaselineLabel: source.comparison_baseline_label || (isStageSpecific ? "Comparison Baseline" : t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")),
+      priceReferenceType: finalPriceReferenceType,
+      priceReferenceLabel: finalPriceReferenceLabel,
+      comparisonBaselineLabel: source.comparison_baseline_label || (isStageSpecific ? "Multi-Year Macro Baseline" : t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")),
       referencePeriod: source.reference_period || "",
-      isFallback: Boolean(source.is_fallback),
+      isFallback: finalIsFallback,
       explanation: source.explanation || "",
       historicalSeasonalPrice: source.historical_seasonal_price,
       macroBaselinePrice: source.macro_baseline_price,
@@ -799,7 +825,7 @@ function PriceDetailView({
       daysToHarvest: source.days_to_harvest ?? null,
       spot7dAveragePrice: source.spot_7d_average_price,
       recentAverage: source.recent_average_price,
-      forecastMidpoint: source.forecast_midpoint,
+      forecastMidpoint: source.forecast_midpoint ?? finalRefPrice,
       lowerForecast: source.lower_forecast,
       upperForecast: source.upper_forecast,
       plantingWindowStart: source.planting_window_start || plantingWindowStart,
@@ -1246,3 +1272,5 @@ function PriceDetailView({
 export {
   PriceDetailView
 };
+
+export default PriceDetailView;
