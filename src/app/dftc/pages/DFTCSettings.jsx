@@ -258,12 +258,12 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
 
       <Card>
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">{t("dftc.settings.danger_zone", {}, "Danger Zone")}</p>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[14px] font-semibold text-black">{t("dftc.settings.request_deletion_title", {}, "Request account removal")}</p>
-            <p className="text-[13px] text-black">{t("dftc.settings.request_deletion_desc", {}, "Submit a request to remove your DFTC account. The HarvestWise team will review it.")}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0 space-y-1 sm:space-y-1.5">
+            <p className="text-[14px] sm:text-[15px] font-semibold text-black">{t("dftc.settings.request_deletion_title", {}, "Request account removal")}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed">{t("dftc.settings.request_deletion_desc", {}, "Submit a request to remove your DFTC account. The HarvestWise team will review it.")}</p>
             {removalStatus && (
-              <p className="text-[13px] text-black mt-1">
+              <p className="text-[13px] text-black pt-0.5">
                 {t("dftc.settings.removal_status_label", {}, "Request status")}:{" "}
                 <span className={`font-semibold ${removalStatusColor}`}>
                   {removalStatusLabel}
@@ -271,7 +271,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               </p>
             )}
             {removalInGrace && (
-              <p className="text-[13px] text-amber-700 mt-1">
+              <p className="text-[13px] text-amber-700 leading-snug">
                 {t(
                   "dftc.settings.removal_grace_note",
                   { date: removalGraceDueAt ? formatDate(removalGraceDueAt) : "—" },
@@ -280,18 +280,18 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               </p>
             )}
             {removalFulfilledAt && (
-              <p className="text-[13px] text-[var(--hw-neutral-500)] mt-1">
+              <p className="text-[13px] text-[var(--hw-neutral-500)] leading-snug">
                 {t("dftc.settings.removal_completed_note", {}, "Your account removal request has been fulfilled.")}
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto flex-shrink-0 pt-1 sm:pt-0">
             {removalInGrace && (
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="h-8 px-3 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-xl sm:rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {cancelling ? t("common.saving", {}, "Saving…") : t("dftc.settings.removal_cancel_btn", {}, "Cancel request")}
               </button>
@@ -300,7 +300,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               type="button"
               onClick={() => setShowRemoveModal(true)}
               disabled={removalBlocked}
-              className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl sm:rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               {removalStatus === "rejected"
                 ? t("dftc.settings.request_again_btn", {}, "Request Again")
@@ -391,7 +391,7 @@ const SecurityTab = ({ showToast }) => {
 
       <Card>
         <SectionLabel>{t("dftc.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
-        <div className="flex items-center justify-between py-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 py-1">
           <div>
             <p className="text-[14px] font-semibold text-black">{t("dftc.settings.google_card_title", {}, "Google Sign-In")}</p>
             <p className="text-[13px] text-black">{googleLink.googleConnected ? t("dftc.settings.google_connected", {}, "Connected") : t("dftc.settings.google_not_connected", {}, "Not connected")}</p>
@@ -407,7 +407,7 @@ const SecurityTab = ({ showToast }) => {
               }
             }}
             disabled={googleLink.loading}
-            className={`h-8 px-3 text-[13px] font-medium rounded-lg border transition-colors ${
+            className={`w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium rounded-xl sm:rounded-lg border transition-colors ${
               googleLink.googleConnected
                 ? "border-red-200 text-red-600 hover:bg-red-50"
                 : "border-[var(--hw-green-700)] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)]"
@@ -486,7 +486,7 @@ function DFTCSettings() {
     }
   };
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+  return <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       <PageHeader
         title="Settings"
         description="Manage your account and security settings."

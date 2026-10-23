@@ -120,7 +120,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   apiGet.mockResolvedValue({
     ok: true,
-    json: async () => [{ id: 'COM-0001', name: 'Kalabasa', is_top10: true, is_active: true }],
+    json: async () => [{ id: 'COM-0001', name: 'Kalabasa', varieties: ['Suprema'], is_top10: true, is_active: true }],
   });
   parseResponse.mockImplementation(async (res) => res.json());
 

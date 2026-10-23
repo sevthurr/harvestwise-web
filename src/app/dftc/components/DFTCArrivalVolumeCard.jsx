@@ -53,7 +53,7 @@ export function DFTCArrivalVolumeCard({
 
   if (loadingHome) {
     return (
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
         {header}
         <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">Loading…</div>
       </div>
@@ -62,7 +62,7 @@ export function DFTCArrivalVolumeCard({
 
   if (!latestArrivalVolume || items.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
         {header}
         <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
           No arrival volume records available yet.
@@ -72,9 +72,9 @@ export function DFTCArrivalVolumeCard({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
       {header}
-      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+      <div className="space-y-3 max-h-64 sm:max-h-72 overflow-y-auto pr-1">
         {items.map((item) => (
           <button
             key={item.id}

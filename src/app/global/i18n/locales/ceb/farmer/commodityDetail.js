@@ -28,6 +28,9 @@ export const commodityDetail = {
   btn_view_another: "Tan-aw og laing tanom",
   not_available: "Dili available ang mga detalye sa presyo.",
   back_to_prices: "Balik sa mga Presyo",
+  offline_notice: "Offline ka — wala pa nga nimbak sa presyo niini sa imong device.",
+  load_failed: "Dili ka nga makapag-load sa presyo niini. Susiha ang imong koneksyon ug sulayi pag-usab.",
+  btn_retry: "Sulayi pag-usab",
   price_trend_details: "Detalye sa Lihok sa Presyo",
   assess_crop_btn: "Susiha kining tanoma",
   select_variety: "Pili og barayti"

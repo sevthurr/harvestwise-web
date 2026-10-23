@@ -315,6 +315,25 @@ describe('AuthContext — farmer offline bundle gating', () => {
     expect(snapshotCalls()).toHaveLength(0);
     expect(profileCalls()).toHaveLength(0);
   });
+
+  it('does NOT seed the farmer bundle when the role is unreadable', async () => {
+    // The bundle carries the farmer's own crop plans, and roleHome() maps an
+    // unknown or missing role name to '/farmer'. A session whose role cannot
+    // be read is not a farmer, so it must not seed the farmer bundle — and its
+    // fallback path requests /crop-plans.
+    const rolelessUser = { ...FAKE_USER_FARMER };
+    delete rolelessUser.role;
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: rolelessUser }));
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(snapshotCalls()).toHaveLength(0);
+    expect(profileCalls()).toHaveLength(0);
+  });
 });
 
 // ── SELLING_OPTIONS backendLabel mapping ─────────────────────────────────────

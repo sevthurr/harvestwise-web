@@ -91,28 +91,36 @@ function computeDateCoverage(records, fallbackDate) {
 }
 
 const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]";
-const tdCls = "px-4 py-3 whitespace-nowrap text-[var(--hw-neutral-800)] text-[14px]";
+const tdCls = "px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[var(--hw-neutral-800)] text-[13px] sm:text-[14px]";
 const tdBold = `${tdCls} font-medium text-[var(--hw-neutral-900)]`;
-const thCls = "px-4 py-3 text-left text-[13px] font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap";
+const thCls = "px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap";
 
 function ValTabNav({ active, onChange, ds }) {
   const tabs = [
-    { id: "analytics", label: `Analytics-Supported Records (${ds.analyticsSupported ?? 0})` },
-    { id: "other", label: `Other Commodity Records (${ds.otherCommodities ?? 0})` }
+    { id: "analytics", label: "Analytics-Supported", fullLabel: "Analytics-Supported Records", count: ds.analyticsSupported ?? 0 },
+    { id: "other", label: "Other Commodities", fullLabel: "Other Commodity Records", count: ds.otherCommodities ?? 0 }
   ];
   return (
-    <div className="flex gap-0 border-b border-[var(--hw-neutral-200)] overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+    <div className="flex gap-2 sm:gap-4 border-b border-[var(--hw-neutral-200)] px-3 sm:px-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          className={`px-4 py-3 text-[13px] font-medium whitespace-nowrap border-b-2 -mb-px transition-colors cursor-pointer ${
+          className={`py-2.5 sm:py-3 text-[12.5px] sm:text-[13px] font-medium whitespace-nowrap border-b-2 -mb-px transition-colors cursor-pointer flex items-center gap-1.5 ${
             active === t.id
               ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] font-semibold"
-              : "border-transparent text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)]"
+              : "border-transparent text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
           }`}
         >
-          {t.label}
+          <span className="hidden sm:inline">{t.fullLabel}</span>
+          <span className="sm:hidden">{t.label}</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10.5px] sm:text-[11px] font-semibold ${
+            active === t.id
+              ? "bg-[var(--hw-green-100)] text-[var(--hw-green-800)]"
+              : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)]"
+          }`}>
+            {t.count}
+          </span>
         </button>
       ))}
     </div>
@@ -243,7 +251,7 @@ function DFTCSubmissionDetail() {
 
   if (isLoading) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
         <button
           onClick={() => navigate("/dftc/submissions")}
           className="flex items-center gap-1.5 text-[14px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
@@ -261,7 +269,7 @@ function DFTCSubmissionDetail() {
 
   if (!ds) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
         <button
           onClick={() => navigate("/dftc/submissions")}
           className="flex items-center gap-1.5 text-[14px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
@@ -305,7 +313,7 @@ function DFTCSubmissionDetail() {
   ];
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       {showDelete && <DeleteModal onCancel={() => setShowDelete(false)} onConfirm={() => navigate("/dftc/submissions")} />}
 
       {/* Back */}
@@ -318,31 +326,36 @@ function DFTCSubmissionDetail() {
       </button>
 
       {/* Header */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <h1 className="text-lg sm:text-xl font-bold text-[var(--hw-neutral-900)] break-words">
             {ds.fileName && ds.fileName !== "—" ? ds.fileName : ds.datasetId}
           </h1>
           {ds.fileName && ds.fileName !== "—" && (
-            <span className="text-[13px] text-[var(--hw-neutral-500)] font-medium">({ds.datasetId})</span>
+            <span className="text-[12px] font-mono font-medium text-[var(--hw-neutral-600)] bg-[var(--hw-neutral-100)] px-2 py-0.5 rounded-md">
+              {ds.datasetId}
+            </span>
           )}
         </div>
-        <p className="text-[14px] text-[var(--hw-neutral-800)]">{ds.datasetType} · {ds.savedDateTime}</p>
-        <p className="text-[14px] text-[var(--hw-neutral-800)]">Saved by {ds.savedBy}</p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] sm:text-[13px] text-[var(--hw-neutral-600)]">
+          <span className="font-medium text-[var(--hw-neutral-800)]">{ds.datasetType}</span>
+          <span className="text-[var(--hw-neutral-300)]">•</span>
+          <span>{ds.savedDateTime}</span>
+          <span className="text-[var(--hw-neutral-300)]">•</span>
+          <span>Saved by <strong className="text-[var(--hw-neutral-800)] font-medium">{ds.savedBy}</strong></span>
+        </div>
       </div>
-
-
 
       {/* Dataset Information */}
       <div className={`${cardCls} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Dataset Information</p>
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)]">
+          <p className="text-[14.5px] sm:text-[15px] font-semibold text-[var(--hw-neutral-900)]">Dataset Information</p>
         </div>
-        <div className="px-5 divide-y divide-[var(--hw-neutral-100)]">
+        <div className="px-4 sm:px-5 divide-y divide-[var(--hw-neutral-100)]">
           {INFO_ROWS.map(([label, value]) => (
-            <div key={label} className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-4 py-3">
-              <span className="text-[13px] font-medium text-[var(--hw-neutral-800)] sm:w-52 flex-shrink-0">{label}</span>
-              <span className="text-[14px] text-[var(--hw-neutral-900)]">{value}</span>
+            <div key={label} className="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-start gap-0.5 sm:gap-4 py-2.5 sm:py-3 text-[13px]">
+              <span className="font-medium text-[var(--hw-neutral-600)] sm:w-52 shrink-0">{label}</span>
+              <span className="font-medium text-[var(--hw-neutral-900)] break-words min-w-0">{value}</span>
             </div>
           ))}
         </div>
@@ -407,9 +420,9 @@ function DFTCSubmissionDetail() {
       {/* Validation Result */}
       {showValidation && (
         <div className={`${cardCls} overflow-hidden`}>
-          <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation Result</p>
-            <p className="text-[13px] text-[var(--hw-neutral-800)] mt-0.5">Saved records are read-only.</p>
+          <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)]">
+            <p className="text-[14.5px] sm:text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation Result</p>
+            <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-600)] mt-0.5">Saved records are read-only.</p>
           </div>
 
           <ValTabNav active={valTab} onChange={setValTab} ds={ds} />
@@ -417,20 +430,20 @@ function DFTCSubmissionDetail() {
           {/* Analytics-Supported Records */}
           {valTab === "analytics" && (
             <>
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 mt-0.5" />
-                <p className="text-[14px] text-[var(--hw-neutral-700)]">
+              <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2 sm:gap-2.5 bg-[var(--hw-neutral-50)]/50">
+                <Info className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0 mt-0.5" />
+                <p className="text-[12.5px] sm:text-[13.5px] text-[var(--hw-neutral-700)] leading-relaxed">
                   These records are used in HarvestWise price trends, forecasting, and analytical processing where applicable.
                 </p>
               </div>
               {ds.analyticsRecords.length === 0 ? (
-                <div className="px-5 py-10 text-center text-[14px] text-[var(--hw-neutral-800)]">
+                <div className="px-4 sm:px-5 py-8 sm:py-10 text-center text-[13px] sm:text-[14px] text-[var(--hw-neutral-600)]">
                   No analytics-supported records in this dataset.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
                   {isArrival ? (
-                    <table className="w-full">
+                    <table className="w-full min-w-[580px]">
                       <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                         <tr>
                           {["Row", "Commodity", "Variety", "Date / Month", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
@@ -454,7 +467,7 @@ function DFTCSubmissionDetail() {
                       </tbody>
                     </table>
                   ) : (
-                    <table className="w-full">
+                    <table className="w-full min-w-[620px]">
                       <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                         <tr>
                           {(ds.hasMarketAndType
@@ -490,20 +503,20 @@ function DFTCSubmissionDetail() {
           {/* Other Commodity Records */}
           {valTab === "other" && (
             <>
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 mt-0.5" />
-                <p className="text-[14px] text-[var(--hw-neutral-700)]">
+              <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2 sm:gap-2.5 bg-[var(--hw-neutral-50)]/50">
+                <Info className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0 mt-0.5" />
+                <p className="text-[12.5px] sm:text-[13.5px] text-[var(--hw-neutral-700)] leading-relaxed">
                   These commodities are not part of HarvestWise crop analytics. Records in this list are retained for DFTC monitoring and will be automatically removed after 30 days.
                 </p>
               </div>
               {ds.otherRecords.length === 0 ? (
-                <div className="px-5 py-10 text-center text-[14px] text-[var(--hw-neutral-800)]">
+                <div className="px-4 sm:px-5 py-8 sm:py-10 text-center text-[13px] sm:text-[14px] text-[var(--hw-neutral-600)]">
                   No other commodity records in this dataset.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
                   {isArrival ? (
-                    <table className="w-full">
+                    <table className="w-full min-w-[580px]">
                       <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                         <tr>
                           {["Row", "Commodity", "Variety", "Date / Month", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
@@ -527,7 +540,7 @@ function DFTCSubmissionDetail() {
                       </tbody>
                     </table>
                   ) : (
-                    <table className="w-full">
+                    <table className="w-full min-w-[620px]">
                       <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                         <tr>
                           {(ds.hasMarketAndType

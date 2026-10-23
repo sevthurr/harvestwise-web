@@ -120,12 +120,12 @@ function MobileDetails({ details }) {
 
 function FilterSelect({ label, id, value, onChange, options }) {
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 pr-8 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)] cursor-pointer"
+        className="w-full sm:w-auto appearance-none bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 pr-8 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)] cursor-pointer"
         aria-label={label}
       >
         {options.map((o) => (
@@ -362,9 +362,9 @@ function AdminAuditLogs() {
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
       {/* ── Header ── */}
-      <div className="mb-5">
+      <div className="mb-4 sm:mb-5">
         <PageHeader
           title="Audit Logs"
           description="View and track system events and administrative actions."
@@ -372,10 +372,10 @@ function AdminAuditLogs() {
       </div>
 
       {/* ── Filter bar ── */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 mb-4">
-        <div className="flex flex-wrap gap-2 items-center">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2.5 sm:gap-2">
           {/* Search → maps to action ilike filter */}
-          <div className="relative flex-1 min-w-[180px]">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
             <input
               id="audit-search"
@@ -387,82 +387,91 @@ function AdminAuditLogs() {
             />
           </div>
 
-          {/* Resource prefix filter */}
-          <FilterSelect
-            id="audit-action-filter"
-            label="Action category"
-            value={actionPrefix}
-            onChange={(v) => { setPrefix(v); setPage(1); }}
-            options={ACTION_FILTER_OPTIONS}
-          />
+          {/* Row containing All Actions and Date Filters on the same row across all screen sizes */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+            {/* Resource prefix filter */}
+            <div className="w-full sm:w-auto min-w-0">
+              <FilterSelect
+                id="audit-action-filter"
+                label="Action category"
+                value={actionPrefix}
+                onChange={(v) => { setPrefix(v); setPage(1); }}
+                options={ACTION_FILTER_OPTIONS}
+              />
+            </div>
 
-          {/* Date range */}
-          <input
-            id="audit-date-from"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-            aria-label="Date from"
-            className="bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
-          />
-          <span className="text-[12px] text-[var(--hw-neutral-400)]">to</span>
-          <input
-            id="audit-date-to"
-            type="date"
-            value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-            aria-label="Date to"
-            className="bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
-          />
+            {/* Date range in same row */}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 w-full sm:w-auto min-w-0">
+              <input
+                id="audit-date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                aria-label="Date from"
+                className="w-full min-w-0 bg-white border border-[var(--hw-neutral-200)] rounded-xl px-1.5 xs:px-2 py-2 text-[11px] xs:text-[12px] sm:text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+              />
+              <span className="text-[10px] xs:text-[11px] text-[var(--hw-neutral-400)] text-center px-0.5">to</span>
+              <input
+                id="audit-date-to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                aria-label="Date to"
+                className="w-full min-w-0 bg-white border border-[var(--hw-neutral-200)] rounded-xl px-1.5 xs:px-2 py-2 text-[11px] xs:text-[12px] sm:text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+              />
+            </div>
+          </div>
 
           {hasFilters && (
             <button
               onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-black border border-[var(--hw-neutral-200)] rounded-xl bg-white hover:bg-[var(--hw-neutral-50)] transition-colors"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-black border border-[var(--hw-neutral-200)] rounded-xl bg-white hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Reset
+              <span>Reset</span>
             </button>
           )}
+        </div>
+      </div>
 
-          {/* Export PDF dropdown inside filter container */}
-          <div className="relative ml-auto">
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              disabled={!!exporting}
-              className="flex items-center gap-2 px-3.5 py-2 text-[13px] font-medium rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] bg-white hover:bg-[var(--hw-neutral-50)] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FileText className={`w-4 h-4 text-[#245501] ${exporting ? "animate-pulse" : ""}`} />
-              {exporting ? "Preparing PDF…" : "Export PDF"}
-            </button>
-            {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden z-20">
-                <button
-                  onClick={() => {
-                    setShowExportMenu(false);
-                    generatePdf("preview");
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" /> Preview
-                </button>
-                <button
-                  onClick={() => {
-                    setShowExportMenu(false);
-                    generatePdf("download");
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" /> Download
-                </button>
-              </div>
-            )}
-          </div>
+      {/* ── Small Export PDF button below the search/filter container, right-justified ── */}
+      <div className="flex items-center justify-end mb-3">
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            disabled={!!exporting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-medium rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] bg-white hover:bg-[var(--hw-neutral-50)] transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <FileText className={`w-3.5 h-3.5 text-[#245501] ${exporting ? "animate-pulse" : ""}`} />
+            <span>{exporting ? "Preparing PDF…" : "Export PDF"}</span>
+          </button>
+          {showExportMenu && (
+            <div className="absolute right-0 mt-1.5 w-36 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden z-20">
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  generatePdf("preview");
+                }}
+                className="w-full text-left px-3.5 py-2 text-[12px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" /> Preview
+              </button>
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  generatePdf("download");
+                }}
+                className="w-full text-left px-3.5 py-2 text-[12px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Download
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Table ── */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
         {/* Desktop table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -586,28 +595,43 @@ function AdminAuditLogs() {
                   <div
                     key={row.id}
                     data-log-row={rowDataMatcher}
-                    className={`px-5 py-3.5 space-y-1.5 transition-colors duration-500 ${
-                      isHighlighted ? "bg-emerald-50/70 font-medium" : ""
+                    className={`p-2.5 sm:p-3 space-y-1 transition-colors duration-500 ${
+                      isHighlighted ? "bg-emerald-50/70" : ""
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <ActionText action={row.action} />
-                      <span className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
+                    {/* Header: Action & Plain Text Log ID (no badge) */}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="break-all font-medium">
+                        <ActionText action={row.action} />
+                      </div>
+                      <span className="shrink-0 text-[11px] font-mono text-[var(--hw-neutral-400)]">
                         {row.id}
                       </span>
                     </div>
-                    <p className="text-[12px] text-[var(--hw-neutral-500)]">
-                      {fmtDatetime(row.created_at)}
-                    </p>
-                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
-                      {formatActorLabel(row)}
-                    </p>
+
+                    {/* Compact Actor & Timestamp in one line or compact row */}
+                    <div className="flex items-center justify-between gap-2 text-[12px]">
+                      <span className="font-semibold text-[var(--hw-neutral-800)] truncate">
+                        {formatActorLabel(row)}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-[var(--hw-neutral-500)]">
+                        {fmtDatetime(row.created_at)}
+                      </span>
+                    </div>
+
+                    {/* Details */}
                     {row.details && (
-                      <MobileDetails details={row.details} />
+                      <div className="pt-0.5">
+                        <MobileDetails details={row.details} />
+                      </div>
                     )}
-                    <p className="text-[11px] text-[var(--hw-neutral-500)] font-mono">
-                      {row.ip_address || "—"}
-                    </p>
+
+                    {/* IP Address (compact) */}
+                    {row.ip_address && (
+                      <div className="text-[10.5px] text-[var(--hw-neutral-400)] font-mono">
+                        IP: {row.ip_address}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -617,42 +641,95 @@ function AdminAuditLogs() {
       </div>
 
       {/* ── Pagination ── */}
-      <div className="mt-4 flex items-center justify-between gap-4 px-5 py-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[var(--shadow-xs)] text-[12px] text-[var(--hw-neutral-700)] flex-wrap">
-        <p>
-          {data.total > 0
-            ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, data.total)} of ${data.total} activities`
-            : "No entries"}
-        </p>
-        <div className="flex items-center gap-1">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            Prev
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+      {totalPages > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl sm:rounded-2xl shadow-[var(--shadow-xs)] text-[12px] text-[var(--hw-neutral-700)]">
+          <p className="text-center sm:text-left text-[13px] font-medium text-[var(--hw-neutral-700)]">
+            {data.total > 0
+              ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, data.total)} of ${data.total} activities`
+              : "No entries"}
+          </p>
+
+          {/* Mobile view: Compact Prev / Page X of Y / Next */}
+          <div className="flex sm:hidden items-center justify-between w-full pt-1 border-t border-[var(--hw-neutral-100)]">
             <button
-              key={p}
-              onClick={() => setPage(p)}
-              className={`px-2.5 py-1 border rounded-lg transition-colors ${
-                p === page
-                  ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white"
-                  : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)]"
-              }`}
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              {p}
+              Prev
             </button>
-          ))}
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            Next
-          </button>
+            <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+
+          {/* Desktop/Tablet view: Sliding window with ellipsis so numbers never wrap into multiple rows */}
+          <div className="hidden sm:flex items-center gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Prev
+            </button>
+
+            {(() => {
+              const pages = [];
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (page > 3) pages.push("...");
+                const start = Math.max(2, page - 1);
+                const end = Math.min(totalPages - 1, page + 1);
+                for (let i = start; i <= end; i++) {
+                  if (!pages.includes(i)) pages.push(i);
+                }
+                if (page < totalPages - 2) pages.push("...");
+                if (!pages.includes(totalPages)) pages.push(totalPages);
+              }
+
+              return pages.map((item, idx) => {
+                if (item === "...") {
+                  return (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-1 text-[var(--hw-neutral-400)] select-none">
+                      …
+                    </span>
+                  );
+                }
+                return (
+                  <button
+                    key={item}
+                    onClick={() => setPage(item)}
+                    className={`min-w-[32px] px-2.5 py-1 border rounded-lg transition-colors ${
+                      item === page
+                        ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white font-medium"
+                        : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)]"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              });
+            })()}
+
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

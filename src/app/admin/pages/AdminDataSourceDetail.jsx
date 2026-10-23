@@ -124,19 +124,19 @@ function AdminDataSourceDetail() {
   const { columns, headers, rows } = buildTable(records);
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5">
-      <div className="max-w-[900px] mx-auto space-y-5">
+  return <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
+      <div className="max-w-[900px] mx-auto space-y-4 sm:space-y-5">
 
         <div>
           <button
     onClick={() => navigate("/admin/data-sources")}
-    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors mb-4"
+    className="flex items-center gap-1 text-[13px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-700)] transition-colors mb-3 sm:mb-4 cursor-pointer"
   >
             <ChevronLeft className="w-4 h-4" />Back to Data Sources
           </button>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h1 className="text-[20px] font-bold text-[var(--hw-neutral-900)]">{src.source_name || "Data Source"}</h1>
+              <h1 className="text-[18px] sm:text-[20px] font-bold text-[var(--hw-neutral-900)]">{src.source_name || "Data Source"}</h1>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-[12px] text-[var(--hw-neutral-800)]">{src.source_type || src.ingestion_method || "—"}</span>
                 <span className="text-[var(--hw-neutral-300)]">·</span>
@@ -147,7 +147,7 @@ function AdminDataSourceDetail() {
         </div>
 
         {error && (
-          <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-2xl px-4 py-3.5">
+          <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl sm:rounded-2xl px-4 py-3.5">
             <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-[12px] font-semibold text-red-700 uppercase tracking-wide mb-0.5">Error</p>
@@ -156,8 +156,8 @@ function AdminDataSourceDetail() {
           </div>
         )}
 
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-5 py-3 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Overview</p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
@@ -167,17 +167,17 @@ function AdminDataSourceDetail() {
     { label: "Ingestion method", value: src.ingestion_method || "-" },
     { label: "Update frequency", value: src.update_frequency || "-" },
     { label: "Last successful update", value: formatDT(src.last_successful_update), highlight: !!src.last_successful_update }
-  ].map((row) => <div key={row.label} className="flex items-center justify-between gap-3 px-5 py-3">
+  ].map((row) => <div key={row.label} className="flex flex-col xs:flex-row xs:items-center justify-between gap-1 xs:gap-3 px-4 sm:px-5 py-2.5 sm:py-3">
                 <p className="text-[13px] text-[var(--hw-neutral-800)]">{row.label}</p>
-                <p className={`text-[13px] font-medium text-right ${"highlight" in row && row.highlight ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-800)]"}`}>
+                <p className={`text-[13px] font-medium text-left xs:text-right ${"highlight" in row && row.highlight ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-800)]"}`}>
                   {row.value}
                 </p>
               </div>)}
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-5 py-3 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-5 py-3 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">Records</p>
           </div>
 
@@ -187,7 +187,7 @@ function AdminDataSourceDetail() {
       setShowRecords((v) => !v);
       if (!showRecords) setRecordPage(1);
     }}
-    className="w-full flex items-center justify-between px-5 py-3 text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+    className="w-full flex items-center justify-between px-4 sm:px-5 py-3 text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
   >
               <span>View Records {loading ? "…" : `(${total.toLocaleString()})`}</span>
               {showRecords ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -199,7 +199,7 @@ function AdminDataSourceDetail() {
               <div className="px-5 py-8 text-center text-[13px] text-[var(--hw-neutral-500)] border-t border-[var(--hw-neutral-100)]">No records available.</div>
             ) : <div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[12px]">
+                  <table className="w-full text-[12px] min-w-[500px]">
                     <thead>
                       <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
                         {headers.map((h) => <th key={h} className="px-4 py-2.5 text-left font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">{h}</th>)}
@@ -213,7 +213,7 @@ function AdminDataSourceDetail() {
                   </table>
                 </div>
 
-                {totalPages > 1 && <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--hw-neutral-100)]">
+                {totalPages > 1 && <div className="flex flex-col xs:flex-row items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-t border-[var(--hw-neutral-100)]">
                     <p className="text-[12px] text-[var(--hw-neutral-700)]">
                       Showing {Math.min((recordPage - 1) * PAGE_SIZE + 1, total)}–{Math.min(recordPage * PAGE_SIZE, total)} of {total.toLocaleString()}
                     </p>
@@ -221,7 +221,7 @@ function AdminDataSourceDetail() {
                       <button
     onClick={() => setRecordPage((p) => Math.max(1, p - 1))}
     disabled={recordPage === 1}
-    className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 transition-colors"
+    className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 transition-colors cursor-pointer"
   >
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
@@ -231,7 +231,7 @@ function AdminDataSourceDetail() {
                       <button
     onClick={() => setRecordPage((p) => Math.min(totalPages, p + 1))}
     disabled={recordPage === totalPages}
-    className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 transition-colors"
+    className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 transition-colors cursor-pointer"
   >
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
@@ -241,11 +241,11 @@ function AdminDataSourceDetail() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2.5">
-          <button onClick={() => navigate("/admin/import")} className={btnPrimary}>
+        <div className="flex flex-col xs:flex-row gap-2.5">
+          <button onClick={() => navigate("/admin/import")} className={`${btnPrimary} w-full xs:w-auto justify-center`}>
             <Upload className="w-4 h-4" />Import Data
           </button>
-          <button onClick={() => navigate("/admin/data-sources?tab=history")} className={btnSecondary}>
+          <button onClick={() => navigate("/admin/data-sources?tab=history")} className={`${btnSecondary} w-full xs:w-auto justify-center`}>
             <Clock className="w-4 h-4" />View History
           </button>
         </div>

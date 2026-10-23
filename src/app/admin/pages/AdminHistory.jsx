@@ -140,7 +140,7 @@ function AdminHistory({ embedded = false }) {
   const selectCls = inputCls + " cursor-pointer";
 
   return (
-    <div className={embedded ? "space-y-6" : "px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6"}>
+    <div className={embedded ? "space-y-5 sm:space-y-6" : "px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5 sm:space-y-6"}>
       {/* Header */}
       {!embedded && (
         <PageHeader
@@ -150,10 +150,10 @@ function AdminHistory({ embedded = false }) {
       )}
 
       {/* Search & Filter Bar (Matching Table Width) */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-4 space-y-3">
+        <div className="flex items-center gap-2 lg:gap-3">
           {/* Search */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)] pointer-events-none" />
             <input
               type="text"
@@ -220,14 +220,16 @@ function AdminHistory({ embedded = false }) {
             )}
           </div>
 
-          {/* Mobile Filter Button */}
+          {/* Mobile Filter Button: In one line with search, icon-only */}
           <button
             onClick={() => setFilterOpen(true)}
-            className="sm:hidden flex items-center justify-center gap-1.5 px-3.5 py-2 border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-700)] hover:bg-white transition-colors cursor-pointer"
+            aria-label="Filter"
+            className="relative sm:hidden flex-shrink-0 flex items-center justify-center w-9.5 h-9.5 border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] rounded-xl text-[var(--hw-neutral-700)] hover:bg-white active:bg-[var(--hw-neutral-100)] transition-colors cursor-pointer"
           >
             <SlidersHorizontal className="w-4 h-4" />
-            Filter
-            {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+            {hasActiveFilters && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
+            )}
           </button>
         </div>
 

@@ -32,6 +32,47 @@ const ACTIVITY_STATUS_CFG = {
   Published: { text: "text-blue-700" }
 };
 
+const KNOWN_ACTIVITY_NAMES = {
+  "analytics.outputs_computed": "Analytics Outputs Computed",
+  "data_source.sync": "Data Source Sync",
+  "data_source.created": "Data Source Created",
+  "data_source.updated": "Data Source Updated",
+  "import.file_uploaded": "File Uploaded",
+  "import.completed": "Import Completed",
+  "import.failed": "Import Failed",
+  "auth.login": "User Login",
+  "auth.logout": "User Logout",
+  "auth.password_change": "Password Changed",
+  "auth.password_reset": "Password Reset",
+  "config.updated": "Configuration Updated",
+  "threshold.updated": "Threshold Updated",
+  "weight.updated": "Weight Updated",
+  "user.created": "User Created",
+  "user.updated": "User Updated",
+  "user.approved": "Account Approved",
+  "user.rejected": "Account Rejected"
+};
+
+function formatActivityName(action) {
+  if (!action) return "Activity Recorded";
+  const trimmed = String(action).trim();
+  if (KNOWN_ACTIVITY_NAMES[trimmed.toLowerCase()]) {
+    return KNOWN_ACTIVITY_NAMES[trimmed.toLowerCase()];
+  }
+  return trimmed
+    .split(/[._\-\s]+/)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (lower === "dftc") return "DFTC";
+      if (lower === "api") return "API";
+      if (lower === "kpi") return "KPI";
+      if (lower === "id") return "ID";
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -46,8 +87,8 @@ function AdminDashboard() {
   const { data, error: queryErr } = useQuery({
     queryKey: ["adminDashboard"],
     queryFn: () => adminApi.getDashboard({ _t: Date.now() }),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 30000,
+    refetchOnMount: true,
     refetchInterval: 30000,
   });
 
@@ -60,8 +101,7 @@ function AdminDashboard() {
     uploadedToday: s.uploaded_today ?? s.uploadedToday ?? 0,
     recordsIngestedToday: s.records_ingested_today ?? s.recordsIngestedToday ?? 0,
     sourcesRequiringAttention: attentionCount,
-    registeredFarmers: s.registered_farmers ?? s.registeredFarmers ?? 0,
-    activeCropPlans: s.active_crop_plans ?? s.activeCropPlans ?? 0
+    registeredFarmers: s.registered_farmers ?? s.registeredFarmers ?? 0
   };
 
   const attentionSources = (data?.sources_requiring_attention || []).map((src) => ({
@@ -75,7 +115,7 @@ function AdminDashboard() {
 
   const todayActivities = (data?.recent_audit_logs || []).map((log) => ({
     time: formatApiTime(log.created_at) || "—",
-    activity: log.action || "Activity recorded",
+    activity: formatActivityName(log.action),
     performedBy: log.actor_name || log.user_id || "—",
     status: "Completed"
   }));
@@ -121,19 +161,11 @@ function AdminDashboard() {
         ? `${kpis.registeredFarmers} active farmer accounts`
         : "Verified active farmer accounts",
       path: "/admin/system?tab=users"
-    },
-    {
-      value: kpis.activeCropPlans.toString(),
-      label: "Active Crop Plans",
-      subtext: kpis.activeCropPlans > 0
-        ? `${kpis.activeCropPlans} active crop plan${kpis.activeCropPlans > 1 ? "s" : ""} on record`
-        : "Crop plans currently active",
-      path: "/admin/modules"
     }
   ];
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5 sm:space-y-7">
       {/* ── Header ── */}
       <PageHeader
         title={greeting}
@@ -147,26 +179,26 @@ function AdminDashboard() {
       )}
 
       {/* ── KPI task cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {kpiCards.map((c) => (
           <button
             key={c.label}
             onClick={() => navigate(c.path)}
-            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98] group flex flex-col justify-between cursor-pointer"
+            className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.98] group flex flex-col justify-between cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <span className="text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)] line-clamp-1">
                 {c.label}
               </span>
-              <span className="text-[11px] font-semibold text-[var(--hw-green-700)] opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-[11px] font-semibold text-[var(--hw-green-700)] opacity-0 group-hover:opacity-100 transition-opacity hidden sm:inline">
                 View →
               </span>
             </div>
             <div>
-              <p className="text-3xl font-bold text-[var(--hw-neutral-900)] leading-none mb-1.5">
+              <p className="text-2xl sm:text-3xl font-bold text-[var(--hw-neutral-900)] leading-none mb-1 sm:mb-1.5">
                 {c.value}
               </p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] leading-snug">
+              <p className="text-[11px] sm:text-[12px] text-[var(--hw-neutral-500)] leading-snug line-clamp-2">
                 {c.subtext}
               </p>
             </div>
@@ -174,25 +206,23 @@ function AdminDashboard() {
         ))}
       </div>
 
-      {/* ── Quick access shortcut grid ── */}
-      <div>
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide mb-3">
-          Quick access
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {QUICK_ACCESS.map((q) => (
-            <button
-              key={q.label}
-              onClick={() => navigate(q.path)}
-              className="bg-white border border-[var(--hw-green-600)] rounded-2xl shadow-[var(--shadow-xs)] py-5 px-3 flex flex-col items-center gap-2.5 hover:bg-[var(--hw-green-50)] hover:border-[var(--hw-green-700)] active:scale-[.97] transition-all"
-            >
-              <q.Icon className="w-5 h-5 text-[var(--hw-green-700)]" />
-              <span className="text-[12px] font-medium text-[var(--hw-green-900)] text-center leading-snug">
-                {q.label}
-              </span>
-            </button>
-          ))}
-        </div>
+      {/* ── Quick access shortcuts ── */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-6 py-4 sm:py-6 my-2 sm:my-4">
+        {QUICK_ACCESS.map((q) => (
+          <button
+            key={q.label}
+            onClick={() => navigate(q.path)}
+            className="flex flex-col items-center justify-start gap-1.5 sm:gap-2.5 py-2.5 px-1 rounded-xl hover:bg-black/[0.02] active:scale-95 transition-all cursor-pointer group text-center"
+          >
+            <q.Icon
+              className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--hw-green-800)] group-hover:text-[var(--hw-green-700)] group-hover:scale-105 transition-transform duration-150"
+              strokeWidth={1.75}
+            />
+            <span className="text-[11.5px] sm:text-[13px] font-medium text-[var(--hw-neutral-800)] group-hover:text-[var(--hw-green-900)] leading-tight">
+              {q.label}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* ── Sources requiring attention ── */}

@@ -47,20 +47,54 @@ async function fetchDay(tab, date) {
 }
 
 /**
+ * The static mirror's (commodity, variant) pairs. Built once: the mirror never
+ * changes at runtime, and resolveVid walks it for every draft cell.
+ */
+const STATIC_PAIRS = PRICE_CATEGORIES.flatMap((cat) =>
+  cat.commodities.flatMap((com) => com.variants.map((v) => ({ com, v })))
+);
+
+/**
  * Resolve a DB commodity_id to the form's variant id, or null when this page
  * cannot render it. Takes the page's own resolver so the slug logic and the
  * runtime catalog map stay in one place.
+ *
+ * `catalogue` is the page's list of { com, v } pairs: the static mirror plus
+ * the rows the page gained from the DB catalogue. When it is omitted the
+ * static mirror is searched, exactly as before.
  */
-export function resolveVid(commodityId, resolveCommodityId) {
+export function resolveVid(commodityId, resolveCommodityId, catalogue) {
   if (!commodityId || typeof resolveCommodityId !== "function") return null;
-  for (const cat of PRICE_CATEGORIES) {
-    for (const com of cat.commodities) {
-      for (const v of com.variants) {
-        if (resolveCommodityId(com, v) === commodityId) return v.id;
-      }
-    }
+  const pairs = catalogue ?? STATIC_PAIRS;
+  for (const { com, v } of pairs) {
+    if (resolveCommodityId(com, v) === commodityId) return v.id;
   }
   return null;
+}
+
+/**
+ * Map shared-draft cells onto the form's (tab, variant) pairs.
+ *
+ * The market-key + price-type rule lives here so the initial load and the
+ * live resync can never drift apart: both ask the same question, "which column
+ * does this cell belong to?". A cell whose commodity this page cannot render
+ * is skipped, exactly as the day loader skips it.
+ *
+ * `catalogue` is the page's list of { com, v } pairs; it is passed through to
+ * resolveVid so a row the page gained from the DB catalogue can be resolved.
+ */
+export function resolveDraftCellTargets(cells, resolveCommodityId, catalogue) {
+  const out = [];
+  for (const cell of Array.isArray(cells) ? cells : []) {
+    const tab = MARKET_TABS.find(
+      (t) => t.sourceId === (cell.source_key || cell.source_id) && t.priceType === cell.price_type,
+    );
+    if (!tab) continue;
+    const vid = resolveVid(cell.commodity_id, resolveCommodityId, catalogue);
+    if (!vid) continue;
+    out.push({ tab, vid, cell });
+  }
+  return out;
 }
 
 /** Keep only priced items this page can render, keyed by variant id. */

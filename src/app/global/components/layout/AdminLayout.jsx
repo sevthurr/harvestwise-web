@@ -42,7 +42,7 @@ function getActive(pathname) {
   return "";
 }
 const AdminMain = ({ children }) => {
-  return <main className="pt-13 pb-16 md:pb-4 md:ml-[220px]">
+  return <main className="pt-14 pb-16 md:pb-4 md:ml-[220px]">
       {children}
     </main>;
 };
@@ -191,67 +191,70 @@ const AdminLayoutInner = () => {
   return (
     <div className="min-h-screen bg-[var(--hw-neutral-50)]">
       {/* ── Compact top bar ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)] h-13">
-        <div className="flex items-center h-13 px-4 gap-3">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-[var(--hw-neutral-200)] h-14">
+        <div className="flex items-center h-14 pl-3 pr-4 sm:px-6 gap-2 sm:gap-3">
           {/* Logo + label */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink min-w-0">
             <img 
               src="/horizontal-logo.png" 
               alt="HarvestWise" 
-              style={{ width: "140px", height: "20px", objectFit: "contain" }}
+              className="w-[104px] xs:w-[118px] sm:w-[136px] h-5 object-contain flex-shrink-0"
             />
-            <span className="hidden md:block text-[11px] font-semibold text-[var(--hw-neutral-500)] tracking-wide border-l border-[var(--hw-neutral-200)] pl-2 ml-1">
-              Admin Workspace
-            </span>
-            <span className="md:hidden px-1.5 py-0.5 bg-[var(--hw-green-700)] text-white text-[10px] font-bold rounded tracking-wide">
+            <div className="hidden md:flex items-center gap-2 border-l border-[var(--hw-neutral-200)] pl-2.5 ml-1">
+              <span className="text-[11.5px] font-semibold text-[var(--hw-neutral-600)] tracking-wide">
+                Admin Workspace
+              </span>
+            </div>
+            <span className="md:hidden px-1.5 py-0.5 bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]/80 text-[9.5px] font-bold rounded-full tracking-wider uppercase flex-shrink-0">
               ADMIN
             </span>
           </div>
 
-          <div className="flex-1" />
+          <div className="flex-1 min-w-[4px]" />
 
-          {/* Background Process Badge (pops up when process active) + Clickable Last Updated button */}
-          <BackgroundProcessBadge />
-          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
+          {/* Actions: Background Process + Last Updated + Bell + Avatar */}
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+            <BackgroundProcessBadge />
+            <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
-          {/* Bell */}
-          <button
-            onClick={() => navigate("/admin/notifications")}
-            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
-              location?.pathname?.includes("/notifications")
-                ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
-                : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
-            }`}
-            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-            aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
-          >
-            <Bell className="w-4 h-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--hw-error)] text-white text-[10px] font-bold rounded-full flex items-center justify-center pointer-events-none leading-none">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
-
-
-          {/* Admin avatar + dropdown */}
-          <div className="relative flex-shrink-0" ref={dropdownRef}>
+            {/* Bell */}
             <button
-              onClick={() => setAvatarOpen((v) => !v)}
-              className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
+              onClick={() => navigate("/admin/notifications")}
+              className={`relative w-8.5 h-8.5 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+                location?.pathname?.includes("/notifications")
+                  ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/30 hover:bg-[var(--hw-green-100)]"
+                  : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
+              }`}
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+              aria-current={location?.pathname?.includes("/notifications") ? "page" : undefined}
             >
-              <UserAvatar
-                src={user?.profile_picture_path}
-                initials={initials}
-                alt={displayName}
-                className="w-7 h-7"
-                textClassName="text-[11px]"
-              />
-              <span className="hidden sm:block text-[13px] font-medium text-black">{displayName}</span>
-              <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
+              <Bell className="w-4.5 h-4.5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs pointer-events-none leading-none">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </button>
 
-            {avatarOpen && <div
+            {/* Admin avatar + dropdown */}
+            <div className="relative flex-shrink-0" ref={dropdownRef}>
+              <button
+                onClick={() => setAvatarOpen((v) => !v)}
+                className="flex items-center gap-2 p-1 sm:pr-2.5 rounded-full hover:bg-[var(--hw-neutral-100)] active:scale-95 transition-all cursor-pointer border border-transparent hover:border-[var(--hw-neutral-200)]"
+              >
+                <UserAvatar
+                  src={user?.profile_picture_path}
+                  initials={initials}
+                  alt={displayName}
+                  className="w-7.5 h-7.5 sm:w-8 sm:h-8 ring-1.5 ring-black/5"
+                  textClassName="text-[11px] font-bold"
+                />
+                <span className="hidden sm:block text-[13px] font-medium text-[var(--hw-neutral-800)]">{displayName}</span>
+                <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform duration-200 ${avatarOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {avatarOpen && (
+                <div
     className="absolute right-0 top-full mt-1 w-60 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden z-50"
     style={{ scrollbarWidth: "none" }}
   >
@@ -308,15 +311,15 @@ const AdminLayoutInner = () => {
                     Log out
                   </button>
                 </div>
-              </div>}
+              </div>
+            )}
+            </div>
           </div>
         </div>
       </header>
 
-      {
-    /* ── Desktop sidebar — compact 220px ── */
-  }
-      <aside className="fixed left-0 top-13 bottom-0 z-40 w-[220px] bg-white border-r border-[var(--hw-neutral-200)] hidden md:flex flex-col">
+      {/* ── Desktop sidebar — compact 220px ── */}
+      <aside className="fixed left-0 top-14 bottom-0 z-40 w-[220px] bg-white border-r border-[var(--hw-neutral-200)] hidden md:flex flex-col">
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5 pt-3" style={{ scrollbarWidth: "none" }}>
           {ADMIN_NAV.map(({ id, label, path, Icon }) => {
     const isActive = active === id;
@@ -357,7 +360,7 @@ const AdminLayoutInner = () => {
       {
     /* ── Mobile bottom nav — mirrors ADMIN_NAV ── */
   }
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[var(--hw-neutral-200)] md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-[var(--hw-neutral-200)] md:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
         <div className="flex items-stretch">
           {ADMIN_NAV.map(({ id, label, path, Icon }) => {
     const isActive = active === id;

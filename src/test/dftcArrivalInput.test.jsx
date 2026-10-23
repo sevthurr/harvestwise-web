@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DFTCArrivalInput from '../app/dftc/pages/DFTCArrivalInput';
+import { PRICE_CATEGORIES } from '../app/dftc/pages/dftc-add-data-data';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -14,17 +15,21 @@ vi.mock('react-router', async () => {
   };
 });
 
-function mockFetch() {
+// The catalogue the server answers with. A test may pass its own items; the
+// default is the catalogue the other tests are written against.
+const DEFAULT_CATALOGUE_ITEMS = [
+  { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+  { id: 'com-2', name: 'Cabbage', variety: 'Scorpio', category: 'Highland Vegetables', unit_of_measure: 'kg' }
+];
+
+function mockFetch(catalogueItems = DEFAULT_CATALOGUE_ITEMS) {
   return vi.fn(async (url, opts) => {
     if (url.includes('/dftc/commodities')) {
       return {
         ok: true,
         status: 200,
         json: async () => ({
-          items: [
-            { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
-            { id: 'com-2', name: 'Cabbage', variety: 'Scorpio', category: 'Highland Vegetables', unit_of_measure: 'kg' }
-          ]
+          items: catalogueItems
         })
       };
     }
@@ -414,5 +419,254 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     expect(mockNavigate).not.toHaveBeenCalledWith('/dftc/input', expect.anything());
     expect(screen.getByText('Add Arrival Volume — Review')).toBeInTheDocument();
     expect(screen.getAllByText(/800/).length).toBeGreaterThan(0);
+  });
+});
+
+describe('DFTCArrivalInput a commodity added at runtime lands in a category the grid renders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    global.fetch = mockFetch();
+    localStorage.clear();
+  });
+
+  it('shows the new commodity instead of filing it where nothing renders it', async () => {
+    // The modal offered category ids ("lowland") that PRICE_CATEGORIES does
+    // not use ("lowland-vegetables"), so the commodity was filed in a bucket
+    // the grid never reads: it appeared for nobody, and no volume could ever
+    // be entered for it, so it never reached the DB either.
+    renderDFTCArrivalInput();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Commodity' }));
+    const modal = screen.getByText('Add New Commodity').closest('div.fixed');
+    // No category is picked: the default category is the one that was broken.
+    fireEvent.change(
+      within(modal).getByPlaceholderText('e.g. Squash, Ginger'),
+      { target: { value: 'Satsuma' } }
+    );
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add Commodity' }));
+
+    // The grid renders categories collapsed; expand the default category.
+    fireEvent.click(screen.getByText(/Lowland Vegetables/i).closest('button'));
+
+    await waitFor(() => expect(screen.getByText('Satsuma')).toBeTruthy());
+  });
+
+  it('offers category ids the grid actually reads', async () => {
+    renderDFTCArrivalInput();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Commodity' }));
+    const modal = screen.getByText('Add New Commodity').closest('div.fixed');
+    const categorySelect = within(modal).getAllByRole('combobox')[0];
+    const values = Array.from(categorySelect.options).map((o) => o.value);
+
+    expect(values).toContain('lowland-vegetables');
+    expect(values).toContain('highland-vegetables');
+  });
+});
+
+describe('DFTCArrivalInput restores a draft whose commodities sit in legacy category buckets', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    global.fetch = mockFetch();
+    localStorage.clear();
+  });
+
+  it('merges the legacy lowland bucket into the derived lowland category', async () => {
+    const lowlandId = PRICE_CATEGORIES.find((c) => c.name === 'Lowland Vegetables').id;
+    // Drafts written before the ids were derived filed Lowland/Highland under
+    // legacy bucket keys the grid never reads, so those commodities were lost.
+    localStorage.setItem('dftc_arrival_draft', 'true');
+    localStorage.setItem('dftc_arrival_draft_data', JSON.stringify({
+      periodType: 'Daily',
+      customCommodities: {
+        lowland: [{
+          id: 'custom-com-lowland-1',
+          name: 'Satsuma',
+          isHW: false,
+          variants: [{ id: 'custom-v-custom-com-lowland-1', name: 'Regular' }]
+        }],
+        [lowlandId]: [{
+          id: 'custom-com-lowland-2',
+          name: 'Pechay',
+          isHW: false,
+          variants: [{ id: 'custom-v-custom-com-lowland-2', name: 'Regular' }]
+        }]
+      }
+    }));
+
+    renderDFTCArrivalInput();
+
+    fireEvent.click(screen.getByRole('button', { name: /Resume Draft/i }));
+
+    fireEvent.click(screen.getByText(/Lowland Vegetables/i).closest('button'));
+
+    // The legacy bucket is merged, not swapped in: both commodities show up.
+    await waitFor(() => expect(screen.getByText('Satsuma')).toBeTruthy());
+    expect(screen.getByText('Pechay')).toBeTruthy();
+  });
+});
+
+describe('DFTCArrivalInput rows gained from the DB catalogue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  /** The commodity block (header + variant rows) of one commodity. */
+  function commodityBlock(name) {
+    return screen.getByText(name).closest('div.cursor-pointer').parentElement;
+  }
+
+  it('renders a variety the static mirror does not have', async () => {
+    // The catalogue holds "Ampalaya / Milky Wave" (COM-0138). The static
+    // mirror only knows Ampalaya/Galaxy, so the row has to come from the
+    // catalogue: without it no arrival volume can be entered for the variety.
+    global.fetch = mockFetch([
+      { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-9', name: 'Ampalaya', variety: 'Milky Wave', category: 'Lowland Vegetables', unit_of_measure: 'kg' }
+    ]);
+
+    renderDFTCArrivalInput();
+
+    // Every category starts collapsed; open the one the commodity belongs to.
+    fireEvent.click(screen.getByText(/Lowland Vegetables/i).closest('button'));
+
+    await waitFor(() => {
+      const block = commodityBlock('Ampalaya');
+      expect(within(block).getAllByText('Milky Wave').length).toBeGreaterThan(0);
+    });
+
+    // The variety has a row of its own: Galaxy and Milky Wave, each with a
+    // farm and an other-source input, in the desktop and the mobile layout.
+    const block = commodityBlock('Ampalaya');
+    expect(within(block).getAllByPlaceholderText('0')).toHaveLength(8);
+  });
+
+  it('skips a catalogue item no category of ours can hold', async () => {
+    global.fetch = mockFetch([
+      { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-9', name: 'Ampalaya', variety: 'Milky Wave', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-20', name: 'Bayabas', variety: null, category: 'Exotic Produce', unit_of_measure: 'kg' }
+    ]);
+
+    renderDFTCArrivalInput();
+
+    // "Exotic Produce" is not a category of the sheet, so there is nowhere to
+    // put the item: searching the whole grid for it must find nothing.
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'Bayabas' } });
+
+    expect(screen.queryByText('Bayabas')).toBeNull();
+
+    // The rest of the catalogue still landed: the item was skipped, not fatal.
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: '' } });
+    fireEvent.click(screen.getByText(/Lowland Vegetables/i).closest('button'));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Milky Wave').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('does not render a catalogue item the sheet already has twice', async () => {
+    global.fetch = mockFetch([
+      { id: 'com-1', name: 'Ampalaya', variety: 'Galaxy', category: 'Lowland Vegetables', unit_of_measure: 'kg' },
+      { id: 'com-9', name: 'Ampalaya', variety: 'Milky Wave', category: 'Lowland Vegetables', unit_of_measure: 'kg' }
+    ]);
+
+    renderDFTCArrivalInput();
+
+    fireEvent.click(screen.getByText(/Lowland Vegetables/i).closest('button'));
+
+    await waitFor(() => {
+      const block = commodityBlock('Ampalaya');
+      expect(within(block).getAllByText('Milky Wave').length).toBeGreaterThan(0);
+    });
+
+    // The variety this user adds themselves carries a generated id, the
+    // catalogue row a slug: the dedupe has to be by identity, not by id.
+    fireEvent.click(within(commodityBlock('Ampalaya')).getByRole('button', { name: '+ Add Variant' }));
+    fireEvent.change(
+      within(commodityBlock('Ampalaya')).getByPlaceholderText('Enter variety, grade, or descriptor'),
+      { target: { value: 'Milky Wave' } }
+    );
+    fireEvent.click(within(commodityBlock('Ampalaya')).getByRole('button', { name: 'Add' }));
+
+    // Galaxy is the mirror's row and Milky Wave is this user's: the
+    // catalogue's twin of either must not add a second row. Two variants,
+    // each with a farm and an other-source input, in the desktop and the
+    // mobile layout.
+    const block = commodityBlock('Ampalaya');
+    expect(within(block).getAllByPlaceholderText('0')).toHaveLength(8);
+  });
+
+  it('does not offer a variety twice when the DB and the mirror spell it differently', async () => {
+    // The DB spells a Saging variety "Senorita" (COM-0070); the static mirror
+    // spells it "Señorita". Folded, they are one variety: the sheet must show
+    // one row, and that row must land on the DB row — not on another variety
+    // of Saging.
+    let requestPayload = null;
+    global.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/dftc/commodities')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              { id: 'com-70', name: 'Saging', variety: 'Senorita', category: 'Fruits', unit_of_measure: 'kg' }
+            ]
+          })
+        };
+      }
+      if (url.includes('/dftc/staff')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [{ first_name: 'MARIA', last_name: 'SANTOS', position_title: 'DFTC Records Clerk' }]
+          })
+        };
+      }
+      if (url.includes('/dftc/submissions/manual') && opts?.method === 'POST') {
+        requestPayload = JSON.parse(opts.body);
+        return { ok: true, status: 200, json: async () => ({ message: 'Saved successfully' }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ items: [] }) };
+    });
+
+    renderDFTCArrivalInput();
+
+    fireEvent.click(screen.getByText(/^Fruits$/i).closest('button'));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Señorita').length).toBeGreaterThan(0);
+    });
+
+    const block = commodityBlock('Saging');
+    // The mirror's spelling is the row that renders — twice, once in the
+    // desktop and once in the mobile layout. The DB's spelling must not add a
+    // second row for the same variety.
+    expect(within(block).getAllByText('Señorita')).toHaveLength(2);
+    expect(within(block).queryAllByText('Senorita')).toHaveLength(0);
+
+    // The row must carry its volume to the DB row it belongs to.
+    const row = within(block).getAllByText('Señorita')[0].closest('div[style]');
+    fireEvent.change(within(row).getAllByPlaceholderText('0')[0], { target: { value: '250' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Review Entered Data/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Save DFTC Arrival Volume/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save DFTC Arrival Volume/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Confirm Finalize & Save Arrival Volume')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /Finalize & Save/i }));
+
+    await waitFor(() => {
+      expect(requestPayload).not.toBeNull();
+      expect(requestPayload.records).toHaveLength(1);
+      expect(requestPayload.records[0].commodity_id).toBe('com-70');
+      expect(requestPayload.records[0].farm_source_volume_kg).toBe(250);
+    });
   });
 });
