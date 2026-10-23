@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminAnalyticsBasis from '../app/admin/pages/AdminAnalyticsBasis';
 import { analyticsApi } from '../services/api';
+import { buildReliabilitySummary } from '../app/admin/utils/reliabilityExplanations';
 
 // The reliability layer owns the factor and the band cutoffs; the page must
 // render them as-is. Values are inlined in the mock factory because vi.mock
@@ -91,6 +92,19 @@ describe('AdminAnalyticsBasis Data Reliability', () => {
       unobserve() {}
       disconnect() {}
     };
+  });
+
+  it('describes the full HSPL coverage window', () => {
+    expect(buildReliabilitySummary({
+      resultId: 'historical-production',
+      level: 'High',
+      evidence: {
+        available: 42,
+        first_year: 2016,
+        latest_year: 2026,
+        years_old: 0,
+      },
+    })).toMatch(/42 quarterly PSA production records are on file from 2016 through 2026/);
   });
 
   it('explains the classification with the factor and a templated explanation', async () => {
