@@ -257,6 +257,7 @@ function ForecastPriceTrendChart({
   }, []);
 
   const chartHeight = isMobile ? Math.min(height, 220) : height;
+  const chartMinWidth = isMobile ? Math.max(600, dataLen * 48) : "100%";
 
   // Wheel zoom
   useEffect(() => {
@@ -341,10 +342,12 @@ function ForecastPriceTrendChart({
   return (
     <div
       ref={containerRef}
-      style={{ touchAction: "pan-y" }}
+      style={{ touchAction: "pan-x pan-y" }}
       className="w-full flex flex-col justify-between"
     >
-      <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+        <div style={{ minWidth: chartMinWidth }}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
         <ComposedChart
           data={displayData}
           margin={{
@@ -543,7 +546,9 @@ function ForecastPriceTrendChart({
             />
           )}
         </ComposedChart>
-      </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
       {/* Legend */}
       {showLegend && (
