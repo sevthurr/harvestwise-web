@@ -1207,6 +1207,19 @@ function DFTCTrends() {
         : [];
   }, [arrivalQueryData]);
 
+  const arrivalYears = useMemo(() => {
+    return [...new Set(rawArrivalRecords.map((record) => {
+      const year = Number.parseInt(String(record.arrival_date || record.date || "").slice(0, 4), 10);
+      return Number.isFinite(year) ? year : null;
+    }).filter((year) => year != null))].sort((a, b) => b - a);
+  }, [rawArrivalRecords]);
+
+  useEffect(() => {
+    if (arrivalYears.length > 0 && !arrivalYears.includes(aYear)) {
+      setAYear(arrivalYears[0]);
+    }
+  }, [arrivalYears, aYear]);
+
   const filteredArrivalRecords = useMemo(() => {
     let startDate = null;
     let endDate = null;
@@ -1682,13 +1695,7 @@ function DFTCTrends() {
                 className={selectCls + " appearance-none pr-9 cursor-pointer"}
               >
                 {(() => {
-                  const years = new Set();
-                  rawArrivalRecords.forEach((r) => {
-                    const y = parseInt(String(r.arrival_date || "").slice(0, 4), 10);
-                    if (Number.isFinite(y)) years.add(y);
-                  });
-                  const sorted = [...years].sort((a, b) => b - a);
-                  return sorted.length > 0 ? sorted : [new Date().getFullYear()];
+                  return arrivalYears.length > 0 ? arrivalYears : [new Date().getFullYear()];
                 })().map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}

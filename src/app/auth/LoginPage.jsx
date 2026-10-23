@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { useNavigate, Link, useLocation } from "react-router";
 import { Eye, EyeOff } from "lucide-react";
 import VerticalLogo from "../../imports/logo";
 import { useAuth, roleHome } from "../global/contexts/AuthContext";
@@ -20,7 +20,7 @@ import { validateContact } from "./authValidation";
 const SCALE = 0.85;
 const LOGO_W = Math.round(494 * SCALE);
 const LOGO_H = Math.round(361 * SCALE);
-const OTP_LENGTH_BY_FACTOR = { email_otp: 8, totp: 6 };
+const OTP_LENGTH_BY_FACTOR = { email_otp: 6, totp: 6 };
 const getOtpLength = (factor) => OTP_LENGTH_BY_FACTOR[factor] ?? 6;
 
 function LogoMark() {
@@ -35,6 +35,7 @@ function LogoMark() {
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const { authLang, t } = usePublicAuthLanguage();
 
@@ -42,6 +43,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const [resetMessage] = useState(location.state?.passwordResetMessage ?? "");
   const [loading, setLoading] = useState(false);
 
   // MFA challenge state
@@ -342,6 +344,11 @@ function LoginPage() {
           </div>
         ) : (
         <>
+        {resetMessage && (
+          <p role="status" className="mb-4 text-[13px] text-[var(--hw-green-800)] font-medium text-center">
+            {resetMessage}
+          </p>
+        )}
         <form onSubmit={handleSignIn} className="space-y-4" noValidate>
           {/* Email / phone */}
           <div className="space-y-1.5">
@@ -370,12 +377,12 @@ function LoginPage() {
                 {t("auth.password_label", {}, "Password")}
                 <span className="text-red-500 ml-1 font-semibold" aria-hidden="true">*</span>
               </label>
-              <button
-                type="button"
+              <Link
+                to="/forgot-password"
                 className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
               >
                 {t("auth.forgot_password", {}, "Forgot password?")}
-              </button>
+              </Link>
             </div>
             <div className="relative">
               <input

@@ -20,6 +20,18 @@ export function changePassword(payload) {
   return apiPost("/auth/change-password", payload);
 }
 
+export function requestPasswordReset(email) {
+  return apiPost("/auth/forgot-password", { email });
+}
+
+export function resetPassword(email, code, newPassword) {
+  return apiPost("/auth/reset-password", {
+    email,
+    code,
+    new_password: newPassword,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Google OAuth (Supabase-brokered)
 // `idToken` is the Supabase-issued JWT (`session.access_token`) — verified by

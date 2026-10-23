@@ -11,7 +11,7 @@ import {
 } from "../../../global/components/ui/hw-ui";
 
 export function EmailOtp2FACard({ showToast }) {
-  const OTP_LENGTH = 8;
+  const OTP_LENGTH = 6;
   const [otpEnabled, setOtpEnabled] = useState(false);
   const [otpLoaded, setOtpLoaded] = useState(false);
   const [otpStep, setOtpStep] = useState("idle");
@@ -137,7 +137,7 @@ export function EmailOtp2FACard({ showToast }) {
               maxLength={OTP_LENGTH}
               value={otpCode}
               onChange={(e) => { setOtpCode(e.target.value.replace(/[^0-9]/g, "")); setOtpErr(""); }}
-              placeholder="12345678"
+              placeholder="123456"
               className={`${inputCls} max-w-[180px]`}
             />
             <div className="flex gap-2">

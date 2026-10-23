@@ -6,10 +6,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Cell,
-  ResponsiveContainer,
-  ReferenceLine,
-  Brush
+  ResponsiveContainer
 } from "recharts";
 import {
   TrendingUp,
@@ -551,27 +548,38 @@ const ArrivalTab = ({
   );
 };
 
+const HARVEST_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
+
 const ProductionTab = ({ data, commodityName }) => {
   const { t } = useLanguage();
+  const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
-  const selectedProfile = profiles.find((profile) => profile.quarter === data?.selectedQuarter);
+  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(currentQuarter);
+  const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter));
   const normLevel = normalizeProductionLevel(selectedProfile?.classification || data?.productionLevel);
   const banner = normLevel ? PRODUCTION_BANNER_CFG[normLevel] : null;
   const LevelIcon = banner?.Icon;
-  const containerRef = useRef(null);
-  const touchDistRef = useRef(null);
+  const historicalData = useMemo(() => {
+    const byYear = new Map();
+    (Array.isArray(data?.records) ? data.records : []).forEach((record) => {
+      const year = Number(record.reference_year);
+      const quarter = record.reference_quarter;
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !HARVEST_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return;
+      const row = byYear.get(year) || { year };
+      row[quarter] = (row[quarter] || 0) + volume;
+      byYear.set(year, row);
+    });
+    return [...byYear.values()].sort((a, b) => a.year - b.year);
+  }, [data?.records]);
 
-  const quarterlyData = useMemo(() => {
-    return profiles
-      .filter((profile) => Number(profile.years_available) > 0)
-      .map((profile) => ({
-        quarter: profile.quarter,
-        production: Number(profile.average_production_mt),
-        classification: profile.classification,
-      }));
-  }, [profiles]);
-
-  const [range, setRange] = useState({ start: 0, end: Math.max(0, quarterlyData.length - 1) });
+  const chartQuarters = activeHarvestQuarter ? [activeHarvestQuarter] : HARVEST_QUARTERS;
+  const chartData = historicalData.length > 0
+    ? historicalData
+    : profiles.filter((profile) => Number(profile.years_available) > 0).map((profile) => ({
+      year: profile.quarter,
+      [profile.quarter]: Number(profile.average_production_mt),
+    }));
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
 
   useEffect(() => {
@@ -582,85 +590,7 @@ const ProductionTab = ({ data, commodityName }) => {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  useEffect(() => {
-    setRange({ start: 0, end: Math.max(0, quarterlyData.length - 1) });
-  }, [quarterlyData.length]);
-
-  // Wheel zoom
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const len = quarterlyData.length;
-    function onWheel(e) {
-      e.preventDefault();
-      setRange((prev) => {
-        if (len < 2) return prev;
-        const r = prev.end - prev.start;
-        const step = Math.max(1, Math.round(r * 0.15));
-        if (e.deltaY < 0) {
-          return { start: Math.min(prev.start + step, prev.end - 1), end: Math.max(prev.end - step, prev.start + 1) };
-        }
-        return { start: Math.max(0, prev.start - step), end: Math.min(len - 1, prev.end + step) };
-      });
-    }
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [quarterlyData.length]);
-
-  // Touch pinch zoom
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    function onTouchStart(e) {
-      if (e.touches.length === 2) {
-        touchDistRef.current = Math.hypot(
-          e.touches[1].clientX - e.touches[0].clientX,
-          e.touches[1].clientY - e.touches[0].clientY
-        );
-      }
-    }
-
-    function onTouchMove(e) {
-      if (e.touches.length === 2 && touchDistRef.current !== null) {
-        if (e.cancelable) e.preventDefault();
-        const newDist = Math.hypot(
-          e.touches[1].clientX - e.touches[0].clientX,
-          e.touches[1].clientY - e.touches[0].clientY
-        );
-        const scale = newDist / touchDistRef.current;
-        if (scale > 0 && Math.abs(scale - 1) > 0.02) {
-          const len = quarterlyData.length;
-          setRange((prev) => {
-            const center = (prev.start + prev.end) / 2;
-            const currentSpan = prev.end - prev.start;
-            const newSpan = Math.max(1, Math.min(len - 1, Math.round(currentSpan / scale)));
-            const newStart = Math.max(0, Math.round(center - newSpan / 2));
-            return { start: newStart, end: Math.min(len - 1, newStart + newSpan) };
-          });
-          touchDistRef.current = newDist;
-        }
-      }
-    }
-
-    function onTouchEnd() {
-      touchDistRef.current = null;
-    }
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, [quarterlyData.length]);
-
-  const hasData = quarterlyData.length > 0;
+  const hasData = chartData.length > 0;
   const historicalAverage = data?.grandAverageQuarterlyMt != null
     && Number.isFinite(Number(data.grandAverageQuarterlyMt))
     ? Number(data.grandAverageQuarterlyMt)
@@ -676,7 +606,6 @@ const ProductionTab = ({ data, commodityName }) => {
   const productionDifferencePct = productionDifference != null && historicalAverage > 0
     ? (productionDifference / historicalAverage) * 100
     : null;
-  const selectedQuarterIndex = quarterlyData.findIndex((profile) => profile.quarter === data?.selectedQuarter);
   const levelColor = (classification) => {
     const level = normalizeProductionLevel(classification);
     if (level === "high") return "#ef4444";
@@ -714,16 +643,31 @@ const ProductionTab = ({ data, commodityName }) => {
             {t("farmer.factors.production.typical_quarterly_title", {}, "Typical Quarterly Production Volume (PSA Data · Q1–Q4)")}
           </p>
         </div>
-        {quarterlyData.length > 0 ? (
+        {chartData.length > 0 ? (
           <div
-            ref={containerRef}
             style={{ touchAction: "pan-y" }}
             className="w-full space-y-1"
           >
+            <div className="flex flex-wrap items-center gap-2 mb-3" aria-label="Harvest Season">
+              <span className="text-[12px] font-semibold text-black mr-1">Harvest Season</span>
+              {HARVEST_QUARTERS.map((quarter) => (
+                <button
+                  key={quarter}
+                  type="button"
+                  aria-pressed={activeHarvestQuarter === quarter}
+                  onClick={() => setActiveHarvestQuarter((current) => current === quarter ? null : quarter)}
+                  className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-colors ${activeHarvestQuarter === quarter
+                    ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
+                    : "bg-white border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] hover:border-[var(--hw-green-500)]"}`}
+                >
+                  {quarter}
+                </button>
+              ))}
+            </div>
             <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
-              <BarChart data={quarterlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={32}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={28}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: "#000000" }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#000000" }} tickLine={false} axisLine={false} />
                 <YAxis
                   tick={{ fontSize: 10, fill: "#000000" }}
                   tickLine={false}
@@ -731,38 +675,13 @@ const ProductionTab = ({ data, commodityName }) => {
                   width={52}
                   tickFormatter={(value) => `${Number(value).toLocaleString()} MT`}
                 />
-                <Tooltip
-                  formatter={(value, _name, item) => [
-                    `${Number(value).toLocaleString()} MT · ${t(
-                      `farmer.factors.production.level_${normalizeProductionLevel(item.payload.classification)}`,
-                      {},
-                      item.payload.classification
-                    )}`,
-                    t("farmer.factors.production.factor_title", {}, "Average production"),
-                  ]}
+                <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()} MT`, name]} 
                   contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb", fontSize: 12 }}
                 />
-                <Bar dataKey="production" radius={[4, 4, 0, 0]}>
-                  {quarterlyData.map((entry, index) => (
-                    <Cell
-                      key={entry.quarter}
-                      fill={levelColor(entry.classification)}
-                      opacity={index === selectedQuarterIndex ? 1 : 0.65}
-                    />
-                  ))}
-                </Bar>
-                {Brush && (
-                  <Brush
-                    dataKey="quarter"
-                    startIndex={range.start}
-                    endIndex={range.end}
-                    onChange={(r) => setRange({ start: r.startIndex ?? 0, end: r.endIndex ?? Math.max(0, quarterlyData.length - 1) })}
-                    height={22}
-                    fill="#f9fafb"
-                    stroke="#cbd5e1"
-                    travellerWidth={12}
-                  />
-                )}
+                {chartQuarters.map((quarter) => {
+                  const profile = profiles.find((item) => item.quarter === quarter);
+                  return <Bar key={quarter} dataKey={quarter} name={quarter} fill={levelColor(profile?.classification)} radius={[4, 4, 0, 0]} />;
+                })}
               </BarChart>
             </ResponsiveContainer>
             <div className="flex items-center gap-4 mt-2 justify-center text-[11px] text-black">
@@ -771,7 +690,7 @@ const ProductionTab = ({ data, commodityName }) => {
               <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /><span>{t("farmer.factors.arrival.level_high", {}, "High")}</span></div>
             </div>
             <p className="text-center text-[10px] text-black mt-1">
-              {t("farmer.factors.price.zoom_pan_help", {}, "Scroll to zoom · drag bar to pan")}
+              Across all available years · click the selected quarter again to show Q1–Q4
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5 mt-3">
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
@@ -784,7 +703,7 @@ const ProductionTab = ({ data, commodityName }) => {
               </div>
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
                 <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
-                  {t("farmer.cropCycle.selected_season_level", { quarter: data?.selectedQuarter || "" }, `Produksyon sa ${data?.selectedQuarter || ""}`)}
+                  {t("farmer.cropCycle.selected_season_level", { quarter: activeHarvestQuarter || "" }, `Produksyon sa ${activeHarvestQuarter || ""}`)}
                 </p>
                 <p className="sm:mt-1 text-[14px] sm:text-[15px] md:text-[16px] font-bold text-black leading-tight">
                   {selectedProduction == null ? "—" : `${selectedProduction.toLocaleString()} MT`}

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { getClassificationColor, getClassificationTextColor } from "./dftcClassificationColors";
 
@@ -25,11 +25,24 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
   const data = query.data;
   const profiles = data?.quarterly_profiles || [];
   const selected = profiles.find((profile) => profile.quarter === quarter);
-  const hasData = data?.status === "processed"
-    && selected?.years_available > 0
-    && selected?.average_production_mt != null;
+  const summaryProfile = selected || profiles[0];
+  const hasData = data?.status === "processed" && (data?.records || []).length > 0;
+  const chartData = useMemo(() => {
+    const rows = new Map();
+    (data?.records || []).forEach((record) => {
+      const year = Number(record.reference_year);
+      const recordQuarter = record.reference_quarter;
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !QUARTERS.includes(recordQuarter) || !Number.isFinite(volume)) return;
+      const row = rows.get(year) || { year };
+      row[recordQuarter] = (row[recordQuarter] || 0) + volume;
+      rows.set(year, row);
+    });
+    return [...rows.values()].sort((a, b) => a.year - b.year);
+  }, [data?.records]);
+  const chartQuarters = quarter ? [quarter] : QUARTERS;
   const geoRecords = (data?.geo_records || [])
-    .filter((record) => record.reference_quarter === quarter)
+    .filter((record) => !quarter || record.reference_quarter === quarter)
     .reduce((byYear, record) => {
       const year = String(record.reference_year);
       byYear[year] ||= {};
@@ -42,9 +55,10 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
     ...Object.values(geoRecords).flatMap((areas) => Object.keys(areas)),
   ])].sort((a, b) => a.localeCompare(b));
   const records = (data?.records || [])
-    .filter((record) => record.reference_quarter === quarter && record.volume_produced != null)
+    .filter((record) => (!quarter || record.reference_quarter === quarter) && record.volume_produced != null)
     .map((record) => ({
       year: String(record.reference_year),
+      quarter: record.reference_quarter,
       production: Number(record.volume_produced),
       geo: geoRecords[String(record.reference_year)] || {},
     }))
@@ -75,7 +89,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                   key={value}
                   type="button"
                   aria-pressed={quarter === value}
-                  onClick={() => setQuarter(value)}
+                  onClick={() => setQuarter((current) => current === value ? null : value)}
                   className={`px-2 py-1.5 sm:px-3 sm:py-2 text-[11.5px] sm:text-[12px] font-semibold rounded-lg border text-center transition-colors ${
                     quarter === value
                       ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)] text-[var(--hw-green-800)]"
@@ -121,26 +135,15 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
               </p>
             </div>
             <ResponsiveContainer width="100%" height={typeof window !== "undefined" && window.innerWidth < 640 ? 240 : 320}>
-              <BarChart data={profiles.filter((profile) => profile.years_available > 0)} margin={{ top: 12, right: 12, bottom: 4, left: typeof window !== "undefined" && window.innerWidth < 640 ? -12 : 8 }}>
+              <BarChart data={chartData} margin={{ top: 12, right: 12, bottom: 4, left: typeof window !== "undefined" && window.innerWidth < 640 ? -12 : 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--hw-neutral-100)" vertical={false} />
-                <XAxis dataKey="quarter" tickFormatter={(value) => `${value} · ${QUARTER_NAMES[value]}`} tick={{ fontSize: 11 }} />
+                <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(value) => Number(value).toLocaleString()} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} MT`, "Average production"]} />
-                <Bar dataKey="average_production_mt" name="Average production" radius={[6, 6, 0, 0]}>
-                  {profiles.filter((profile) => profile.years_available > 0).map((profile) => {
-                    const color = getClassificationColor(profile.classification);
-                    const isSelected = profile.quarter === quarter;
-                    return (
-                      <Cell
-                        key={profile.quarter}
-                        fill={color}
-                        opacity={isSelected ? 1 : 0.85}
-                        stroke={isSelected ? "#1e293b" : "none"}
-                        strokeWidth={isSelected ? 2 : 0}
-                      />
-                    );
-                  })}
-                </Bar>
+                <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()} MT`, name]} />
+                {chartQuarters.map((chartQuarter) => {
+                  const profile = profiles.find((item) => item.quarter === chartQuarter);
+                  return <Bar key={chartQuarter} dataKey={chartQuarter} name={chartQuarter} fill={getClassificationColor(profile?.classification)} radius={[6, 6, 0, 0]} />;
+                })}
               </BarChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 mt-2 justify-center text-[10.5px] sm:text-[11px]">
@@ -170,7 +173,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                   Selected season
                 </p>
                 <p className="sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
-                  {quarter} · {QUARTER_NAMES[quarter]}
+                  {quarter ? `${quarter} · ${QUARTER_NAMES[quarter]}` : "All seasons"}
                 </p>
               </div>
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
@@ -178,15 +181,15 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                   Historical seasonal average
                 </p>
                 <p className="sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
-                  {Number(selected.average_production_mt).toLocaleString()} MT
+                  {summaryProfile?.average_production_mt == null ? "—" : `${Number(summaryProfile.average_production_mt).toLocaleString()} MT`}
                 </p>
               </div>
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
                 <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
                   Production level
                 </p>
-                <p className={`sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold leading-tight ${getClassificationTextColor(selected.classification)}`}>
-                  {selected.classification}
+                <p className={`sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold leading-tight ${getClassificationTextColor(summaryProfile?.classification)}`}>
+                  {summaryProfile?.classification || "—"}
                 </p>
               </div>
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
@@ -208,7 +211,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
           <section className={`${CARD_CLASS} overflow-hidden`}>
             <div className="border-b border-[var(--hw-neutral-100)] px-3.5 sm:px-5 py-3 sm:py-4">
               <h2 className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)]">
-                {quarter} historical records · {commodity}
+                {quarter ? `${quarter} historical records` : "All historical records"} · {commodity}
               </h2>
             </div>
             <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
@@ -225,7 +228,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                 </thead>
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                   {records.map((record) => (
-                    <tr key={record.year}>
+                    <tr key={`${record.year}-${record.quarter}`}>
                       <td className="px-3.5 sm:px-5 py-2.5 sm:py-3 font-medium text-[var(--hw-neutral-800)] whitespace-nowrap">{record.year}</td>
                       {locations.map((location) => (
                         <td key={location} className="px-3.5 sm:px-5 py-2.5 sm:py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">
@@ -238,7 +241,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                         </td>
                       ))}
                       <td className="px-3.5 sm:px-5 py-2.5 sm:py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{record.production.toLocaleString()} MT</td>
-                      <td className={`px-3.5 sm:px-5 py-2.5 sm:py-3 font-semibold whitespace-nowrap ${getClassificationTextColor(selected.classification)}`}>{selected.classification}</td>
+                      <td className={`px-3.5 sm:px-5 py-2.5 sm:py-3 font-semibold whitespace-nowrap ${getClassificationTextColor(summaryProfile?.classification)}`}>{summaryProfile?.classification || "—"}</td>
                     </tr>
                   ))}
                   {records.length === 0 && (
