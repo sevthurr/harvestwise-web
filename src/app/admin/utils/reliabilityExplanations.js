@@ -133,7 +133,11 @@ export function buildReliabilitySummary({ resultId, level, evidence, rules }) {
     }
 
     case "historical-production": {
-      const yearText = e.latest_year ? `from ${e.latest_year} (${plural(e.years_old ?? 0, "year")} old)` : null;
+      const yearText = e.latest_year
+        ? e.first_year != null && e.first_year !== e.latest_year
+          ? `from ${e.first_year} through ${e.latest_year} (${plural(e.years_old ?? 0, "year")} old at the latest year)`
+          : `from ${e.latest_year} (${plural(e.years_old ?? 0, "year")} old)`
+        : null;
       if (level === "High") {
         const countText = count != null ? `${count} quarterly PSA production records are on file` : "Quarterly PSA production records are on file";
         const timeText = yearText ? `${yearText}, meeting the recency threshold` : "covering the multi-year benchmark window";
