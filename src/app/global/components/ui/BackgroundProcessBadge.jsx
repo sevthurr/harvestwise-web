@@ -71,7 +71,7 @@ export const LastUpdatedButton = ({ onClick, isSyncing = false, lastUpdatedTime 
     <button
       onClick={onClick}
       disabled={activeSync}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-green-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-green-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-green-700)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white hover:bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-all duration-200 disabled:opacity-60 text-xs font-medium cursor-pointer shadow-2xs active:scale-95 flex-shrink-0"
       title={activeSync ? "Syncing data..." : "Click to sync data"}
       aria-label="Last updated / sync data"
     >
@@ -79,7 +79,7 @@ export const LastUpdatedButton = ({ onClick, isSyncing = false, lastUpdatedTime 
       <span className="hidden sm:inline whitespace-nowrap">
         {activeSync ? "Syncing..." : `${t("common.last_updated", {}, "Last updated")} ${timeDisplay}`}
       </span>
-      <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-green-700)]">
+      <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">
         {activeSync ? "Syncing" : timeDisplay}
       </span>
     </button>

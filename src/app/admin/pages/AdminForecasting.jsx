@@ -21,7 +21,6 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
 import { formatDate, formatPrice } from "../../global/utils/apiTransforms";
 import { filterRecordsByPeriod } from "../../global/utils/priceChartTransforms";
-import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { pricesApi } from "../../../services/api";
 import { formatPriceOutlookExplanation, ADMIN_TEXT_TEMPLATES } from "../utils/textTemplates";
 
@@ -240,22 +239,36 @@ function buildChartData(historical, forecastPoint, forecastPoints = []) {
     }
   }
 
-  const forecastDate = isoDate(forecastPoint?.forecast_date);
-  const lower = Number(forecastPoint?.lower_forecast);
-  const upper = Number(forecastPoint?.upper_forecast);
-  const hasRange = Number.isFinite(lower) || Number.isFinite(upper);
-  if (forecastDate && hasRange) {
-    const existing = byDate.get(forecastDate) || { d: forecastDate };
-    if (Number.isFinite(lower)) existing.lower = lower;
-    if (Number.isFinite(upper)) existing.upper = upper;
-    byDate.set(forecastDate, existing);
+  if (dailyPoints.length > 0) {
+    const firstFc = dailyPoints[0];
+    const firstDate = isoDate(firstFc?.forecast_date);
+    const anchorDate = [...byDate.keys()].filter((d) => d < firstDate).sort().at(-1);
+    if (anchorDate && firstFc) {
+      const anchor = byDate.get(anchorDate);
+      if (anchor) {
+        if (firstFc.lower_forecast != null) anchor.lower = Number(firstFc.lower_forecast);
+        if (firstFc.upper_forecast != null) anchor.upper = Number(firstFc.upper_forecast);
+        byDate.set(anchorDate, anchor);
+      }
+    }
+  } else {
+    const forecastDate = isoDate(forecastPoint?.forecast_date);
+    const lower = Number(forecastPoint?.lower_forecast);
+    const upper = Number(forecastPoint?.upper_forecast);
+    const hasRange = Number.isFinite(lower) || Number.isFinite(upper);
+    if (forecastDate && hasRange) {
+      const existing = byDate.get(forecastDate) || { d: forecastDate };
+      if (Number.isFinite(lower)) existing.lower = lower;
+      if (Number.isFinite(upper)) existing.upper = upper;
+      byDate.set(forecastDate, existing);
 
-    const anchorDate = [...byDate.keys()].filter((d) => d !== forecastDate).sort().at(-1);
-    if (anchorDate) {
-      const anchor = byDate.get(anchorDate) || { d: anchorDate };
-      if (Number.isFinite(lower)) anchor.lower = lower;
-      if (Number.isFinite(upper)) anchor.upper = upper;
-      byDate.set(anchorDate, anchor);
+      const anchorDate = [...byDate.keys()].filter((d) => d !== forecastDate).sort().at(-1);
+      if (anchorDate) {
+        const anchor = byDate.get(anchorDate) || { d: anchorDate };
+        if (Number.isFinite(lower)) anchor.lower = lower;
+        if (Number.isFinite(upper)) anchor.upper = upper;
+        byDate.set(anchorDate, anchor);
+      }
     }
   }
 
@@ -294,13 +307,13 @@ const CustomCommodityDropdown = ({ value, options = [], onChange }) => {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+        className="w-full flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-[12px] sm:text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <CommodityIllustration commodityId={selectedIconKey} className="w-5 h-5 flex-shrink-0" />
-          <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{selectedName}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <CommodityIllustration commodityId={selectedIconKey} className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+          <span className="font-semibold text-black truncate">{selectedName}</span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-black flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
@@ -318,10 +331,10 @@ const CustomCommodityDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] sm:text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-black hover:bg-[var(--hw-neutral-50)]"
                   }`}
               >
-                <CommodityIllustration commodityId={optIconKey} className="w-5 h-5 flex-shrink-0" />
+                <CommodityIllustration commodityId={optIconKey} className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
                 <span className="flex-1 truncate">{optName}</span>
               </button>
             );
@@ -351,10 +364,10 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
       <button
         type="button"
         onClick={() => hasVarieties && setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+        className="w-full flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-[12px] sm:text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
       >
-        <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{selectedVariety}</span>
-        <ChevronDown className={`w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="font-semibold text-black truncate">{selectedVariety}</span>
+        <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-black flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && hasVarieties && (
@@ -370,7 +383,7 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
                   onChange(optName);
                   setOpen(false);
                 }}
-                className={`w-full flex items-center px-3.5 py-2.5 text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                className={`w-full flex items-center px-3.5 py-2 text-[12px] sm:text-[13px] text-left transition-colors cursor-pointer ${isSelected ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-black hover:bg-[var(--hw-neutral-50)]"
                   }`}
               >
                 <span className="flex-1 truncate">{optName}</span>
@@ -400,10 +413,10 @@ const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+        className="w-full flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-[12px] sm:text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
       >
-        <span className="text-[13px] font-medium text-[var(--hw-neutral-900)] truncate">{value}</span>
-        <ChevronDown className={`w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="font-semibold text-black truncate">{value}</span>
+        <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-black flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
@@ -416,7 +429,7 @@ const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
                 onChange(opt);
                 setOpen(false);
               }}
-              className={`w-full flex items-center px-3.5 py-2 text-[13px] text-left transition-colors cursor-pointer ${opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              className={`w-full flex items-center px-3.5 py-2 text-[12px] sm:text-[13px] text-left transition-colors cursor-pointer ${opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-black hover:bg-[var(--hw-neutral-50)]"
                 }`}
             >
               <span className="flex-1 truncate">{opt}</span>
@@ -449,20 +462,20 @@ const ForecastChart = ({
   const hasData = (data || []).length > 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 md:p-8 space-y-4 min-h-[520px] flex flex-col justify-between">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[var(--hw-neutral-100)]">
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-6 md:p-8 space-y-3.5 sm:space-y-4 min-h-[460px] sm:min-h-[520px] flex flex-col justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 pb-3 border-b border-[var(--hw-neutral-100)]">
         <div>
-          <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
+          <p className="text-[14px] sm:text-[15px] font-bold text-black tracking-tight">
             {commodity ? `${commodity}${varietyLabel} · ${market || "-"} · ${priceType || "-"} · ${horizonDays}-Day Forecast` : "Forecast Chart"}
           </p>
-          <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+          <p className="text-[11px] sm:text-[12px] text-black mt-0.5">
             Historical actual prices vs forecast midpoint and forecast range · ₱/kg
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
-          <div className="flex items-center gap-2">
-            <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Historical Range</label>
-            <div className="w-32">
+        <div className="grid grid-cols-2 md:flex md:items-center gap-2 sm:gap-3 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+            <label className="text-[11px] sm:text-[12px] font-semibold text-black whitespace-nowrap">Historical Range</label>
+            <div className="w-full sm:w-32">
               <CustomSimpleDropdown
                 value={historicalRange}
                 options={["7 days", "14 days", "21 days", "28 days"]}
@@ -470,9 +483,9 @@ const ForecastChart = ({
               />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-[12px] font-medium text-[var(--hw-neutral-600)] whitespace-nowrap">Forecast Horizon</label>
-            <div className="w-32">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+            <label className="text-[11px] sm:text-[12px] font-semibold text-black whitespace-nowrap">Forecast Horizon</label>
+            <div className="w-full sm:w-32">
               <CustomSimpleDropdown
                 value={horizon}
                 options={horizonOptions}
@@ -614,7 +627,7 @@ function AdminForecasting() {
         const payload = await pricesApi.getPriceDetail(commodityId, {
           price_type: toPriceTypeKey(market, priceType),
           horizon: horizonDays,
-          records_limit: 30,
+          records_limit: 90,
         });
         if (!active) return;
         setChartPayload(payload);
@@ -686,7 +699,7 @@ function AdminForecasting() {
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
       <PageHeader
         title="Forecasting"
@@ -719,11 +732,11 @@ function AdminForecasting() {
       )}
 
       {/* 1. Filter Card */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        {/* Dropdowns row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4">
+        {/* Dropdowns row: 2 cols on mobile, 4 cols on md+ */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3.5">
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Commodity</label>
+            <label className="block text-[11px] font-semibold text-black mb-1">Commodity</label>
             <CustomCommodityDropdown
               value={commodity}
               options={commodities}
@@ -731,7 +744,7 @@ function AdminForecasting() {
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Variety</label>
+            <label className="block text-[11px] font-semibold text-black mb-1">Variety</label>
             <CustomVarietyDropdown
               value={variety}
               options={variants}
@@ -739,7 +752,7 @@ function AdminForecasting() {
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Market</label>
+            <label className="block text-[11px] font-semibold text-black mb-1">Market</label>
             <CustomSimpleDropdown
               value={market}
               options={markets}
@@ -747,7 +760,7 @@ function AdminForecasting() {
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Price Type</label>
+            <label className="block text-[11px] font-semibold text-black mb-1">Price Type</label>
             <CustomSimpleDropdown
               value={priceType}
               options={priceTypes}
@@ -755,86 +768,9 @@ function AdminForecasting() {
             />
           </div>
         </div>
-
-        {/* Filter context metadata: series identity, dates, official prices */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[11px]">
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">ID:</span>{" "}
-            <span className="font-semibold text-[var(--hw-neutral-800)] font-mono">{seriesId || "-"}</span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Date:</span>{" "}
-            <span className="font-semibold text-[var(--hw-neutral-800)]">
-              {selectedForecast?.forecast_date ? formatDate(selectedForecast.forecast_date) : "-"}
-            </span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Latest Price Date:</span>{" "}
-            <span className="font-semibold text-[var(--hw-neutral-800)]">
-              {chartPayload?.as_of_date ? formatDate(chartPayload.as_of_date) : (latestPriceDate ? formatDate(latestPriceDate) : "-")}
-            </span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Midpoint:</span>{" "}
-            <span className="font-semibold text-[var(--hw-neutral-800)]">
-              {formatSummaryPrice(selectedForecast?.forecast_midpoint ?? selectedForecast?.predicted_price)}
-            </span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Forecast Range:</span>{" "}
-            <span className="font-semibold text-[var(--hw-neutral-800)]">
-              {formatSummaryPriceRange(lowerForecast, upperForecast)}
-            </span>
-          </div>
-        </div>
       </div>
 
-      {/* 2. Forecast Summary Container */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
-          <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Forecast Summary</p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-[var(--hw-neutral-100)] p-4 sm:p-5">
-          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Recent Average</p>
-            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
-              {formatSummaryPrice(recentAverage)}
-            </p>
-          </div>
-          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Lower Forecast</p>
-            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
-              {formatSummaryPrice(lowerForecast)}
-            </p>
-          </div>
-          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Upper Forecast</p>
-            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
-              {formatSummaryPrice(upperForecast)}
-            </p>
-          </div>
-          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Forecast Midpoint</p>
-            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
-              {formatSummaryPrice(forecastMidpoint)}
-            </p>
-          </div>
-          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Forecast Change</p>
-            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] mt-1.5 text-right">
-              {formatChange(changePercent)}
-            </p>
-          </div>
-          <div className="px-3.5 py-2.5 sm:py-0 flex flex-col justify-between">
-            <p className="text-[11px] font-medium text-[var(--hw-neutral-500)] text-left">Price Outlook</p>
-            <p className={`text-[14px] font-bold mt-1.5 text-right ${outlook ? OUTLOOK_COLORS[outlook] : "text-[var(--hw-neutral-700)]"}`}>
-              {outlook || "Not available"}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Forecast Chart */}
+      {/* 2. Forecast Chart Container */}
       <ForecastChart
         commodity={commodity}
         variety={apiVariety}
@@ -851,23 +787,73 @@ function AdminForecasting() {
         empty={empty}
       />
 
+      {/* 3. Forecast Summary Container (Placed below the chart container like Farmer Basis view) */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
+          <p className="text-[12px] font-bold text-black uppercase tracking-wider">Forecast Summary</p>
+          {selectedForecast?.forecast_date && (
+            <p className="text-[12px] text-[var(--hw-neutral-600)] font-medium">
+              Forecast Date: <span className="text-black font-semibold">{formatDate(selectedForecast.forecast_date)}</span>
+            </p>
+          )}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 p-3.5 sm:p-5">
+          <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
+            <p className="text-[11px] font-semibold text-black text-left">Recent Average</p>
+            <p className="text-[14px] font-bold text-black mt-1.5 text-right">
+              {formatSummaryPrice(recentAverage)}
+            </p>
+          </div>
+          <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
+            <p className="text-[11px] font-semibold text-black text-left">Lower Forecast</p>
+            <p className="text-[14px] font-bold text-black mt-1.5 text-right">
+              {formatSummaryPrice(lowerForecast)}
+            </p>
+          </div>
+          <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
+            <p className="text-[11px] font-semibold text-black text-left">Upper Forecast</p>
+            <p className="text-[14px] font-bold text-black mt-1.5 text-right">
+              {formatSummaryPrice(upperForecast)}
+            </p>
+          </div>
+          <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
+            <p className="text-[11px] font-semibold text-black text-left">Forecast Midpoint</p>
+            <p className="text-[14px] font-bold text-black mt-1.5 text-right">
+              {formatSummaryPrice(forecastMidpoint)}
+            </p>
+          </div>
+          <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
+            <p className="text-[11px] font-semibold text-black text-left">Forecast Change</p>
+            <p className="text-[14px] font-bold text-black mt-1.5 text-right">
+              {formatChange(changePercent)}
+            </p>
+          </div>
+          <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
+            <p className="text-[11px] font-semibold text-black text-left">Price Outlook</p>
+            <p className={`text-[14px] font-bold mt-1.5 text-right ${outlook ? OUTLOOK_COLORS[outlook] : "text-black"}`}>
+              {outlook || "Not available"}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 4. Threshold Applied & Result Explanation (Consistent with Basis Page, No Duplicate Metrics) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* Threshold Applied Card */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
-            <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+            <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
               <span className="text-[13px] font-bold flex-shrink-0 min-w-[95px] text-emerald-700">Favorable</span>
               <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Forecast price change &gt; +5%</span>
             </div>
-            <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+            <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
               <span className="text-[13px] font-bold flex-shrink-0 min-w-[95px] text-[var(--hw-neutral-700)]">Neutral</span>
               <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Forecast price change between −5% and +5%</span>
             </div>
-            <div className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+            <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
               <span className="text-[13px] font-bold flex-shrink-0 min-w-[95px] text-red-600">Unfavorable</span>
               <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">Forecast price change &lt; −5%</span>
             </div>
@@ -875,11 +861,11 @@ function AdminForecasting() {
         </div>
 
         {/* Result Explanation Card */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
           </div>
-          <div className="p-6 flex-1 flex flex-col justify-center">
+          <div className="p-4 sm:p-6 flex-1 flex flex-col justify-center">
             {loading ? (
               <p className="text-[12px] text-[var(--hw-neutral-500)] leading-relaxed">Loading result explanation...</p>
             ) : error ? (
@@ -903,15 +889,6 @@ function AdminForecasting() {
         </div>
       </div>
 
-      {/* 5. Historical Average Price Section — Informational context only */}
-      <HistoricalAveragePriceSection
-        commodityId={selectedCommodityId || chartPayload?.commodity_id}
-        commodityName={commodity}
-        variety={apiVariety}
-        market={market}
-        priceType={priceType}
-        priceTypeKey={toPriceTypeKey(market, priceType)}
-      />
     </div>
   );
 }

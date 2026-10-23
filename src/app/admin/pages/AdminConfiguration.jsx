@@ -61,7 +61,7 @@ const CONFIG_AREAS = [
 ];
 function AdminConfiguration() {
   const navigate = useNavigate();
-  return <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
+  return <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
 
       {
     /* Page header */
@@ -75,7 +75,7 @@ function AdminConfiguration() {
       {
     /* Notice */
   }
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-4 flex items-start gap-3">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:px-5 sm:py-4 flex items-start gap-3">
         <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
           <p className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">Configuration changes require validation before going live.</p>
@@ -88,10 +88,10 @@ function AdminConfiguration() {
       {
     /* 4-column config areas grid */
   }
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4">
         {CONFIG_AREAS.map((area) => <div
     key={area.title}
-    className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col gap-4"
+    className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col gap-3.5 sm:gap-4"
   >
             {
     /* Icon + title */
@@ -135,9 +135,9 @@ function AdminConfiguration() {
       {
     /* Version info */
   }
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-4 space-y-2">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:px-5 sm:py-4 space-y-2">
         <p className="text-[12px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-700)]">Active configuration versions</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           {[
     { label: "Factor Rules", version: "v1.2.0", date: "Jun 1, 2026" },
     { label: "Weather Thresholds", version: "v1.1.0", date: "May 15, 2026" },

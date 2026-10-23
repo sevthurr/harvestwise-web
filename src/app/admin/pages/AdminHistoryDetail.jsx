@@ -130,7 +130,7 @@ function AdminHistoryDetail() {
   const supportsProcessedRecords = true;
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-6">
       {/* Back */}
       <button
         onClick={() => navigate("/admin/history")}
@@ -142,7 +142,7 @@ function AdminHistoryDetail() {
 
       {/* Header */}
       <div>
-        <h1 className="text-[22px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
+        <h1 className="text-[20px] sm:text-[22px] font-bold text-[var(--hw-neutral-900)] tracking-tight break-words">
           {record.sourceModule || "Processing Record"}
         </h1>
         <div className="flex flex-wrap items-center gap-2 mt-1.5">
@@ -157,11 +157,11 @@ function AdminHistoryDetail() {
       </div>
 
       {/* 1. Summary */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-6 py-3.5 border-b border-[var(--hw-neutral-100)]">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
           <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Summary</p>
         </div>
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="p-4 sm:p-6 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {[
             { label: "History ID", value: record.historyId || "-", mono: true },
             { label: "Source / Module", value: record.sourceModule || "-", mono: false },
@@ -175,9 +175,9 @@ function AdminHistoryDetail() {
             <div key={row.label}>
               <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">{row.label}</p>
               <p
-                className={`text-[13px] font-semibold mt-0.5 ${
+                className={`text-[13px] font-semibold mt-0.5 break-words ${
                   row.statusColor ?? "text-[var(--hw-neutral-900)]"
-                } ${row.mono ? "font-mono" : ""}`}
+                } ${row.mono ? "font-mono text-[12px]" : ""}`}
               >
                 {row.value}
               </p>
@@ -188,18 +188,18 @@ function AdminHistoryDetail() {
 
       {/* 2. Activity-Specific Details */}
       {record.details && Object.keys(record.details).length > 0 && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-3.5 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
               {record.activity} Details
             </p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             {Object.entries(record.details).map(([key, val]) => (
-              <div key={key} className="flex items-center justify-between gap-4 px-6 py-3">
+              <div key={key} className="flex items-center justify-between gap-4 px-4 sm:px-6 py-2.5 sm:py-3">
                 <span className="text-[13px] text-[var(--hw-neutral-600)] flex-shrink-0">{key}</span>
                 <span
-                  className={`text-[13px] font-medium text-right ${
+                  className={`text-[13px] font-medium text-right break-words ${
                     key === "Error message" ? "text-red-600 font-semibold" : "text-[var(--hw-neutral-900)]"
                   }`}
                 >
@@ -243,8 +243,8 @@ function AdminHistoryDetail() {
 
       {/* 4. Processed Records (Only displayed for activities that produce row-level outputs) */}
       {supportsProcessedRecords && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-3.5 border-b border-[var(--hw-neutral-100)] flex items-center justify-between">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)] flex flex-col xs:flex-row xs:items-center justify-between gap-2">
             <div>
               <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Processed Records</p>
               {totalRecords > 0 && (
@@ -263,7 +263,7 @@ function AdminHistoryDetail() {
 
           {columns.length > 0 && pageRows.length > 0 ? (
             <>
-              <div className="overflow-x-auto max-h-[500px]">
+              <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x max-h-[500px]">
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)] z-10">
                     <tr>
@@ -334,7 +334,7 @@ function AdminHistoryDetail() {
 
               {/* Records Pagination (20 per page) */}
               {totalPages > 1 && (
-                <div className="px-6 py-3.5 border-t border-[var(--hw-neutral-100)] flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)]">
+                <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-t border-[var(--hw-neutral-100)] flex flex-col sm:flex-row items-center justify-between gap-2.5 text-[12px] text-[var(--hw-neutral-600)]">
                   <span>
                     Showing {(recordsPage - 1) * PAGE_SIZE + 1}–{Math.min(recordsPage * PAGE_SIZE, totalRecords)} of {totalRecords.toLocaleString()}
                   </span>
