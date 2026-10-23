@@ -51,6 +51,23 @@ function currentQuarter() {
   return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
 }
 
+function productionClassificationFromRatio(ratio, quartiles) {
+  if (!Number.isFinite(ratio) || !quartiles) return null;
+  if (ratio < Number(quartiles.q1)) return "Low";
+  if (ratio < Number(quartiles.q2)) return "Lower Middle";
+  if (ratio < Number(quartiles.q3)) return "Upper Middle";
+  return "High";
+}
+
+function productionClassificationColor(classification) {
+  return {
+    High: "#dc2626",
+    "Upper Middle": "#ea580c",
+    "Lower Middle": "#eab308",
+    Low: "#16a34a",
+  }[classification] || "#16a34a";
+}
+
 const ARRIVAL_SOURCE_OPTIONS = [
   { value: "overall", label: "Overall", subtitle: "Overall (Farm + Other)" },
   { value: "farm", label: "Farm Source", subtitle: "Farm Source" },
@@ -1143,20 +1160,44 @@ function AdminAnalyticsBasis() {
     // When a quarter filter is active, build per-year bars from records.
     // When no filter, show all quarters' average bars (existing behaviour).
     const rawRecords = productionSummary?.records || [];
-    const quarterRecords = productionQuarter
+    const annualAverages = rawRecords.reduce((byYear, record) => {
+      const year = Number(record.reference_year);
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !Number.isFinite(volume)) return byYear;
+      const entry = byYear.get(year) || { total: 0, count: 0 };
+      entry.total += volume;
+      entry.count += 1;
+      byYear.set(year, entry);
+      return byYear;
+    }, new Map());
+    const selectedQuarterRecords = productionQuarter
       ? rawRecords
           .filter((r) => r.reference_quarter === productionQuarter && r.volume_produced != null)
           .sort((a, b) => Number(a.reference_year) - Number(b.reference_year))
-          .map((r) => ({
-            quarter: String(r.reference_year),
-            average_production_mt: Number(r.volume_produced),
-            classification: null,   // individual years don't carry a classification
-          }))
-      : profiles.map((p) => ({
-          quarter: p.quarter,
-          average_production_mt: p.average_production_mt,
-          classification: p.classification,
-        }));
+          .map((r) => {
+            const volume = Number(r.volume_produced);
+            const annual = annualAverages.get(Number(r.reference_year));
+            const ratio = annual?.count ? volume / (annual.total / annual.count) : null;
+            return {
+              quarter: String(r.reference_year),
+              average_production_mt: volume,
+              classification: productionClassificationFromRatio(ratio, quartiles),
+            };
+          })
+      : [];
+    const allQuarterRecords = rawRecords.reduce((byYear, record) => {
+      const year = Number(record.reference_year);
+      const quarter = record.reference_quarter;
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !PRODUCTION_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return byYear;
+      const row = byYear.get(year) || { quarter: String(year) };
+      row[quarter] = (row[quarter] || 0) + volume;
+      byYear.set(year, row);
+      return byYear;
+    }, new Map());
+    const quarterRecords = productionQuarter
+      ? selectedQuarterRecords
+      : [...allQuarterRecords.values()].sort((a, b) => Number(a.quarter) - Number(b.quarter));
 
     return {
       ...result,
@@ -1754,8 +1795,15 @@ function AdminAnalyticsBasis() {
                       displayResult.productionVolumes?.length
                         ? displayResult.productionVolumes.map((row) => ({
                             quarter: row.quarter,
-                            volume: row.average_production_mt || 0,
-                            level: row.classification,
+                            ...(productionQuarter
+                              ? {
+                                  volume: row.average_production_mt || 0,
+                                  level: row.classification,
+                                }
+                              : PRODUCTION_QUARTERS.reduce((values, chartQuarter) => ({
+                                  ...values,
+                                  [chartQuarter]: row[chartQuarter] || 0,
+                                }), {})),
                           }))
                         : quarterlyGhostData
                     }
@@ -1769,33 +1817,26 @@ function AdminAnalyticsBasis() {
                       <RechartsTooltip
                         formatter={(val, _name, props) => [
                           `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT${props.payload?.level ? ` (${props.payload.level})` : ""}`,
-                          productionQuarter ? "Production" : "Avg Production"
+                          productionQuarter ? "Production" : _name
                         ]}
                       />
                     )}
-                    <Bar
-                      dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"}
-                      radius={[6, 6, 0, 0]}
-                      fill="#2f7d32"
-                      stroke="#cbd5e1"
-                      strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"}
-                    >
-                      {displayResult.productionVolumes?.length > 0 &&
-                        displayResult.productionVolumes.map((entry, index) => {
-                          // Per-year bars (quarter filter active): single green colour;
-                          // All-quarter bars: classification colour.
-                          const barColor = productionQuarter
-                            ? "var(--hw-green-700, #2f7d32)"
-                            : entry.classification === "High"
-                            ? "#dc2626"
-                            : entry.classification === "Upper Middle"
-                            ? "#d97706"
-                            : entry.classification === "Lower Middle"
-                            ? "#2563eb"
-                            : "#16a34a";
-                          return <Cell key={`cell-${index}`} fill={barColor} />;
-                        })}
-                    </Bar>
+                    {displayResult.productionVolumes?.length > 0 ? (
+                      (productionQuarter ? [productionQuarter] : PRODUCTION_QUARTERS).map((chartQuarter) => {
+                        const profile = displayResult.quarterlyProfiles?.find((item) => item.quarter === chartQuarter);
+                        return (
+                          <Bar
+                            key={chartQuarter}
+                            dataKey={productionQuarter ? "volume" : chartQuarter}
+                            name={chartQuarter}
+                            fill={productionClassificationColor(profile?.classification)}
+                            radius={[6, 6, 0, 0]}
+                          />
+                        );
+                      })
+                    ) : (
+                      <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
                 {!displayResult.productionVolumes?.length && (
