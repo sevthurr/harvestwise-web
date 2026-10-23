@@ -1170,7 +1170,7 @@ function AdminAnalyticsBasis() {
       byYear.set(year, entry);
       return byYear;
     }, new Map());
-    const quarterRecords = productionQuarter
+    const selectedQuarterRecords = productionQuarter
       ? rawRecords
           .filter((r) => r.reference_quarter === productionQuarter && r.volume_produced != null)
           .sort((a, b) => Number(a.reference_year) - Number(b.reference_year))
@@ -1184,11 +1184,20 @@ function AdminAnalyticsBasis() {
               classification: productionClassificationFromRatio(ratio, quartiles),
             };
           })
-      : profiles.map((p) => ({
-          quarter: p.quarter,
-          average_production_mt: p.average_production_mt,
-          classification: p.classification,
-        }));
+      : [];
+    const allQuarterRecords = rawRecords.reduce((byYear, record) => {
+      const year = Number(record.reference_year);
+      const quarter = record.reference_quarter;
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !PRODUCTION_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return byYear;
+      const row = byYear.get(year) || { quarter: String(year) };
+      row[quarter] = (row[quarter] || 0) + volume;
+      byYear.set(year, row);
+      return byYear;
+    }, new Map());
+    const quarterRecords = productionQuarter
+      ? selectedQuarterRecords
+      : [...allQuarterRecords.values()].sort((a, b) => Number(a.quarter) - Number(b.quarter));
 
     return {
       ...result,
@@ -1786,8 +1795,15 @@ function AdminAnalyticsBasis() {
                       displayResult.productionVolumes?.length
                         ? displayResult.productionVolumes.map((row) => ({
                             quarter: row.quarter,
-                            volume: row.average_production_mt || 0,
-                            level: row.classification,
+                            ...(productionQuarter
+                              ? {
+                                  volume: row.average_production_mt || 0,
+                                  level: row.classification,
+                                }
+                              : PRODUCTION_QUARTERS.reduce((values, chartQuarter) => ({
+                                  ...values,
+                                  [chartQuarter]: row[chartQuarter] || 0,
+                                }), {})),
                           }))
                         : quarterlyGhostData
                     }
@@ -1801,23 +1817,26 @@ function AdminAnalyticsBasis() {
                       <RechartsTooltip
                         formatter={(val, _name, props) => [
                           `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT${props.payload?.level ? ` (${props.payload.level})` : ""}`,
-                          productionQuarter ? "Production" : "Avg Production"
+                          productionQuarter ? "Production" : _name
                         ]}
                       />
                     )}
-                    <Bar
-                      dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"}
-                      radius={[6, 6, 0, 0]}
-                      fill="#2f7d32"
-                      stroke="#cbd5e1"
-                      strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"}
-                    >
-                      {displayResult.productionVolumes?.length > 0 &&
-                        displayResult.productionVolumes.map((entry, index) => {
-                          const barColor = productionClassificationColor(entry.level);
-                          return <Cell key={`cell-${index}`} fill={barColor} />;
-                        })}
-                    </Bar>
+                    {displayResult.productionVolumes?.length > 0 ? (
+                      (productionQuarter ? [productionQuarter] : PRODUCTION_QUARTERS).map((chartQuarter) => {
+                        const profile = displayResult.quarterlyProfiles?.find((item) => item.quarter === chartQuarter);
+                        return (
+                          <Bar
+                            key={chartQuarter}
+                            dataKey={productionQuarter ? "volume" : chartQuarter}
+                            name={chartQuarter}
+                            fill={productionClassificationColor(profile?.classification)}
+                            radius={[6, 6, 0, 0]}
+                          />
+                        );
+                      })
+                    ) : (
+                      <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
                 {!displayResult.productionVolumes?.length && (
