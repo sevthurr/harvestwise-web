@@ -396,8 +396,9 @@ function SeasonalProductionDetailsPage() {
                   {t("farmer.factors.production.historical_from_location", { location: SOURCE_LABELS[location].toLowerCase() })}
                 </p>
               </div>
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-52 overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+                <div style={{ minWidth: quarterlyData.length > 0 ? Math.max(560, quarterlyData.length * 56) : "100%", height: "100%" }}>
+                  <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={quarterlyData} margin={{ top: 20, right: 8, left: -8, bottom: 0 }} barSize={26}>
                     <CartesianGrid vertical={false} stroke="var(--hw-neutral-100)" />
                     <XAxis dataKey="year" tick={{ fill: "var(--hw-neutral-400)", fontSize: 10 }} stroke="var(--hw-neutral-200)" tickLine={false} />
@@ -417,7 +418,8 @@ function SeasonalProductionDetailsPage() {
   />
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </div>
               </div>
               <p className="text-[12px] text-[var(--hw-neutral-700)]">{t("farmer.factors.production.chart_footnote_quarterly")}</p>
             </div>
@@ -522,8 +524,9 @@ function SeasonalProductionDetailsPage() {
                   {t("farmer.factors.production.historical_from_location", { location: SOURCE_LABELS[location].toLowerCase() })}
                 </p>
               </div>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-56 overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+                <div style={{ minWidth: annualData.length > 0 ? Math.max(560, annualData.length * 56) : "100%", height: "100%" }}>
+                  <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={annualData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barSize={22}>
                     <CartesianGrid vertical={false} stroke="var(--hw-neutral-100)" />
                     <XAxis dataKey="year" tick={{ fill: "var(--hw-neutral-400)", fontSize: 10 }} stroke="var(--hw-neutral-200)" tickLine={false} />
@@ -542,7 +545,8 @@ function SeasonalProductionDetailsPage() {
     radius={q === "Q4" ? [3, 3, 0, 0] : void 0}
   />)}
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </div>
               </div>
               <p className="text-[12px] text-[var(--hw-neutral-700)]">{t("farmer.factors.production.chart_footnote_annual", { location: SOURCE_LABELS[location] })}</p>
             </div>

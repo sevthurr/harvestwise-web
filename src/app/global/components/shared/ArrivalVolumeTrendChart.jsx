@@ -204,6 +204,7 @@ function ArrivalVolumeTrendChart({
   }, []);
 
   const chartHeight = isMobile ? Math.min(height, 220) : height;
+  const chartMinWidth = isMobile ? Math.max(560, (chartData?.length || 0) * 52) : "100%";
 
   const allValues = useMemo(() => {
     const vals = [];
@@ -293,10 +294,12 @@ function ArrivalVolumeTrendChart({
   return (
     <div
       ref={containerRef}
-      style={{ touchAction: "pan-y" }}
+      style={{ touchAction: "pan-x pan-y" }}
       className="w-full space-y-1"
     >
-      <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+        <div style={{ minWidth: chartMinWidth }}>
+          <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart data={chartData} margin={{ top: 10, right: isMobile ? 8 : 16, bottom: 4, left: isMobile ? -6 : 0 }} barCategoryGap="20%" barGap={2}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--hw-neutral-100)" vertical={false} />
           <XAxis
@@ -346,7 +349,9 @@ function ArrivalVolumeTrendChart({
             travellerWidth={isMobile ? 16 : 10}
           />
         </BarChart>
-      </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 justify-center">
         <span className="text-[11px] font-semibold text-black">
           {t("farmer.factors.arrival.classification_label", {}, "Classification")}:

@@ -8,6 +8,7 @@ import { ForecastPriceTrendChart } from "../../global/components/shared/Forecast
 import { ArrivalVolumeTrendChart } from "../../global/components/shared/ArrivalVolumeTrendChart";
 import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSourcePieChart";
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
+import { useIsMobile } from "../../global/components/ui/use-mobile";
 import { normalizeCommodityLabel } from "../../global/utils/priceChartTransforms";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
@@ -101,7 +102,7 @@ function formatCustomDateLabel(from, to) {
   return `${fmt(from)}–${fmt(to)}, ${year}`;
 }
 
-const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]";
+const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] min-w-0";
 const labelCls = "block text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1";
 const selectCls = "w-full truncate px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-600)] transition-colors";
 const PAGE_SIZE = 20;
@@ -761,6 +762,7 @@ function TableSkeleton({ cols = 8, rows = 5 }) {
 }
 
 function DFTCTrends() {
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined" && window.location) {
       const params = new URLSearchParams(window.location.search);
@@ -1459,7 +1461,7 @@ function DFTCTrends() {
               chartData={pChartData}
               varieties={varieties}
               colors={varietyColors}
-              height={typeof window !== "undefined" && window.innerWidth < 640 ? 280 : 380}
+              height={isMobile ? 280 : 380}
               actualLabel="Actual price"
               forecastLabel="Forecast"
               forecastRangeLabel="Forecast range"
@@ -1765,7 +1767,7 @@ function DFTCTrends() {
                 chartData={aChartData}
                 varietyKeys={aVarietyKeys}
                 sourceType={aVolumeType}
-                height={typeof window !== "undefined" && window.innerWidth < 640 ? 250 : 300}
+                height={isMobile ? 250 : 300}
                 quartileThresholds={arrivalQueryData?.quartile_thresholds}
               />
             )}
@@ -1808,7 +1810,7 @@ function DFTCTrends() {
               {aSourcesBreakdown.length > 0 ? (
                 <ArrivalSourcePieChart
                   data={aSourcesBreakdown}
-                  height={typeof window !== "undefined" && window.innerWidth < 640 ? 250 : 300}
+                  height={isMobile ? 250 : 300}
                 />
               ) : (
                 <p className="py-12 sm:py-16 text-center text-xs sm:text-sm text-[var(--hw-neutral-500)]">

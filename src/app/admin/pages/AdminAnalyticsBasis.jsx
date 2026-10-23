@@ -43,6 +43,7 @@ import { getCommodityProfile } from "../../global/components/shared/weatherExpla
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { useIsMobile } from "../../global/components/ui/use-mobile";
 
 const PRODUCTION_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -868,6 +869,7 @@ function AdminAnalyticsBasis() {
   const { resultId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const defaultTemplate = DEFAULT_BASIS_TEMPLATES[resultId];
 
@@ -1393,7 +1395,7 @@ function AdminAnalyticsBasis() {
   }, []);
 
   // Uniform styling for visualization cards
-  const vizCardClass = "bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-4 sm:p-6 md:p-8 space-y-4 min-h-[460px] flex flex-col justify-between";
+  const vizCardClass = "bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-4 sm:p-6 md:p-8 space-y-4 min-h-[460px] min-w-0 flex flex-col justify-between";
 
   return (
     <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto space-y-4 sm:space-y-6">
@@ -1602,8 +1604,8 @@ function AdminAnalyticsBasis() {
               <ForecastPriceTrendChart commodity={selectedCommodity} chartData={displayResult.forecastPoints} varieties={displayResult.varieties || []} height={360} />
             ) : (
               <div className="w-full flex-1 flex flex-col justify-center">
-                <ResponsiveContainer width="100%" height={340}>
-                  <ComposedChart data={priceForecastEmpty} margin={{ top: 16, right: 20, bottom: 8, left: 0 }}>
+                <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
+                  <ComposedChart data={priceForecastEmpty} margin={{ top: 16, right: isMobile ? 8 : 20, bottom: 8, left: isMobile ? -8 : 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => `₱${v}`} width={55} />
@@ -1664,25 +1666,27 @@ function AdminAnalyticsBasis() {
               </div>
 
               {arrivalHasData ? (
-                <ResponsiveContainer width="100%" height={340}>
+                <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+                  <div style={{ minWidth: isMobile ? 600 : "100%" }}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
                   <BarChart
                     data={arrivalChartData}
-                    margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
-                    barCategoryGap="32%"
+                    margin={{ top: 16, right: isMobile ? 8 : 20, left: isMobile ? -8 : 0, bottom: 8 }}
+                    barCategoryGap={isMobile ? "18%" : "32%"}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }}
+                      tick={{ fontSize: isMobile ? 10 : 12, fill: "#4b5563", fontWeight: 500 }}
                       tickLine={false}
                       axisLine={false}
                     />
                     <YAxis
-                      tick={{ fontSize: 11, fill: "#9ca3af" }}
+                      tick={{ fontSize: isMobile ? 10 : 11, fill: "#9ca3af" }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(v) => Number(v).toLocaleString()}
-                      width={62}
+                      width={isMobile ? 48 : 62}
                     />
                     <RechartsTooltip
                       cursor={{ fill: "rgba(0,0,0,0.03)" }}
@@ -1708,11 +1712,13 @@ function AdminAnalyticsBasis() {
                       ))}
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full flex-1 flex flex-col justify-center">
-                  <ResponsiveContainer width="100%" height={340}>
-                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
+                  <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
+                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: isMobile ? 8 : 20, left: isMobile ? -8 : 0, bottom: 8 }} barSize={isMobile ? 36 : 60}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
                       <YAxis hide domain={[0, 10]} />
@@ -1742,7 +1748,7 @@ function AdminAnalyticsBasis() {
               <ArrivalSourcePieChart
                 showEmpty={!arrivalSourcePieData.length}
                 data={arrivalSourcePieData}
-                height={340}
+                height={isMobile ? 300 : 380}
               />
             </div>
           </>
@@ -1789,7 +1795,9 @@ function AdminAnalyticsBasis() {
                 </div>
               </div>
               <div className="w-full flex-1 flex flex-col justify-center">
-                <ResponsiveContainer width="100%" height={340}>
+                <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+                  <div style={{ minWidth: isMobile ? 560 : "100%" }}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
                   <BarChart
                     data={
                       displayResult.productionVolumes?.length
@@ -1807,11 +1815,11 @@ function AdminAnalyticsBasis() {
                           }))
                         : quarterlyGhostData
                     }
-                    margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
-                    barSize={72}
+                    margin={{ top: 16, right: isMobile ? 8 : 20, left: isMobile ? -8 : 0, bottom: 8 }}
+                    barSize={isMobile ? 40 : 72}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="quarter" tick={{ fontSize: 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="quarter" tick={{ fontSize: isMobile ? 10 : 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
                     <YAxis hide domain={[0, "auto"]} />
                     {displayResult.productionVolumes?.length > 0 && (
                       <RechartsTooltip
@@ -1838,7 +1846,9 @@ function AdminAnalyticsBasis() {
                       <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray="3 3" />
                     )}
                   </BarChart>
-                </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
                 {!displayResult.productionVolumes?.length && (
                   <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
                     <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">

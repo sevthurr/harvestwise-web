@@ -664,7 +664,9 @@ const ProductionTab = ({ data, commodityName }) => {
                 </button>
               ))}
             </div>
-            <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
+            <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+              <div style={{ minWidth: isMobile ? Math.max(560, chartData.length * 56) : "100%" }}>
+                <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={28}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#000000" }} tickLine={false} axisLine={false} />
@@ -683,7 +685,9 @@ const ProductionTab = ({ data, commodityName }) => {
                   return <Bar key={quarter} dataKey={quarter} name={quarter} fill={levelColor(profile?.classification)} radius={[4, 4, 0, 0]} />;
                 })}
               </BarChart>
-            </ResponsiveContainer>
+                </ResponsiveContainer>
+              </div>
+            </div>
             <div className="flex items-center gap-4 mt-2 justify-center text-[11px] text-black">
               <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /><span>{t("farmer.factors.arrival.level_low", {}, "Low")}</span></div>
               <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /><span>{t("farmer.factors.arrival.level_lower_middle", {}, "Moderate")}</span></div>

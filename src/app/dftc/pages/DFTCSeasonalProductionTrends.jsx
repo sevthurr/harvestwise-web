@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { getClassificationColor, getClassificationTextColor } from "./dftcClassificationColors";
+import { useIsMobile } from "../../global/components/ui/use-mobile";
 
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -13,6 +14,7 @@ function currentQuarter() {
 }
 
 function SeasonalProductionTrends({ commodity, commodityId, categories, onCommodityChange }) {
+  const isMobile = useIsMobile();
   const [quarter, setQuarter] = useState(currentQuarter);
   const commodityRef = commodityId || commodity;
   const query = useQuery({
@@ -134,18 +136,22 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                 Backend quarterly averages across {commodity} production records · MT
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={typeof window !== "undefined" && window.innerWidth < 640 ? 240 : 320}>
-              <BarChart data={chartData} margin={{ top: 12, right: 12, bottom: 4, left: typeof window !== "undefined" && window.innerWidth < 640 ? -12 : 8 }}>
+            <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+              <div style={{ minWidth: isMobile ? Math.max(560, chartData.length * 56) : "100%" }}>
+                <ResponsiveContainer width="100%" height={isMobile ? 240 : 320}>
+              <BarChart data={chartData} margin={{ top: 12, right: isMobile ? 8 : 12, bottom: 4, left: isMobile ? -12 : 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--hw-neutral-100)" vertical={false} />
-                <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={(value) => Number(value).toLocaleString()} tick={{ fontSize: 11 }} />
+                <XAxis dataKey="year" tick={{ fontSize: isMobile ? 10 : 11 }} />
+                <YAxis tickFormatter={(value) => Number(value).toLocaleString()} tick={{ fontSize: isMobile ? 10 : 11 }} width={isMobile ? 44 : 60} />
                 <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()} MT`, name]} />
                 {chartQuarters.map((chartQuarter) => {
                   const profile = profiles.find((item) => item.quarter === chartQuarter);
                   return <Bar key={chartQuarter} dataKey={chartQuarter} name={chartQuarter} fill={getClassificationColor(profile?.classification)} radius={[6, 6, 0, 0]} />;
                 })}
               </BarChart>
-            </ResponsiveContainer>
+                </ResponsiveContainer>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 mt-2 justify-center text-[10.5px] sm:text-[11px]">
               <span className="font-semibold text-[var(--hw-neutral-500)]">Classification:</span>
               <div className="flex items-center gap-1.5">
