@@ -94,10 +94,10 @@ describe('roleHome()', () => {
 // ── Token helpers ────────────────────────────────────────────────────────────
 
 describe('token helpers', () => {
-  it('storeTokens keeps tokens out of browser storage', () => {
+  it('storeTokens never exposes tokens to JavaScript or browser storage', () => {
     storeTokens(FAKE_TOKENS);
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
-    expect(getRefreshToken()).toBe(FAKE_TOKENS.refresh_token);
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
     expect(localStorage.getItem('hw_access_token')).toBeNull();
     expect(localStorage.getItem('hw_refresh_token')).toBeNull();
   });
@@ -204,7 +204,7 @@ describe('AuthContext — login()', () => {
       await capturedAuth.login(FAKE_TOKENS);
     });
 
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
+    expect(getAccessToken()).toBeNull();
     expect(capturedAuth.isLoggedIn).toBe(true);
     expect(capturedAuth.user.email).toBe('juan@example.com');
   });

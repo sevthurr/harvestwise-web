@@ -1,9 +1,9 @@
 export const privacy = {
   title: "Privacy Policy",
   effective_date_label: "Effective Date",
-  effective_date: "October 9, 2026",
+  effective_date: "October 24, 2026",
   version_label: "Version",
-  version: "1.0",
+  version: "1.1",
   intro_p1: "HarvestWise respects the privacy of its users and is committed to handling personal information responsibly.",
   intro_p2: "HarvestWise is a Bachelor of Science in Information Technology Capstone Project developed at the University of Mindanao. This Privacy Policy explains what information HarvestWise collects, why it is used, where it may be sent, how it is protected, how long it may be retained, and the choices and rights available to users.",
   intro_p3: "By using HarvestWise, you acknowledge that you have read this Privacy Policy.",

@@ -187,10 +187,9 @@ describe('crops query pre-auth behaviour', () => {
   });
 
   it('a 401 WITH a token still dispatches hw:auth:expired', async () => {
-    // Access token present, no refresh token -> no refresh attempt, forced logout.
+    // A live cookie session is represented only by an in-memory session flag.
     storeTokens(FAKE_TOKENS);
-    clearTokens();
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
+    expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
 
     const onExpired = vi.fn();

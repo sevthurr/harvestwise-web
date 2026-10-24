@@ -4,7 +4,7 @@ import {
   apiPost,
   clearTokens,
   completeLegacyTokenMigration,
-  getRefreshToken,
+  markSessionActive,
   parseResponse,
   storeTokens,
 } from '../api';
@@ -90,6 +90,7 @@ export function AuthProvider({ children }) {
       try {
         await completeLegacyTokenMigration();
         const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+        markSessionActive();
         setUser(me);
         // Cache user profile for offline restoration
         await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
@@ -162,7 +163,7 @@ export function AuthProvider({ children }) {
     // A token key changing value in another tab means the session identity
     // changed underneath us.
     const handleStorage = (e) => {
-      if (e.key === 'hw_access_token' || e.key === 'hw_refresh_token' || e.key === 'hw_session_generation') {
+      if (e.key === 'hw_session_generation') {
         purge({ refetchActive: false });
       }
     };
@@ -185,6 +186,7 @@ export function AuthProvider({ children }) {
     await clearQueryPersistedCache();
     storeTokens(tokens);
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+    markSessionActive();
     setUser(me);
     await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
     await seedFarmerOffline(me);
@@ -195,13 +197,12 @@ export function AuthProvider({ children }) {
   // Logout: tell backend, then clear local state regardless of outcome
   // ------------------------------------------------------------------
   const logout = async () => {
-    const refreshToken = getRefreshToken();
     const offline = browserIsOffline();
     try {
       if (offline) {
         localStorage.setItem(PENDING_LOGOUT_KEY, 'true');
       } else {
-        await apiPost('/api/v1/auth/logout', { refresh_token: refreshToken });
+        await apiPost('/api/v1/auth/logout', {});
         localStorage.removeItem(PENDING_LOGOUT_KEY);
       }
     } catch (error) {

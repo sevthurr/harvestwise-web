@@ -1,9 +1,9 @@
 export const privacy = {
   title: "Patakaran sa Privacy",
   effective_date_label: "Epektibo Sukad",
-  effective_date: "October 9, 2026",
+  effective_date: "October 24, 2026",
   version_label: "Version",
-  version: "1.0",
+  version: "1.1",
   intro_p1: "Girespeto sa HarvestWise ang privacy sa mga user ug responsable nga pagdumala sa personal nga impormasyon.",
   intro_p2: "Ang HarvestWise usa ka Bachelor of Science in Information Technology Capstone Project nga gihimo sa University of Mindanao. Kini nga Patakaran sa Privacy nagpasabot unsang impormasyon ang kolektahon ug gamiton sa HarvestWise, nganong gikinahanglan kini, asa kini mahimong ipadala, unsaon kini pagpanalipod, hangtod kanus-a kini mahimong tipigan, ug unsang mga katungod ug kapilian ang naa sa user.",
   intro_p3: "Paggamit nimo sa HarvestWise, nagpamatuod ka nga nabasa nimo kini nga Patakaran sa Privacy.",

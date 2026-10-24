@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { get, set, del } from "idb-keyval";
+import { get, set, del, clear } from "idb-keyval";
 
 // 7-day cache for offline-first farming use
 const SEVEN_DAYS = 1000 * 60 * 60 * 24 * 7;
@@ -116,5 +116,25 @@ export async function clearQueryPersistedCache({ refetchActive = true } = {}) {
   } catch {
     // CacheStorage unavailable (private mode / older browser) — not fatal.
   }
+}
+
+/** Remove all HarvestWise device copies, including non-React-Query caches. */
+export async function clearDeviceData() {
+  // Rotate the cache namespace first so an in-flight response cannot refill a
+  // cache entry that this action just removed.
+  try { localStorage.setItem('hw_session_generation', `${Date.now()}-${Math.random()}`); } catch {}
+  await clearQueryPersistedCache({ refetchActive: false });
+  try { await clear(); } catch {}
+  try {
+    if (typeof caches !== 'undefined') {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    }
+  } catch {}
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('HARVESTWISE_') || key.startsWith('hw_'))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {}
 }
 
