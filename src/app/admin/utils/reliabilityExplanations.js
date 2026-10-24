@@ -9,7 +9,7 @@
 // scoring rules (`reliability_rules`), so everything quoted here is a real value
 // from the computation - nothing is restated from memory.
 
-export const RELIABILITY_LEVELS = ["High", "Moderate", "Limited", "Low"];
+export const RELIABILITY_LEVELS = ["High", "Moderate", "Low"];
 
 export const DIMENSION_ORDER = ["availability", "timeliness", "validity"];
 
@@ -27,14 +27,14 @@ export const FALLBACK_RELIABILITY_RULES = {
   no_data_timeliness: 0.05,
   floor: 0.1,
   low_threshold: 0.4,
+  high_threshold: 0.85,
 };
 
 // Short explanations for the minimal bands table.
 export const SHORT_BAND_EXPLANATIONS = {
-  High: "Complete and fresh records; module weight applied in full (≥0.85).",
-  Moderate: "Usable but aging or thin records; module weight scaled down.",
-  Limited: "Sparse or stale records; weight heavily dampened (indicative only).",
-  Low: "Insufficient records; falls back to neutral default (0.10 floor).",
+  High: "Data meets reliability requirements; full module weight.",
+  Moderate: "Some data limitations; module weight is reduced.",
+  Low: "Major data limitations; neutral fallback is used.",
 };
 
 // Mirrors RELIABILITY_BANDS in reliability.py (used only when the API sends none).
@@ -47,15 +47,9 @@ export const FALLBACK_RELIABILITY_BANDS = [
   },
   {
     label: "Moderate",
-    min: 0.65,
+    min: 0.40,
     max: 0.84,
     description: SHORT_BAND_EXPLANATIONS.Moderate,
-  },
-  {
-    label: "Limited",
-    min: 0.4,
-    max: 0.64,
-    description: SHORT_BAND_EXPLANATIONS.Limited,
   },
   {
     label: "Low",
@@ -82,94 +76,105 @@ const plural = (n, word) => `${n} ${word}${Number(n) === 1 ? "" : "s"}`;
 export function buildReliabilitySummary({ resultId, level, evidence, rules }) {
   const e = evidence || {};
   const r = rules || FALLBACK_RELIABILITY_RULES;
-  const stale = r.stale_after_days || 14;
-  const count = e.available != null ? e.available : null;
+  const count = e.available != null ? e.available : (e.available_months != null ? e.available_months : null);
   const age = e.age_days != null ? e.age_days : null;
 
   switch (resultId) {
     case "price-outlook": {
+      const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : null);
+      const isReportingDayMode = missed != null || (e.unit && e.unit.includes("reporting day"));
+      const latestDateStr = e.latest_date || "recent";
+
       if (level === "High") {
-        const countText = count != null ? `${count} price records are on file` : "Price records are complete";
-        const timeText = age != null
-          ? `with the latest entry ${plural(age, "day")} old (within the ${stale}-day limit)`
-          : (e.timeliness_basis === "forecast" ? "with active forecast coverage" : "with recent entries");
-        return `${countText} ${timeText}. Sufficiency and timeliness criteria are satisfied, so the module's advisory weight is applied in full.`;
+        const countText = count != null
+          ? (isReportingDayMode ? `${count} of ${e.required || count} expected reporting days have usable price observations` : `${count} price records are on file`)
+          : "Price records are complete";
+        const timeText = missed != null
+          ? (missed === 0
+            ? `Latest price: ${latestDateStr}. No reporting days missed; within the 2-day allowance.`
+            : `Latest price: ${latestDateStr}. ${plural(missed, "reporting day")} missed; within the 2-day allowance.`)
+          : `Latest price: ${latestDateStr}. Within freshness requirements.`;
+        return `${countText}. ${timeText} Sufficiency and timeliness criteria are satisfied, so full module weight is applied.`;
       }
       if (level === "Moderate") {
-        const countText = count != null ? `${count} price records are on file` : "Price records are on file";
-        const timeText = age != null && age > stale
-          ? `with the latest entry ${age} days old (past the ${stale}-day limit)`
-          : "with moderate historical depth";
-        return `${countText} ${timeText}. The data remains usable, but the module's advisory weight is moderately scaled down.`;
+        const countText = count != null
+          ? (isReportingDayMode ? `${count} of ${e.required || count} expected reporting days are covered` : `${count} price records are on file`)
+          : "Price records are on file";
+        const timeText = missed != null
+          ? `Latest price: ${latestDateStr}. ${plural(missed, "reporting day")} missed since latest observation.`
+          : `Latest price: ${latestDateStr}. Moderate historical reporting depth.`;
+        return `${countText}. ${timeText} Data remains usable, but module weight is reduced.`;
       }
-      if (level === "Limited") {
-        const countText = count != null ? `Only ${count} price records are available` : "Price records are sparse";
-        const timeText = age != null ? `with the latest entry dated ${e.latest_date || `${age} days old`}` : "or aging";
-        return `${countText} ${timeText}. Due to limited sufficiency, price outlook estimates should be treated as indicative only.`;
-      }
-      const countText = count != null ? `Only ${count} price records were found` : "Too few price records exist";
-      return `${countText}, falling short of reliable calculation thresholds. The module falls back to a neutral default and is flagged for insufficient data.`;
+      // Low
+      const countText = count != null
+        ? (isReportingDayMode ? `Only ${count} price reporting days were found` : `Only ${count} price records were found`)
+        : "Too few price records exist";
+      const timeNote = missed != null && missed > 10 ? ` (${missed} missed reporting days, critically stale)` : "";
+      return `${countText}${timeNote}. Major data limitations apply; neutral fallback is used.`;
     }
 
     case "arrival-pressure": {
+      const elapsed = e.elapsed_calendar_months != null ? e.elapsed_calendar_months : null;
+      const latestMo = e.latest_arrival_month ? e.latest_arrival_month : "2025-12";
       if (level === "High") {
-        const countText = count != null ? `${count} DFTC arrival records are on file` : "DFTC arrival records are complete";
-        const timeText = age != null
-          ? `with the latest entry ${plural(age, "day")} old (within the ${stale}-day limit)`
-          : "with current entries";
-        return `${countText} ${timeText}. Volume data satisfies sufficiency criteria, so the arrival pressure reading is weighted in full.`;
+        const countText = count != null ? `${count} of ${e.required || 12} monthly arrival observations are available` : "DFTC monthly arrival observations are complete";
+        const elapsedText = elapsed != null ? ` (${plural(elapsed, "month")} elapsed)` : "";
+        return `${countText} (latest month: ${latestMo})${elapsedText}. Full coverage criteria are satisfied; full module weight is applied.`;
       }
       if (level === "Moderate") {
-        const countText = count != null ? `${count} DFTC arrival records are on file` : "DFTC arrival records are on file";
-        const timeText = age != null && age > stale
-          ? `with the latest entry ${age} days old (past the ${stale}-day limit)`
-          : "with volume history below the full-score threshold";
-        return `${countText} ${timeText}. Arrival tracking is usable, but the module's advisory weight is scaled down.`;
+        const countText = count != null ? `${count} of ${e.required || 12} monthly arrival observations are available` : "DFTC monthly arrival observations are on file";
+        const elapsedText = elapsed != null ? ` (${plural(elapsed, "month")} elapsed)` : "";
+        return `${countText} (latest month: ${latestMo})${elapsedText}. The data satisfies computational minimums, but partial coverage or reporting lag reduces module weight.`;
       }
-      if (level === "Limited") {
-        const countText = count != null ? `Only ${count} DFTC arrival records are recorded` : "DFTC arrival records are sparse";
-        return `${countText}, indicating thin or outdated tracking. The calculated supply pressure is heavily dampened and indicative only.`;
+      // Low: Distinguish between coverage deficiency vs staleness
+      if (count != null && count >= (e.min_required_months || 4) && elapsed != null && elapsed > 6) {
+        return `${count} of ${e.required || 12} monthly arrival observations are available, but the latest record is ${plural(elapsed, "month")} old (${latestMo}). Reliability is Low because the data is outdated.`;
       }
-      return "Insufficient DFTC arrival records are available to compute volume quartile thresholds. The module falls back to a neutral reading due to lack of usable data.";
+      const countText = count != null && count > 0 ? `Only ${count} monthly arrival observation(s) are recorded` : "Insufficient monthly arrival observations are available";
+      const stalenessNote = elapsed != null && elapsed > 6 ? ` (${elapsed} calendar months elapsed, critically stale)` : "";
+      return `${countText}${stalenessNote}. Major data limitations apply; neutral fallback is used.`;
     }
 
     case "historical-production": {
-      const yearText = e.latest_year
-        ? e.first_year != null && e.first_year !== e.latest_year
-          ? `from ${e.first_year} through ${e.latest_year} (${plural(e.years_old ?? 0, "year")} old at the latest year)`
-          : `from ${e.latest_year} (${plural(e.years_old ?? 0, "year")} old)`
-        : null;
+      const latestPeriod = e.latest_period || (e.latest_year ? `${e.latest_year} ${e.latest_quarter || ""}`.trim() : null);
+      const isOverdue = e.days_overdue != null && e.days_overdue > 0;
+      const graceText = isOverdue
+        ? `${e.earliest_missing_period || "next period"} is ${plural(e.days_overdue, "day")} overdue past HarvestWise grace deadline`
+        : "the next expected quarter is not overdue";
+
       if (level === "High") {
-        const countText = count != null ? `${count} quarterly PSA production records are on file` : "Quarterly PSA production records are on file";
-        const timeText = yearText ? `${yearText}, meeting the recency threshold` : "covering the multi-year benchmark window";
-        return `${countText} ${timeText}. The baseline meets all historical depth criteria, so seasonal production is weighted in full.`;
+        const countText = count != null
+          ? `${count} usable quarterly production observations are available${latestPeriod ? ` through ${latestPeriod}` : ""}`
+          : "Quarterly PSA production records are on file";
+        return `${countText}. Baseline meets historical depth requirements (target: ${e.required || 20} quarters) and ${graceText}; full module weight is applied.`;
       }
       if (level === "Moderate") {
-        const countText = count != null ? `${count} quarterly PSA production records are on file` : "Quarterly PSA production records are on file";
-        const timeText = e.years_old > 1 ? `with latest data from ${e.latest_year} (${e.years_old} years old)` : "covering fewer quarters than optimal";
-        return `${countText} ${timeText}. Historical records are usable, but the baseline's advisory weight is moderately reduced.`;
+        const countText = count != null
+          ? `${count} usable quarterly production observations are available${latestPeriod ? ` through ${latestPeriod}` : ""}`
+          : "Quarterly PSA production records are on file";
+        return `${countText}. Baseline is usable but ${isOverdue ? graceText : "covers fewer quarters than optimal"}; module weight is reduced.`;
       }
-      if (level === "Limited") {
-        const countText = count != null ? `Only ${count} quarterly PSA production records are recorded` : "Quarterly PSA records are sparse";
-        return `${countText}, providing thin historical depth. Seasonal benchmarks are indicative only and have their weight dampened.`;
-      }
-      return "Too few quarterly PSA production records exist to build a reliable seasonal benchmark. The module falls back to a neutral production baseline.";
+      // Low
+      const countText = count != null && count > 0 ? `Only ${count} quarterly production records are available` : "Too few quarterly production records exist";
+      return `${countText}. Major data limitations apply; neutral fallback is used.`;
     }
 
     case "weather-risk": {
+      const availDays = e.available != null ? e.available : count;
+      const reqDays = e.required || 14;
       if (level === "High") {
-        const countText = count != null ? `${count} forecast days are loaded` : "Daily weather forecast days are loaded";
-        return `${countText} with complete daily precipitation and temperature metrics. Forecast data meets timeliness criteria, so evaluated weather risk receives full weight.`;
+        const countText = availDays != null ? `${availDays} of ${reqDays} forecast days are available` : "14 of 14 forecast days are available";
+        const ageText = e.age_hours != null ? ` (refreshed ${e.age_hours}h ago)` : " recently";
+        return `${countText}. The forecast was refreshed${ageText} and meets freshness requirements; full module weight is applied.`;
       }
       if (level === "Moderate") {
-        const countText = count != null ? `${count} forecast days are loaded` : "Daily forecast days are loaded";
-        return `${countText}, covering part of the standard projection window. The weather assessment remains usable, but its advisory weight is moderately scaled down.`;
+        const countText = availDays != null ? `${availDays} of ${reqDays} forecast days are available` : "Daily forecast days are loaded";
+        const warnText = e.unverified_freshness ? "freshness is unverified" : (e.age_hours != null ? `retrieved ${e.age_hours}h ago` : "partial forecast horizon");
+        return `${countText} (${warnText}). Weather assessment remains usable, but module weight is reduced.`;
       }
-      if (level === "Limited") {
-        const countText = count != null ? `Only ${count} forecast days are available` : "Forecast days are sparse";
-        return `${countText}, offering limited forward visibility. Weather risk indicators are indicative only with dampened weighting.`;
-      }
-      return "No usable daily weather forecast is currently loaded for the target location. The module falls back to a neutral risk rating until forecast entries are available.";
+      // Low
+      const countText = availDays != null && availDays > 0 ? `Only ${availDays} daily forecast day(s) are available` : "No usable daily weather forecast is currently loaded";
+      return `${countText} in the 14-day window. Major data limitations apply; neutral fallback is used.`;
     }
 
     default:
@@ -177,42 +182,86 @@ export function buildReliabilitySummary({ resultId, level, evidence, rules }) {
   }
 }
 
-function dimensionDetail(dimension, score, evidence, rules) {
+export function dimensionDetail(dimension, score, evidence, rules) {
   const e = evidence || {};
-  const unit = e.unit || "records";
-  const stale = rules.stale_after_days;
+  const rawUnit = e.unit || "records";
+  const unit = rawUnit.startsWith("distinct ") ? rawUnit.slice(9) : rawUnit;
+  const stale = rules.stale_after_days || 14;
 
   switch (dimension) {
-    case "availability":
-      return e.available > 0
-        ? `${e.available} of ${e.required} required distinct ${unit} (${Math.round(Math.min(1, e.available / (e.required || 1)) * 100)}%).`
+    case "availability": {
+      const count = e.available != null ? e.available : (e.available_months != null ? e.available_months : 0);
+      const req = e.required != null ? e.required : (e.full_benchmark_months || e.min_required_months || 1);
+      return count > 0
+        ? `${count} of ${req} required distinct ${unit} (${Math.round(Math.min(1, count / req) * 100)}%).`
         : `No ${unit} found (score 0.00).`;
+    }
 
-    case "timeliness":
+    case "timeliness": {
+      if (e.timeliness_basis === "missed_reporting_days" || e.timeliness_basis === "missed_reporting_weekdays") {
+        const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : 0);
+        return missed <= 2
+          ? `Latest observation: ${e.latest_date || "recent"}. Missed reporting days: ${missed} (within 2-day allowance; score ${fmt2(score)}).`
+          : `Latest observation: ${e.latest_date || "older"}. Missed reporting days: ${missed} (score ${fmt2(score)}).`;
+      }
+      if (e.timeliness_basis === "elapsed_calendar_months") {
+        const elapsed = e.elapsed_calendar_months != null ? e.elapsed_calendar_months : 0;
+        return `Latest arrival observation: ${e.latest_arrival_month || e.latest_date || "recent"}. Age: ${plural(elapsed, "calendar month")} (score ${fmt2(score)}).`;
+      }
+      if (e.timeliness_basis === "provisional_quarter_grace_period") {
+        const overdue = e.days_overdue != null ? e.days_overdue : 0;
+        return overdue === 0
+          ? `Next expected period: ${e.earliest_missing_period || "subsequent quarter"}. Grace deadline: not overdue (score ${fmt2(score)}).`
+          : `Next expected period: ${e.earliest_missing_period || "subsequent quarter"}. Overdue: ${plural(overdue, "day")} past grace deadline (score ${fmt2(score)}).`;
+      }
       if (e.timeliness_basis === "forecast") {
-        return "An active forecast covers the outlook window, so timeliness is scored 1.00.";
+        return `An active forecast covers the outlook window (score ${fmt2(score)}).`;
+      }
+      if (e.timeliness_basis === "historical_benchmark_currency") {
+        return `Active ${e.benchmark_year || 2025} historical arrival benchmark; currency scored ${fmt2(score)}.`;
+      }
+      if (
+        e.timeliness_basis === "provisional_quarterly_lag" ||
+        e.timeliness_basis === "official_publication_lag_adjusted" ||
+        e.timeliness_basis === "latest_year"
+      ) {
+        const periodDesc = e.latest_period || (e.latest_year ? `${e.latest_year}${e.latest_quarter ? ` ${e.latest_quarter}` : ""}` : null);
+        const lagDesc = e.quarters_lag != null ? `${e.quarters_lag} quarters lag` : (e.years_old != null ? `${plural(e.years_old, "year")} old` : null);
+        return periodDesc
+          ? `Latest production period is ${periodDesc}${lagDesc ? ` (${lagDesc})` : ""}; timeliness scored ${fmt2(score)} under quarterly publication lag rules.`
+          : `No production records on file (score ${fmt2(score)}).`;
+      }
+      if (e.timeliness_basis === "unverified_retrieval_time" || e.unverified_freshness) {
+        return `Forecast retrieval timestamp unavailable; freshness is unverified (conservative score ${fmt2(score)}, capped to Moderate).`;
+      }
+      if (e.timeliness_basis === "forecast_retrieval_age" || e.timeliness_basis === "retrieval_timestamp") {
+        const ageDesc = e.age_hours != null ? `${e.age_hours}h old` : (e.age_days != null ? `${plural(e.age_days, "day")} old` : null);
+        return ageDesc
+          ? `Forecast retrieved ${ageDesc} (score ${fmt2(score)}).`
+          : `Forecast retrieval timestamp verified (score ${fmt2(score)}).`;
       }
       if (e.timeliness_basis === "forecast_available") {
-        return e.available > 0
-          ? `${plural(e.available, "forecast day")} loaded, so timeliness is scored 1.00 (0.00 when none).`
+        const count = e.available != null ? e.available : 0;
+        return count > 0
+          ? `${plural(count, "forecast day")} loaded, so timeliness is scored ${fmt2(score)}.`
           : "No forecast days loaded (score 0.00).";
       }
-      if (e.timeliness_basis === "latest_year") {
-        return e.latest_year != null
-          ? `Latest production year is ${e.latest_year} with ${e.latest_year_quarters ?? "some"} of 4 quarters available (${plural(e.years_old, "year")} old). Scored 1.00 when at most 1 year old, otherwise 0.20.`
-          : "No production year on record (score 0.20).";
-      }
       if (e.age_days == null) {
-        return `No dated record found (score ${fmt2(rules.no_data_timeliness)}).`;
+        return score > (rules.no_data_timeliness || 0.05)
+          ? `Timeliness scored ${fmt2(score)} based on available benchmark evidence.`
+          : `No dated record found (score ${fmt2(rules.no_data_timeliness || 0.05)}).`;
       }
       return e.age_days <= stale
-        ? `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — within the ${stale}-day limit, so it scores 1.00.`
-        : `Latest record is dated ${e.latest_date}, ${plural(e.age_days, "day")} old — past the ${stale}-day limit. The score drops linearly to ${fmt2(rules.no_data_timeliness)} at ${rules.timeliness_floor_after_days ?? stale * 2} days.`;
+        ? `Latest record is dated ${e.latest_date || "recent"}, ${plural(e.age_days, "day")} old (score ${fmt2(score)}).`
+        : `Latest record is dated ${e.latest_date || "older"}, ${plural(e.age_days, "day")} old (past ${stale}-day limit; score ${fmt2(score)}).`;
+    }
 
-    case "validity":
-      return e.available > 0
-        ? `${e.available} usable ${unit}; required values, formats, ranges, and duplicate checks passed.`
+    case "validity": {
+      const usable = e.valid_records != null ? e.valid_records : (e.usable_records != null ? e.usable_records : (e.available != null ? e.available : (score > 0 ? 1 : 0)));
+      return score > 0 && usable > 0
+        ? `${usable} usable ${unit} verified for calculation (score ${fmt2(score)}).`
         : `No usable ${unit} found (score 0.00).`;
+    }
 
     default:
       return "";
@@ -258,7 +307,12 @@ export function buildReliabilityExplanation({ resultId, level, factor, bands, di
   const sum = rows.reduce((acc, r) => acc + r.weight * r.score, 0);
   const terms = rows.map((r) => `${fmt2(r.weight)} × ${fmt2(r.score)}`).join(" + ");
   const floored = factor != null && Number(factor) > sum + 1e-9;
-  const calculation = `${terms} = ${sum.toFixed(4)}${floored ? `, raised to the ${fmt2(effectiveRules.floor)} floor` : ""}`;
+  const capped = factor != null && Number(factor) < sum - 1e-9;
+  const calculation = `${terms} = ${sum.toFixed(4)}${
+    floored
+      ? `, raised to the ${fmt2(effectiveRules.floor)} floor`
+      : (capped ? `, capped to ${Number(factor).toFixed(4)}` : "")
+  }`;
 
   return { summary, rows, calculation };
 }
