@@ -89,12 +89,21 @@ const API_RUNTIME_CACHE = 'harvestwise-api-cache';
  * body is already on disk and the service worker replays it without consulting
  * any credential.
  */
-export async function clearQueryPersistedCache() {
-  // resetQueries(), NOT clear(). clear()/removeQueries() destroy the Query
-  // object a mounted observer is attached to; the observer then re-attaches to
-  // an empty, never-fetched query and isLoading stays true forever. resetQueries
-  // refetches active queries so every mounted observer settles.
-  queryClient.resetQueries();
+export async function clearQueryPersistedCache({ refetchActive = true } = {}) {
+  // Forced auth expiry keeps the mounted query observers alive and refetches
+  // them so they settle. Intentional logout/session changes pass
+  // refetchActive:false and cancel/clear instead; refetching during an offline
+  // route transition can wake queries when connectivity returns and leave a
+  // blank loading state.
+  if (refetchActive) {
+    queryClient.resetQueries();
+  } else {
+    // Logout/session changes are terminal for the mounted user. Refetching
+    // active queries here can wake them when connectivity returns, during the
+    // route transition to /login, and leave the app in a blank loading state.
+    queryClient.cancelQueries();
+    queryClient.clear();
+  }
   try {
     await del("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
   } catch {

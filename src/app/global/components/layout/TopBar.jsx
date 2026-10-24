@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download } from "lucide-react";
+import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
@@ -18,7 +18,7 @@ const TopBar = ({
   const navigate = useNavigate();
   const location = useLocation();
   const isNotificationOpen = Boolean(location?.pathname?.includes("/notifications"));
-  const { user, logout } = useAuth();
+  const { user, logout, offlineCacheStatus } = useAuth();
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
   const queryClient = useQueryClient();
@@ -38,6 +38,12 @@ const TopBar = ({
   // Prices, Profile and Notifications opt back into refetchOnMount:"always"
   // even though the login bundle seeded their cache.
   const isSyncing = isManualSyncing || processState.active;
+  const cacheStatus = user?.role?.role_name?.toLowerCase() === "farmer" ? offlineCacheStatus : "idle";
+  const cacheStatusCopy = {
+    preparing: t("farmer.offline_preparing", {}, "Preparing offline data"),
+    ready: t("farmer.offline_ready", {}, "Offline data ready"),
+    error: t("farmer.offline_incomplete", {}, "Offline data incomplete"),
+  }[cacheStatus];
 
   // Keep the "Last updated" timestamp in sync when a background process
   // completes and triggers an automatic live resync.
@@ -108,6 +114,28 @@ const TopBar = ({
 
         {/* Right: sync · bell · avatar */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {cacheStatusCopy && (
+            <div
+              className={`flex items-center gap-1 px-1.5 sm:px-2 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium whitespace-nowrap ${
+                cacheStatus === "error"
+                  ? "bg-amber-50 text-amber-700"
+                  : cacheStatus === "preparing"
+                  ? "bg-blue-50 text-blue-700"
+                  : "bg-emerald-50 text-emerald-700"
+              }`}
+              title={cacheStatusCopy}
+              aria-label={cacheStatusCopy}
+            >
+              {cacheStatus === "preparing" ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : cacheStatus === "error" ? (
+                <AlertCircle className="w-4 h-4" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">{cacheStatusCopy}</span>
+            </div>
+          )}
           <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 
           <button

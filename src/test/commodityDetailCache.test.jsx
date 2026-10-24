@@ -275,6 +275,29 @@ describe("CommodityDetail offline and error states", () => {
     expect(detailCalls()).toHaveLength(0);
   });
 
+  it("uses the cached Prices row when the detail section is unavailable offline", async () => {
+    onlineManager.setOnline(false);
+    const client = makeClient();
+    client.setQueryData(["prices", "list"], {
+      items: [{
+        commodity_id: "COM-0001",
+        name: "Tomato",
+        base_name: "Tomato",
+        variety: "Roma",
+        unit_of_measure: "kg",
+        prices: { bangkerohan_retail: 42.5 },
+        forecast: { lower_forecast: 40, upper_forecast: 45 },
+      }],
+    });
+
+    renderPage(client);
+
+    await waitFor(() => expect(screen.getAllByText("Tomato").length).toBeGreaterThan(0));
+    expect(screen.queryByText(OFFLINE_NOTICE)).not.toBeInTheDocument();
+    expect(screen.getByText("₱42.5/kg")).toBeInTheDocument();
+    expect(detailCalls()).toHaveLength(0);
+  });
+
   it("does not claim the commodity is missing when the request fails at the network level", async () => {
     const client = makeClient({ networkMode: "always" });
     apiGet.mockRejectedValue(new TypeError("Failed to fetch"));

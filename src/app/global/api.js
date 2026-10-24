@@ -1,7 +1,8 @@
 /**
  * Base API client for HarvestWise.
  *
- * - Attaches the access token from localStorage to every request.
+ * - Keeps the short-lived access token in memory; the API persists the session
+ *   in HttpOnly cookies.
  * - On 401, attempts a single token refresh then retries the original request.
  * - On second 401 (refresh also expired / revoked), clears storage and
  *   dispatches a custom "hw:auth:expired" event so AuthContext can log the
@@ -21,20 +22,53 @@ const STORAGE = {
   REFRESH: 'hw_refresh_token',
 };
 
+let memoryAccessToken = null;
+let memoryRefreshToken = null;
+let legacyMigrationPending = false;
+
 // ---------------------------------------------------------------------------
 // Token helpers
 // ---------------------------------------------------------------------------
-export function getAccessToken()  { return localStorage.getItem(STORAGE.ACCESS); }
-export function getRefreshToken() { return localStorage.getItem(STORAGE.REFRESH); }
+function migrateLegacyTokens() {
+  try {
+    const access = localStorage.getItem(STORAGE.ACCESS);
+    const refresh = localStorage.getItem(STORAGE.REFRESH);
+    if (access || refresh) {
+      memoryAccessToken = access;
+      memoryRefreshToken = refresh;
+      legacyMigrationPending = true;
+      localStorage.removeItem(STORAGE.ACCESS);
+      localStorage.removeItem(STORAGE.REFRESH);
+    }
+  } catch {}
+}
+migrateLegacyTokens();
+
+export function getAccessToken()  { return memoryAccessToken; }
+export function getRefreshToken() { return memoryRefreshToken; }
+
+function announceSessionChange() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hw:session:changed'));
+  try {
+    localStorage.setItem('hw_session_generation', `${Date.now()}-${Math.random()}`);
+  } catch {}
+}
 
 export function storeTokens({ access_token, refresh_token }) {
-  localStorage.setItem(STORAGE.ACCESS,  access_token);
-  localStorage.setItem(STORAGE.REFRESH, refresh_token);
+  memoryAccessToken = access_token;
+  memoryRefreshToken = refresh_token;
+  announceSessionChange();
 }
 
 export function clearTokens() {
-  localStorage.removeItem(STORAGE.ACCESS);
-  localStorage.removeItem(STORAGE.REFRESH);
+  memoryAccessToken = null;
+  memoryRefreshToken = null;
+  announceSessionChange();
+}
+
+function csrfToken() {
+  if (typeof document === 'undefined') return '';
+  return document.cookie.split('; ').find((part) => part.startsWith('hw_csrf_token='))?.split('=').slice(1).join('=') || '';
 }
 
 /**
@@ -89,6 +123,20 @@ function fetchWithTimeout(url, options = {}) {
   });
 }
 
+/** Exchange a one-release legacy in-memory refresh token for HttpOnly cookies. */
+export async function completeLegacyTokenMigration() {
+  if (!legacyMigrationPending || !memoryRefreshToken) return;
+  const res = await fetchWithTimeout(`${API_BASE}/api/v1/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: memoryRefreshToken }),
+    credentials: 'include',
+  });
+  if (!res.ok) return;
+  storeTokens(await res.json());
+  legacyMigrationPending = false;
+}
+
 async function _fetch(url, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
@@ -96,11 +144,14 @@ async function _fetch(url, options = {}) {
     ...authHeaders(),
     ...(options.headers ?? {}),
   };
+  const method = (options.method || 'GET').toUpperCase();
+  const csrf = csrfToken();
+  if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRF-Token'] = csrf;
   if (isFormData) {
     delete headers['Content-Type'];
     delete headers['content-type'];
   }
-  return fetchWithTimeout(buildUrl(url), { ...options, headers });
+  return fetchWithTimeout(buildUrl(url), { ...options, credentials: 'include', headers });
 }
 
 // ---------------------------------------------------------------------------
@@ -125,6 +176,7 @@ async function _refreshAndRetry(url, options) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
     });
 
     if (!res.ok) throw new Error('refresh_failed');
@@ -267,6 +319,7 @@ export function openEventStream(path, handlers = {}, options = {}) {
         // stream is bounded by our own AbortController instead.
         const res = await fetch(buildUrl(path), {
           headers: { ...authHeaders(), Accept: 'text/event-stream' },
+          credentials: 'include',
           signal: controller.signal,
         });
 

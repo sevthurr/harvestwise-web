@@ -339,6 +339,9 @@ export const ceb = {
     sync_now: "I-sync Karon",
     syncing: "Nag-update sa bag-ong data...",
     offline_available: "Andam ang data nga offline",
+    offline_preparing: "Giandam ang data para offline",
+    offline_ready: "Andam na ang offline data",
+    offline_incomplete: "Dili kompleto ang offline data",
     advisory: {
       recommended_summary: "Suportahan sa karon nga kahimtang ang imong plano alang sa {crop_name}.",
       recommended_support: "Maayo ang presyo ug kontrolado ang panahon karong semanaha.",

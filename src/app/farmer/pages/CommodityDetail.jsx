@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2, X } from "lucide-react";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
@@ -47,6 +47,7 @@ function CommodityDetailPage() {
   const { t } = useLanguage();
   const { commodityId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [market, setMarket] = useState("bangkerohan");
   const [period, setPeriod] = useState(7);
   const [showRecordsModal, setShowRecordsModal] = useState(false);
@@ -139,25 +140,6 @@ function CommodityDetailPage() {
     placeholderData: (previousData) => previousData,
   });
 
-  // Derived straight from the query's data. Copying it into useState through a
-  // useEffect left commodity/priceDetail null on the first render, so the
-  // "not found" branch could flash even when the data was already cached.
-  const commodity = useMemo(() => {
-    if (!detailData) return null;
-    return {
-      id: detailData.commodityId,
-      name: detailData.name || '–',
-      baseName: detailData.baseName,
-      variety: detailData.variety,
-      icon: detailData.icon,
-      unitOfMeasure: detailData.unitOfMeasure || 'kg'
-    };
-  }, [detailData]);
-
-  useEffect(() => {
-    if (detailData) setPriceRecords(detailData.recentRecords || []);
-  }, [detailData]);
-
   // The records modal belongs to the market + commodity it was opened for, so
   // switching either one drops the cached list instead of showing the old one.
   useEffect(() => {
@@ -186,6 +168,45 @@ function CommodityDetailPage() {
     (typeof navigator !== "undefined" && navigator.onLine === false) ||
     fetchStatus === "paused" ||
     (detailError != null && typeof detailErrorStatus !== "number");
+
+  // The offline bundle always includes the Prices list, while the per-market
+  // detail section can be partial when its snapshot budget is exhausted. Keep
+  // the specific-price view useful in that case by falling back to the list's
+  // cached commodity row instead of showing the cache-miss notice.
+  const offlinePriceKey = priceTypeKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+  const resolvedDetailData = useMemo(() => {
+    if (detailData || !isOffline) return detailData;
+    const offlineListItem = (pricesListData?.items || [])
+      .map(toCamelCase)
+      .find((item) => String(item.commodityId) === String(commodityId));
+    return offlineListItem
+      ? {
+          ...offlineListItem,
+          selectedPriceType: priceTypeKey,
+          currentPrice: offlineListItem.prices?.[offlinePriceKey] ?? null,
+          recentRecords: [],
+        }
+      : null;
+  }, [detailData, isOffline, pricesListData, commodityId, priceTypeKey, offlinePriceKey]);
+
+  // Derived straight from the query's data. Copying it into useState through a
+  // useEffect left commodity/priceDetail null on the first render, so the
+  // "not found" branch could flash even when the data was already cached.
+  const commodity = useMemo(() => {
+    if (!resolvedDetailData) return null;
+    return {
+      id: resolvedDetailData.commodityId,
+      name: resolvedDetailData.name || '–',
+      baseName: resolvedDetailData.baseName,
+      variety: resolvedDetailData.variety,
+      icon: resolvedDetailData.icon,
+      unitOfMeasure: resolvedDetailData.unitOfMeasure || 'kg'
+    };
+  }, [resolvedDetailData]);
+
+  useEffect(() => {
+    if (resolvedDetailData) setPriceRecords(resolvedDetailData.recentRecords || []);
+  }, [resolvedDetailData]);
 
   // Fetch extended records when "View more records" is clicked
   const fetchExtendedRecords = async () => {
@@ -237,7 +258,7 @@ function CommodityDetailPage() {
     setShowRecordsModal(true);
   };
 
-  const forecast = detailData?.forecast || {};
+  const forecast = resolvedDetailData?.forecast || {};
   const cfg = DIR_CFG[forecast.trend] || DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const uom = commodity?.unitOfMeasure || 'kg';
@@ -311,6 +332,8 @@ function CommodityDetailPage() {
     queryFn: async () => {
       const entries = await Promise.all(
         siblingIds.map(async (id) => {
+          const cached = queryClient.getQueryData(["prices", "detail", id, priceTypeKey, period]);
+          if (cached) return [id, cached];
           const response = await apiGet(
             `/prices/${id}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
           );
@@ -372,7 +395,7 @@ function CommodityDetailPage() {
       let lower = null;
       let upper = null;
 
-      if (isCurrentActive && detailData) {
+      if (isCurrentActive && resolvedDetailData) {
         priceVal = forecast.currentPrice ?? priceRecords[0]?.prevailPrice ?? getAvailablePrice(v.prices);
         lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
@@ -395,7 +418,7 @@ function CommodityDetailPage() {
         forecastRangeText,
       };
     });
-  }, [familyVariants, market, uom, commodity, commodityId, detailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
+  }, [familyVariants, market, uom, commodity, commodityId, resolvedDetailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
 
   // Loading state (only show full screen skeleton on cold start if NO data exists in cache)
   //
@@ -406,7 +429,7 @@ function CommodityDetailPage() {
   // query are neither: they fall through to the message branch below instead
   // of spinning forever.
   const isLoadingDetail = loading || (Boolean(commodityId) && fetchStatus === "idle");
-  if (isLoadingDetail && !detailData && !detailError) {
+  if (isLoadingDetail && !resolvedDetailData && !detailError) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
         {/* Breadcrumb Skeleton */}

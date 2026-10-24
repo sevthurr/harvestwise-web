@@ -144,26 +144,6 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
       });
     }
 
-    // Fallback only when the API returned no rows at all. It must NOT fire just
-    // because no crop is "Recommended" — that would surface an "Avoid for Now"
-    // crop as a good one (same defect as the Market Calendar page).
-    if (rawRecommendations.length === 0) {
-      const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
-      defaultIds.forEach((cid) => {
-        const p = DEFAULT_RECOMMENDED_PROFILES[cid];
-        const name = cid === "COM-0004" ? "Kamatis" : "Ampalaya";
-        result.push({
-          id: cid,
-          name,
-          variety: p?.bestVariety || null,
-          priceOutlookText: cid === "COM-0004"
-            ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon")
-            : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit"),
-          plantWindow: p?.plantWindow ? p.plantWindow(localizedMonth) : `${localizedMonth} 1–20`,
-        });
-      });
-    }
-
     const prefSource = preferredCrops && preferredCrops.length > 0 ? preferredCrops : preferredCropIds;
     return sortWithPreferredFirst(result, prefSource);
   }, [rawRecommendations, localizedMonth, t, preferredCrops, preferredCropIds]);

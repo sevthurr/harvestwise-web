@@ -339,6 +339,9 @@ export const en = {
     sync_now: "Sync Now",
     syncing: "Updating latest data...",
     offline_available: "Offline data available",
+    offline_preparing: "Preparing offline data",
+    offline_ready: "Offline data ready",
+    offline_incomplete: "Offline data incomplete",
 
     advisory: {
       recommended_summary: "Current conditions support your {crop_name} plan.",

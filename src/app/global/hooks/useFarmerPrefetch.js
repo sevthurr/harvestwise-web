@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiGet, parseResponse } from "../api";
+import { apiGet, apiPost, parseResponse } from "../api";
 import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
+import { toCamelCase } from "../utils/apiTransforms";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
+export const SUPPORTED_PRICES_KEY = ["prices", "supported-list"];
 // Must stay identical to DAVAO_CITY_FALLBACK_COORDINATES: the weather pages key
 // their advisory query off that constant, so a farmer with no farm location
 // would otherwise miss the seeded entry and refetch. Kept as aliases because
@@ -26,6 +28,17 @@ export const BUNDLE_DETAIL_PERIOD = 7;
 export const BUNDLE_TREND_RECORDS_LIMIT = 40;
 export const BUNDLE_TREND_PERIOD = 7;
 export const BUNDLE_TREND_PRICE_TYPE = "bangkerohan_retail";
+
+// These are the selectors exposed by the farmer price pages. Keep the offline
+// warm-up aligned with the UI so changing a market or forecast horizon does
+// not immediately fall through to the network.
+export const FARMER_PRICE_TYPES = [
+  "bangkerohan_retail",
+  "bangkerohan_wholesale",
+  "dftc_retail",
+  "dftc_wholesale",
+];
+export const FARMER_PRICE_HORIZONS = [7, 14, 21, 28];
 
 export function weatherAdvisoryKey(lat, lon) {
   return ["weather", "advisory", lat, lon];
@@ -79,6 +92,25 @@ export function transformDashboardRecommendations(rawItems) {
 // Raw price list shared by Prices, Assess, CommodityDetail, Dashboard.
 export function fetchPricesList() {
   return apiGet("/prices?is_top10=true&page_size=50").then(parseResponse);
+}
+
+// The normal Prices list intentionally contains only top-10 rows. Detail and
+// trend pages also need the non-top-10 variety rows belonging to those crops.
+export async function fetchSupportedPricesList() {
+  const items = [];
+  let page = 1;
+  let total = Infinity;
+  while (items.length < total) {
+    const data = await parseResponse(await apiGet(
+      `/prices?include_supported_varieties=true&page=${page}&page_size=100`
+    ));
+    const pageItems = data?.items || [];
+    items.push(...pageItems);
+    total = Number(data?.total ?? items.length);
+    if (pageItems.length === 0) break;
+    page += 1;
+  }
+  return { items, total: items.length, page: 1, page_size: items.length };
 }
 
 // Raw farmer profile shared by Dashboard and every farmer page.
@@ -159,7 +191,13 @@ export async function seedFarmerOfflineBundle(queryClient) {
   const bundle = await parseResponse(res);
 
   const profile = bundle.profile || null;
-  if (profile) queryClient.setQueryData(FARMER_PROFILE_KEY, profile);
+  if (profile) {
+    queryClient.setQueryData(FARMER_PROFILE_KEY, profile);
+    // Several legacy farmer pages still use this key. Keep it backed by the
+    // same canonical profile so offline navigation does not refetch it.
+    queryClient.setQueryData(["farmerProfile"], profile);
+    queryClient.setQueryData(["dashboard", "profile"], profile);
+  }
 
   if (Array.isArray(bundle.crop_plans)) {
     const pricesMap = Array.isArray(bundle.price_trends) ? buildPricesMap(bundle.price_trends) : new Map();
@@ -190,6 +228,9 @@ export async function seedFarmerOfflineBundle(queryClient) {
         priceDetailKey(camel.commodityId, camel.selectedPriceType, BUNDLE_DETAIL_PERIOD),
         camel
       );
+      if (camel.selectedPriceType === "bangkerohan_retail") {
+        queryClient.setQueryData(["price-detail", camel.commodityId], entry);
+      }
     });
   }
 
@@ -209,14 +250,39 @@ export async function seedFarmerOfflineBundle(queryClient) {
         priceTrendKey(commodityId, priceTypeKey, BUNDLE_TREND_PERIOD),
         entry
       );
+      // Dashboard and the Prices cards use their own historical query key.
+      // Point it at the same raw API-shaped entry so those pages also render
+      // immediately from the login snapshot while offline.
+      queryClient.setQueryData(
+        ["farmer-price-card-trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD],
+        entry
+      );
     });
   }
 
+  // The top-10 list does not include every variety row. Persist the widened
+  // catalog separately so detail/trend pages can resolve a selected variety
+  // while offline without changing the Prices page's list shape.
+  await queryClient.prefetchQuery({
+    queryKey: SUPPORTED_PRICES_KEY,
+    queryFn: fetchSupportedPricesList,
+    staleTime: STALE_TIME,
+  });
+
   if (Array.isArray(bundle.advisory_summary)) {
+    const recommendations = { items: bundle.advisory_summary };
     queryClient.setQueryData(
       ["dashboard", "recommendations"],
       transformDashboardRecommendations(bundle.advisory_summary)
     );
+    // Seed the raw recommendation keys used by the farmer pages. Without
+    // these aliases, offline pages see an empty query and render presentation
+    // defaults instead of the snapshot's persisted recommendations.
+    queryClient.setQueryData(["market", "monthly-recommendations"], recommendations);
+    queryClient.setQueryData(["recommendations", "list"], recommendations);
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    queryClient.setQueryData(["monthly-recommendations", currentMonth], recommendations);
   }
 
   if (bundle.weather_forecast) {
@@ -231,6 +297,187 @@ export async function seedFarmerOfflineBundle(queryClient) {
     queryFn: fetchMarketCalendar,
     staleTime: STALE_TIME,
   });
+
+  await prefetchFarmerPageData(queryClient, bundle);
+}
+
+async function prefetchFarmerPageData(queryClient, bundle) {
+  const safePrefetch = (queryKey, queryFn) =>
+    queryClient.prefetchQuery({ queryKey, queryFn, staleTime: STALE_TIME }).catch(() => {});
+
+  const cropIds = [...new Set((bundle.crop_plans || [])
+    .map((plan) => plan.commodity_id || plan.commodityId)
+    .filter(Boolean))];
+  const priceIds = [...new Set((bundle.price_trends || [])
+    .map((item) => item.commodity_id || item.commodityId)
+    .filter(Boolean))];
+  const supportedPriceIds = (queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [])
+    .map((item) => item.commodity_id || item.commodityId)
+    .filter(Boolean);
+  const supportedVarietyById = new Map(
+    (queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [])
+      .map((item) => [
+        item.commodity_id || item.commodityId,
+        item.variety ?? item.variety_name ?? null,
+      ])
+      .filter(([id]) => Boolean(id))
+  );
+  const allPriceIds = [...new Set([...priceIds, ...supportedPriceIds])];
+  const basisIds = [...new Set([...cropIds, ...allPriceIds])];
+  const quarters = ["Q1", "Q2", "Q3", "Q4"];
+
+  const requests = [
+    safePrefetch(["farmer-notifications"], async () => {
+      const response = await apiGet("/me/notifications?page=1&page_size=50");
+      return parseResponse(response);
+    }),
+    safePrefetch(["location", "davao-city", "barangays"], async () => {
+      const response = await apiGet("/location/davao-city/barangays");
+      const data = await parseResponse(response);
+      return data?.items || [];
+    }),
+    safePrefetch(["farmer", "admin-weather-forecast", 14], async () =>
+      parseResponse(await apiGet("/admin/analytics/outputs/weather-forecast?days=14"))
+    ),
+    safePrefetch(["farmer", "removalRequests"], async () =>
+      parseResponse(await apiGet("/dftc/removal-requests"))
+    ),
+    safePrefetch(["notifications", "unread-count"], async () => {
+      const data = await parseResponse(await apiGet("/me/notifications/unread-count"));
+      return data?.unread_count ?? 0;
+    }),
+  ];
+
+  allPriceIds.forEach((commodityId) => {
+    const variety = supportedVarietyById.get(commodityId) || null;
+    FARMER_PRICE_TYPES.forEach((priceTypeKey) => {
+      FARMER_PRICE_HORIZONS.forEach((horizon) => {
+        requests.push(
+          safePrefetch(
+            ["farmer", "admin-price-outlook", commodityId, priceTypeKey, horizon, null, null, null],
+            async () => parseResponse(await apiGet(
+              `/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}`
+            ))
+          ),
+          safePrefetch(
+            ["prices", "detail", commodityId, priceTypeKey, horizon],
+            async () => {
+              const raw = await parseResponse(await apiGet(
+                `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}&records_limit=5`
+              ));
+              if (priceTypeKey === "bangkerohan_retail" && horizon === BUNDLE_DETAIL_PERIOD) {
+                queryClient.setQueryData(["price-detail", commodityId], raw);
+              }
+              return toCamelCase(raw);
+            }
+          ),
+        );
+      });
+      requests.push(
+        safePrefetch(
+          ["prices", "trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD, BUNDLE_TREND_RECORDS_LIMIT],
+          async () => {
+            const raw = await parseResponse(await apiGet(
+              `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${BUNDLE_TREND_PERIOD}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
+            ));
+            if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
+              queryClient.setQueryData(
+                ["farmer-price-card-trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD],
+                raw
+              );
+            }
+            return raw;
+          }
+        )
+      );
+      ["weekly", "monthly"].forEach((frequency) => {
+        requests.push(
+          safePrefetch(
+            ["prices", "historicalAvg", commodityId, priceTypeKey, frequency, variety],
+            async () => parseResponse(await apiGet(
+              `/prices/${encodeURIComponent(commodityId)}/historical-averages?price_type=${encodeURIComponent(priceTypeKey)}&frequency=${frequency}&start_offset_days=0${variety ? `&variety=${encodeURIComponent(variety)}` : ""}`
+            ))
+          )
+        );
+      });
+    });
+  });
+
+  basisIds.forEach((commodityId) => {
+    requests.push(
+      safePrefetch(["farmer", "arrival-pressure", commodityId], async () =>
+        parseResponse(await apiGet(`/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`))
+      ),
+      ...quarters.map((quarter) => safePrefetch(
+        ["farmer", "seasonal-production", commodityId, quarter],
+        async () => parseResponse(await apiGet(
+          `/admin/analytics/outputs/historical-seasonal-production?commodity_id=${encodeURIComponent(commodityId)}&quarter=${quarter}`
+        ))
+      )),
+      safePrefetch(["farmer", "weather-rules", commodityId], async () =>
+        parseResponse(await apiGet(`/admin/crop-weather-rules?commodity_id=${encodeURIComponent(commodityId)}`))
+      ),
+    );
+  });
+
+  // Recommendation pages allow browsing months. Warm the complete current
+  // year so changing the month while offline does not create a cache miss.
+  const year = new Date().getFullYear();
+  for (let month = 1; month <= 12; month += 1) {
+    const referenceMonth = `${year}-${String(month).padStart(2, "0")}-01`;
+    requests.push(
+      safePrefetch(["monthly-recommendations", referenceMonth], async () => {
+        const response = await apiGet(
+          `/market/monthly-recommendations?reference_month=${referenceMonth}`
+        );
+        if (!response.ok) return { items: [] };
+        return parseResponse(response);
+      })
+    );
+  }
+
+  // Crop Factors and Crop Cycle Details use a parameterized advisory result
+  // for each saved crop plan. Recreate the exact key and payload from the
+  // normalized offline crop record.
+  const cachedCrops = queryClient.getQueryData(["farmer", "crops"]) || [];
+  cachedCrops.forEach((crop) => {
+    const totalCost = crop.totalCost || 0;
+    const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
+    const canQuery = Boolean(
+      crop.id && crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && quantity > 0
+    );
+    if (!canQuery) return;
+    const rawPhase = String(crop.phase || "").toLowerCase();
+    const explicitStage = rawPhase.includes("plan")
+      ? "before_planting"
+      : rawPhase.includes("grow") || rawPhase.includes("plant")
+        ? "during_planting"
+        : rawPhase.includes("pre")
+          ? "near_harvest"
+          : rawPhase.includes("harvest")
+            ? "harvest"
+            : null;
+    const queryKey = [
+      "advisory", "plan", crop.id, crop.commodityName, crop.plantingDate,
+      crop.harvestDate, totalCost, quantity, explicitStage,
+    ];
+    requests.push(
+      safePrefetch(queryKey, async () => {
+        const response = await apiPost("/advisory/plan", {
+          crop_name: crop.commodityName,
+          planting_date: crop.plantingDate,
+          expected_harvest_date: crop.harvestDate,
+          total_production_cost: totalCost,
+          expected_yield_kg: quantity,
+          crop_stage: explicitStage,
+        });
+        if (!response.ok) return null;
+        return parseResponse(response);
+      })
+    );
+  });
+
+  await Promise.all(requests);
 }
 
 // Fallback when the bundle endpoint is unavailable (e.g. offline restore that
@@ -241,6 +488,7 @@ export async function prefetchFarmerOfflineData(queryClient) {
 
   await Promise.all([
     prefetch(["prices", "list"], fetchPricesList),
+    prefetch(SUPPORTED_PRICES_KEY, fetchSupportedPricesList),
     prefetch(["dashboard", "prices"], fetchDashboardPrices),
     prefetch(["dashboard", "recommendations"], fetchDashboardRecommendations),
     prefetch(FARMER_PROFILE_KEY, fetchFarmerProfile),
@@ -252,6 +500,13 @@ export async function prefetchFarmerOfflineData(queryClient) {
   const lat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
   const lon = profile?.longitude ?? DEFAULT_WEATHER_LON;
   await prefetch(weatherAdvisoryKey(lat, lon), () => fetchWeatherAdvisory(lat, lon));
+
+  // Keep the fallback path equivalent to the snapshot path for variety-aware
+  // price and basis pages.
+  await prefetchFarmerPageData(queryClient, {
+    crop_plans: queryClient.getQueryData(["farmer", "crops"]) || [],
+    price_trends: queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [],
+  });
 }
 
 /**
