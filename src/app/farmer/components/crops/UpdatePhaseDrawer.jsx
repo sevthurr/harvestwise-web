@@ -97,7 +97,9 @@ const UpdatePhaseDrawer = ({
       completionDate: initialCompletionDate,
       finalProductionCost: overallTotalCost > 0 ? overallTotalCost : (crop.totalCost ?? ""),
       finalQtySold: crop.actualHarvestQty ?? crop.partialHarvestQty ?? crop.harvestQuantity ?? "",
-      avgSellingPrice: crop.actualSellingPrice ?? (crop.farmgatePrice != null ? crop.farmgatePrice : ""),
+      avgSellingPrice: crop.actualSellingPrice != null
+        ? Number(crop.actualSellingPrice).toFixed(2)
+        : (crop.farmgatePrice != null ? Number(crop.farmgatePrice).toFixed(2) : ""),
       notes: crop.notes ?? "",
       updatedTotalCost: "",
       additionalCost: "",
@@ -254,8 +256,14 @@ const UpdatePhaseDrawer = ({
               id="avgSellingPrice"
               type="number"
               min="0"
+              step="0.01"
               value={fields.avgSellingPrice ?? ""}
               onChange={(e) => set({ avgSellingPrice: e.target.value === "" ? "" : Number(e.target.value) })}
+              onBlur={() => {
+                if (fields.avgSellingPrice !== "" && Number.isFinite(Number(fields.avgSellingPrice))) {
+                  set({ avgSellingPrice: Number(fields.avgSellingPrice).toFixed(2) });
+                }
+              }}
               placeholder={crop.farmgatePrice ? `e.g. ${crop.farmgatePrice}` : "e.g. 78"}
               className={inputCls}
             />
