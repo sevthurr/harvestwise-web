@@ -14,6 +14,8 @@ import { MemoryRouter } from 'react-router';
 // ── Module under test ──────────────────────────────────────────────────────
 import { AuthProvider, useAuth, roleHome } from '../app/global/contexts/AuthContext';
 import {
+  apiFetch,
+  markSessionActive,
   storeTokens,
   clearTokens,
   getAccessToken,
@@ -128,6 +130,20 @@ describe('AuthContext — no stored tokens', () => {
 // ── AuthContext: restore session from stored tokens ──────────────────────────
 
 describe('AuthContext — token restoration', () => {
+  it('does not log out when refresh is temporarily rejected with 403', async () => {
+    markSessionActive();
+    const expired = vi.fn();
+    window.addEventListener('hw:auth:expired', expired);
+    vi.stubGlobal('fetch', mockFetch([
+      { ok: false, status: 401, body: { detail: 'Token expired' } },
+      { ok: false, status: 403, body: { detail: 'Refresh temporarily rejected' } },
+    ]));
+
+    await expect(apiFetch('/admin/dashboard')).rejects.toMatchObject({ status: 403 });
+    expect(expired).not.toHaveBeenCalled();
+    window.removeEventListener('hw:auth:expired', expired);
+  });
+
   it('restores user from stored access token via GET /me', async () => {
     storeTokens(FAKE_TOKENS);
 

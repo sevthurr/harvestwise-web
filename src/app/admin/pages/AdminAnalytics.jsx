@@ -1,7 +1,7 @@
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { ChevronDown, Info, X, Edit2, Sliders, ArrowRight } from "lucide-react";
+import { ChevronDown, X, Edit2, Sliders, ArrowRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../global/components/ui/tooltip";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { apiGet, parseResponse } from "../../global/api";
@@ -15,12 +15,9 @@ import {
   latestArrivalBucket
 } from "../components/analytics/arrivalVolumeSeries";
 import {
-  MODULES,
-  CLASSIFICATIONS,
   CLASSIFICATION_COLORS
 } from "../components/analytics/adminAnalyticsMockData";
 
-const DEFAULT_ROWS = 8;
 const RELIABILITY_TONES = {
   High: "text-[var(--hw-success)] bg-[var(--hw-success)]/10",
   Moderate: "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10",
@@ -43,12 +40,6 @@ const MODULE_CARD_DATA = {
   "historical-production": { label: "quarters", required: 4, key: "quarters_available" },
   "weather-risk": { label: "days", required: 7, key: "days_available" }
 };
-const MODULE_ROW_FIELDS = [
-  { key: "price-outlook", module: "Price Outlook", field: "price_outlook" },
-  { key: "arrival-pressure", module: "Arrival Pressure", field: "arrival_pressure" },
-  { key: "historical-production", module: "Historical Seasonal Production Level", field: "historical_seasonal_production_level" },
-  { key: "weather-risk", module: "Weather Risk", field: "weather_risk_level" }
-];
 const WEIGHT_MODULES = [
   "Price Outlook",
   "Arrival Pressure",
@@ -119,16 +110,6 @@ const formatDisplayDate = (val) => {
     const s = String(val);
     const formatted = formatDate(s.length === 7 ? `${s}-01` : s);
     return formatted && formatted !== "Invalid Date" ? formatted : s;
-  } catch {
-    return val;
-  }
-};
-
-const formatDisplayDateTime = (val) => {
-  if (!val) return "-";
-  try {
-    const formatted = formatDateTime(val);
-    return formatted && formatted !== "Invalid Date" ? formatted : val;
   } catch {
     return val;
   }
@@ -940,10 +921,6 @@ function AdminAnalytics() {
   const [scopedCommodity, setScopedCommodity] = useState("");
   const [scopedVariety, setScopedVariety] = useState("");
 
-  // History table filters (only Module and Classification since Commodity + Variety are scoped above)
-  const [fModule, setFModule] = useState("All");
-  const [fClassification, setFClassification] = useState("All");
-  const [showAll, setShowAll] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipRef = useRef(null);
 
@@ -983,7 +960,6 @@ function AdminAnalytics() {
   // Module outputs state (computed + persisted via /admin/analytics/outputs)
   const [moduleOutputs, setModuleOutputs] = useState(null);
   const [commodityId, setCommodityId] = useState("");
-  const [processedResults, setProcessedResults] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState("");
 
@@ -1208,52 +1184,6 @@ function AdminAnalytics() {
     }
   }, [scopedCommodity, scopedVariants, loadingCommodities]);
 
-  // Load the persisted module-output history.
-  //
-  // Refreshes whenever the commodity or variety scope changes, so the table
-  // always reflects the commodity currently selected in Module Outputs. It also
-  // runs on mount, before any scope exists, so the table is populated on open
-  // rather than waiting for a commodity to be picked.
-  const loadProcessedResults = useCallback(async () => {
-    try {
-      const data = await analyticsApi.listModuleOutputs({ page_size: 100 });
-      const rows = (data?.items || []).flatMap((r) =>
-        MODULE_ROW_FIELDS.map(({ key, module, field }) => ({
-          id: r.id,
-          basisId: key,
-          module,
-          commodity: r.commodity_name,
-          // `variant`, not `variety` — the row shape uses `variant` and the
-          // filter below reads it. Reading `variety` here left it undefined,
-          // which made every non-Standard variety match nothing.
-          variant: r.variety || "Standard",
-          classification: r[field] || "Not available",
-          inputPeriod: r.reference_month,
-          processedAt: r.generated_at
-        }))
-      );
-      setProcessedResults(rows);
-    } catch {
-      setProcessedResults([]);
-    }
-  }, []);
-
-  // Mount only. Once a scope exists, `reloadAnalytics` owns the refresh: it
-  // awaits the compute before reloading, so the table never shows pre-compute
-  // rows. Listing the scope here as well raced that and fetched the same
-  // unfiltered page twice on every scope change.
-  useEffect(() => {
-    loadProcessedResults();
-  }, [loadProcessedResults]);
-
-  // A module or classification chosen for the previous commodity can mask the
-  // new one entirely, leaving an empty table that looks like missing records.
-  // Reset both whenever the scope changes so the table starts from "All".
-  useEffect(() => {
-    setFModule("All");
-    setFClassification("All");
-  }, [scopedCommodity, scopedVariety]);
-
   // Compute + persist module outputs for the scoped commodity/variety.
   const reloadAnalytics = useCallback(async () => {
     if (!scopedCommodity || !scopedVariety) return;
@@ -1277,9 +1207,7 @@ function AdminAnalytics() {
       setAnalyticsLoading(false);
     }
 
-    // A compute rewrites rows, so refresh the history it feeds.
-    await loadProcessedResults();
-  }, [scopedCommodity, scopedVariety, loadProcessedResults]);
+  }, [scopedCommodity, scopedVariety]);
 
   useEffect(() => {
     reloadAnalytics();
@@ -1361,32 +1289,6 @@ function AdminAnalytics() {
 
   const selectCls = "px-3 py-2 text-[13px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
 
-  // Filter processed results using the top scope (scopedCommodity + scopedVariety) + module & classification
-  const filteredResults = processedResults.filter((r) => {
-    const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
-    // Rows carry `variant`; "Standard" in the selector means the commodity's
-    // plain (null-variety) row. Comparing against `r.variety` here silently
-    // matched nothing for every named variety.
-    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
-    const matchVar =
-      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
-    const matchMod = fModule === "All" || r.module === fModule;
-    const matchClass = fClassification === "All" || r.classification === fClassification;
-    return matchComm && matchVar && matchMod && matchClass;
-  });
-
-  const visibleResults = showAll ? filteredResults : filteredResults.slice(0, DEFAULT_ROWS);
-
-  // True when rows exist for the scope but the module/classification filters are
-  // hiding them. Distinguishes "no records" from "filtered everything away".
-  const scopeHasFiltered = processedResults.some((r) => {
-    const matchComm = !scopedCommodity || r.commodity === scopedCommodity;
-    const rowVariant = r.variant === "Standard" ? "" : r.variant || "";
-    const matchVar =
-      !scopedVariety || rowVariant === (scopedVariety === "Standard" ? "" : scopedVariety);
-    return matchComm && matchVar;
-  });
-
   // 4 Module cards built from the latest computed outputs for the current scope.
   const withCardData = (key, moduleOutput) => {
     const base = {
@@ -1425,16 +1327,38 @@ function AdminAnalytics() {
     }
     : {};
 
+  const moduleIssues = (key, moduleOutput, fallback = null) => {
+    const issues = [
+      ...(moduleOutput?.reliability_warnings || []),
+      ...(moduleOutput?.reliability_critical_failure_reasons || []),
+      ...(moduleOutput?.reliability_limitations || []),
+      ...(fallback ? [fallback] : [])
+    ];
+    const warningPrefixes = {
+      "price-outlook": ["Price:"],
+      "arrival-pressure": ["Arrivals:"],
+      "historical-production": ["Production:"],
+      "weather-risk": ["Weather:"]
+    };
+    (moduleOutputs?.warnings || []).forEach((warning) => {
+      if ((warningPrefixes[key] || []).some((prefix) => warning.startsWith(prefix))) issues.push(warning);
+    });
+    if (analyticsError && !moduleOutput) issues.push(analyticsError);
+    return [...new Set(issues.filter(Boolean))];
+  };
+
   const moduleCards = [
     {
       module: "Price Outlook",
       moduleKey: "price-outlook",
-      ...(moduleOutputsByCard["price-outlook"] || { classification: "Not processed", source: "-", processed: "-" })
+      ...(moduleOutputsByCard["price-outlook"] || { classification: "Not processed", source: "-", processed: "-" }),
+      issues: moduleIssues("price-outlook", moduleOutputs?.price_outlook)
     },
     {
       module: "Arrival Pressure",
       moduleKey: "arrival-pressure",
-      ...(moduleOutputsByCard["arrival-pressure"] || { classification: "Not processed", source: "-", processed: "-" })
+      ...(moduleOutputsByCard["arrival-pressure"] || { classification: "Not processed", source: "-", processed: "-" }),
+      issues: moduleIssues("arrival-pressure", moduleOutputs?.arrival_pressure, arrivalError)
     },
     {
       module: "Historical Seasonal Production Level",
@@ -1450,39 +1374,26 @@ function AdminAnalytics() {
                 : (productionSummary.classification || "Processed"))
               : "Not processed",
           source: productionSummary?.source || "-",
-          processed: productionSummary?.processed_at
-            ? new Date(productionSummary.processed_at).toLocaleString()
+            processed: productionSummary?.processed_at
+            ? formatDateTime(productionSummary.processed_at)
             : "-"
-        })
+        }),
+      issues: moduleIssues("historical-production", moduleOutputs?.historical_seasonal_production_level, productionError)
     },
     {
       module: "Weather Risk",
       moduleKey: "weather-risk",
-      ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" })
+      ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" }),
+      issues: moduleIssues("weather-risk", moduleOutputs?.weather_risk)
     }
   ];
 
   const handleCardClick = (card) => {
     const targetId = card.basisId || card.moduleKey;
-    const match = processedResults.find(
-      (r) =>
-        r.basisId === targetId &&
-        r.commodity === scopedCommodity &&
-        (r.variant || "Standard") === (scopedVariety || "Standard")
-    );
     const params = new URLSearchParams();
     if (scopedCommodity) params.set("commodity", scopedCommodity);
     if (scopedVariety) params.set("variety", scopedVariety);
-    if (match?.id) params.set("output", match.id);
     navigate(`/admin/modules/basis/${targetId}?${params.toString()}`);
-  };
-
-  const handleRowClick = (row) => {
-    const params = new URLSearchParams();
-    params.set("commodity", row.commodity || scopedCommodity);
-    params.set("variety", row.variant || scopedVariety);
-    if (row.id) params.set("output", row.id);
-    navigate(`/admin/modules/basis/${row.basisId || row.moduleKey}?${params.toString()}`);
   };
 
   const handleWeightSave = async (phase, updated) => {
@@ -1748,11 +1659,6 @@ function AdminAnalytics() {
             />
 
             {/* 4 Module Output Cards (Clickable & Empty State) */}
-            {analyticsError && (
-              <div className="bg-[var(--hw-red-50)] border border-[var(--hw-red-200)] text-[var(--hw-red-800)] text-[12px] rounded-xl px-4 py-3">
-                {analyticsError}
-              </div>
-            )}
             <div>
               <h2 className="text-[14px] font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide mb-3">
                 Current Analytics Outputs
@@ -1804,160 +1710,20 @@ function AdminAnalytics() {
                           </span>
                         </div>
                       </div>
+                      {card.issues?.length > 0 && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
+                          <p className="font-semibold mb-0.5">Issues</p>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {card.issues.map((issue, i) => <li key={i}>{issue}</li>)}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              {(moduleOutputs?.warnings?.length || 0) > 0 && (
-                <div className="mt-3 flex flex-col gap-1">
-                  <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Data reliability warnings
-                  </p>
-                  <ul className="space-y-0.5 pl-5">
-                    {moduleOutputs.warnings.map((w, i) => (
-                      <li key={i} className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">
-                        {w}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
 
-            {/* Processed Results History Table */}
-            <div className="space-y-4 pt-2">
-              {/* Heading */}
-              <div className="flex items-center gap-2">
-                <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Processed Results</h2>
-              </div>
-
-              {/* Filters (Module & Classification in the same row) */}
-              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3">
-                {/* Module Filter */}
-                <select
-                  value={fModule}
-                  onChange={(e) => {
-                    setFModule(e.target.value);
-                    setShowAll(false);
-                  }}
-                  className={`${selectCls} w-full sm:w-auto`}
-                >
-                  {MODULES.map((m) => (
-                    <option key={m} value={m}>
-                      {m === "All" ? "All modules" : m}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Classification Filter */}
-                <select
-                  value={fClassification}
-                  onChange={(e) => {
-                    setFClassification(e.target.value);
-                    setShowAll(false);
-                  }}
-                  className={`${selectCls} w-full sm:w-auto`}
-                >
-                  {CLASSIFICATIONS.map((c) => (
-                    <option key={c} value={c}>
-                      {c === "All" ? "All classifications" : c}
-                    </option>
-                  ))}
-                </select>
-
-                {(fModule !== "All" || fClassification !== "All") && (
-                  <button
-                    onClick={() => {
-                      setFModule("All");
-                      setFClassification("All");
-                      setShowAll(false);
-                    }}
-                    className="col-span-2 sm:col-span-1 text-[12px] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors underline whitespace-nowrap cursor-pointer px-1"
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
-
-              {/* Table */}
-              <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
-                  <table className="w-full text-[12px]">
-                    <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                      <tr>
-                        {["Module", "Input Period", "Classification", "Processed Date"].map((h) => (
-                          <th key={h} className="px-3 py-2.5 text-left font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                      {filteredResults.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-10 text-center text-[var(--hw-neutral-500)] text-[13px]">
-                            {scopeHasFiltered ? (
-                              "No processed results match the selected module and classification."
-                            ) : scopedCommodity ? (
-                              <>
-                                No processed results for{" "}
-                                <span className="font-medium text-[var(--hw-neutral-800)]">
-                                  {scopedCommodity}
-                                  {scopedVariety && scopedVariety !== "Standard"
-                                    ? ` · ${scopedVariety}`
-                                    : ""}
-                                </span>
-                                . Run the module outputs for this commodity to create them.
-                              </>
-                            ) : (
-                              "No processed results yet. Run the module outputs for a commodity to create them."
-                            )}
-                          </td>
-                        </tr>
-                      ) : (
-                        visibleResults.map((r) => {
-                          const cc = CLASSIFICATION_COLORS[r.classification] ?? "text-[var(--hw-neutral-700)]";
-                          return (
-                            <tr
-                              key={`${r.id}::${r.basisId}`}
-                              data-commodity={r.commodity}
-                              data-variety={r.variant}
-                              onClick={() => handleRowClick(r)}
-                              className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
-                            >
-                              <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">
-                                {r.module}
-                                <span className="sr-only"> ({r.commodity || "-"} · {r.variant || "Standard"})</span>
-                              </td>
-                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">
-                                {formatDisplayDate(r.inputPeriod)}
-                              </td>
-                              <td className={`px-3 py-2.5 font-semibold ${cc}`}>{r.classification || "Not available"}</td>
-                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">
-                                {formatDisplayDateTime(r.processedAt)}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                {filteredResults.length > DEFAULT_ROWS && (
-                  <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
-                    <p className="text-[12px] text-[var(--hw-neutral-700)]">
-                      Showing {visibleResults.length} of {filteredResults.length} results
-                    </p>
-                    <button
-                      onClick={() => setShowAll((v) => !v)}
-                      className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-                    >
-                      {showAll ? "Show less" : `Show all ${filteredResults.length} results`}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         )}
 

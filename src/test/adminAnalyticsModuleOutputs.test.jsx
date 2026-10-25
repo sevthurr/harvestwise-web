@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import AdminAnalytics from '../app/admin/pages/AdminAnalytics';
 import { analyticsApi } from '../services/api';
@@ -58,10 +58,7 @@ const renderPage = () =>
     </MemoryRouter>
   );
 
-const resultsTable = () => screen.getByRole('table');
-const bodyRows = () => within(resultsTable()).getAllByRole('row').slice(1);
-
-describe('AdminAnalytics module outputs table', () => {
+describe('AdminAnalytics module outputs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -103,18 +100,12 @@ describe('AdminAnalytics module outputs table', () => {
     // one spy this file uses restores itself in its own test.
   });
 
-  // Waits for the mount-time history load plus the scope-driven compute refresh.
-  const settle = async () => {
-    await waitFor(() => expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(analyticsApi.listModuleOutputs).toHaveBeenCalledTimes(2));
-  };
-
   it('computes once for the scope, not once per intermediate variety', async () => {
     // Regression: the variety defaulted to "Standard" while the commodity list
     // was still loading, so the scope looked complete and the compute persisted
     // a second set of module outputs for a variety nobody picked.
     renderPage();
-    await settle();
+    await waitFor(() => expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledTimes(1));
     expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledTimes(1);
     expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledWith({
       crop_name: 'Kalabasa',
@@ -122,78 +113,10 @@ describe('AdminAnalytics module outputs table', () => {
     });
   });
 
-  it('lists the persisted history once on mount, then once after the compute', async () => {
-    // Not three. A scope effect that listed the page alongside the compute
-    // refresh fetched the same unfiltered page twice per scope change, and
-    // could land its pre-compute copy after the fresh one.
+  it('does not render the removed processed-results history or request it', async () => {
     renderPage();
-    await settle();
-    expect(analyticsApi.listModuleOutputs).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps the scoped variety and drops the others', async () => {
-    // Regression: the filter compared `r.variety`, which the mapped row never
-    // set, so every named variety matched nothing and the table looked empty.
-    analyticsApi.listModuleOutputs.mockResolvedValue({
-      items: [RECORD, { ...RECORD, id: 'MO-2', variety: 'Unscoped' }],
-    });
-
-    renderPage();
-    await settle();
-    await waitFor(() => expect(bodyRows()).toHaveLength(4));
-
-    // Only the Suprema record's four module rows survive the scope filter.
-    expect(bodyRows().every((r) => r.textContent.includes('Suprema'))).toBe(true);
-  });
-
-  it('renders every module row for a matching record under distinct keys', async () => {
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    renderPage();
-    await settle();
-    await waitFor(() => expect(bodyRows()).toHaveLength(4));
-
-    // One record fans out across MODULE_ROW_FIELDS, one row per module.
-    expect(bodyRows().map((r) => r.textContent)).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('Price Outlook'),
-        expect.stringContaining('Arrival Pressure'),
-        expect.stringContaining('Historical Seasonal Production Level'),
-        expect.stringContaining('Weather Risk'),
-      ])
-    );
-
-    // Keys were `r.id`, identical across all four fanned-out rows.
-    expect(warn.mock.calls.flat().join(' ')).not.toMatch(/same key/i);
-    warn.mockRestore();
-  });
-
-  it('blames the module and classification filters when the scope does have rows', async () => {
-    renderPage();
-    await settle();
-    await waitFor(() => expect(bodyRows()).toHaveLength(4));
-
-    // Suprema rows exist, but none are "High" under Price Outlook, so the table
-    // empties out for a reason the old single message could not explain.
-    const [moduleFilter, classificationFilter] = screen.getAllByRole('combobox');
-    fireEvent.change(moduleFilter, { target: { value: 'Price Outlook' } });
-    fireEvent.change(classificationFilter, { target: { value: 'High' } });
-
-    await waitFor(() =>
-      expect(
-        screen.getByText(/No processed results match the selected module and classification/i)
-      ).toBeInTheDocument()
-    );
-  });
-
-  it('points at the compute action when the scope has no rows at all', async () => {
-    analyticsApi.listModuleOutputs.mockResolvedValue({ items: [] });
-    renderPage();
-    await settle();
-    await waitFor(() =>
-      expect(
-        screen.getByText(/Run the module outputs for this commodity to create them/i)
-      ).toBeInTheDocument()
-    );
+    await waitFor(() => expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Processed Results')).not.toBeInTheDocument();
+    expect(analyticsApi.listModuleOutputs).not.toHaveBeenCalled();
   });
 });

@@ -21,16 +21,29 @@ function fmtISO(dateStr) {
   return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "";
 }
 
-function toApiEvent(form) {
-  return {
+function toApiEvent(form, { includeStatus = true } = {}) {
+  const payload = {
     event_name: form.name,
     event_type: form.type,
     start_date: form.from,
     end_date: form.to || form.from,
-    recurrence: form.recurrence === "None" ? null : form.recurrence,
-    description: form.description || null,
-    status: form.status.toLowerCase()
+    recurrence: normalizeRecurrence(form.recurrence),
+    description: form.description || null
   };
+  if (includeStatus) payload.status = form.status.toLowerCase();
+  return payload;
+}
+
+function normalizeRecurrence(value) {
+  const key = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "");
+  if (!key || key === "none" || key === "once" || key === "oneoff") return null;
+  if (key === "biweekly" || key === "fortnightly") return "biweekly";
+  return ["daily", "weekly", "monthly", "yearly"].includes(key) ? key : null;
+}
+
+function recurrenceLabel(value) {
+  const labels = { daily: "Daily", weekly: "Weekly", biweekly: "Bi-weekly", monthly: "Monthly", yearly: "Yearly" };
+  return labels[normalizeRecurrence(value)] || "None";
 }
 
 function mapEvent(ev) {
@@ -43,7 +56,7 @@ function mapEvent(ev) {
     to: ev.end_date ? fmtDate(ev.end_date) : fmtDate(ev.start_date),
     source: ev.source || "Manual Entry",
     category: ev.source === "Payday Period" ? "payday" : ev.source === "Google Calendar API" ? "holiday" : "manual",
-    recurrence: ev.recurrence || "None",
+    recurrence: normalizeRecurrence(ev.recurrence),
     description: ev.description || undefined,
     status: ev.status === "active" ? "Active" : "Inactive",
     lastUpdated: ev.updated_at ? fmtDate(ev.updated_at) : fmtDate(ev.created_at)
@@ -72,6 +85,11 @@ const SOURCE_DISPLAY_NAMES = {
   psa_openstat:                    "PSA OpenStat",
   open_meteo:                      "Open-Meteo Weather API",
 };
+const HIDDEN_DATA_SOURCE_NAMES = new Set([
+  "bankerohan_daily_landing",
+  "consolidated_monthly_landing",
+  "dftc_daily_landing",
+]);
 const BASE_EVENTS = [];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -91,6 +109,12 @@ function filterEnd(f) {
   else if (f === "6m") d.setMonth(d.getMonth() + 6);
   else d.setFullYear(d.getFullYear() + 1);
   return d;
+}
+function eventCoversDate(event, year, month, day) {
+  const target = new Date(year, month, day);
+  const start = event.date;
+  const end = event.to ? new Date(event.to) : start;
+  return start <= target && end >= target;
 }
 const FMT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtDate(s) {
@@ -121,7 +145,7 @@ const EMPTY_FORM = {
   type: "Holiday",
   from: "",
   to: "",
-  recurrence: "Yearly",
+  recurrence: "yearly",
   description: "",
   status: "Active"
 };
@@ -245,7 +269,7 @@ function AdminDataSources() {
   }, [eventsData]);
 
   const dataSources = (dataSourcesRes?.items || []).filter(
-    (s) => s.name !== "open_meteo" && s.name !== "psa_openstat"
+    (s) => s.name !== "open_meteo" && s.name !== "psa_openstat" && !HIDDEN_DATA_SOURCE_NAMES.has(s.name)
   );
   const apiSyncSources = apiSyncRes?.items || [];
   const dataSourcesError = dsErr ? (dsErr.message || "Failed to load data sources.") : null;
@@ -281,10 +305,20 @@ function AdminDataSources() {
   const calGrid = useMemo(() => buildGrid(calYear, calMonth), [calYear, calMonth]);
   const filteredEvents = useMemo(() => {
     const end = filterEnd(calFilter);
-    return events.filter((e) => e.date >= TODAY_DATE && e.date <= end).sort((a, b) => a.date.getTime() - b.date.getTime());
+    return events.filter((e) => {
+      const eventEnd = e.to ? new Date(e.to) : e.date;
+      return eventEnd >= TODAY_DATE && e.date <= end;
+    }).sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [events, calFilter]);
   const eventsInMonth = useMemo(
-    () => events.filter((e) => e.date.getFullYear() === calYear && e.date.getMonth() === calMonth),
+    () => {
+      const monthStart = new Date(calYear, calMonth, 1);
+      const monthEnd = new Date(calYear, calMonth + 1, 0);
+      return events.filter((e) => {
+        const eventEnd = e.to ? new Date(e.to) : e.date;
+        return e.date <= monthEnd && eventEnd >= monthStart;
+      });
+    },
     [events, calYear, calMonth]
   );
   const manualEvents = useMemo(
@@ -323,7 +357,7 @@ function AdminDataSources() {
   const inputCls = "w-full px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
   const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
   const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
-  const renderEventFormFields = (form, setForm, error) => <div className="px-5 py-4 space-y-3">
+  const renderEventFormFields = (form, setForm, error, { includeStatus = true } = {}) => <div className="px-5 py-4 space-y-3">
       <div>
         <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Event name *</label>
         <input
@@ -366,10 +400,12 @@ function AdminDataSources() {
       <div>
         <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Recurrence</label>
         <select value={form.recurrence} onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))} className={inputCls}>
-          <option value="None">None</option>
-          <option value="Bi-weekly">Bi-weekly</option>
-          <option value="Monthly">Monthly</option>
-          <option value="Yearly">Yearly</option>
+          <option value="none">None</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Bi-weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
         </select>
       </div>
       <div>
@@ -381,13 +417,13 @@ function AdminDataSources() {
     className={inputCls}
   />
       </div>
-      <div>
+      {includeStatus && <div>
         <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Status</label>
         <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={inputCls}>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>
-      </div>
+      </div>}
     </div>;
   const [formError, setFormError] = useState("");
   const renderAddModal = () => <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -410,7 +446,7 @@ function AdminDataSources() {
             <X className="w-4 h-4" />
           </button>
         </div>
-        {renderEventFormFields(addForm, setAddForm, formError)}
+        {renderEventFormFields(addForm, setAddForm, formError, { includeStatus: false })}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
           <button onClick={() => {
     setShowAddModal(false);
@@ -427,7 +463,7 @@ function AdminDataSources() {
       return;
     }
     try {
-      await calendarApi.createEvent(toApiEvent(addForm));
+      await calendarApi.createEvent(toApiEvent(addForm, { includeStatus: false }));
       queryClient.invalidateQueries({ queryKey: ["adminCalendarEvents"] });
       setShowAddModal(false);
       setAddForm(EMPTY_FORM);
@@ -546,7 +582,7 @@ function AdminDataSources() {
       { label: "Source", value: viewEvent.source },
       { label: "From", value: viewEvent.from },
       { label: "To", value: viewEvent.to },
-      { label: "Recurrence", value: viewEvent.recurrence },
+      { label: "Recurrence", value: recurrenceLabel(viewEvent.recurrence) },
       { label: "Description", value: viewEvent.description || "\u2014" },
       { label: "Status", value: viewEvent.status, color: viewEvent.status === "Active" ? "text-emerald-700" : "text-[var(--hw-neutral-700)]" },
       { label: "Last updated", value: viewEvent.lastUpdated }
@@ -564,7 +600,7 @@ function AdminDataSources() {
       </div>;
   };
   const renderCalendarWidget = () => {
-    const selectedEvents = selectedCalDay ? eventsInMonth.filter((e) => e.date.getDate() === selectedCalDay) : [];
+    const selectedEvents = selectedCalDay ? eventsInMonth.filter((e) => eventCoversDate(e, calYear, calMonth, selectedCalDay)) : [];
     return <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
         {
       /* Month navigation */
@@ -594,7 +630,7 @@ function AdminDataSources() {
       if (day === null) return <div key={i} />;
       const isToday = calYear === new Date().getFullYear() && calMonth === new Date().getMonth() && day === new Date().getDate();
       const isSelected = selectedCalDay === day;
-      const dayEvents = eventsInMonth.filter((e) => e.date.getDate() === day);
+      const dayEvents = eventsInMonth.filter((e) => eventCoversDate(e, calYear, calMonth, day));
       const hasEvents = dayEvents.length > 0;
       return <button
         key={i}
@@ -725,7 +761,7 @@ function AdminDataSources() {
                     {e.from === e.to ? e.from : `${e.from} \u2013 ${e.to}`}
                   </td>
                   <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{e.type}</td>
-                  <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{e.recurrence}</td>
+                  <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{recurrenceLabel(e.recurrence)}</td>
                   <td className={`px-4 py-3 font-medium whitespace-nowrap ${e.status === "Active" ? "text-emerald-700" : "text-[var(--hw-neutral-700)]"}`}>
                     {e.status}
                   </td>
@@ -784,7 +820,7 @@ function AdminDataSources() {
                 <span>·</span>
                 <span>{e.type}</span>
                 <span>·</span>
-                <span>{e.recurrence}</span>
+                <span>{recurrenceLabel(e.recurrence)}</span>
               </div>
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-[var(--hw-neutral-100)]">
                 <button
@@ -872,13 +908,13 @@ function AdminDataSources() {
                     <table className="w-full text-[13px] min-w-[560px]">
                       <thead>
                         <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                          {["Source", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+                          {["Source", "Last Updated", "Records"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                         {dataSources.length === 0 ? (
                           <tr>
-                            <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                            <td colSpan={3} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
                               No data sources configured.
                             </td>
                           </tr>
@@ -913,7 +949,6 @@ function AdminDataSources() {
                                 <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
                                   {s.records != null ? s.records.toLocaleString() : "—"}
                                 </td>
-                                <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
                               </tr>
                             );
                           })
@@ -957,9 +992,6 @@ function AdminDataSources() {
                             <p className="font-semibold text-[14px] text-[var(--hw-neutral-900)] leading-snug">
                               {displayName}
                             </p>
-                            <span className={`text-[12px] font-semibold whitespace-nowrap flex-shrink-0 ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>
-                              {s.status}
-                            </span>
                           </div>
                           <div className="flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)] pt-2 border-t border-[var(--hw-neutral-100)]">
                             <span className="font-medium text-[var(--hw-neutral-800)]">
@@ -1021,7 +1053,6 @@ function AdminDataSources() {
                         >
                           {SOURCE_DISPLAY_NAMES[s.name] || s.name}
                         </button>
-                        <span className={`text-[13px] font-medium ${STATUS_TEXT[s.status]}`}>{s.status}</span>
                       </div>
                       <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{s.apiSource}</p>
                     </div>

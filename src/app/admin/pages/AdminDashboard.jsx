@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { adminApi } from "../../../services/api";
-import { formatApiTime } from "../../global/utils/apiTransforms";
+import { formatApiTime, formatPersonName, formatDisplayLabel } from "../../global/utils/apiTransforms";
 
 const QUICK_ACCESS = [
   { Icon: Upload,             label: "Import & Validate",    path: "/admin/import" },
@@ -74,7 +74,7 @@ function formatActivityName(action) {
 }
 
 function getGreeting() {
-  const hour = new Date().getHours();
+  const hour = Number(new Intl.DateTimeFormat("en-PH", { hour: "numeric", hour12: false, timeZone: "Asia/Manila" }).format(new Date()));
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
@@ -106,7 +106,7 @@ function AdminDashboard() {
 
   const attentionSources = (data?.sources_requiring_attention || []).map((src) => ({
     id: src.id,
-    source: src.source_name || "Unknown source",
+    source: formatDisplayLabel(src.source_name || "Unknown source"),
     type: src.source_type || src.ingestion_method || "—",
     issue: src.reason || "Requires attention",
     status: "Warning",
@@ -116,7 +116,7 @@ function AdminDashboard() {
   const todayActivities = (data?.recent_audit_logs || []).map((log) => ({
     time: formatApiTime(log.created_at) || "—",
     activity: formatActivityName(log.action),
-    performedBy: log.actor_name || log.user_id || "—",
+    performedBy: log.actor_name ? formatPersonName(log.actor_name) : log.user_id || "System",
     status: "Completed"
   }));
 
@@ -339,7 +339,7 @@ function AdminDashboard() {
                     <tr
                       key={i}
                       onClick={() => row.path && navigate(row.path)}
-                      className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                      className="cursor-pointer"
                     >
                       <td className="px-5 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap w-20">
                         {row.time || "—"}
@@ -374,7 +374,7 @@ function AdminDashboard() {
                 <div
                   key={i}
                   onClick={() => row.path && navigate(row.path)}
-                  className="px-5 py-3 flex items-start justify-between gap-2 cursor-pointer hover:bg-[var(--hw-neutral-50)] transition-colors"
+                  className="px-5 py-3 flex items-start justify-between gap-2 cursor-pointer"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-medium text-[var(--hw-neutral-800)] leading-snug">
@@ -396,7 +396,7 @@ function AdminDashboard() {
         <div className="px-5 py-3 border-t border-[var(--hw-neutral-100)]">
           <button
             onClick={() => navigate("/admin/data-sources?tab=history")}
-            className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 flex items-center gap-1"
+            className="text-[13px] font-medium text-[var(--hw-green-700)] flex items-center gap-1"
           >
             View History <ChevronRight className="w-4 h-4" />
           </button>

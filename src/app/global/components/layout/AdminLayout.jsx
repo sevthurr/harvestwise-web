@@ -25,6 +25,7 @@ import { BackgroundProcessBadge, LastUpdatedButton } from "../ui/BackgroundProce
 import { UserAvatar } from "../profile/UserAvatar";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", path: "/admin", Icon: LayoutDashboard },
@@ -50,7 +51,7 @@ const AdminLayoutInner = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const active = getActive(location.pathname);
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
 
   // ── Must-change-password gate ──────────────────────────────────────────
   // Admin-provisioned accounts — including SuperAdmins created by
@@ -58,35 +59,22 @@ const AdminLayoutInner = () => {
   // rejects every privileged route with 403 until it is rotated, so this must
   // replace the workspace rather than render behind it. `rotated` is cleared
   // the moment the POST succeeds: change_password() revokes every session and
-  // purges the cached snapshot before returning, so the next /auth/me can come
-  // back 401 and null out `user` — and a gate derived from the flag alone
-  // would strand the user. The rotation already committed server-side;
-  // refreshUser() only reconciles the cache, so it is best-effort.
+  // purges the cached snapshot before returning. The current browser is
+  // logged out explicitly after the rotation.
   const [rotated, setRotated] = useState(false);
   const pendingPasswordChange = user?.must_change_password === true && !rotated;
 
   const handlePasswordRotated = async () => {
     setRotated(true);
-    try {
-      await refreshUser?.();
-    } catch {
-      // Deliberately swallowed — see above.
-    }
+    await logout();
+    navigate("/login", { replace: true });
   };
-  // Build a proper display name whether or not the profile fields are populated.
-  // If first_name is available, use "First Last". Otherwise parse the username
-  // (which may contain dots, e.g. "kaye.mayugba") and title-case it.
-  function toTitleCase(str) {
-    return str
-      .split(/[._\s]+/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-  }
+  // Build a proper display name whether or not profile fields are populated.
   const displayName =
     user?.first_name
-      ? `${user.first_name} ${user.last_name || ""}`.trim()
+      ? formatPersonName(`${user.first_name} ${user.last_name || ""}`)
       : user?.email
-      ? user.email
+      ? formatPersonName(user.email.split("@")[0])
       : "Admin";
 
   const initials = displayName
@@ -120,11 +108,11 @@ const AdminLayoutInner = () => {
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    formatManilaTime()
   );
 
   const syncTimeLabel = () =>
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    formatManilaTime();
 
   // Keep the "Last updated" timestamp in sync when a background process
   // completes and triggers an automatic live resync.
@@ -144,7 +132,7 @@ const AdminLayoutInner = () => {
       await queryClient.refetchQueries();
       await queryClient.invalidateQueries();
       setLastSyncedTime(
-        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        formatManilaTime()
       );
     } catch (e) {
       console.error("Data resync failed:", e);

@@ -139,6 +139,47 @@ async function _fetch(url, options = {}) {
 // ---------------------------------------------------------------------------
 let _refreshing = false;
 let _refreshQueue = [];
+const REFRESH_LOCK_KEY = "hw_auth_refresh_lock";
+const REFRESH_LOCK_TTL_MS = 15000;
+const REFRESH_TAB_ID = `${Date.now()}-${Math.random()}`;
+
+function readRefreshLock() {
+  try {
+    const raw = localStorage.getItem(REFRESH_LOCK_KEY);
+    const lock = raw ? JSON.parse(raw) : null;
+    return lock && Number(lock.expiresAt) > Date.now() ? lock : null;
+  } catch {
+    return null;
+  }
+}
+
+function acquireRefreshLock() {
+  const existing = readRefreshLock();
+  if (existing && existing.owner !== REFRESH_TAB_ID) return false;
+  try {
+    localStorage.setItem(REFRESH_LOCK_KEY, JSON.stringify({
+      owner: REFRESH_TAB_ID,
+      expiresAt: Date.now() + REFRESH_LOCK_TTL_MS,
+    }));
+    return readRefreshLock()?.owner === REFRESH_TAB_ID;
+  } catch {
+    // If storage is unavailable, retain the existing same-tab lock behavior.
+    return true;
+  }
+}
+
+function releaseRefreshLock() {
+  try {
+    if (readRefreshLock()?.owner === REFRESH_TAB_ID) localStorage.removeItem(REFRESH_LOCK_KEY);
+  } catch {}
+}
+
+async function waitForRefreshLock() {
+  const deadline = Date.now() + REFRESH_LOCK_TTL_MS + 1000;
+  while (readRefreshLock() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
 
 async function _refreshAndRetry(url, options) {
   // If a refresh is already in-flight, queue this request behind it.
@@ -149,14 +190,31 @@ async function _refreshAndRetry(url, options) {
   }
 
   _refreshing = true;
+  let ownsRefreshLock = false;
   try {
+    ownsRefreshLock = acquireRefreshLock();
+    if (!ownsRefreshLock) {
+      // Another tab is rotating the shared HttpOnly refresh cookie. Wait for
+      // it to finish, then retry with the newly issued access cookie instead
+      // of replaying the old refresh token and revoking the whole session.
+      await waitForRefreshLock();
+      const peerResponse = await _fetch(url, options);
+      if (peerResponse.status !== 401) return peerResponse;
+      ownsRefreshLock = acquireRefreshLock();
+      if (!ownsRefreshLock) return peerResponse;
+    }
+
     const res = await fetchWithTimeout(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
     });
 
-    if (!res.ok) throw new Error('refresh_failed');
+    if (!res.ok) {
+      const error = new Error(res.status === 429 ? 'refresh_rate_limited' : 'refresh_failed');
+      error.status = res.status;
+      throw error;
+    }
 
     const data = await res.json();
     storeTokens(data);
@@ -172,18 +230,21 @@ async function _refreshAndRetry(url, options) {
   } catch (err) {
     // Only clear tokens if the refresh actually failed (not a network error)
     // Network errors mean we're offline — keep tokens for when we reconnect
-    if (err.message === 'refresh_failed') {
+    // A rate limit or upstream 5xx is not proof that the session is invalid.
+    // Keep the cookies so a later request can refresh successfully.
+    if (err.message === 'refresh_failed' && [400, 401].includes(err.status)) {
       clearTokens();
       window.dispatchEvent(new Event('hw:auth:expired'));
       _refreshQueue.forEach(({ reject }) => reject(authError('Session expired')));
       _refreshQueue = [];
       throw authError('Session expired. Please log in again.');
     }
-    // Network error — don't clear tokens, just fail this request
+    // Network/rate-limit/server error — don't clear tokens, just fail this request.
     _refreshQueue.forEach(({ reject }) => reject(err));
     _refreshQueue = [];
     throw err;
   } finally {
+    if (ownsRefreshLock) releaseRefreshLock();
     _refreshing = false;
   }
 }

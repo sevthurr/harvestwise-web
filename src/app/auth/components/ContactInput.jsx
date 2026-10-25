@@ -14,7 +14,7 @@ export function ContactInput({
   id = "contact",
   value = "",
   onChange,
-  placeholder = "name@example.com or 09XXXXXXXXX",
+  placeholder = "name@example.com or +639XXXXXXXXX",
   required = false,
   autoComplete = "username",
   className = "",

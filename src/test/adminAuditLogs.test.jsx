@@ -84,8 +84,6 @@ describe('AdminAuditLogs', () => {
       'Auth',
       'Import',
       'Config',
-      'Analytics',
-      'System Management',
       'DFTC',
       'Farmer',
       'User Management',
@@ -94,7 +92,7 @@ describe('AdminAuditLogs', () => {
     // Each option's value is the namespace the backend matches via ilike.
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual([
-      '', 'auth', 'import', 'config', 'analytics', 'system', 'dftc', 'farmer', 'user',
+      '', 'auth', 'import', 'config', 'dftc', 'farmer', 'user',
     ]);
   });
 });

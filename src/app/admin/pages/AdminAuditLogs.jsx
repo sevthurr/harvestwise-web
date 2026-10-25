@@ -44,7 +44,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { adminApi } from "../../../services/api";
 import { createAuditLogsPdf } from "../utils/auditLogsPdf";
 import { formatActorLabel } from "../utils/auditActor";
-import { formatDateTime } from "../../global/utils/apiTransforms";
+import { formatDateTime, formatPersonName } from "../../global/utils/apiTransforms";
 // Optional, not useAuth(): this page renders in unit tests without an
 // AuthProvider, and useAuth() throws in that case.
 import { useOptionalAuth } from "../../global/contexts/AuthContext";
@@ -167,8 +167,6 @@ const ACTION_FILTER_OPTIONS = [
   { value: "auth",       label: "Auth"                },
   { value: "import",     label: "Import"              },
   { value: "config",     label: "Config"              },
-  { value: "analytics",  label: "Analytics"           },
-  { value: "system",     label: "System Management"   },
   { value: "dftc",       label: "DFTC"                },
   { value: "farmer",     label: "Farmer"              },
   { value: "user",       label: "User Management"     },
@@ -177,12 +175,13 @@ const ACTION_FILTER_OPTIONS = [
 const PAGE_SIZE = 20;
 const EXPORT_PAGE_SIZE = 100;
 
-function buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize }) {
+function buildLogParams({ actionPrefix, search, userSearch = "", dateFrom, dateTo, page, pageSize }) {
   const params = { page, page_size: pageSize };
   const actionParts = [];
   if (actionPrefix) actionParts.push(actionPrefix);
   if (search.trim()) actionParts.push(search.trim());
   if (actionParts.length) params.action = actionParts.join(".");
+  if (userSearch.trim()) params.user_id = userSearch.trim();
   if (dateFrom) params.date_from = dateFrom;
   if (dateTo) params.date_to = dateTo;
   return params;
@@ -191,6 +190,7 @@ function buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize
 function AdminAuditLogs() {
   const [searchParams] = useSearchParams();
   const searchParam = searchParams.get("search") || searchParams.get("action") || "";
+  const initialUserSearch = searchParams.get("user_id") || "";
   const highlightParam = searchParams.get("highlight") || searchParam;
 
   // Initialize prefix and search term from URL query if provided
@@ -209,6 +209,9 @@ function AdminAuditLogs() {
 
   // ── Filter state ─────────────────────────────────────────────────────────
   const [search, setSearch]         = useState(initialSearch);   // maps to action ilike
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [userSearch, setUserSearch] = useState(initialUserSearch);
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState(initialUserSearch);
   const [actionPrefix, setPrefix]   = useState(initialPrefix);   // resource prefix filter
   const [highlightedId, setHighlightedId] = useState(highlightParam);
   const [dateFrom, setDateFrom]     = useState("");   // ISO date string
@@ -216,6 +219,16 @@ function AdminAuditLogs() {
   const [page, setPage]             = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting]   = useState(null); // null | "preview" | "download"
+
+  // Avoid one API request per keystroke while searching audit actions.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedUserSearch(userSearch), 400);
+    return () => clearTimeout(timer);
+  }, [userSearch]);
 
   // 3-second temporary highlight timer (matching DFTC pattern)
   useEffect(() => {
@@ -229,10 +242,10 @@ function AdminAuditLogs() {
   const auth = useOptionalAuth();
   const user = auth?.user;
   const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
-    queryKey: ["adminAuditLogs", actionPrefix, search, dateFrom, dateTo, page],
+    queryKey: ["adminAuditLogs", actionPrefix, debouncedSearch, debouncedUserSearch, dateFrom, dateTo, page],
     queryFn: () =>
       adminApi.getAuditLogs(
-        buildLogParams({ actionPrefix, search, dateFrom, dateTo, page, pageSize: PAGE_SIZE })
+        buildLogParams({ actionPrefix, search: debouncedSearch, userSearch: debouncedUserSearch, dateFrom, dateTo, page, pageSize: PAGE_SIZE })
       ),
     staleTime: 1000 * 60 * 5,
     refetchOnMount: true,
@@ -244,10 +257,11 @@ function AdminAuditLogs() {
 
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
-  const hasFilters = search.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
+  const hasFilters = search.trim() !== "" || userSearch.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
 
   const handleReset = () => {
     setSearch("");
+    setUserSearch("");
     setPrefix("");
     setDateFrom("");
     setDateTo("");
@@ -278,7 +292,8 @@ function AdminAuditLogs() {
       const res = await adminApi.getAuditLogs(
         buildLogParams({
           actionPrefix,
-          search,
+          search: debouncedSearch,
+          userSearch: debouncedUserSearch,
           dateFrom,
           dateTo,
           page: pageNo,
@@ -297,8 +312,9 @@ function AdminAuditLogs() {
     const parts = [];
     const actionParts = [];
     if (actionPrefix) actionParts.push(actionPrefix);
-    if (search.trim()) actionParts.push(search.trim());
+    if (debouncedSearch.trim()) actionParts.push(debouncedSearch.trim());
     if (actionParts.length) parts.push(`Action: ${actionParts.join(".")}`);
+    if (debouncedUserSearch.trim()) parts.push(`User: ${debouncedUserSearch.trim()}`);
     if (dateFrom) parts.push(`From ${dateFrom}`);
     if (dateTo) parts.push(`To ${dateTo}`);
     return parts.length ? parts.join("  |  ") : "All logs";
@@ -310,7 +326,7 @@ function AdminAuditLogs() {
       .filter(Boolean)
       .join(" ")
       .trim();
-    const label = fullName || user?.email || "Unknown Admin";
+    const label = formatPersonName(fullName) || user?.email || "Unknown Admin";
     return user?.id ? `${label} (${user.id})` : label;
   };
 
@@ -327,6 +343,7 @@ function AdminAuditLogs() {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
+        timeZone: "Asia/Manila",
       });
       const doc = await createAuditLogsPdf({
         logs,
@@ -384,6 +401,17 @@ function AdminAuditLogs() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+            />
+          </div>
+
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
+            <input
+              id="audit-user-filter"
+              type="text"
+              placeholder="Search user ID…"
+              value={userSearch}
+              onChange={(e) => { setUserSearch(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
             />
           </div>
 

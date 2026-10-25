@@ -17,7 +17,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
-import { formatDateTime } from "../../global/utils/apiTransforms";
+import { formatDateTime, formatDisplayLabel, formatPersonName } from "../../global/utils/apiTransforms";
 
 
 const TABS = [
@@ -35,7 +35,6 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
     phone: "",
     email: "",
     role: "DFTC",
-    status: "Active",
     position: ""
   });
   const [submitting, setSubmitting] = useState(false);
@@ -55,7 +54,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
         phone: form.phone || null,
         email: form.email || null,
         role: form.role,
-        is_active: form.status === "Active",
+        is_active: true,
         position: form.position || null
       });
       onClose();
@@ -164,35 +163,18 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
             />
           </div>
           <div>
-            <FieldLabel htmlFor="au-status">Status</FieldLabel>
-            <div className="relative">
-              <select
-                id="au-status"
-                className={`${inputCls} appearance-none pr-9`}
-                value={form.status}
-                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-              >
-                {["Active", "Inactive"].map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
-            </div>
+            <FieldLabel htmlFor="au-pos" optional>
+              Position
+            </FieldLabel>
+            <input
+              id="au-pos"
+              type="text"
+              placeholder="e.g. Market Monitoring Staff"
+              className={inputCls}
+              value={form.position}
+              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+            />
           </div>
-        </div>
-
-        <div>
-          <FieldLabel htmlFor="au-pos" optional>
-            Position
-          </FieldLabel>
-          <input
-            id="au-pos"
-            type="text"
-            placeholder="e.g. Market Monitoring Staff"
-            className={inputCls}
-            value={form.position}
-            onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-          />
         </div>
 
         <div className="flex gap-2 justify-end pt-2">
@@ -258,10 +240,9 @@ const UsersTab = ({ showToast }) => {
   }, [highlightedUser, loading, users]);
 
   const createUser = async (payload) => {
-    const created = await adminApi.createUser({
-      ...payload,
-      password: "Temp!pass123"
-    });
+    // The API generates a unique cryptographically secure temporary password
+    // and passes that same value to the welcome-email flow.
+    const created = await adminApi.createUser(payload);
     await queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
     showToast("User account created successfully.");
     return created;
@@ -337,7 +318,7 @@ const UsersTab = ({ showToast }) => {
       <div className="space-y-2.5 md:hidden">
         {filtered.map((u) => {
           const hl = (highlightedUser || "").toLowerCase();
-          const fullName = `${u.first_name || ""} ${u.last_name || ""}`.trim() || "-";
+          const fullName = formatPersonName(`${u.first_name || ""} ${u.last_name || ""}`) || "-";
           const userMatcher = `${u.id} ${u.email || ""} ${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
           const isHighlighted = Boolean(
             hl &&
@@ -438,7 +419,7 @@ const UsersTab = ({ showToast }) => {
                         : "hover:bg-[var(--hw-neutral-50)]"
                     }`}
                   >
-                    <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{`${u.first_name || ""} ${u.last_name || ""}`.trim() || "-"}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{formatPersonName(`${u.first_name || ""} ${u.last_name || ""}`) || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role?.role_name || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black">{u.is_active ? "Active" : "Inactive"}</td>
@@ -549,7 +530,7 @@ const AccountRequestsTab = ({ showToast }) => {
     if (!userId) return "-";
     const u = usersById.get(userId);
     if (!u) return userId;
-    return `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email || userId;
+    return formatPersonName(`${u.first_name || ""} ${u.last_name || ""}`) || u.email || userId;
   };
 
   const roleOf = (userId) => usersById.get(userId)?.role?.role_name || "-";
@@ -787,7 +768,7 @@ const SecurityTab = ({ showToast }) => {
       setSettings(saved);
       showToast("System security settings saved.");
     } catch {
-      showToast("Failed to save system security settings.");
+      showToast("Failed to save system security settings.", "error");
     } finally {
       setSaving(false);
     }
@@ -1106,7 +1087,7 @@ const HealthTab = ({ showToast }) => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0" />
-                    <p className="text-[13px] font-semibold text-black">{s.source_name}</p>
+                    <p className="text-[13px] font-semibold text-black">{formatDisplayLabel(s.source_name)}</p>
                     <span className="text-[11px] text-[var(--hw-neutral-600)] px-1.5 py-0.5 rounded bg-[var(--hw-neutral-100)]">
                       {s.source_type || s.ingestion_method}
                     </span>
@@ -1137,7 +1118,7 @@ function AdminSystemManagement() {
   const activeTab = searchParams.get("tab") || "users";
   const [toastMsg, setToastMsg] = useState(null);
 
-  const showToast = (msg) => setToastMsg(msg);
+  const showToast = (message, type = "success") => setToastMsg({ message, type });
 
   return (
     <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
@@ -1170,7 +1151,7 @@ function AdminSystemManagement() {
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
       {activeTab === "health" && <HealthTab showToast={showToast} />}
 
-      {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
+      {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={() => setToastMsg(null)} />}
     </div>
   );
 }

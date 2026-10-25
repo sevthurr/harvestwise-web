@@ -8,6 +8,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
 import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 import { UserAvatar } from "../profile/UserAvatar";
+import { formatManilaTime } from "../../utils/apiTransforms";
 
 const TopBar = ({
   logo,
@@ -27,7 +28,7 @@ const TopBar = ({
   const [installing, setInstalling] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    formatManilaTime()
   );
   const ref = useRef(null);
   const { processState } = useBackgroundProcess();
@@ -50,7 +51,7 @@ const TopBar = ({
   useEffect(() => {
     if (processState.completed || processState.error) {
       setLastSyncedTime(
-        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        formatManilaTime()
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,7 +63,7 @@ const TopBar = ({
     try {
       await queryClient.invalidateQueries();
       setLastSyncedTime(
-        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        formatManilaTime()
       );
     } catch (e) {
       console.error("Data resync failed:", e);

@@ -43,6 +43,10 @@ export async function getHistoryDetail(importId) {
   return parseResponse(await apiGet(`/admin/ingestion/history/${importId}`));
 }
 
+export async function getHistoryStatus(importId) {
+  return parseResponse(await apiGet(`/admin/ingestion/status/${importId}`));
+}
+
 export async function getHistoryRecords(importId, params = {}) {
   const qs = new URLSearchParams(params).toString();
   return parseResponse(await apiGet(`/admin/ingestion/history/${importId}/records${qs ? `?${qs}` : ""}`));

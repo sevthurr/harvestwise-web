@@ -1,3 +1,5 @@
+import { formatDateTime } from "./apiTransforms";
+
 export function buildWeatherRiskAnalysis({
   weatherForecast,
   weatherRules = [],
@@ -167,7 +169,7 @@ export function buildWeatherRiskAnalysis({
     basisSource: "Open-Meteo 14-day Forecast",
     inputPeriod: periodLabel,
     processedAt: weatherForecast?.fetched_at
-      ? new Date(weatherForecast.fetched_at).toLocaleString()
+      ? formatDateTime(weatherForecast.fetched_at)
       : new Date().toLocaleDateString(),
     classification,
     basisInputs: {
