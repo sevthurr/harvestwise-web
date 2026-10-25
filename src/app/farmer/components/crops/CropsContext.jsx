@@ -86,14 +86,33 @@ export function normalizeCropPlan(raw, pricesMap) {
     : (item.breakevenPricePerKg != null ? Number(item.breakevenPricePerKg) : (item.breakEvenPrice != null ? Number(item.breakEvenPrice) : null));
 
   const harvestRecords = Array.isArray(item.harvestRecords) ? item.harvestRecords : [];
-  const latestHarvest = harvestRecords[0] || null;
-  const actualHarvestQty = latestHarvest
-    ? Number(latestHarvest.actualHarvestQty)
+  const sortedHarvestRecords = [...harvestRecords].sort((a, b) => {
+    const dateDifference = String(b.actualHarvestDate || "").localeCompare(String(a.actualHarvestDate || ""));
+    if (dateDifference !== 0) return dateDifference;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+  const latestHarvest = sortedHarvestRecords[0] || null;
+  const actualHarvestQty = sortedHarvestRecords.length > 0
+    ? sortedHarvestRecords.reduce((sum, record) => sum + Number(record.actualHarvestQty || 0), 0)
     : item.actualHarvestQty != null
       ? Number(item.actualHarvestQty)
       : null;
-  const actualSellingPrice = latestHarvest
-    ? Number(latestHarvest.actualSellingPricePerKg)
+  const pricedHarvestQty = sortedHarvestRecords.reduce(
+    (sum, record) => sum + (record.actualSellingPricePerKg != null ? Number(record.actualHarvestQty || 0) : 0),
+    0
+  );
+  const actualHarvestRevenue = sortedHarvestRecords.reduce(
+    (sum, record) => sum + (
+      record.actualSellingPricePerKg != null
+        ? Number(record.actualHarvestQty || 0) * Number(record.actualSellingPricePerKg)
+        : 0
+    ),
+    0
+  );
+  const actualSellingPrice = pricedHarvestQty > 0
+    ? actualHarvestRevenue / pricedHarvestQty
+    : latestHarvest
+      ? Number(latestHarvest.actualSellingPricePerKg)
     : item.actualSellingPrice != null
       ? Number(item.actualSellingPrice)
       : null;
@@ -143,11 +162,12 @@ export function normalizeCropPlan(raw, pricesMap) {
     farmAreaUnit: "sqm",
     harvestQuantity: qty,
     expectedHarvestQty: qty,
-    harvestRecords,
+    harvestRecords: sortedHarvestRecords,
     actualHarvestDate: latestHarvest
-      ? new Date(latestHarvest.actualHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      ? formatLocalDate(latestHarvest.actualHarvestDate)
       : item.actualHarvestDate || null,
     actualHarvestQty,
+    actualHarvestRevenue: sortedHarvestRecords.length > 0 ? actualHarvestRevenue : null,
     actualSellingPrice,
     costMethod,
     expenses,
@@ -374,8 +394,22 @@ const CropsProvider = ({ children }) => {
     [refreshCrops]
   );
 
+  const saveHarvestRecordApi = useCallback(
+    async (planId, harvestDate, harvestQty, sellingPricePerKg) => {
+      const res = await apiPost(`/crop-plans/${planId}/harvest-records`, {
+        actual_harvest_date: harvestDate,
+        actual_harvest_qty: harvestQty,
+        actual_selling_price_per_kg: sellingPricePerKg,
+      });
+      const data = await parseResponse(res);
+      await refreshCrops();
+      return data;
+    },
+    [refreshCrops]
+  );
+
   return (
-    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi }}>
+    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi, saveHarvestRecordApi }}>
       {children}
     </CropsContext.Provider>
   );

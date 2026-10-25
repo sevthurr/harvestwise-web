@@ -18,7 +18,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../app/global/contexts/AuthContext';
-import { apiGet, storeTokens, getAccessToken, getRefreshToken } from '../app/global/api';
+import { apiGet, storeTokens, clearTokens, getAccessToken, getRefreshToken } from '../app/global/api';
 import { CropsProvider, useCrops } from '../app/farmer/components/crops/CropsContext';
 import { queryClient as appQueryClient, shouldRetry } from '../app/global/lib/queryClient';
 
@@ -104,6 +104,7 @@ const errWithStatus = (status) => Object.assign(new Error('boom'), { status });
 
 beforeEach(() => {
   localStorage.clear();
+  clearTokens();
   vi.restoreAllMocks();
 });
 
@@ -186,10 +187,9 @@ describe('crops query pre-auth behaviour', () => {
   });
 
   it('a 401 WITH a token still dispatches hw:auth:expired', async () => {
-    // Access token present, no refresh token -> no refresh attempt, forced logout.
+    // A live cookie session is represented only by an in-memory session flag.
     storeTokens(FAKE_TOKENS);
-    localStorage.removeItem('hw_refresh_token');
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
+    expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
 
     const onExpired = vi.fn();
@@ -335,7 +335,7 @@ describe('auth failures are not retried', () => {
   it('the real app queryClient stops after one /crop-plans request on a 401', async () => {
     // Uses the shipped queryClient so the default retry policy is what is tested.
     storeTokens(FAKE_TOKENS);
-    localStorage.removeItem('hw_refresh_token');
+    clearTokens();
     vi.stubGlobal('fetch', mockFetchCropPlansUnauthorized());
 
     appQueryClient.clear();

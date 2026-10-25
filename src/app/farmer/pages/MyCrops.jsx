@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Sprout, ChevronRight, CheckCircle2, X } from "lucide-react";
 import { useCrops, formatLocalDate } from "../components/crops/CropsContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
@@ -9,6 +9,15 @@ import { PhasePill } from "../components/crops/CropCard";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { apiGet, parseResponse } from "../../global/api";
+
+export async function syncFarmerRecommendations() {
+  const response = await apiGet("/farmer/planting-suitability");
+  if (!response.ok) {
+    throw new Error(`Recommendation sync failed (${response.status})`);
+  }
+  return parseResponse(response);
+}
 
 const STAGE_TABS = [
   { id: "all", key: "common.filter_all", label: "All" },
@@ -173,12 +182,31 @@ function MyCropsPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { crops } = useCrops();
   const [stageFilter, setStageFilter] = useState("all");
   const [toastMessage, setToastMessage] = useState(
     () => location.state?.message || (location.state?.draftSaved ? "Assessment draft saved. Continue editing Step 1 anytime." : null)
   );
   const [isToastFading, setIsToastFading] = useState(false);
+
+  // The suitability endpoint also backfills the current monthly recommendation
+  // rows on a cache miss. Run it whenever this page is entered, then make any
+  // already-mounted recommendation consumers fetch the refreshed rows.
+  const { data: recommendationSync } = useQuery({
+    queryKey: ["farmer", "my-crops-recommendation-sync"],
+    queryFn: syncFarmerRecommendations,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (recommendationSync === undefined) return;
+    queryClient.invalidateQueries({ queryKey: ["monthly-recommendations"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard", "recommendations"] });
+  }, [queryClient, recommendationSync]);
 
   useEffect(() => {
     if (!toastMessage) return;

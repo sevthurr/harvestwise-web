@@ -1,9 +1,9 @@
 export const privacy = {
   title: "Patakaran sa Privacy",
   effective_date_label: "Petsa ng Pagkabisa",
-  effective_date: "October 9, 2026",
+  effective_date: "October 24, 2026",
   version_label: "Version",
-  version: "1.0",
+  version: "1.1",
   intro_p1: "Iginagalang ng HarvestWise ang privacy ng mga gumagamit nito at responsable itong humawak ng personal na impormasyon.",
   intro_p2: "Ang HarvestWise ay isang Bachelor of Science in Information Technology Capstone Project na binuo sa University of Mindanao. Ipinapaliwanag ng Patakaran sa Privacy na ito kung anong impormasyon ang kinokolekta at ginagamit ng HarvestWise, bakit ito kailangan, saan ito maaaring ipadala, paano ito pinoprotektahan, gaano ito katagal maaaring itago, at kung anong mga karapatan at pagpipilian ang mayroon ang user.",
   intro_p3: "Sa paggamit ng HarvestWise, kinikilala mong nabasa mo ang Patakaran sa Privacy na ito.",
@@ -53,7 +53,7 @@ export const privacy = {
       group5_title: "Technical at security information:",
       group5_desc: "Maaaring iproseso ng HarvestWise ang session identifiers, authentication-token information, IP address, browser o device information, login attempts, security lockouts, audit records, at notification history.",
       group6_title: "Browser at offline information:",
-      group6_desc: "Gumagamit ang HarvestWise ng browser storage at Progressive Web App caching para sa authentication, preferences, at offline access sa piling impormasyon ng sistema."
+      group6_desc: "Nagse-save ang HarvestWise ng ilang impormasyon sa iyong telepono o computer para gumana ang app kahit walang internet. Ang iyong login ay pinapanatili sa pamamagitan ng secure na cookie. Ang iyong password o login key ay hindi kailanman sine-save sa lugar na mababasa ng ibang mga app sa iyong telepono. Ang farm advice, weather, at impormasyon sa presyo ay maaaring ma-save sa iyong telepono nang hanggang pitong araw para mabasa mo pa rin kahit walang signal. Ang na-save na impormasyong ito ay nababura kapag nag-logout ka o kapag ibang tao ang nag-login sa parehong telepono."
     },
     s2: {
       title: "2. PAANO NAMIN GINAGAMIT ANG IMPORMASYON",
@@ -120,7 +120,8 @@ export const privacy = {
       p3: "Ang security at audit records ay karaniwang maaaring itago nang hanggang 12 buwan, maliban kung kailangan nang mas matagal para sa investigation, security incident, legal obligation, o lehitimong academic requirement.",
       p4: "Ang authentication credentials at session-related records ay nag-e-expire o tinatanggal ayon sa kanilang technical lifecycle.",
       p5: "Sa kasalukuyan, maaaring manual na pamahalaan ng HarvestWise project team ang retention at deletion sa halip na sa pamamagitan ng fully automated database-purging process.",
-      p6: "Ang data na tunay nang na-anonymize o na-aggregate at hindi na makatuwirang makapagpapakilala sa isang tao ay maaaring panatilihin para sa academic, statistical, system-evaluation, o agricultural research."
+      p6: "Ang data na tunay nang na-anonymize o na-aggregate at hindi na makatuwirang makapagpapakilala sa isang tao ay maaaring panatilihin para sa academic, statistical, system-evaluation, o agricultural research.",
+      p7: "Na-save na advice sa iyong telepono: Ang farm advice, weather, at iba pang impormasyong na-save sa iyong telepono para sa offline na paggamit ay itinago nang hanggang pitong (7) araw. Awtomatiko itong nababura kapag nag-logout ka o kapag ibang tao ang nag-login. Kung nagsara ka ng app bago matapos ang paglilinis, maaaring manatili ang isang kopya sa iyong telepono. Maaari mo itong alisin sa pag-logout o sa pag-clear ng site data ng HarvestWise sa iyong browser settings."
     },
     s8: {
       title: "8. PAG-DELETE NG ACCOUNT",
@@ -129,13 +130,15 @@ export const privacy = {
       p2: "Maaaring humingi ang HarvestWise ng makatuwirang verification bago iproseso ang deletion request upang maprotektahan ang account laban sa unauthorized deletion.",
       p3: "Kapag nakumpleto ang verified deletion request, ang identifying account information, contact information, at exact farm-location information ay tatanggalin o permanenteng ide-de-identify, maliban sa impormasyong kailangang panatilihin dahil sa balidong legal o lehitimong dahilan.",
       p4: "Ang crop, cost, harvest, o iba pang agricultural records ay maaari lamang panatilihin kung na-anonymize o na-aggregate na ang mga ito at hindi na makatuwirang maiugnay sa magsasaka.",
-      p5: "Ang kasalukuyang in-app deletion request ay hindi dapat ipahiwatig bilang kagyat na awtomatikong pagbura sa database maliban kung naipatupad na ang gayong kakayahan."
+      p5: "Ang kasalukuyang in-app deletion request ay hindi dapat ipahiwatig bilang kagyat na awtomatikong pagbura sa database maliban kung naipatupad na ang gayong kakayahan.",
+      p6: "Maaaring may kopya pa ng iyong impormasyon sa iyong telepono kahit na burahin na namin ang iyong account. Ito ay dahil nag-save ang app ng advice at farm data sa iyong telepono para mabasa offline. Para matanggal ang mga kopyang iyon, mangyaring mag-logout mula sa app at i-clear ang HarvestWise site data sa iyong telepono o browser settings."
     },
     s9: {
       title: "9. SEGURIDAD",
       p1: "Gumagamit ang HarvestWise ng makatuwirang technical at organizational safeguards na angkop sa uri ng project at impormasyong pinoproseso.",
-      p2: "Kabilang sa kasalukuyang safeguards ang password hashing, authenticated API access, role-based authorization, token rotation at revocation, security lockouts, audit logging, at multi-factor authentication para sa supported staff accounts.",
-      p3: "Walang internet-based system na makakagarantiya ng ganap na seguridad. Dapat protektahan ng user ang account credentials at agad i-report ang pinaghihinalaang unauthorized access."
+      p2: "Gumagamit kami ng mga pananggol para protektahan ang iyong account. Kabilang dito ang: pagtatago ng iyong password para hindi ito mabasa ng sinuman, pagsusuri ng iyong pagkakakilanlan bago ka papasukin, pagbibigay ng iba't ibang limitasyon depende sa uri ng user, paggamit ng secure na cookie para sa login (hindi sine-save ang iyong login key sa lugar na mababasa ng ibang mga app), pagharang sa account pagkatapos ng maraming maling pagsubok sa pag-login, at pagtatala ng mahahalagang aksyon para sa seguridad.",
+      p3: "Kung na-cancel o na-block ang iyong account, hindi na ito gagana agad para sa mga bagong login. Gayunpaman, kung nag-save na ang app ng farm advice sa iyong telepono para sa offline na paggamit, ang mga na-save na kopyang iyon ay mananatili sa iyong telepono hanggang mag-logout ka o ma-clear ang datos ng app. Ang pagba-block ng iyong account ay hindi awtomatikong nagtatanggal ng mga na-save na kopyang iyon sa iyong telepono.",
+      p4: "Walang app o website na 100% ligtas. Panatilihing lihim ang iyong password at abisuhan kami agad kung sa tingin mo ay may ibang taong nakapasok sa iyong account."
     },
     s10: {
       title: "10. IYONG MGA KARAPATAN SA PRIVACY",
@@ -157,7 +160,8 @@ export const privacy = {
     s11: {
       title: "11. KATUMPAKAN NG IMPORMASYON",
       p1: "Hinihikayat ang mga user na panatilihing tama at updated ang kanilang profile, farm location, crop plans, production costs, at iba pang impormasyon.",
-      p2: "Ang mali o kulang na data ay maaaring makabawas sa accuracy o usefulness ng HarvestWise advisory at calculations."
+      p2: "Ang mali o kulang na data ay maaaring makabawas sa accuracy o usefulness ng HarvestWise advisory at calculations.",
+      p3: "Kapag ginamit ang HarvestWise nang walang internet, ang advice at weather na makikita ay maaaring lumang impormasyon na na-save sa iyong telepono. Ipinapakita ng app kung kailan ito huling na-update. Laging tingnan ang petsa ng huling update bago ka kumilos batay sa advisory. Kumonekta sa internet para makuha ang pinakabagong impormasyon."
     },
     s12: {
       title: "12. MGA BATA AT AUTHORIZED USERS",

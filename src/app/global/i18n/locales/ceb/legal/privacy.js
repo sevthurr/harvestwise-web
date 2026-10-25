@@ -1,9 +1,9 @@
 export const privacy = {
   title: "Patakaran sa Privacy",
   effective_date_label: "Epektibo Sukad",
-  effective_date: "October 9, 2026",
+  effective_date: "October 24, 2026",
   version_label: "Version",
-  version: "1.0",
+  version: "1.1",
   intro_p1: "Girespeto sa HarvestWise ang privacy sa mga user ug responsable nga pagdumala sa personal nga impormasyon.",
   intro_p2: "Ang HarvestWise usa ka Bachelor of Science in Information Technology Capstone Project nga gihimo sa University of Mindanao. Kini nga Patakaran sa Privacy nagpasabot unsang impormasyon ang kolektahon ug gamiton sa HarvestWise, nganong gikinahanglan kini, asa kini mahimong ipadala, unsaon kini pagpanalipod, hangtod kanus-a kini mahimong tipigan, ug unsang mga katungod ug kapilian ang naa sa user.",
   intro_p3: "Paggamit nimo sa HarvestWise, nagpamatuod ka nga nabasa nimo kini nga Patakaran sa Privacy.",
@@ -53,7 +53,7 @@ export const privacy = {
       group5_title: "Technical ug security information:",
       group5_desc: "Mahimong iproseso sa HarvestWise ang session identifiers, authentication-token information, IP address, browser o device information, login attempts, security lockouts, audit records, ug notification history.",
       group6_title: "Browser ug offline information:",
-      group6_desc: "Naggamit ang HarvestWise og browser storage ug Progressive Web App caching para sa authentication, preferences, ug offline access sa piniling impormasyon sa sistema."
+      group6_desc: "Nag-save ang HarvestWise og pipila ka impormasyon sa imong telepono o computer aron magamit ang app bisan walay internet. Ang imong login gipadagan pinaagi sa secure nga cookie. Ang imong password o login key dili gyud i-save sa lugar nga mabasa sa ubang mga app sa imong telepono. Ang farm advice, weather, ug impormasyon sa presyo mahimong i-save sa imong telepono hangtod pito ka adlaw aron mabasa pa gihapon bisan walay signal. Ang kini nga na-save nga impormasyon tinangtang kung mag-logout ka o kung lain nga tawo ang mag-login sa parehas nga telepono."
     },
     s2: {
       title: "2. NGANONG GIGAMIT ANG IMPORMASYON",
@@ -120,7 +120,8 @@ export const privacy = {
       p3: "Ang security ug audit records kasagarang mahimong tipigan hangtod 12 ka bulan, gawas kung kinahanglan kini mas dugay tungod sa investigation, security incident, legal obligation, o lehitimong academic requirement.",
       p4: "Ang authentication credentials ug session-related records mo-expire o tangtangon sumala sa ilang technical lifecycle.",
       p5: "Sa pagkakaron, ang retention ug deletion mahimong dumalahon manually sa HarvestWise project team imbes nga pinaagi sa fully automated database-purging process.",
-      p6: "Ang datos nga tinuod nang na-anonymize o na-aggregate ug dili na makaila sa usa ka tawo mahimong tipigan para sa academic, statistical, system evaluation, o agricultural research."
+      p6: "Ang datos nga tinuod nang na-anonymize o na-aggregate ug dili na makaila sa usa ka tawo mahimong tipigan para sa academic, statistical, system evaluation, o agricultural research.",
+      p7: "Na-save nga advice sa imong telepono: Ang farm advice, weather, ug ubang impormasyon nga na-save sa imong telepono para sa offline nga paggamit tipigan hangtod pito (7) ka adlaw. Awtomatiko kining tinangtang kung mag-logout ka o kung lain nga tawo ang mag-login. Kung nagsira ka sa app sa dili pa makompleto ang pagtangtang, mahimong magpabilin ang usa ka kopya sa imong telepono. Pwede nimo kining tangtangon sa pag-logout o sa pag-clear sa site data sa HarvestWise sa imong browser settings."
     },
     s8: {
       title: "8. PAG-DELETE SA ACCOUNT",
@@ -129,13 +130,15 @@ export const privacy = {
       p2: "Mahimong mangayo ang HarvestWise og reasonable verification sa dili pa prosesoha ang deletion aron malikayan nga laing tawo ang magpa-delete sa imong account.",
       p3: "Human ma-verify ug makompleto ang deletion request, ang identifying account information, contact information, ug exact farm-location information tangtangon o himuong dili na makaila sa user, gawas sa impormasyon nga kinahanglan pa tipigan tungod sa balidong legal o lehitimong rason.",
       p4: "Ang crop, cost, harvest, o ubang agricultural records mahimo lamang ipadayon og tipig kung na-anonymize o na-aggregate na kini ug dili na makatarunganong ma-link balik sa mag-uuma.",
-      p5: "Ang current in-app deletion request dili angay ihulagway nga diha-diha nga awtomatikong pagtangtang sa database gawas kon kini nga katakos gipatuman."
+      p5: "Ang current in-app deletion request dili angay ihulagway nga diha-diha nga awtomatikong pagtangtang sa database gawas kon kini nga katakos gipatuman.",
+      p6: "Mahimong adunay kopya pa sa imong impormasyon sa imong telepono bisan human namo ma-delete ang imong account. Kini tungod kay nag-save ang app og advice ug farm data sa imong telepono aron mabasa offline. Aron matangtang kini, palihug mag-logout sa app ug i-clear ang HarvestWise site data sa imong telepono o browser settings."
     },
     s9: {
       title: "9. SEGURIDAD",
       p1: "Naggamit ang HarvestWise og makatarunganong technical ug organizational safeguards nga angay sa klase sa project ug impormasyon nga giproseso.",
-      p2: "Lakip sa kasamtangang safeguards ang password hashing, authenticated API access, role-based authorization, token rotation ug revocation, security lockouts, audit logging, ug multi-factor authentication para sa supported staff accounts.",
-      p3: "Walay internet-based nga sistema nga makagarantiya og hingpit nga seguridad. Kinahanglan protektahan sa user ang iyang account credentials ug i-report dayon kung adunay suspetsa nga unauthorized access."
+      p2: "Naggamit kami og mga pananggol aron mapanalipdan ang imong account. Kini naglakip sa: pagtago sa imong password aron walay makabasa niini, pagsusi sa imong identity sa dili pa ka paandaron, paghatag og lain-laing limitasyon depende sa matang sa user, paggamit og secure cookie para sa login (dili i-save ang imong login key sa lugar nga mabasa sa ubang mga app), pagbabag sa account human sa daghang sayop nga pagsulay sa pag-login, ug pagrekord sa mga importante nga aksyon para sa seguridad.",
+      p3: "Kung gi-cancel o gi-block ang imong account, dili na kini magamit dayon. Apan, kung nag-save na ang app og farm advice sa imong telepono para sa offline nga paggamit, kini nga na-save nga mga kopya magpabilin sa imong telepono hangtod mag-logout ka o ma-clear ang datos sa app. Ang pagbabag sa imong account dili awtomatikong makatangtang sa kini nga mga na-save nga kopya sa imong telepono.",
+      p4: "Walay app o website nga 100% ligtas. Palihug ipadayon nga lihim ang imong password ug abotori kami dayon kung adunay tawo nga gisuspetsahan nimong nakasulod sa imong account."
     },
     s10: {
       title: "10. IMONG MGA KATUNGOD SA PRIVACY",
@@ -157,7 +160,8 @@ export const privacy = {
     s11: {
       title: "11. KATUKMA SA IMPORMASYON",
       p1: "Gidasig ang mga user nga ipadayon nga sakto ug updated ang ilang profile, farm location, crop plans, production costs, ug ubang impormasyon.",
-      p2: "Ang sayop o kulang nga datos mahimong makapakunhod sa katukma o kapuslanan sa HarvestWise advisory ug calculations."
+      p2: "Ang sayop o kulang nga datos mahimong makapakunhod sa katukma o kapuslanan sa HarvestWise advisory ug calculations.",
+      p3: "Kung gigamit ang HarvestWise nga walay internet, ang advice ug weather nga makita mahimong daan nang impormasyon nga na-save sa imong telepono. Gipakita sa app kung kanus-a kini katapusang na-update. Kanunay i-check ang petsa sa katapusang update sa dili ka modesisyon base sa advisory. Kumonekta sa internet aron makuha ang pinakabag-o nga impormasyon."
     },
     s12: {
       title: "12. MGA BATA UG AUTHORIZED USERS",

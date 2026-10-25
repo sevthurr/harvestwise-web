@@ -1,12 +1,13 @@
 /**
  * Base API client for HarvestWise.
  *
- * - Attaches the access token from localStorage to every request.
+ * - Keeps authentication state in HttpOnly cookies; JavaScript never receives
+ *   or stores access/refresh token values.
  * - On 401, attempts a single token refresh then retries the original request.
  * - On second 401 (refresh also expired / revoked), clears storage and
  *   dispatches a custom "hw:auth:expired" event so AuthContext can log the
- *   user out without a circular import. Only if the request actually carried an
- *   access token — an anonymous 401 is not an expired session and stays silent.
+ *   user out without a circular import. Only an established cookie session is
+ *   treated as expired; an anonymous 401 stays silent.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ?? 'http://localhost:8080';
@@ -16,25 +17,41 @@ const API_BASE = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_U
 // instead of hanging forever.
 const FETCH_TIMEOUT_MS = 15000;
 
-const STORAGE = {
-  ACCESS:  'hw_access_token',
-  REFRESH: 'hw_refresh_token',
-};
+let sessionActive = false;
 
 // ---------------------------------------------------------------------------
 // Token helpers
 // ---------------------------------------------------------------------------
-export function getAccessToken()  { return localStorage.getItem(STORAGE.ACCESS); }
-export function getRefreshToken() { return localStorage.getItem(STORAGE.REFRESH); }
+export function getAccessToken() { return null; }
+export function getRefreshToken() { return null; }
+export function markSessionActive() { sessionActive = true; }
 
-export function storeTokens({ access_token, refresh_token }) {
-  localStorage.setItem(STORAGE.ACCESS,  access_token);
-  localStorage.setItem(STORAGE.REFRESH, refresh_token);
+function announceSessionChange() {
+  try {
+    localStorage.setItem('hw_session_generation', `${Date.now()}-${Math.random()}`);
+  } catch {}
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hw:session:changed'));
+}
+
+function sessionGeneration() {
+  try { return localStorage.getItem('hw_session_generation') || 'anonymous'; } catch { return 'anonymous'; }
+}
+
+export function storeTokens(_legacySession = null) {
+  // Compatibility shim for callers released before cookie-only auth. The
+  // values are intentionally ignored; the server sets HttpOnly cookies.
+  void _legacySession;
+  sessionActive = true;
 }
 
 export function clearTokens() {
-  localStorage.removeItem(STORAGE.ACCESS);
-  localStorage.removeItem(STORAGE.REFRESH);
+  sessionActive = false;
+  announceSessionChange();
+}
+
+function csrfToken() {
+  if (typeof document === 'undefined') return '';
+  return document.cookie.split('; ').find((part) => part.startsWith('hw_csrf_token='))?.split('=').slice(1).join('=') || '';
 }
 
 /**
@@ -49,13 +66,8 @@ function authError(message) {
 }
 
 // ---------------------------------------------------------------------------
-// Internal fetch with auth header
+// Internal fetch with cookie credentials
 // ---------------------------------------------------------------------------
-function authHeaders() {
-  const token = getAccessToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export function buildUrl(url) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   const path = url.startsWith('/') ? url : `/${url}`;
@@ -84,23 +96,42 @@ function fetchWithTimeout(url, options = {}) {
   }
 
   const { timeoutMs: _ignored, ...fetchOptions } = options;
-  return fetch(url, { ...fetchOptions, signal: controller.signal }).finally(() => {
+  const generation = sessionGeneration();
+  return fetch(url, { ...fetchOptions, signal: controller.signal }).then((response) => {
+    if (generation !== sessionGeneration()) {
+      controller.abort(new DOMException('Session changed', 'AbortError'));
+      throw new DOMException('Session changed', 'AbortError');
+    }
+    return response;
+  }).finally(() => {
     clearTimeout(timeoutId);
   });
+}
+
+/** Kept as a no-op compatibility entry point for older auth-context builds. */
+export async function completeLegacyTokenMigration() {
+  return undefined;
 }
 
 async function _fetch(url, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
-    ...authHeaders(),
     ...(options.headers ?? {}),
   };
+  const method = (options.method || 'GET').toUpperCase();
+  const csrf = csrfToken();
+  if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRF-Token'] = csrf;
   if (isFormData) {
     delete headers['Content-Type'];
     delete headers['content-type'];
   }
-  return fetchWithTimeout(buildUrl(url), { ...options, headers });
+  let requestUrl = buildUrl(url);
+  if (method === 'GET' && requestUrl.includes('/api/v1/')) {
+    const separator = requestUrl.includes('?') ? '&' : '?';
+    requestUrl = `${requestUrl}${separator}hw_session_generation=${encodeURIComponent(sessionGeneration())}`;
+  }
+  return fetchWithTimeout(requestUrl, { ...options, credentials: 'include', headers });
 }
 
 // ---------------------------------------------------------------------------
@@ -118,13 +149,11 @@ async function _refreshAndRetry(url, options) {
   }
 
   _refreshing = true;
-  const refreshToken = getRefreshToken();
-
   try {
     const res = await fetchWithTimeout(`${API_BASE}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
     });
 
     if (!res.ok) throw new Error('refresh_failed');
@@ -166,12 +195,12 @@ export async function apiFetch(url, options = {}) {
   // Must be read BEFORE the request: a 401 on an anonymous request (e.g. a
   // pre-login /crop-plans probe) is not an expired session, so it must not
   // clear tokens or fire hw:auth:expired.
-  const hadAuth = Boolean(getAccessToken());
+  const hadAuth = sessionActive;
   const res = await _fetch(url, options);
 
   if (res.status === 401) {
     // Only attempt refresh if we actually have a refresh token.
-    if (getRefreshToken()) {
+    if (sessionActive) {
       return _refreshAndRetry(url, options);
     }
     if (hadAuth) {
@@ -250,7 +279,9 @@ export function openEventStream(path, handlers = {}, options = {}) {
   const abort = () => {
     closed = true;
     controller?.abort();
+    window.removeEventListener('hw:session:changed', abort);
   };
+  window.addEventListener('hw:session:changed', abort, { once: true });
   if (external) {
     if (external.aborted) abort();
     else external.addEventListener('abort', abort, { once: true });
@@ -265,8 +296,10 @@ export function openEventStream(path, handlers = {}, options = {}) {
         // Raw fetch, not fetchWithTimeout: the request here is intentionally
         // long-lived, so the shared request timeout must not abort it. The
         // stream is bounded by our own AbortController instead.
-        const res = await fetch(buildUrl(path), {
-          headers: { ...authHeaders(), Accept: 'text/event-stream' },
+        const streamUrl = `${buildUrl(path)}${buildUrl(path).includes('?') ? '&' : '?'}hw_session_generation=${encodeURIComponent(sessionGeneration())}`;
+        const res = await fetch(streamUrl, {
+          headers: { Accept: 'text/event-stream' },
+          credentials: 'include',
           signal: controller.signal,
         });
 

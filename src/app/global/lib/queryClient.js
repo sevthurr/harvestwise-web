@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { get, set, del } from "idb-keyval";
+import { get, set, del, clear } from "idb-keyval";
 
 // 7-day cache for offline-first farming use
 const SEVEN_DAYS = 1000 * 60 * 60 * 24 * 7;
@@ -89,12 +89,21 @@ const API_RUNTIME_CACHE = 'harvestwise-api-cache';
  * body is already on disk and the service worker replays it without consulting
  * any credential.
  */
-export async function clearQueryPersistedCache() {
-  // resetQueries(), NOT clear(). clear()/removeQueries() destroy the Query
-  // object a mounted observer is attached to; the observer then re-attaches to
-  // an empty, never-fetched query and isLoading stays true forever. resetQueries
-  // refetches active queries so every mounted observer settles.
-  queryClient.resetQueries();
+export async function clearQueryPersistedCache({ refetchActive = true } = {}) {
+  // Forced auth expiry keeps the mounted query observers alive and refetches
+  // them so they settle. Intentional logout/session changes pass
+  // refetchActive:false and cancel/clear instead; refetching during an offline
+  // route transition can wake queries when connectivity returns and leave a
+  // blank loading state.
+  if (refetchActive) {
+    queryClient.resetQueries();
+  } else {
+    // Logout/session changes are terminal for the mounted user. Refetching
+    // active queries here can wake them when connectivity returns, during the
+    // route transition to /login, and leave the app in a blank loading state.
+    queryClient.cancelQueries();
+    queryClient.clear();
+  }
   try {
     await del("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
   } catch {
@@ -107,5 +116,25 @@ export async function clearQueryPersistedCache() {
   } catch {
     // CacheStorage unavailable (private mode / older browser) — not fatal.
   }
+}
+
+/** Remove all HarvestWise device copies, including non-React-Query caches. */
+export async function clearDeviceData() {
+  // Rotate the cache namespace first so an in-flight response cannot refill a
+  // cache entry that this action just removed.
+  try { localStorage.setItem('hw_session_generation', `${Date.now()}-${Math.random()}`); } catch {}
+  await clearQueryPersistedCache({ refetchActive: false });
+  try { await clear(); } catch {}
+  try {
+    if (typeof caches !== 'undefined') {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    }
+  } catch {}
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('HARVESTWISE_') || key.startsWith('hw_'))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {}
 }
 

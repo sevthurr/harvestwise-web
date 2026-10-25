@@ -8,6 +8,7 @@ import CropCycleDetailPage from "../app/farmer/pages/CropCycleDetail.jsx";
 
 const cropState = { current: null };
 const addCostApiMock = vi.fn();
+const saveHarvestRecordApiMock = vi.fn();
 
 vi.mock("../app/farmer/components/crops/CropsContext.jsx", async () => {
   const actual = await vi.importActual("../app/farmer/components/crops/CropsContext.jsx");
@@ -20,6 +21,7 @@ vi.mock("../app/farmer/components/crops/CropsContext.jsx", async () => {
       updateCropStatusApi: vi.fn(),
       addCostApi: addCostApiMock,
       logHarvestApi: vi.fn(),
+      saveHarvestRecordApi: saveHarvestRecordApiMock,
       refreshCrops: vi.fn(),
     }),
   };
@@ -79,6 +81,25 @@ describe("normalizeCropPlan cost calculation", () => {
     expect(normalized.breakEvenPrice).toBe(45);
     expect(normalized.productionCosts).toHaveLength(4);
     expect(normalized.productionCosts.filter((c) => c.costType === "additional")).toHaveLength(2);
+  });
+
+  it("sorts dated harvest entries and exposes their cumulative quantity", () => {
+    const normalized = normalizeCropPlan({
+      id: "CRP-002",
+      commodity_id: "COM-001",
+      status: "Harvesting",
+      expected_harvest_qty: 600,
+      harvest_records: [
+        { id: "HVR-1", actual_harvest_date: "2026-11-15", actual_harvest_qty: 125, actual_selling_price_per_kg: 90, created_at: "2026-11-15T08:00:00Z" },
+        { id: "HVR-2", actual_harvest_date: "2026-11-18", actual_harvest_qty: 80, actual_selling_price_per_kg: 120, created_at: "2026-11-18T08:00:00Z" },
+      ],
+    });
+
+    expect(normalized.actualHarvestQty).toBe(205);
+    expect(normalized.actualHarvestRevenue).toBe(20850);
+    expect(normalized.actualSellingPrice).toBeCloseTo(101.7073, 4);
+    expect(normalized.harvestRecords.map((record) => record.id)).toEqual(["HVR-2", "HVR-1"]);
+    expect(normalized.actualHarvestDate).toBe("Nov 18, 2026");
   });
 });
 
@@ -147,6 +168,46 @@ describe("CropCycleDetailPage Add Cost flow", () => {
       category: "Additional",
       amount: 300,
       costType: "additional",
+    });
+  });
+
+  it("saves a dated harvest entry from the check button", async () => {
+    const user = userEvent.setup();
+    cropState.current = {
+      id: "CRP-0002",
+      commodity: "COM-0025",
+      commodityId: "COM-0025",
+      commodityName: "Lettuce",
+      variant: "Ball",
+      phase: "harvested",
+      status: "Harvesting",
+      harvestQuantity: 600,
+      harvestRecords: [],
+      initialCost: 26000,
+      totalCost: 26000,
+      productionCosts: [],
+      isOnHold: false,
+    };
+    saveHarvestRecordApiMock.mockResolvedValueOnce({ id: "HVR-1" });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/farmer/crops/CRP-0002"]}>
+          <Routes>
+            <Route path="/farmer/crops/:cropId" element={<CropCycleDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText("Harvest date"), { target: { value: "2026-11-20" } });
+    await user.type(screen.getByLabelText("Qty (kg)"), "125");
+    await user.type(screen.getByLabelText("Price (₱/kg)"), "85");
+    await user.click(screen.getByRole("button", { name: "Save harvest entry" }));
+
+    await waitFor(() => {
+      expect(saveHarvestRecordApiMock).toHaveBeenCalledWith("CRP-0002", "2026-11-20", 125, 85);
     });
   });
 

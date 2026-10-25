@@ -561,8 +561,8 @@ function PriceDetailView({
 
   // 1. Top-10 catalog, to resolve commodity IDs & catalog varieties.
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 50 }),
+    queryKey: ["prices", "supported-list"],
+    queryFn: () => pricesApi.getPriceList({ include_supported_varieties: true, page_size: 100 }),
     staleTime: STALE_TIME,
   });
 

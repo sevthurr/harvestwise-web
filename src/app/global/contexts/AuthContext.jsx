@@ -3,8 +3,8 @@ import {
   apiGet,
   apiPost,
   clearTokens,
-  getAccessToken,
-  getRefreshToken,
+  completeLegacyTokenMigration,
+  markSessionActive,
   parseResponse,
   storeTokens,
 } from '../api';
@@ -15,6 +15,12 @@ import { loadFarmerOfflineData } from '../hooks/useFarmerPrefetch';
 const AuthContext = createContext(null);
 
 const USER_CACHE_KEY = 'HARVESTWISE_USER_CACHE_V1';
+const PENDING_LOGOUT_KEY = 'hw_logout_pending';
+const OFFLINE_GRACE_MS = 1000 * 60 * 60 * 24;
+
+function browserIsOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
 
 /**
  * Map backend role_name to frontend route prefix.
@@ -31,6 +37,7 @@ export function roleHome(roleName) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [offlineCacheStatus, setOfflineCacheStatus] = useState('idle');
 
   // Seed the offline bundle after a successful farmer session restore.
   // /auth/me nests the role as { role: { role_name } } — reading a top-level
@@ -41,9 +48,15 @@ export function AuthProvider({ children }) {
   // Farmer check. roleHome() maps any unknown or missing role name to
   // '/farmer', and the fallback path inside loadFarmerOfflineData requests
   // /crop-plans — so a session without a readable role must not seed it.
-  const seedFarmerOffline = (me) => {
+  const seedFarmerOffline = async (me, { force = false } = {}) => {
     if ((me?.role?.role_name || '').toLowerCase() === 'farmer') {
-      loadFarmerOfflineData(queryClient).catch(() => {});
+      setOfflineCacheStatus('preparing');
+      try {
+        await loadFarmerOfflineData(queryClient, { force });
+        setOfflineCacheStatus('ready');
+      } catch {
+        setOfflineCacheStatus('error');
+      }
     }
   };
 
@@ -55,24 +68,47 @@ export function AuthProvider({ children }) {
   // ------------------------------------------------------------------
   useEffect(() => {
     const restore = async () => {
-      const token = getAccessToken();
-      if (!token) {
+      let pendingLogout = false;
+      try { pendingLogout = localStorage.getItem(PENDING_LOGOUT_KEY) === 'true'; } catch {}
+      if (pendingLogout) {
+        if (!browserIsOffline()) {
+          try {
+            await apiPost('/api/v1/auth/logout', {});
+            localStorage.removeItem(PENDING_LOGOUT_KEY);
+          } catch (error) {
+            if (error?.status) {
+              try { localStorage.removeItem(PENDING_LOGOUT_KEY); } catch {}
+            }
+          }
+        }
+        clearTokens();
+        setUser(null);
         setLoading(false);
         return;
       }
 
       try {
+        await completeLegacyTokenMigration();
         const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+        markSessionActive();
         setUser(me);
         // Cache user profile for offline restoration
-        await set(USER_CACHE_KEY, me);
-        seedFarmerOffline(me);
-      } catch {
-        // Network failure (not 401) — try to restore from IndexedDB cache
+        await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
+        await seedFarmerOffline(me);
+      } catch (error) {
+        if (error?.status) {
+          clearTokens();
+          setUser(null);
+          setLoading(false);
+          return;
+        }
         try {
-          const cachedUser = await get(USER_CACHE_KEY);
-          if (cachedUser) {
+          const cached = await get(USER_CACHE_KEY);
+          const cachedUser = cached?.user ?? cached;
+          const expiresAt = cached?.expiresAt ?? 0;
+          if (cachedUser && expiresAt > Date.now()) {
             setUser(cachedUser);
+            setOfflineCacheStatus('ready');
             // Don't clear tokens — farmer is still "logged in", just offline
           } else {
             clearTokens();
@@ -103,21 +139,42 @@ export function AuthProvider({ children }) {
   // and this is the path that leaks one farmer's data to the next.
   // ------------------------------------------------------------------
   useEffect(() => {
-    const purge = () => {
+    const purge = ({ refetchActive = true } = {}) => {
       setUser(null);
-      clearQueryPersistedCache();
+      setOfflineCacheStatus('idle');
+      clearQueryPersistedCache({ refetchActive });
       try { del(USER_CACHE_KEY); } catch {}
     };
     const handleExpiry = () => purge();
+    const handleSessionChange = () => purge({ refetchActive: false });
+    const flushPendingLogout = async () => {
+      let pending = false;
+      try { pending = localStorage.getItem(PENDING_LOGOUT_KEY) === 'true'; } catch {}
+      if (!pending) return;
+      try {
+        await apiPost('/api/v1/auth/logout', {});
+        localStorage.removeItem(PENDING_LOGOUT_KEY);
+      } catch (error) {
+        if (error?.status) {
+          try { localStorage.removeItem(PENDING_LOGOUT_KEY); } catch {}
+        }
+      }
+    };
     // A token key changing value in another tab means the session identity
     // changed underneath us.
     const handleStorage = (e) => {
-      if (e.key === 'hw_access_token' || e.key === 'hw_refresh_token') purge();
+      if (e.key === 'hw_session_generation') {
+        purge({ refetchActive: false });
+      }
     };
     window.addEventListener('hw:auth:expired', handleExpiry);
+    window.addEventListener('hw:session:changed', handleSessionChange);
+    window.addEventListener('online', flushPendingLogout);
     window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('hw:auth:expired', handleExpiry);
+      window.removeEventListener('hw:session:changed', handleSessionChange);
+      window.removeEventListener('online', flushPendingLogout);
       window.removeEventListener('storage', handleStorage);
     };
   }, []);
@@ -129,9 +186,10 @@ export function AuthProvider({ children }) {
     await clearQueryPersistedCache();
     storeTokens(tokens);
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+    markSessionActive();
     setUser(me);
-    await set(USER_CACHE_KEY, me);
-    seedFarmerOffline(me);
+    await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
+    await seedFarmerOffline(me, { force: true });
     return me;
   };
 
@@ -139,15 +197,25 @@ export function AuthProvider({ children }) {
   // Logout: tell backend, then clear local state regardless of outcome
   // ------------------------------------------------------------------
   const logout = async () => {
-    const refreshToken = getRefreshToken();
+    const offline = browserIsOffline();
     try {
-      await apiPost('/api/v1/auth/logout', { refresh_token: refreshToken });
-    } catch {
-      // Best-effort — clear tokens locally even if the request fails
+      if (offline) {
+        localStorage.setItem(PENDING_LOGOUT_KEY, 'true');
+      } else {
+        await apiPost('/api/v1/auth/logout', {});
+        localStorage.removeItem(PENDING_LOGOUT_KEY);
+      }
+    } catch (error) {
+      // Keep a marker so the HttpOnly cookie session is revoked once the
+      // browser reconnects. A local logout must never depend on the network.
+      if (!error?.status) {
+        try { localStorage.setItem(PENDING_LOGOUT_KEY, 'true'); } catch {}
+      }
     } finally {
       clearTokens();
       setUser(null);
-      await clearQueryPersistedCache();
+      setOfflineCacheStatus('idle');
+      await clearQueryPersistedCache({ refetchActive: false });
       try { await del(USER_CACHE_KEY); } catch {}
     }
   };
@@ -180,12 +248,12 @@ export function AuthProvider({ children }) {
     if (!user) return null;
     const next = { ...user, ...partial };
     setUser(next);
-    await set(USER_CACHE_KEY, next);
+    await set(USER_CACHE_KEY, { user: next, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
     return next;
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, login, logout, refreshUser, patchUser }}>
+    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, offlineCacheStatus, login, logout, refreshUser, patchUser }}>
       {children}
     </AuthContext.Provider>
   );

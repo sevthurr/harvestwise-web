@@ -6,7 +6,7 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { PriceDetailView } from "../components/shared/PriceDetailView";
 import { toCamelCase } from "../../global/utils/apiTransforms";
-import { fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
+import { fetchSupportedPricesList } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 function PriceTrendDetailPage() {
@@ -17,8 +17,8 @@ function PriceTrendDetailPage() {
   const state = location.state;
 
   const { data: pricesData, isLoading: loading, isError } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: fetchPricesList,
+    queryKey: ["prices", "supported-list"],
+    queryFn: fetchSupportedPricesList,
     staleTime: 1000 * 60 * 30,
   });
 

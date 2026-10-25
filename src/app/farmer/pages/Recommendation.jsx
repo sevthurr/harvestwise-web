@@ -861,38 +861,6 @@ function RecommendationPage() {
       });
     }
 
-    // Fallback to the curated list only when the API has finished loading and
-    // returned no rows at all. It must NOT fire just because no crop is
-    // "Recommended" (the stored advisory is the authority), and it must NOT
-    // fire while the request is still in flight — that flash renders fabricated
-    // "good crops" with invented factors before the real data arrives.
-    if (!recommendationsLoading && rawRecommendations.length === 0) {
-      const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
-      defaultIds.forEach((cid) => {
-        const p = DEFAULT_RECOMMENDED_PROFILES[cid];
-        const name = cid === "COM-0004" ? "Kamatis" : "Ampalaya";
-        result.push({
-          id: cid,
-          name,
-          varietyCount: t("farmer.calendar.variety_count_single", {}, "1 variety"),
-          priceOutlookText: cid === "COM-0004"
-            ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon")
-            : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit"),
-          bestVariety: p.bestVariety,
-          plantWindow: p.plantWindow(localizedMonth),
-          harvestWindow: p.harvestWindow(rawMonthName, t),
-          factors: p.factors(rawMonthName, rawMonthShort, t),
-          factorLevels: {
-            price: "favorable",
-            supply: "favorable",
-            production: "upper_middle",
-            weather: "favorable",
-            profit: "favorable",
-          },
-        });
-      });
-    }
-
     return sortWithPreferredFirst(result, preferredCrops);
   }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, recommendationsLoading, t, preferredCrops]);
 

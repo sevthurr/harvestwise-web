@@ -853,7 +853,7 @@ const PreferencesTab = ({ showToast }) => {
     setSyncing(true);
     setSaveError(null);
     try {
-      await loadFarmerOfflineData(queryClient);
+      await loadFarmerOfflineData(queryClient, { force: true });
       const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       localStorage.setItem("hw_last_synced", `Today, ${nowStr}`);
       setLastSynced(`Today, ${nowStr}`);

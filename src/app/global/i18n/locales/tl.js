@@ -339,6 +339,9 @@ export const tl = {
     sync_now: "I-sync Ngayon",
     syncing: "Nag-u-update ng bagong data...",
     offline_available: "Handa ang offline data",
+    offline_preparing: "Inihahanda ang offline data",
+    offline_ready: "Handa na ang offline data",
+    offline_incomplete: "Hindi kumpleto ang offline data",
     advisory: {
       recommended_summary: "Sinusuportahan ng kasalukuyang kondisyon ang iyong plano para sa {crop_name}.",
       recommended_support: "Maayos ang presyo at kontrolado ang panahon ngayong linggo.",
