@@ -399,9 +399,9 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
 
   return (
     <>
-      <div className="grid grid-cols-7 mb-1">
+      <div className="grid grid-cols-7 mb-0.5">
         {DAY_LABELS.map((d) => (
-          <div key={d.key} className="text-center text-[12px] font-semibold text-[var(--hw-neutral-700)] py-1">
+          <div key={d.key} className="text-center text-[11px] sm:text-[12px] font-semibold text-black py-0.5">
             {t(d.key, {}, d.fallback)}
           </div>
         ))}
@@ -420,23 +420,23 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
               key={day}
               type="button"
               onClick={() => onSelectDay(day)}
-              className={`flex flex-col items-center justify-start pt-1.5 pb-1 min-h-[58px] sm:min-h-[64px] rounded-xl text-[13px] font-medium transition-all
+              className={`flex flex-col items-center justify-start pt-1 pb-1 min-h-[44px] sm:min-h-[48px] rounded-xl text-[12px] sm:text-[13px] font-medium transition-all
                 ${isSelected
-                  ? "bg-[var(--hw-green-700)] text-white shadow-sm ring-2 ring-[var(--hw-green-700)]"
+                  ? "bg-[var(--hw-green-50)] text-black font-bold ring-2 ring-[var(--hw-green-700)] shadow-xs"
                   : isToday
-                  ? "ring-2 ring-[var(--hw-green-700)] text-[var(--hw-neutral-900)] font-bold hover:bg-[var(--hw-green-50)]"
+                  ? "ring-2 ring-[var(--hw-green-700)] text-black font-bold hover:bg-[var(--hw-green-50)]"
                   : isPast
                   ? "text-[var(--hw-neutral-400)] hover:bg-[var(--hw-neutral-50)]"
-                  : "text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-100)]"
+                  : "text-black hover:bg-[var(--hw-green-50)]"
                 }
               `}
             >
-              <span className="leading-none mb-1">{day}</span>
+              <span className="leading-none mb-0.5">{day}</span>
               {marked && (
-                <div className="flex items-center justify-center gap-1 sm:gap-1.5 px-0.5">
+                <div className="flex items-center justify-center gap-0.5 sm:gap-1 px-0.5">
                   {m.crop && (
                     <span
-                      className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0"
+                      className="text-[12px] sm:text-[13px] leading-none select-none flex-shrink-0"
                       role="img"
                       aria-label="crop schedule"
                     >
@@ -446,12 +446,12 @@ const CalendarGrid = ({ year, month, selectedDay, onSelectDay, calendarData }) =
                   {m.weather && (
                     <WIcon
                       type={m.weather}
-                      cls={`w-4 h-4 flex-shrink-0 ${weatherColor(m.weather, isSelected)}`}
+                      cls={`w-3.5 h-3.5 flex-shrink-0 ${weatherColor(m.weather, isSelected)}`}
                     />
                   )}
                   {m.hasEvent && (
                     <span
-                      className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0"
+                      className="text-[12px] sm:text-[13px] leading-none select-none flex-shrink-0"
                       role="img"
                       aria-label="events"
                     >
@@ -501,19 +501,31 @@ const SelectedDateDetails = ({ year, month, day, markers = {}, onClose }) => {
   const isPayday = markers?.payday || false;
   const eventName = markers?.event || (isPayday ? t("farmer.calendar.selected_date.payday_note", {}, "Panahon sa sweldo. Gilaom nga mas taas ang gastos sa mga konsumer ug ang panginahanglan sa merkado.") : null);
 
+  const hasCrop = Boolean(crop);
+  const hasWeather = Boolean(weather || weatherInfo);
+  const hasMarketEvent = Boolean(hasEvent || isPayday || eventName);
+
+  const activeCardCount = (hasCrop ? 1 : 0) + (hasWeather ? 1 : 0) + (hasMarketEvent ? 1 : 0);
+
+  const gridCls = activeCardCount <= 1
+    ? "grid grid-cols-1"
+    : activeCardCount === 2
+    ? "grid grid-cols-1 md:grid-cols-2 gap-3"
+    : "grid grid-cols-1 md:grid-cols-3 gap-3.5";
+
   return (
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 md:p-6 space-y-4 transition-all animate-fadeIn">
+    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3.5 transition-all animate-fadeIn">
       {/* Top Header with Date and Close button */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[var(--hw-neutral-100)]">
+      <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-[var(--hw-neutral-100)]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-[var(--hw-green-100)] text-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
             <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[15px] sm:text-[16px] font-bold text-[var(--hw-neutral-900)]">
+            <p className="text-[15px] sm:text-[16px] font-bold text-black">
               {fullDateLabel}
             </p>
-            <p className="text-[12px] text-[var(--hw-neutral-500)]">
+            <p className="text-[12px] text-black">
               {detailsTitle}
             </p>
           </div>
@@ -523,7 +535,7 @@ const SelectedDateDetails = ({ year, month, day, markers = {}, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-100)] transition-colors"
+            className="p-1.5 rounded-lg text-black hover:bg-[var(--hw-neutral-100)] transition-colors"
             aria-label="Close details"
           >
             <X className="w-4 h-4" />
@@ -531,136 +543,120 @@ const SelectedDateDetails = ({ year, month, day, markers = {}, onClose }) => {
         )}
       </div>
 
-      {/* 3 Detail Cards: Crop Milestone, Weather Note, Market Events */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-        {/* 1. Crop Milestone Card */}
-        <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-4 flex flex-col justify-between space-y-3">
-          <div className="space-y-2.5">
-            <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)]">
-              <Sprout className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-600)]">
-                {t("farmer.calendar.legend.crop_schedule", {}, "Crop Schedule")}
-              </span>
-            </div>
-
-            {crop ? (
-              <div className="pt-1">
-                <div className="flex items-center gap-2.5 mb-2">
-                  <CommodityIllustration
-                    commodityId={crop.id}
-                    commodityName={crop.name}
-                    baseName={crop.name}
-                    className="w-10 h-10 flex-shrink-0"
-                  />
-                  <div>
-                    <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] leading-snug">
-                      {crop.variant ? `${crop.name} (${crop.variant})` : crop.name}
-                    </p>
-                    <p className="text-[12px] text-emerald-700 font-medium">
-                      {cropPurpose}
-                    </p>
-                  </div>
+      {activeCardCount === 0 ? (
+        <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-5 text-center">
+          <p className="text-[13px] text-black font-medium">
+            {t("farmer.calendar.selected_date.no_notes_for_day", {}, "Walay iskedyul o pahinumdom niining petsaha.")}
+          </p>
+        </div>
+      ) : (
+        <div className={gridCls}>
+          {/* 1. Crop Milestone Card — ONLY if crop exists */}
+          {hasCrop && (
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-4 flex flex-col justify-between space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-black">
+                  <Sprout className="w-4 h-4 text-[var(--hw-green-700)] flex-shrink-0" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-black">
+                    {t("farmer.calendar.legend.crop_schedule", {}, "Crop Schedule")}
+                  </span>
                 </div>
-                <p className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">
-                  {cropDesc || (crop.harvestStr ? `${t("farmer.calendar.selected_date.expected_harvest", {}, "Expected harvest")}: ${crop.harvestStr}` : "")}
+
+                <div className="pt-0.5">
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <CommodityIllustration
+                      commodityId={crop.id}
+                      commodityName={crop.name}
+                      baseName={crop.name}
+                      className="w-10 h-10 flex-shrink-0"
+                    />
+                    <div>
+                      <p className="text-[14px] font-bold text-black leading-snug">
+                        {crop.variant ? `${crop.name} (${crop.variant})` : crop.name}
+                      </p>
+                      <p className="text-[12px] text-[var(--hw-green-700)] font-semibold">
+                        {cropPurpose}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-[12px] text-black leading-relaxed">
+                    {cropDesc || (crop.harvestStr ? `${t("farmer.calendar.selected_date.expected_harvest", {}, "Expected harvest")}: ${crop.harvestStr}` : "")}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate(crop.cropPlanId ? `/farmer/crops/${crop.cropPlanId}` : "/farmer/crops")}
+                className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-3 py-2 rounded-xl text-xs font-semibold hover:bg-[var(--hw-green-800)] transition-colors mt-auto"
+              >
+                {t("farmer.calendar.selected_date.check_crop", {}, "Check this crop")}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* 2. Weather Details Card — ONLY if weather exists */}
+          {hasWeather && (
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-4 flex flex-col justify-between space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-black">
+                    {weather ? (
+                      <WIcon type={weather} />
+                    ) : (
+                      <Cloud className="w-4 h-4 text-black flex-shrink-0" />
+                    )}
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-black">
+                      {t("farmer.calendar.selected_date.weather_note", {}, "Weather Note")}
+                    </span>
+                  </div>
+                  {weatherInfo && weatherInfo.tempMax != null && (
+                    <span className="text-[12px] font-bold text-black">
+                      {Math.round(weatherInfo.tempMax)}°C / {Math.round(weatherInfo.tempMin ?? 22)}°C
+                    </span>
+                  )}
+                </div>
+
+                <div className="pt-0.5">
+                  <p className="text-[13px] text-black leading-relaxed">
+                    {rainExplanation || _weatherNote(weather, weatherInfo, t)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/farmer/market/weather")}
+                className="w-full flex items-center justify-center gap-1.5 bg-white border border-[var(--hw-neutral-300)] text-black px-3 py-2 rounded-xl text-xs font-medium hover:bg-[var(--hw-neutral-100)] transition-colors mt-auto"
+              >
+                {t("farmer.calendar.view_weather", {}, "View weather")}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* 3. Market & Calendar Events Card — ONLY if event exists */}
+          {hasMarketEvent && (
+            <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-4 flex flex-col justify-start space-y-2">
+              <div className="flex items-center gap-1.5 text-black">
+                <CalendarClock className="w-4 h-4 flex-shrink-0 text-[var(--hw-green-700)]" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-black">
+                  {isPayday
+                    ? t("farmer.calendar.selected_date.payday", {}, "Payday Period")
+                    : t("farmer.calendar.selected_date.market_note", {}, "Market Note")}
+                </span>
+              </div>
+
+              <div className="pt-0.5">
+                <p className="text-[13px] text-black font-medium leading-relaxed">
+                  {eventName}
                 </p>
               </div>
-            ) : (
-              <div className="pt-1 text-[13px] text-[var(--hw-neutral-500)] leading-relaxed">
-                {t("farmer.calendar.selected_date.no_crop_schedule", {}, "No crop schedule on this date.")}
-              </div>
-            )}
-          </div>
-
-          {crop ? (
-            <button
-              type="button"
-              onClick={() => navigate(crop.cropPlanId ? `/farmer/crops/${crop.cropPlanId}` : "/farmer/crops")}
-              className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-3 py-2 rounded-xl text-xs font-semibold hover:bg-[var(--hw-green-800)] transition-colors mt-auto"
-            >
-              {t("farmer.calendar.selected_date.check_crop", {}, "Check this crop")}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => navigate("/farmer/crops")}
-              className="w-full flex items-center justify-center gap-1.5 bg-white border border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] px-3 py-2 rounded-xl text-xs font-medium hover:bg-[var(--hw-neutral-100)] transition-colors mt-auto"
-            >
-              <Sprout className="w-3.5 h-3.5 text-emerald-600" />
-              {t("farmer.dashboard.add_crop_plan_btn", {}, "Add Crop Plan")}
-            </button>
+            </div>
           )}
         </div>
-
-        {/* 2. Weather Details Card */}
-        <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-4 flex flex-col justify-between space-y-3">
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)]">
-                {weather ? (
-                  <WIcon type={weather} cls={`w-4 h-4 flex-shrink-0 ${weatherColor(weather)}`} />
-                ) : (
-                  <Cloud className="w-4 h-4 text-[var(--hw-neutral-500)] flex-shrink-0" />
-                )}
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-600)]">
-                  {t("farmer.calendar.selected_date.weather_note", {}, "Weather Note")}
-                </span>
-              </div>
-              {weatherInfo && weatherInfo.tempMax != null && (
-                <span className="text-[12px] font-bold text-[var(--hw-neutral-800)]">
-                  {Math.round(weatherInfo.tempMax)}°C / {Math.round(weatherInfo.tempMin ?? 22)}°C
-                </span>
-              )}
-            </div>
-
-            <div className="pt-1">
-              {weather ? (
-                <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed">
-                  {rainExplanation || _weatherNote(weather, weatherInfo, t)}
-                </p>
-              ) : (
-                <p className="text-[13px] text-[var(--hw-neutral-500)] leading-relaxed">
-                  {t("farmer.calendar.selected_date.no_weather_note", {}, "No weather forecast available for this date (available for next 14 days).")}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate("/farmer/market/weather")}
-            className="w-full flex items-center justify-center gap-1.5 bg-white border border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] px-3 py-2 rounded-xl text-xs font-medium hover:bg-[var(--hw-neutral-100)] transition-colors mt-auto"
-          >
-            {t("farmer.calendar.view_weather", {}, "View weather")}
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* 3. Market & Calendar Events Card */}
-        <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-4 flex flex-col justify-start space-y-2.5">
-          <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)]">
-            <CalendarClock className={`w-4 h-4 flex-shrink-0 ${hasEvent ? "text-emerald-600" : "text-[var(--hw-neutral-500)]"}`} />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--hw-neutral-600)]">
-              {isPayday
-                ? t("farmer.calendar.selected_date.payday", {}, "Payday Period")
-                : t("farmer.calendar.selected_date.market_note", {}, "Market Note")}
-            </span>
-          </div>
-
-          <div className="pt-1">
-            {hasEvent ? (
-              <p className="text-[13px] text-[var(--hw-neutral-800)] font-medium leading-relaxed">
-                {eventName}
-              </p>
-            ) : (
-              <p className="text-[13px] text-[var(--hw-neutral-500)] leading-relaxed">
-                {t("farmer.calendar.selected_date.no_event_note", {}, "Regular trading day. No special market events or holidays recorded.")}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -865,38 +861,6 @@ function RecommendationPage() {
       });
     }
 
-    // Fallback to the curated list only when the API has finished loading and
-    // returned no rows at all. It must NOT fire just because no crop is
-    // "Recommended" (the stored advisory is the authority), and it must NOT
-    // fire while the request is still in flight — that flash renders fabricated
-    // "good crops" with invented factors before the real data arrives.
-    if (!recommendationsLoading && rawRecommendations.length === 0) {
-      const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
-      defaultIds.forEach((cid) => {
-        const p = DEFAULT_RECOMMENDED_PROFILES[cid];
-        const name = cid === "COM-0004" ? "Kamatis" : "Ampalaya";
-        result.push({
-          id: cid,
-          name,
-          varietyCount: t("farmer.calendar.variety_count_single", {}, "1 variety"),
-          priceOutlookText: cid === "COM-0004"
-            ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon")
-            : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit"),
-          bestVariety: p.bestVariety,
-          plantWindow: p.plantWindow(localizedMonth),
-          harvestWindow: p.harvestWindow(rawMonthName, t),
-          factors: p.factors(rawMonthName, rawMonthShort, t),
-          factorLevels: {
-            price: "favorable",
-            supply: "favorable",
-            production: "upper_middle",
-            weather: "favorable",
-            profit: "favorable",
-          },
-        });
-      });
-    }
-
     return sortWithPreferredFirst(result, preferredCrops);
   }, [rawRecommendations, rawMonthName, rawMonthShort, localizedMonth, recommendationsLoading, t, preferredCrops]);
 
@@ -965,13 +929,13 @@ function RecommendationPage() {
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
       {/* ── 1. Page Header ── */}
       <div>
-        <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+        <h1 className="text-[22px] md:text-3xl font-bold text-black leading-tight">
           {t("farmer.calendar.page_title", {}, "Crop Calendar")}
         </h1>
-        <p className="text-[15px] text-[var(--hw-neutral-700)] mt-0.5">
+        <p className="text-[14px] sm:text-[15px] text-black mt-0.5">
           {t("farmer.calendar.page_subtitle", {}, "Track crop schedules and harvest timing.")}
         </p>
       </div>
@@ -980,24 +944,24 @@ function RecommendationPage() {
 
       {/* ── 2. Crop Calendar Card ── */}
       <section className="space-y-4">
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 md:p-6 w-full">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-4 md:p-5 w-full">
           {/* Month navigator */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
             <button
               type="button"
               onClick={prevMonth}
-              className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors"
+              className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors"
               aria-label="Previous month"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <p className="font-bold text-[16px] text-[var(--hw-neutral-900)]">
+            <p className="font-bold text-[16px] text-black">
               {localizedMonth} {viewYear}
             </p>
             <button
               type="button"
               onClick={nextMonth}
-              className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-900)] transition-colors"
+              className="p-2 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors"
               aria-label="Next month"
             >
               <ChevronRight className="w-5 h-5" />
@@ -1013,25 +977,25 @@ function RecommendationPage() {
           />
 
           {/* Legend matching weather cards, events, and crop milestones */}
-          <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-5 pt-3.5 border-t border-[var(--hw-neutral-100)] text-[12px] text-[var(--hw-neutral-700)]">
+          <div className="flex flex-wrap items-center gap-3.5 sm:gap-5 mt-3.5 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[11px] sm:text-[12px] text-black">
             <div className="flex items-center gap-1.5">
-              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="light rain">🌦️</span>
+              <span className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="light rain">🌦️</span>
               <span>{t("farmer.calendar.legend.light_rain", {}, "Light rain")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="heavy rain">⛈️</span>
+              <span className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="heavy rain">⛈️</span>
               <span>{t("farmer.calendar.legend.heavy_rain", {}, "Heavy rain")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="hot days">☀️</span>
+              <span className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="hot days">☀️</span>
               <span>{t("farmer.calendar.legend.hot_days", {}, "Hot days")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="events">📅</span>
+              <span className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="events">📅</span>
               <span>{t("farmer.calendar.legend.events", {}, "Mga Events")}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="crop schedule">🌱</span>
+              <span className="text-[14px] sm:text-[15px] leading-none select-none flex-shrink-0" role="img" aria-label="crop schedule">🌱</span>
               <span>{t("farmer.calendar.legend.crop_schedule", {}, "Iskedyul sa tanom")}</span>
             </div>
           </div>
@@ -1050,15 +1014,15 @@ function RecommendationPage() {
       </section>
 
       {/* ── 3. Good crops to plant in [Month] (Image 3) ── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+      <section className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[15px] font-bold text-black leading-tight">
             {t("farmer.calendar.good_crops_month_title", { month: localizedMonth }, `Good crops to plant in ${localizedMonth}`)}
           </h2>
           <button
             type="button"
             onClick={() => navigate("/farmer/prices")}
-            className="text-[13px] font-medium text-[var(--hw-green-700)] hover:underline"
+            className="text-[14px] font-semibold text-[var(--hw-green-700)] hover:underline whitespace-nowrap flex-shrink-0"
           >
             {t("farmer.calendar.view_all_crops", {}, "View all crops")}
           </button>
@@ -1072,10 +1036,10 @@ function RecommendationPage() {
             </>
           ) : recommendedCrops.length === 0 ? (
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 text-center space-y-1">
-              <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+              <p className="text-[14px] font-bold text-black">
                 {t("farmer.calendar.empty_recommendations_title", {}, "No crop recommendations available yet.")}
               </p>
-              <p className="text-[13px] text-[var(--hw-neutral-700)]">
+              <p className="text-[14px] text-black">
                 {t("farmer.calendar.empty_recommendations_helper", {}, "There is not enough data yet to provide a recommendation for this month.")}
               </p>
             </div>
@@ -1092,26 +1056,26 @@ function RecommendationPage() {
               <div
                 key={crop.id}
                 id={`recommended-crop-${crop.id}`}
-                className={`bg-white rounded-2xl border p-5 space-y-4 transition-all duration-700 ease-out ${
+                className={`bg-white rounded-2xl border p-4 space-y-3 transition-all duration-700 ease-out ${
                   isHighlighted
-                    ? "bg-emerald-50/70 border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
+                    ? "bg-[var(--hw-green-50)] border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
                     : "border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]"
                 }`}
               >
                 {/* Crop Top Info */}
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3.5">
                   <CommodityIllustration
                     commodityId={crop.id}
                     commodityName={crop.name}
                     baseName={crop.name}
-                    className="w-12 h-12 flex-shrink-0 mt-0.5"
+                    className="w-11 h-11 flex-shrink-0 mt-0.5"
                   />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <h3 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-[15px] font-bold text-black">
                         {crop.name}
                       </h3>
-                      <span className="text-[13px] text-[var(--hw-neutral-600)]">
+                      <span className="text-[14px] text-black font-medium">
                         {crop.varietyCount}
                       </span>
                       {isPreferredCrop(crop, preferredCrops) && (
@@ -1119,17 +1083,17 @@ function RecommendationPage() {
                       )}
                     </div>
 
-                    <p className="text-[14px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">
+                    <p className="text-[14px] text-black leading-snug">
                       {crop.priceOutlookText}
                     </p>
 
                     {crop.bestVariety && (
-                      <p className="text-[13px] font-medium text-[var(--hw-green-700)] mt-1">
+                      <p className="text-[14px] font-semibold text-[var(--hw-green-700)]">
                         {t("farmer.calendar.good_variety_prefix", { variety: crop.bestVariety }, `Good variety: ${crop.bestVariety}`)}
                       </p>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[var(--hw-neutral-600)] mt-1">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] text-black">
                       <span>{t("farmer.calendar.plant_prefix", { window: crop.plantWindow }, `Plant: ${crop.plantWindow}`)}</span>
                       <span>{t("farmer.calendar.harvest_prefix", { window: crop.harvestWindow }, `Harvest: ${crop.harvestWindow}`)}</span>
                     </div>
@@ -1159,11 +1123,11 @@ function RecommendationPage() {
                     const profitCond = resolveFactorCondition("profit", crop.factorLevels?.profit, "", crop.factors?.profit);
 
                     return (
-                      <div className="mt-3.5 space-y-2.5 pt-1 text-[13px]">
+                      <div className="mt-3 space-y-2.5 pt-0.5 text-[14px]">
                         <div className="flex items-start gap-2.5">
-                          <span className={`font-bold flex-shrink-0 leading-tight ${priceCond.colorClass}`}>₱</span>
+                          <Banknote className={`w-4 h-4 flex-shrink-0 mt-0.5 ${priceCond.colorClass}`} />
                           <p className="leading-snug text-black">
-                            <span className={`font-semibold ${priceCond.colorClass}`}>
+                            <span className="font-semibold text-black">
                               {t("farmer.calendar.factor_price", {}, "Price")}
                             </span>{" "}
                             · {crop.factors?.price}
@@ -1173,7 +1137,7 @@ function RecommendationPage() {
                         <div className="flex items-start gap-2.5">
                           <Package className={`w-4 h-4 flex-shrink-0 mt-0.5 ${supplyCond.colorClass}`} />
                           <p className="leading-snug text-black">
-                            <span className={`font-semibold ${supplyCond.colorClass}`}>
+                            <span className="font-semibold text-black">
                               {t("farmer.calendar.factor_supply", {}, "Supply")}
                             </span>{" "}
                             · {crop.factors?.supply}
@@ -1183,7 +1147,7 @@ function RecommendationPage() {
                         <div className="flex items-start gap-2.5">
                           <Leaf className={`w-4 h-4 flex-shrink-0 mt-0.5 ${productionCond.colorClass}`} />
                           <p className="leading-snug text-black">
-                            <span className={`font-semibold ${productionCond.colorClass}`}>
+                            <span className="font-semibold text-black">
                               {t("farmer.calendar.factor_production", {}, "Production")}
                             </span>{" "}
                             · {crop.factors?.production}
@@ -1193,7 +1157,7 @@ function RecommendationPage() {
                         <div className="flex items-start gap-2.5">
                           <Cloud className={`w-4 h-4 flex-shrink-0 mt-0.5 ${weatherCond.colorClass}`} />
                           <p className="leading-snug text-black">
-                            <span className={`font-semibold ${weatherCond.colorClass}`}>
+                            <span className="font-semibold text-black">
                               {t("farmer.calendar.factor_weather", {}, "Weather")}
                             </span>{" "}
                             · {crop.factors?.weather}
@@ -1203,14 +1167,14 @@ function RecommendationPage() {
                         <div className="flex items-start gap-2.5">
                           <TrendingUp className={`w-4 h-4 flex-shrink-0 mt-0.5 ${profitCond.colorClass}`} />
                           <p className="leading-snug text-black">
-                            <span className={`font-semibold ${profitCond.colorClass}`}>
+                            <span className="font-semibold text-black">
                               {t("farmer.calendar.factor_profit", {}, "Profit")}
                             </span>{" "}
                             · {crop.factors?.profit}
                           </p>
                         </div>
 
-                        <div className="pt-2">
+                        <div className="pt-1.5">
                           <button
                             type="button"
                             onClick={() =>
@@ -1228,7 +1192,7 @@ function RecommendationPage() {
                                 },
                               })
                             }
-                            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
+                            className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
                           >
                             {t("farmer.calendar.view_detailed_factors", {}, "View detailed factors")}
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -1244,52 +1208,46 @@ function RecommendationPage() {
         </div>
       </section>
 
-      {/* ── 4. Weather Note Card (Image 5) ── */}
+      {/* ── 4. Weather Note Card (Image 3) ── */}
       <section>
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CloudRain className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
-                  {t("farmer.calendar.weather_note_title", {}, "Weather note")}
-                </h3>
-                <p className="text-[13px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">
-                  {t("farmer.calendar.weather_note_default", {}, "Rain is expected this week. Clear drainage before planting.")}
-                </p>
-              </div>
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+              <CloudRain className="w-5 h-5" />
             </div>
-            <button
-              type="button"
-              onClick={() => navigate("/farmer/market/weather")}
-              className="text-[13px] font-medium text-[var(--hw-green-700)] hover:underline whitespace-nowrap flex-shrink-0 pt-0.5"
-            >
-              {t("farmer.calendar.view_weather", {}, "View weather")}
-            </button>
+            <h3 className="text-[15px] font-bold text-black">
+              {t("farmer.calendar.weather_note_title", {}, "Weather note")}
+            </h3>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/farmer/market/weather")}
+            className="w-full flex items-center justify-center gap-2 bg-white border border-[var(--hw-neutral-300)] text-black hover:bg-[var(--hw-neutral-50)] py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors"
+          >
+            {t("farmer.calendar.view_weather", {}, "View weather")}
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </section>
 
-      {/* ── 5. Check a crop before planting Card (Image 5) ── */}
+      {/* ── 5. Check a crop before planting Card ── */}
       <section>
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-green-50 text-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0">
               <Sprout className="w-5 h-5" />
             </div>
-            <h3 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">
+            <h3 className="text-[15px] font-bold text-black">
               {t("farmer.calendar.check_crop_title", {}, "Check a crop before planting")}
             </h3>
           </div>
-          <p className="text-[13px] text-[var(--hw-neutral-700)] leading-snug">
+          <p className="text-[13px] text-black leading-snug">
             {t("farmer.calendar.check_crop_desc", {}, "Enter your crop, farm size, cost, and expected harvest to get a recommendation.")}
           </p>
           <button
             type="button"
             onClick={() => navigate("/farmer/assess")}
-            className="w-full bg-[var(--hw-green-700)] hover:bg-[var(--hw-green-800)] text-white font-medium py-3 rounded-full flex items-center justify-center gap-2 transition-colors text-sm"
+            className="w-full bg-[var(--hw-green-700)] hover:bg-[var(--hw-green-800)] text-white font-semibold py-3 rounded-full flex items-center justify-center gap-2 transition-colors text-sm"
           >
             {t("farmer.calendar.start_check", {}, "Start check")}
             <ArrowRight className="w-4 h-4" />

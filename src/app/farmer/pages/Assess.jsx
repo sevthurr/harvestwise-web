@@ -99,7 +99,8 @@ const StepActions = ({
               onClick={onRetry}
               className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-red-800 underline hover:text-red-900"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Try again
+              <RefreshCw className="w-3.5 h-3.5" />
+              {t ? t("common.try_again", {}, "Sulayi Pag-usab") : "Sulayi Pag-usab"}
             </button>
           )}
         </div>
@@ -373,7 +374,34 @@ function AssessPage() {
     setDraftLoading(false);
     const pre = searchParams.get("commodity");
     if (pre) {
-      setData((d) => ({ ...d, commodity: pre }));
+      const existingCropDraft = Array.isArray(crops) ? crops.find((c) =>
+        (c.phase === "draft" || c.status === "Draft" || c.isDraft) &&
+        (c.commodityId === pre || c.commodity === pre || (c.commodityName || "").toLowerCase() === pre.toLowerCase())
+      ) : null;
+
+      if (existingCropDraft) {
+        setData({
+          ...DEFAULT_ASSESSMENT,
+          commodity: existingCropDraft.commodity || pre,
+          commodityId: existingCropDraft.commodityId || existingCropDraft.commodity || pre,
+          commodityName: existingCropDraft.commodityName || "",
+          variant: existingCropDraft.variant || existingCropDraft.variety || "",
+          plantingDate: existingCropDraft.rawPlantingDate || existingCropDraft.plantingDate || "",
+          harvestDate: existingCropDraft.rawHarvestDate || existingCropDraft.harvestDate || "",
+          farmArea: existingCropDraft.farmArea ?? "",
+          farmAreaUnit: existingCropDraft.farmAreaUnit || "sqm",
+          harvestQuantity: existingCropDraft.harvestQuantity ?? "",
+          costMethod: existingCropDraft.costMethod || "simple",
+          simpleCost: existingCropDraft.costMethod !== "detailed" ? (existingCropDraft.totalCost || "") : "",
+          expenses: existingCropDraft.expenses && existingCropDraft.expenses.length > 0 ? existingCropDraft.expenses : makeDefaultExpenses(),
+          useFarmgate: Boolean(existingCropDraft.farmgatePrice && existingCropDraft.farmgatePrice > 0),
+          farmgatePrice: existingCropDraft.farmgatePrice ?? "",
+          draftId: existingCropDraft.id,
+          isDraft: true,
+        });
+      } else {
+        setData((d) => ({ ...d, commodity: pre }));
+      }
       setView("assessment");
       setStep(1);
     }
@@ -410,18 +438,17 @@ function AssessPage() {
     setSavingDraft(true);
     setDraftStatus(null);
 
-    const draftSnapshot = {
-      ...data,
-      isDraft: true,
-    };
-    try {
-      localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
-      setLocalDraft(draftSnapshot);
-    } catch {
-      // ignore
-    }
-
     if (!data.commodity) {
+      const draftSnapshot = {
+        ...data,
+        isDraft: true,
+      };
+      try {
+        localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
+        setLocalDraft(draftSnapshot);
+      } catch {
+        // ignore
+      }
       setSavingDraft(false);
       navigate("/farmer/crops", {
         state: {
@@ -437,11 +464,28 @@ function AssessPage() {
     }
 
     try {
-      const res = await apiPost("/crop-plans/draft", buildDraftPayload(data));
+      const targetCommId = data.commodityId || data.commodity;
+      const existingCropDraft = data.draftId ? null : (Array.isArray(crops) ? crops.find((c) =>
+        (c.phase === "draft" || c.status === "Draft" || c.isDraft) &&
+        (c.commodityId === targetCommId || c.commodity === targetCommId || c.commodity === data.commodity || (data.commodityName && (c.commodityName || "").toLowerCase().trim() === data.commodityName.toLowerCase().trim()))
+      ) : null);
+
+      const effectiveDraftId = data.draftId || existingCropDraft?.id || null;
+      const payload = buildDraftPayload({ ...data, draftId: effectiveDraftId });
+
+      const res = await apiPost("/crop-plans/draft", payload);
       if (!res.ok) {
         throw new Error("Failed to save draft");
       }
       const saved = await parseResponse(res);
+
+      try {
+        localStorage.removeItem("harvestwise_assessment_draft");
+        setLocalDraft(null);
+      } catch {
+        // ignore
+      }
+
       setData((d) => ({
         ...d,
         draftId: saved.id,
@@ -459,6 +503,16 @@ function AssessPage() {
         },
       });
     } catch (_err) {
+      const offlineSnapshot = {
+        ...data,
+        isDraft: true,
+      };
+      try {
+        localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(offlineSnapshot));
+        setLocalDraft(offlineSnapshot);
+      } catch {
+        // ignore
+      }
       navigate("/farmer/crops", {
         state: {
           draftSaved: true,
@@ -506,10 +560,15 @@ function AssessPage() {
     setAdvisoryResponse(null);
     try {
       const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
-      const baseCropName = selectedCommodity?.name || data.commodity;
+      const baseCropName = data.commodityName || selectedCommodity?.name || data.commodity;
       const cropName = data.variant ? `${baseCropName} ${data.variant}` : baseCropName;
       const totalCost = getTotalCost(data);
       const yieldKg = Number(data.harvestQuantity) || 1;
+
+      setData((prev) => ({
+        ...prev,
+        commodityName: baseCropName,
+      }));
 
       const payload = {
         crop_name: cropName,
@@ -517,6 +576,7 @@ function AssessPage() {
         expected_harvest_date: data.harvestDate,
         total_production_cost: Number(totalCost),
         expected_yield_kg: yieldKg,
+        crop_stage: "before_planting",
       };
 
       const res = await apiPost("/advisory/plan", payload);
@@ -656,17 +716,19 @@ function AssessPage() {
         <div className={`md:grid gap-8 ${showSidePanel ? "md:grid-cols-[1fr_280px]" : ""}`}>
           <div className="space-y-6">
             {(data.isDraft || data.draftId) && (
-              <div className="flex items-center justify-between p-3.5 bg-amber-50/90 border border-amber-300 rounded-2xl text-amber-950 shadow-xs">
-                <div className="flex items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
-                    <FileText className="w-3.5 h-3.5 text-amber-800" />
-                    {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Incomplete")}
-                  </span>
-                  <p className="text-xs sm:text-sm font-medium text-amber-900">
+              <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-amber-100/80 flex items-center justify-center flex-shrink-0 text-amber-700">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800">
+                    {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Dili Kompleto")}
+                  </p>
+                  <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">
                     {t(
                       "farmer.assess.draft_banner_notice",
                       {},
-                      "You are continuing an unfinished assessment. Review, edit, and complete Step 1 before continuing."
+                      "Gipadayon nimo ang wala pa nahuman nga assessment. Rebyuha, usba, ug kompletoha ang Step 1 bago mopadayon."
                     )}
                   </p>
                 </div>

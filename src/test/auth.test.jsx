@@ -73,6 +73,7 @@ function renderWithAuth(ui, { initialEntries = ['/'] } = {}) {
 
 beforeEach(() => {
   localStorage.clear();
+  clearTokens();
   vi.restoreAllMocks();
 });
 
@@ -93,10 +94,12 @@ describe('roleHome()', () => {
 // ── Token helpers ────────────────────────────────────────────────────────────
 
 describe('token helpers', () => {
-  it('storeTokens saves both tokens to localStorage', () => {
+  it('storeTokens never exposes tokens to JavaScript or browser storage', () => {
     storeTokens(FAKE_TOKENS);
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
-    expect(getRefreshToken()).toBe(FAKE_TOKENS.refresh_token);
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+    expect(localStorage.getItem('hw_access_token')).toBeNull();
+    expect(localStorage.getItem('hw_refresh_token')).toBeNull();
   });
 
   it('clearTokens removes both tokens', () => {
@@ -155,6 +158,34 @@ describe('AuthContext — token restoration', () => {
     expect(capturedAuth.isLoggedIn).toBe(false);
     expect(getAccessToken()).toBeNull();
   });
+
+  it('restores the bounded identity cache only after a network failure', async () => {
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_FARMER }));
+    let firstAuth;
+    const first = renderWithAuth(<AuthConsumer onRender={(a) => { firstAuth = a; }} />);
+    await waitFor(() => expect(firstAuth?.loading).toBe(false));
+    first.unmount();
+
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    let offlineAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { offlineAuth = a; }} />);
+    await waitFor(() => expect(offlineAuth?.loading).toBe(false));
+    expect(offlineAuth.user.email).toBe('juan@example.com');
+  });
+
+  it('does not restore cached identity after an authentication failure', async () => {
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_FARMER }));
+    let firstAuth;
+    const first = renderWithAuth(<AuthConsumer onRender={(a) => { firstAuth = a; }} />);
+    await waitFor(() => expect(firstAuth?.loading).toBe(false));
+    first.unmount();
+
+    vi.stubGlobal('fetch', mockFetch({ ok: false, status: 401, body: { detail: 'Not authenticated' } }));
+    let failedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { failedAuth = a; }} />);
+    await waitFor(() => expect(failedAuth?.loading).toBe(false));
+    expect(failedAuth.user).toBeNull();
+  });
 });
 
 // ── login() ──────────────────────────────────────────────────────────────────
@@ -173,7 +204,7 @@ describe('AuthContext — login()', () => {
       await capturedAuth.login(FAKE_TOKENS);
     });
 
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
+    expect(getAccessToken()).toBeNull();
     expect(capturedAuth.isLoggedIn).toBe(true);
     expect(capturedAuth.user.email).toBe('juan@example.com');
   });
@@ -206,13 +237,13 @@ describe('AuthContext — logout()', () => {
     expect(getRefreshToken()).toBeNull();
   });
 
-  it('clears local state even when POST /logout fails', async () => {
+  it('clears local state when POST /logout fails offline', async () => {
     storeTokens(FAKE_TOKENS);
 
-    vi.stubGlobal('fetch', mockFetch([
-      { ok: true,  status: 200, body: FAKE_USER_FARMER },
-      { ok: false, status: 500, body: { detail: 'Internal error' } },
-    ]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => FAKE_USER_FARMER })
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
 
     let capturedAuth;
     renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
@@ -224,6 +255,28 @@ describe('AuthContext — logout()', () => {
 
     expect(capturedAuth.isLoggedIn).toBe(false);
     expect(getAccessToken()).toBeNull();
+  });
+
+  it('logs out locally offline and flushes the server logout after reconnecting', async () => {
+    storeTokens(FAKE_TOKENS);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => FAKE_USER_FARMER })
+      .mockResolvedValueOnce({ ok: true, status: 204, json: async () => null });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+    vi.stubGlobal('navigator', { onLine: false });
+
+    await act(async () => { await capturedAuth.logout(); });
+    expect(capturedAuth.isLoggedIn).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.stubGlobal('navigator', { onLine: true });
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(localStorage.getItem('hw_logout_pending')).toBeNull();
   });
 });
 
@@ -306,6 +359,25 @@ describe('AuthContext — farmer offline bundle gating', () => {
   it('does NOT seed the farmer bundle for an Admin session', async () => {
     storeTokens(FAKE_TOKENS);
     vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_ADMIN }));
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(snapshotCalls()).toHaveLength(0);
+    expect(profileCalls()).toHaveLength(0);
+  });
+
+  it('does NOT seed the farmer bundle when the role is unreadable', async () => {
+    // The bundle carries the farmer's own crop plans, and roleHome() maps an
+    // unknown or missing role name to '/farmer'. A session whose role cannot
+    // be read is not a farmer, so it must not seed the farmer bundle — and its
+    // fallback path requests /crop-plans.
+    const rolelessUser = { ...FAKE_USER_FARMER };
+    delete rolelessUser.role;
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: rolelessUser }));
 
     let capturedAuth;
     renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);

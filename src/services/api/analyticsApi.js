@@ -147,13 +147,16 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
   return parseResponse(await apiGet(url));
 }
 
-export async function getArrivalPressure(commodityId, year = null, source = null) {
+export async function getArrivalPressure(commodityId, year = null, source = null, options = {}) {
   let url = `/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`;
   if (year != null) {
     url += `&year=${encodeURIComponent(year)}`;
   }
   if (source != null && source !== "overall") {
     url += `&source=${encodeURIComponent(source)}`;
+  }
+  if (options.aggregateVarieties) {
+    url += `&aggregate_varieties=true`;
   }
   return parseResponse(await apiGet(url));
 }

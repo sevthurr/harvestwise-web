@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 
@@ -138,5 +138,186 @@ describe("Farmer prices page", () => {
     expect(headings[0]).toHaveTextContent("Pipino");
     expect(headings[1]).toHaveTextContent("Lettuce");
     expect(screen.getByText("Preferred")).toBeInTheDocument();
+  });
+
+  it("filters commodities by category", async () => {
+    const ampalaya = {
+      commodity_id: "COM-0001",
+      name: "Ampalaya",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 96 },
+    };
+    const carrots = {
+      commodity_id: "COM-0028",
+      name: "Carrots",
+      category: "Highland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 65 },
+    };
+    priceListResponse.current = {
+      items: [ampalaya, carrots],
+    };
+
+    renderPricesPage();
+
+    expect(await screen.findByText("Ampalaya")).toBeInTheDocument();
+    expect(screen.getByText("Carrots")).toBeInTheDocument();
+
+    // Open filter drawer
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+
+    // Click "Lowland Vegetables" chip inside the drawer
+    fireEvent.click(screen.getByRole("button", { name: "Lowland Vegetables" }));
+
+    // Click Save
+    fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
+
+    // Ampalaya should remain, Carrots should be filtered out
+    expect(screen.getByText("Ampalaya")).toBeInTheDocument();
+    expect(screen.queryByText("Carrots")).not.toBeInTheDocument();
+  });
+
+  it("filters commodities by price direction", async () => {
+    const ampalaya = {
+      commodity_id: "COM-0001",
+      name: "Ampalaya",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 96 },
+    };
+    const carrots = {
+      commodity_id: "COM-0028",
+      name: "Carrots",
+      category: "Highland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 65 },
+    };
+    priceListResponse.current = {
+      items: [ampalaya, carrots],
+    };
+
+    // Ampalaya is Rising, Carrots is Falling
+    getPriceDetailMock.mockImplementation(async (id) => {
+      if (id === "COM-0001") {
+        return {
+          recent_records: [{ prevail_price: 96 }],
+          forecast: { trend: "Rising", forecast_midpoint: 98, horizon_days: 7 },
+        };
+      }
+      return {
+        recent_records: [{ prevail_price: 65 }],
+        forecast: { trend: "Falling", forecast_midpoint: 60, horizon_days: 7 },
+      };
+    });
+
+    renderPricesPage();
+
+    expect(await screen.findByText("Ampalaya")).toBeInTheDocument();
+    expect(screen.getByText("Carrots")).toBeInTheDocument();
+
+    // Open filter drawer
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+
+    // Select Rising
+    fireEvent.click(screen.getByRole("button", { name: "Rising" }));
+
+    // Save
+    fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
+
+    // Only Ampalaya (Rising) remains
+    expect(screen.getByText("Ampalaya")).toBeInTheDocument();
+    expect(screen.queryByText("Carrots")).not.toBeInTheDocument();
+  });
+
+  it("sorts commodities by lowest price first and highest price first", async () => {
+    const cheap = {
+      commodity_id: "COM-0003",
+      name: "Kalabasa",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 40 },
+    };
+    const expensive = {
+      commodity_id: "COM-0025",
+      name: "Lettuce",
+      category: "Highland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 180 },
+    };
+    priceListResponse.current = {
+      items: [expensive, cheap],
+    };
+
+    renderPricesPage();
+
+    expect(await screen.findByText("Kalabasa")).toBeInTheDocument();
+    expect(screen.getByText("Lettuce")).toBeInTheDocument();
+
+    // Open filter drawer and select lowest price first
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Lowest price first" }));
+    fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
+
+    let headings = screen.getAllByText(/Kalabasa|Lettuce/);
+    expect(headings[0]).toHaveTextContent("Kalabasa");
+    expect(headings[1]).toHaveTextContent("Lettuce");
+
+    // Open filter drawer and select highest price first
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Highest price first" }));
+    fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
+
+    headings = screen.getAllByText(/Kalabasa|Lettuce/);
+    expect(headings[0]).toHaveTextContent("Lettuce");
+    expect(headings[1]).toHaveTextContent("Kalabasa");
+  });
+
+  it("saves filter changes when clicking Save button in filter drawer", async () => {
+    const ampalaya = {
+      commodity_id: "COM-0001",
+      name: "Ampalaya",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 96 },
+    };
+    const carrots = {
+      commodity_id: "COM-0028",
+      name: "Carrots",
+      category: "Highland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 65 },
+    };
+    priceListResponse.current = {
+      items: [ampalaya, carrots],
+    };
+
+    renderPricesPage();
+
+    expect(await screen.findByText("Ampalaya")).toBeInTheDocument();
+    expect(screen.getByText("Carrots")).toBeInTheDocument();
+
+    // Open filter drawer
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+
+    // Click "Highland Vegetables" chip inside the drawer
+    fireEvent.click(screen.getByRole("button", { name: "Highland Vegetables" }));
+
+    // Verify Save button exists and click it
+    const saveBtn = screen.getByRole("button", { name: /Save/i });
+    expect(saveBtn).toBeInTheDocument();
+    fireEvent.click(saveBtn);
+
+    // Carrots should remain, Ampalaya should be filtered out
+    expect(screen.getByText("Carrots")).toBeInTheDocument();
+    expect(screen.queryByText("Ampalaya")).not.toBeInTheDocument();
   });
 });

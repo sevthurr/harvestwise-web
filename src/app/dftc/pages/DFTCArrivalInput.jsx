@@ -28,6 +28,7 @@ import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/componen
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
+import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -47,18 +48,42 @@ const COMMODITY_NAME_OVERRIDES = {
   "Kamote tops / Galay": "Kamote Tops"
 };
 
+/**
+ * The key a commodity or variety name is looked up by.
+ *
+ * Diacritics are folded: the DB spells a Saging variety "Senorita" and the
+ * static mirror spells it "Señorita". Without folding they are two identities
+ * for one variety — the sheet would offer it twice, and the mirror's row would
+ * not resolve to the DB row. `normalizeKey` is the same folding the price
+ * preview uses to match an uploaded workbook.
+ */
 function nameSlug(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return normalizeKey(name).replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-const CATEGORY_OPTIONS = [
-  { id: "lowland", name: "Lowland Vegetables" },
-  { id: "highland", name: "Highland Vegetables" },
-  { id: "spices", name: "Spices" },
-  { id: "rootcrops", name: "Rootcrops" },
-  { id: "fruits", name: "Fruits" },
-  { id: "others", name: "Others" }
-];
+// The categories a new commodity can be filed under. Derived from the same list
+// the grid renders, so an id here is always an id the grid reads: a hand-written
+// list drifted from it ("lowland" vs "lowland-vegetables") and the commodity was
+// filed in a bucket nothing renders, so it never appeared for anyone.
+const CATEGORY_OPTIONS = PRICE_CATEGORIES.map((c) => ({ id: c.id, name: c.name }));
+
+// Drafts written before the ids were derived filed Lowland/Highland under
+// legacy bucket keys the grid never reads; they are mapped by category name and
+// merged into the derived category so a restored draft still shows them.
+const LEGACY_CATEGORY_NAMES = { lowland: "Lowland Vegetables", highland: "Highland Vegetables" };
+
+function migrateDraftCommodities(commodities) {
+  const next = { ...commodities };
+  Object.entries(LEGACY_CATEGORY_NAMES).forEach(([legacyId, name]) => {
+    const legacy = next[legacyId];
+    if (!legacy?.length) return;
+    const targetId = PRICE_CATEGORIES.find((c) => c.name === name)?.id;
+    if (!targetId) return;
+    delete next[legacyId];
+    next[targetId] = [...next[targetId] ?? [], ...legacy];
+  });
+  return next;
+}
 
 const MONTHS = [
   { val: "01", name: "January" },
@@ -184,7 +209,7 @@ function fmtKg(val) {
 // ─── AddCommodityModal ───────────────────────────────────────────────────────
 function AddCommodityModal({ onClose, onAdd }) {
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("lowland");
+  const [categoryId, setCategoryId] = useState(CATEGORY_OPTIONS[0].id);
   const [variant, setVariant] = useState("");
   const [uom, setUom] = useState("kg");
   const [error, setError] = useState("");
@@ -342,8 +367,8 @@ function ConfirmFinalizeArrivalModal({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-[var(--hw-green-200)] bg-[var(--hw-green-50)]">
-              <span className="text-[13px] font-medium text-[var(--hw-green-800)]">Total Commodities Entered</span>
-              <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{totalRecords} commodities</span>
+              <span className="text-[13px] font-medium text-[var(--hw-green-800)]">Total Source Values Entered</span>
+              <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{totalRecords} inputs</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[12px] text-[var(--hw-neutral-700)] bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-200)]">
@@ -698,6 +723,14 @@ export default function DFTCArrivalInput() {
   const [fields, setFields] = useState({});
 
   // Category collapsed state: starts collapsed initially
+  const [collapsedComs, setCollapsedComs] = useState(() => new Set());
+  const toggleCommodity = (id) =>
+    setCollapsedComs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [collapsed, setCollapsed] = useState(() => new Set(PRICE_CATEGORIES.map((c) => c.id)));
   const [customVariants, setCustomVariants] = useState({});
   const [customCommodities, setCustomCommodities] = useState({});
@@ -719,12 +752,41 @@ export default function DFTCArrivalInput() {
   const [draftDismissed, setDraftDismissed] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
+  const reviewScrollRef = useRef(null);
+
+  // Slide the review table to the filtered source column so it is visible without manual scrolling
+  useEffect(() => {
+    if (!reviewMode) return;
+    const el = reviewScrollRef.current;
+    if (!el) return;
+    if (reviewFilter === "all") {
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    const timer = setTimeout(() => {
+      const targetTh = el.querySelector(`[data-col="${reviewFilter}"]`);
+      if (!targetTh) return;
+      const containerRect = el.getBoundingClientRect();
+      const thRect = targetTh.getBoundingClientRect();
+      const scrollOffset = thRect.left - containerRect.left + el.scrollLeft;
+      if (typeof el.scrollTo === "function") el.scrollTo({ left: Math.max(0, scrollOffset - 120), behavior: "smooth" });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [reviewFilter, reviewMode]);
   const [dataName, setDataName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState(0);
   const [saveProgressStage, setSaveProgressStage] = useState("Validating arrival records...");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
+  // The DB catalogue items behind the map above. Kept so a row can be placed
+  // for a commodity the static mirror has never heard of.
+  const catalogItemsRef = useRef([]);
+  // The rows the grid gained from the DB catalogue.
+  const catalogRowsRef = useRef([]);
+  // Bumped whenever a catalogue row is added, so the grid re-renders and any
+  // memo that walks the catalogue is invalidated.
+  const [catalogRowsVersion, setCatalogRowsVersion] = useState(0);
 
   // DFTC Personnel from database
   const [staffList, setStaffList] = useState([]);
@@ -856,12 +918,100 @@ export default function DFTCArrivalInput() {
           }
         }
         catalogRef.current = map;
+        catalogItemsRef.current = items;
+        addCatalogRows(catalogItemsRef.current);
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Rows the grid gained from the DB catalogue ────────────────────────────
+  /** Identity of a rendered row: its commodity and its variety, by name. */
+  function variantIdentity(commodityName, variantName) {
+    return `${nameSlug(commodityName)}|${nameSlug(variantName)}`;
+  }
+
+  /**
+   * Turn a DB catalogue item into a row the grid can render.
+   *
+   * An item whose name is a commodity of the static mirror is a new VARIANT of
+   * it. An item with a name the mirror does not have is a new COMMODITY and
+   * needs a category of ours to sit in. Returns null when neither applies.
+   */
+  function buildCatalogRow(item) {
+    const baseName = COMMODITY_NAME_OVERRIDES[item.name] ?? item.name;
+    const baseSlug = nameSlug(baseName);
+
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of cat.commodities) {
+        if (nameSlug(COMMODITY_NAME_OVERRIDES[com.name] ?? com.name) !== baseSlug) continue;
+        return {
+          commodityId: com.id,
+          commodityName: com.name,
+          categoryId: cat.id,
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
+          variantName: item.variety || "Base",
+          dbId: item.id
+        };
+      }
+    }
+
+    const cat = PRICE_CATEGORIES.find(
+      (c) => c.name.toLowerCase() === (item.category ?? "").toLowerCase()
+    );
+    if (!cat) return null;
+    return {
+      commodityId: baseSlug,
+      commodityName: baseName,
+      categoryId: cat.id,
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
+      variantName: item.variety || "Base",
+      dbId: item.id
+    };
+  }
+
+  /** The identities of every variant the grid renders right now. */
+  function renderedIdentities() {
+    const ids = new Set();
+    for (const cat of PRICE_CATEGORIES) {
+      for (const com of getAllCommodities(cat)) {
+        for (const v of getVariants(com)) {
+          ids.add(variantIdentity(com.name, v.name));
+        }
+      }
+    }
+    return ids;
+  }
+
+  /**
+   * Add the grid rows for the catalogue items.
+   *
+   * A row is added only when the grid renders no variant with the same
+   * identity (commodity name + variety name). Dedupe by identity, not by id:
+   * the mirror's row and the catalogue's row for the same thing must not both
+   * render, and the row this user added at runtime carries a different id but
+   * the same variety.
+   */
+  function addCatalogRows(items) {
+    const identities = renderedIdentities();
+    const added = [];
+    for (const item of items) {
+      const row = buildCatalogRow(item);
+      // The catalogue holds the commodity but the grid has no category of ours
+      // for it: there is nowhere to put the row.
+      if (!row) continue;
+      const identity = variantIdentity(row.commodityName, row.variantName);
+      if (identities.has(identity)) continue;
+      identities.add(identity);
+      added.push(row);
+    }
+    if (added.length === 0) return 0;
+    catalogRowsRef.current = [...catalogRowsRef.current, ...added];
+    setCatalogRowsVersion((v) => v + 1);
+    return added.length;
+  }
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -903,7 +1053,7 @@ export default function DFTCArrivalInput() {
         if (d.selectedYear) setSelectedYear(d.selectedYear);
         if (d.fields) setFields(d.fields);
         if (d.customVariants) setCustomVariants(d.customVariants);
-        if (d.customCommodities) setCustomCommodities(d.customCommodities);
+        if (d.customCommodities) setCustomCommodities(migrateDraftCommodities(d.customCommodities));
       }
     } catch { }
     setDraftDismissed(true);
@@ -960,8 +1110,19 @@ export default function DFTCArrivalInput() {
   function toggleCategory(catId) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(catId)) next.delete(catId);
-      else next.add(catId);
+      if (next.has(catId)) {
+        next.delete(catId);
+      } else {
+        next.add(catId);
+        const cat = PRICE_CATEGORIES.find((c) => c.id === catId);
+        if (cat) {
+          setCollapsedComs((cPrev) => {
+            const cNext = new Set(cPrev);
+            getAllCommodities(cat).forEach((com) => cNext.add(com.id));
+            return cNext;
+          });
+        }
+      }
       return next;
     });
   }
@@ -971,17 +1132,56 @@ export default function DFTCArrivalInput() {
   function toggleCollapseAll() {
     if (allCollapsed) {
       setCollapsed(new Set());
+      setCollapsedComs(new Set());
     } else {
       setCollapsed(new Set(PRICE_CATEGORIES.map((c) => c.id)));
+      const comIds = new Set();
+      PRICE_CATEGORIES.forEach((cat) => {
+        getAllCommodities(cat).forEach((com) => comIds.add(com.id));
+      });
+      setCollapsedComs(comIds);
     }
   }
 
+  /**
+   * The commodities of one category: the static mirror, the rows this user
+   * added at runtime, and a block for every catalogue commodity the grid does
+   * not have yet.
+   */
   function getAllCommodities(cat) {
-    return [...cat.commodities, ...customCommodities[cat.id] ?? []];
+    const rendered = [...cat.commodities, ...customCommodities[cat.id] ?? []];
+    const present = new Set(rendered.map((c) => c.id));
+    const presentNames = new Set(rendered.map((c) => nameSlug(COMMODITY_NAME_OVERRIDES[c.name] ?? c.name)));
+    const fromCatalog = [];
+    for (const row of catalogRowsRef.current) {
+      if (row.categoryId !== cat.id) continue;
+      // One block per commodity, even when the catalogue holds several
+      // varieties of it.
+      if (present.has(row.commodityId)) continue;
+      // A commodity this user added at runtime carries a different id but the
+      // same name: it must not gain a second header.
+      if (presentNames.has(nameSlug(row.commodityName))) continue;
+      present.add(row.commodityId);
+      presentNames.add(nameSlug(row.commodityName));
+      fromCatalog.push({ id: row.commodityId, name: row.commodityName, isHW: false, variants: [] });
+    }
+    return [...rendered, ...fromCatalog];
   }
 
+  /**
+   * The variants of one commodity: the static mirror, the rows this user added
+   * at runtime, and the catalogue rows that belong to this commodity.
+   */
   function getVariants(com) {
-    return [...com.variants, ...customVariants[com.id] ?? []];
+    const rendered = [...com.variants, ...customVariants[com.id] ?? []];
+    const identities = new Set(rendered.map((v) => variantIdentity(com.name, v.name)));
+    const fromCatalog = catalogRowsRef.current
+      .filter((row) => row.commodityId === com.id)
+      // The row this user added at runtime carries a different id but the same
+      // variety: it must not show up twice.
+      .filter((row) => !identities.has(variantIdentity(row.commodityName, row.variantName)))
+      .map((row) => ({ id: row.variantId, name: row.variantName }));
+    return [...rendered, ...fromCatalog];
   }
 
   function commitVariant(commodityId) {
@@ -1093,7 +1293,7 @@ export default function DFTCArrivalInput() {
       });
     });
     return list;
-  }, [fields, customCommodities, customVariants]);
+  }, [fields, customCommodities, customVariants, catalogRowsVersion]);
 
   const totalEnteredCount = enteredRows.length;
 
@@ -1118,17 +1318,49 @@ export default function DFTCArrivalInput() {
     return enteredRows.filter((r) => r.otherVal > 0).length;
   }, [enteredRows]);
 
+  // enteredRows stays one record per commodity because it is also the save
+  // payload, so a commodity with both sources filled counts once there but
+  // fills two source cells. The review counts cells.
+  const totalSourceValueCount = farmEnteredCount + otherEnteredCount;
+
+  // The review is the complete monitoring sheet, so it walks the full catalogue
+  // rather than enteredRows — that one is the save payload and the printed
+  // totals, which must stay limited to commodities that carry a volume.
+  const catalogueReviewRows = useMemo(() => {
+    const list = [];
+    PRICE_CATEGORIES.forEach((cat) => {
+      getAllCommodities(cat).forEach((com) => {
+        getVariants(com).forEach((v, vi) => {
+          const f = getField(v.id);
+          const farmVal = parseFloat(f.farmSource) || 0;
+          const otherVal = parseFloat(f.otherSource) || 0;
+          list.push({
+            cat,
+            com,
+            v,
+            vi,
+            uom: f.uom || "kg",
+            farmVal,
+            otherVal,
+            combined: farmVal + otherVal
+          });
+        });
+      });
+    });
+    return list;
+  }, [fields, customCommodities, customVariants, catalogRowsVersion]);
+
   // Consolidated review rows grouped by category
   const consolidatedReviewGroups = useMemo(() => {
     const groups = [];
     PRICE_CATEGORIES.forEach((cat) => {
-      const rows = enteredRows.filter((r) => r.cat.id === cat.id);
+      const rows = catalogueReviewRows.filter((r) => r.cat.id === cat.id);
       if (rows.length > 0) {
         groups.push({ cat, rows });
       }
     });
     return groups;
-  }, [enteredRows]);
+  }, [catalogueReviewRows]);
 
   // Filtered review groups based on summary card clicks
   const filteredReviewGroups = useMemo(() => {
@@ -1155,7 +1387,16 @@ export default function DFTCArrivalInput() {
 
     const records = [];
     for (const r of enteredRows) {
+      const baseName = COMMODITY_NAME_OVERRIDES?.[r.com.name] ?? r.com.name;
+      const baseKey = nameSlug(baseName);
+      const variantName = r.v.name;
+      const variantKey = variantName && variantName !== "Base"
+        ? `${baseKey}-${nameSlug(variantName)}`
+        : baseKey;
+      const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
+
       let commodity_id = resolveCommodityId(r.com, r.v);
+
       const base = {
         variety: r.v.name,
         uom: r.uom || "kg",
@@ -1165,25 +1406,39 @@ export default function DFTCArrivalInput() {
         observation_status: "Reported value"
       };
 
-      if (!commodity_id) {
-        commodity_id = catalogRef.current?.get(nameSlug(r.com.name)) ?? r.com.id;
-      }
-
-      if (commodity_id) {
-        records.push({ commodity_id, ...base });
-      } else {
+      // Register custom-added commodities / new varieties on the fly so their
+      // volumes reach the DB instead of being silently dropped as unknown ids.
+      if (!variantKnown) {
         const registered = await registerCommodity({
-          name: r.com.name,
+          name: baseName,
           category: r.cat.name,
           variety: r.v.name === "Base" ? null : r.v.name,
           unit_of_measure: r.uom || "kg"
         });
         if (registered?.id) {
-          try { catalogRef.current?.set(nameSlug(r.com.name), registered.id); } catch { }
-          records.push({ commodity_id: registered.id, ...base });
-        } else if (r.com.id) {
-          records.push({ commodity_id: r.com.id, ...base });
+          commodity_id = registered.id;
+          try {
+            if (catalogRef.current) {
+              // The base key already points at the parent commodity's row:
+              // overwriting it would send the parent's own volumes to the
+              // newly registered variety.
+              if (!catalogRef.current.has(baseKey)) {
+                catalogRef.current.set(baseKey, registered.id);
+              }
+              catalogRef.current.set(variantKey, registered.id);
+            }
+          } catch { /* ignore */ }
         }
+      }
+
+      if (!commodity_id) {
+        // The catalog is keyed by the override-resolved DB name, not the UI
+        // label: "Pak choi / Bok choy" is stored as "Pakchoy/Bokchoy".
+        commodity_id = catalogRef.current?.get(baseKey) ?? r.com.id;
+      }
+
+      if (commodity_id) {
+        records.push({ commodity_id, ...base });
       }
     }
 
@@ -1248,7 +1503,7 @@ export default function DFTCArrivalInput() {
       setIsSaving(false);
       navigate("/dftc/input", {
         state: {
-          successMsg: `${dataName} saved successfully (${totalSaved} arrival records recorded).`,
+          successMsg: `${dataName} saved successfully (${totalSaved} commodity records, ${totalSourceValueCount} source values across Farm Source and Other Sources).`,
           justSavedType: "arrival",
           justSavedDate: effectivePeriodInfo.iso,
           justSavedAt: new Date().toISOString(),
@@ -1305,7 +1560,7 @@ export default function DFTCArrivalInput() {
   // ── RENDER REVIEW MODE ─────────────────────────────────────────────────────
   if (reviewMode) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
         {/* Top bar with back button */}
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -1337,7 +1592,7 @@ export default function DFTCArrivalInput() {
         )}
 
         {/* Summary Badges Card — Clickable to filter details (Matching Add Price Data Review) */}
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 mb-5">
+        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-4 sm:mb-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hw-neutral-100)] pb-3 mb-3">
             <button
               type="button"
@@ -1346,7 +1601,7 @@ export default function DFTCArrivalInput() {
                 reviewFilter === "all" ? "text-[var(--hw-green-800)]" : "text-[var(--hw-neutral-900)] hover:text-[var(--hw-green-700)]"
               }`}
             >
-              Total Commodities Entered: <strong className="text-[var(--hw-green-700)]">{totalEnteredCount}</strong>
+              Total Source Values Entered: <strong className="text-[var(--hw-green-700)]">{totalSourceValueCount}</strong>
               {reviewFilter !== "all" && (
                 <span className="ml-2 text-[12px] font-normal text-[var(--hw-green-700)] underline">
                   (Show All)
@@ -1359,9 +1614,9 @@ export default function DFTCArrivalInput() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2.5 text-[12px]">
             {[
-              { id: "all", label: "Combined Overall Volume", count: totalEnteredCount },
+              { id: "all", label: "Combined Overall Volume", count: totalSourceValueCount },
               { id: "farm", label: "Farm Source", count: farmEnteredCount },
               { id: "other", label: "Other Sources", count: otherEnteredCount }
             ].map((card) => {
@@ -1371,7 +1626,9 @@ export default function DFTCArrivalInput() {
                   key={card.id}
                   type="button"
                   onClick={() => setReviewFilter((prev) => (prev === card.id ? "all" : card.id))}
-                  className={`text-left rounded-xl p-3 border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                  className={`text-left rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:p-3 border transition-all cursor-pointer flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 ${
+                    card.id === "all" ? "col-span-2 sm:col-span-1" : ""
+                  } ${
                     isSelected
                       ? "bg-white border-[var(--hw-neutral-400)] shadow-md ring-1 ring-black/5"
                       : "bg-[var(--hw-neutral-50)] border-[var(--hw-neutral-200)] hover:bg-white hover:shadow-xs"
@@ -1391,7 +1648,7 @@ export default function DFTCArrivalInput() {
         </div>
 
         {/* Official DFTC Table Container */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-6 mb-6">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 sm:p-6 mb-6">
           <div className="text-center mb-4">
             <h2 className="text-[14px] sm:text-[15px] font-bold text-black uppercase tracking-wide">
               Davao Food Terminal Complex
@@ -1404,7 +1661,7 @@ export default function DFTCArrivalInput() {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" ref={reviewScrollRef}>
             <table className="w-full text-[12px] border-collapse bg-white" style={{ minWidth: 720 }}>
               <thead>
                 <tr>
@@ -1413,6 +1670,7 @@ export default function DFTCArrivalInput() {
                   <th rowSpan={2} style={{ background: EXCEL_HEADER_BG, border: EXCEL_BORDER, padding: "6px 8px", width: 64, textAlign: "center", fontWeight: "bold" }}>Unit</th>
                   <th
                     colSpan={2}
+                    data-col="farm"
                     style={{
                       background: EXCEL_FARM_BG,
                       border: reviewFilter === "farm" ? "2px solid #166534" : EXCEL_BORDER,
@@ -1427,6 +1685,7 @@ export default function DFTCArrivalInput() {
                   </th>
                   <th
                     colSpan={2}
+                    data-col="other"
                     style={{
                       background: EXCEL_OTHER_BG,
                       border: reviewFilter === "other" ? "2px solid #166534" : EXCEL_BORDER,
@@ -1564,20 +1823,20 @@ export default function DFTCArrivalInput() {
           </div>
 
           {/* Personnel Signatures Block */}
-          <div className="mt-8 pt-6 border-t border-[var(--hw-neutral-200)] flex flex-col sm:flex-row items-center justify-between gap-6 px-4">
-            <div className="text-center sm:text-left">
+          <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-[var(--hw-neutral-200)] grid grid-cols-2 gap-3 sm:gap-6 px-1 sm:px-4 text-[12px]">
+            <div>
               <span className="text-[11px] text-[var(--hw-neutral-500)] uppercase font-semibold block mb-1">Encoded by:</span>
-              <p className="text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide">
+              <p className="text-[12px] sm:text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide truncate">
                 {encodedBy || "—"}
               </p>
-              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5">{encodedByRole || ""}</p>
+              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5 truncate">{encodedByRole || ""}</p>
             </div>
-            <div className="text-center sm:text-right">
+            <div className="text-right">
               <span className="text-[11px] text-[var(--hw-neutral-500)] uppercase font-semibold block mb-1">Reviewed by:</span>
-              <p className="text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide">
+              <p className="text-[12px] sm:text-[13px] font-bold text-[var(--hw-neutral-900)] underline tracking-wide truncate">
                 {reviewedBy || "—"}
               </p>
-              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5">{reviewedByRole || ""}</p>
+              <p className="text-[11px] text-[var(--hw-neutral-600)] mt-0.5 truncate">{reviewedByRole || ""}</p>
             </div>
           </div>
         </div>
@@ -1645,7 +1904,7 @@ export default function DFTCArrivalInput() {
               disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError)}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalEnteredCount} commodities)
+              Save {dataName} ({totalSourceValueCount} inputs)
             </button>
           </div>
 
@@ -1685,7 +1944,7 @@ export default function DFTCArrivalInput() {
           {confirmOpen && (
             <ConfirmFinalizeArrivalModal
               periodLabel={effectivePeriodInfo.label}
-              totalRecords={totalEnteredCount}
+              totalRecords={totalSourceValueCount}
               totalVolume={totalCombinedVolume}
               farmVolume={totalFarmVolume}
               otherVolume={totalOtherVolume}
@@ -1704,7 +1963,7 @@ export default function DFTCArrivalInput() {
 
   // ── RENDER DATA INPUT MODE ─────────────────────────────────────────────────
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
       {/* Draft restoration banner */}
       {hasDraft && !draftDismissed && (
         <DFTCNotificationBanner
@@ -1733,25 +1992,20 @@ export default function DFTCArrivalInput() {
       )}
 
       {/* Top Header */}
-      <div className="space-y-3 mb-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <div className="space-y-1 mb-3.5 sm:mb-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => navigate("/dftc/input")}
-              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
+              className="p-1.5 -ml-1.5 rounded-xl hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer shrink-0"
               title="Back to Submit Data"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">Add Arrival Volume</h1>
-              <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-                Record commodity arrival volumes dropped at DFTC ({effectivePeriodInfo.label})
-              </p>
-            </div>
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--hw-neutral-900)] truncate">Add Arrival Volume</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
             <SaveStatusIndicator />
             <button
               type="button"
@@ -1760,116 +2014,124 @@ export default function DFTCArrivalInput() {
                 setReviewMode(true);
               }}
               disabled={totalEnteredCount === 0}
-              className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
-              Review ({totalEnteredCount})
+              Review ({totalSourceValueCount})
             </button>
           </div>
         </div>
+        <p className="text-[12px] text-[var(--hw-neutral-600)] pl-7 sm:pl-8 leading-snug">
+          Record commodity arrival volumes dropped at DFTC ({effectivePeriodInfo.label})
+        </p>
+      </div>
 
-        {/* Controls Bar: Frequency (Daily / Weekly / Monthly) + Date/Period selection (NO source tabs) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 p-3 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">Period:</span>
-            <div className="flex rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5">
-              {[
-                { id: "daily", label: "Daily" },
-                { id: "weekly", label: "Weekly" },
-                { id: "monthly", label: "Monthly" }
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPeriodType(p.id)}
-                  className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-colors cursor-pointer ${
-                    periodType === p.id
-                      ? "bg-[var(--hw-green-700)] text-white font-semibold shadow-xs"
-                      : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-white/60"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+      {/* Controls Bar: Frequency (Daily / Weekly / Monthly) + Date/Period selection (NO source tabs) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] mb-4">
+        <div className="flex items-center justify-between sm:justify-start gap-2">
+          <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)] shrink-0">Period:</span>
+          <div className="flex rounded-lg border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5 flex-1 sm:flex-none">
+            {[
+              { id: "daily", label: "Daily" },
+              { id: "weekly", label: "Weekly" },
+              { id: "monthly", label: "Monthly" }
+            ].map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPeriodType(p.id)}
+                className={`flex-1 sm:flex-none px-3 py-1 text-[11.5px] sm:text-[12px] font-medium rounded-md transition-colors cursor-pointer text-center ${
+                  periodType === p.id
+                    ? "bg-[var(--hw-green-700)] text-white font-semibold shadow-xs"
+                    : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-white/60"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {periodType === "daily" && (
-              <div className="relative inline-flex items-center gap-2">
-                <label htmlFor="arrival-date-input" className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
-                  Date:
-                </label>
+        <div className="flex items-center justify-between sm:justify-end gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--hw-neutral-100)]">
+          {periodType === "daily" && (
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+              <label htmlFor="arrival-date-input" className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">
+                Date:
+              </label>
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+                <Calendar className="w-3.5 h-3.5 text-[var(--hw-neutral-500)] shrink-0" />
                 <input
                   id="arrival-date-input"
                   type="date"
                   max={localToday()}
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                  className="w-[118px] sm:w-auto text-[12px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {periodType === "weekly" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Week:</span>
-                  <select
-                    id="arrival-week-select"
-                    aria-label="Select week of month"
-                    value={activeWeekObj.weekNum}
-                    onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}
-                    className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                  >
-                    {availableWeeks.map((w) => (
-                      <option key={w.weekNum} value={w.weekNum}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Month:</span>
-                  <select
-                    id="arrival-month-select"
-                    aria-label="Select month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                  >
-                    {MONTHS.map((m) => (
-                      <option key={m.val} value={m.val}>{m.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Year:</span>
-                  <select
-                    id="arrival-year-select"
-                    aria-label="Select year"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                  >
-                    {["2025", "2026", "2027"].map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
+          {periodType === "weekly" && (
+            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Week:</span>
+                <select
+                  id="arrival-week-select"
+                  aria-label="Select week of month"
+                  value={activeWeekObj.weekNum}
+                  onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                >
+                  {availableWeeks.map((w) => (
+                    <option key={w.weekNum} value={w.weekNum}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
 
-            {periodType === "monthly" && (
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)]">Monthly Report Period:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
+                <select
+                  id="arrival-month-select"
+                  aria-label="Select month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                >
+                  {MONTHS.map((m) => (
+                    <option key={m.val} value={m.val}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Year:</span>
+                <select
+                  id="arrival-year-select"
+                  aria-label="Select year"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                >
+                  {["2025", "2026", "2027"].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {periodType === "monthly" && (
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+              <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
+              <div className="flex items-center gap-1.5">
                 <select
                   id="arrival-monthly-month-select"
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
                 >
                   {MONTHS.map((m) => (
                     <option key={m.val} value={m.val}>{m.name}</option>
@@ -1879,31 +2141,31 @@ export default function DFTCArrivalInput() {
                   id="arrival-monthly-year-select"
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
                 >
                   {["2025", "2026", "2027"].map((y) => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Table Card (matching Add Price Data) */}
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden mb-6">
         {/* Toolbar */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[var(--hw-neutral-200)]">
+        <div className="px-2.5 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-2 border-b border-[var(--hw-neutral-200)] overflow-x-auto">
           {/* Search */}
-          <div className="relative flex-1 min-w-[160px]">
+          <div className="relative flex-1 min-w-[70px] sm:min-w-[160px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search commodity or variant"
-              className="w-full pl-8 pr-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
+              placeholder="Search"
+              className="w-full pl-8 pr-2 sm:pr-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
             {searchQuery && (
               <button
@@ -1920,10 +2182,13 @@ export default function DFTCArrivalInput() {
           <button
             type="button"
             onClick={() => setAddCommodityOpen(true)}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+            aria-label="Add Commodity"
+            title="Add Commodity"
+            className="shrink-0 flex items-center gap-1 xs:gap-1.5 px-2 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[var(--hw-green-700)] text-white text-[11px] sm:text-[12px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Commodity</span>
+            <span className="hidden xs:inline sm:hidden">Add</span>
+            <span className="hidden sm:inline">Add Commodity</span>
           </button>
 
           {/* Show All / Entered Only */}
@@ -1933,13 +2198,13 @@ export default function DFTCArrivalInput() {
                 key={m}
                 type="button"
                 onClick={() => setShowMode(m)}
-                className={`px-3 py-2 text-[12px] font-medium transition-colors cursor-pointer ${
+                className={`px-1.5 xs:px-2.5 sm:px-3 py-1.5 sm:py-2 text-[10.5px] xs:text-[11px] sm:text-[12px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   showMode === m
                     ? "bg-[var(--hw-neutral-900)] text-white font-semibold"
                     : "text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
                 }`}
               >
-                {m === "all" ? "Show All" : "Show Entered Only"}
+                {m === "all" ? "All" : "Entered"}
               </button>
             ))}
           </div>
@@ -1948,9 +2213,12 @@ export default function DFTCArrivalInput() {
           <button
             type="button"
             onClick={toggleCollapseAll}
-            className="shrink-0 px-3 py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+            title={allCollapsed ? "Expand All" : "Collapse All"}
+            aria-label={allCollapsed ? "Expand All" : "Collapse All"}
+            className="shrink-0 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-[var(--hw-neutral-200)] text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer flex items-center gap-1"
           >
-            {allCollapsed ? "Expand All" : "Collapse All"}
+            <span className="sm:hidden">{allCollapsed ? "Expand" : "Collapse"}</span>
+            <span className="hidden sm:inline">{allCollapsed ? "Expand All" : "Collapse All"}</span>
           </button>
         </div>
 
@@ -2014,23 +2282,27 @@ export default function DFTCArrivalInput() {
 
                   {catCommodities.map((com) => {
                     const variants = getVariants(com).filter((v) => matchesVariant(com, v));
+                    const colCom = collapsedComs.has(com.id);
                     return (
                       <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                         {/* Commodity Header with Icon (matching Image 1) */}
-                        <div className="px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)]">
-                          <div className="flex items-center gap-2">
+                        <div
+                          onClick={() => toggleCommodity(com.id)}
+                          className="px-3 sm:px-4 py-2 bg-white flex items-center justify-between border-b border-[var(--hw-neutral-50)] cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
                             {com.isHW && hasHWIcon(com.name) ? (
                               <CommodityIllustration commodityId={hwId(com.name)} className="w-5 h-5 shrink-0" />
                             ) : (
                               <Leaf className={`w-4 h-4 shrink-0 ${com.isHW ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`} />
                             )}
-                            <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                            <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
                               {com.name}
                             </span>
                             {com.isHW && (
                               <button
                                 type="button"
-                                onClick={() => setHwInfoId(com.id)}
+                                onClick={(e) => { e.stopPropagation(); setHwInfoId(com.id); }}
                                 className="text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] cursor-pointer"
                                 title="HarvestWise Supported Commodity"
                               >
@@ -2039,17 +2311,20 @@ export default function DFTCArrivalInput() {
                             )}
                             <button
                               type="button"
-                              onClick={() => setCoverageOpen(true)}
+                              onClick={(e) => { e.stopPropagation(); setCoverageOpen(true); }}
                               className="text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] cursor-pointer"
                               title="About Analytics Coverage"
                             >
                               <Info className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                          {colCom
+                            ? <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />
+                            : <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0" />}
                         </div>
 
                         {/* Variant Rows */}
-                        {variants.map((v) => {
+                        {!colCom && variants.map((v) => {
                           const f = getField(v.id);
                           const farmVal = parseFloat(f.farmSource) || 0;
                           const otherVal = parseFloat(f.otherSource) || 0;
@@ -2130,7 +2405,7 @@ export default function DFTCArrivalInput() {
                         })}
 
                         {/* Add Variant Button */}
-                        {showMode === "all" && (
+                        {!colCom && showMode === "all" && (
                           <div className="px-4 py-2 border-b border-[var(--hw-neutral-50)]">
                             {addingVariant === com.id ? (
                               <div className="flex items-center gap-2">
@@ -2190,7 +2465,7 @@ export default function DFTCArrivalInput() {
             Ready to review entered arrival volume?
           </h3>
           <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-            {totalEnteredCount} commodity record{totalEnteredCount === 1 ? "" : "s"} entered across Farm Source and Other Sources.
+            {totalSourceValueCount} source value{totalSourceValueCount === 1 ? "" : "s"} entered across Farm Source and Other Sources.
           </p>
         </div>
         <button
@@ -2205,7 +2480,7 @@ export default function DFTCArrivalInput() {
           <span>Review Entered Data</span>
           {totalEnteredCount > 0 && (
             <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold">
-              {totalEnteredCount}
+              {totalSourceValueCount}
             </span>
           )}
         </button>

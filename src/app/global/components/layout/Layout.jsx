@@ -14,6 +14,7 @@ import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { ChangePasswordPanel } from "../settings/ChangePasswordPanel";
+import { PrivacyPolicyNotice } from "../legal/PrivacyPolicyNotice";
 
 const NAV_ROUTES = {
   home: "/farmer",
@@ -145,6 +146,8 @@ const Layout = () => {
         className={`pt-16 pb-20 md:pb-6 transition-all duration-300 ${sidebarCollapsed ? "md:ml-16" : "md:ml-64"}`}
         style={{ overflowX: "hidden" }}
       >
+        <PrivacyPolicyNotice />
+
         <FarmerMain>
           {pendingPasswordChange ? (
             <ChangePasswordPanel onRotated={handlePasswordRotated} />

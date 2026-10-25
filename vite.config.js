@@ -87,10 +87,10 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
-            // Cache all other API GET responses with NetworkFirst strategy
-            // (try network, fall back to cache when offline)
-            // Match any origin with /api/v1/ path — works for localhost, production domains, etc.
-            urlPattern: /\/api\/v1\/.*/i,
+            // Only farmer-safe read surfaces may be replayed offline. Admin,
+            // DFTC, audit, notification, profile, and auth responses are not
+            // stored in URL-keyed CacheStorage.
+            urlPattern: /\/api\/v1\/(farmer\/daily-snapshot|prices(?:\/[^/?]+)?|market\/(calendar|monthly-recommendations)|weather\/advisory)(?:\?|$)/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'harvestwise-api-cache',

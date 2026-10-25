@@ -133,7 +133,7 @@ function DFTCNotifications() {
   };
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       <PageHeader
         title="Notifications"
         description="Stay updated on data submissions, validation outcomes, and market trends."
@@ -153,14 +153,14 @@ function DFTCNotifications() {
       />
 
       {isLoading ? (
-        <div className="space-y-2.5">
+        <div className="space-y-2 sm:space-y-2.5">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-[var(--hw-neutral-200)] animate-pulse"
+              className="flex items-start gap-3 sm:gap-3.5 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white border border-[var(--hw-neutral-200)] animate-pulse"
             >
               <div className="w-9 h-9 rounded-xl bg-[var(--hw-neutral-100)] flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0 space-y-2.5">
+              <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="h-4 bg-[var(--hw-neutral-200)] rounded-md w-1/3" />
                   <div className="h-3 bg-[var(--hw-neutral-100)] rounded w-20" />
@@ -206,12 +206,12 @@ function DFTCNotifications() {
           </div>
         </Card>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-2 sm:space-y-2.5">
           {notifications.map((alert) => (
             <div
               key={alert.id}
               onClick={() => handleCardClick(alert)}
-              className={`flex items-start gap-3.5 p-4 rounded-2xl border transition-all cursor-pointer ${
+              className={`flex items-start gap-3 sm:gap-3.5 p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer ${
                 alert.read
                   ? "bg-white border-[var(--hw-neutral-200)] opacity-80 hover:opacity-100 hover:border-[var(--hw-neutral-300)]"
                   : "bg-white border-[var(--hw-neutral-300)] shadow-[var(--shadow-xs)] hover:border-[var(--hw-neutral-400)]"
@@ -223,30 +223,35 @@ function DFTCNotifications() {
                 fallbackTitle={alert.title}
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <p
-                      className={`text-[14px] leading-snug ${
-                        alert.read
-                          ? "font-medium text-[var(--hw-neutral-700)]"
-                          : "font-bold text-[var(--hw-neutral-900)]"
-                      }`}
-                    >
-                      {alert.title}
-                    </p>
-                    {!alert.read && (
-                      <span className="w-2 h-2 rounded-full bg-[var(--hw-green-600)] flex-shrink-0" />
-                    )}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p
+                        className={`text-[13.5px] sm:text-[14px] leading-snug ${
+                          alert.read
+                            ? "font-medium text-[var(--hw-neutral-700)]"
+                            : "font-bold text-[var(--hw-neutral-900)]"
+                        }`}
+                      >
+                        {alert.title}
+                      </p>
+                      {!alert.read && (
+                        <span className="w-2 h-2 rounded-full bg-[var(--hw-green-600)] shrink-0" />
+                      )}
+                    </div>
+                    <span className="text-[11px] text-[var(--hw-neutral-500)] block sm:hidden mt-0.5">
+                      {alert.timestamp}
+                    </span>
                   </div>
-                  <span className="text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap flex-shrink-0">
+                  <span className="text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap hidden sm:inline-block shrink-0 mt-0.5">
                     {alert.timestamp}
                   </span>
                 </div>
-                <p className="text-[13px] text-[var(--hw-neutral-600)] mt-1 line-clamp-2 leading-relaxed">
+                <p className="text-[12.5px] sm:text-[13px] text-[var(--hw-neutral-600)] mt-1 line-clamp-2 leading-relaxed">
                   {alert.summary}
                 </p>
               </div>
-              <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0 self-center" />
+              <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0 self-center" />
             </div>
           ))}
         </div>

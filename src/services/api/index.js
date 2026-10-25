@@ -5,3 +5,4 @@ export * as calendarApi from "./calendarApi";
 export * as analyticsApi from "./analyticsApi";
 export * as pricesApi from "./pricesApi";
 export * as notificationsApi from "./notificationsApi";
+export * as dftcApi from "./dftcApi";

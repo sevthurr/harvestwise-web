@@ -522,7 +522,7 @@ function RegisterPage() {
               onChange={(e) => setAgreed(e.target.checked)}
               className="mt-0.5 w-4 h-4 rounded border-[var(--hw-neutral-300)] text-[var(--hw-green-700)] focus:ring-[var(--hw-green-700)] accent-[var(--hw-green-700)] cursor-pointer flex-shrink-0"
             />
-            <label htmlFor="agreeTerms" className="cursor-pointer select-none">
+            <label htmlFor="agreeTerms" className="text-[12px] text-[var(--hw-neutral-600)] leading-relaxed cursor-pointer select-none">
               {authLang === "ceb" ? (
                 <span>
                   Paghimo nimo og account, mouyon ka sa{" "}
@@ -533,7 +533,7 @@ function RegisterPage() {
                       e.stopPropagation();
                       setViewLegalModal("terms");
                     }}
-                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                    className="text-[12px] text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer inline align-baseline p-0 bg-transparent"
                   >
                     Mga Termino ug Kondisyon
                   </button>{" "}
@@ -545,7 +545,7 @@ function RegisterPage() {
                       e.stopPropagation();
                       setViewLegalModal("privacy");
                     }}
-                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                    className="text-[12px] text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer inline align-baseline p-0 bg-transparent"
                   >
                     Patakaran sa Privacy
                   </button>.
@@ -560,7 +560,7 @@ function RegisterPage() {
                       e.stopPropagation();
                       setViewLegalModal("terms");
                     }}
-                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                    className="text-[12px] text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer inline align-baseline p-0 bg-transparent"
                   >
                     Mga Tuntunin at Kundisyon
                   </button>{" "}
@@ -572,7 +572,7 @@ function RegisterPage() {
                       e.stopPropagation();
                       setViewLegalModal("privacy");
                     }}
-                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                    className="text-[12px] text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer inline align-baseline p-0 bg-transparent"
                   >
                     Patakaran sa Privacy
                   </button>.
@@ -587,7 +587,7 @@ function RegisterPage() {
                       e.stopPropagation();
                       setViewLegalModal("terms");
                     }}
-                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                    className="text-[12px] text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer inline align-baseline p-0 bg-transparent"
                   >
                     Terms and Conditions
                   </button>{" "}
@@ -599,7 +599,7 @@ function RegisterPage() {
                       e.stopPropagation();
                       setViewLegalModal("privacy");
                     }}
-                    className="text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer"
+                    className="text-[12px] text-[var(--hw-green-800)] font-semibold underline hover:text-[var(--hw-green-900)] cursor-pointer inline align-baseline p-0 bg-transparent"
                   >
                     Privacy Policy
                   </button>.

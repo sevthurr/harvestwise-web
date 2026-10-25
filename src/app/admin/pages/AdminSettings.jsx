@@ -31,6 +31,10 @@ const TABS = [
 
 const AccountTab = ({ showToast }) => {
   const { user, refreshUser } = useAuth();
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/admin/settings?tab=account`,
+    onResult: () => {},
+  });
   const staff = user?.staff_profile || user?.staffProfile || {};
   const [form, setForm] = useState({
     firstName: staff?.first_name || staff?.firstName || user?.first_name || user?.firstName || "",
@@ -170,9 +174,15 @@ const AccountTab = ({ showToast }) => {
               placeholder="admin@example.com"
               value={form.email}
               onChange={set("email")}
-              className={`${inputCls} ${emailInvalid ? "border-red-500 focus:ring-red-500" : ""}`}
+              disabled={googleLink.googleConnected}
+              className={`${inputCls} ${emailInvalid ? "border-red-500 focus:ring-red-500" : ""} ${googleLink.googleConnected ? "bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed" : ""}`}
             />
             {emailInvalid && <p className="mt-1 text-[12px] text-red-600">Enter a valid email address.</p>}
+            {googleLink.googleConnected && (
+              <p className="mt-1 text-[12px] text-amber-700">
+                Your account is linked to Google Sign-In. To change your email, update it in your Google account first.
+              </p>
+            )}
           </div>
           <div>
             <FieldLabel htmlFor="adm-role">Role</FieldLabel>
@@ -334,7 +344,7 @@ const SecurityTab = ({ showToast }) => {
       <Card>
         <SectionLabel>Two-Factor Authentication</SectionLabel>
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-[14px] font-semibold text-black">Two-Factor Authentication</p>
               {twoFAEnabled ? (
@@ -344,11 +354,11 @@ const SecurityTab = ({ showToast }) => {
               )}
             </div>
             {twoFAEnabled ? (
-              <GhostBtn onClick={() => setTwoFAAccordionOpen((v) => !v)}>
+              <GhostBtn onClick={() => setTwoFAAccordionOpen((v) => !v)} className="w-full sm:w-auto">
                 Manage Two-Factor Authentication
               </GhostBtn>
             ) : (
-              <GreenBtn onClick={() => setTwoFAAccordionOpen((v) => !v)}>
+              <GreenBtn onClick={() => setTwoFAAccordionOpen((v) => !v)} className="w-full sm:w-auto">
                 Set up Two-Factor Authentication
               </GreenBtn>
             )}
@@ -474,7 +484,7 @@ const SecurityTab = ({ showToast }) => {
       {/* Card 3: Google Sign-In */}
       <Card>
         <SectionLabel>{t("admin.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-[14px] font-semibold text-black">{t("admin.settings.google_card_title", {}, "Google Sign-In")}</p>
             <p className="text-[13px] text-black mt-0.5">{googleLink.googleConnected ? t("admin.settings.google_connected", {}, "Connected") : t("admin.settings.google_not_connected", {}, "Not connected")}</p>
@@ -484,7 +494,7 @@ const SecurityTab = ({ showToast }) => {
               type="button"
               onClick={() => setShowDisconnectModal(true)}
               disabled={googleLink.loading}
-              className="h-9 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0 cursor-pointer"
+              className="w-full sm:w-auto h-9 px-4 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0 cursor-pointer"
             >
               {t("admin.settings.google_disconnect", {}, "Disconnect")}
             </button>
@@ -493,7 +503,7 @@ const SecurityTab = ({ showToast }) => {
               type="button"
               onClick={handleGoogleConnect}
               disabled={googleLink.loading}
-              className="h-9 px-4 text-[13px] font-medium text-[var(--hw-green-700)] border border-[var(--hw-green-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors flex-shrink-0 cursor-pointer"
+              className="w-full sm:w-auto h-9 px-4 text-[13px] font-medium text-[var(--hw-green-700)] border border-[var(--hw-green-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors flex-shrink-0 cursor-pointer"
             >
               {t("admin.settings.google_connect", {}, "Connect")}
             </button>
@@ -627,7 +637,7 @@ function AdminSettings() {
   };
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
       <PageHeader
         title="Settings"
         description="Manage your admin account and security settings."

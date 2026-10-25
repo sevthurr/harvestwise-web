@@ -6,7 +6,7 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { PriceDetailView } from "../components/shared/PriceDetailView";
 import { toCamelCase } from "../../global/utils/apiTransforms";
-import { fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
+import { fetchSupportedPricesList } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 
 function PriceTrendDetailPage() {
@@ -17,8 +17,8 @@ function PriceTrendDetailPage() {
   const state = location.state;
 
   const { data: pricesData, isLoading: loading, isError } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: fetchPricesList,
+    queryKey: ["prices", "supported-list"],
+    queryFn: fetchSupportedPricesList,
     staleTime: 1000 * 60 * 30,
   });
 
@@ -96,7 +96,7 @@ function PriceTrendDetailPage() {
   ];
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+    <div className="px-4 md:px-8 lg:px-10 py-3.5 sm:py-5 pb-20 sm:pb-24 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
 
         {/* Breadcrumb */}
         <Breadcrumb
@@ -123,7 +123,7 @@ function PriceTrendDetailPage() {
         {/* CTA */}
         <button
           onClick={() => navigate(`/farmer/assess?commodity=${commodity.id}`)}
-          className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-[var(--hw-green-700)] text-white px-4 py-2.5 sm:py-3 rounded-xl text-[14px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors"
         >
           {t("farmer.commodityDetail.assess_crop_btn", {}, "Assess this crop")}
           <TrendingUp className="w-4 h-4" />

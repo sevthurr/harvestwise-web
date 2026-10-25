@@ -7,6 +7,7 @@ import { CommodityIllustration, getCommodityIconKey } from "../../global/compone
 import { apiGet, parseResponse } from "../../global/api";
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction } from "../../../hooks/useAnalyticsOutputs";
+import { formatDateTime, formatDate } from "../../global/utils/apiTransforms";
 import {
   arrivalBoundaryRows,
   arrivalSeriesTotals,
@@ -31,8 +32,8 @@ const RELIABILITY_TONES = {
 // Low to emerald and Lower Middle to blue because it is shared with Price
 // Outlook, where those labels mean something different.
 const ARRIVAL_PRESSURE_TONES = {
-  Low: "text-blue-600",
-  "Lower Middle": "text-emerald-600",
+  Low: "text-emerald-700",
+  "Lower Middle": "text-blue-600",
   "Upper Middle": "text-amber-600",
   High: "text-red-600"
 };
@@ -109,7 +110,29 @@ const RESILIENT_STAGE_WEIGHTS = {
     "Historical Seasonal Production Level": 5, "Weather Risk": 10, Profitability: 15
   }
 };
+const PROFITABILITY_MODULE = "Profitability";
 const PRICE_OUTLOOK_MODULE = "Price Outlook";
+
+const formatDisplayDate = (val) => {
+  if (!val) return "-";
+  try {
+    const s = String(val);
+    const formatted = formatDate(s.length === 7 ? `${s}-01` : s);
+    return formatted && formatted !== "Invalid Date" ? formatted : s;
+  } catch {
+    return val;
+  }
+};
+
+const formatDisplayDateTime = (val) => {
+  if (!val) return "-";
+  try {
+    const formatted = formatDateTime(val);
+    return formatted && formatted !== "Invalid Date" ? formatted : val;
+  } catch {
+    return val;
+  }
+};
 
 const WEATHER_METRICS = [
   { key: "temp_range", label: "Temperature range", unit: "°C" },
@@ -171,19 +194,19 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 xs:p-4 pt-4 pb-24 sm:p-6">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Edit {phaseLabel} Weights</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-7.5rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)] shrink-0">
+          <p className="font-semibold text-black">Edit {phaseLabel} Weights</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-4 space-y-3">
+        <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1 min-h-0 [scrollbar-width:thin]">
           {WEIGHT_MODULES.map((m) => (
             <div key={m}>
-              <label className="block text-[12px] text-[var(--hw-neutral-700)] mb-1">{m} %</label>
+              <label className="block text-[12px] text-black mb-1">{m} %</label>
               <input
                 type="number"
                 min="0"
@@ -191,26 +214,26 @@ const EditWeightModal = ({ phase, currentWeights, onClose, onSave }) => {
                 placeholder="0"
                 value={values[m]}
                 onChange={(e) => setValues((v) => ({ ...v, [m]: e.target.value }))}
-                className={inputCls}
+                className="w-full px-3 py-2 text-[13px] text-black border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
               />
             </div>
           ))}
           <div className="flex items-center justify-between pt-2 border-t border-[var(--hw-neutral-100)]">
-            <span className="text-[13px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
+            <span className="text-[13px] font-semibold text-black">Total</span>
             <span className={`text-[13px] font-bold ${totalOk ? "text-emerald-700" : "text-red-600"}`}>
               {total > 0 ? `${total.toFixed(0)}%` : "0%"}
             </span>
           </div>
           {!totalOk && <p className="text-[12px] text-red-600">Weights must total 100%.</p>}
         </div>
-        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 sm:py-4 border-t border-[var(--hw-neutral-100)] shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
           </div>
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400"
           >
             Cancel
           </button>
@@ -260,21 +283,21 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 xs:p-4 pt-4 pb-24 sm:p-6">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
-          <p className="font-semibold text-[var(--hw-neutral-900)]">Edit Price Outlook Thresholds</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-7.5rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)] shrink-0">
+          <p className="font-semibold text-black">Edit Price Outlook Thresholds</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-4 space-y-4">
-          <p className="text-[12px] text-[var(--hw-neutral-600)]">
+        <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1 min-h-0 [scrollbar-width:thin]">
+          <p className="text-[12px] text-black">
             Configure global percentage change thresholds. Neutral is automatically derived as the range between unfavorable and favorable boundaries.
           </p>
           <div>
-            <label className="block text-[12px] text-[var(--hw-neutral-700)] mb-1">Favorable above (%)</label>
+            <label className="block text-[12px] text-black mb-1">Favorable above (%)</label>
             <input
               type="number"
               step="0.1"
@@ -285,7 +308,7 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
             />
           </div>
           <div>
-            <label className="block text-[12px] text-[var(--hw-neutral-700)] mb-1">Unfavorable below (%)</label>
+            <label className="block text-[12px] text-black mb-1">Unfavorable below (%)</label>
             <input
               type="number"
               step="0.1"
@@ -299,14 +322,14 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
             <p className="text-[12px] text-red-600">Unfavorable cutoff must be strictly less than Favorable cutoff.</p>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 sm:py-4 border-t border-[var(--hw-neutral-100)] shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
           </div>
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400"
           >
             Cancel
           </button>
@@ -322,6 +345,129 @@ const EditPriceOutlookModal = ({ currentRules, onClose, onSave }) => {
     </div>
   );
 };
+
+// Edit Profitability Modal (Configures farmer assessment classification rules matching Table 9)
+// Edit Profitability Modal (Configures farmer assessment classification rules)
+const EditProfitabilityModal = ({ currentRules, onClose, onSave }) => {
+  const initialFav = currentRules?.favPct ?? (currentRules?.favMultiplier ? Math.round(Number(currentRules.favMultiplier) <= 10 ? currentRules.favMultiplier * 100 : currentRules.favMultiplier) : 110);
+
+  const [favPct, setFavPct] = useState(initialFav);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const favNum = Number(favPct);
+  const isValid = !isNaN(favNum) && favNum > 100 && favNum <= 300;
+  const favMargin = Math.round(favNum - 100);
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const err = await onSave({ favPct: favNum, unfavPct: 100 });
+      if (err) {
+        setSaveError(err);
+      } else {
+        setSaved(true);
+        setTimeout(onClose, 600);
+      }
+    } catch (e) {
+      setSaveError(e.message || "Failed to save profitability threshold.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 xs:p-4 pt-4 pb-24 sm:p-6">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-7.5rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)] shrink-0">
+          <div>
+            <p className="font-semibold text-black">Edit Profitability Thresholds</p>
+            <p className="text-[12px] text-black">Global farmer assessment classification rules</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 min-h-0 [scrollbar-width:thin]">
+          <p className="text-[12px] text-black leading-relaxed">
+            Profitability is evaluated during farmer crop planning where <span className="font-semibold text-black">Break-Even = Total Cost ÷ Marketable Yield</span>. Marginal and Unfavorable are anchored to the Break-even Price.
+          </p>
+
+          <div>
+            <label className="block text-[12px] font-medium text-black mb-1">
+              Favorable Threshold (% of Break-even Price)
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  step="1"
+                  min="101"
+                  max="300"
+                  placeholder="110"
+                  aria-label="Favorable Threshold Percentage"
+                  value={favPct}
+                  onChange={(e) => setFavPct(e.target.value)}
+                  className="w-full px-3 py-2 text-[13px] text-black border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition pr-8"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-black">
+                  %
+                </span>
+              </div>
+              <span className="text-[12px] font-medium text-black whitespace-nowrap">
+                ({favMargin >= 0 ? `+${favMargin}%` : `${favMargin}%`} profit buffer)
+              </span>
+            </div>
+            <p className="text-[11px] text-black mt-1">
+              Lower Forecast must be at least this percentage of Break-even Price to be Favorable.
+            </p>
+          </div>
+
+          <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] text-[10px] space-y-1">
+            <p className="font-semibold text-black text-[9.5px] uppercase tracking-wide mb-1">
+              Decision Rule Preview
+            </p>
+            <p className="text-black text-[10px] leading-snug">
+              <span className="text-emerald-700 font-semibold">Favorable:</span> Lower Forecast ≥ {favNum || 110}% of Break-even Price
+            </p>
+            <p className="text-black text-[10px] leading-snug">
+              <span className="text-amber-600 font-semibold">Marginal:</span> Forecast Range overlaps Break-even Price
+            </p>
+            <p className="text-black text-[10px] leading-snug">
+              <span className="text-red-600 font-semibold">Unfavorable:</span> Upper Forecast &lt; Break-even Price
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 sm:py-4 border-t border-[var(--hw-neutral-100)] shrink-0 bg-white">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!isValid || saving || saved}
+            onClick={handleSave}
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // Edit Weather Risk Modal (metric-based crop_weather_rules, persisted via API)
 const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved }) => {
@@ -419,106 +565,192 @@ const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved })
     }
   };
 
-  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition";
-  const selectCls = "w-full px-2 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
+  const allMetricOptions = useMemo(() => {
+    const existingKeys = new Set(WEATHER_METRICS.map((m) => m.key));
+    const extras = (rules || [])
+      .filter((r) => r.metric_key && !existingKeys.has(r.metric_key))
+      .map((r) => ({
+        key: r.metric_key,
+        label: r.metric_key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        unit: r.unit || ""
+      }));
+    return [...WEATHER_METRICS, ...extras];
+  }, [rules]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 xs:p-4 pt-4 pb-24 sm:p-6">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)]">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[calc(100dvh-7.5rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)] shrink-0">
           <div>
-            <p className="font-semibold text-[var(--hw-neutral-900)]">Edit Weather Thresholds</p>
-            <p className="text-[12px] text-[var(--hw-neutral-600)]">{commodity} · {variety || "Standard"}</p>
+            <p className="font-semibold text-black">Edit Weather Thresholds</p>
+            <p className="text-[12px] text-black">{commodity} · {variety || "Standard"}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+        <div className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-4 min-h-0 [scrollbar-width:thin]">
           {error && <p className="text-[12px] text-red-600">{error}</p>}
-          <p className="text-[12px] text-[var(--hw-neutral-600)]">
-            One row per metric threshold stored in <span className="font-mono">crop_weather_rules</span>.
-            These rules drive the Weather Risk and HSRA module classifications.
+          <p className="text-[12px] text-black leading-relaxed">
+            One rule per weather metric stored in <span className="font-mono text-black font-semibold">crop_weather_rules</span>.
+            These rules drive the Weather Risk and crop suitability classifications.
           </p>
 
-          {!rules && !error && <p className="text-[13px] text-[var(--hw-neutral-500)]">Loading weather rules…</p>}
+          {!rules && !error && <p className="text-[13px] text-black">Loading weather rules…</p>}
           {rules && rules.length === 0 && (
-            <p className="text-[13px] text-[var(--hw-neutral-500)]">
+            <p className="text-[13px] text-black">
               No weather rules configured for this commodity and variety. Add one below.
             </p>
           )}
 
           {rules && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {rules.map((r, i) => (
-                <div key={r.id || `new-${i}`} className="grid grid-cols-12 gap-2 items-center border border-[var(--hw-neutral-200)] rounded-xl p-2.5 bg-[var(--hw-neutral-50)]/50">
-                  <div className="col-span-3">
-                    <select
-                      value={r.metric_key}
-                      onChange={(e) => {
-                        const metric = WEATHER_METRICS.find((m) => m.key === e.target.value);
-                        updateRule(i, { metric_key: e.target.value, unit: metric?.unit || r.unit });
-                      }}
-                      className={selectCls}
-                    >
-                      {WEATHER_METRICS.map((m) => (
-                        <option key={m.key} value={m.key}>{m.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <select
-                      value={r.operator}
-                      onChange={(e) => updateRule(i, { operator: e.target.value })}
-                      className={selectCls}
-                    >
-                      {WEATHER_OPERATORS.map((op) => (
-                        <option key={op} value={op}>{op}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="Min"
-                      value={r.threshold_min}
-                      onChange={(e) => updateRule(i, { threshold_min: e.target.value })}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="Max"
-                      value={r.threshold_max}
-                      onChange={(e) => updateRule(i, { threshold_max: e.target.value })}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <select
-                      value={r.risk_level}
-                      onChange={(e) => updateRule(i, { risk_level: e.target.value })}
-                      className={selectCls}
-                    >
-                      {WEATHER_RISK_LEVELS.map((lvl) => (
-                        <option key={lvl} value={lvl}>{lvl}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    {!r.id && (
-                      <button
-                        onClick={() => removeRule(i)}
-                        className="p-1.5 rounded-lg text-[var(--hw-neutral-500)] hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-                        title="Remove rule"
+                <div
+                  key={r.id || `new-${i}`}
+                  className="border border-[var(--hw-neutral-200)] rounded-xl p-3 bg-white hover:border-[var(--hw-neutral-300)] transition-colors space-y-2.5 shadow-[var(--shadow-xs)]"
+                >
+                  {/* Line 1: Weather Metric & Risk Level & Delete */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-[11px] font-medium text-black mb-1">
+                        Weather Metric
+                      </label>
+                      <select
+                        value={r.metric_key}
+                        onChange={(e) => {
+                          const metric = allMetricOptions.find((m) => m.key === e.target.value);
+                          updateRule(i, { metric_key: e.target.value, unit: metric?.unit || r.unit });
+                        }}
+                        className="w-full px-2.5 py-1.5 text-[12px] font-medium text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer"
                       >
-                        <X className="w-4 h-4" />
-                      </button>
+                        {allMetricOptions.map((m) => (
+                          <option key={m.key} value={m.key} className="text-black">
+                            {m.label} {m.unit ? `(${m.unit})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-end gap-2 shrink-0">
+                      <div className="w-32 sm:w-36">
+                        <label className="block text-[11px] font-medium text-black mb-1">
+                          Risk Level
+                        </label>
+                        <select
+                          value={r.risk_level}
+                          onChange={(e) => updateRule(i, { risk_level: e.target.value })}
+                          className={`w-full px-2.5 py-1.5 text-[12px] font-semibold capitalize bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer ${
+                            r.risk_level?.toLowerCase() === "suitable"
+                              ? "text-emerald-700"
+                              : r.risk_level?.toLowerCase() === "caution"
+                              ? "text-amber-600"
+                              : r.risk_level?.toLowerCase() === "severe"
+                              ? "text-red-600"
+                              : "text-black"
+                          }`}
+                        >
+                          {WEATHER_RISK_LEVELS.map((lvl) => (
+                            <option key={lvl} value={lvl} className="text-black">
+                              {lvl}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {!r.id && (
+                        <button
+                          onClick={() => removeRule(i)}
+                          className="p-1.5 mb-0.5 rounded-lg text-black hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                          title="Remove rule"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Line 2: Operator / Condition and Threshold Values */}
+                  <div className="grid grid-cols-12 gap-2 items-center bg-[var(--hw-neutral-50)] p-2.5 rounded-lg border border-[var(--hw-neutral-100)] text-[12px]">
+                    <div className="col-span-4 sm:col-span-3">
+                      <label className="block text-[10px] font-medium text-black mb-0.5">
+                        Condition
+                      </label>
+                      <select
+                        value={r.operator}
+                        onChange={(e) => updateRule(i, { operator: e.target.value })}
+                        className="w-full px-2 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer"
+                      >
+                        {WEATHER_OPERATORS.map((op) => (
+                          <option key={op} value={op} className="text-black">
+                            {op === "between"
+                              ? "Between"
+                              : op === ">"
+                              ? "Greater than (>)"
+                              : op === "<"
+                              ? "Less than (<)"
+                              : op === ">="
+                              ? "At least (≥)"
+                              : op === "<="
+                              ? "At most (≤)"
+                              : op}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {r.operator === "between" ? (
+                      <>
+                        <div className="col-span-4 sm:col-span-4">
+                          <label className="block text-[10px] font-medium text-black mb-0.5">
+                            Min Value {r.unit ? `(${r.unit})` : ""}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            placeholder="Min"
+                            value={r.threshold_min}
+                            onChange={(e) => updateRule(i, { threshold_min: e.target.value })}
+                            className="w-full px-2.5 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
+                          />
+                        </div>
+                        <div className="col-span-4 sm:col-span-5">
+                          <label className="block text-[10px] font-medium text-black mb-0.5">
+                            Max Value {r.unit ? `(${r.unit})` : ""}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            placeholder="Max"
+                            value={r.threshold_max}
+                            onChange={(e) => updateRule(i, { threshold_max: e.target.value })}
+                            className="w-full px-2.5 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-8 sm:col-span-9">
+                        <label className="block text-[10px] font-medium text-black mb-0.5">
+                          Threshold Value {r.unit ? `(${r.unit})` : ""}
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          placeholder={`Value ${r.unit ? `in ${r.unit}` : ""}`}
+                          value={r.threshold_min !== "" ? r.threshold_min : r.threshold_max}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (r.operator.includes(">")) {
+                              updateRule(i, { threshold_min: val, threshold_max: "" });
+                            } else {
+                              updateRule(i, { threshold_min: "", threshold_max: val });
+                            }
+                          }}
+                          className="w-full px-2.5 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -534,8 +766,8 @@ const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved })
           </button>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--hw-neutral-100)]">
-          <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors">
+        <div className="flex items-center justify-end gap-2 px-5 py-3.5 sm:py-4 border-t border-[var(--hw-neutral-100)] shrink-0 bg-white">
+          <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400">
             Cancel
           </button>
           <button
@@ -566,7 +798,7 @@ const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder 
 
   if (!options || options.length === 0) {
     return (
-      <div className="px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl text-[var(--hw-neutral-500)] min-w-[148px]">
+      <div className="px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl text-black min-w-[148px]">
         No analytics commodities available.
       </div>
     );
@@ -575,15 +807,15 @@ const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder 
   const selectedName = typeof value === "object" ? value?.name : value;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-full sm:w-auto">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:border-[var(--hw-neutral-300)] transition-colors cursor-pointer min-w-[148px]"
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl hover:border-[var(--hw-neutral-300)] transition-colors cursor-pointer sm:min-w-[148px]"
       >
-        <span className="flex-1 text-left text-[var(--hw-neutral-800)]">
+        <span className="flex-1 text-left text-black truncate">
           {selectedName || placeholder}
         </span>
-        <ChevronDown className="w-3.5 h-3.5 text-[var(--hw-neutral-700)] flex-shrink-0" />
+        <ChevronDown className="w-3.5 h-3.5 text-black flex-shrink-0" />
       </button>
 
       {open && (
@@ -600,7 +832,7 @@ const TextOnlyCommodityDropdown = ({ value, options = [], onChange, placeholder 
                   setOpen(false);
                 }}
                 className={`w-full flex items-center px-3 py-2 text-[13px] hover:bg-[var(--hw-neutral-50)] transition-colors text-left
-                  ${isSelected ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] font-medium" : "text-[var(--hw-neutral-800)]"}`}
+                  ${isSelected ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] font-medium" : "text-black"}`}
               >
                 <span>{optName}</span>
               </button>
@@ -626,21 +858,21 @@ const ScopeSelector = ({
   onCommodityChange,
   onVarietyChange
 }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-    <div className="flex items-center gap-3">
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
+    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
       {commodity && (
         <CommodityIllustration
           commodityId={getCommodityIconKey(null, null, commodity)}
-          className="w-8 h-8 flex-shrink-0"
+          className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0"
         />
       )}
-      <span className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+      <span className="text-[15px] sm:text-[17px] font-bold text-black truncate">
         {commodity ? `${commodity} · ${variety || "Standard"}` : "Select a commodity and variety"}
       </span>
     </div>
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex flex-col gap-0.5">
-        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Commodity</label>
+    <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <label className="text-[11px] text-black font-medium px-1">Commodity</label>
         <TextOnlyCommodityDropdown
           value={commodity}
           options={commodities}
@@ -648,13 +880,13 @@ const ScopeSelector = ({
           placeholder="Select Commodity"
         />
       </div>
-      <div className="flex flex-col gap-0.5">
-        <label className="text-[11px] text-[var(--hw-neutral-600)] font-medium px-1">Variety</label>
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <label className="text-[11px] text-black font-medium px-1">Variety</label>
         <select
           value={variety}
           onChange={(e) => onVarietyChange(e.target.value)}
           disabled={!commodity || variants.length === 0}
-          className={`${selectCls} min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed`}
+          className={`${selectCls} w-full sm:min-w-[140px] text-black disabled:opacity-60 disabled:cursor-not-allowed disabled:text-neutral-400`}
         >
           {variants.length === 0 ? (
             <option value="Standard">Standard</option>
@@ -718,12 +950,35 @@ function AdminAnalytics() {
   // Weights & Thresholds state (empty handling support)
   const [phaseWeights, setPhaseWeights] = useState({});
   const [priceOutlookRules, setPriceOutlookRules] = useState(null);
+  const [profitabilityRules, setProfitabilityRules] = useState(() => {
+    try {
+      const saved = localStorage.getItem("hw_profitability_thresholds");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const favVal = parsed.favPct ?? (parsed.favMultiplier ? Math.round(parsed.favMultiplier <= 10 ? parsed.favMultiplier * 100 : parsed.favMultiplier) : 110);
+        const unfavVal = parsed.unfavPct ?? (parsed.unfavMultiplier ? Math.round(parsed.unfavMultiplier <= 10 ? parsed.unfavMultiplier * 100 : parsed.unfavMultiplier) : 100);
+        return {
+          favPct: favVal,
+          unfavPct: unfavVal,
+          favMultiplier: favVal / 100,
+          unfavMultiplier: unfavVal / 100
+        };
+      }
+    } catch {}
+    return {
+      favPct: 110,
+      unfavPct: 100,
+      favMultiplier: 1.10,
+      unfavMultiplier: 1.00
+    };
+  });
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [weightsError, setWeightsError] = useState("");
   const [weightIds, setWeightIds] = useState({});
   const [thresholdsLoading, setThresholdsLoading] = useState(false);
   const [thresholdsError, setThresholdsError] = useState("");
   const [priceOutlookRuleIds, setPriceOutlookRuleIds] = useState({ fav: null, unfav: null });
+  const [profitabilityRuleIds, setProfitabilityRuleIds] = useState({ fav: null, unfav: null });
 
   // Module outputs state (computed + persisted via /admin/analytics/outputs)
   const [moduleOutputs, setModuleOutputs] = useState(null);
@@ -867,25 +1122,54 @@ function AdminAnalytics() {
     };
   }, []);
 
-  // Load the Price Outlook threshold rules from the admin thresholds API
+  // Load Price Outlook & Profitability threshold rules from the admin thresholds API
   const refreshPriceOutlook = useCallback(async () => {
     try {
       setThresholdsError("");
       const data = await analyticsApi.listThresholds();
-      const poModule = (data?.items || []).find((m) => m.module_name === PRICE_OUTLOOK_MODULE);
-      if (!poModule) return;
-      const rules =
-        poModule.rules && poModule.rules.length > 0
-          ? poModule.rules
-          : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
-      const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
-      const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
-      if (fav && unfav) {
-        setPriceOutlookRules({
-          favMin: Math.round(Number(fav.threshold_value) * 100),
-          unfavMax: Math.round(Number(unfav.threshold_value) * 100)
-        });
-        setPriceOutlookRuleIds({ fav, unfav });
+      const items = data?.items || [];
+      const poModule = items.find((m) => m.module_name === PRICE_OUTLOOK_MODULE);
+      if (poModule) {
+        const rules =
+          poModule.rules && poModule.rules.length > 0
+            ? poModule.rules
+            : (await analyticsApi.listThresholdRules(poModule.id))?.items || [];
+        const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
+        const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
+        if (fav && unfav) {
+          setPriceOutlookRules({
+            favMin: Math.round(Number(fav.threshold_value) * 100),
+            unfavMax: Math.round(Number(unfav.threshold_value) * 100)
+          });
+          setPriceOutlookRuleIds({ fav, unfav });
+        }
+      }
+
+      const profModule = items.find((m) => m.module_name?.toLowerCase().includes("profit"));
+      if (profModule) {
+        const rules =
+          profModule.rules && profModule.rules.length > 0
+            ? profModule.rules
+            : (await analyticsApi.listThresholdRules(profModule.id))?.items || [];
+        const fav = rules.find((r) => (r.classification || "").toLowerCase() === "favorable");
+        const unfav = rules.find((r) => (r.classification || "").toLowerCase() === "unfavorable");
+        if (fav || unfav) {
+          const rawFav = fav?.threshold_value != null ? Number(fav.threshold_value) : 110;
+          const rawUnfav = unfav?.threshold_value != null ? Number(unfav.threshold_value) : 100;
+          const favVal = rawFav <= 10 ? Math.round(rawFav * 100) : Math.round(rawFav);
+          const unfavVal = rawUnfav <= 10 ? Math.round(rawUnfav * 100) : Math.round(rawUnfav);
+          const loaded = {
+            favPct: favVal,
+            unfavPct: unfavVal,
+            favMultiplier: favVal / 100,
+            unfavMultiplier: unfavVal / 100
+          };
+          setProfitabilityRules(loaded);
+          try {
+            localStorage.setItem("hw_profitability_thresholds", JSON.stringify(loaded));
+          } catch {}
+          setProfitabilityRuleIds({ fav, unfav, moduleId: profModule.id });
+        }
       }
     } catch (err) {
       setThresholdsError(err.message || "Failed to load threshold rules.");
@@ -1075,7 +1359,7 @@ function AdminAnalytics() {
     return () => document.removeEventListener("mousedown", h);
   }, [showTooltip]);
 
-  const selectCls = "px-3 py-2 text-[13px] bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
+  const selectCls = "px-3 py-2 text-[13px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer";
 
   // Filter processed results using the top scope (scopedCommodity + scopedVariety) + module & classification
   const filteredResults = processedResults.filter((r) => {
@@ -1279,9 +1563,109 @@ function AdminAnalytics() {
     } catch (err) {
       const message = err.message || "Failed to save threshold rules.";
       setThresholdsError(message);
-      // Returned so the modal can refuse to claim success. Without this the
-      // modal closed showing "Saved!" even when the write was rejected.
       return message;
+    }
+  };
+
+  const [editingProfitability, setEditingProfitability] = useState(false);
+
+  const handleProfitabilitySave = async (updated) => {
+    try {
+      setThresholdsError("");
+      const rawFav = Number(updated.favPct ?? updated.favMultiplier);
+      const rawUnfav = Number(updated.unfavPct ?? updated.unfavMultiplier);
+      const favPct = rawFav <= 10 ? Math.round(rawFav * 100) : Math.round(rawFav);
+      const unfavPct = rawUnfav <= 10 ? Math.round(rawUnfav * 100) : Math.round(rawUnfav);
+      const favMultiplier = favPct / 100;
+      const unfavMultiplier = unfavPct / 100;
+
+      let data = await analyticsApi.listThresholds();
+      let profModule = (data?.items || []).find((m) =>
+        m.module_name?.toLowerCase().includes("profit")
+      );
+      if (!profModule) {
+        profModule = await analyticsApi.createThreshold({
+          module_name: PROFITABILITY_MODULE,
+          source_label: "Farmer crop-plan assessment"
+        });
+      }
+
+      const ensureRule = async (rule, classification, operator, value, display) => {
+        if (rule) {
+          await analyticsApi.updateThresholdRule(rule.id, {
+            threshold_value: value,
+            display_text: display
+          });
+        } else {
+          const rules =
+            profModule.rules && profModule.rules.length > 0
+              ? profModule.rules
+              : (await analyticsApi.listThresholdRules(profModule.id))?.items || [];
+          const existing = rules.find((r) => (r.classification || "").toLowerCase() === classification.toLowerCase());
+          if (existing) {
+            await analyticsApi.updateThresholdRule(existing.id, {
+              threshold_value: value,
+              display_text: display
+            });
+          } else {
+            await analyticsApi.createThresholdRule(profModule.id, {
+              rule_key: classification.toLowerCase(),
+              classification,
+              operator,
+              threshold_value: value,
+              display_text: display
+            });
+          }
+        }
+      };
+
+      const { fav, unfav } = profitabilityRuleIds;
+      await ensureRule(
+        fav,
+        "Favorable",
+        ">=",
+        favPct,
+        `Lower Forecast ≥ ${favPct}% of Break-even Price`
+      );
+      await ensureRule(
+        unfav,
+        "Unfavorable",
+        "<",
+        unfavPct,
+        unfavPct === 100
+          ? "Upper Forecast < Break-even Price"
+          : `Upper Forecast < ${unfavPct}% of Break-even Price`
+      );
+
+      const stateVal = {
+        favPct,
+        unfavPct,
+        favMultiplier,
+        unfavMultiplier
+      };
+      try {
+        localStorage.setItem("hw_profitability_thresholds", JSON.stringify(stateVal));
+      } catch {}
+      setProfitabilityRules(stateVal);
+      await refreshPriceOutlook();
+      return null;
+    } catch (err) {
+      // In case of API network failure, persist locally
+      const rawFav = Number(updated.favPct ?? updated.favMultiplier);
+      const rawUnfav = Number(updated.unfavPct ?? updated.unfavMultiplier);
+      const favPct = rawFav <= 10 ? Math.round(rawFav * 100) : Math.round(rawFav);
+      const unfavPct = rawUnfav <= 10 ? Math.round(rawUnfav * 100) : Math.round(rawUnfav);
+      const fallback = {
+        favPct,
+        unfavPct,
+        favMultiplier: favPct / 100,
+        unfavMultiplier: unfavPct / 100
+      };
+      try {
+        localStorage.setItem("hw_profitability_thresholds", JSON.stringify(fallback));
+      } catch {}
+      setProfitabilityRules(fallback);
+      return null;
     }
   };
 
@@ -1302,6 +1686,13 @@ function AdminAnalytics() {
           onSave={handlePriceOutlookSave}
         />
       )}
+      {editingProfitability && (
+        <EditProfitabilityModal
+          currentRules={profitabilityRules}
+          onClose={() => setEditingProfitability(false)}
+          onSave={handleProfitabilitySave}
+        />
+      )}
       {editingWeather && (
         <EditWeatherModal
           commodity={scopedCommodity}
@@ -1314,7 +1705,7 @@ function AdminAnalytics() {
         />
       )}
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-6">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <PageHeader
           title="Analytical Modules"
@@ -1400,9 +1791,9 @@ function AdminAnalytics() {
                           <span className="text-[12px] text-[var(--hw-neutral-700)]">Classification</span>
                           <span className={`text-[12px] font-semibold ${cc}`}>{card.classification}</span>
                         </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[12px] text-[var(--hw-neutral-700)]">Source</span>
-                          <span className="text-[12px] text-[var(--hw-neutral-800)] text-right max-w-[120px] leading-tight truncate">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-[12px] text-[var(--hw-neutral-700)] shrink-0">Source</span>
+                          <span className="text-[12px] text-[var(--hw-neutral-800)] text-right leading-tight">
                             {card.source}
                           </span>
                         </div>
@@ -1418,11 +1809,11 @@ function AdminAnalytics() {
                 })}
               </div>
               {(moduleOutputs?.warnings?.length || 0) > 0 && (
-                <div className="mt-3 rounded-lg border border-[var(--hw-warning)]/30 bg-[var(--hw-warning)]/5 p-3 flex flex-col gap-1">
-                  <p className="text-[12px] font-semibold text-[var(--hw-warning)] flex items-center gap-1.5">
-                    <Info className="w-3.5 h-3.5" /> Data reliability warnings
+                <div className="mt-3 flex flex-col gap-1">
+                  <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Data reliability warnings
                   </p>
-                  <ul className="space-y-0.5">
+                  <ul className="space-y-0.5 pl-5">
                     {moduleOutputs.warnings.map((w, i) => (
                       <li key={i} className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">
                         {w}
@@ -1435,34 +1826,13 @@ function AdminAnalytics() {
 
             {/* Processed Results History Table */}
             <div className="space-y-4 pt-2">
-              {/* Heading + tooltip */}
-              <div ref={tooltipRef} className="relative flex items-center gap-2">
+              {/* Heading */}
+              <div className="flex items-center gap-2">
                 <h2 className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Processed Results</h2>
-                <button
-                  onClick={() => setShowTooltip((v) => !v)}
-                  className="text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] transition-colors"
-                >
-                  <Info className="w-4 h-4" />
-                </button>
-                {showTooltip && (
-                  <div className="absolute top-full left-0 mt-2 z-20 w-[320px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-3.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-[12px] text-[var(--hw-neutral-800)] leading-relaxed">
-                        This table shows processed outputs for Price Outlook, Arrival Pressure, Historical Seasonal Production Level, and Weather Risk. Profitability is calculated during individual farmer assessment because it depends on farmer-specific cost, yield, and selling-price inputs.
-                      </p>
-                      <button
-                        onClick={() => setShowTooltip(false)}
-                        className="text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] flex-shrink-0 mt-0.5"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Filters (Module & Classification only — redundant Commodity/Variety removed) */}
-              <div className="flex flex-wrap gap-3 items-center">
+              {/* Filters (Module & Classification in the same row) */}
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3">
                 {/* Module Filter */}
                 <select
                   value={fModule}
@@ -1470,7 +1840,7 @@ function AdminAnalytics() {
                     setFModule(e.target.value);
                     setShowAll(false);
                   }}
-                  className={selectCls}
+                  className={`${selectCls} w-full sm:w-auto`}
                 >
                   {MODULES.map((m) => (
                     <option key={m} value={m}>
@@ -1486,7 +1856,7 @@ function AdminAnalytics() {
                     setFClassification(e.target.value);
                     setShowAll(false);
                   }}
-                  className={selectCls}
+                  className={`${selectCls} w-full sm:w-auto`}
                 >
                   {CLASSIFICATIONS.map((c) => (
                     <option key={c} value={c}>
@@ -1502,7 +1872,7 @@ function AdminAnalytics() {
                       setFClassification("All");
                       setShowAll(false);
                     }}
-                    className="text-[12px] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors underline"
+                    className="col-span-2 sm:col-span-1 text-[12px] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-colors underline whitespace-nowrap cursor-pointer px-1"
                   >
                     Clear filters
                   </button>
@@ -1510,12 +1880,12 @@ function AdminAnalytics() {
               </div>
 
               {/* Table */}
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-                <div className="overflow-x-auto">
+              <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
                   <table className="w-full text-[12px]">
                     <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
                       <tr>
-                        {["Module", "Commodity", "Variety", "Input Period", "Classification", "Processed Date"].map((h) => (
+                        {["Module", "Input Period", "Classification", "Processed Date"].map((h) => (
                           <th key={h} className="px-3 py-2.5 text-left font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">
                             {h}
                           </th>
@@ -1525,7 +1895,7 @@ function AdminAnalytics() {
                     <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                       {filteredResults.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center text-[var(--hw-neutral-500)] text-[13px]">
+                          <td colSpan={4} className="px-4 py-10 text-center text-[var(--hw-neutral-500)] text-[13px]">
                             {scopeHasFiltered ? (
                               "No processed results match the selected module and classification."
                             ) : scopedCommodity ? (
@@ -1550,25 +1920,22 @@ function AdminAnalytics() {
                           return (
                             <tr
                               key={`${r.id}::${r.basisId}`}
+                              data-commodity={r.commodity}
+                              data-variety={r.variant}
                               onClick={() => handleRowClick(r)}
                               className="hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                             >
-                              <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">{r.module}</td>
-                              <td className="px-3 py-2.5">
-                                <div className="flex items-center gap-1.5">
-                                  {r.commodity && (
-                                    <CommodityIllustration
-                                      commodityId={getCommodityIconKey(null, null, r.commodity)}
-                                      className="w-5 h-5 flex-shrink-0"
-                                    />
-                                  )}
-                                  <span className="text-[var(--hw-neutral-800)]">{r.commodity || "-"}</span>
-                                </div>
+                              <td className="px-3 py-2.5 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">
+                                {r.module}
+                                <span className="sr-only"> ({r.commodity || "-"} · {r.variant || "Standard"})</span>
                               </td>
-                              <td className="px-3 py-2.5 text-[var(--hw-neutral-700)] whitespace-nowrap">{r.variant || "Standard"}</td>
-                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">{r.inputPeriod || "-"}</td>
+                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">
+                                {formatDisplayDate(r.inputPeriod)}
+                              </td>
                               <td className={`px-3 py-2.5 font-semibold ${cc}`}>{r.classification || "Not available"}</td>
-                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">{r.processedAt || "-"}</td>
+                              <td className="px-3 py-2.5 text-[var(--hw-neutral-800)] whitespace-nowrap">
+                                {formatDisplayDateTime(r.processedAt)}
+                              </td>
                             </tr>
                           );
                         })
@@ -1612,14 +1979,14 @@ function AdminAnalytics() {
             {/* Section 1: Adaptive Weights */}
             <section className="space-y-4">
               <div>
-                <h2 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Adaptive Weights</h2>
-                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-                  One base weight profile per stage (Planning, Planting, Near Harvest, Harvest). It overrides the built-in presets for both weather-sensitive and weather-resilient crops in that stage; leave a stage empty to keep the presets. Weights per stage must sum to 100%.
+                <h2 className="text-[16px] font-bold text-black">Adaptive Weights</h2>
+                <p className="text-[12px] text-black mt-0.5 leading-relaxed">
+                  Set module weight distribution per crop stage. Defaults are used when no override is set. Stage weights must total 100%.
                 </p>
               </div>
 
               {weightsLoading && (
-                <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading adaptive weights…</p>
+                <p className="text-[12px] text-black">Loading adaptive weights…</p>
               )}
               {weightsError && (
                 <p className="text-[12px] text-red-600">{weightsError}</p>
@@ -1632,7 +1999,6 @@ function AdminAnalytics() {
                   const defaultWeights = DEFAULT_STAGE_WEIGHTS[phase] || {};
                   const effectiveWeights = hasWeights ? weights : defaultWeights;
                   const total = Object.values(effectiveWeights).reduce((a, b) => a + (Number(b) || 0), 0);
-                  const resilient = RESILIENT_STAGE_WEIGHTS[phase] || {};
 
                   const isPhaseHighlighted = Boolean(
                     highlightedCard &&
@@ -1645,50 +2011,45 @@ function AdminAnalytics() {
                       key={phase}
                       id={`weight-phase-${phase.toLowerCase()}`}
                       data-threshold-card={`weights ${phase.toLowerCase()}`}
-                      className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                      className={`rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col justify-between transition-colors duration-500 ${
                         isPhaseHighlighted ? "bg-emerald-50/70" : "bg-white"
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                           <div>
-                            <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">{label}</h3>
-                            <p className="text-[11px] text-[var(--hw-neutral-500)]">Base weight override for this stage</p>
+                            <h3 className="text-[15px] font-bold text-black">{label}</h3>
+                            <p className="text-[11px] text-black">Base weight override for this stage</p>
                           </div>
                           <button
                             onClick={() => setEditingPhase(phase)}
-                            className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors cursor-pointer"
                             title={`Edit ${label} Weights`}
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
-                        {!hasWeights ? (
-                          <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
-                            No override set — using built-in presets.
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {WEIGHT_MODULES.map((m) => (
-                              <div key={m} className="flex items-center justify-between text-[12px]">
-                                <span className="text-[var(--hw-neutral-700)] truncate pr-2">{m}</span>
-                                <span className="font-semibold text-[var(--hw-neutral-900)] shrink-0">
-                                  {weights[m] !== undefined ? `${weights[m]}%` : "-"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <div className="space-y-2">
+                          {WEIGHT_MODULES.map((m) => (
+                            <div key={m} className="flex items-center justify-between text-[12px]">
+                              <span className="text-black truncate pr-2">{m}</span>
+                              <span className="font-semibold text-black shrink-0">
+                                {effectiveWeights[m] !== undefined ? `${effectiveWeights[m]}%` : "-"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
 
-                        <div className="mt-4 pt-3 border-t border-dashed border-[var(--hw-neutral-200)] text-[11px] leading-relaxed text-[var(--hw-neutral-500)]">
-                          Weather-resilient default:{" "}
-                          {WEIGHT_MODULES.map((m) => `${WEIGHT_ABBR[m]} ${resilient[m] ?? "-"}%`).join(" · ")}
+                        <div className="mt-4 pt-3 border-t border-dashed border-[var(--hw-neutral-200)]">
+                          <p className="text-[11px] font-medium text-black">
+                            {!hasWeights ? "No override set — using built-in presets." : "Custom override active."}
+                          </p>
                         </div>
                       </div>
 
                       <div className="mt-3 pt-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
-                        <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)]">Total</span>
+                        <span className="text-[12px] font-semibold text-black">Total</span>
                         <span className={`text-[13px] font-bold ${Math.abs(total - 100) < 0.01 ? "text-emerald-700" : "text-amber-600"}`}>
                           {total}%
                         </span>
@@ -1702,14 +2063,14 @@ function AdminAnalytics() {
             {/* Section 2: Threshold Rules */}
             <section className="space-y-4">
               <div>
-                <h2 className="text-[16px] font-bold text-[var(--hw-neutral-900)]">Threshold Rules</h2>
-                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
+                <h2 className="text-[16px] font-bold text-black">Threshold Rules</h2>
+                <p className="text-[12px] text-black mt-0.5">
                   Threshold configurations and classification boundaries used by each analytical module.
                 </p>
               </div>
 
               {thresholdsLoading && (
-                <p className="text-[12px] text-[var(--hw-neutral-500)]">Loading threshold rules…</p>
+                <p className="text-[12px] text-black">Loading threshold rules…</p>
               )}
               {thresholdsError && (
                 <p className="text-[12px] text-red-600">{thresholdsError}</p>
@@ -1720,19 +2081,19 @@ function AdminAnalytics() {
                 <div
                   id="threshold-price-outlook"
                   data-threshold-card="price price-outlook"
-                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                  className={`rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col justify-between transition-colors duration-500 ${
                     isCardHighlighted("price") ? "bg-emerald-50/70" : "bg-white"
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
-                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Price Outlook</h3>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">Source: Forecasting output (Bangkerohan Retail Prices)</p>
+                        <h3 className="text-[15px] font-bold text-black">Price Outlook</h3>
+                        <p className="text-[11px] text-black mt-0.5">Source: Forecasting output (Bangkerohan Retail Prices)</p>
                       </div>
                       <button
                         onClick={() => setEditingPriceOutlook(true)}
-                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 cursor-pointer"
+                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 cursor-pointer"
                         title="Edit Price Outlook Thresholds"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -1740,41 +2101,98 @@ function AdminAnalytics() {
                     </div>
 
                     {!priceOutlookRules ? (
-                      <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
+                      <div className="py-6 text-center text-black text-[12px]">
                         Price Outlook thresholds not configured.
                       </div>
                     ) : (
                       <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
                         <div className="py-2 flex items-center justify-between gap-3">
                           <span className="font-semibold text-emerald-700">Favorable</span>
-                          <span className="text-[var(--hw-neutral-700)]">Forecast price change &gt; +{priceOutlookRules.favMin}%</span>
+                          <span className="text-black">Forecast price change &gt; +{priceOutlookRules.favMin}%</span>
                         </div>
                         <div className="py-2 flex items-center justify-between gap-3">
-                          <span className="font-semibold text-[var(--hw-neutral-600)]">Neutral</span>
-                          <span className="text-[var(--hw-neutral-700)]">{priceOutlookRules.unfavMax}% to +{priceOutlookRules.favMin}%</span>
+                          <span className="font-semibold text-black">Neutral</span>
+                          <span className="text-black">{priceOutlookRules.unfavMax}% to +{priceOutlookRules.favMin}%</span>
                         </div>
                         <div className="py-2 flex items-center justify-between gap-3">
                           <span className="font-semibold text-red-600">Unfavorable</span>
-                          <span className="text-[var(--hw-neutral-700)]">Forecast price change &lt; {priceOutlookRules.unfavMax}%</span>
+                          <span className="text-black">Forecast price change &lt; {priceOutlookRules.unfavMax}%</span>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* 2. Arrival Pressure (Derived per Commodity + Variety — Read-Only) */}
+                {/* 2. Weather Risk (Configured per Commodity + Variety) */}
+                <div
+                  id="threshold-weather-risk"
+                  data-threshold-card="weather weather-risk"
+                  className={`rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col justify-between transition-colors duration-500 ${
+                    isCardHighlighted("weather") ? "bg-emerald-50/70" : "bg-white"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-black">Weather Risk</h3>
+                        <p className="text-[11px] text-black mt-0.5">
+                          Scope: {scopedCommodity ? `${scopedCommodity} — ${scopedVariety || "Standard"}` : "Select a commodity and variety"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setEditingWeather(true)}
+                        disabled={!scopedCommodity}
+                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:text-neutral-400 cursor-pointer"
+                        title="Edit Weather Thresholds"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {currentWeatherRules.length === 0 ? (
+                      <div className="py-6 text-center text-black text-[12px]">
+                        Weather thresholds not configured for {scopedCommodity || "crop"} — {scopedVariety || "Standard"}.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px] max-h-[160px] overflow-y-auto [scrollbar-width:thin] pr-1.5">
+                        {currentWeatherRules.map((r) => {
+                          const riskLower = r.risk_level?.toLowerCase();
+                          const riskColor =
+                            riskLower === "suitable"
+                              ? "text-emerald-700"
+                              : riskLower === "caution"
+                              ? "text-amber-600"
+                              : riskLower === "severe"
+                              ? "text-red-600"
+                              : "text-black";
+                          return (
+                            <div key={r.id || r.metric_key} className="py-2 flex flex-col gap-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-black font-medium">{weatherMetricLabel(r.metric_key)}</span>
+                                <span className={`font-semibold capitalize ${riskColor}`}>{r.risk_level}</span>
+                              </div>
+                              <span className="text-[11px] text-black">{weatherRuleSummary(r)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Arrival Pressure (Derived per Commodity + Variety — Read-Only) */}
                 <div
                   id="threshold-arrival-pressure"
                   data-threshold-card="arrival arrival-pressure arrival_pressure_q3"
-                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col justify-between transition-colors duration-500 ${
                     isCardHighlighted("arrival") ? "bg-emerald-50/70" : "bg-white"
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
-                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Arrival Pressure</h3>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
+                        <h3 className="text-[15px] font-bold text-black">Arrival Pressure</h3>
+                        <p className="text-[11px] text-black mt-0.5">
                           Source: DFTC Arrival Volume · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
                         </p>
                       </div>
@@ -1788,17 +2206,16 @@ function AdminAnalytics() {
                           { label: "Q3 Threshold", value: arrivalQuartiles?.q3 }
                         ].map((q) => (
                           <div key={q.label}>
-                            <p className="text-[11px] text-[var(--hw-neutral-500)]">{q.label}</p>
-                            {/* Number bold, unit lighter -- as the design sets it. */}
+                            <p className="text-[11px] text-black">{q.label}</p>
                             <p className="text-[13px] mt-0.5">
                               {q.value == null ? (
-                                <span className="font-bold text-[var(--hw-neutral-400)]">— kg/mo</span>
+                                <span className="font-bold text-neutral-400">— kg/mo</span>
                               ) : (
                                 <>
-                                  <span className="font-bold text-[var(--hw-neutral-800)]">
+                                  <span className="font-bold text-black">
                                     {q.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                                   </span>{" "}
-                                  <span className="text-[11px] text-[var(--hw-neutral-500)]">kg/mo</span>
+                                  <span className="text-[11px] text-black">kg/mo</span>
                                 </>
                               )}
                             </p>
@@ -1807,30 +2224,30 @@ function AdminAnalytics() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-center">
-                          <p className="text-[11px] font-medium text-blue-700">Current Month Volume</p>
-                          <p className="mt-0.5 flex items-center justify-center gap-1.5">
-                            <span className="text-[15px] font-bold text-blue-800">
+                        <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-[11px] font-medium text-black">Current Month Volume</p>
+                          <div className="mt-0.5">
+                            <p className={`text-[15px] font-bold ${ARRIVAL_PRESSURE_TONES[arrivalClassification] || "text-black"}`}>
                               {arrivalCurrentKg == null
                                 ? "—"
                                 : `${arrivalCurrentKg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`}
-                            </span>
+                            </p>
                             {arrivalClassification && (
-                              <span className="px-1.5 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-[10px] font-bold text-blue-700">
+                              <p className="text-[11px] font-medium text-black mt-0.5">
                                 {arrivalClassification}
-                              </span>
+                              </p>
                             )}
-                          </p>
+                          </div>
                         </div>
                         <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2.5 text-center">
-                          <p className="text-[11px] font-medium text-[var(--hw-neutral-700)]">Annual Recorded Total</p>
-                          <p className="mt-0.5 text-[15px] font-bold text-[var(--hw-neutral-800)]">
+                          <p className="text-[11px] font-medium text-black">Annual Recorded Total</p>
+                          <p className="mt-0.5 text-[15px] font-bold text-black">
                             {arrivalTotals.total_kg == null ? (
                               "—"
                             ) : (
                               <>
                                 {arrivalTotals.total_kg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg{" "}
-                                <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+                                <span className="text-[12px] font-medium text-black">
                                   ({arrivalTotals.months} mo)
                                 </span>
                               </>
@@ -1841,7 +2258,7 @@ function AdminAnalytics() {
 
                       {arrivalBoundary.length > 0 ? (
                         <div className="border border-[var(--hw-neutral-200)] rounded-xl overflow-hidden">
-                          <div className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)] text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-500)]">
+                          <div className="grid grid-cols-[1fr_1.4fr_1.2fr] gap-2 px-3 py-2 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)] text-[10px] font-semibold uppercase tracking-wide text-black">
                             <span>Classification</span>
                             <span>Monthly Boundary</span>
                             <span className="text-right">Supply Pressure</span>
@@ -1863,18 +2280,18 @@ function AdminAnalytics() {
                                 </TooltipTrigger>
                                 <TooltipContent
                                   side="top"
-                                  className="max-w-xs bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed z-50"
+                                  className="max-w-xs bg-black text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed z-50"
                                 >
                                   <p>{row.supply}</p>
                                 </TooltipContent>
                               </Tooltip>
-                              <span className="text-[var(--hw-neutral-700)]">{row.boundary}</span>
-                              <span className="text-right text-[var(--hw-neutral-600)]">{row.supply}</span>
+                              <span className="text-black">{row.boundary}</span>
+                              <span className="text-right text-black">{row.supply}</span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                        <p className="text-[11px] text-black text-center">
                           {arrivalLoading
                             ? "Loading arrival volume…"
                             : arrivalError || "Insufficient arrival history to calculate quartiles for this variety."}
@@ -1895,7 +2312,7 @@ function AdminAnalytics() {
                   </div>
                 </div>
 
-                {/* 3. Historical Seasonal Production Level (Derived per Commodity + Variety — Read-Only) */}
+                {/* 4. Historical Seasonal Production Level (Derived per Commodity + Variety — Read-Only) */}
                 <div
                   id="threshold-seasonal-production"
                   data-threshold-card="production seasonal seasonal-production"
@@ -1906,8 +2323,8 @@ function AdminAnalytics() {
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
-                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Historical Seasonal Production Level</h3>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
+                        <h3 className="text-[15px] font-bold text-black">Historical Seasonal Production Level</h3>
+                        <p className="text-[11px] text-black mt-0.5">
                           Source: {productionSummary?.source || "production_record"} · {scopedCommodity ? `${scopedCommodity} (${scopedVariety || "Standard"})` : "No crop selected"}
                         </p>
                       </div>
@@ -1916,47 +2333,47 @@ function AdminAnalytics() {
                     <div className="space-y-3">
                       <div className="grid grid-cols-3 gap-2 bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-center">
                         <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q1 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                          <p className="text-[11px] text-black">Q1 Ratio</p>
+                          <p className="text-[13px] font-bold text-black mt-0.5">
                             {productionSummary?.quartiles ? productionSummary.quartiles.q1.toFixed(2) : "-"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q2 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                          <p className="text-[11px] text-black">Q2 Ratio</p>
+                          <p className="text-[13px] font-bold text-black mt-0.5">
                             {productionSummary?.quartiles ? productionSummary.quartiles.q2.toFixed(2) : "-"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-[var(--hw-neutral-500)]">Q3 Ratio</p>
-                          <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] mt-0.5">
+                          <p className="text-[11px] text-black">Q3 Ratio</p>
+                          <p className="text-[13px] font-bold text-black mt-0.5">
                             {productionSummary?.quartiles ? productionSummary.quartiles.q3.toFixed(2) : "-"}
                           </p>
                         </div>
                       </div>
                       {productionLoading ? (
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">Loading production history…</p>
+                        <p className="text-[11px] text-black text-center">Loading production history…</p>
                       ) : productionError ? (
                         <p className="text-[11px] text-red-600 text-center">{productionError}</p>
                       ) : productionSummary?.status !== "processed" ? (
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] text-center">
+                        <p className="text-[11px] text-black text-center">
                           {productionSummary?.message || "Insufficient historical production data to calculate thresholds."}
                         </p>
                       ) : (
                         <>
                           <div className="grid grid-cols-2 gap-2 text-center">
-                            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-2">
-                              <p className="text-[10px] text-emerald-700 font-medium">Peak Season</p>
-                              <p className="text-[12px] font-bold text-emerald-800">{productionSummary.peak_quarter || "—"}</p>
+                            <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2 text-center">
+                              <p className="text-[10px] text-black font-medium">Peak Season</p>
+                              <p className="text-[13px] font-bold text-emerald-700 mt-0.5">{productionSummary.peak_quarter || "—"}</p>
                             </div>
-                            <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-2">
-                              <p className="text-[10px] text-amber-700 font-medium">Lean Season</p>
-                              <p className="text-[12px] font-bold text-amber-800">{productionSummary.lean_quarter || "—"}</p>
+                            <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)] rounded-xl px-3 py-2 text-center">
+                              <p className="text-[10px] text-black font-medium">Lean Season</p>
+                              <p className="text-[13px] font-bold text-amber-600 mt-0.5">{productionSummary.lean_quarter || "—"}</p>
                             </div>
                           </div>
                           <div className="overflow-x-auto rounded-lg border border-[var(--hw-neutral-100)]">
                             <table className="w-full text-[10px] text-left">
-                              <thead className="bg-[var(--hw-neutral-50)] text-[var(--hw-neutral-500)]">
+                              <thead className="bg-[var(--hw-neutral-50)] text-black font-semibold">
                                 <tr>
                                   <th className="px-2 py-1.5">Quarter</th>
                                   <th className="px-2 py-1.5 text-right">Avg MT</th>
@@ -1975,20 +2392,15 @@ function AdminAnalytics() {
                                   }))
                                 ).map((qp) => (
                                   <tr key={qp.quarter} className="border-t border-[var(--hw-neutral-100)]">
-                                    <td className="px-2 py-1.5 font-semibold text-[var(--hw-neutral-800)]">{qp.quarter}</td>
-                                    <td className="px-2 py-1.5 text-right text-[var(--hw-neutral-700)]">
+                                    <td className="px-2 py-1.5 font-semibold text-black">{qp.quarter}</td>
+                                    <td className="px-2 py-1.5 text-right text-black">
                                       {Number(qp.average_production_mt).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                     </td>
-                                    <td className="px-2 py-1.5 text-right font-mono text-[var(--hw-neutral-600)]">
+                                    <td className="px-2 py-1.5 text-right font-mono text-black">
                                       {Number(qp.seasonal_ratio).toFixed(2)}
                                     </td>
                                     <td className="px-2 py-1.5 text-center font-medium">
-                                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${qp.classification === "High" ? "bg-red-50 text-red-700" :
-                                        qp.classification === "Upper Middle" ? "bg-amber-50 text-amber-700" :
-                                          qp.classification === "Lower Middle" ? "bg-blue-50 text-blue-700" :
-                                            qp.classification === "Low" ? "bg-emerald-50 text-emerald-700" :
-                                              "text-[var(--hw-neutral-500)]"
-                                        }`}>
+                                      <span className={`text-[11px] font-semibold ${CLASSIFICATION_COLORS[qp.classification] || "text-black"}`}>
                                         {qp.classification}
                                       </span>
                                     </td>
@@ -2003,90 +2415,59 @@ function AdminAnalytics() {
                   </div>
                 </div>
 
-                {/* 4. Weather Risk (Configured per Commodity + Variety) */}
-                <div
-                  id="threshold-weather-risk"
-                  data-threshold-card="weather weather-risk"
-                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
-                    isCardHighlighted("weather") ? "bg-emerald-50/70" : "bg-white"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
-                      <div>
-                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Weather Risk</h3>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
-                          Scope: {scopedCommodity ? `${scopedCommodity} — ${scopedVariety || "Standard"}` : "Select a commodity and variety"}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setEditingWeather(true)}
-                        disabled={!scopedCommodity}
-                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                        title="Edit Weather Thresholds"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {currentWeatherRules.length === 0 ? (
-                      <div className="py-6 text-center text-[var(--hw-neutral-500)] text-[12px]">
-                        Weather thresholds not configured for {scopedCommodity || "crop"} — {scopedVariety || "Standard"}.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
-                        {currentWeatherRules.slice(0, 3).map((r) => (
-                          <div key={r.id || r.metric_key} className="py-2 flex flex-col gap-0.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[var(--hw-neutral-600)]">{weatherMetricLabel(r.metric_key)}</span>
-                              <span className="font-medium text-[var(--hw-neutral-900)] capitalize">{r.risk_level}</span>
-                            </div>
-                            <span className="text-[11px] text-[var(--hw-neutral-500)]">{weatherRuleSummary(r)}</span>
-                          </div>
-                        ))}
-                        {currentWeatherRules.length > 3 && (
-                          <div className="py-2 text-center text-[var(--hw-neutral-400)] text-[11px]">
-                            +{currentWeatherRules.length - 3} more rule{currentWeatherRules.length - 3 > 1 ? "s" : ""} configured
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 {/* 5. Profitability (Global Farmer Assessment Rule) */}
                 <div
                   id="threshold-profitability"
                   data-threshold-card="profit profitability"
-                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col justify-between transition-colors duration-500 ${
                     isCardHighlighted("profitability") ? "bg-emerald-50/70" : "bg-white"
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
-                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Profitability</h3>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">Applied during individual farmer assessment</p>
+                        <h3 className="text-[15px] font-bold text-black">Profitability</h3>
+                        <p className="text-[11px] text-black mt-0.5">Source: Farmer crop-plan assessment</p>
                       </div>
+                      <button
+                        onClick={() => setEditingProfitability(true)}
+                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 cursor-pointer"
+                        title="Edit Profitability Thresholds"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)]">
-                        <p className="text-[11px] text-[var(--hw-neutral-600)] leading-relaxed">
-                          This rule is applied during individual farmer assessment using the farmer&apos;s own production cost, expected yield, and selling price. It is not shown as a global analytical result.
-                        </p>
-                      </div>
-                      <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
-                        <div className="py-1.5 flex items-center justify-between">
-                          <span className="text-[var(--hw-neutral-600)]">Favorable Multiplier</span>
-                          <span className="font-medium text-[var(--hw-neutral-900)]">-</span>
+                      <div className="space-y-3">
+                        <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)]">
+                          <p className="text-[11px] text-black leading-relaxed">
+                            Applied during farmer crop planning where <span className="font-semibold text-black">Break-Even = Total Cost ÷ Marketable Yield</span>. Evaluates forecasted selling price range against break-even price percentages.
+                          </p>
                         </div>
-                        <div className="py-1.5 flex items-center justify-between">
-                          <span className="text-[var(--hw-neutral-600)]">Break-even Overlap Rule</span>
-                          <span className="font-medium text-[var(--hw-neutral-500)]">Not configured</span>
+
+                        <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
+                          <div className="py-2 flex items-center justify-between gap-3">
+                            <span className="font-semibold text-emerald-700">Favorable</span>
+                            <span className="text-black text-right">
+                              Lower Forecast ≥ {profitabilityRules.favPct || 110}% of Break-even Price
+                            </span>
+                          </div>
+                          <div className="py-2 flex items-center justify-between gap-3">
+                            <span className="font-semibold text-amber-600">Marginal</span>
+                            <span className="text-black text-right">
+                              Forecast Range overlaps Break-even Price
+                            </span>
+                          </div>
+                          <div className="py-2 flex items-center justify-between gap-3">
+                            <span className="font-semibold text-red-600">Unfavorable</span>
+                            <span className="text-black text-right">
+                              {(profitabilityRules.unfavPct || 100) === 100
+                                ? "Upper Forecast < Break-even Price"
+                                : `Upper Forecast < ${profitabilityRules.unfavPct}% of Break-even Price`}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
                   </div>
                 </div>
 
@@ -2094,15 +2475,15 @@ function AdminAnalytics() {
                 <div
                   id="threshold-final-advisory"
                   data-threshold-card="advisory final-advisory"
-                  className={`rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5 flex flex-col justify-between transition-colors duration-500 ${
+                  className={`rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 flex flex-col justify-between transition-colors duration-500 ${
                     isCardHighlighted("advisory") ? "bg-emerald-50/70" : "bg-white"
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-[var(--hw-neutral-100)]">
                       <div>
-                        <h3 className="text-[15px] font-bold text-[var(--hw-neutral-900)]">Final Advisory Cutoffs</h3>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">Recommendation Engine output mapping</p>
+                        <h3 className="text-[15px] font-bold text-black">Final Advisory Cutoffs</h3>
+                        <p className="text-[11px] text-black mt-0.5">Recommendation Engine output mapping</p>
                       </div>
                     </div>
 
@@ -2110,23 +2491,23 @@ function AdminAnalytics() {
                       <div className="py-2.5 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-emerald-700">Recommended</span>
-                          <span className="font-mono text-[var(--hw-neutral-800)] font-medium">-</span>
+                          <span className="font-mono text-neutral-400 font-medium">-</span>
                         </div>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)]">Most factors support planting.</p>
+                        <p className="text-[11px] text-black">Most factors support planting.</p>
                       </div>
                       <div className="py-2.5 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-amber-700">Proceed with Caution</span>
-                          <span className="font-mono text-[var(--hw-neutral-800)] font-medium">-</span>
+                          <span className="font-mono text-neutral-400 font-medium">-</span>
                         </div>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)]">Some factors add caution.</p>
+                        <p className="text-[11px] text-black">Some factors add caution.</p>
                       </div>
                       <div className="py-2.5 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-red-700">Avoid for Now</span>
-                          <span className="font-mono text-[var(--hw-neutral-800)] font-medium">-</span>
+                          <span className="font-mono text-neutral-400 font-medium">-</span>
                         </div>
-                        <p className="text-[11px] text-[var(--hw-neutral-500)]">Multiple unfavorable factors.</p>
+                        <p className="text-[11px] text-black">Multiple unfavorable factors.</p>
                       </div>
                     </div>
                   </div>

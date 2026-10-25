@@ -21,6 +21,8 @@ export const crops = {
   confirm_details_monitoring: "Kumpirmahin ang iyong detalye upang masimulan ang pagsubaybay sa {displayName}.",
   actual_planting_date: "Aktwal na petsa ng pagtatanim",
   actual_planted_area: "Aktwal na sukat ng itinanim (sq m)",
-  updated_expected_harvest: "Na-update na inaasahang petsa ng ani",
-  confirm_planted: "Kumpirmahin — naitanim ko na ito"
+  confirm_planted: "Kumpirmahin — naitanim ko na ito",
+  saved_as_plan: "na-save bilang plano ng pananim",
+  marked_as_planted: "minarkahan na naitanim na at lumalaki",
+  saved_on_hold: "na-save at pansamantalang itinigil"
 };

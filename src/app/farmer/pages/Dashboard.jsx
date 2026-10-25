@@ -224,8 +224,8 @@ function ProfitCard({ cropPlans, loading }) {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-4">
+        <div className="flex items-center gap-3 mb-2.5">
           <CommodityIllustration
             commodityId={nearestCrop.commodityId || nearestCrop.commodity}
             commodityName={nearestCrop.commodityName}
@@ -249,10 +249,7 @@ function ProfitCard({ cropPlans, loading }) {
         <p className="text-[12px] font-medium text-[var(--hw-neutral-900)] mt-0.5">{t("farmer.dashboard.estimated_profit", {}, "Estimated Profit")}</p>
         <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">{t("farmer.dashboard.nearest_harvest_caption", {}, "Nearest harvest among your crops.")}</p>
 
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--hw-neutral-100)]">
-          <p className="text-[12px] text-[var(--hw-neutral-900)] leading-snug">
-            {t("farmer.dashboard.estimate_income_notice", {}, "Estimate only. Actual income may change.")}
-          </p>
+        <div className="flex items-center justify-end mt-2 pt-2 border-t border-[var(--hw-neutral-100)]">
           <button
             onClick={() => navigate("/farmer/crops")}
             className="flex-shrink-0 text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
@@ -427,24 +424,24 @@ function DashboardPage() {
           <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
             {greetingText}
           </h1>
-          <p className="text-[15px] text-[var(--hw-neutral-600)] mt-0.5 flex items-center gap-1.5">
-            <MapPin className="w-4 h-4 text-[var(--hw-green-700)] flex-shrink-0" />
+          <p className="text-[13px] text-black mt-0.5 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-black flex-shrink-0" />
             <span>{subtitle}</span>
           </p>
         </div>
 
         {/* ── 2. Main action card ── */}
-        <div className="bg-[var(--hw-green-700)] rounded-2xl p-5 text-white shadow-[var(--shadow-md)]">
-          <p className="font-semibold text-lg leading-snug">{t("farmer.dashboard.hero_title", {}, "Need help choosing what to plant?")}</p>
-          <p className="mt-1.5 text-[15px] text-green-100 leading-relaxed">
+        <div className="bg-[var(--hw-green-700)] rounded-2xl p-4 text-white shadow-[var(--shadow-md)]">
+          <p className="font-semibold text-base leading-snug">{t("farmer.dashboard.hero_title", {}, "Need help choosing what to plant?")}</p>
+          <p className="mt-1 text-[13px] text-green-100 leading-snug">
             {t("farmer.dashboard.hero_desc", {}, "Check prices, weather, and estimated profit before planting.")}
           </p>
           <button
             onClick={() => navigate("/farmer/market")}
-            className="mt-4 inline-flex items-center gap-2 bg-white text-[var(--hw-green-700)] px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-green-50 transition-colors"
+            className="mt-3 inline-flex items-center gap-1.5 bg-white text-[var(--hw-green-700)] px-3.5 py-2 rounded-xl font-medium text-xs hover:bg-green-50 transition-colors"
           >
             {t("farmer.dashboard.hero_btn", {}, "Check what to plant")}
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 

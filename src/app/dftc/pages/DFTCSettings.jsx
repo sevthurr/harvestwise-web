@@ -7,7 +7,7 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
-import { isValidEmail } from "../../auth/authValidation";
+import { isValidEmail, isFakeEmailDomain } from "../../auth/authValidation";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
@@ -32,12 +32,16 @@ const TABS = [
 const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked, removalCurrent, onCancelRemoval }) => {
   const { user, refreshUser } = useAuth();
   const { t, formatDate } = useLanguage();
+  const googleLink = useGoogleLink({
+    redirectTo: `${window.location.origin}/dftc/settings?tab=account`,
+    onResult: () => {},
+  });
   const queryClient = useQueryClient();
   const staff = user?.staff_profile || user?.staffProfile || {};
   const firstName = staff.first_name || user?.first_name || (user?.name ? user.name.split(" ")[0] : "") || "";
   const lastName = staff.last_name || user?.last_name || (user?.name && user.name.split(" ").length > 1 ? user.name.split(" ").slice(-1)[0] : "") || "";
   const middleName = staff.middle_name || "";
-  const suffix = staff.suffix || "None";
+  const suffix = staff.suffix || user?.suffix || "None";
   const phone = user?.phone || "";
   const email = user?.email || "";
   const position = user?.position || staff.position_title || "";
@@ -66,6 +70,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [removeReason, setRemoveReason] = useState("");
   const [removeReasonErr, setRemoveReasonErr] = useState("");
@@ -102,14 +107,26 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
   const set = (k) => (e) => {
     const value = e.target.value;
     setForm((f) => ({ ...f, [k]: value }));
-    if (k === "email") setEmailError(value.trim() && !isValidEmail(value) ? "Enter a valid email address." : "");
+    if (k === "email") {
+      if (value.trim() && !isValidEmail(value)) {
+        setEmailError("Enter a valid email address.");
+      } else if (isFakeEmailDomain(value)) {
+        setEmailError("You cannot use a test or development email address. Enter a real email address that can receive messages.");
+      } else {
+        setEmailError("");
+      }
+    }
   };
   const handlePreSave = () => {
     if (emailError) return;
+    if (isFakeEmailDomain(form.email)) {
+      setEmailError("You cannot use a test or development email address. Enter a real email address that can receive messages.");
+      return;
+    }
     setShowSaveModal(true);
   };
   const handleSave = async () => {
-    setShowSaveModal(false);
+    setFieldErrors({});
     const payload = {
       first_name: form.firstName,
       last_name: form.lastName,
@@ -120,9 +137,10 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       email: form.email || null
     };
     if (currentPassword) payload.current_password = currentPassword;
-    setCurrentPassword("");
     try {
       await parseResponse(await apiPut("/dftc/staff/me", payload));
+      setShowSaveModal(false);
+      setCurrentPassword("");
       try {
         await refreshUser();
         queryClient.invalidateQueries({ queryKey: ["auth-me-profile"] });
@@ -131,7 +149,36 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       }
       showToast("Account updated successfully.");
     } catch (err) {
-      showToast(err?.message || "Could not save account changes. Please try again.", "error");
+      const msg = err?.message || "";
+      const lc = msg.toLowerCase();
+      // Map well-known backend messages to the affected field so the user
+      // sees an inline error next to the input, not just a generic toast.
+      if (lc.includes("test or development email") || lc.includes("fake")) {
+        setShowSaveModal(false);
+        setCurrentPassword("");
+        setEmailError("You cannot use a test or development email address. Enter a real email address that can receive messages.");
+      } else if (lc.includes("email address is already in use") || lc.includes("email already")) {
+        setShowSaveModal(false);
+        setCurrentPassword("");
+        setFieldErrors((f) => ({ ...f, email: "That email address is already in use by another account." }));
+      } else if (lc.includes("phone number is already in use") || lc.includes("phone number already")) {
+        setShowSaveModal(false);
+        setCurrentPassword("");
+        setFieldErrors((f) => ({ ...f, phone: "That phone number is already in use by another account." }));
+      } else if (lc.includes("password you entered is incorrect") || lc.includes("password is incorrect")) {
+        // Keep modal open — user can correct the password without reopening it.
+        setFieldErrors((f) => ({ ...f, currentPassword: "The password you entered is incorrect. Please try again." }));
+      } else if (lc.includes("current password is required")) {
+        setFieldErrors((f) => ({ ...f, currentPassword: "Your current password is required to change your email or phone number." }));
+      } else if (lc.includes("first name") || lc.includes("last name")) {
+        setShowSaveModal(false);
+        setCurrentPassword("");
+        setFieldErrors((f) => ({ ...f, firstName: "First name and last name are required." }));
+      } else {
+        setShowSaveModal(false);
+        setCurrentPassword("");
+        showToast(msg || "Could not save account changes. Please try again.", "error");
+      }
     }
   };
   const handleRemoveSubmit = () => {
@@ -152,7 +199,8 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <FieldLabel htmlFor="ac-fn">First Name</FieldLabel>
-              <input id="ac-fn" type="text" value={form.firstName} onChange={set("firstName")} className={inputCls} />
+              <input id="ac-fn" type="text" value={form.firstName} onChange={set("firstName")} className={`${inputCls} ${fieldErrors.firstName ? "border-red-500 focus:ring-red-500" : ""}`} />
+              {fieldErrors.firstName && <p className="mt-1 text-[12px] text-red-600">{fieldErrors.firstName}</p>}
             </div>
             <div>
               <FieldLabel htmlFor="ac-ln">Last Name</FieldLabel>
@@ -176,12 +224,19 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
           </div>
           <div>
             <FieldLabel htmlFor="ac-ph">Phone Number</FieldLabel>
-            <input id="ac-ph" type="tel" inputMode="numeric" maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} className={inputCls} />
+            <input id="ac-ph" type="tel" inputMode="numeric" maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} className={`${inputCls} ${fieldErrors.phone ? "border-red-500 focus:ring-red-500" : ""}`} />
+            {fieldErrors.phone && <p className="mt-1 text-[12px] text-red-600">{fieldErrors.phone}</p>}
           </div>
           <div>
             <FieldLabel htmlFor="ac-em">Email</FieldLabel>
-            <input id="ac-em" type="email" value={form.email} onChange={set("email")} className={`${inputCls} ${emailError ? "border-red-500 focus:ring-red-500" : ""}`} />
+            <input id="ac-em" type="email" value={form.email} onChange={set("email")} disabled={googleLink.googleConnected} className={`${inputCls} ${(emailError || fieldErrors.email) ? "border-red-500 focus:ring-red-500" : ""} ${googleLink.googleConnected ? "bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed" : ""}`} />
             {emailError && <p className="mt-1 text-[12px] text-red-600">{emailError}</p>}
+            {!emailError && fieldErrors.email && <p className="mt-1 text-[12px] text-red-600">{fieldErrors.email}</p>}
+            {googleLink.googleConnected && (
+              <p className="mt-1 text-[12px] text-amber-700">
+                Your account is linked to Google Sign-In. To change your email, update it in your Google account first.
+              </p>
+            )}
           </div>
           <div>
             <FieldLabel htmlFor="ac-role">Role</FieldLabel>
@@ -203,12 +258,12 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
 
       <Card>
         <p className="text-[12px] font-semibold text-red-500 uppercase tracking-wide mb-3">{t("dftc.settings.danger_zone", {}, "Danger Zone")}</p>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[14px] font-semibold text-black">{t("dftc.settings.request_deletion_title", {}, "Request account removal")}</p>
-            <p className="text-[13px] text-black">{t("dftc.settings.request_deletion_desc", {}, "Submit a request to remove your DFTC account. The HarvestWise team will review it.")}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0 space-y-1 sm:space-y-1.5">
+            <p className="text-[14px] sm:text-[15px] font-semibold text-black">{t("dftc.settings.request_deletion_title", {}, "Request account removal")}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-700)] leading-relaxed">{t("dftc.settings.request_deletion_desc", {}, "Submit a request to remove your DFTC account. The HarvestWise team will review it.")}</p>
             {removalStatus && (
-              <p className="text-[13px] text-black mt-1">
+              <p className="text-[13px] text-black pt-0.5">
                 {t("dftc.settings.removal_status_label", {}, "Request status")}:{" "}
                 <span className={`font-semibold ${removalStatusColor}`}>
                   {removalStatusLabel}
@@ -216,7 +271,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               </p>
             )}
             {removalInGrace && (
-              <p className="text-[13px] text-amber-700 mt-1">
+              <p className="text-[13px] text-amber-700 leading-snug">
                 {t(
                   "dftc.settings.removal_grace_note",
                   { date: removalGraceDueAt ? formatDate(removalGraceDueAt) : "—" },
@@ -225,18 +280,18 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               </p>
             )}
             {removalFulfilledAt && (
-              <p className="text-[13px] text-[var(--hw-neutral-500)] mt-1">
+              <p className="text-[13px] text-[var(--hw-neutral-500)] leading-snug">
                 {t("dftc.settings.removal_completed_note", {}, "Your account removal request has been fulfilled.")}
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto flex-shrink-0 pt-1 sm:pt-0">
             {removalInGrace && (
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="h-8 px-3 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-black border border-[var(--hw-neutral-200)] rounded-xl sm:rounded-lg hover:bg-[var(--hw-neutral-50)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {cancelling ? t("common.saving", {}, "Saving…") : t("dftc.settings.removal_cancel_btn", {}, "Cancel request")}
               </button>
@@ -245,7 +300,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
               type="button"
               onClick={() => setShowRemoveModal(true)}
               disabled={removalBlocked}
-              className="h-8 px-3 text-[13px] font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              className="w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium text-red-600 border border-red-200 rounded-xl sm:rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               {removalStatus === "rejected"
                 ? t("dftc.settings.request_again_btn", {}, "Request Again")
@@ -255,7 +310,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
         </div>
       </Card>
 
-      {showSaveModal && <Modal title="Save account changes?" onClose={() => setShowSaveModal(false)}>
+      {showSaveModal && <Modal title="Save account changes?" onClose={() => { setShowSaveModal(false); setFieldErrors({}); setCurrentPassword(""); }}>
           <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your HarvestWise profile.</p>
           <label htmlFor="dftc-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
             Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
@@ -265,11 +320,13 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
             type="password"
             autoComplete="current-password"
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className={`${inputCls} mb-5`}
+            onChange={(e) => { setCurrentPassword(e.target.value); setFieldErrors((f) => ({ ...f, currentPassword: "" })); }}
+            className={`${inputCls} mb-1`}
           />
+          {fieldErrors.currentPassword && <p className="mb-4 text-[12px] text-red-600">{fieldErrors.currentPassword}</p>}
+          {!fieldErrors.currentPassword && <div className="mb-4" />}
           <div className="flex gap-2 justify-end">
-            <GhostBtn onClick={() => setShowSaveModal(false)}>Cancel</GhostBtn>
+            <GhostBtn onClick={() => { setShowSaveModal(false); setFieldErrors({}); setCurrentPassword(""); }}>Cancel</GhostBtn>
             <GreenBtn onClick={handleSave}>Save changes</GreenBtn>
           </div>
         </Modal>}
@@ -334,7 +391,7 @@ const SecurityTab = ({ showToast }) => {
 
       <Card>
         <SectionLabel>{t("dftc.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
-        <div className="flex items-center justify-between py-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 py-1">
           <div>
             <p className="text-[14px] font-semibold text-black">{t("dftc.settings.google_card_title", {}, "Google Sign-In")}</p>
             <p className="text-[13px] text-black">{googleLink.googleConnected ? t("dftc.settings.google_connected", {}, "Connected") : t("dftc.settings.google_not_connected", {}, "Not connected")}</p>
@@ -350,7 +407,7 @@ const SecurityTab = ({ showToast }) => {
               }
             }}
             disabled={googleLink.loading}
-            className={`h-8 px-3 text-[13px] font-medium rounded-lg border transition-colors ${
+            className={`w-full sm:w-auto h-9 sm:h-8 px-3.5 text-[13px] font-medium rounded-xl sm:rounded-lg border transition-colors ${
               googleLink.googleConnected
                 ? "border-red-200 text-red-600 hover:bg-red-50"
                 : "border-[var(--hw-green-700)] text-[var(--hw-green-700)] hover:bg-[var(--hw-green-50)]"
@@ -429,7 +486,7 @@ function DFTCSettings() {
     }
   };
 
-  return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+  return <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       <PageHeader
         title="Settings"
         description="Manage your account and security settings."

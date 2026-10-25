@@ -18,7 +18,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../app/global/contexts/AuthContext';
-import { apiGet, storeTokens, getAccessToken, getRefreshToken } from '../app/global/api';
+import { apiGet, storeTokens, clearTokens, getAccessToken, getRefreshToken } from '../app/global/api';
 import { CropsProvider, useCrops } from '../app/farmer/components/crops/CropsContext';
 import { queryClient as appQueryClient, shouldRetry } from '../app/global/lib/queryClient';
 
@@ -104,6 +104,7 @@ const errWithStatus = (status) => Object.assign(new Error('boom'), { status });
 
 beforeEach(() => {
   localStorage.clear();
+  clearTokens();
   vi.restoreAllMocks();
 });
 
@@ -186,10 +187,9 @@ describe('crops query pre-auth behaviour', () => {
   });
 
   it('a 401 WITH a token still dispatches hw:auth:expired', async () => {
-    // Access token present, no refresh token -> no refresh attempt, forced logout.
+    // A live cookie session is represented only by an in-memory session flag.
     storeTokens(FAKE_TOKENS);
-    localStorage.removeItem('hw_refresh_token');
-    expect(getAccessToken()).toBe(FAKE_TOKENS.access_token);
+    expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
 
     const onExpired = vi.fn();
@@ -216,6 +216,81 @@ describe('crops query pre-auth behaviour', () => {
 
     expect(onExpired).not.toHaveBeenCalled();
     window.removeEventListener('hw:auth:expired', onExpired);
+  });
+});
+
+// ── Crop plans are read by role, not by "is there a token" ───────────────────
+//
+// GET /crop-plans answers with the caller's own plans and the backend gates it
+// on (SuperAdmin, Farmer). CropsProvider is mounted above the router, so it
+// also runs on /login and in the admin and DFTC workspaces. Gating on "is
+// there a session" stopped the pre-login 401 but still fired the request for
+// every logged-in role: a guaranteed 403 for DFTC, and an out-of-scope read
+// for admin — which gets the active-plan count from the admin dashboard KPI
+// (GET /admin/dashboard) instead.
+
+const FAKE_USER_DFTC = {
+  ...FAKE_USER_FARMER,
+  id: 'USR-0002',
+  email: 'dftc@example.com',
+  role: { id: 'ROL-0003', role_name: 'DFTC' },
+};
+
+const FAKE_USER_ADMIN = {
+  ...FAKE_USER_FARMER,
+  id: 'USR-0003',
+  email: 'admin@example.com',
+  role: { id: 'ROL-0002', role_name: 'SuperAdmin' },
+};
+
+/** fetch stub: /auth/me returns `user`, /crop-plans returns one plan. */
+function mockFetchUser(user) {
+  return vi.fn(async (url) => {
+    const u = String(url);
+    if (u.includes('/auth/me')) return { ok: true, status: 200, json: async () => user };
+    if (u.includes('/crop-plans')) return { ok: true, status: 200, json: async () => CROP_PLANS_OK };
+    return { ok: true, status: 200, json: async () => ({}) };
+  });
+}
+
+describe('crops query role gating', () => {
+  it('requests /crop-plans for a Farmer session', async () => {
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetchUser(FAKE_USER_FARMER));
+
+    renderWithCrops(() => {});
+
+    await waitFor(() => expect(cropPlanCalls()).toBeGreaterThan(0));
+  });
+
+  it('does NOT request /crop-plans for a DFTC session', async () => {
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetchUser(FAKE_USER_DFTC));
+
+    renderWithCrops(() => {});
+
+    // Give the (incorrect) request a chance to fire before asserting.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cropPlanCalls()).toBe(0);
+  });
+
+  it('does NOT request /crop-plans for an admin session', async () => {
+    storeTokens(FAKE_TOKENS);
+    vi.stubGlobal('fetch', mockFetchUser(FAKE_USER_ADMIN));
+
+    renderWithCrops(() => {});
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cropPlanCalls()).toBe(0);
+  });
+
+  it('does NOT request /crop-plans without a session', async () => {
+    vi.stubGlobal('fetch', mockFetchUser(FAKE_USER_FARMER));
+
+    renderWithCrops(() => {});
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cropPlanCalls()).toBe(0);
   });
 });
 
@@ -260,7 +335,7 @@ describe('auth failures are not retried', () => {
   it('the real app queryClient stops after one /crop-plans request on a 401', async () => {
     // Uses the shipped queryClient so the default retry policy is what is tested.
     storeTokens(FAKE_TOKENS);
-    localStorage.removeItem('hw_refresh_token');
+    clearTokens();
     vi.stubGlobal('fetch', mockFetchCropPlansUnauthorized());
 
     appQueryClient.clear();

@@ -352,6 +352,8 @@ function DFTCUpload() {
     new: 0,
     updated: 0,
     unchanged: 0,
+    skipped: 0,
+    overwritten: 0,
     duplicates: 0,
     missingValues: 0,
     unrecognizedCommodities: 0,
@@ -368,9 +370,11 @@ function DFTCUpload() {
   const [uploadMessage, setUploadMessage] = useState("");
   const [ingestionStatus, setIngestionStatus] = useState("idle");
   const fileRef = useRef(null);
+  const validationAbortRef = useRef(null);
   const mountedRef = useRef(true);
   useEffect(() => () => {
     mountedRef.current = false;
+    validationAbortRef.current?.abort();
   }, []);
 
   const runValidation = async (targetFile, dt, isOverwrite) => {
@@ -382,10 +386,13 @@ function DFTCUpload() {
       return;
     }
     const mappedType = DATA_TYPE_MAP[targetDt] || targetDt;
+    validationAbortRef.current?.abort();
+    const controller = new AbortController();
+    validationAbortRef.current = controller;
     setValidating(true);
     setUploadError("");
     try {
-      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite);
+      const res = await ingestionApi.validateFile(f, mappedType, isOverwrite, { signal: controller.signal });
       const summary = res?.summary || {};
       setValidationResult({
         totalRows: summary.total_rows ?? 0,
@@ -393,6 +400,8 @@ function DFTCUpload() {
         new: summary.new_rows ?? 0,
         updated: summary.updated_rows ?? 0,
         unchanged: summary.unchanged_rows ?? summary.duplicate_rows ?? 0,
+        skipped: summary.skipped_rows ?? 0,
+        overwritten: summary.overwritten_rows ?? 0,
         duplicates: summary.duplicate_rows ?? 0,
         missingValues: summary.missing_value_rows ?? 0,
         unrecognizedCommodities: summary.unrecognized_commodity_rows ?? 0,
@@ -402,14 +411,20 @@ function DFTCUpload() {
       setStep("validated");
       setCurrentStep(1);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Validation error:", err);
       setUploadError("We couldn't validate this file. Please try again.");
     } finally {
-      setValidating(false);
+      if (validationAbortRef.current === controller) {
+        validationAbortRef.current = null;
+        setValidating(false);
+      }
     }
   };
 
   const processFile = async (selected) => {
+    validationAbortRef.current?.abort();
+    setValidating(false);
     setFile(selected);
     setFileName(selected.name);
     setUploadError("");
@@ -419,6 +434,11 @@ function DFTCUpload() {
     setValidationResult({
       totalRows: 0,
       valid: 0,
+      new: 0,
+      updated: 0,
+      unchanged: 0,
+      skipped: 0,
+      overwritten: 0,
       duplicates: 0,
       missingValues: 0,
       unrecognizedCommodities: 0,
@@ -527,16 +547,20 @@ function DFTCUpload() {
       if (importId) {
         let isFinished = false;
         let attempts = 0;
-        while (!isFinished && attempts < 60) {
+        while (!isFinished && attempts < 300) {
           attempts++;
           await new Promise((r) => setTimeout(r, 2000));
           if (!mountedRef.current) return;
           try {
             const statusRes = await ingestionApi.getHistoryDetail(importId);
-            if (statusRes?.status === "completed" || statusRes?.status === "success") {
+            const forecastFailed = statusRes?.status === "completed_with_forecast_error";
+            const forecastPending = statusRes?.status === "waiting_for_complete_series";
+            if (statusRes?.status === "completed" || statusRes?.status === "success" || forecastFailed || forecastPending) {
               isFinished = true;
               setIngestionStatus("success");
               const subId = statusRes?.submission_id || res?.submission_id || null;
+              const rowsSkipped = validationResult.skipped ?? 0;
+              const rowsUpdated = validationResult.updated ?? 0;
               setCompletedImportId(importId);
               setCompletedSummary({
                 fileName: fileName || file?.name || "Uploaded File",
@@ -549,12 +573,27 @@ function DFTCUpload() {
                 totalRows: validationResult.totalRows,
                 validRows: validationResult.valid,
                 rejectedRows: validationResult.rejected,
+                rowsSkipped: rowsSkipped,
+                rowsUpdated: rowsUpdated,
                 fileFormat: file?.name ? ("." + file.name.split(".").pop().toLowerCase()) : ".xlsx",
                 finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
               });
               setImportProgress(100);
-              setUploadMessage(`Import completed successfully! Stored ${statusRes.records_imported || 0} records.`);
-              finishProcess(`Stored ${statusRes.records_imported || 0} records`);
+              setUploadMessage(
+                forecastPending
+                  ? "Data stored. Forecast is waiting for the remaining complete price series."
+                  : forecastFailed
+                  ? `Data stored, but forecast generation failed. Stored ${statusRes.records_imported || 0} records.`
+                  : `Import and forecast completed successfully! Stored ${statusRes.records_imported || 0} records.`
+              );
+              finishProcess(
+                forecastPending
+                  ? "Data stored; forecast waiting"
+                  : forecastFailed
+                  ? "Data stored; forecast failed"
+                  : `Stored ${statusRes.records_imported || 0} records`,
+                forecastFailed
+              );
               setStep("stored");
               setCurrentStep(4);
               queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
@@ -564,8 +603,6 @@ function DFTCUpload() {
               queryClient.invalidateQueries({ queryKey: ["dftc-home"] });
               queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
               queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
-              queryClient.invalidateQueries();
-              queryClient.refetchQueries();
             } else if (statusRes?.status === "failed") {
               isFinished = true;
               setIngestionStatus("failed");
@@ -573,12 +610,14 @@ function DFTCUpload() {
               finishProcess(statusRes.error_message || "Import failed", true);
               setStep("validated");
               setCurrentStep(1);
-              queryClient.invalidateQueries();
-              queryClient.refetchQueries();
-            } else {
-              const pct = Math.min(90, 20 + attempts * 3);
+            } else if (statusRes?.status === "forecasting") {
+              const pct = Math.min(95, 75 + Math.min(20, attempts));
               setImportProgress(pct);
-              updateProgress(pct, `Processing records... (${attempts * 2}s)`);
+              updateProgress(pct, "Generating forecast…");
+            } else {
+              const pct = Math.min(70, 20 + attempts * 2);
+              setImportProgress(pct);
+              updateProgress(pct, `Processing records… (${attempts * 2}s)`);
             }
           } catch (statusErr) {
             console.warn("Status poll error:", statusErr);
@@ -599,6 +638,9 @@ function DFTCUpload() {
   };
 
   const handleReset = () => {
+    validationAbortRef.current?.abort();
+    validationAbortRef.current = null;
+    setValidating(false);
     setStep("form");
     setFileName("");
     setCurrentStep(0);
@@ -621,6 +663,8 @@ function DFTCUpload() {
       new: 0,
       updated: 0,
       unchanged: 0,
+      skipped: 0,
+      overwritten: 0,
       duplicates: 0,
       missingValues: 0,
       unrecognizedCommodities: 0,
@@ -638,7 +682,7 @@ function DFTCUpload() {
 
   const filteredTableRows = (tableFilter === "valid" ? validationRows : displayedIssueRows).filter((r) => {
     if (tableFilter === "all") return true;
-    if (tableFilter === "valid") return r.result === "valid" || r.result === "valid_with_warning" || (!r.issues || r.issues.length === 0);
+    if (tableFilter === "valid") return overwrite ? (r.result === "valid" || r.result === "valid_with_warning") : r.result === "valid";
     if (tableFilter === "rejected") return r.result === "rejected";
     if (tableFilter === "warning") return r.result === "valid_with_warning";
     if (tableFilter === "duplicate") return r.issues?.some((i) => i.code === "duplicate");
@@ -660,7 +704,7 @@ function DFTCUpload() {
   const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       
       {/* Navigation & Header */}
         <div>
@@ -683,23 +727,23 @@ function DFTCUpload() {
         </div>
 
         {/* Processing steps indicator */}
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3.5">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 sm:px-4 py-3 sm:py-3.5">
           <div className="flex items-center justify-between">
             {STEP_CONFIG.map((stepCfg, i) => {
               const isDone = i < currentStep;
               const stepLabel = isDone ? stepCfg.done : stepCfg.active;
               return (
                 <React.Fragment key={stepCfg.active}>
-                  <div className="flex flex-col items-center gap-1">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2 transition-colors ${isDone ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : i === currentStep ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] bg-white" : "border-[var(--hw-neutral-300)] text-[var(--hw-neutral-400)] bg-white"}`}>
-                      {isDone ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                  <div className="flex flex-col items-center gap-1 shrink-0">
+                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-[11px] font-bold border-2 transition-colors ${isDone ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white" : i === currentStep ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] bg-white" : "border-[var(--hw-neutral-300)] text-[var(--hw-neutral-400)] bg-white"}`}>
+                      {isDone ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : i + 1}
                     </div>
-                    <span className={`text-[10px] font-medium ${i <= currentStep ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`}>
+                    <span className={`text-[9.5px] sm:text-[10.5px] font-medium ${i <= currentStep ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-400)]"}`}>
                       {stepLabel}
                     </span>
                   </div>
                   {i < STEP_CONFIG.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-2 transition-colors ${isDone ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-200)]"}`} />
+                    <div className={`flex-1 h-0.5 mx-1 sm:mx-2 min-w-2 sm:min-w-3 transition-colors ${isDone ? "bg-[var(--hw-green-700)]" : "bg-[var(--hw-neutral-200)]"}`} />
                   )}
                 </React.Fragment>
               );
@@ -811,6 +855,11 @@ function DFTCUpload() {
                   <label htmlFor="overwrite-checkbox" className="text-[13px] font-medium text-[var(--hw-neutral-700)] cursor-pointer">
                     Overwrite existing records (upsert mode)
                   </label>
+                  {overwrite && (
+                    <span className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                      Existing records will be replaced with the values from this file.
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -891,79 +940,74 @@ function DFTCUpload() {
 
         {/* Validation results & importing progress */}
         {(step === "validated" || step === "importing" || (step === "done" && ingestionStatus !== "success")) && (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-4">
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5 space-y-3.5 sm:space-y-4">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation complete</p>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <p className="text-[14.5px] sm:text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation complete</p>
             </div>
 
-            {/* 6 KPI Cards (3 on Row 1, 3 on Row 2) */}
-            <div className="space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("all")}
-                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "all" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Total Rows</p>
-                  <p className="text-[18px] font-bold text-[var(--hw-neutral-900)] mt-0.5">{validationResult.totalRows}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("valid")}
-                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "valid" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Valid Rows</p>
-                  <p className="text-[18px] font-bold text-emerald-700 mt-0.5">{validationResult.valid}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("rejected")}
-                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "rejected" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Rejected Rows</p>
-                  <p className="text-[18px] font-bold text-red-600 mt-0.5">{validationResult.rejected}</p>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("duplicate")}
-                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "duplicate" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Duplicates</p>
-                  <p className="text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.duplicates}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("missing")}
-                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "missing" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Missing Values</p>
-                  <p className="text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.missingValues}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("new_commodity")}
-                  className={`rounded-xl px-4 py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "new_commodity" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">Unrecognized Commodities</p>
-                  <p className="text-[18px] font-bold text-[var(--hw-neutral-800)] mt-0.5">{validationResult.unrecognizedCommodities}</p>
-                </button>
-              </div>
+            {/* 6 KPI Cards (2 cols on mobile, 3 on tablet, 6 on desktop) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <button
+                type="button"
+                onClick={() => handleKpiFilter("all")}
+                className={`rounded-xl p-2.5 sm:px-3 sm:py-2.5 lg:px-3.5 lg:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                  tableFilter === "all" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                }`}
+              >
+                <p className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">Total Rows</p>
+                <p className="text-[16px] sm:text-[18px] font-bold text-[var(--hw-neutral-900)] mt-0.5">{validationResult.totalRows}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleKpiFilter("valid")}
+                className={`rounded-xl p-2.5 sm:px-3 sm:py-2.5 lg:px-3.5 lg:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                  tableFilter === "valid" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                }`}
+              >
+                <p className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">Valid Rows</p>
+                <p className="text-[16px] sm:text-[18px] font-bold text-emerald-700 mt-0.5">{validationResult.valid}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleKpiFilter("rejected")}
+                className={`rounded-xl p-2.5 sm:px-3 sm:py-2.5 lg:px-3.5 lg:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                  tableFilter === "rejected" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                }`}
+              >
+                <p className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">Rejected Rows</p>
+                <p className="text-[16px] sm:text-[18px] font-bold text-red-600 mt-0.5">{validationResult.rejected}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleKpiFilter("duplicate")}
+                className={`rounded-xl p-2.5 sm:px-3 sm:py-2.5 lg:px-3.5 lg:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                  tableFilter === "duplicate" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                }`}
+              >
+                <p className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">Duplicates</p>
+                <p className="text-[16px] sm:text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.duplicates}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleKpiFilter("missing")}
+                className={`rounded-xl p-2.5 sm:px-3 sm:py-2.5 lg:px-3.5 lg:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                  tableFilter === "missing" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                }`}
+              >
+                <p className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">Missing Values</p>
+                <p className="text-[16px] sm:text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.missingValues}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleKpiFilter("new_commodity")}
+                className={`rounded-xl p-2.5 sm:px-3 sm:py-2.5 lg:px-3.5 lg:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                  tableFilter === "new_commodity" ? "border-[var(--hw-green-600)]" : "border-transparent"
+                }`}
+              >
+                <p className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)] truncate">Unrecognized Commodities</p>
+                <p className="text-[16px] sm:text-[18px] font-bold text-[var(--hw-neutral-800)] mt-0.5">{validationResult.unrecognizedCommodities}</p>
+              </button>
             </div>
 
             {/* Validation Details Table Section */}
@@ -971,12 +1015,12 @@ function DFTCUpload() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">Validation Details</p>
                 {validationRows.length > 0 && (
-                  <div className="flex items-center gap-1.5 text-[12px]">
-                    <span className="text-[var(--hw-neutral-600)]">Filter:</span>
+                  <div className="flex items-center gap-1.5 text-[12px] w-full sm:w-auto">
+                    <span className="text-[var(--hw-neutral-600)] shrink-0">Filter:</span>
                     <select
                       value={tableFilter}
                       onChange={(e) => setTableFilter(e.target.value)}
-                      className="px-2 py-1 border border-[var(--hw-neutral-300)] rounded-lg text-[12px] bg-white text-[var(--hw-neutral-800)] focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] cursor-pointer"
+                      className="w-full sm:w-auto px-2 py-1.5 border border-[var(--hw-neutral-300)] rounded-lg text-[12px] bg-white text-[var(--hw-neutral-800)] focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] cursor-pointer"
                     >
                       <option value="all">All Issues ({displayedIssueRows.length})</option>
                       <option value="valid">Valid Rows ({validationResult.valid})</option>
@@ -992,15 +1036,15 @@ function DFTCUpload() {
               </div>
 
               {filteredTableRows.length > 0 ? (
-                <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] max-h-80">
-                  <table className="w-full text-[12px] text-left border-collapse">
+                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x rounded-xl border border-[var(--hw-neutral-200)] max-h-80">
+                  <table className="w-full min-w-[580px] text-[12px] text-left border-collapse">
                     <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)] sticky top-0">
                       <tr>
-                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] w-28">Source</th>
-                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)]">Commodity / Record</th>
-                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] w-36">Result</th>
-                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)]">Issues</th>
-                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)]">Reason</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap w-28">Source</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">Commodity / Record</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap w-36">Result</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">Issues</th>
+                        <th className="px-3 py-2 font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">Reason</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--hw-neutral-100)] bg-white">
@@ -1017,10 +1061,10 @@ function DFTCUpload() {
                         return (
                           <tr key={idx}>
                             <td className="px-3 py-2 text-[var(--hw-neutral-700)] whitespace-nowrap font-medium">{sourceDisplay}</td>
-                            <td className="px-3 py-2 font-medium text-[var(--hw-neutral-900)]">{r.record_label || "—"}</td>
-                            <td className={`px-3 py-2 font-medium ${resultTextColor}`}>{resultLabel}</td>
-                            <td className="px-3 py-2 text-[var(--hw-neutral-800)]">{issuesText || "—"}</td>
-                            <td className="px-3 py-2 text-[var(--hw-neutral-600)]">{reasonText || "—"}</td>
+                            <td className="px-3 py-2 font-medium text-[var(--hw-neutral-900)] whitespace-nowrap">{r.record_label || "—"}</td>
+                            <td className={`px-3 py-2 font-medium whitespace-nowrap ${resultTextColor}`}>{resultLabel}</td>
+                            <td className="px-3 py-2 text-[var(--hw-neutral-800)] whitespace-nowrap">{issuesText || "—"}</td>
+                            <td className="px-3 py-2 text-[var(--hw-neutral-600)] whitespace-nowrap">{reasonText || "—"}</td>
                           </tr>
                         );
                       })}
@@ -1046,15 +1090,18 @@ function DFTCUpload() {
             )}
 
             {step === "validated" && (
-              <div className="flex flex-wrap gap-3 pt-1">
+              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 pt-1">
                 <button
                   onClick={handleImport}
-                  disabled={uploading}
-                  className="flex-1 min-w-[140px] py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer"
+                  disabled={uploading || validationResult.valid === 0}
+                  className="w-full sm:flex-1 py-2.5 px-4 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer text-center"
                 >
                   Import Valid Records ({validationResult.valid})
                 </button>
-                <button onClick={handleReset} className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer">
+                <button 
+                  onClick={handleReset} 
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Replace File
                 </button>
@@ -1062,17 +1109,17 @@ function DFTCUpload() {
             )}
 
             {step === "importing" && (
-              <div className="p-5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 space-y-3">
+              <div className="p-4 sm:p-5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[14px] font-bold text-blue-950">Standardizing & Storing Records…</p>
-                    <p className="text-[12px] text-blue-800 mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] sm:text-[14px] font-bold text-blue-950">Standardizing & Storing Records…</p>
+                    <p className="text-[12px] text-blue-800 mt-0.5 break-words">
                       {uploadMessage || "Uploading and processing dataset in the background…"}
                     </p>
                   </div>
-                  <span className="text-[14px] font-bold text-blue-700 shrink-0">{importProgress}%</span>
+                  <span className="text-[13px] sm:text-[14px] font-bold text-blue-700 shrink-0">{importProgress}%</span>
                 </div>
-                <div className="w-full bg-blue-200/70 h-2.5 rounded-full overflow-hidden border border-blue-200">
+                <div className="w-full bg-blue-200/70 h-2 sm:h-2.5 rounded-full overflow-hidden border border-blue-200">
                   <div
                     className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out"
                     style={{ width: `${importProgress}%` }}
@@ -1084,7 +1131,7 @@ function DFTCUpload() {
             {step === "done" && ingestionStatus === "failed" && (
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-900">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-[13px] font-bold text-red-950">Background Import Failed</p>
                     <p className="text-[13px] text-red-800 mt-0.5">{uploadError || "The background ingestion task failed."}</p>
@@ -1093,7 +1140,7 @@ function DFTCUpload() {
                 </div>
                 <button
                   onClick={handleReset}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   Try another file
@@ -1105,16 +1152,16 @@ function DFTCUpload() {
 
         {/* Step 4: Stored View */}
         {(step === "stored" || (step === "done" && ingestionStatus === "success")) && (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 space-y-6">
-            <div className="flex items-start gap-3.5 pb-5 border-b border-[var(--hw-neutral-100)]">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 flex-shrink-0">
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className="flex items-start gap-3 sm:gap-3.5 pb-4 sm:pb-5 border-b border-[var(--hw-neutral-100)]">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
-              <div>
-                <h2 className="text-[17px] font-bold text-[var(--hw-neutral-900)]">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">
                   Import Completed & Stored
                 </h2>
-                <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+                <p className="text-[12.5px] sm:text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
                   {uploadMessage || "The dataset was successfully validated, standardized, and stored in the database."}
                 </p>
               </div>
@@ -1122,68 +1169,80 @@ function DFTCUpload() {
 
             {/* Summary of the Uploaded File */}
             <div className="rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]/50 overflow-hidden">
-              <div className="px-5 py-3 border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-100)]/60 flex items-center justify-between">
-                <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
+              <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-100)]/60 flex items-center justify-between">
+                <p className="text-[11.5px] sm:text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
                   Upload Summary
                 </p>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span className="inline-flex items-center gap-1.5 text-[11.5px] sm:text-[12px] font-semibold text-emerald-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Completed
                 </span>
               </div>
 
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div>
+              <div className="p-3.5 sm:p-5 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 md:gap-5">
+                <div className="col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Submission ID</p>
-                  <p className="text-[13px] font-semibold text-emerald-800 font-mono mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-emerald-800 font-mono mt-0.5 break-all">
                     {completedSummary?.submissionId || "—"}
                   </p>
                 </div>
-                <div>
+                <div className="col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">History ID</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] font-mono mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] font-mono mt-0.5 break-all">
                     {completedSummary?.importId || completedImportId || "—"}
                   </p>
                 </div>
-                <div>
+                <div className="col-span-2 sm:col-span-2 lg:col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Source / File Name</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate mt-0.5" title={completedSummary?.fileName || fileName}>
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5 break-all leading-snug" title={completedSummary?.fileName || fileName}>
                     {completedSummary?.fileName || fileName || "—"}
                   </p>
                 </div>
-                <div>
+                <div className="col-span-2 sm:col-span-1 lg:col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Dataset Type</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
                     {completedSummary?.datasetType || datasetType || "—"}
                   </p>
                 </div>
-                <div>
-                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Records Stored</p>
-                  <p className="text-[14px] font-bold text-emerald-700 mt-0.5">
-                    {(completedSummary?.recordsImported ?? validationResult.valid).toLocaleString()} records
+                <div className="col-span-1">
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Rows Updated</p>
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {(completedSummary?.rowsUpdated ?? 0).toLocaleString()}
                   </p>
                 </div>
-                <div>
-                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Reporting Period</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
-                    {completedSummary?.period || period || "—"}
+                <div className="col-span-1">
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Rows Skipped</p>
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                    {(completedSummary?.rowsSkipped ?? 0).toLocaleString()}
                   </p>
                 </div>
-                <div>
+                <div className="col-span-2 sm:col-span-1 lg:col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Data Source</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
                     {completedSummary?.source || source || "—"}
                   </p>
                 </div>
-                <div>
+                <div className="col-span-1">
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Records Stored</p>
+                  <p className="text-[13px] sm:text-[14px] font-bold text-emerald-700 mt-0.5">
+                    {(completedSummary?.recordsImported ?? validationResult.valid).toLocaleString()} records
+                  </p>
+                </div>
+                <div className="col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Total Rows Processed</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
                     {(completedSummary?.totalRows ?? validationResult.totalRows).toLocaleString()} rows
                   </p>
                 </div>
-                <div>
+                <div className="col-span-1">
+                  <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Reporting Period</p>
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
+                    {completedSummary?.period || period || "—"}
+                  </p>
+                </div>
+                <div className="col-span-1">
                   <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Completion Time</p>
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
+                  <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
                     {completedSummary?.finishedAt || "Just now"}
                   </p>
                 </div>
@@ -1191,12 +1250,12 @@ function DFTCUpload() {
             </div>
 
             {/* Actions: View Details and Import another file */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-2">
               <button
                 onClick={() => {
                   navigate("/dftc/submissions");
                 }}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-sm cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-sm cursor-pointer"
               >
                 <FileText className="w-4 h-4" />
                 View Submission History
@@ -1204,7 +1263,7 @@ function DFTCUpload() {
 
               <button
                 onClick={handleReset}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
               >
                 <Upload className="w-3.5 h-3.5" />
                 Upload another file

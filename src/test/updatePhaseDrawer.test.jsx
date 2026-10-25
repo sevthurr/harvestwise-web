@@ -94,4 +94,95 @@ describe("UpdatePhaseDrawer auto-fill harvest date", () => {
     const harvestInput = screen.getByLabelText(/Updated expected harvest date/i);
     expect(harvestInput.value).toBe("2026-11-25");
   });
+
+  it("renders action button and Put on Hold card in confirm-planting mode", () => {
+    const onConfirm = vi.fn();
+    render(
+      <LanguageProvider>
+        <UpdatePhaseDrawer
+          open={true}
+          crop={baseCarrotCrop}
+          mode="confirm-planting"
+          onClose={vi.fn()}
+          onConfirm={onConfirm}
+        />
+      </LanguageProvider>
+    );
+
+    // Title and action button both show Confirm Planting
+    expect(screen.getAllByText("Confirm Planting").length).toBe(2);
+
+    // The primary action button (Confirm Planting) and Put on hold card are accessible
+    const actionButton = screen.getByRole("button", { name: /confirm planting/i });
+    const holdButton = screen.getByRole("button", { name: /put on hold/i });
+    expect(actionButton).toBeInTheDocument();
+    expect(holdButton).toBeInTheDocument();
+
+    // Clicking action button should submit phase transition to growing
+    fireEvent.click(actionButton);
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "phase",
+        phase: "growing",
+        fields: expect.objectContaining({
+          actualPlantingDate: "2026-10-14",
+        }),
+      })
+    );
+  });
+
+  it("renders Update status button in update-phase mode", () => {
+    const onConfirm = vi.fn();
+    render(
+      <LanguageProvider>
+        <UpdatePhaseDrawer
+          open={true}
+          crop={baseCarrotCrop}
+          mode="update-phase"
+          onClose={vi.fn()}
+          onConfirm={onConfirm}
+        />
+      </LanguageProvider>
+    );
+
+    expect(screen.getByText("Update crop phase")).toBeInTheDocument();
+    const updateBtn = screen.getByRole("button", { name: /update status/i });
+    expect(updateBtn).toBeInTheDocument();
+  });
+
+  it("allows putting a crop on hold from the drawer and confirming with Confirm button", () => {
+    const onConfirm = vi.fn();
+    render(
+      <LanguageProvider>
+        <UpdatePhaseDrawer
+          open={true}
+          crop={baseCarrotCrop}
+          mode="update-phase"
+          onClose={vi.fn()}
+          onConfirm={onConfirm}
+        />
+      </LanguageProvider>
+    );
+
+    // Click the Put on hold card in the drawer body
+    const holdButton = screen.getByRole("button", { name: /put on hold/i });
+    fireEvent.click(holdButton);
+
+    // Hold reason selector should now be displayed
+    const select = screen.getByRole("combobox");
+    expect(select).toBeInTheDocument();
+
+    // Select a reason
+    fireEvent.change(select, { target: { value: "Weather conditions" } });
+
+    // The page must have a "Confirm" button
+    const confirmBtn = screen.getByRole("button", { name: /confirm/i });
+    expect(confirmBtn).toBeInTheDocument();
+    fireEvent.click(confirmBtn);
+
+    expect(onConfirm).toHaveBeenCalledWith({
+      kind: "hold",
+      reason: "Weather conditions",
+    });
+  });
 });

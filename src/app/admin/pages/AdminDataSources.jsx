@@ -319,7 +319,7 @@ function AdminDataSources() {
     });
     setEditEventId(id);
   };
-  const tabCls = (id) => `px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${tab === id ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]" : "border-transparent text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-800)]"}`;
+  const tabCls = (id) => `px-3.5 sm:px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap flex-shrink-0 ${tab === id ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)]" : "border-transparent text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-800)]"}`;
   const inputCls = "w-full px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
   const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
   const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
@@ -565,7 +565,7 @@ function AdminDataSources() {
   };
   const renderCalendarWidget = () => {
     const selectedEvents = selectedCalDay ? eventsInMonth.filter((e) => e.date.getDate() === selectedCalDay) : [];
-    return <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-5">
+    return <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
         {
       /* Month navigation */
     }
@@ -657,7 +657,7 @@ function AdminDataSources() {
         {
       /* Legend */
     }
-        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[var(--hw-neutral-100)]">
+        <div className="flex items-center gap-3 sm:gap-4 mt-4 pt-3 border-t border-[var(--hw-neutral-100)] flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
             <span className="text-[12px] text-[var(--hw-neutral-800)]">API holiday</span>
@@ -700,9 +700,10 @@ function AdminDataSources() {
       {
     /* Table */
   }
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden sm:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[13px] min-w-[620px]">
             <thead>
               <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
                 {["ID", "Event Name", "Date", "Type", "Recurrence", "Status", ""].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
@@ -755,6 +756,60 @@ function AdminDataSources() {
           </table>
         </div>
       </div>
+
+      {/* Mobile Cards */}
+      <div className="sm:hidden space-y-2.5">
+        {manualEvents.length === 0 ? (
+          <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center text-[13px] text-[var(--hw-neutral-700)]">
+            No configured events yet. Add one to get started.
+          </div>
+        ) : (
+          manualEvents.map((e) => (
+            <div
+              key={e.id}
+              onClick={() => setViewEventId(e.id)}
+              className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-2.5 cursor-pointer active:bg-[var(--hw-neutral-50)] transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-[14px] text-[var(--hw-neutral-900)]">{e.name}</p>
+                  <p className="text-[11px] font-mono text-[var(--hw-neutral-500)]">{e.id}</p>
+                </div>
+                <span className={`text-[12px] font-semibold whitespace-nowrap flex-shrink-0 ${e.status === "Active" ? "text-emerald-700" : "text-[var(--hw-neutral-700)]"}`}>
+                  {e.status}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[12px] text-[var(--hw-neutral-600)] flex-wrap">
+                <span>{e.from === e.to ? e.from : `${e.from} \u2013 ${e.to}`}</span>
+                <span>·</span>
+                <span>{e.type}</span>
+                <span>·</span>
+                <span>{e.recurrence}</span>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-[var(--hw-neutral-100)]">
+                <button
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    openEdit(e.id);
+                  }}
+                  className="text-[12px] font-medium text-[var(--hw-neutral-800)] hover:text-black inline-flex items-center gap-1"
+                >
+                  <Pencil className="w-3 h-3" />Edit
+                </button>
+                <button
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    setDeleteEventId(e.id);
+                  }}
+                  className="text-[12px] font-medium text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>;
   return <>
       {
@@ -765,7 +820,7 @@ function AdminDataSources() {
       {deleteEventId && renderDeleteConfirmModal()}
       {viewEventId && renderViewEventModal()}
 
-      <div className="px-4 md:px-8 lg:px-10 py-5 max-w-[1440px] mx-auto space-y-5">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
 
         {/* Header */}
         <PageHeader
@@ -774,23 +829,33 @@ function AdminDataSources() {
         />
 
         {/* Tabs */}
-        {<div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto">
-            {DATA_SOURCE_TABS.map(([id, label]) => <button key={id} onClick={() => {
-    setTab(id);
-    setShowConfiguredEvents(false);
-  }} className={tabCls(id)}>{label}</button>)}
-          </div>}
+        <div className="flex border-b border-[var(--hw-neutral-200)] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden -mx-3 xs:-mx-4 sm:mx-0 px-3 xs:px-4 sm:px-0">
+          {DATA_SOURCE_TABS.map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => {
+                setTab(id);
+                setShowConfiguredEvents(false);
+              }}
+              className={tabCls(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* ══ TAB: DATA SOURCES ══ */}
         {tab === "sources" && <div className="space-y-3">
             <div className="flex items-center justify-end">
-              <button onClick={() => navigate("/admin/import")} className={btnPrimary}>
-                <FileText className="w-4 h-4" />Import Data
+              <button
+                onClick={() => navigate("/admin/import")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Import Data</span>
               </button>
             </div>
             {dataSourcesLoading ? (
-
-
               <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-12 text-center">
                 <div className="w-5 h-5 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-[13px] text-[var(--hw-neutral-500)] mt-3">Loading data sources...</p>
@@ -800,61 +865,114 @@ function AdminDataSources() {
                 <p className="text-[13px] text-red-600">{dataSourcesError}</p>
               </div>
             ) : (
-            <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
-                      {["Source", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                    {dataSources.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
-                          No data sources configured.
-                        </td>
-                      </tr>
-                    ) : (
-                      dataSources.map((s) => {
-                        const hl = (highlightedSource || "").toLowerCase();
-                        const displayName = SOURCE_DISPLAY_NAMES[s.name] || s.name || "";
-                        const matcher = `${s.id} ${s.name} ${displayName}`.toLowerCase();
-                        const isHighlighted = Boolean(
-                          hl &&
-                          (matcher.includes(hl) ||
-                           hl.includes(s.name.toLowerCase()) ||
-                           (hl.includes("dftc") && s.name.toLowerCase().includes("dftc")) ||
-                           (hl.includes("openstat") && s.name.toLowerCase().includes("openstat")) ||
-                           (hl.includes("meteo") && s.name.toLowerCase().includes("meteo")))
-                        );
-
-                        return (
-                          <tr
-                            key={s.id}
-                            id={`source-row-${s.id.toLowerCase()}`}
-                            data-source-match={matcher}
-                            onClick={() => navigate(`/admin/data-sources/${s.id}`)}
-                            className={`hover:bg-[var(--hw-neutral-50)] transition-colors duration-500 cursor-pointer ${
-                              isHighlighted ? "bg-emerald-50/70 font-medium" : ""
-                            }`}
-                          >
-                            <td className="px-4 py-3">
-                              <p className="font-medium text-[var(--hw-neutral-800)]">{displayName}</p>
+              <>
+                {/* Desktop/Tablet Table */}
+                <div className="hidden sm:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[13px] min-w-[560px]">
+                      <thead>
+                        <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
+                          {["Source", "Last Updated", "Records", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                        {dataSources.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                              No data sources configured.
                             </td>
-                            <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
-                            <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
-                              {s.records != null ? s.records.toLocaleString() : "—"}
-                            </td>
-                            <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        ) : (
+                          dataSources.map((s) => {
+                            const hl = (highlightedSource || "").toLowerCase();
+                            const displayName = SOURCE_DISPLAY_NAMES[s.name] || s.name || "";
+                            const matcher = `${s.id} ${s.name} ${displayName}`.toLowerCase();
+                            const isHighlighted = Boolean(
+                              hl &&
+                              (matcher.includes(hl) ||
+                               hl.includes(s.name.toLowerCase()) ||
+                               (hl.includes("dftc") && s.name.toLowerCase().includes("dftc")) ||
+                               (hl.includes("openstat") && s.name.toLowerCase().includes("openstat")) ||
+                               (hl.includes("meteo") && s.name.toLowerCase().includes("meteo")))
+                            );
+
+                            return (
+                              <tr
+                                key={s.id}
+                                id={`source-row-${s.id.toLowerCase()}`}
+                                data-source-match={matcher}
+                                onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                                className={`hover:bg-[var(--hw-neutral-50)] transition-colors duration-500 cursor-pointer ${
+                                  isHighlighted ? "bg-emerald-50/70 font-medium" : ""
+                                }`}
+                              >
+                                <td className="px-4 py-3">
+                                  <p className="font-medium text-[var(--hw-neutral-800)]">{displayName}</p>
+                                </td>
+                                <td className="px-4 py-3 text-[var(--hw-neutral-800)] whitespace-nowrap">{s.lastUpdate ? fmtDate(s.lastUpdate) : "—"}</td>
+                                <td className="px-4 py-3 text-[var(--hw-neutral-700)] font-medium">
+                                  {s.records != null ? s.records.toLocaleString() : "—"}
+                                </td>
+                                <td className={`px-4 py-3 font-medium whitespace-nowrap ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>{s.status}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="sm:hidden space-y-2.5">
+                  {dataSources.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                      No data sources configured.
+                    </div>
+                  ) : (
+                    dataSources.map((s) => {
+                      const hl = (highlightedSource || "").toLowerCase();
+                      const displayName = SOURCE_DISPLAY_NAMES[s.name] || s.name || "";
+                      const matcher = `${s.id} ${s.name} ${displayName}`.toLowerCase();
+                      const isHighlighted = Boolean(
+                        hl &&
+                        (matcher.includes(hl) ||
+                         hl.includes(s.name.toLowerCase()) ||
+                         (hl.includes("dftc") && s.name.toLowerCase().includes("dftc")) ||
+                         (hl.includes("openstat") && s.name.toLowerCase().includes("openstat")) ||
+                         (hl.includes("meteo") && s.name.toLowerCase().includes("meteo")))
+                      );
+
+                      return (
+                        <div
+                          key={s.id}
+                          id={`source-card-${s.id.toLowerCase()}`}
+                          data-source-match={matcher}
+                          onClick={() => navigate(`/admin/data-sources/${s.id}`)}
+                          className={`bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-2.5 cursor-pointer active:bg-[var(--hw-neutral-50)] transition-colors ${
+                            isHighlighted ? "bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-500/20" : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-[14px] text-[var(--hw-neutral-900)] leading-snug">
+                              {displayName}
+                            </p>
+                            <span className={`text-[12px] font-semibold whitespace-nowrap flex-shrink-0 ${STATUS_TEXT[s.status] || "text-[var(--hw-neutral-600)]"}`}>
+                              {s.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[12px] text-[var(--hw-neutral-600)] pt-2 border-t border-[var(--hw-neutral-100)]">
+                            <span className="font-medium text-[var(--hw-neutral-800)]">
+                              {s.records != null ? `${s.records.toLocaleString()} records` : "— records"}
+                            </span>
+                            <span>{s.lastUpdate ? `Updated ${fmtDate(s.lastUpdate)}` : "Not updated"}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
             )}
           </div>}
 
@@ -867,7 +985,7 @@ function AdminDataSources() {
         {tab === "api-sync" && <div className="space-y-4">
             {/* Header row */}
             <div className="flex items-center justify-end gap-2 flex-shrink-0">
-              <button onClick={() => setTab("history")} className={btnSecondary}>
+              <button onClick={() => setTab("history")} className={`${btnSecondary} w-full sm:w-auto justify-center`}>
                 View Sync History
               </button>
             </div>
@@ -940,36 +1058,50 @@ function AdminDataSources() {
           </div>}
 
         {/* ══ TAB: CALENDAR & EVENTS ══ */}
-        {tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-5">
-              {/* Top row */}
-              <div className="flex items-center justify-end gap-2 flex-shrink-0">
-                <button onClick={() => setShowConfiguredEvents(true)} className={btnSecondary}>
-                  <List className="w-4 h-4" />View Configured Events
+        {tab === "calendar" && (showConfiguredEvents ? renderConfiguredEventsPage() : <div className="space-y-4 sm:space-y-5">
+              {/* Top row: Both buttons in one line, reduced sizes */}
+              <div className="flex items-center justify-end gap-2 w-full">
+                <button
+                  onClick={() => setShowConfiguredEvents(true)}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors whitespace-nowrap cursor-pointer shadow-xs"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>View Configured Events</span>
                 </button>
-                <button onClick={() => setShowAddModal(true)} className={btnPrimary}>
-                  <Plus className="w-4 h-4" />Add Calendar Event
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors whitespace-nowrap cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Calendar Event</span>
                 </button>
               </div>
 
               {/* Calendar widget — full width */}
               {renderCalendarWidget()}
 
-              {/* Filter */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[12px] text-[var(--hw-neutral-800)] font-medium">Show:</span>
-                {[["30d", "Next 30 days"], ["3m", "Next 3 months"], ["6m", "Next 6 months"], ["1y", "Next 1 year"]].map(([val, label]) => <button
-    key={val}
-    onClick={() => setCalFilter(val)}
-    className={`px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors ${calFilter === val ? "bg-[var(--hw-green-700)] text-white" : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"}`}
-  >
+              {/* Filter: All in one line */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 whitespace-nowrap">
+                <span className="text-[12px] text-[var(--hw-neutral-800)] font-medium shrink-0 mr-0.5">Show:</span>
+                {[["30d", "Next 30 days"], ["3m", "Next 3 months"], ["6m", "Next 6 months"], ["1y", "Next 1 year"]].map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setCalFilter(val)}
+                    className={`shrink-0 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-[12px] font-medium transition-colors cursor-pointer ${
+                      calFilter === val
+                        ? "bg-[var(--hw-green-700)] text-white shadow-xs"
+                        : "bg-white border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                    }`}
+                  >
                     {label}
-                  </button>)}
+                  </button>
+                ))}
               </div>
 
-              {/* Events table */}
-              <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+              {/* Desktop Events Table */}
+              <div className="hidden sm:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[13px]">
+                  <table className="w-full text-[13px] min-w-[560px]">
                     <thead>
                       <tr className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
                         {["Event / Holiday Name", "Date or Date Range", "Type", "Source", "Status"].map((h) => <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[var(--hw-neutral-800)] uppercase tracking-wide whitespace-nowrap">{h}</th>)}
@@ -994,6 +1126,37 @@ function AdminDataSources() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* Mobile Events Cards */}
+              <div className="sm:hidden space-y-2.5">
+                {filteredEvents.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                    No events found for this period.
+                  </div>
+                ) : (
+                  filteredEvents.map((e) => (
+                    <div
+                      key={e.id}
+                      onClick={() => setViewEventId(e.id)}
+                      className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 space-y-2 cursor-pointer active:bg-[var(--hw-neutral-50)] transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-[14px] text-[var(--hw-neutral-900)] leading-snug">{e.name}</p>
+                        <span className={`text-[12px] font-semibold whitespace-nowrap flex-shrink-0 ${e.status === "Active" ? "text-emerald-700" : "text-[var(--hw-neutral-700)]"}`}>
+                          {e.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[12px] text-[var(--hw-neutral-600)] flex-wrap">
+                        <span className="font-medium text-[var(--hw-neutral-800)]">{e.from === e.to || !e.to ? e.from : `${e.from} – ${e.to}`}</span>
+                        <span>·</span>
+                        <span>{e.type}</span>
+                        <span>·</span>
+                        <span>{e.source}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>)}
 

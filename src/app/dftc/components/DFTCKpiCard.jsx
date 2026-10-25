@@ -25,15 +25,15 @@ export function DFTCKpiCard({
   const isRatio = typeof displayValue === "string" && displayValue.includes("/");
   const isText = typeof displayValue === "string" && isNaN(Number(displayValue)) && !isRatio;
   const textSize = isText
-    ? "text-[20px] sm:text-[24px]"
+    ? "text-[17px] xs:text-[20px] sm:text-[24px]"
     : isRatio
-    ? "text-[22px] sm:text-[26px]"
-    : "text-[28px] sm:text-[32px]";
+    ? "text-[20px] xs:text-[22px] sm:text-[26px]"
+    : "text-[24px] xs:text-[28px] sm:text-[32px]";
 
   return (
     <Component
       onClick={!loading ? onClick : undefined}
-      className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-4 text-left flex flex-col justify-between min-h-[96px] transition-all ${
+      className={`bg-white rounded-2xl border shadow-[var(--shadow-xs)] p-3 sm:p-4 text-left flex flex-col justify-between min-h-[80px] sm:min-h-[96px] transition-all ${
         onClick && !loading ? "hover:bg-[var(--hw-neutral-50)] cursor-pointer active:scale-[0.99]" : ""
       } ${
         active
@@ -41,8 +41,8 @@ export function DFTCKpiCard({
           : "border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)]"
       } ${className}`}
     >
-      <div className="mb-2">
-        <span className={`text-[11px] font-bold uppercase tracking-wider ${labelColor}`}>
+      <div className="mb-1.5 sm:mb-2">
+        <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wide sm:tracking-wider leading-tight ${labelColor}`}>
           {label}
         </span>
       </div>

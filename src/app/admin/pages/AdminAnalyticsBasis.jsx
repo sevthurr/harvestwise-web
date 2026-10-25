@@ -12,9 +12,17 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
+import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { getVariants } from "../../global/data/commodities";
 import { useParams, useNavigate, useSearchParams } from "react-router";
-import { ChevronLeft, ChevronDown, AlertTriangle, Info, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronDown, AlertTriangle, Info, Calendar, X } from "lucide-react";
+import {
+  FALLBACK_RELIABILITY_BANDS,
+  SHORT_BAND_EXPLANATIONS,
+  buildReliabilitySummary,
+  buildReliabilityExplanation,
+  buildReliabilityRuleLines
+} from "../utils/reliabilityExplanations";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMockData";
 import {
@@ -35,6 +43,31 @@ import { getCommodityProfile } from "../../global/components/shared/weatherExpla
 import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { useIsMobile } from "../../global/components/ui/use-mobile";
+
+const PRODUCTION_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
+const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
+
+function currentQuarter() {
+  return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+}
+
+function productionClassificationFromRatio(ratio, quartiles) {
+  if (!Number.isFinite(ratio) || !quartiles) return null;
+  if (ratio < Number(quartiles.q1)) return "Low";
+  if (ratio < Number(quartiles.q2)) return "Lower Middle";
+  if (ratio < Number(quartiles.q3)) return "Upper Middle";
+  return "High";
+}
+
+function productionClassificationColor(classification) {
+  return {
+    High: "#dc2626",
+    "Upper Middle": "#ea580c",
+    "Lower Middle": "#eab308",
+    Low: "#16a34a",
+  }[classification] || "#16a34a";
+}
 
 const ARRIVAL_SOURCE_OPTIONS = [
   { value: "overall", label: "Overall", subtitle: "Overall (Farm + Other)" },
@@ -63,7 +96,7 @@ const kgFmt = (value) =>
 // Pill switch used by the trend card's source and granularity controls.
 function SegmentedControl({ value, onChange, options }) {
   return (
-    <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)]">
+    <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] max-w-full overflow-x-auto [scrollbar-width:none]">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -72,7 +105,7 @@ function SegmentedControl({ value, onChange, options }) {
             type="button"
             onClick={() => onChange(opt.value)}
             aria-pressed={active}
-            className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-colors cursor-pointer ${active
+            className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-[12px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${active
                 ? "bg-white text-[var(--hw-green-800)] shadow-sm border border-[var(--hw-neutral-200)]"
                 : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-800)] border border-transparent"
               }`}
@@ -84,6 +117,51 @@ function SegmentedControl({ value, onChange, options }) {
     </div>
   );
 }
+
+const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-[12px] sm:text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
+      >
+        <span className="font-semibold text-black truncate">{value}</span>
+        <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-black flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
+          {options.map((opt) => (
+            <button
+              type="button"
+              key={opt}
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              className={`w-full flex items-center px-3.5 py-2 text-[12px] sm:text-[13px] text-left transition-colors cursor-pointer ${opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-black hover:bg-[var(--hw-neutral-50)]"
+                }`}
+            >
+              <span className="flex-1 truncate">{opt}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Tooltip card: period + classification badge, the overall total, the farm/other
 // split with each share, then the total for whichever view is selected.
@@ -491,13 +569,13 @@ const DatasetsUsed = ({ module, records = [] }) => {
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+    <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
       <button
         onClick={() => {
           setExpanded((v) => !v);
           setPage(1);
         }}
-        className="w-full flex items-center justify-between gap-3 px-6 py-4 hover:bg-[var(--hw-neutral-50)] transition-colors text-left cursor-pointer"
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 hover:bg-[var(--hw-neutral-50)] transition-colors text-left cursor-pointer"
       >
         <div>
           <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Datasets Used</p>
@@ -508,7 +586,7 @@ const DatasetsUsed = ({ module, records = [] }) => {
 
       {expanded && (
         <>
-          <div className="border-t border-[var(--hw-neutral-100)] overflow-x-auto">
+          <div className="border-t border-[var(--hw-neutral-100)] overflow-x-auto [scrollbar-width:thin] touch-pan-x">
             <table className="w-full text-[12px]">
               <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
                 <tr>
@@ -541,11 +619,11 @@ const DatasetsUsed = ({ module, records = [] }) => {
             </table>
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-t border-[var(--hw-neutral-100)]">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-t border-[var(--hw-neutral-100)]">
               <p className="text-[12px] text-[var(--hw-neutral-600)]">
                 Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, rows.length)} of {rows.length} records
               </p>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap justify-center">
                 <button
                   disabled={page === 1}
                   onClick={() => setPage((p) => p - 1)}
@@ -617,42 +695,424 @@ const PRICE_OUTLOOK_SOURCE_LABELS = {
 const priceOutlookSourceLabel = (source) =>
   PRICE_OUTLOOK_SOURCE_LABELS[source] || source || "-";
 
-// Shared by the Data Reliability badge and its band legend so a band always
-// renders in the same colour in both places.
-const reliabilityBadgeClass = (status) =>
-  status === "High"
-    ? "text-[var(--hw-success)] bg-[var(--hw-success)]/10"
-    : status === "Moderate" || status === "Limited"
-      ? "text-[var(--hw-warning)] bg-[var(--hw-warning)]/10"
-      : "text-[var(--hw-error)] bg-[var(--hw-error)]/10";
+// Modal listing every Data Reliability classification band with its score range
+// and meaning. Ranges and meanings come from the scoring layer
+// (`reliability.py`) via the API, so they can never drift from the cutoffs.
+// Modal showing full Data Reliability details (dimensions, calculation)
+// followed by a minimal table with Reliability bands and short explanations.
+const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimensions, evidence, rules, onClose }) => {
+  const [expandedSection, setExpandedSection] = useState({
+    availability: false,
+    timeliness: false,
+    validity: false,
+  });
 
-// One band in the Data Reliability legend. The explanation is supplied by the
-// scoring layer in `reliability.py`, so the tooltip can never drift from the
-// cutoffs it describes. `title` keeps a native hover (and a long-press fallback)
-// available where the Radix tooltip is not, matching AdminAuditLogs.
-const ReliabilityBandChip = ({ band }) => {
-  const chip = (
-    <span
-      tabIndex={band.description ? 0 : undefined}
-      title={band.description || undefined}
-      className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${band.description ? "md:cursor-help" : ""} ${reliabilityBadgeClass(band.label)}`}
-    >
-      {band.label} {Number(band.min).toFixed(2)}&ndash;{Number(band.max).toFixed(2)}
-    </span>
-  );
+  const toggleSection = (dim) => {
+    setExpandedSection((prev) => ({
+      ...prev,
+      [dim]: !prev[dim],
+    }));
+  };
 
-  if (!band.description) return chip;
+  const exp = buildReliabilityExplanation({
+    resultId,
+    level,
+    factor,
+    bands,
+    dimensions,
+    evidence,
+    rules,
+  });
+
+  const minimalBands = (bands || FALLBACK_RELIABILITY_BANDS).map((b) => ({
+    ...b,
+    shortDescription: SHORT_BAND_EXPLANATIONS[b.label] || b.description || "-",
+  }));
+
+  const e = evidence || {};
+  const modulePolicy = rules?.module_policies?.[resultId] || null;
+
+  // Helper to determine current assessment value summary text per dimension
+  const getCurrentAssessmentText = (dim) => {
+    const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+    if (resultId === "price-outlook") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : (e.observed_reporting_days != null ? e.observed_reporting_days : "-");
+        const req = e.required != null ? e.required : (e.expected_reporting_days != null ? e.expected_reporting_days : "-");
+        return `${obs} of ${req} expected reporting days have usable price observations. Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const lat = e.latest_date || "N/A";
+        const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : 0);
+        return `Latest observation: ${lat}. Missed reporting days: ${missed}. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const usable = e.usable_records != null ? e.usable_records : (e.valid_records != null ? e.valid_records : "-");
+        return `${usable} usable price observations were included in the reliability assessment. Validity: ${scoreVal}.`;
+      }
+    } else if (resultId === "arrival-pressure") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : (e.available_months != null ? e.available_months : "-");
+        const req = e.required != null ? e.required : 12;
+        return `${obs} of ${req} monthly arrival observations are available. Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const lat = e.latest_arrival_month || e.latest_date || "N/A";
+        const elapsed = e.elapsed_calendar_months != null ? e.elapsed_calendar_months : "-";
+        return `Latest observation: ${lat}. Age: ${elapsed} calendar months. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const usable = e.usable_records != null ? e.usable_records : (e.valid_records != null ? e.valid_records : "-");
+        return `${usable} usable monthly arrival observations recorded with positive or non-null volume. Validity: ${scoreVal}.`;
+      }
+    } else if (resultId === "historical-production") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : "-";
+        const req = e.required != null ? e.required : 20;
+        return `${obs} usable quarters are available (target: ${req} quarters / 5 years). Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const lat = e.latest_period || (e.latest_year ? `${e.latest_year} ${e.latest_quarter || ""}`.trim() : "N/A");
+        const overdue = e.days_overdue != null ? e.days_overdue : 0;
+        const missing = e.earliest_missing_period || "subsequent quarter";
+        const statusText = overdue === 0 ? `${missing} is not overdue` : `${missing} is ${overdue} days overdue`;
+        return `Latest production period: ${lat}. ${statusText}. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const usable = e.usable_records != null ? e.usable_records : "-";
+        return `${usable} usable quarters with reported positive volume. Validity: ${scoreVal}.`;
+      }
+    } else if (resultId === "weather-risk") {
+      if (dim === "availability") {
+        const obs = e.available != null ? e.available : "-";
+        const req = e.required != null ? e.required : 14;
+        return `${obs} of ${req} forecast days are available in the 14-day window. Availability: ${scoreVal}.`;
+      }
+      if (dim === "timeliness") {
+        const age = e.age_hours != null ? `${e.age_hours} hours old` : (e.unverified_freshness ? "timestamp unverified" : "fresh");
+        return `Forecast retrieval age: ${age}. Timeliness: ${scoreVal}.`;
+      }
+      if (dim === "validity") {
+        const obs = e.valid_records != null ? e.valid_records : (e.available != null ? e.available : "-");
+        return `${obs} forecast dates with verified meteorological metrics. Validity: ${scoreVal}.`;
+      }
+    }
+    return `Evaluated score: ${scoreVal}.`;
+  };
+
+  // Helper to check if a bracket row is active
+  const isBracketActive = (dim, bracket) => {
+    if (resultId === "price-outlook" && dim === "timeliness") {
+      const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : null);
+      if (missed == null) return false;
+      if (bracket.min != null && bracket.max != null) {
+        return missed >= bracket.min && missed <= bracket.max;
+      }
+      if (bracket.min != null && bracket.max == null) {
+        return missed >= bracket.min;
+      }
+    } else if (resultId === "arrival-pressure") {
+      if (dim === "availability") {
+        const count = e.available != null ? e.available : e.available_months;
+        if (count == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return count >= bracket.min && count <= bracket.max;
+        }
+      }
+      if (dim === "timeliness") {
+        const elapsed = e.elapsed_calendar_months;
+        if (elapsed == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return elapsed >= bracket.min && elapsed <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return elapsed >= bracket.min;
+        }
+      }
+    } else if (resultId === "historical-production") {
+      if (dim === "availability") {
+        const count = e.available;
+        if (count == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return count >= bracket.min && count <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return count >= bracket.min;
+        }
+      }
+      if (dim === "timeliness") {
+        const overdue = e.days_overdue;
+        if (overdue == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return overdue >= bracket.min && overdue <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return overdue >= bracket.min;
+        }
+      }
+    } else if (resultId === "weather-risk" && dim === "timeliness") {
+      if (e.unverified_freshness && bracket.min == null) {
+        return true;
+      }
+      const hours = e.age_hours;
+      if (hours == null) return false;
+      if (bracket.min != null && bracket.max != null) {
+        return hours >= bracket.min && hours <= bracket.max;
+      }
+      if (bracket.min != null && bracket.max == null) {
+        return hours >= bracket.min;
+      }
+    }
+    return false;
+  };
+
+  const renderScoringTable = (dim) => {
+    const dimTitle = dim.charAt(0).toUpperCase() + dim.slice(1);
+    const policy = modulePolicy?.[dim];
+
+    if (!policy) {
+      return (
+        <p className="text-[12px] text-[var(--hw-neutral-600)] italic">
+          Scoring rules metadata unavailable for this dimension.
+        </p>
+      );
+    }
+
+    if (policy.rule_type === "brackets" && policy.brackets) {
+      return (
+        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
+          <table className="w-full text-left text-[12px]">
+            <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+              <tr>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  Condition / Evidence Range
+                </th>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  {dimTitle}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+              {policy.brackets.map((b, idx) => {
+                const active = isBracketActive(dim, b);
+                return (
+                  <tr
+                    key={idx}
+                    className={active ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]" : "text-black"}
+                  >
+                    <td className="px-3 sm:px-4 py-1.5 align-top">
+                      <div>
+                        {b.condition}
+                        {b.safeguard && (
+                          <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
+                            * {b.safeguard}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
+                      {typeof b.score === "number" ? b.score.toFixed(2) : b.score}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (policy.rule_type === "ratio") {
+      const obs = e.available != null ? e.available : "-";
+      const req = e.required != null ? e.required : "-";
+      const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+
+      return (
+        <div className="space-y-2 mt-2">
+          <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)]">
+            <table className="w-full text-left text-[12px]">
+              <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                <tr>
+                  <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                    Formula / Calculation
+                  </th>
+                  <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                    {dimTitle}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+                <tr className="bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]">
+                  <td className="px-3 sm:px-4 py-2 align-top">
+                    <div>{policy.formula}</div>
+                    <div className="text-[11px] font-normal text-[var(--hw-green-800)] mt-0.5">
+                      Actual evidence: {obs} usable of {req} required {policy.unit} = {scoreVal}
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-4 py-2 align-top whitespace-nowrap">
+                    {scoreVal}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11.5px] text-[var(--hw-neutral-600)] leading-relaxed">
+            {policy.description}
+          </p>
+        </div>
+      );
+    }
+
+    if (policy.rule_type === "rule_based" && policy.checks) {
+      return (
+        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
+          <table className="w-full text-left text-[12px]">
+            <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+              <tr>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  Condition / Rule
+                </th>
+                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
+                  {dimTitle}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+              {policy.checks.map((chk, idx) => (
+                <tr key={idx} className="text-black">
+                  <td className="px-3 sm:px-4 py-1.5 align-top">
+                    <div>{chk.condition}</div>
+                    {chk.safeguard && (
+                      <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
+                        * {chk.safeguard}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
+                    {typeof chk.score === "number" ? chk.score.toFixed(2) : chk.score}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{chip}</TooltipTrigger>
-      <TooltipContent
-        side="top"
-        className="max-w-xs bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed z-50"
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Reliability explanation"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
-        <p>{band.description}</p>
-      </TooltipContent>
-    </Tooltip>
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-[var(--hw-neutral-100)]">
+          <p className="text-[14px] font-bold text-black">Reliability Explanation</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1.5 rounded-lg text-black hover:bg-[var(--hw-neutral-100)] cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="overflow-auto p-4 sm:p-6 space-y-5">
+          <div className="space-y-3">
+            <p className="text-[12px] font-bold text-black uppercase tracking-wider">Score Breakdown</p>
+            <p className="text-[13px] text-black leading-relaxed">{exp.summary}</p>
+            {exp.rows.length > 0 && (
+              <ul className="space-y-2 bg-[var(--hw-neutral-50)] rounded-xl p-3 sm:p-4 border border-[var(--hw-neutral-200)]">
+                {exp.rows.map((row) => (
+                  <li key={row.key} className="text-[13px] text-black leading-relaxed">
+                    <span className="font-semibold">{row.label}</span>{" "}
+                    {Number(row.score).toFixed(2)} (weight {Number(row.weight).toFixed(2)}) &mdash; {row.detail}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {exp.calculation && (
+              <p className="text-[13px] text-black leading-relaxed">
+                <span className="font-semibold">Calculation:</span> {exp.calculation}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-black uppercase tracking-wider">Classification Bands</p>
+            <div className="overflow-hidden rounded-xl border border-[var(--hw-neutral-200)]">
+              <table className="w-full text-left text-[13px]">
+                <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                  <tr>
+                    <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">Classification</th>
+                    <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">Score Range</th>
+                    <th className="px-3 sm:px-4 py-2 font-semibold text-black">Explanation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--hw-neutral-200)]">
+                  {minimalBands.map((band) => (
+                    <tr key={band.label} className={band.label === level ? "bg-[var(--hw-green-50)]" : ""}>
+                      <td className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap align-top">{band.label}</td>
+                      <td className="px-3 sm:px-4 py-2 text-black whitespace-nowrap align-top">
+                        {Number(band.min).toFixed(2)}&ndash;{Number(band.max).toFixed(2)}
+                      </td>
+                      <td className="px-3 sm:px-4 py-2 text-black leading-relaxed align-top">{band.shortDescription}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Expandable Scoring Rules Section */}
+          <div className="space-y-3 pt-2 border-t border-[var(--hw-neutral-100)]">
+            <p className="text-[12px] font-bold text-black uppercase tracking-wider">Scoring Rules</p>
+            <div className="space-y-2">
+              {[
+                { key: "availability", label: "Availability (40%)" },
+                { key: "timeliness", label: "Timeliness (30%)" },
+                { key: "validity", label: "Validity (30%)" },
+              ].map(({ key, label }) => {
+                const isOpen = !!expandedSection[key];
+                return (
+                  <div key={key} className="rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden">
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleSection(key)}
+                      className="w-full flex items-center justify-between px-3.5 sm:px-4 py-2.5 text-left bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] transition-colors cursor-pointer"
+                    >
+                      <span className="text-[13px] font-semibold text-black">{label}</span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-black transition-transform duration-200 ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="p-3 sm:p-4 bg-white border-t border-[var(--hw-neutral-200)] space-y-2">
+                        <p className="text-[12.5px] text-black font-medium leading-relaxed">
+                          {getCurrentAssessmentText(key)}
+                        </p>
+                        {renderScoringTable(key)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -721,6 +1181,9 @@ function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
     // so the explanation below always matches the scoring that set the status.
     reliabilityFactor: raw.reliability_factor ?? null,
     reliabilityBands: detail?.basis_inputs?.reliability_bands || [],
+    reliabilityDimensions: raw.reliability_dimensions || null,
+    reliabilityEvidence: raw.reliability_evidence || null,
+    reliabilityRules: detail?.basis_inputs?.reliability_rules || null,
     moduleWarnings,
     thresholds: defaultTemplate.thresholds,
     resultExplanation: detail?.explanation || defaultTemplate.resultExplanation
@@ -731,6 +1194,7 @@ function AdminAnalyticsBasis() {
   const { resultId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const defaultTemplate = DEFAULT_BASIS_TEMPLATES[resultId];
 
@@ -854,14 +1318,21 @@ function AdminAnalyticsBasis() {
     });
   }, [commodityRecords, allWeatherRules]);
 
+  const [priceOutlookHorizon, setPriceOutlookHorizon] = useState(14);
+  const [showReliabilityBands, setShowReliabilityBands] = useState(false);
+  const [productionQuarter, setProductionQuarter] = useState(currentQuarter);
+
   const { data: productionSummary, loading: productionLoading, error: productionError } = useHistoricalSeasonalProduction(
     resultId === "historical-production" && !!selectedCommodityRecord?.id,
-    selectedCommodityRecord?.id
+    selectedCommodityRecord?.id,
+    productionQuarter
   );
 
   const { data: priceOutlook, error: priceOutlookError } = usePriceOutlook(
     resultId === "price-outlook" && !!selectedCommodityRecord?.id,
-    selectedCommodityRecord?.id
+    selectedCommodityRecord?.id,
+    "bangkerohan_retail",
+    priceOutlookHorizon
   );
 
   const { data: arrivalSummary, loading: arrivalLoading, error: arrivalError } = useArrivalPressure(
@@ -1013,6 +1484,48 @@ function AdminAnalyticsBasis() {
       ? `${leanQ}${leanProfile?.calendar_period ? ` (${leanProfile.calendar_period})` : ""}${leanProfile?.classification ? ` — ${leanProfile.classification}` : ""}`
       : "-";
 
+    // When a quarter filter is active, build per-year bars from records.
+    // When no filter, show all quarters' average bars (existing behaviour).
+    const rawRecords = productionSummary?.records || [];
+    const annualAverages = rawRecords.reduce((byYear, record) => {
+      const year = Number(record.reference_year);
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !Number.isFinite(volume)) return byYear;
+      const entry = byYear.get(year) || { total: 0, count: 0 };
+      entry.total += volume;
+      entry.count += 1;
+      byYear.set(year, entry);
+      return byYear;
+    }, new Map());
+    const selectedQuarterRecords = productionQuarter
+      ? rawRecords
+          .filter((r) => r.reference_quarter === productionQuarter && r.volume_produced != null)
+          .sort((a, b) => Number(a.reference_year) - Number(b.reference_year))
+          .map((r) => {
+            const volume = Number(r.volume_produced);
+            const annual = annualAverages.get(Number(r.reference_year));
+            const ratio = annual?.count ? volume / (annual.total / annual.count) : null;
+            return {
+              quarter: String(r.reference_year),
+              average_production_mt: volume,
+              classification: productionClassificationFromRatio(ratio, quartiles),
+            };
+          })
+      : [];
+    const allQuarterRecords = rawRecords.reduce((byYear, record) => {
+      const year = Number(record.reference_year);
+      const quarter = record.reference_quarter;
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !PRODUCTION_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return byYear;
+      const row = byYear.get(year) || { quarter: String(year) };
+      row[quarter] = (row[quarter] || 0) + volume;
+      byYear.set(year, row);
+      return byYear;
+    }, new Map());
+    const quarterRecords = productionQuarter
+      ? selectedQuarterRecords
+      : [...allQuarterRecords.values()].sort((a, b) => Number(a.quarter) - Number(b.quarter));
+
     return {
       ...result,
       outputId: productionSummary?.source_commodity_id || "-",
@@ -1041,11 +1554,9 @@ function AdminAnalyticsBasis() {
         { classification: "Upper Middle", rule: `Seasonal ratio ≥ ${Number(quartiles.q2).toFixed(4)} and < ${Number(quartiles.q3).toFixed(4)}` },
         { classification: "High", rule: `Seasonal ratio ≥ ${Number(quartiles.q3).toFixed(4)}` }
       ] : result.thresholds,
-      productionVolumes: profiles.length > 0
-        ? profiles.map((p) => ({ season: p.quarter, quarter: p.quarter, average_production_mt: p.average_production_mt, volume: p.average_production_mt, classification: p.classification, seasonal_ratio: p.seasonal_ratio }))
-        : (productionSummary?.seasonal_totals || []),
+      productionVolumes: quarterRecords,
       productionSources: productionSummary?.source_areas || [],
-      records: (productionSummary?.records || []).map((record) => ({
+      records: rawRecords.map((record) => ({
         Year: record.reference_year,
         Quarter: record.reference_quarter,
         Commodity: selectedCommodity,
@@ -1059,7 +1570,7 @@ function AdminAnalyticsBasis() {
         : (productionError || productionSummary?.message || (productionLoading ? "Loading historical production data…" : "No historical production data is available for this scope.")),
       basisMissing: isProcessed ? null : (productionError || productionSummary?.message || null)
     };
-  }, [result, resultId, productionSummary, productionError, productionLoading, selectedCommodity, selectedVariety]);
+  }, [result, resultId, productionSummary, productionError, productionLoading, selectedCommodity, selectedVariety, productionQuarter]);
   const priceResult = useMemo(() => {
     if (resultId !== "price-outlook") return null;
     const processed = priceOutlook?.status === "processed";
@@ -1067,7 +1578,7 @@ function AdminAnalyticsBasis() {
     return {
       ...result,
       basisSource: priceOutlookSourceLabel(priceOutlook?.source),
-      inputPeriod: priceOutlook?.forecast_horizon_days ? `${priceOutlook.forecast_horizon_days} days` : "-",
+      inputPeriod: priceOutlook?.forecast_horizon_days ? `${priceOutlook.forecast_horizon_days} days` : `${priceOutlookHorizon} days`,
       classification: processed ? priceOutlook.classification : "Not processed",
       basisInputs: {
         "Recent average price": money(priceOutlook?.recent_average_price),
@@ -1149,6 +1660,7 @@ function AdminAnalyticsBasis() {
       commodityName: selectedCommodity,
       weatherError,
       weatherLoading,
+      lang: "en",
     });
 
     return {
@@ -1208,43 +1720,29 @@ function AdminAnalyticsBasis() {
   }, []);
 
   // Uniform styling for visualization cards
-  const vizCardClass = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-6 md:p-8 space-y-4 min-h-[460px] flex flex-col justify-between";
+  const vizCardClass = "bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-4 sm:p-6 md:p-8 space-y-4 min-h-[460px] min-w-0 flex flex-col justify-between";
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto space-y-6">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-6 pb-24 md:pb-12 max-w-[1440px] mx-auto space-y-4 sm:space-y-6">
       {/* Header & Back button */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <button
-            onClick={() => navigate("/admin/modules")}
-            className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors mb-3 cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Analytical Modules
-          </button>
-          <h1 className="text-[22px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
-            {result.module || "-"} Basis
-          </h1>
-        </div>
-        {(resultId === "historical-production" || result.module === "Historical Seasonal Production Level") && displayResult.peakQuarter && (
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] font-semibold flex items-center gap-1.5 shadow-[var(--shadow-xs)]">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              Peak: {displayResult.peakQuarter}
-            </span>
-            <span className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[12px] font-semibold flex items-center gap-1.5 shadow-[var(--shadow-xs)]">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              Lean: {displayResult.leanQuarter}
-            </span>
-          </div>
-        )}
+      <div>
+        <button
+          onClick={() => navigate("/admin/modules")}
+          className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] transition-colors mb-1.5 cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to Analytical Modules
+        </button>
+        <h1 className="text-[20px] sm:text-[22px] font-bold text-[var(--hw-neutral-900)] tracking-tight">
+          {result.module || "-"} Basis
+        </h1>
       </div>
 
-      {/* 1. Filter Card (Ultra-Compact Height, Styled Farmer Dropdowns with Icons, No Header Bar) */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      {/* 1. Filter Card (Compact Height) */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 sm:p-3.5">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3.5">
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Commodity</label>
+            <label className="block text-[11px] font-semibold text-black mb-1">Commodity</label>
             <CustomCommodityDropdown
               value={selectedCommodity}
               options={commodities}
@@ -1252,7 +1750,7 @@ function AdminAnalyticsBasis() {
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--hw-neutral-600)] mb-1">Variety</label>
+            <label className="block text-[11px] font-semibold text-black mb-1">Variety</label>
             <CustomVarietyDropdown
               value={selectedVariety}
               options={availableVariants}
@@ -1260,31 +1758,12 @@ function AdminAnalyticsBasis() {
             />
           </div>
         </div>
-
-        {/* Compact Metadata Chips */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[11px]">
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">ID:</span> <span className="font-semibold text-[var(--hw-neutral-800)] font-mono">{displayResult.outputId || "-"}</span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Module:</span> <span className="font-semibold text-[var(--hw-neutral-800)]">{result.module || "-"}</span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">Data Source:</span> <span className="font-semibold text-[var(--hw-neutral-800)]" title={displayResult.basisSource}>{displayResult.basisSource || "-"}</span>
-          </div>
-          <div>
-            <span className="text-[var(--hw-neutral-400)] font-medium">
-              {resultId === "historical-production" || result.module === "Historical Seasonal Production Level" ? "Historical Baseline:" : "Input Period:"}
-            </span>{" "}
-            <span className="font-semibold text-[var(--hw-neutral-800)]">{displayResult.inputPeriod || "-"}</span>
-          </div>
-        </div>
       </div>
 
       {/* 2. Baseline / Input Values (Full Width) */}
       {displayResult.basisInputs && Object.keys(displayResult.basisInputs).length > 0 && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
               {resultId === "historical-production" || result.module === "Historical Seasonal Production Level"
                 ? "Historical Production Baseline"
@@ -1293,7 +1772,7 @@ function AdminAnalyticsBasis() {
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             {Object.entries(displayResult.basisInputs).map(([key, val]) => (
-              <div key={key} className="flex justify-between items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+              <div key={key} className="flex justify-between items-center gap-4 px-4 sm:px-6 py-2.5 sm:py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
                 <span className="text-[13px] text-[var(--hw-neutral-700)]">{key}</span>
                 <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] text-right">{val || "-"}</span>
               </div>
@@ -1304,8 +1783,8 @@ function AdminAnalyticsBasis() {
 
       {/* 2b. Quarterly Seasonal Benchmark Table (Historical Seasonal Production Level only) */}
       {(resultId === "historical-production" || result.module === "Historical Seasonal Production Level") && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">
                 Quarterly Seasonal Benchmark
@@ -1314,27 +1793,17 @@ function AdminAnalyticsBasis() {
                 Long-term quarterly distribution and seasonal index across historical PSA records
               </p>
             </div>
-            {displayResult.peakQuarter && (
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Peak: {displayResult.peakQuarter}
-                </span>
-                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  Lean: {displayResult.leanQuarter}
-                </span>
-              </div>
-            )}
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
             <table className="w-full text-[13px]">
               <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)]">
                 <tr>
-                  <th className="px-6 py-3 text-left font-semibold text-[var(--hw-neutral-600)]">Quarter</th>
-                  <th className="px-6 py-3 text-left font-semibold text-[var(--hw-neutral-600)]">Calendar Period</th>
-                  <th className="px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)]">Average Production</th>
-                  <th className="px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)]">Seasonal Ratio</th>
-                  <th className="px-6 py-3 text-center font-semibold text-[var(--hw-neutral-600)]">Historical Level</th>
-                  <th className="px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)]">Years of Data</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">Quarter</th>
+                  <th className="px-4 sm:px-6 py-3 text-left font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">Calendar Period</th>
+                  <th className="px-4 sm:px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">Average Production</th>
+                  <th className="px-4 sm:px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">Seasonal Ratio</th>
+                  <th className="px-4 sm:px-6 py-3 text-center font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">Historical Level</th>
+                  <th className="px-4 sm:px-6 py-3 text-right font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">Years of Data</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-100)]">
@@ -1350,26 +1819,26 @@ function AdminAnalyticsBasis() {
                             : "bg-emerald-50 text-emerald-700 border-emerald-200";
                     return (
                       <tr key={p.quarter} className="hover:bg-[var(--hw-neutral-50)] transition-colors">
-                        <td className="px-6 py-3.5 font-bold text-[var(--hw-neutral-900)]">{p.quarter}</td>
-                        <td className="px-6 py-3.5 text-[var(--hw-neutral-600)]">{p.calendar_period || p.period}</td>
-                        <td className="px-6 py-3.5 text-right font-semibold text-[var(--hw-neutral-800)]">
+                        <td className="px-4 sm:px-6 py-3.5 font-bold text-[var(--hw-neutral-900)] whitespace-nowrap">{p.quarter}</td>
+                        <td className="px-4 sm:px-6 py-3.5 text-[var(--hw-neutral-600)] whitespace-nowrap">{p.calendar_period || p.period}</td>
+                        <td className="px-4 sm:px-6 py-3.5 text-right font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap">
                           {Number(p.average_production_mt).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT
                         </td>
-                        <td className="px-6 py-3.5 text-right font-mono text-[var(--hw-neutral-700)]">
+                        <td className="px-4 sm:px-6 py-3.5 text-right font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">
                           {Number(p.seasonal_ratio).toFixed(4)}
                         </td>
-                        <td className="px-6 py-3.5 text-center">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[12px] font-semibold border ${levelColor}`}>
+                        <td className="px-4 sm:px-6 py-3.5 text-center whitespace-nowrap">
+                          <span className="font-semibold text-black text-[13px]">
                             {p.classification}
                           </span>
                         </td>
-                        <td className="px-6 py-3.5 text-right text-[var(--hw-neutral-600)]">{p.years_available} yrs</td>
+                        <td className="px-4 sm:px-6 py-3.5 text-right text-[var(--hw-neutral-600)] whitespace-nowrap">{p.years_available} yrs</td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-[var(--hw-neutral-500)]">
+                    <td colSpan={6} className="px-4 sm:px-6 py-8 text-center text-[var(--hw-neutral-500)]">
                       No seasonal benchmark profiles available for this commodity.
                     </td>
                   </tr>
@@ -1382,41 +1851,51 @@ function AdminAnalyticsBasis() {
 
       {/* 3. Data Reliability (module-specific data sufficiency + warnings) */}
       {(result.reliability || (result.moduleWarnings || []).length > 0) && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Data Reliability</p>
             <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-              How far this module&apos;s source records can be trusted &mdash; sufficiency and freshness, scored
+              How far this module&apos;s source records can be trusted &mdash; sufficiency and timeliness, scored
               0.00&ndash;1.00.
             </p>
           </div>
           <div className="divide-y divide-[var(--hw-neutral-100)]">
-            <div className="flex justify-between items-center gap-4 px-6 py-3.5">
-              <span className="text-[13px] text-[var(--hw-neutral-700)]">Reliability</span>
-              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${reliabilityBadgeClass(result.reliability)}`}>
+            <div className="flex justify-between items-center gap-4 px-4 sm:px-6 py-2.5 sm:py-3.5">
+              <span className="text-[13px] text-black font-medium">Reliability</span>
+              <span className="text-[13px] font-bold text-black">
                 {result.reliability || "-"}
               </span>
             </div>
             {result.reliabilityFactor != null && (
-              <div className="flex justify-between items-center gap-4 px-6 py-3.5">
-                <span className="text-[13px] text-[var(--hw-neutral-700)]">Reliability factor</span>
-                <span className="text-[13px] font-mono font-semibold text-[var(--hw-neutral-800)]">
+              <div className="flex justify-between items-center gap-4 px-4 sm:px-6 py-2.5 sm:py-3.5">
+                <span className="text-[13px] text-black font-medium">Reliability score</span>
+                <span className="text-[13px] font-semibold text-black">
                   {Number(result.reliabilityFactor).toFixed(4)}
                 </span>
               </div>
             )}
-            {(result.reliabilityBands || []).length > 0 && (
-              <div className="px-6 py-3.5">
-                <p className="text-[13px] text-[var(--hw-neutral-700)] mb-2">Classification bands</p>
-                <div className="flex flex-wrap gap-2">
-                  {result.reliabilityBands.map((band) => (
-                    <ReliabilityBandChip key={band.label} band={band} />
-                  ))}
-                </div>
+            {result.reliability && (
+              <div className="px-4 sm:px-6 py-2.5 sm:py-3.5 space-y-2">
+                <p className="text-[13px] text-black font-medium">Explanation</p>
+                <p className="text-[13px] text-black leading-relaxed">
+                  {buildReliabilitySummary({
+                    resultId,
+                    level: result.reliability,
+                    evidence: result.reliabilityEvidence,
+                    rules: result.reliabilityRules
+                  })}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowReliabilityBands(true)}
+                  className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline cursor-pointer"
+                >
+                  View explanation
+                </button>
               </div>
             )}
             {(result.moduleWarnings || []).map((w, i) => (
-              <div key={i} className="flex items-start gap-2.5 px-6 py-3.5">
+              <div key={i} className="flex items-start gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3.5">
                 <AlertTriangle className="w-4 h-4 text-[var(--hw-warning)] flex-shrink-0 mt-0.5" />
                 <span className="text-[12px] text-[var(--hw-neutral-700)] leading-relaxed">{w}</span>
               </div>
@@ -1430,16 +1909,28 @@ function AdminAnalyticsBasis() {
         {/* Forecast Price Trend Chart (Price Outlook) */}
         {(result.module === "Price Outlook" || resultId === "price-outlook") && (
           <div className={vizCardClass}>
-            <div>
-              <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Forecast Price Trend</p>
-              <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">14-day price outlook for {selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--hw-neutral-100)]">
+              <div>
+                <p className="text-[13px] font-bold text-black uppercase tracking-wide">Forecast Price Trend</p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">{priceOutlookHorizon}-day price outlook for {selectedCommodity !== "-" ? selectedCommodity : "selected crop"}.</p>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <label className="text-[11px] sm:text-[12px] font-semibold text-black whitespace-nowrap">Forecast Horizon</label>
+                <div className="w-28 sm:w-32">
+                  <CustomSimpleDropdown
+                    value={`${priceOutlookHorizon} days`}
+                    options={["7 days", "14 days", "21 days", "28 days"]}
+                    onChange={(val) => setPriceOutlookHorizon(parseInt(val, 10))}
+                  />
+                </div>
+              </div>
             </div>
             {displayResult.forecastPoints && displayResult.forecastPoints.length > 0 ? (
               <ForecastPriceTrendChart commodity={selectedCommodity} chartData={displayResult.forecastPoints} varieties={displayResult.varieties || []} height={360} />
             ) : (
               <div className="w-full flex-1 flex flex-col justify-center">
-                <ResponsiveContainer width="100%" height={340}>
-                  <ComposedChart data={priceForecastEmpty} margin={{ top: 16, right: 20, bottom: 8, left: 0 }}>
+                <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
+                  <ComposedChart data={priceForecastEmpty} margin={{ top: 16, right: isMobile ? 8 : 20, bottom: 8, left: isMobile ? -8 : 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={(v) => `₱${v}`} width={55} />
@@ -1500,25 +1991,27 @@ function AdminAnalyticsBasis() {
               </div>
 
               {arrivalHasData ? (
-                <ResponsiveContainer width="100%" height={340}>
+                <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+                  <div style={{ minWidth: isMobile ? 600 : "100%" }}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
                   <BarChart
                     data={arrivalChartData}
-                    margin={{ top: 16, right: 20, left: 0, bottom: 8 }}
-                    barCategoryGap="32%"
+                    margin={{ top: 16, right: isMobile ? 8 : 20, left: isMobile ? -8 : 0, bottom: 8 }}
+                    barCategoryGap={isMobile ? "18%" : "32%"}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }}
+                      tick={{ fontSize: isMobile ? 10 : 12, fill: "#4b5563", fontWeight: 500 }}
                       tickLine={false}
                       axisLine={false}
                     />
                     <YAxis
-                      tick={{ fontSize: 11, fill: "#9ca3af" }}
+                      tick={{ fontSize: isMobile ? 10 : 11, fill: "#9ca3af" }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(v) => Number(v).toLocaleString()}
-                      width={62}
+                      width={isMobile ? 48 : 62}
                     />
                     <RechartsTooltip
                       cursor={{ fill: "rgba(0,0,0,0.03)" }}
@@ -1544,11 +2037,13 @@ function AdminAnalyticsBasis() {
                       ))}
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full flex-1 flex flex-col justify-center">
-                  <ResponsiveContainer width="100%" height={340}>
-                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={60}>
+                  <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
+                    <BarChart data={arrivalGhostData} margin={{ top: 16, right: isMobile ? 8 : 20, left: isMobile ? -8 : 0, bottom: 8 }} barSize={isMobile ? 36 : 60}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 500 }} tickLine={false} axisLine={false} />
                       <YAxis hide domain={[0, 10]} />
@@ -1578,7 +2073,7 @@ function AdminAnalyticsBasis() {
               <ArrivalSourcePieChart
                 showEmpty={!arrivalSourcePieData.length}
                 data={arrivalSourcePieData}
-                height={340}
+                height={isMobile ? 300 : 380}
               />
             </div>
           </>
@@ -1589,41 +2084,107 @@ function AdminAnalyticsBasis() {
           <>
             {/* Typical Quarterly Production Volume Bar Chart */}
             <div className={vizCardClass}>
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Typical Quarterly Production Volume</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">PSA Data · Q1–Q4</p>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[var(--hw-neutral-100)]">
+                <div>
+                  <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                    {productionQuarter
+                      ? `${productionQuarter} Production by Year · ${QUARTER_NAMES[productionQuarter]}`
+                      : "Typical Quarterly Production Volume"}
+                  </p>
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                    {productionQuarter
+                      ? `PSA Data · ${productionQuarter} records across all years`
+                      : "PSA Data · Q1–Q4 historical averages"}
+                  </p>
+                </div>
+                {/* Harvest Season filter */}
+                <div className="flex flex-col gap-1 shrink-0">
+                  <span className="text-[11px] font-semibold text-[var(--hw-neutral-700)]">Harvest Season</span>
+                  <div className="flex items-center gap-1.5">
+                    {PRODUCTION_QUARTERS.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        aria-pressed={productionQuarter === q}
+                        onClick={() => setProductionQuarter((prev) => (prev === q ? null : q))}
+                        className={`px-2.5 py-1.5 text-[11.5px] font-semibold rounded-lg border transition-colors ${
+                          productionQuarter === q
+                            ? "border-[var(--hw-green-700)] bg-[var(--hw-green-50)] text-[var(--hw-green-800)]"
+                            : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
+                        }`}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="w-full flex-1 flex flex-col justify-center">
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={displayResult.productionVolumes?.length ? displayResult.productionVolumes.map((row) => ({ quarter: row.quarter || row.season, volume: row.average_production_mt || 0, level: row.classification })) : quarterlyGhostData} margin={{ top: 16, right: 20, left: 0, bottom: 8 }} barSize={72}>
+                <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+                  <div style={{ minWidth: isMobile ? 560 : "100%" }}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 340}>
+                  <BarChart
+                    data={
+                      displayResult.productionVolumes?.length
+                        ? displayResult.productionVolumes.map((row) => ({
+                            quarter: row.quarter,
+                            ...(productionQuarter
+                              ? {
+                                  volume: row.average_production_mt || 0,
+                                  level: row.classification,
+                                }
+                              : PRODUCTION_QUARTERS.reduce((values, chartQuarter) => ({
+                                  ...values,
+                                  [chartQuarter]: row[chartQuarter] || 0,
+                                }), {})),
+                          }))
+                        : quarterlyGhostData
+                    }
+                    margin={{ top: 16, right: isMobile ? 8 : 20, left: isMobile ? -8 : 0, bottom: 8 }}
+                    barSize={isMobile ? 40 : 72}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="quarter" tick={{ fontSize: 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="quarter" tick={{ fontSize: isMobile ? 10 : 13, fill: "#4b5563", fontWeight: 600 }} tickLine={false} axisLine={false} />
                     <YAxis hide domain={[0, "auto"]} />
                     {displayResult.productionVolumes?.length > 0 && (
                       <RechartsTooltip
                         formatter={(val, _name, props) => [
                           `${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT${props.payload?.level ? ` (${props.payload.level})` : ""}`,
-                          "Avg Production"
+                          productionQuarter ? "Production" : _name
                         ]}
                       />
                     )}
-                    <Bar dataKey={displayResult.productionVolumes?.length ? "volume" : "placeholder"} radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray={displayResult.productionVolumes?.length ? undefined : "3 3"}>
-                      {displayResult.productionVolumes?.length > 0 && displayResult.productionVolumes.map((entry, index) => {
-                        const barColor =
-                          entry.classification === "High" ? "#dc2626" :
-                            entry.classification === "Upper Middle" ? "#d97706" :
-                              entry.classification === "Lower Middle" ? "#2563eb" :
-                                "#16a34a";
-                        return <Cell key={`cell-${index}`} fill={barColor} />;
-                      })}
-                    </Bar>
+                    {displayResult.productionVolumes?.length > 0 ? (
+                      (productionQuarter ? [productionQuarter] : PRODUCTION_QUARTERS).map((chartQuarter) => {
+                        const profile = displayResult.quarterlyProfiles?.find((item) => item.quarter === chartQuarter);
+                        return (
+                          <Bar
+                            key={chartQuarter}
+                            dataKey={productionQuarter ? "volume" : chartQuarter}
+                            name={chartQuarter}
+                            fill={productionClassificationColor(profile?.classification)}
+                            radius={[6, 6, 0, 0]}
+                          />
+                        );
+                      })
+                    ) : (
+                      <Bar dataKey="placeholder" radius={[6, 6, 0, 0]} fill="#2f7d32" stroke="#cbd5e1" strokeDasharray="3 3" />
+                    )}
                   </BarChart>
-                </ResponsiveContainer>
-                {!displayResult.productionVolumes?.length && <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
-                  <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
-                    No production data available.
-                  </span>
-                </div>}
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                {!displayResult.productionVolumes?.length && (
+                  <div className="flex items-center justify-center -mt-[190px] mb-[150px] pointer-events-none">
+                    <span className="text-[13px] text-[var(--hw-neutral-600)] font-medium bg-white/90 px-4 py-1.5 rounded-lg shadow-sm border border-[var(--hw-neutral-200)]">
+                      {productionLoading
+                        ? "Loading production data…"
+                        : productionQuarter
+                        ? `No ${productionQuarter} records found.`
+                        : "No production data available."}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1663,28 +2224,28 @@ function AdminAnalyticsBasis() {
 
       {/* 5. Weather Threshold — Top 10 Commodities (Weather Risk only) */}
       {isWeatherRisk && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Weather Threshold · Top 10 Commodities</p>
             <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
               Crop-specific weather classification thresholds for the Top 10 monitored commodities.
             </p>
           </div>
 
-          <div className="overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]/60">
-                  <th className="py-3 px-6 text-[12px] font-semibold text-black uppercase tracking-wide">Commodity</th>
-                  <th className="py-3 px-6 text-[12px] font-semibold text-emerald-700 uppercase tracking-wide">Suitable</th>
-                  <th className="py-3 px-6 text-[12px] font-semibold text-amber-700 uppercase tracking-wide">Caution</th>
-                  <th className="py-3 px-6 text-[12px] font-semibold text-rose-700 uppercase tracking-wide">Severe</th>
+                  <th className="py-3 px-4 sm:px-6 text-[12px] font-semibold text-black uppercase tracking-wide">Commodity</th>
+                  <th className="py-3 px-4 sm:px-6 text-[12px] font-semibold text-emerald-700 uppercase tracking-wide">Suitable</th>
+                  <th className="py-3 px-4 sm:px-6 text-[12px] font-semibold text-amber-700 uppercase tracking-wide">Caution</th>
+                  <th className="py-3 px-4 sm:px-6 text-[12px] font-semibold text-rose-700 uppercase tracking-wide">Severe</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                 {weatherThresholdsRows.map((row) => (
                   <tr key={row.commodity}>
-                    <td className="py-3.5 px-6 whitespace-nowrap">
+                    <td className="py-3.5 px-4 sm:px-6 whitespace-nowrap">
                       <div className="flex items-center gap-2.5">
                         <CommodityIllustration
                           commodityId={getCommodityIconKey(null, null, row.commodity)}
@@ -1693,13 +2254,13 @@ function AdminAnalyticsBasis() {
                         <span className="text-[14px] font-semibold text-black">{row.commodity}</span>
                       </div>
                     </td>
-                    <td className="py-3.5 px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[200px]">
+                    <td className="py-3.5 px-4 sm:px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[180px] sm:min-w-[200px]">
                       {row.suitable}
                     </td>
-                    <td className="py-3.5 px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[200px]">
+                    <td className="py-3.5 px-4 sm:px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[180px] sm:min-w-[200px]">
                       {row.caution}
                     </td>
-                    <td className="py-3.5 px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[200px]">
+                    <td className="py-3.5 px-4 sm:px-6 text-[13px] text-[var(--hw-neutral-800)] font-medium min-w-[180px] sm:min-w-[200px]">
                       {row.severe}
                     </td>
                   </tr>
@@ -1712,11 +2273,11 @@ function AdminAnalyticsBasis() {
 
       {/* 6. Threshold Applied & Result Explanation */}
       {isWeatherRisk ? (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
             <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
               <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed">
                 {displayResult.resultExplanation}
@@ -1737,26 +2298,26 @@ function AdminAnalyticsBasis() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Threshold Applied Card */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+            <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
               <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Threshold Applied</p>
             </div>
             {thresholdsError && (
-              <div className="px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
+              <div className="px-4 sm:px-6 py-2.5 text-[12px] text-red-600 border-b border-[var(--hw-neutral-100)]">{thresholdsError}</div>
             )}
             <div className="divide-y divide-[var(--hw-neutral-100)] flex-1 flex flex-col justify-around">
               {displayThresholds && displayThresholds.length > 0 ? (
                 displayThresholds.map((t) => {
                   const tc = CLASSIFICATION_COLORS[t.classification] ?? "text-[var(--hw-neutral-700)]";
                   return (
-                    <div key={t.classification} className="flex items-center gap-4 px-6 py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
+                    <div key={t.classification} className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5 sm:py-3.5 hover:bg-[var(--hw-neutral-50)]/60 transition-colors">
                       <span className={`text-[13px] font-bold flex-shrink-0 min-w-[95px] ${tc}`}>{t.classification}</span>
                       <span className="text-[13px] text-[var(--hw-neutral-800)] font-medium">{t.rule}</span>
                     </div>
                   );
                 })
               ) : (
-                <div className="px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
+                <div className="px-4 sm:px-6 py-5 text-[13px] text-[var(--hw-neutral-500)]">
                   Threshold information unavailable.
                 </div>
               )}
@@ -1764,11 +2325,11 @@ function AdminAnalyticsBasis() {
           </div>
 
           {/* Result Explanation Card (Concise Empty State) */}
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
-            <div className="px-6 py-4 border-b border-[var(--hw-neutral-100)]">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
+            <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)]">
               <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Result Explanation</p>
             </div>
-            <div className="p-6 flex-1 flex flex-col items-center justify-center text-center">
+            <div className="p-4 sm:p-6 flex-1 flex flex-col items-center justify-center text-center">
               {displayResult.resultExplanation && displayResult.resultExplanation !== "No explanation available." ? (
                 <p className="text-[14px] font-medium text-[var(--hw-neutral-800)] leading-relaxed text-left w-full">
                   {displayResult.resultExplanation}
@@ -1789,12 +2350,37 @@ function AdminAnalyticsBasis() {
         </div>
       )}
 
+      {/* Historical Average Price Section (Only on Price Outlook Basis, below Result Explanation) */}
+      {(resultId === "price-outlook" || result.module === "Price Outlook") && (
+        <HistoricalAveragePriceSection
+          commodityId={selectedCommodityRecord?.id || detail?.commodity_id || null}
+          commodityName={selectedCommodity}
+          variety={selectedVariety && selectedVariety !== "All Varieties" && selectedVariety !== "All" ? selectedVariety : null}
+          market="Bankerohan"
+          priceType="Retail"
+          priceTypeKey="bangkerohan_retail"
+        />
+      )}
+
       {/* Missing data warning */}
       {displayResult.basisMissing && (
-        <div className="flex items-start gap-3 border border-amber-200 bg-amber-50/60 rounded-2xl px-5 py-4">
+        <div className="flex items-start gap-3 border border-amber-200 bg-amber-50/60 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
           <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
           <p className="text-[13px] text-amber-800 leading-relaxed font-medium">{displayResult.basisMissing}</p>
         </div>
+      )}
+
+      {showReliabilityBands && (
+        <ReliabilityExplanationModal
+          resultId={resultId}
+          level={result.reliability}
+          factor={result.reliabilityFactor}
+          bands={(result.reliabilityBands || []).length > 0 ? result.reliabilityBands : FALLBACK_RELIABILITY_BANDS}
+          dimensions={result.reliabilityDimensions}
+          evidence={result.reliabilityEvidence}
+          rules={result.reliabilityRules}
+          onClose={() => setShowReliabilityBands(false)}
+        />
       )}
     </div>
   );

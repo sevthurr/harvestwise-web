@@ -58,7 +58,7 @@ function DFTCLayoutInner() {
   const active = getActive(location.pathname);
   const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
   const staff = user?.staff_profile || user?.staffProfile || {};
-  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
+  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix || user?.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
   const initials = getInitials(name);
   useEffect(() => {
     const handler = (e) => {
@@ -98,8 +98,8 @@ function DFTCLayoutInner() {
     if (isSyncing) return;
     setIsManualSyncing(true);
     try {
-      await queryClient.refetchQueries();
-      await queryClient.invalidateQueries();
+      await queryClient.refetchQueries(undefined, { throwOnError: true });
+      await queryClient.invalidateQueries(undefined, { throwOnError: true });
       setLastSyncedTime(
         new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       );
@@ -168,13 +168,13 @@ function DFTCLayoutInner() {
     <div className="min-h-screen bg-[var(--hw-neutral-50)]">
       {/* ── Top bar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)] h-13">
-        <div className="flex items-center h-13 px-4 gap-3">
+        <div className="flex items-center h-13 px-3 sm:px-4 gap-1.5 sm:gap-3">
           {/* Logo + label */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink min-w-0">
             <img 
               src="/horizontal-logo.png" 
               alt="HarvestWise" 
-              style={{ width: "140px", height: "20px", objectFit: "contain" }}
+              className="w-[104px] xs:w-[120px] sm:w-[140px] h-5 object-contain flex-shrink-0"
             />
             <span className="hidden md:block text-[11px] font-semibold text-[var(--hw-neutral-500)] tracking-wide border-l border-[var(--hw-neutral-200)] pl-2 ml-1">
               DFTC
@@ -191,7 +191,7 @@ function DFTCLayoutInner() {
 
           <button
             onClick={() => navigate("/dftc/notifications")}
-            className={`relative p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
+            className={`relative p-1.5 sm:p-2 rounded-lg transition-all duration-200 flex-shrink-0 cursor-pointer active:scale-95 ${
               location?.pathname?.includes("/notifications")
                 ? "bg-[var(--hw-green-50)] text-[var(--hw-green-700)] ring-1 ring-[var(--hw-green-600)]/25 hover:bg-[var(--hw-green-100)] shadow-xs"
                 : "text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)] hover:text-[var(--hw-neutral-900)]"
@@ -226,7 +226,7 @@ function DFTCLayoutInner() {
               <ChevronDown className={`hidden sm:block w-3.5 h-3.5 text-[var(--hw-neutral-400)] transition-transform ${avatarOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {avatarOpen && <div className="absolute right-0 top-full mt-1 w-60 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden z-50">
+            {avatarOpen && <div className="absolute right-0 top-full mt-1 w-[min(15rem,calc(100vw-1.5rem))] bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden z-50">
 
                 {
     /* Identity row — navigate to profile */
@@ -329,10 +329,10 @@ function DFTCLayoutInner() {
     return <button
       key={id}
       onClick={() => navigate(path)}
-      className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${isActive ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}
+      className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${isActive ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}
     >
                 <Icon className="w-5 h-5" />
-                <span className="text-[11px] font-medium leading-tight">{label}</span>
+                <span className="text-[10.5px] xs:text-[11px] font-medium leading-tight truncate max-w-full px-0.5">{label}</span>
               </button>;
   })}
         </div>

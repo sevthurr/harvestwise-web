@@ -1,9 +1,9 @@
 export const privacy = {
   title: "Privacy Policy",
   effective_date_label: "Effective Date",
-  effective_date: "October 9, 2026",
+  effective_date: "October 24, 2026",
   version_label: "Version",
-  version: "1.0",
+  version: "1.1",
   intro_p1: "HarvestWise respects the privacy of its users and is committed to handling personal information responsibly.",
   intro_p2: "HarvestWise is a Bachelor of Science in Information Technology Capstone Project developed at the University of Mindanao. This Privacy Policy explains what information HarvestWise collects, why it is used, where it may be sent, how it is protected, how long it may be retained, and the choices and rights available to users.",
   intro_p3: "By using HarvestWise, you acknowledge that you have read this Privacy Policy.",
@@ -53,7 +53,7 @@ export const privacy = {
       group5_title: "Technical and security information:",
       group5_desc: "HarvestWise may process session identifiers, authentication-token information, IP address, browser or device user-agent information, login attempts, security-lockout information, audit records, and notification history.",
       group6_title: "Browser and offline information:",
-      group6_desc: "HarvestWise uses browser storage and Progressive Web App caching for authentication, preferences, and offline access to selected system information."
+      group6_desc: "HarvestWise saves some information on your phone or computer so the app works even without internet. Your login session is kept through a secure cookie. Your password or login key is never saved in a place that other apps on your phone can read. Farm advice, weather, and price information may be saved on your phone for up to seven days so you can still read them when there is no signal. This saved information is deleted when you log out or when a different person logs in on the same phone."
     },
     s2: {
       title: "2. HOW WE USE INFORMATION",
@@ -120,7 +120,8 @@ export const privacy = {
       p3: "Security and audit records may generally be retained for up to 12 months, unless they are required longer for an investigation, security incident, legal obligation, or legitimate academic requirement.",
       p4: "Authentication credentials and session-related records expire or are removed in accordance with their applicable technical lifecycle.",
       p5: "Retention and deletion may currently be administered manually by the HarvestWise project team rather than through a fully automated database-purging process.",
-      p6: "Information that has been genuinely anonymized or aggregated so that it can no longer reasonably identify an individual may be retained for academic, statistical, system-evaluation, or agricultural research purposes."
+      p6: "Information that has been genuinely anonymized or aggregated so that it can no longer reasonably identify an individual may be retained for academic, statistical, system-evaluation, or agricultural research purposes.",
+      p7: "Saved advice on your phone: Farm advice, weather, and other information saved on your phone for offline use is kept for up to seven days. It is automatically removed when you log out or when someone else logs in. If you close the app before it finishes cleaning up, a copy may remain on your phone. You can remove it yourself by logging out or going to your browser settings and clearing the site data for HarvestWise."
     },
     s8: {
       title: "8. ACCOUNT DELETION",
@@ -129,13 +130,15 @@ export const privacy = {
       p2: "HarvestWise may require reasonable verification before processing a deletion request to protect the account from unauthorized deletion.",
       p3: "After a verified deletion request is completed, identifying account information, contact information, and precise farm-location information should be removed or irreversibly de-identified, subject to information that must be retained for a lawful or legitimate reason.",
       p4: "Agricultural, crop, cost, or harvest information may be retained only when it has been anonymized or aggregated so that it can no longer reasonably be linked to the Farmer.",
-      p5: "The current in-app deletion request should not be represented as immediate automatic database erasure unless that capability is implemented."
+      p5: "The current in-app deletion request should not be represented as immediate automatic database erasure unless that capability is implemented.",
+      p6: "A copy of some information may still be saved on your phone even after we delete your account from our system. This is because the app saves advice and farm data on your phone so you can read it offline. To remove those saved copies, please log out of the app and then clear the HarvestWise site data in your phone or browser settings."
     },
     s9: {
       title: "9. SECURITY",
       p1: "HarvestWise uses reasonable technical and organizational safeguards appropriate to the nature of the project and information processed.",
-      p2: "Current safeguards include password hashing, authenticated API access, role-based authorization, token rotation and revocation, security lockouts, audit logging, and multi-factor authentication for supported staff accounts.",
-      p3: "No internet-based system can guarantee absolute security. Users should protect their account credentials and promptly report suspected unauthorized access."
+      p2: "We use safety measures to protect your account. These include: hiding your password so no one can read it, checking who you are before letting you in, limiting what each type of user can do, using a secure login cookie instead of saving your login key on your phone, blocking accounts after too many wrong login attempts, and keeping records of important actions for security checks.",
+      p3: "If your account is blocked or cancelled, it stops working right away for new logins. However, if the app already saved some farm advice on your phone for offline use, those saved copies will stay on your phone until you log out or clear the app's data. Blocking your account does not automatically delete those saved copies from your phone.",
+      p4: "No app or website can be 100% safe. Please keep your password private and tell us right away if you think someone else got into your account."
     },
     s10: {
       title: "10. YOUR PRIVACY RIGHTS",
@@ -156,7 +159,8 @@ export const privacy = {
     s11: {
       title: "11. ACCURACY OF INFORMATION",
       p1: "Users are encouraged to keep their profile, farm location, crop plans, production costs, and other information accurate and current.",
-      p2: "Incorrect or incomplete data may reduce the accuracy or usefulness of HarvestWise advisories and calculations."
+      p2: "Incorrect or incomplete data may reduce the accuracy or usefulness of HarvestWise advisories and calculations.",
+      p3: "When you use HarvestWise without internet, the advice and weather shown may be old information saved on your phone. The app shows you when that information was last updated. Always check the last update date before making a farming decision. Connect to the internet to get the latest advice."
     },
     s12: {
       title: "12. CHILDREN AND AUTHORIZED USERS",

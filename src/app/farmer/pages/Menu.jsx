@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { applyUpdate, subscribeUpdateAvailable } from "../../global/lib/pwaUpdate";
+import { clearDeviceData } from "../../global/lib/queryClient";
 import {
   User,
   MapPin,
@@ -459,8 +460,9 @@ function MenuPage() {
     message="Clearing downloaded data removes offline copies from this device. Your saved account records will remain available after you reconnect."
     confirmLabel="Clear data"
     danger
-    onConfirm={() => {
+    onConfirm={async () => {
       setShowClearData(false);
+      await clearDeviceData();
       showToast("Downloaded data cleared.");
     }}
     onCancel={() => setShowClearData(false)}

@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Sprout } from "lucide-react";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { SkeletonListRow } from "../shared/FarmerSkeletons";
@@ -144,26 +144,6 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
       });
     }
 
-    // Fallback only when the API returned no rows at all. It must NOT fire just
-    // because no crop is "Recommended" — that would surface an "Avoid for Now"
-    // crop as a good one (same defect as the Market Calendar page).
-    if (rawRecommendations.length === 0) {
-      const defaultIds = ["COM-0004", "COM-0001"]; // Kamatis & Ampalaya
-      defaultIds.forEach((cid) => {
-        const p = DEFAULT_RECOMMENDED_PROFILES[cid];
-        const name = cid === "COM-0004" ? "Kamatis" : "Ampalaya";
-        result.push({
-          id: cid,
-          name,
-          variety: p?.bestVariety || null,
-          priceOutlookText: cid === "COM-0004"
-            ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon")
-            : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit"),
-          plantWindow: p?.plantWindow ? p.plantWindow(localizedMonth) : `${localizedMonth} 1–20`,
-        });
-      });
-    }
-
     const prefSource = preferredCrops && preferredCrops.length > 0 ? preferredCrops : preferredCropIds;
     return sortWithPreferredFirst(result, prefSource);
   }, [rawRecommendations, localizedMonth, t, preferredCrops, preferredCropIds]);
@@ -199,8 +179,13 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
           <SkeletonListRow />
         </div>
       ) : recommendedCrops.length === 0 ? (
-        <div className="p-4 text-center text-[13px] text-[var(--hw-neutral-700)]">
-          {t("farmer.plantingSuitability.no_recommendations", {}, "No planting recommendations available right now.")}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 text-center min-h-[200px]">
+          <div className="w-12 h-12 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center text-[var(--hw-neutral-400)] mb-2.5">
+            <Sprout className="w-6 h-6" />
+          </div>
+          <p className="text-[13px] sm:text-[14px] font-medium text-[var(--hw-neutral-600)] max-w-[260px] leading-snug">
+            {t("farmer.plantingSuitability.no_recommendations", {}, "No planting recommendations available right now.")}
+          </p>
         </div>
       ) : (
         <>

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, parseResponse } from "../../global/api";
@@ -122,7 +122,7 @@ function DateCombobox({ value, customFrom, customTo, onChange }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-30 w-44 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+        <div className="absolute right-0 sm:left-0 top-full mt-1 z-30 w-48 max-w-[calc(100vw-32px)] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
           {OPTIONS.map((opt) => (
             <button
               key={opt.key}
@@ -149,7 +149,7 @@ function DateCombobox({ value, customFrom, customTo, onChange }) {
       )}
 
       {popOpen && (
-        <div className="absolute left-0 top-full mt-1 z-30 w-72 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-4 space-y-3">
+        <div className="absolute right-0 sm:left-0 top-full mt-1 z-30 w-72 max-w-[calc(100vw-32px)] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-4 space-y-3">
           <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Custom Date Range</p>
           <div className="space-y-2">
             <div>
@@ -267,16 +267,11 @@ function DFTCHistory() {
   }, [highlightParam]);
 
   // Live Query from backend API
-  const { data: submissionsData, isLoading } = useQuery({
+  const { data: submissionsData, isLoading, isError, refetch } = useQuery({
     queryKey: ["dftc-submissions"],
     queryFn: async () => {
-      try {
-        const res = await apiGet("/dftc/submissions?page_size=100");
-        return parseResponse(res);
-      } catch (err) {
-        console.error("DFTC SUBMISSIONS FETCH ERROR:", err);
-        return null;
-      }
+      const res = await apiGet("/dftc/submissions?page_size=100");
+      return parseResponse(res);
     },
     staleTime: 0,
     refetchOnMount: "always"
@@ -363,6 +358,12 @@ function DFTCHistory() {
     setPage(1);
   }, [datasetType, savedBy, datePreset, customFrom, customTo]);
 
+  // Data can shrink after a resync; keep `page` inside the current range.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [filtered.length, page]);
+
   // Smooth scroll to highlighted dataset row
   useEffect(() => {
     if (!highlightKey) return;
@@ -411,7 +412,7 @@ function DFTCHistory() {
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       {/* Header */}
       <PageHeader
         title="Submission History"
@@ -419,10 +420,10 @@ function DFTCHistory() {
       />
 
       {/* Filters — compact one-row card */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3.5">
-        <div className="flex flex-col sm:flex-row flex-wrap lg:flex-nowrap gap-3 items-end">
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-3 sm:px-4 py-3 sm:py-3.5">
+        <div className="grid grid-cols-2 sm:flex sm:flex-row sm:flex-wrap lg:flex-nowrap gap-2.5 sm:gap-3 items-end">
           {/* Dataset Type */}
-          <div className="w-full sm:w-auto flex-1 min-w-[150px]">
+          <div className="col-span-2 w-full sm:w-auto flex-1 sm:min-w-[150px]">
             <label className={labelCls}>Dataset Type</label>
             <div className="relative">
               <select className={selectCls} value={datasetType} onChange={(e) => setDatasetType(e.target.value)}>
@@ -441,7 +442,7 @@ function DFTCHistory() {
           </div>
 
           {/* Saved By */}
-          <div className="w-full sm:w-auto flex-1 min-w-[150px]">
+          <div className="w-full sm:w-auto flex-1 sm:min-w-[150px] min-w-0">
             <label className={labelCls}>Saved By</label>
             <input
               className={inputCls}
@@ -452,7 +453,7 @@ function DFTCHistory() {
           </div>
 
           {/* Period */}
-          <div className="w-full sm:w-auto flex-1 min-w-[150px]">
+          <div className="w-full sm:w-auto flex-1 sm:min-w-[150px] min-w-0">
             <label className={labelCls}>Period</label>
             <DateCombobox
               value={datePreset}
@@ -477,13 +478,27 @@ function DFTCHistory() {
         )}
       </div>
 
+      {/* Error banner */}
+      {isError && (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Submission history could not be loaded. Please try again later.
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="ml-3 font-medium text-red-800 underline underline-offset-2 hover:opacity-70 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Result count */}
       <p className="text-[13px] text-[var(--hw-neutral-800)]">
         {isLoading ? (
           <span className="inline-flex items-center gap-1.5 text-[var(--hw-neutral-500)]">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading datasets...
           </span>
-        ) : hasFilter ? (
+        ) : isError && !submissionsData ? null : hasFilter ? (
           `${filtered.length} result${filtered.length !== 1 ? "s" : ""} · filtered`
         ) : (
           `${rawRows.length} datasets`
@@ -491,12 +506,15 @@ function DFTCHistory() {
       </p>
 
       {/* Skeleton / Loading */}
-      {isLoading ? (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-6 space-y-3">
+      {isLoading && !submissionsData ? (
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden p-4 sm:p-6 space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-10 bg-[var(--hw-neutral-100)] rounded-lg animate-pulse" />
           ))}
         </div>
+      ) : isError && !submissionsData ? (
+        /* Error state — the alert banner above carries the message */
+        null
       ) : filtered.length === 0 ? (
         /* Empty state */
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] py-12 text-center">
@@ -573,38 +591,38 @@ function DFTCHistory() {
                   key={r.datasetId}
                   data-highlighted={isHighlighted ? "true" : undefined}
                   onClick={() => navigate(`/dftc/submissions/${r.datasetId}`)}
-                  className={`w-full rounded-2xl border transition-all duration-700 ease-out p-4 text-left shadow-[var(--shadow-xs)] cursor-pointer ${
+                  className={`w-full rounded-2xl border transition-all duration-700 ease-out p-4 text-left shadow-[var(--shadow-xs)] cursor-pointer group ${
                     isHighlighted
                       ? "bg-emerald-50/90 border-[var(--hw-green-600)] ring-1 ring-[var(--hw-green-600)]"
                       : "bg-white border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] active:scale-[.99]"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{r.datasetId}</p>
-                      <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] mt-0.5">{r.fileName || r.datasetType}</p>
-                      {r.fileName && <p className="text-[12px] text-[var(--hw-neutral-500)]">{r.datasetType}</p>}
-                    </div>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                      {r.datasetId} · {r.totalRecords} {r.totalRecords === 1 ? "record" : "records"}
+                    </p>
+                    <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-600)] transition-colors shrink-0" />
                   </div>
-                  <div className="text-[13px] text-[var(--hw-neutral-800)] space-y-0.5">
-                    <p>
-                      {r.savedDateTime} · {r.savedBy}
-                    </p>
-                    <p className="flex flex-wrap gap-3 mt-1">
-                      <span>{r.totalRecords} total</span>
-                      <span>{r.analyticsSupported} analytics</span>
-                      <span>{r.otherCommodities} other</span>
-                    </p>
+
+                  <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
+                    {r.fileName || r.datasetType}
+                  </p>
+                  {r.fileName && <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">{r.datasetType}</p>}
+
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-[var(--hw-neutral-600)] mt-1">
+                    <span>{r.savedDateTime}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{r.savedBy}</span>
                   </div>
                 </button>
               );
             })}
             {Math.ceil(filtered.length / PAGE_SIZE) > 1 && (
-              <div className="flex justify-center gap-2 pt-2">
+              <div className="flex items-center justify-center gap-2 pt-2">
                 <button
                   disabled={page === 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
+                  className="px-4 py-2 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
                 >
                   Prev
                 </button>
@@ -614,7 +632,7 @@ function DFTCHistory() {
                 <button
                   disabled={page === Math.ceil(filtered.length / PAGE_SIZE)}
                   onClick={() => setPage((p) => p + 1)}
-                  className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
+                  className="px-4 py-2 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
                 >
                   Next
                 </button>

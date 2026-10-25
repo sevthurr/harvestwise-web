@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2, X } from "lucide-react";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -47,13 +47,15 @@ function CommodityDetailPage() {
   const { t } = useLanguage();
   const { commodityId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [market, setMarket] = useState("bangkerohan");
   const [period, setPeriod] = useState(7);
-  const [showMore, setShowMore] = useState(false);
+  const [showRecordsModal, setShowRecordsModal] = useState(false);
+  const [modalRecords, setModalRecords] = useState([]);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // API integration - fetch commodity details
-  const [commodity, setCommodity] = useState(null);
-  const [priceDetail, setPriceDetail] = useState(null);
+  // The only piece of detail state that cannot be derived from the query:
+  // "View more" replaces the records with a longer list fetched on demand.
   const [priceRecords, setPriceRecords] = useState([]);
 
   // No prefetch here on purpose: the login bundle (/farmer/daily-snapshot) already
@@ -110,13 +112,26 @@ function CommodityDetailPage() {
   const priceTypeKey = PRICE_TYPE_KEY[market];
 
   // Fetch detailed price data with React Query
-  const { data: detailData, isLoading: loading } = useQuery({
+  const {
+    data: detailData,
+    isLoading: loading,
+    error: detailError,
+    fetchStatus,
+    refetch: refetchDetail,
+  } = useQuery({
     queryKey: ["prices", "detail", commodityId, priceTypeKey, period],
     queryFn: async () => {
       const response = await apiGet(
         `/prices/${commodityId}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
       );
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        // The HTTP status is the only thing that tells "this commodity does not
+        // exist" (404) apart from "the request never reached the server" (a
+        // network-level failure carries no status at all).
+        const httpError = new Error(`HTTP error! status: ${response.status}`);
+        httpError.status = response.status;
+        throw httpError;
+      }
       const data = await parseResponse(response);
       return toCamelCase(data);
     },
@@ -125,47 +140,125 @@ function CommodityDetailPage() {
     placeholderData: (previousData) => previousData,
   });
 
+  // The records modal belongs to the market + commodity it was opened for, so
+  // switching either one drops the cached list instead of showing the old one.
   useEffect(() => {
-    if (detailData) {
-      setCommodity({
-        id: detailData.commodityId,
-        name: detailData.name || '–',
-        baseName: detailData.baseName,
-        variety: detailData.variety,
-        icon: detailData.icon,
-        unitOfMeasure: detailData.unitOfMeasure || 'kg'
-      });
-      setPriceDetail(detailData);
-      setPriceRecords(detailData.recentRecords || []);
-    }
-  }, [detailData]);
+    setShowRecordsModal(false);
+    setModalRecords([]);
+  }, [market, commodityId]);
 
-  // Fetch extended records when "View more" is clicked
-  const fetchMoreRecords = async () => {
-    if (!commodityId) return;
-    
+  useEffect(() => {
+    if (!showRecordsModal) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setShowRecordsModal(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showRecordsModal]);
+
+  // Offline detection. Three independent signals, because the app's global
+  // network mode decides which one fires:
+  //   - navigator.onLine === false → the browser knows there is no connection
+  //   - fetchStatus === "paused"   → React Query's "online" mode refuses to fire
+  //   - an error with no status    → the request failed at the network level
+  // A 404 is the opposite case: it proves the server answered.
+  const detailErrorStatus = detailError?.status;
+  const isNotFound = detailErrorStatus === 404;
+  const isOffline =
+    (typeof navigator !== "undefined" && navigator.onLine === false) ||
+    fetchStatus === "paused" ||
+    (detailError != null && typeof detailErrorStatus !== "number");
+
+  // The offline bundle always includes the Prices list, while the per-market
+  // detail section can be partial when its snapshot budget is exhausted. Keep
+  // the specific-price view useful in that case by falling back to the list's
+  // cached commodity row instead of showing the cache-miss notice.
+  const offlinePriceKey = priceTypeKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+  const resolvedDetailData = useMemo(() => {
+    if (detailData || !isOffline) return detailData;
+    const offlineListItem = (pricesListData?.items || [])
+      .map(toCamelCase)
+      .find((item) => String(item.commodityId) === String(commodityId));
+    return offlineListItem
+      ? {
+          ...offlineListItem,
+          selectedPriceType: priceTypeKey,
+          currentPrice: offlineListItem.prices?.[offlinePriceKey] ?? null,
+          recentRecords: [],
+        }
+      : null;
+  }, [detailData, isOffline, pricesListData, commodityId, priceTypeKey, offlinePriceKey]);
+
+  // Derived straight from the query's data. Copying it into useState through a
+  // useEffect left commodity/priceDetail null on the first render, so the
+  // "not found" branch could flash even when the data was already cached.
+  const commodity = useMemo(() => {
+    if (!resolvedDetailData) return null;
+    return {
+      id: resolvedDetailData.commodityId,
+      name: resolvedDetailData.name || '–',
+      baseName: resolvedDetailData.baseName,
+      variety: resolvedDetailData.variety,
+      icon: resolvedDetailData.icon,
+      unitOfMeasure: resolvedDetailData.unitOfMeasure || 'kg'
+    };
+  }, [resolvedDetailData]);
+
+  useEffect(() => {
+    if (resolvedDetailData) setPriceRecords(resolvedDetailData.recentRecords || []);
+  }, [resolvedDetailData]);
+
+  // Fetch extended records when "View more records" is clicked
+  const fetchExtendedRecords = async () => {
+    if (!commodityId) return [];
+    setLoadingMore(true);
     try {
+      // 1. Try dedicated records endpoint
       const response = await apiGet(
         `/prices/${commodityId}/records?price_type=${priceTypeKey}&limit=30`
       );
       
       if (response.ok) {
         const data = await parseResponse(response);
-        setPriceRecords((data || []).map(r => toCamelCase(r)));
+        const list = Array.isArray(data) ? data : (data?.recentRecords || data?.recent_records || []);
+        if (list.length > 0) {
+          const transformed = list.map(r => toCamelCase(r));
+          setModalRecords(transformed);
+          return transformed;
+        }
+      }
+
+      // 2. Fallback to main price detail with records_limit=30
+      const fallbackResp = await apiGet(
+        `/prices/${commodityId}?price_type=${priceTypeKey}&horizon=${period}&records_limit=30`
+      );
+      if (fallbackResp.ok) {
+        const data = await parseResponse(fallbackResp);
+        const camel = toCamelCase(data);
+        if (camel.recentRecords?.length) {
+          setModalRecords(camel.recentRecords);
+          return camel.recentRecords;
+        }
       }
     } catch (error) {
       console.error('Failed to fetch extended records:', error);
+    } finally {
+      setLoadingMore(false);
     }
+    return [];
   };
 
-  const handleShowMore = async () => {
-    if (!showMore) {
-      await fetchMoreRecords();
+  const handleOpenRecordsModal = async () => {
+    if (modalRecords.length === 0) {
+      const records = await fetchExtendedRecords();
+      if (records.length === 0 && priceRecords.length > 0) {
+        setModalRecords(priceRecords);
+      }
     }
-    setShowMore(!showMore);
+    setShowRecordsModal(true);
   };
 
-  const forecast = priceDetail?.forecast || {};
+  const forecast = resolvedDetailData?.forecast || {};
   const cfg = DIR_CFG[forecast.trend] || DIR_CFG.default;
   const DirIcon = cfg.Icon;
   const uom = commodity?.unitOfMeasure || 'kg';
@@ -239,6 +332,8 @@ function CommodityDetailPage() {
     queryFn: async () => {
       const entries = await Promise.all(
         siblingIds.map(async (id) => {
+          const cached = queryClient.getQueryData(["prices", "detail", id, priceTypeKey, period]);
+          if (cached) return [id, cached];
           const response = await apiGet(
             `/prices/${id}?price_type=${priceTypeKey}&horizon=${period}&records_limit=5`
           );
@@ -300,7 +395,7 @@ function CommodityDetailPage() {
       let lower = null;
       let upper = null;
 
-      if (isCurrentActive && detailData) {
+      if (isCurrentActive && resolvedDetailData) {
         priceVal = forecast.currentPrice ?? priceRecords[0]?.prevailPrice ?? getAvailablePrice(v.prices);
         lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
@@ -323,10 +418,18 @@ function CommodityDetailPage() {
         forecastRangeText,
       };
     });
-  }, [familyVariants, market, uom, commodity, commodityId, detailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
+  }, [familyVariants, market, uom, commodity, commodityId, resolvedDetailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
 
   // Loading state (only show full screen skeleton on cold start if NO data exists in cache)
-  if (loading && !detailData && !priceDetail) {
+  //
+  // `loading` is React Query's isLoading — true only while a request is
+  // genuinely in flight. Between the first render and the fetch being kicked
+  // off the query reports fetchStatus "idle", and that frame is loading too,
+  // so it is covered here as well. A paused query (offline) and an errored
+  // query are neither: they fall through to the message branch below instead
+  // of spinning forever.
+  const isLoadingDetail = loading || (Boolean(commodityId) && fetchStatus === "idle");
+  if (isLoadingDetail && !resolvedDetailData && !detailError) {
     return (
       <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
         {/* Breadcrumb Skeleton */}
@@ -360,14 +463,44 @@ function CommodityDetailPage() {
     );
   }
 
-  // Error state - commodity not found
-  if (!commodity || !priceDetail) {
+  // Error state. "Commodity not found." is reserved for a real 404 — an
+  // offline device or a server error gets its own message and a retry, so the
+  // farmer is never told a crop does not exist just because the network is
+  // down.
+  if (!commodity) {
     return (
       <div className="px-4 py-8 text-center">
-        <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
-        <button onClick={() => navigate("/farmer/prices")} className="mt-3 text-sm font-medium text-[var(--hw-green-700)]">
-          Back to Prices
-        </button>
+        {isNotFound ? (
+          <p className="text-[var(--hw-neutral-900)]">Commodity not found.</p>
+        ) : (
+          <p className="text-[var(--hw-neutral-900)]">
+            {isOffline
+              ? t(
+                  "farmer.commodityDetail.offline_notice",
+                  {},
+                  "You're offline — this price isn't saved on this device yet."
+                )
+              : t(
+                  "farmer.commodityDetail.load_failed",
+                  {},
+                  "We couldn't load this price. Check your connection and try again."
+                )}
+          </p>
+        )}
+        <div className="mt-3 flex flex-col items-center gap-2">
+          {!isNotFound && (
+            <button
+              onClick={() => refetchDetail()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--hw-green-700)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--hw-green-800)]"
+            >
+              <RefreshCw className="w-4 h-4" aria-hidden="true" />
+              {t("farmer.commodityDetail.btn_retry", {}, "Retry")}
+            </button>
+          )}
+          <button onClick={() => navigate("/farmer/prices")} className="text-sm font-medium text-[var(--hw-green-700)]">
+            Back to Prices
+          </button>
+        </div>
       </div>
     );
   }
@@ -385,7 +518,7 @@ function CommodityDetailPage() {
     navigate(`/farmer/prices/${commodity.id}/price-trend`, { state });
   };
 
-  const displayRecords = showMore ? priceRecords : priceRecords.slice(0, 5);
+  const displayRecords = priceRecords.slice(0, 5);
 
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
@@ -529,8 +662,8 @@ function CommodityDetailPage() {
           className="w-full flex items-center justify-between gap-3 bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-4 py-3.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[var(--hw-neutral-100)] rounded-xl flex-shrink-0">
-              <BarChart2 className="w-4 h-4 text-[var(--hw-neutral-900)]" />
+            <div className="w-10 h-10 rounded-full bg-[var(--hw-green-50)] flex items-center justify-center flex-shrink-0">
+              <BarChart2 className="w-5 h-5 text-[var(--hw-green-700)]" />
             </div>
             <div>
               <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.commodityDetail.view_price_trend", {}, "View price trend details")}</p>
@@ -567,9 +700,9 @@ function CommodityDetailPage() {
                 </tr>
               ) : (
                 displayRecords.map((row, i) => (
-                  <tr key={i} className={row.isToday ? "bg-[var(--hw-neutral-50)]" : ""}>
+                  <tr key={row.recordId || i} className={row.isToday ? "bg-[var(--hw-neutral-50)]" : ""}>
                     <td className="px-4 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap">
-                      {row.priceDate ? new Date(row.priceDate).toLocaleDateString('en-US', { 
+                      {row.priceDate ? new Date(typeof row.priceDate === 'string' && row.priceDate.length === 10 ? row.priceDate + "T00:00:00" : row.priceDate).toLocaleDateString('en-US', { 
                         month: 'short', 
                         day: 'numeric' 
                       }) : '–'}
@@ -597,12 +730,21 @@ function CommodityDetailPage() {
           </table>
 
           {displayRecords.length > 0 && (
-            <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)]">
+            <div className="px-4 py-3 border-t border-[var(--hw-neutral-100)] flex items-center justify-between">
               <button
-                onClick={handleShowMore}
-                className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity"
+                type="button"
+                onClick={handleOpenRecordsModal}
+                disabled={loadingMore}
+                className="text-[13px] font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                {showMore ? t("farmer.commodityDetail.show_fewer", {}, "Show fewer records") : t("farmer.commodityDetail.view_more", {}, "View more records")}
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    {t("common.loading", {}, "Loading...")}
+                  </>
+                ) : (
+                  t("farmer.commodityDetail.view_more", {}, "View more records")
+                )}
               </button>
             </div>
           )}
@@ -634,6 +776,128 @@ function CommodityDetailPage() {
             </button>
           </div>
         </div>
+
+      {/* Records Only Modal */}
+      {showRecordsModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="records-modal-title"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setShowRecordsModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-[var(--hw-neutral-100)] flex items-center justify-between gap-3 bg-[var(--hw-neutral-50)]">
+              <div>
+                <h3
+                  id="records-modal-title"
+                  className="text-[15px] font-semibold text-[var(--hw-neutral-900)]"
+                >
+                  {t("farmer.commodityDetail.recent_records", {}, "Recent price records")}
+                </h3>
+                <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
+                  {commodity?.name || ''} · {MARKET_LABEL[market] || '–'} · {modalRecords[0]?.location || priceRecords[0]?.location || 'Davao City'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRecordsModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--hw-neutral-500)] hover:bg-[var(--hw-neutral-200)] hover:text-[var(--hw-neutral-800)] transition-colors cursor-pointer"
+                aria-label="Close records modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body - Records Table Only */}
+            <div className="overflow-y-auto flex-1 divide-y divide-[var(--hw-neutral-100)]">
+              {loadingMore && modalRecords.length === 0 ? (
+                <div className="p-8 text-center text-[13px] text-[var(--hw-neutral-500)] flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-[var(--hw-green-700)]" />
+                  <span>{t("common.loading", {}, "Loading records...")}</span>
+                </div>
+              ) : (modalRecords.length > 0 ? modalRecords : priceRecords).length === 0 ? (
+                <div className="p-8 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                  {t("farmer.commodityDetail.no_records", {}, "No recent price records available.")}
+                </div>
+              ) : (
+                <table className="w-full text-[13px]">
+                  <thead className="sticky top-0 bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-100)] z-10 shadow-xs">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-semibold text-[var(--hw-neutral-900)]">
+                        {t("common.date", {}, "Date")}
+                      </th>
+                      <th className="text-left px-4 py-2.5 font-semibold text-[var(--hw-neutral-900)]">
+                        {t("farmer.commodityDetail.variety", {}, "Variety")}
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-semibold text-[var(--hw-neutral-900)]">
+                        {t("farmer.commodityDetail.price", {}, "Price")}
+                      </th>
+                      <th className="text-right px-4 py-2.5 font-semibold text-[var(--hw-neutral-900)]">
+                        {t("farmer.commodityDetail.change", {}, "Change")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                    {(modalRecords.length > 0 ? modalRecords : priceRecords).map((row, i) => (
+                      <tr
+                        key={row.recordId || i}
+                        className={row.isToday ? "bg-[var(--hw-green-50)]/40" : "hover:bg-[var(--hw-neutral-50)] transition-colors"}
+                      >
+                        <td className="px-4 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap">
+                          {row.priceDate ? new Date(typeof row.priceDate === 'string' && row.priceDate.length === 10 ? row.priceDate + "T00:00:00" : row.priceDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          }) : '–'}
+                          {row.isToday && (
+                            <span className="ml-1.5 text-[10px] font-semibold text-[var(--hw-green-700)]">
+                              {t("farmer.commodityDetail.today", {}, "Today")}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-[var(--hw-neutral-900)] whitespace-nowrap italic text-[12px]">
+                          {row.variety || commodity.variety || '–'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-semibold text-[var(--hw-neutral-900)] whitespace-nowrap">
+                          {row.prevailPrice != null ? `₱${Number(row.prevailPrice).toFixed(2)}` : '–'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                          {row.change == null || row.change === 0 ? (
+                            <span className="text-[var(--hw-neutral-900)]">—</span>
+                          ) : (
+                            <span className={row.change > 0 ? "text-emerald-600 font-medium" : "text-red-500 font-medium"}>
+                              {row.change > 0 ? "+" : ""}₱{Number(row.change).toFixed(2)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)] flex items-center justify-between">
+              <span className="text-[12px] text-[var(--hw-neutral-600)]">
+                {(modalRecords.length > 0 ? modalRecords : priceRecords).length} {t("farmer.commodityDetail.records_count", {}, "records")}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowRecordsModal(false)}
+                className="px-4 py-1.5 rounded-lg text-[13px] font-medium bg-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-300)] transition-colors cursor-pointer"
+              >
+                {t("common.close", {}, "Close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

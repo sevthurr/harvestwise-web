@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 const DEFAULT_ARRIVAL_SOURCES = [
@@ -16,6 +17,15 @@ function formatKgValue(kg) {
 }
 
 export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false }) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const sourceData = data && data.length > 0 && !showEmpty
     ? data
     : EMPTY_ARRIVAL_SOURCES;
@@ -37,23 +47,20 @@ export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false })
   return (
     <div className="w-full flex flex-col items-center">
       <ResponsiveContainer width="100%" height={height}>
-        <PieChart margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>
+        <PieChart margin={{ top: 10, right: isMobile ? 16 : 30, bottom: 10, left: isMobile ? 16 : 30 }}>
           <Pie
             data={renderData}
             cx="50%"
             cy="50%"
             innerRadius={0}
-            outerRadius={isEmpty ? 80 : 92}
+            outerRadius={isEmpty ? 60 : (isMobile ? 70 : 88)}
             paddingAngle={0}
             dataKey="value"
             labelLine={!isEmpty}
             label={
               isEmpty
                 ? false
-                : ({ name, percent, payload }) => {
-                    const kgText = payload.volumeKg != null ? ` (${formatKgValue(payload.volumeKg)})` : "";
-                    return `${name} ${(percent * 100).toFixed(0)}%${kgText}`;
-                  }
+                : ({ percent }) => `${(percent * 100).toFixed(0)}%`
             }
           >
             {renderData.map((entry, index) => (

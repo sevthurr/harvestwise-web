@@ -22,6 +22,7 @@ export const profitability = {
   "profitability_unavailable_crop": "Profitability information for {crop_name} is not available right now.",
   "profitability_unavailable_generic": "Profitability information is not available right now.",
   title: "Estimated Profit",
+  based_on_seasonal: "Based on historical seasonal price",
   based_on_forecast_market: "Based on forecasted market price",
   based_on_farmgate: "Based on estimated farmgate price",
   forecast_price_reference: "Forecasted price reference",

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -6,9 +6,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Cell,
-  ResponsiveContainer,
-  ReferenceLine
+  ResponsiveContainer
 } from "recharts";
 import {
   TrendingUp,
@@ -318,7 +316,7 @@ const PriceTab = ({
   return (
     <PriceDetailView
       commodityId={commodityId}
-      commodityName={commodityName ?? "this crop"}
+      commodityName={commodityName ?? t("farmer.common.unspecified_crop", {}, "Tanom")}
       showHeading={false}
       cropStage={cropStage}
       plantingDate={plantingDate}
@@ -333,7 +331,19 @@ const PriceTab = ({
 };
 
 
-const ArrivalTab = ({ data, commodityName }) => {
+const ArrivalTab = ({
+  data,
+  commodityId,
+  commodityName,
+  cropStage,
+  plantingDate,
+  expectedHarvestDate,
+  plantingSeason,
+  moduleResults,
+  plantingWindowStart,
+  plantingWindowEnd,
+  plantingWindowLabel,
+}) => {
   const { t } = useLanguage();
   const farmSourceLabel = t("farmer.cropCycle.farm_source", {}, "Farm source");
   const otherSourcesLabel = t("farmer.cropCycle.other_sources", {}, "Other sources");
@@ -368,6 +378,34 @@ const ArrivalTab = ({ data, commodityName }) => {
   const banner = normPressure ? ARRIVAL_PRESSURE_CFG[normPressure] : null;
   const BannerIcon = banner?.Icon;
   const hasData = Boolean(normPressure || showRealChart);
+  const arrivalExplanation = useMemo(() => {
+    const rawText = data?.summary || data?.message || "";
+    const match = rawText.match(/Only (\d+) arrival record/i);
+    const count = match ? match[1] : (data?.records?.length || 0);
+    const isQuartileWithheld = Boolean(match) || rawText.toLowerCase().includes("calculate quartiles") || rawText.toLowerCase().includes("withheld");
+
+    if (isQuartileWithheld) {
+      return t(
+        "farmer.factors.arrival.insufficient_records_explanation",
+        { count },
+        `Aduna pay ${count} ka record sa arrival nga natala sa DFTC. Kinahanglan og labing menos 4 ka record aron makalkula ang average level. Gipakita gihapon ang volume sa ubos apan wala pay opisyal nga classification karon.`
+      );
+    }
+
+    if (data?.currentVolumeKg != null && data?.averageArrivalKg != null) {
+      return t(
+        "farmer.factors.arrival.processed_summary",
+        { current: data.currentVolumeKg.toLocaleString(), average: data.averageArrivalKg.toLocaleString() },
+        `Ang pinakabag-ong natala nga arrival volume kay ${data.currentVolumeKg.toLocaleString()} kg; samtang ang historical average sa miaging mga adlaw kay ${data.averageArrivalKg.toLocaleString()} kg.`
+      );
+    }
+
+    if (banner) {
+      return t(banner.descKey, {}, banner.fallbackDesc);
+    }
+
+    return rawText || t("farmer.empty.no_arrival_data", {}, "DFTC arrival information is not available right now.");
+  }, [data, banner, t]);
   const currentVolume = data?.currentVolumeKg != null && Number.isFinite(Number(data.currentVolumeKg))
     ? Number(data.currentVolumeKg)
     : null;
@@ -380,6 +418,13 @@ const ArrivalTab = ({ data, commodityName }) => {
   ].map((source) => ({ ...source, value: source.volumeKg }))
     .filter((source) => source.volumeKg > 0);
 
+  const chartSubtitle = useMemo(() => {
+    if (data?.dataIsStale) {
+      return t("farmer.cropCycle.arrival_stale_notice", {}, "The latest available arrival records are older than 90 days.");
+    }
+    return t("farmer.factors.arrival.chart_subtitle_actual", {}, "Actual arrivals · kg");
+  }, [data?.dataIsStale, t]);
+
   if (!hasData) {
     return (
       <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
@@ -391,13 +436,13 @@ const ArrivalTab = ({ data, commodityName }) => {
   return (
     <div className="space-y-4">
       {banner && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
-          <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
+        <div className="flex items-start sm:items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-transparent">
+          <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0 mt-0.5 sm:mt-0`} />
           <div>
-            <p className={`text-[15px] font-bold ${banner.color}`}>
+            <p className="text-[14px] sm:text-[15px] font-bold text-black">
               {t(banner.titleKey, {}, banner.fallbackTitle)}
             </p>
-            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
+            <p className="text-[12px] sm:text-[13px] text-black mt-0.5">
               {t(banner.descKey, {}, banner.fallbackDesc)}
             </p>
           </div>
@@ -405,14 +450,14 @@ const ArrivalTab = ({ data, commodityName }) => {
       )}
 
       {showRealChart && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-          <div className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mb-0.5">
-            {commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
-          </div>
-          <div className="text-[12px] text-[var(--hw-neutral-800)] mb-4">
-            {data?.dataIsStale
-              ? t("farmer.cropCycle.arrival_stale_notice", {}, "The latest available arrival records are older than 90 days.")
-              : t("farmer.factors.arrival.chart_subtitle_actual", {}, "Actual arrivals · Last 90 days · kg")}
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
+          <div>
+            <p className="text-[13px] font-bold text-black">
+              {commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
+            </p>
+            <p className="text-[12px] text-black mt-0.5">
+              {chartSubtitle}
+            </p>
           </div>
           <ArrivalVolumeTrendChart
             commodity={commodityName ?? ""}
@@ -423,66 +468,129 @@ const ArrivalTab = ({ data, commodityName }) => {
             referenceValue={averageVolume}
             height={260}
             year={realChartData?.length > 0 ? new Date(realChartData[0].date || realChartData[0].arrival_date).getFullYear() : undefined}
+            cropStage={cropStage}
+            plantingDate={plantingDate}
+            expectedHarvestDate={expectedHarvestDate}
+            plantingWindowStart={plantingWindowStart}
+            plantingWindowEnd={plantingWindowEnd}
           />
+          {(currentVolume != null || averageVolume != null) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
+              {currentVolume != null && (
+                <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                  <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                    {t("farmer.cropCycle.latest_arrival", {}, "Latest arrival")}
+                  </p>
+                  <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
+                    {currentVolume.toLocaleString()} kg
+                  </p>
+                </div>
+              )}
+              {averageVolume != null && (
+                <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                  <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                    {t("farmer.cropCycle.historical_average", {}, "Historical average")}
+                  </p>
+                  <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
+                    {averageVolume.toLocaleString()} kg
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {(currentVolume != null || averageVolume != null) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {currentVolume != null && (
-            <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.latest_arrival", {}, "Latest arrival")}</p>
-              <p className="mt-1 text-[18px] font-bold text-[var(--hw-neutral-900)]">{currentVolume.toLocaleString()} kg</p>
-            </div>
-          )}
-          {averageVolume != null && (
-            <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.historical_average", {}, "Historical average")}</p>
-              <p className="mt-1 text-[18px] font-bold text-[var(--hw-neutral-900)]">{averageVolume.toLocaleString()} kg</p>
-            </div>
-          )}
+      {!showRealChart && (currentVolume != null || averageVolume != null) && (
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+            {currentVolume != null && (
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  {t("farmer.cropCycle.latest_arrival", {}, "Latest arrival")}
+                </p>
+                <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
+                  {currentVolume.toLocaleString()} kg
+                </p>
+              </div>
+            )}
+            {averageVolume != null && (
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  {t("farmer.cropCycle.historical_average", {}, "Historical average")}
+                </p>
+                <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
+                  {averageVolume.toLocaleString()} kg
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {sourceBreakdown.length > 0 && (
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
           <div>
-            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.arrival.source_breakdown_title", {}, "Arrival Volume by Source")}</p>
-            <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.arrival.source_breakdown_subtitle", {}, "DFTC registered farms vs other supplying sources.")}</p>
+            <p className="text-[13px] font-bold text-black">{t("farmer.factors.arrival.source_breakdown_title", {}, "Arrival Volume by Source")}</p>
+            <p className="text-[12px] text-black mt-0.5">{t("farmer.factors.arrival.source_breakdown_subtitle", {}, "DFTC registered farms vs other supplying sources.")}</p>
           </div>
-          <ArrivalSourcePieChart data={sourceBreakdown} height={190} />
+          <ArrivalSourcePieChart data={sourceBreakdown} height={200} />
         </div>
       )}
 
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means", {}, "What this means")}</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {data?.summary || (banner ? t(banner.descKey, {}, banner.fallbackDesc) : t("farmer.empty.no_arrival_data", {}, "DFTC arrival information is not available right now."))}
+      <div className="bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-1.5">
+        <p className="text-[12px] font-bold text-black uppercase tracking-wide">{t("farmer.common.what_this_means", {}, "What this means")}</p>
+        <p className="text-[13px] text-black leading-relaxed">
+          {arrivalExplanation}
         </p>
       </div>
     </div>
   );
 };
 
+const HARVEST_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
+
 const ProductionTab = ({ data, commodityName }) => {
   const { t } = useLanguage();
+  const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
-  const selectedProfile = profiles.find((profile) => profile.quarter === data?.selectedQuarter);
+  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(currentQuarter);
+  const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter));
   const normLevel = normalizeProductionLevel(selectedProfile?.classification || data?.productionLevel);
   const banner = normLevel ? PRODUCTION_BANNER_CFG[normLevel] : null;
   const LevelIcon = banner?.Icon;
+  const historicalData = useMemo(() => {
+    const byYear = new Map();
+    (Array.isArray(data?.records) ? data.records : []).forEach((record) => {
+      const year = Number(record.reference_year);
+      const quarter = record.reference_quarter;
+      const volume = Number(record.volume_produced);
+      if (!Number.isFinite(year) || !HARVEST_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return;
+      const row = byYear.get(year) || { year };
+      row[quarter] = (row[quarter] || 0) + volume;
+      byYear.set(year, row);
+    });
+    return [...byYear.values()].sort((a, b) => a.year - b.year);
+  }, [data?.records]);
 
-  const quarterlyData = useMemo(() => {
-    return profiles
-      .filter((profile) => Number(profile.years_available) > 0)
-      .map((profile) => ({
-        quarter: profile.quarter,
-        production: Number(profile.average_production_mt),
-        classification: profile.classification,
-      }));
-  }, [profiles]);
+  const chartQuarters = activeHarvestQuarter ? [activeHarvestQuarter] : HARVEST_QUARTERS;
+  const chartData = historicalData.length > 0
+    ? historicalData
+    : profiles.filter((profile) => Number(profile.years_available) > 0).map((profile) => ({
+      year: profile.quarter,
+      [profile.quarter]: Number(profile.average_production_mt),
+    }));
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
 
-  const hasData = quarterlyData.length > 0;
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const hasData = chartData.length > 0;
   const historicalAverage = data?.grandAverageQuarterlyMt != null
     && Number.isFinite(Number(data.grandAverageQuarterlyMt))
     ? Number(data.grandAverageQuarterlyMt)
@@ -498,7 +606,6 @@ const ProductionTab = ({ data, commodityName }) => {
   const productionDifferencePct = productionDifference != null && historicalAverage > 0
     ? (productionDifference / historicalAverage) * 100
     : null;
-  const selectedQuarterIndex = quarterlyData.findIndex((profile) => profile.quarter === data?.selectedQuarter);
   const levelColor = (classification) => {
     const level = normalizeProductionLevel(classification);
     if (level === "high") return "#ef4444";
@@ -508,132 +615,137 @@ const ProductionTab = ({ data, commodityName }) => {
 
   if (!hasData) {
     return (
-      <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
+      <div className="flex items-center justify-center p-8 bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-black font-medium">
         {t("farmer.empty.no_production_data", {}, "Production data not available")}
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 sm:space-y-5">
       {banner && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
-          <LevelIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
+        <div className="flex items-start sm:items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-transparent">
+          <LevelIcon className={`w-5 h-5 ${banner.color} flex-shrink-0 mt-0.5 sm:mt-0`} />
           <div>
-            <p className={`text-[15px] font-bold ${banner.color}`}>
+            <p className="text-[14px] sm:text-[15px] font-bold text-black">
               {t(banner.titleKey, {}, banner.fallbackTitle)}
             </p>
-            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
-              {t(banner.descKey, {}, banner.fallbackDesc)}
+            <p className="text-[12px] sm:text-[13px] text-black mt-0.5">
+              {t(banner.descKey, { name: commodityName || data?.commodityName || t("common.crop", {}, "tanom") }, banner.fallbackDesc)}
             </p>
           </div>
         </div>
       )}
 
-      <div>
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] mb-2">
-          {t("farmer.factors.production.typical_quarterly_title", {}, "Typical Quarterly Production Volume (PSA Data · Q1–Q4)")}
-        </p>
-        {data?.dataSource && (
-          <p className="text-[11px] text-[var(--hw-neutral-500)] mb-2">
-            {t("farmer.factors.production.source_variety_note", {}, "PSA reports production by crop name. Series shown for")}{" "}
-            {data.dataSource.name}{data.dataSource.variety ? ` (${data.dataSource.variety})` : ""}.
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
+        <div>
+          <p className="text-[13px] font-bold text-black">
+            {t("farmer.factors.production.typical_quarterly_title", {}, "Typical Quarterly Production Volume (PSA Data · Q1–Q4)")}
           </p>
-        )}
-        {quarterlyData.length > 0 ? (
-          <>
-            <ResponsiveContainer width="100%" height={175}>
-              <BarChart data={quarterlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={32}>
+        </div>
+        {chartData.length > 0 ? (
+          <div
+            style={{ touchAction: "pan-y" }}
+            className="w-full space-y-1"
+          >
+            <div className="flex flex-wrap items-center gap-2 mb-3" aria-label="Harvest Season">
+              <span className="text-[12px] font-semibold text-black mr-1">Harvest Season</span>
+              {HARVEST_QUARTERS.map((quarter) => (
+                <button
+                  key={quarter}
+                  type="button"
+                  aria-pressed={activeHarvestQuarter === quarter}
+                  onClick={() => setActiveHarvestQuarter((current) => current === quarter ? null : quarter)}
+                  className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-colors ${activeHarvestQuarter === quarter
+                    ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
+                    : "bg-white border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] hover:border-[var(--hw-green-500)]"}`}
+                >
+                  {quarter}
+                </button>
+              ))}
+            </div>
+            <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
+              <div style={{ minWidth: isMobile ? Math.max(560, chartData.length * 56) : "100%" }}>
+                <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barSize={28}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: "#1f2937" }} tickLine={false} axisLine={false} />
+                <XAxis dataKey="year" tick={{ fontSize: 11, fill: "#000000" }} tickLine={false} axisLine={false} />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  tick={{ fontSize: 10, fill: "#000000" }}
                   tickLine={false}
                   axisLine={false}
                   width={52}
                   tickFormatter={(value) => `${Number(value).toLocaleString()} MT`}
                 />
-                <Tooltip
-                  formatter={(value, _name, item) => [
-                    `${Number(value).toLocaleString()} MT · ${t(
-                      `farmer.factors.production.level_${normalizeProductionLevel(item.payload.classification)}`,
-                      {},
-                      item.payload.classification
-                    )}`,
-                    t("farmer.factors.production.factor_title", {}, "Average production"),
-                  ]}
+                <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()} MT`, name]} 
                   contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb", fontSize: 12 }}
                 />
-                {historicalAverage != null && (
-                  <ReferenceLine
-                    y={historicalAverage}
-                    stroke="#64748b"
-                    strokeDasharray="4 4"
-                    label={t("farmer.cropCycle.historical_average_reference_line", {}, "Historical average")}
-                  />
-                )}
-                <Bar dataKey="production" radius={[4, 4, 0, 0]}>
-                  {quarterlyData.map((entry, index) => (
-                    <Cell
-                      key={entry.quarter}
-                      fill={levelColor(entry.classification)}
-                      opacity={index === selectedQuarterIndex ? 1 : 0.55}
-                    />
-                  ))}
-                </Bar>
+                {chartQuarters.map((quarter) => {
+                  const profile = profiles.find((item) => item.quarter === quarter);
+                  return <Bar key={quarter} dataKey={quarter} name={quarter} fill={levelColor(profile?.classification)} radius={[4, 4, 0, 0]} />;
+                })}
               </BarChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-4 mt-1 justify-center text-[11px] text-[var(--hw-neutral-900)]">
-              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500 inline-block" /><span>{t("farmer.factors.arrival.level_low", {}, "Low")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /><span>{t("farmer.factors.arrival.level_lower_middle", {}, "Moderate")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400 inline-block" /><span>{t("farmer.factors.arrival.level_high", {}, "High")}</span></div>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-              <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.historical_seasonal_average", {}, "Historical seasonal average")}</p>
-                <p className="mt-1 text-[16px] font-bold text-[var(--hw-neutral-900)]">
+            <div className="flex items-center gap-4 mt-2 justify-center text-[11px] text-black">
+              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /><span>{t("farmer.factors.arrival.level_low", {}, "Low")}</span></div>
+              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /><span>{t("farmer.factors.arrival.level_lower_middle", {}, "Moderate")}</span></div>
+              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /><span>{t("farmer.factors.arrival.level_high", {}, "High")}</span></div>
+            </div>
+            <p className="text-center text-[10px] text-black mt-1">
+              Across all available years · click the selected quarter again to show Q1–Q4
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5 mt-3">
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  {t("farmer.cropCycle.historical_seasonal_average", {}, "Historical Average nga Produksyon")}
+                </p>
+                <p className="sm:mt-1 text-[14px] sm:text-[15px] md:text-[16px] font-bold text-black leading-tight">
                   {historicalAverage == null ? "—" : `${historicalAverage.toLocaleString()} MT`}
                 </p>
               </div>
-              <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">
-                  {t("farmer.cropCycle.selected_season_level", { quarter: data?.selectedQuarter || "" }, `${data?.selectedQuarter || "Selected"} season level`)}
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  {t("farmer.cropCycle.selected_season_level", { quarter: activeHarvestQuarter || "" }, `Produksyon sa ${activeHarvestQuarter || ""}`)}
                 </p>
-                <p className="mt-1 text-[16px] font-bold text-[var(--hw-neutral-900)]">
+                <p className="sm:mt-1 text-[14px] sm:text-[15px] md:text-[16px] font-bold text-black leading-tight">
                   {selectedProduction == null ? "—" : `${selectedProduction.toLocaleString()} MT`}
                 </p>
               </div>
-              <div className="rounded-xl bg-[var(--hw-neutral-50)] p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.difference_from_average", {}, "Difference from average")}</p>
-                <p className="mt-1 text-[16px] font-bold text-[var(--hw-neutral-900)]">
+              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
+                  {t("farmer.cropCycle.difference_from_average", {}, "Kalainan sa Historical Average")}
+                </p>
+                <p className="sm:mt-1 text-[14px] sm:text-[15px] md:text-[16px] font-bold text-black leading-tight">
                   {productionDifference == null
                     ? "—"
                     : `${productionDifference > 0 ? "+" : ""}${productionDifference.toLocaleString()} MT${productionDifferencePct == null ? "" : ` (${productionDifferencePct > 0 ? "+" : ""}${productionDifferencePct.toFixed(1)}%)`}`}
                 </p>
               </div>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="flex items-center justify-center h-[175px] bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-[var(--hw-neutral-500)] font-medium">
+          <div className="flex items-center justify-center h-[175px] bg-[var(--hw-neutral-50)] rounded-xl border border-dashed border-[var(--hw-neutral-200)] text-[13px] text-black font-medium">
             {t("farmer.empty.no_production_data", {}, "Production data not available")}
           </div>
         )}
       </div>
 
       {data?.sources && data.sources.length > 0 && (
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 sm:p-5 space-y-3">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
           <div>
-            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.production.major_sources_title", {}, "Major Production Sources")}</p>
-            <p className="text-[12px] text-[var(--hw-neutral-600)]">{t("farmer.factors.production.major_sources_subtitle", {}, "Production volume distribution across Davao City, Davao Del Sur, and Bukidnon.")}</p>
+            <p className="text-[13px] font-bold text-black">{t("farmer.factors.production.major_sources_title", {}, "Pangunang mga Source sa Produksyon")}</p>
+            <p className="text-[12px] text-black mt-0.5">{t("farmer.factors.production.major_sources_subtitle", {}, "Bahin sa volume sa produksyon gikan sa Davao City, Davao Del Sur, ug Bukidnon.")}</p>
           </div>
-          <ProductionSourcePieChart data={data.sources} height={280} />
+          <ProductionSourcePieChart data={data.sources} height={260} />
         </div>
       )}
 
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means", {}, "What this means")}</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">
-          {data?.summary || (banner ? t(banner.descKey, { name: commodityName || data?.commodityName || "this crop" }, banner.fallbackDesc) : t("farmer.empty.no_production_data", {}, "Production data not available"))}
+      <div className="bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-1.5">
+        <p className="text-[12px] font-bold text-black uppercase tracking-wide">{t("farmer.common.what_this_means", {}, "What this means")}</p>
+        <p className="text-[13px] text-black leading-relaxed">
+          {data?.summary || (banner ? t(banner.descKey, { name: commodityName || data?.commodityName || t("farmer.common.unspecified_crop", {}, "kini nga tanom") }, banner.fallbackDesc) : t("farmer.empty.no_production_data", {}, "Production data not available"))}
         </p>
       </div>
     </div>
@@ -693,25 +805,25 @@ const WeatherTab = ({ data, commodityName }) => {
       : (currentLang === "ceb" ? `Paborable ang kahimtang sa panahon alang sa ${defaultCropName}` : currentLang === "tl" ? `Maganda ang kondisyon ng panahon para sa ${defaultCropName}` : `Suitable weather conditions for ${defaultCropName}`));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 sm:space-y-5">
       <WeatherLocationBanner />
       {banner && (
-        <div className={`rounded-xl border px-4 py-3 ${banner.bg} ${banner.border}`}>
-          <div className={`flex items-start gap-2 ${banner.color}`}>
-            <RiskIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="rounded-xl border border-[var(--hw-neutral-200)] bg-transparent px-4 py-3">
+          <div className="flex items-start gap-2.5">
+            <RiskIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${banner.color}`} />
             <div>
-              <p className={`text-[14px] font-bold ${banner.color}`}>
+              <p className="text-[14px] sm:text-[15px] font-bold text-black">
                 {t(banner.titleKey, {}, banner.fallback)}
               </p>
               {data?.riskHeadline && (
-                <p className="text-[13px] text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
+                <p className="text-[12px] sm:text-[13px] text-black mt-0.5 leading-snug">
                   {data.riskHeadline}
                 </p>
               )}
             </div>
           </div>
           {data?.plantingWindow && (
-            <p className="text-[12px] text-[var(--hw-neutral-900)] mt-2 font-medium">
+            <p className="text-[12px] text-black mt-2 font-medium">
               {t("farmer.factors.weather.planting_window_prefix", {}, "Planting window: ")}{data.plantingWindow}
             </p>
           )}
@@ -729,8 +841,8 @@ const WeatherTab = ({ data, commodityName }) => {
       />
 
       {/* ── 3. Crop-specific advisory section (strictly for this single commodity) ── */}
-      <section className="space-y-3 pt-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+      <section className="space-y-3 pt-3 sm:pt-4">
+        <p className="text-[13px] font-bold text-black uppercase tracking-wide">
           {t("farmer.factors.weather.crop_advisories_title")}
         </p>
         <CropWeatherCard
@@ -754,8 +866,8 @@ const WeatherTab = ({ data, commodityName }) => {
       </section>
 
       {/* ── 4. Notes ── */}
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3">
-        <p className="text-[11px] text-[var(--hw-neutral-900)] italic">
+      <div className="bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
+        <p className="text-[12px] text-black leading-relaxed italic">
           {t("farmer.factors.weather.source_open_meteo_notice")}
         </p>
       </div>
@@ -797,13 +909,13 @@ const ProfitabilityTab = ({ data }) => {
   return (
     <div className="space-y-4">
       {/* Classification banner */}
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${banner.bg} ${banner.border}`}>
-        <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0`} />
+      <div className="flex items-start sm:items-center gap-3 px-4 py-3 rounded-xl border border-[var(--hw-neutral-200)] bg-transparent">
+        <BannerIcon className={`w-5 h-5 ${banner.color} flex-shrink-0 mt-0.5 sm:mt-0`} />
         <div>
-          <p className={`text-[15px] font-bold ${banner.color}`}>
+          <p className="text-[14px] sm:text-[15px] font-bold text-black">
             {t(banner.titleKey, {}, banner.fallbackTitle)}
           </p>
-          <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
+          <p className="text-[12px] sm:text-[13px] text-black mt-0.5">
             {t(banner.descKey, {}, banner.fallbackDesc)}
           </p>
         </div>
@@ -825,7 +937,7 @@ const ProfitabilityTab = ({ data }) => {
           <p className="text-[18px] font-bold text-[var(--hw-neutral-900)]">₱{data.sellingPricePerKg}</p>
           <p className="text-[10px] text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.per_kg", {}, "per kg")}</p>
         </div>
-        <div className={`rounded-xl p-3 text-center border ${isProfit ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+        <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 text-center">
           <p className="text-[10px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide mb-1">
             {isProfit ? t("farmer.factors.profitability.profit_label", {}, "Profit") : t("farmer.factors.profitability.loss_label", {}, "Loss")}
           </p>
@@ -878,20 +990,20 @@ const ProfitabilityTab = ({ data }) => {
 
       {/* Detailed Cost Breakdown Pie Chart */}
       {data.expenses && data.expenses.length > 0 && (
-        <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] p-4 space-y-2">
+        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
           <div>
-            <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.detailed_cost_breakdown_title", {}, "Detailed Cost Breakdown")}</p>
-            <p className="text-[11px] text-[var(--hw-neutral-600)]">{t("farmer.factors.profitability.detailed_cost_breakdown_subtitle", {}, "Itemized expenses entered for this planting cycle.")}</p>
+            <p className="text-[13px] font-bold text-black">{t("farmer.factors.profitability.detailed_cost_breakdown_title", {}, "Detailed Cost Breakdown")}</p>
+            <p className="text-[12px] text-black mt-0.5">{t("farmer.factors.profitability.detailed_cost_breakdown_subtitle", {}, "Itemized expenses entered for this planting cycle.")}</p>
           </div>
           <CostBreakdownPieChart expenses={data.expenses} height={200} />
         </div>
       )}
 
       {/* Summary */}
-      <div className="bg-[var(--hw-neutral-50)] rounded-xl p-3 space-y-1">
-        <p className="text-[12px] font-semibold text-[var(--hw-neutral-900)]">{t("farmer.common.what_this_means", {}, "What this means")}</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed">{data.summary || t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may vary.")}</p>
-        <p className="text-[11px] text-[var(--hw-neutral-900)] italic mt-1">{t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may vary.")}</p>
+      <div className="bg-[var(--hw-neutral-50)] rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-1.5">
+        <p className="text-[12px] font-bold text-black uppercase tracking-wide">{t("farmer.common.what_this_means", {}, "What this means")}</p>
+        <p className="text-[13px] text-black leading-relaxed">{data.summary || t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may vary.")}</p>
+        <p className="text-[11px] text-black italic">{t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may vary.")}</p>
       </div>
     </div>
   );
@@ -930,31 +1042,34 @@ const FactorDetailTabs = ({
   const safeTab = visibleTabs.some((tab) => tab.id === activeTab) ? activeTab : visibleTabs[0].id;
 
   return (
-    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+    <div className="space-y-4">
       {/* Tab bar */}
-      <div className="flex overflow-x-auto border-b border-[var(--hw-neutral-200)]" style={{ scrollbarWidth: "none" }}>
-        {visibleTabs.map((tab) => {
-          const Icon = tab.Icon;
-          const isActive = safeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-[13px] font-medium border-b-2 flex-shrink-0 transition-colors ${
-                isActive
-                  ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] bg-[var(--hw-green-50)]"
-                  : "border-transparent text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{t(tab.labelKey, {}, tab.fallback)}</span>
-            </button>
-          );
-        })}
+      <div className="bg-white rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="flex w-full overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {visibleTabs.map((tab) => {
+            const Icon = tab.Icon;
+            const isActive = safeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                title={t(tab.labelKey, {}, tab.fallback)}
+                className={`flex-auto min-w-fit flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 xs:px-2.5 sm:px-4 py-2 sm:py-2.5 text-[11px] xs:text-[12px] sm:text-[13px] md:text-[14px] font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  isActive
+                    ? "border-[var(--hw-green-700)] text-[var(--hw-green-700)] bg-[var(--hw-green-50)]"
+                    : "border-transparent text-black hover:bg-[var(--hw-neutral-50)]"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="whitespace-nowrap shrink-0">{t(tab.labelKey, {}, tab.fallback)}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="p-4">
+      {/* Tab content directly in the main container */}
+      <div className="w-full">
         {safeTab === "price" && (
           <PriceTab
             commodityId={commodityId}
@@ -969,7 +1084,21 @@ const FactorDetailTabs = ({
             plantingWindowLabel={plantingWindowLabel}
           />
         )}
-        {safeTab === "arrival" && <ArrivalTab data={arrival} commodityId={commodityId} commodityName={commodityName ?? weather?.cropName} />}
+        {safeTab === "arrival" && (
+          <ArrivalTab
+            data={arrival}
+            commodityId={commodityId}
+            commodityName={commodityName ?? weather?.cropName}
+            cropStage={cropStage}
+            plantingDate={plantingDate}
+            expectedHarvestDate={expectedHarvestDate}
+            plantingSeason={plantingSeason}
+            moduleResults={moduleResults}
+            plantingWindowStart={plantingWindowStart}
+            plantingWindowEnd={plantingWindowEnd}
+            plantingWindowLabel={plantingWindowLabel}
+          />
+        )}
         {safeTab === "production" && <ProductionTab data={production} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "profitability" && profitability && <ProfitabilityTab data={profitability} />}

@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { get, set, del } from "idb-keyval";
+import { get, set, del, clear } from "idb-keyval";
 
 // 7-day cache for offline-first farming use
 const SEVEN_DAYS = 1000 * 60 * 60 * 24 * 7;
@@ -21,7 +21,20 @@ const SEVEN_DAYS = 1000 * 60 * 60 * 24 * 7;
 export function shouldRetry(failureCount, error) {
   const status = error?.status;
   if (typeof status === 'number' && status >= 400 && status < 500) return false;
+  // A network-level failure (no HTTP status — the request never reached the
+  // server) while the browser is offline cannot succeed on a retry: the
+  // service worker has already answered from its runtime cache, or there was
+  // nothing to answer with. Retrying only delays the error by the backoff.
+  if (typeof status !== 'number' && isBrowserOffline()) return false;
   return failureCount < 3;
+}
+
+/**
+ * True only when the browser reports being offline. `navigator` is absent in
+ * non-browser environments (tests, SSR), where offline is not a thing.
+ */
+function isBrowserOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 export const queryClient = new QueryClient({
@@ -30,6 +43,15 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 30,        // 30 min before data is considered stale
       gcTime: SEVEN_DAYS,                // keep in memory for 7 days
       retry: shouldRetry,
+      // The offline layer is the service worker: vite.config.js caches every
+      // /api/v1/ GET under NetworkFirst for 7 days. React Query's default
+      // networkMode ('online') refuses to issue the request at all while the
+      // browser reports offline, so the service worker is never consulted and
+      // its cached response can never be read. 'always' lets the request go
+      // out so the service worker can answer it from cache.
+      // Mutations keep the default, so a half-written save is never attempted
+      // while offline.
+      networkMode: 'always',
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,           // refresh when farmer comes back online
       refetchOnMount: false,
@@ -67,12 +89,21 @@ const API_RUNTIME_CACHE = 'harvestwise-api-cache';
  * body is already on disk and the service worker replays it without consulting
  * any credential.
  */
-export async function clearQueryPersistedCache() {
-  // resetQueries(), NOT clear(). clear()/removeQueries() destroy the Query
-  // object a mounted observer is attached to; the observer then re-attaches to
-  // an empty, never-fetched query and isLoading stays true forever. resetQueries
-  // refetches active queries so every mounted observer settles.
-  queryClient.resetQueries();
+export async function clearQueryPersistedCache({ refetchActive = true } = {}) {
+  // Forced auth expiry keeps the mounted query observers alive and refetches
+  // them so they settle. Intentional logout/session changes pass
+  // refetchActive:false and cancel/clear instead; refetching during an offline
+  // route transition can wake queries when connectivity returns and leave a
+  // blank loading state.
+  if (refetchActive) {
+    queryClient.resetQueries();
+  } else {
+    // Logout/session changes are terminal for the mounted user. Refetching
+    // active queries here can wake them when connectivity returns, during the
+    // route transition to /login, and leave the app in a blank loading state.
+    queryClient.cancelQueries();
+    queryClient.clear();
+  }
   try {
     await del("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
   } catch {
@@ -85,5 +116,25 @@ export async function clearQueryPersistedCache() {
   } catch {
     // CacheStorage unavailable (private mode / older browser) — not fatal.
   }
+}
+
+/** Remove all HarvestWise device copies, including non-React-Query caches. */
+export async function clearDeviceData() {
+  // Rotate the cache namespace first so an in-flight response cannot refill a
+  // cache entry that this action just removed.
+  try { localStorage.setItem('hw_session_generation', `${Date.now()}-${Math.random()}`); } catch {}
+  await clearQueryPersistedCache({ refetchActive: false });
+  try { await clear(); } catch {}
+  try {
+    if (typeof caches !== 'undefined') {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    }
+  } catch {}
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('HARVESTWISE_') || key.startsWith('hw_'))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {}
 }
 

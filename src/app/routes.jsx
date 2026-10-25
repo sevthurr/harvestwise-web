@@ -7,6 +7,8 @@ import { roleHome, useAuth } from "./global/contexts/AuthContext";
 import { RouteErrorElement } from "./global/components/RouteError";
 import LoginPage from "./auth/LoginPage";
 import RegisterPage from "./auth/RegisterPage";
+import ForgotPasswordPage from "./auth/ForgotPasswordPage";
+import ResetPasswordPage from "./auth/ResetPasswordPage";
 import OnboardingPage from "./auth/OnboardingPage";
 import DashboardPage from "./farmer/pages/Dashboard";
 import PricesPage from "./farmer/pages/Prices";
@@ -110,6 +112,8 @@ export const router = createBrowserRouter([
   { path: "/", element: <SmartRedirect />, errorElement: <RouteErrorElement /> },
   { path: "/login", element: <SmartRedirect fallback={<LoginPage />} />, errorElement: <RouteErrorElement /> },
   { path: "/register",   element: <RegisterPage />, errorElement: <RouteErrorElement /> },
+  { path: "/forgot-password", element: <ForgotPasswordPage />, errorElement: <RouteErrorElement /> },
+  { path: "/reset-password", element: <ResetPasswordPage />, errorElement: <RouteErrorElement /> },
   { path: "/onboarding", element: <OnboardingPage />, errorElement: <RouteErrorElement /> },
   { path: "/privacy",    element: <PrivacyPolicyPage />, errorElement: <RouteErrorElement /> },
   { path: "/terms",      element: <TermsPage />, errorElement: <RouteErrorElement /> },

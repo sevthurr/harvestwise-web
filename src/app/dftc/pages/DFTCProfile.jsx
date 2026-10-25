@@ -46,7 +46,7 @@ function DFTCProfile() {
   const firstName = staff.first_name || user?.first_name || "";
   const lastName = staff.last_name || user?.last_name || "";
   const middleName = staff.middle_name || null;
-  const suffix = staff.suffix || null;
+  const suffix = staff.suffix || user?.suffix || null;
 
   const fullName = [firstName, middleName, lastName, suffix].filter(Boolean).join(" ") || user?.name || user?.username || "—";
 
@@ -65,7 +65,7 @@ function DFTCProfile() {
 
   if (isLoading && !user) {
     return (
-      <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+      <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
         <PageHeader title="Profile" description="Your account and submission overview." />
         <Card>
           <div className="py-12 text-center">
@@ -78,7 +78,7 @@ function DFTCProfile() {
   }
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
       <PageHeader
         title="Profile"
         description="Your account and submission overview."

@@ -28,6 +28,9 @@ export const commodityDetail = {
   btn_view_another: "Tingnan ang ibang pananim",
   not_available: "Hindi available ang mga detalye ng presyo.",
   back_to_prices: "Bumalik sa mga Presyo",
+  offline_notice: "Offline ka — hindi pa naka-save ang presyong ito sa iyong device.",
+  load_failed: "Hindi namin ma-load ang presyong ito. Suriin ang iyong koneksyon at subukan muli.",
+  btn_retry: "Subukan muli",
   price_trend_details: "Detalye ng Galaw ng Presyo",
   assess_crop_btn: "Suriin ang pananim na ito",
   select_variety: "Pumili ng barayti"

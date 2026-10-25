@@ -14,7 +14,7 @@ const CropsContext = createContext(null);
  * day for viewers at or west of UTC — so a plan dated the 27th would display as
  * the 26th. See parseLocalDate.
  */
-function formatLocalDate(isoDate) {
+export function formatLocalDate(isoDate) {
   const parsed = parseLocalDate(isoDate);
   if (!parsed) return null;
   return parsed.toLocaleDateString("en-US", {
@@ -45,14 +45,35 @@ export function normalizeCropPlan(raw, pricesMap) {
   const variant = commodity.variety || item.variety || item.variant || null;
   const commodityId = item.commodityId || commodity.id || (typeof item.commodity === "string" ? item.commodity : "") || "";
 
-  const productionCosts = Array.isArray(item.productionCosts) ? item.productionCosts : [];
-  const totalCost = productionCosts.length > 0
-    ? productionCosts.reduce((sum, c) => sum + Number(c.amount || 0), 0)
-    : Number(item.productionCost || item.totalCost || 0);
+  const rawProductionCosts = Array.isArray(item.productionCosts) ? item.productionCosts : [];
+  const productionCosts = rawProductionCosts.map((c, i) => ({
+    id: c.id || String(i + 1),
+    cropPlanId: c.cropPlanId || item.id,
+    category: c.category || "Additional",
+    amount: Number(c.amount || 0),
+    costType: c.costType || c.cost_type || "initial",
+    createdAt: c.createdAt || c.created_at || null,
+  }));
+
+  const initialCostsList = productionCosts.filter((c) => c.costType !== "additional");
+  const additionalCostsList = productionCosts.filter((c) => c.costType === "additional");
+
+  const addedCosts = additionalCostsList.reduce((sum, c) => sum + c.amount, 0);
+
+  let initialCost = 0;
+  if (initialCostsList.length > 0) {
+    initialCost = initialCostsList.reduce((sum, c) => sum + c.amount, 0);
+  } else if (productionCosts.length > 0) {
+    initialCost = Math.max(0, productionCosts.reduce((sum, c) => sum + c.amount, 0) - addedCosts);
+  } else {
+    initialCost = Number(item.productionCost || item.totalCost || 0);
+  }
+
+  const totalCost = initialCost + addedCosts;
 
   const costMethod = item.costEntryMode === "detailed" ? "detailed" : "simple";
   const expenses = (productionCosts || []).map((c, i) => ({
-    id: String(i + 1),
+    id: c.id || String(i + 1),
     name: c.category || "Additional",
     amount: Number(c.amount || 0),
     isCustom: true,
@@ -65,14 +86,33 @@ export function normalizeCropPlan(raw, pricesMap) {
     : (item.breakevenPricePerKg != null ? Number(item.breakevenPricePerKg) : (item.breakEvenPrice != null ? Number(item.breakEvenPrice) : null));
 
   const harvestRecords = Array.isArray(item.harvestRecords) ? item.harvestRecords : [];
-  const latestHarvest = harvestRecords[0] || null;
-  const actualHarvestQty = latestHarvest
-    ? Number(latestHarvest.actualHarvestQty)
+  const sortedHarvestRecords = [...harvestRecords].sort((a, b) => {
+    const dateDifference = String(b.actualHarvestDate || "").localeCompare(String(a.actualHarvestDate || ""));
+    if (dateDifference !== 0) return dateDifference;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+  const latestHarvest = sortedHarvestRecords[0] || null;
+  const actualHarvestQty = sortedHarvestRecords.length > 0
+    ? sortedHarvestRecords.reduce((sum, record) => sum + Number(record.actualHarvestQty || 0), 0)
     : item.actualHarvestQty != null
       ? Number(item.actualHarvestQty)
       : null;
-  const actualSellingPrice = latestHarvest
-    ? Number(latestHarvest.actualSellingPricePerKg)
+  const pricedHarvestQty = sortedHarvestRecords.reduce(
+    (sum, record) => sum + (record.actualSellingPricePerKg != null ? Number(record.actualHarvestQty || 0) : 0),
+    0
+  );
+  const actualHarvestRevenue = sortedHarvestRecords.reduce(
+    (sum, record) => sum + (
+      record.actualSellingPricePerKg != null
+        ? Number(record.actualHarvestQty || 0) * Number(record.actualSellingPricePerKg)
+        : 0
+    ),
+    0
+  );
+  const actualSellingPrice = pricedHarvestQty > 0
+    ? actualHarvestRevenue / pricedHarvestQty
+    : latestHarvest
+      ? Number(latestHarvest.actualSellingPricePerKg)
     : item.actualSellingPrice != null
       ? Number(item.actualSellingPrice)
       : null;
@@ -122,16 +162,20 @@ export function normalizeCropPlan(raw, pricesMap) {
     farmAreaUnit: "sqm",
     harvestQuantity: qty,
     expectedHarvestQty: qty,
-    harvestRecords,
+    harvestRecords: sortedHarvestRecords,
     actualHarvestDate: latestHarvest
-      ? new Date(latestHarvest.actualHarvestDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      ? formatLocalDate(latestHarvest.actualHarvestDate)
       : item.actualHarvestDate || null,
     actualHarvestQty,
+    actualHarvestRevenue: sortedHarvestRecords.length > 0 ? actualHarvestRevenue : null,
     actualSellingPrice,
     costMethod,
     expenses,
     farmgatePrice,
     totalCost,
+    initialCost,
+    addedCosts,
+    productionCosts,
     productionCost: totalCost,
     breakEvenPrice: breakEven,
     breakevenPricePerKg: breakEven,
@@ -146,6 +190,9 @@ export function normalizeCropPlan(raw, pricesMap) {
         : rawStatus === "On Hold"
           ? "Resume when market conditions improve"
           : item.nextMilestone || null,
+    advisoryCategory: item.advisoryCategory || item.advisory || item.advisory_category || null,
+    advisory: item.advisory || item.advisoryCategory || item.advisory_category || null,
+    notes: item.notes || (Array.isArray(item.cropCalendarEntries) ? item.cropCalendarEntries.find((e) => e.notes)?.notes : null) || null,
     lastUpdated: item.updatedAt
       ? new Date(item.updatedAt).toLocaleString("en-US", {
           month: "short",
@@ -196,6 +243,17 @@ const CropsProvider = ({ children }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  // Crop plans are per-farmer data: GET /crop-plans answers with the caller's
+  // own plans and rejects every role outside (SuperAdmin, Farmer).
+  //
+  // The gate is the ROLE, not the presence of a session. This provider is
+  // mounted above the router, so it also runs on /login and in the admin and
+  // DFTC workspaces. Gating on "is there a user" stopped the pre-login 401 but
+  // still fired GET /crop-plans for every logged-in role — a guaranteed 403 for
+  // DFTC and an out-of-scope read for admin, which gets the active-plan count
+  // from the admin dashboard KPI instead.
+  const isFarmerSession = (user?.role?.role_name || "").toLowerCase() === "farmer";
+
   const { data: crops = [], isLoading: loading } = useQuery({
     queryKey: ["farmer", "crops"],
     queryFn: async () => {
@@ -211,9 +269,10 @@ const CropsProvider = ({ children }) => {
       return transformCropItems(rawItems, pricesMap);
     },
     // This provider is mounted above the router, so it runs on /login too.
-    // Without a session the request is a guaranteed 401; gating on the user
-    // keeps it at 0 requests until login and auto-fetches once enabled flips.
-    enabled: Boolean(user?.id),
+    // Without a farmer session the request is a guaranteed 401/403; gating on
+    // the role keeps it at 0 requests until a farmer signs in and auto-fetches
+    // once enabled flips.
+    enabled: isFarmerSession,
     staleTime: 1000 * 60 * 30,
     refetchOnMount: true,
   });
@@ -240,23 +299,72 @@ const CropsProvider = ({ children }) => {
   }, [queryClient]);
 
   const addCostApi = useCallback(
-    async (planId, { category, amount, costType = "additional" }) => {
+    async (planId, { category = "Additional", amount, costType = "additional" }) => {
       const res = await apiPost(`/crop-plans/${planId}/costs`, {
-        category,
+        category: category || "Additional",
         amount,
         cost_type: costType,
       });
       const data = await parseResponse(res);
+      const newCost = toCamelCase(data);
+      queryClient.setQueryData(["farmer", "crops"], (old) => {
+        if (!old) return old;
+        return old.map((c) => {
+          if (c.id !== planId) return c;
+          const costItem = {
+            id: newCost.id || `PDC-tmp-${Date.now()}`,
+            cropPlanId: planId,
+            category: newCost.category || category || "Additional",
+            amount: Number(newCost.amount || amount || 0),
+            costType: newCost.costType || costType,
+            createdAt: newCost.createdAt || new Date().toISOString(),
+          };
+          const updatedCosts = [...(c.productionCosts || []), costItem];
+          const newAddedCosts = (c.addedCosts || 0) + Number(costItem.amount || 0);
+          const initial = c.initialCost != null ? c.initialCost : Math.max(0, (c.totalCost || 0) - (c.addedCosts || 0));
+          const newTotal = initial + newAddedCosts;
+          const qty = c.harvestQuantity || c.expectedHarvestQty || 1;
+          const newBreakEven = qty > 0 ? Math.ceil(newTotal / qty) : c.breakEvenPrice;
+          return {
+            ...c,
+            productionCosts: updatedCosts,
+            initialCost: initial,
+            addedCosts: newAddedCosts,
+            totalCost: newTotal,
+            productionCost: newTotal,
+            breakEvenPrice: newBreakEven,
+            breakevenPricePerKg: newBreakEven,
+          };
+        });
+      });
       await refreshCrops();
       return data;
     },
-    [refreshCrops]
+    [queryClient, refreshCrops]
   );
 
   const updateCropStatusApi = useCallback(
-    async (planId, targetStatus, holdReason = null) => {
+    async (planId, targetStatus, holdReason = null, extra = {}) => {
       const body = { target_status: targetStatus };
       if (holdReason) body.hold_reason = holdReason;
+      if (extra?.additionalCost != null || extra?.additional_cost != null) {
+        body.additional_cost = Number(extra.additionalCost ?? extra.additional_cost);
+      }
+      if (extra?.actualHarvestQty != null || extra?.actual_harvest_qty != null) {
+        body.actual_harvest_qty = Number(extra.actualHarvestQty ?? extra.actual_harvest_qty);
+      }
+      if (extra?.actualHarvestDate != null || extra?.actual_harvest_date != null) {
+        body.actual_harvest_date = extra.actualHarvestDate ?? extra.actual_harvest_date;
+      }
+      if (extra?.actualSellingPricePerKg != null || extra?.actual_selling_price_per_kg != null) {
+        body.actual_selling_price_per_kg = Number(extra.actualSellingPricePerKg ?? extra.actual_selling_price_per_kg);
+      }
+      if (extra?.finalProductionCost != null || extra?.final_production_cost != null) {
+        body.final_production_cost = Number(extra.finalProductionCost ?? extra.final_production_cost);
+      }
+      if (extra?.notes) {
+        body.notes = String(extra.notes).trim();
+      }
       const res = await apiPut(`/crop-plans/${planId}/status`, body);
       const data = await parseResponse(res);
       await refreshCrops();
@@ -266,8 +374,29 @@ const CropsProvider = ({ children }) => {
   );
 
   const logHarvestApi = useCallback(
-    async (planId, harvestDate, harvestQty, sellingPricePerKg = null) => {
-      const res = await apiPost(`/crop-plans/${planId}/harvest`, {
+    async (planId, harvestDate, harvestQty, sellingPricePerKg = null, extra = {}) => {
+      const payload = {
+        actual_harvest_date: harvestDate,
+        actual_harvest_qty: harvestQty,
+        actual_selling_price_per_kg: sellingPricePerKg,
+      };
+      if (extra?.finalProductionCost != null || extra?.final_production_cost != null) {
+        payload.final_production_cost = Number(extra.finalProductionCost ?? extra.final_production_cost);
+      }
+      if (extra?.notes) {
+        payload.notes = String(extra.notes).trim();
+      }
+      const res = await apiPost(`/crop-plans/${planId}/harvest`, payload);
+      const data = await parseResponse(res);
+      await refreshCrops();
+      return data;
+    },
+    [refreshCrops]
+  );
+
+  const saveHarvestRecordApi = useCallback(
+    async (planId, harvestDate, harvestQty, sellingPricePerKg) => {
+      const res = await apiPost(`/crop-plans/${planId}/harvest-records`, {
         actual_harvest_date: harvestDate,
         actual_harvest_qty: harvestQty,
         actual_selling_price_per_kg: sellingPricePerKg,
@@ -280,7 +409,7 @@ const CropsProvider = ({ children }) => {
   );
 
   return (
-    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi }}>
+    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi, saveHarvestRecordApi }}>
       {children}
     </CropsContext.Provider>
   );

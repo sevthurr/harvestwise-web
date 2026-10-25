@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
+import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -67,7 +68,7 @@ function triggerDownload(url, filename) {
 function ArrivalVolumeReportPage({
   pageIndex,
   totalPages,
-  records,
+  rows,
   offset,
   isFirst,
   isLast,
@@ -104,7 +105,7 @@ function ArrivalVolumeReportPage({
           </tr>
         </thead>
         <tbody>
-          {records.map((r, i) => (
+          {rows.map((r, i) => (
             <tr key={`${r.commodity_name}-${r.variety}-${offset + i}`}>
               <td style={cellL({ textAlign: "center", width: 40 })}>{offset + i + 1}</td>
               <td style={cellL()}><strong>{r.commodity_name || "—"}</strong></td>
@@ -116,7 +117,7 @@ function ArrivalVolumeReportPage({
               <td style={cell(DFTC_BG, { fontWeight: "bold" })}>{numStr(r.volume_kg)}</td>
             </tr>
           ))}
-          {records.length === 0 && (
+          {rows.length === 0 && (
             <tr>
               <td colSpan={8} style={{ ...cellL({ textAlign: "center", fontStyle: "italic" }) }}>No volume records for this submission.</td>
             </tr>
@@ -150,14 +151,35 @@ function ArrivalVolumeReportPage({
 
 const ROWS_PER_PAGE = 22;
 
+// A row carries data when any of the three volume columns is non-null. `!= null`
+// rather than truthiness: the entry screen saves 0 as null
+// (DFTCArrivalInput.jsx:1162-1164) but `volume_kg` is written as the computed
+// farm+other, so a commodity the encoder reported as zero arrives as 0.0 — a
+// real reported figure that must count.
+function arrivalRowIsPopulated(row) {
+  return row.farm_source_volume_kg != null
+    || row.other_source_volume_kg != null
+    || row.volume_kg != null;
+}
+
+function countPopulatedArrivalRows(rows) {
+  let n = 0;
+  for (const r of rows) if (arrivalRowIsPopulated(r)) n++;
+  return n;
+}
+
 /**
  * Preview for an arrival-volume submission.
  *
- * Arrival volumes are a different dataset from prevailing prices, so the
- * report body is built separately from the price report — but it is presented
- * through the same DFTCReportShell, so both previews look and behave
- * identically. Records come from the submission's own record lists, so this
- * shows exactly the volumes that submission holds.
+ * Arrival volumes are a different dataset from prevailing prices, so the report
+ * body is built separately from the price report — but it is presented through
+ * the same DFTCReportShell, so both previews look and behave identically.
+ *
+ * Rows are the full commodity catalogue from `/dftc/reports/arrival-preview`,
+ * merged against the submission's volumes server-side on `commodity_id`, so a
+ * commodity the encoder left blank still appears with an empty cell instead of
+ * vanishing from the sheet. The submission detail call remains only for
+ * `submitted_by_name`.
  */
 function DFTCArrivalPreview({ file, onClose }) {
   const [format, setFormat] = useState("IMG");
@@ -177,31 +199,43 @@ function DFTCArrivalPreview({ file, onClose }) {
     enabled: !!submissionId
   });
 
-  // Fall back to the list payload if the detail call has not landed yet.
-  const records = useMemo(() => {
-    const fromDetail = submission
-      ? [...(submission.analytics_records || []), ...(submission.other_records || [])]
-      : [];
-    if (fromDetail.length > 0) return fromDetail;
-    return [...(file.analyticsRecords || []), ...(file.otherRecords || [])];
-  }, [submission, file]);
+  const { data: reportPreviewData, isLoading: previewLoading, isError: previewError } = useQuery({
+    // The submission id is in the key because the report is submission-scoped:
+    // the service worker caches `/api/v1/*` under `NetworkFirst` for 7 days
+    // (client/vite.config.js), and a key without it would pin one submission's
+    // sheet to another's.
+    queryKey: ["dftc-arrival-report-preview", submissionId],
+    queryFn: async () => {
+      const res = await apiGet(
+        `/dftc/reports/arrival-preview?submission_id=${encodeURIComponent(submissionId)}`
+      );
+      return parseResponse(res);
+    },
+    enabled: !!submissionId
+  });
+
+  // Every catalogue commodity, blank where nothing was collected. Merged on
+  // commodity_id by the server — this file does no name matching, so it cannot
+  // paint one variety's volume under another's label (the bug recorded in
+  // documentation/dftc-price-report-blank-cells-and-stale-bundle-2026-10-15.md).
+  const rows = useMemo(() => reportPreviewData?.rows ?? [], [reportPreviewData]);
 
   const totalVolume = useMemo(
-    () => records.reduce((sum, r) => sum + (Number(r.volume_kg) || 0), 0),
-    [records]
+    () => rows.reduce((sum, r) => sum + (Number(r.volume_kg) || 0), 0),
+    [rows]
   );
 
   const reportingDateShort = formatDisplayDateShort(submission?.reporting_date || file.reportingDate);
   const reportingDate = formatDisplayDate(submission?.reporting_date || file.reportingDate);
-  const totalPages = Math.max(1, Math.ceil(records.length / ROWS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
 
   const pages = useMemo(() => {
     const out = [];
     for (let i = 0; i < totalPages; i++) {
-      out.push({ records: records.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE), offset: i * ROWS_PER_PAGE });
+      out.push({ rows: rows.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE), offset: i * ROWS_PER_PAGE });
     }
     return out;
-  }, [records, totalPages]);
+  }, [rows, totalPages]);
 
   async function downloadImages() {
     setDlState("generating-img");
@@ -314,7 +348,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       applyStyle(h2, [6, 7], BANK_BG);
       applyStyle(h2, [8], DFTC_BG);
 
-      records.forEach((r, i) => {
+      rows.forEach((r, i) => {
         const row = ws.addRow([
           i + 1,
           r.commodity_name || "",
@@ -393,7 +427,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       <ArrivalVolumeReportPage
         pageIndex={idx}
         totalPages={totalPages}
-        records={page.records}
+        rows={page.rows}
         offset={page.offset}
         isFirst={idx === 0}
         isLast={idx === totalPages - 1}
@@ -405,7 +439,7 @@ function DFTCArrivalPreview({ file, onClose }) {
   }
 
   function renderPreviewBody() {
-    if (loadError) {
+    if (loadError || previewError) {
       return (
         <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
@@ -413,7 +447,7 @@ function DFTCArrivalPreview({ file, onClose }) {
         </div>
       );
     }
-    if (isLoading && records.length === 0) {
+    if ((isLoading || previewLoading) && rows.length === 0) {
       return (
         <div className="rounded-xl border border-[var(--hw-neutral-200)] bg-white p-8 text-center">
           <p className="text-[13px] text-[var(--hw-neutral-600)]">Loading arrival volumes…</p>
@@ -447,9 +481,11 @@ function DFTCArrivalPreview({ file, onClose }) {
               <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-800)]" />
             </button>
           </div>
-          <div className="border border-[var(--hw-neutral-300)] rounded-xl bg-white overflow-x-auto shadow-sm">
+
+          <DFTCPreviewZoomContainer label={`Image ${imgPage + 1} of ${totalPages}`}>
             {renderPage(imgPage)}
-          </div>
+          </DFTCPreviewZoomContainer>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl">
               <p className="text-[11px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide mb-1">Encoded by</p>
@@ -467,37 +503,51 @@ function DFTCArrivalPreview({ file, onClose }) {
     }
     if (format === "PDF") {
       return (
-        <div className="space-y-5">
-          {pages.map((_, idx) => (
-            <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
-                <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {totalPages}</span>
-                <span className="text-[12px] text-[var(--hw-neutral-800)]">A4 Landscape</span>
+        <DFTCPreviewZoomContainer label="Arrival Volume PDF (A4 Landscape)">
+          <div className="space-y-5">
+            {pages.map((_, idx) => (
+              <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
+                  <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {totalPages}</span>
+                  <span className="text-[12px] text-[var(--hw-neutral-800)]">A4 Landscape</span>
+                </div>
+                <div>{renderPage(idx)}</div>
               </div>
-              <div className="overflow-x-auto">{renderPage(idx)}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </DFTCPreviewZoomContainer>
       );
     }
     return (
-      <div className="rounded-xl overflow-hidden border border-[var(--hw-neutral-300)] bg-white">
-        <div className="bg-[#217346] px-4 py-2 flex items-center gap-2">
-          <span className="text-white text-[12px] font-semibold">Microsoft Excel</span>
-          <span className="text-green-200 text-[12px] truncate">— DFTC-Arrival-Volume-{reportingDateShort}.xlsx</span>
+      <DFTCPreviewZoomContainer label="Microsoft Excel Workbook">
+        <div className="rounded-xl overflow-hidden border border-[var(--hw-neutral-300)] bg-white">
+          <div className="bg-[#217346] px-4 py-2 flex items-center gap-2">
+            <span className="text-white text-[12px] font-semibold">Microsoft Excel</span>
+            <span className="text-green-200 text-[12px] truncate">— DFTC-Arrival-Volume-{reportingDateShort}.xlsx</span>
+          </div>
+          <div className="bg-[#f3f3f3] border-b border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-2">
+            <span className="text-[12px] font-medium text-[var(--hw-neutral-700)]">A1</span>
+            <span className="text-[var(--hw-neutral-700)] text-[12px]">fx</span>
+            <span className="text-[12px] text-[var(--hw-neutral-800)] truncate">DAVAO FOOD TERMINAL COMPLEX ARRIVAL VOLUME</span>
+          </div>
+          <div className="bg-white">{pages.map((_, idx) => renderPage(idx))}</div>
+          <div className="bg-[#f3f3f3] border-t border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-1">
+            <div className="px-3 py-0.5 bg-white border border-b-0 border-[var(--hw-neutral-300)] rounded-t text-[12px] font-medium text-[#217346] -mb-1.5">Arrival Volume</div>
+          </div>
         </div>
-        <div className="bg-[#f3f3f3] border-b border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-2">
-          <span className="text-[12px] font-medium text-[var(--hw-neutral-700)]">A1</span>
-          <span className="text-[var(--hw-neutral-700)] text-[12px]">fx</span>
-          <span className="text-[12px] text-[var(--hw-neutral-800)] truncate">DAVAO FOOD TERMINAL COMPLEX ARRIVAL VOLUME</span>
-        </div>
-        <div className="overflow-x-auto bg-white">{pages.map((_, idx) => renderPage(idx))}</div>
-        <div className="bg-[#f3f3f3] border-t border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-1">
-          <div className="px-3 py-0.5 bg-white border border-b-0 border-[var(--hw-neutral-300)] rounded-t text-[12px] font-medium text-[#217346] -mb-1.5">Arrival Volume</div>
-        </div>
-      </div>
+      </DFTCPreviewZoomContainer>
     );
   }
+
+  // Mirrors `countPopulatedPriceRows` in DFTCFilePreview.jsx: the badge counts
+  // rows that carry data, not rows on the sheet. The sheet is now the catalogue,
+  // so `rows.length` would report ~130 and mean nothing to a reader. The
+  // Math.max copies DFTCFilePreview.jsx so the badge never under-reports what
+  // the submission itself holds.
+  const recordsIncluded = Math.max(
+    countPopulatedArrivalRows(rows),
+    Number(file.records) || 0
+  );
 
   return (
     <DFTCReportShell
@@ -507,7 +557,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       metaFields={[
         ["Report ID", submission?.id || file.id || "—"],
         ["Reporting Date", reportingDate],
-        ["Records Included", String(records.length)],
+        ["Records Included", String(recordsIncluded)],
         ["Total Volume", `${numStr(totalVolume)} kg`],
         ["Saved Date", file.savedDate || "—"],
         ["Encoded By", submission?.submitted_by_name || "—"]
@@ -535,4 +585,6 @@ function DFTCArrivalPreview({ file, onClose }) {
   );
 }
 
-export { DFTCArrivalPreview };
+// arrivalRowIsPopulated / countPopulatedArrivalRows / numStr are exported for
+// the regression test in src/test/dftcArrivalReportRows.test.js.
+export { DFTCArrivalPreview, arrivalRowIsPopulated, countPopulatedArrivalRows, numStr };

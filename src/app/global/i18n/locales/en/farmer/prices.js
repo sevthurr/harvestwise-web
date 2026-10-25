@@ -16,6 +16,7 @@ export const prices = {
   unit_label: "Unit",
   clear: "Clear",
   apply: "Apply",
+  save: "Save",
   forecast_period: "Forecast period {period}:",
   forecast_horizon: "Forecast horizon: {days} days:",
   trend_rising: "Rising",

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminAnalyticsBasis, { sortArrivalRecordsAscending } from '../app/admin/pages/AdminAnalyticsBasis';
 
 // Regression cover for the "Datasets Used" panel. Price Outlook and Arrival
@@ -91,14 +92,18 @@ const dataRows = (table) =>
     [...row.querySelectorAll('td')].map((cell) => cell.textContent)
   );
 
-const renderPage = (path) =>
-  render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/admin/modules/basis/:resultId" element={<AdminAnalyticsBasis />} />
-      </Routes>
-    </MemoryRouter>
+const renderPage = (path) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/admin/modules/basis/:resultId" element={<AdminAnalyticsBasis />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
+};
 
 describe('AdminAnalyticsBasis Datasets Used', () => {
   beforeEach(() => {

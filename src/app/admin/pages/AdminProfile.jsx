@@ -76,7 +76,7 @@ function AdminProfile() {
   const accountStatus = isActiveValue !== undefined ? (isActiveValue ? "Active" : "Inactive") : "Active";
 
   return (
-    <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4 sm:space-y-5">
       <PageHeader
         title="Profile"
         description="Your admin account and access information."
@@ -84,18 +84,18 @@ function AdminProfile() {
 
       {/* ── Card 1: Profile Header ── */}
       <Card>
-        <div className="relative flex items-start gap-4">
+        <div className="relative flex items-start gap-3.5 sm:gap-4">
           <ProfileAvatar initials={initials} src={user?.profile_picture_path} alt={displayName} />
 
           <div className="flex-1 min-w-0 pt-0.5">
-            <p className="text-[20px] font-bold text-[var(--hw-neutral-900)] leading-snug">{displayName}</p>
-            <p className="text-[14px] text-[var(--hw-neutral-600)]">{roleName}</p>
+            <p className="text-[18px] sm:text-[20px] font-bold text-[var(--hw-neutral-900)] leading-snug break-words">{displayName}</p>
+            <p className="text-[13px] sm:text-[14px] text-[var(--hw-neutral-600)]">{roleName}</p>
           </div>
 
           <button
             type="button"
             onClick={() => navigate("/admin/settings?tab=account")}
-            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline flex-shrink-0 cursor-pointer"
+            className="text-[13px] font-semibold text-[var(--hw-green-700)] hover:underline flex-shrink-0 cursor-pointer pt-0.5"
           >
             Edit Profile
           </button>

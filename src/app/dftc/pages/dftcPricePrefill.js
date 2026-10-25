@@ -7,15 +7,9 @@
  * date with nothing recorded on it therefore filled the form with an older day's
  * numbers, which the user then saved as today's price.
  *
- * This module queries GET /dftc/prices/by-day, which matches one exact date,
- * and keeps provenance explicit:
- *   - same-day records  → amending; loaded and saved like anything else
- *   - previous-day ones  → a starting point only; the page commits them solely
- *                         when the user edits them.
- *
- * Per-tab rule: a market tab that has ANY same-day record never receives a
- * previous-day carry, so a tab never mixes provenance. The rule and the request
- * count are the same code — flip CARRIES_ONLY_INTO_EMPTY_TABS to change both.
+ * This module queries GET /dftc/prices/by-day, which matches one exact date.
+ * It never falls back to an earlier date: a missing day must remain empty so
+ * an older price cannot be mistaken for a new observation.
  */
 
 import { apiGet, parseResponse } from "../../global/api";
@@ -28,8 +22,6 @@ export const MARKET_TABS = [
   { id: "dftc-retail", label: "DFTC Retail", market: "DFTC Taboan", priceType: "Retail", sourceId: "dftc" },
   { id: "dftc-wholesale", label: "DFTC Wholesale", market: "DFTC Taboan", priceType: "Wholesale", sourceId: "dftc" }
 ];
-
-const CARRIES_ONLY_INTO_EMPTY_TABS = true;
 
 const emptyTabsById = () => Object.fromEntries(MARKET_TABS.map((t) => [t.id, new Map()]));
 
@@ -55,20 +47,54 @@ async function fetchDay(tab, date) {
 }
 
 /**
+ * The static mirror's (commodity, variant) pairs. Built once: the mirror never
+ * changes at runtime, and resolveVid walks it for every draft cell.
+ */
+const STATIC_PAIRS = PRICE_CATEGORIES.flatMap((cat) =>
+  cat.commodities.flatMap((com) => com.variants.map((v) => ({ com, v })))
+);
+
+/**
  * Resolve a DB commodity_id to the form's variant id, or null when this page
  * cannot render it. Takes the page's own resolver so the slug logic and the
  * runtime catalog map stay in one place.
+ *
+ * `catalogue` is the page's list of { com, v } pairs: the static mirror plus
+ * the rows the page gained from the DB catalogue. When it is omitted the
+ * static mirror is searched, exactly as before.
  */
-export function resolveVid(commodityId, resolveCommodityId) {
+export function resolveVid(commodityId, resolveCommodityId, catalogue) {
   if (!commodityId || typeof resolveCommodityId !== "function") return null;
-  for (const cat of PRICE_CATEGORIES) {
-    for (const com of cat.commodities) {
-      for (const v of com.variants) {
-        if (resolveCommodityId(com, v) === commodityId) return v.id;
-      }
-    }
+  const pairs = catalogue ?? STATIC_PAIRS;
+  for (const { com, v } of pairs) {
+    if (resolveCommodityId(com, v) === commodityId) return v.id;
   }
   return null;
+}
+
+/**
+ * Map shared-draft cells onto the form's (tab, variant) pairs.
+ *
+ * The market-key + price-type rule lives here so the initial load and the
+ * live resync can never drift apart: both ask the same question, "which column
+ * does this cell belong to?". A cell whose commodity this page cannot render
+ * is skipped, exactly as the day loader skips it.
+ *
+ * `catalogue` is the page's list of { com, v } pairs; it is passed through to
+ * resolveVid so a row the page gained from the DB catalogue can be resolved.
+ */
+export function resolveDraftCellTargets(cells, resolveCommodityId, catalogue) {
+  const out = [];
+  for (const cell of Array.isArray(cells) ? cells : []) {
+    const tab = MARKET_TABS.find(
+      (t) => t.sourceId === (cell.source_key || cell.source_id) && t.priceType === cell.price_type,
+    );
+    if (!tab) continue;
+    const vid = resolveVid(cell.commodity_id, resolveCommodityId, catalogue);
+    if (!vid) continue;
+    out.push({ tab, vid, cell });
+  }
+  return out;
 }
 
 /** Keep only priced items this page can render, keyed by variant id. */
@@ -93,11 +119,8 @@ function collect(items, resolveCommodityId) {
 /**
  * Build the prefill snapshot for one date.
  *
- * Phase 1 fetches the selected date for all 5 tabs in parallel. Phase 2 fetches
- * the previous calendar day only for tabs whose phase-1 result came back empty,
- * so an amend day costs 5 requests, not 10. Promise.allSettled throughout: a
- * market whose source ref cannot be resolved (404) must not zero out the other
- * four.
+ * The selected date is fetched for all 5 tabs in parallel. Promise.allSettled
+ * keeps one unavailable market from discarding the other four.
  */
 export async function buildPrefillSnapshot(date, resolveCommodityId) {
   const snapshot = {
@@ -120,22 +143,6 @@ export async function buildPrefillSnapshot(date, resolveCommodityId) {
     snapshot.unrenderableCount += unrenderable;
   });
 
-  const prevDate = CARRIES_ONLY_INTO_EMPTY_TABS ? previousIsoDate(date) : null;
-  const emptyTabs = prevDate ? MARKET_TABS.filter((t) => snapshot.sameDayByTab[t.id].size === 0) : [];
-
-  if (emptyTabs.length > 0) {
-    const carryResults = await Promise.allSettled(emptyTabs.map((tab) => fetchDay(tab, prevDate)));
-    emptyTabs.forEach((tab, i) => {
-      const res = carryResults[i];
-      if (res.status !== "fulfilled") return;
-      const { map, unrenderable, count } = collect(res.value, resolveCommodityId);
-      snapshot.carriedByTab[tab.id] = map;
-      snapshot.carriedCount += count;
-      snapshot.unrenderableCount += unrenderable;
-    });
-  }
-
-  snapshot.previousDate = prevDate;
   return snapshot;
 }
 

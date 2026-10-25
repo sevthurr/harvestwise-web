@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DFTCTrends from "../app/dftc/pages/DFTCTrends";
 import * as pricesApi from "../services/api/pricesApi";
 import * as analyticsApi from "../services/api/analyticsApi";
+import * as dftcApi from "../services/api/dftcApi";
 import {
   buildForecastChartData,
   buildForecastSummaries,
@@ -158,6 +159,17 @@ const CATALOG = {
       forecast: null,
     },
     {
+      commodity_id: "COM-AMP-GALAXY",
+      name: "Ampalaya",
+      variety: "Galaxy",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      updated_at: "2026-07-31",
+      prices: {},
+      forecast: null,
+    },
+    {
       commodity_id: "COM-CAR",
       name: "Carrots",
       variety: null,
@@ -172,6 +184,83 @@ const CATALOG = {
   total: 1,
   page: 1,
   page_size: 100,
+};
+
+// The widened catalogue (include_supported_varieties=true) also returns the
+// variety rows of a top-10 commodity whose own is_top10 flag is false.
+const SUPPORTED_CATALOG = {
+  items: [
+    {
+      commodity_id: "COM-KAM-DIAM",
+      name: "Kamatis",
+      variety: "Diamante Big",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      updated_at: "2026-07-31",
+      prices: {},
+      forecast: null,
+    },
+    {
+      commodity_id: "COM-AMP-GALAXY",
+      name: "Ampalaya",
+      variety: "Galaxy",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      updated_at: "2026-07-31",
+      prices: {
+        bangkerohan_retail: 45,
+        bangkerohan_wholesale: 40,
+        dftc_retail: 50,
+        dftc_wholesale: 46,
+      },
+      forecast: null,
+    },
+    {
+      commodity_id: "COM-AMP-MILKYWAVE",
+      name: "Ampalaya",
+      variety: "Milky Wave",
+      category: "Lowland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: false,
+      updated_at: "2026-07-31",
+      prices: {
+        bangkerohan_retail: null,
+        bangkerohan_wholesale: null,
+        dftc_retail: null,
+        dftc_wholesale: null,
+      },
+      forecast: null,
+    },
+    {
+      commodity_id: "COM-CAR",
+      name: "Carrots",
+      variety: null,
+      category: "Highland Vegetables",
+      unit_of_measure: "kg",
+      is_top10: true,
+      updated_at: "2026-07-31",
+      prices: {},
+      forecast: null,
+    },
+  ],
+  total: 4,
+  page: 1,
+  page_size: 100,
+};
+
+// Every active commodity, top-10 or not — the arrival tab's scope.
+const COMMODITY_CATALOG = {
+  items: [
+    { id: "COM-KAM-DIAM", name: "Kamatis", variety: "Diamante Big", category: "Lowland Vegetables", unit_of_measure: "kg", is_top10: true },
+    { id: "COM-AMP-GALAXY", name: "Ampalaya", variety: "Galaxy", category: "Lowland Vegetables", unit_of_measure: "kg", is_top10: true },
+    { id: "COM-AMP-MILKYWAVE", name: "Ampalaya", variety: "Milky Wave", category: "Lowland Vegetables", unit_of_measure: "kg", is_top10: false },
+    { id: "COM-SAL", name: "Saluyot", variety: null, category: "Lowland Vegetables", unit_of_measure: "kg", is_top10: false },
+    { id: "COM-CAR", name: "Carrots", variety: null, category: "Highland Vegetables", unit_of_measure: "kg", is_top10: true },
+    { id: "COM-AVO", name: "Avocado", variety: "Medium", category: "Fruits", unit_of_measure: "kg", is_top10: false },
+  ],
+  total: 6,
 };
 
 describe("dftcTrendsPriceData helpers", () => {
@@ -293,11 +382,16 @@ describe("DFTC Trends page prices API integration", () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
+    // Tab clicks write ?tab=... to the URL; reset so the next test mounts on Price.
+    window.history.replaceState({}, "", "/dftc/trends");
   });
 
   function installApi() {
     const detailCalls = [];
-    vi.spyOn(pricesApi, "getPriceList").mockResolvedValue(CATALOG);
+    vi.spyOn(pricesApi, "getPriceList").mockImplementation(async (params = {}) =>
+      params.include_supported_varieties ? SUPPORTED_CATALOG : CATALOG
+    );
+    vi.spyOn(dftcApi, "getCommodityCatalog").mockResolvedValue(COMMODITY_CATALOG);
     vi.spyOn(pricesApi, "getPriceDetail").mockImplementation(async (commodityId, params = {}) => {
       detailCalls.push({ commodityId, ...params });
       return detailBody({
@@ -371,6 +465,75 @@ describe("DFTC Trends page prices API integration", () => {
     return detailCalls;
   }
 
+  async function openCommodityCombobox(toggleText) {
+    const toggle = screen
+      .getAllByRole("button")
+      .find((b) => (b.textContent || "").includes(toggleText));
+    fireEvent.click(toggle);
+    const input = await screen.findByPlaceholderText("Search commodities...");
+    return { input, dropdown: () => input.closest("div.border") };
+  }
+
+  it("does not offer Landing as a Price Type", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument());
+    const priceTypeSelect = screen.getByDisplayValue("Retail");
+    expect(Array.from(priceTypeSelect.options).map((o) => o.textContent)).toEqual([
+      "Retail",
+      "Wholesale",
+    ]);
+  });
+
+  it("offers only catalog-backed commodities on the Price tab, full list on Arrival", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument());
+
+    const priceFilter = await openCommodityCombobox("Kamatis");
+    fireEvent.change(priceFilter.input, { target: { value: "Avocado" } });
+    expect(await screen.findByText("No commodities found")).toBeInTheDocument();
+    fireEvent.change(priceFilter.input, { target: { value: "Kamatis" } });
+    expect(
+      within(priceFilter.dropdown()).getByRole("button", { name: /Kamatis/ })
+    ).toBeInTheDocument();
+    // Close before switching tabs: the combobox is reconciled across tabs,
+    // so an open dropdown would carry its state into the arrival filter.
+    fireEvent.keyDown(priceFilter.input, { key: "Escape" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
+    const arrivalFilter = await openCommodityCombobox("Carrots");
+    fireEvent.change(arrivalFilter.input, { target: { value: "Avocado" } });
+    expect(
+      within(arrivalFilter.dropdown()).getByRole("button", { name: /Avocado/ })
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the full commodity list while the price catalog is still loading", async () => {
+    installApi();
+    vi.spyOn(pricesApi, "getPriceList").mockReturnValue(new Promise(() => {}));
+    renderTrends(<DFTCTrends />);
+
+    const priceFilter = await openCommodityCombobox("Kamatis");
+    fireEvent.change(priceFilter.input, { target: { value: "Avocado" } });
+    expect(
+      within(priceFilter.dropdown()).getByRole("button", { name: /Avocado/ })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the honest no-data state for a commodity outside the catalog", async () => {
+    const detailCalls = installApi();
+    window.history.replaceState({}, "", "/dftc/trends?tab=price&commodity=Avocado");
+    renderTrends(<DFTCTrends />);
+
+    expect(await screen.findByText("No price trend data available")).toBeInTheDocument();
+    expect(
+      screen.getByText(/No price records found for Avocado/)
+    ).toBeInTheDocument();
+    // No catalog commodity_id means no trend query is fired at all.
+    expect(detailCalls).toHaveLength(0);
+  });
+
   it("loads Bangkerohan/DFTC historical + forecast for the catalog commodity_id", async () => {
     const detailCalls = installApi();
     renderTrends(<DFTCTrends />);
@@ -397,6 +560,33 @@ describe("DFTC Trends page prices API integration", () => {
     const varietySelect = screen.getByDisplayValue("Diamante Big");
     expect(varietySelect).toBeInTheDocument();
     expect(screen.queryByText("Walay barayti")).not.toBeInTheDocument();
+  });
+
+  it("offers a non-top-10 variety of a top-10 commodity and loads its own price detail", async () => {
+    const detailCalls = installApi();
+    renderTrends(<DFTCTrends />);
+    await waitFor(() => expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument());
+
+    const priceFilter = await openCommodityCombobox("Kamatis");
+    fireEvent.change(priceFilter.input, { target: { value: "Ampalaya" } });
+    fireEvent.click(
+      within(priceFilter.dropdown()).getByRole("button", { name: /Ampalaya/ })
+    );
+
+    // "Milky Wave" is not a top-10 row of its own, but it belongs to the
+    // top-10 commodity Ampalaya, so it must be listed and selectable.
+    const varietySelect = await screen.findByDisplayValue("Galaxy");
+    expect(Array.from(varietySelect.options).map((o) => o.textContent)).toEqual([
+      "Galaxy",
+      "Milky Wave",
+    ]);
+
+    fireEvent.change(varietySelect, { target: { value: "Milky Wave" } });
+    await waitFor(() => {
+      expect(detailCalls.some((call) => call.commodityId === "COM-AMP-MILKYWAVE")).toBe(
+        true
+      );
+    });
   });
 
   it("loads DFTC Retail and Wholesale with isolated price_type keys", async () => {
@@ -488,14 +678,40 @@ describe("DFTC Trends page prices API integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
 
     await waitFor(() => {
-      expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith("COM-CAR");
+      expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith(
+        "COM-CAR",
+        null,
+        null,
+        { aggregateVarieties: true }
+      );
     });
     expect(await screen.findByText("Arrival Pressure Classification")).toBeInTheDocument();
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
     expect(screen.getByText("Historical Average Arrival")).toBeInTheDocument();
     expect(await screen.findByTestId("arrival-chart-dates")).toHaveTextContent(
-      "Mar 31, 2025|Sep 30, 2025|Oct 2, 2026"
+      "Oct 2, 2026"
     );
+  });
+
+  it("resolves an arrival commodity that has no top-10 price row through the commodity catalog", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
+    const arrivalFilter = await openCommodityCombobox("Carrots");
+    fireEvent.change(arrivalFilter.input, { target: { value: "Saluyot" } });
+    fireEvent.click(
+      within(arrivalFilter.dropdown()).getByRole("button", { name: /Saluyot/ })
+    );
+
+    await waitFor(() => {
+      expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith(
+        "COM-SAL",
+        null,
+        null,
+        { aggregateVarieties: true }
+      );
+    });
   });
 
   it("loads and displays the Admin seasonal-production classification in DFTC Trends", async () => {
