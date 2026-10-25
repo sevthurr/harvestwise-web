@@ -48,11 +48,11 @@ export function AuthProvider({ children }) {
   // Farmer check. roleHome() maps any unknown or missing role name to
   // '/farmer', and the fallback path inside loadFarmerOfflineData requests
   // /crop-plans — so a session without a readable role must not seed it.
-  const seedFarmerOffline = async (me) => {
+  const seedFarmerOffline = async (me, { force = false } = {}) => {
     if ((me?.role?.role_name || '').toLowerCase() === 'farmer') {
       setOfflineCacheStatus('preparing');
       try {
-        await loadFarmerOfflineData(queryClient);
+        await loadFarmerOfflineData(queryClient, { force });
         setOfflineCacheStatus('ready');
       } catch {
         setOfflineCacheStatus('error');
@@ -189,7 +189,7 @@ export function AuthProvider({ children }) {
     markSessionActive();
     setUser(me);
     await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
-    await seedFarmerOffline(me);
+    await seedFarmerOffline(me, { force: true });
     return me;
   };
 

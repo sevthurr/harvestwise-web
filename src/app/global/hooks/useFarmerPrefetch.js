@@ -186,7 +186,9 @@ export function priceTrendKey(
 // degraded server response (a budget-exhausted section arrives as null) still
 // seeds everything else rather than throwing away the whole bundle.
 export async function seedFarmerOfflineBundle(queryClient) {
-  const res = await apiGet("/farmer/daily-snapshot");
+  // The login path only needs the summary bundle. Detail pages are warmed in
+  // the background after the farmer can use the app.
+  const res = await apiGet("/farmer/daily-snapshot?detail=0");
   if (!res.ok) throw new Error(`snapshot failed: ${res.status}`);
   const bundle = await parseResponse(res);
 
@@ -260,15 +262,6 @@ export async function seedFarmerOfflineBundle(queryClient) {
     });
   }
 
-  // The top-10 list does not include every variety row. Persist the widened
-  // catalog separately so detail/trend pages can resolve a selected variety
-  // while offline without changing the Prices page's list shape.
-  await queryClient.prefetchQuery({
-    queryKey: SUPPORTED_PRICES_KEY,
-    queryFn: fetchSupportedPricesList,
-    staleTime: STALE_TIME,
-  });
-
   if (Array.isArray(bundle.advisory_summary)) {
     const recommendations = { items: bundle.advisory_summary };
     queryClient.setQueryData(
@@ -291,14 +284,6 @@ export async function seedFarmerOfflineBundle(queryClient) {
     queryClient.setQueryData(weatherAdvisoryKey(lat, lon), bundle.weather_forecast);
   }
 
-  // Market calendar is not part of the snapshot bundle; fetch it separately.
-  await queryClient.prefetchQuery({
-    queryKey: ["marketCalendar"],
-    queryFn: fetchMarketCalendar,
-    staleTime: STALE_TIME,
-  });
-
-  await prefetchFarmerPageData(queryClient, bundle);
 }
 
 async function prefetchFarmerPageData(queryClient, bundle) {
@@ -488,7 +473,6 @@ export async function prefetchFarmerOfflineData(queryClient) {
 
   await Promise.all([
     prefetch(["prices", "list"], fetchPricesList),
-    prefetch(SUPPORTED_PRICES_KEY, fetchSupportedPricesList),
     prefetch(["dashboard", "prices"], fetchDashboardPrices),
     prefetch(["dashboard", "recommendations"], fetchDashboardRecommendations),
     prefetch(FARMER_PROFILE_KEY, fetchFarmerProfile),
@@ -500,13 +484,46 @@ export async function prefetchFarmerOfflineData(queryClient) {
   const lat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
   const lon = profile?.longitude ?? DEFAULT_WEATHER_LON;
   await prefetch(weatherAdvisoryKey(lat, lon), () => fetchWeatherAdvisory(lat, lon));
+}
+
+// Full detail warm-up for pages the farmer may visit later. This is
+// intentionally separate from the login-critical path and runs during idle
+// time, so a slow analytics endpoint cannot delay the dashboard.
+export async function prefetchFarmerFullData(queryClient) {
+  await queryClient.prefetchQuery({
+    queryKey: SUPPORTED_PRICES_KEY,
+    queryFn: fetchSupportedPricesList,
+    staleTime: STALE_TIME,
+  }).catch(() => {});
+  await queryClient.prefetchQuery({
+    queryKey: ["marketCalendar"],
+    queryFn: fetchMarketCalendar,
+    staleTime: STALE_TIME,
+  }).catch(() => {});
 
   // Keep the fallback path equivalent to the snapshot path for variety-aware
   // price and basis pages.
+  const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
+  const priceItems = supportedItems.length
+    ? supportedItems
+    : queryClient.getQueryData(["prices", "list"])?.items || [];
   await prefetchFarmerPageData(queryClient, {
     crop_plans: queryClient.getQueryData(["farmer", "crops"]) || [],
-    price_trends: queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [],
+    price_trends: priceItems,
   });
+}
+
+let farmerOfflineLoadPromise = null;
+let lastFarmerOfflineLoadAt = 0;
+const OFFLINE_LOAD_DEDUPE_MS = 1000 * 60 * 30;
+
+function scheduleFullFarmerPrefetch(queryClient) {
+  const run = () => prefetchFarmerFullData(queryClient).catch(() => {});
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 5000 });
+  } else {
+    setTimeout(run, 0);
+  }
 }
 
 /**
@@ -514,12 +531,23 @@ export async function prefetchFarmerOfflineData(queryClient) {
  * so the persister pushes it to IndexedDB. Prefers the single snapshot bundle;
  * falls back to per-endpoint prefetches.
  */
-export async function loadFarmerOfflineData(queryClient) {
-  try {
-    await seedFarmerOfflineBundle(queryClient);
-  } catch {
-    await prefetchFarmerOfflineData(queryClient);
+export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
+  const now = Date.now();
+  if (!force && (farmerOfflineLoadPromise || now - lastFarmerOfflineLoadAt < OFFLINE_LOAD_DEDUPE_MS)) {
+    return farmerOfflineLoadPromise || Promise.resolve();
   }
+  farmerOfflineLoadPromise = (async () => {
+    try {
+      await seedFarmerOfflineBundle(queryClient);
+    } catch {
+      await prefetchFarmerOfflineData(queryClient);
+    }
+    lastFarmerOfflineLoadAt = Date.now();
+    scheduleFullFarmerPrefetch(queryClient);
+  })().finally(() => {
+    farmerOfflineLoadPromise = null;
+  });
+  return farmerOfflineLoadPromise;
 }
 
 export function useFarmerPrefetch() {

@@ -8,7 +8,10 @@ const { apiGet, parseResponse } = vi.hoisted(() => ({
 
 vi.mock("../app/global/api", () => ({ apiGet, parseResponse }));
 
-import { seedFarmerOfflineBundle } from "../app/global/hooks/useFarmerPrefetch";
+import {
+  prefetchFarmerFullData,
+  seedFarmerOfflineBundle,
+} from "../app/global/hooks/useFarmerPrefetch";
 
 describe("farmer offline recommendation snapshot", () => {
   it("seeds every farmer recommendation query key from the raw snapshot", async () => {
@@ -30,6 +33,8 @@ describe("farmer offline recommendation snapshot", () => {
 
     const client = new QueryClient();
     await seedFarmerOfflineBundle(client);
+
+    expect(apiGet).toHaveBeenCalledWith("/farmer/daily-snapshot?detail=0");
 
     expect(client.getQueryData(["market", "monthly-recommendations"])).toEqual({
       items: recommendations,
@@ -58,6 +63,7 @@ describe("farmer offline recommendation snapshot", () => {
 
     const client = new QueryClient();
     await seedFarmerOfflineBundle(client);
+    await prefetchFarmerFullData(client);
 
     expect(client.getQueryData([
       "farmer", "admin-price-outlook", "COM-0038", "bangkerohan_retail", 14,

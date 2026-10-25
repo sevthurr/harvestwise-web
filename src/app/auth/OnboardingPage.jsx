@@ -568,7 +568,7 @@ function OnboardingPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["weather"] });
       await refreshUser?.();
-      loadFarmerOfflineData(queryClient).catch(() => {});
+      loadFarmerOfflineData(queryClient, { force: true }).catch(() => {});
       setStep(4);
     } catch (err) {
       setSubmitError(err.message || t("onboarding.save_error", {}, "Failed to save. Please try again."));
