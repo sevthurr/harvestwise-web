@@ -24,6 +24,7 @@ import { UserAvatar } from "../profile/UserAvatar";
 
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
+import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
@@ -52,13 +53,18 @@ function DFTCMain({ children }) {
 function DFTCLayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const dropdownRef = useRef(null);
   const active = getActive(location.pathname);
   const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
   const staff = user?.staff_profile || user?.staffProfile || {};
-  const name = [staff.first_name || user?.first_name, staff.middle_name, staff.last_name || user?.last_name, staff.suffix || user?.suffix].filter(Boolean).join(" ") || user?.name || user?.username || "DFTC Personnel";
+  const name = formatPersonName([
+    staff.first_name || user?.first_name,
+    staff.middle_name,
+    staff.last_name || user?.last_name,
+    staff.suffix || user?.suffix,
+  ].filter(Boolean).join(" ")) || formatPersonName(user?.name || user?.username) || "DFTC Personnel";
   const initials = getInitials(name);
   useEffect(() => {
     const handler = (e) => {
@@ -78,7 +84,7 @@ function DFTCLayoutInner() {
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    formatManilaTime()
   );
 
   const isSyncing = isManualSyncing || isFetching > 0;
@@ -88,7 +94,7 @@ function DFTCLayoutInner() {
   useEffect(() => {
     if (processState.completed || processState.error) {
       setLastSyncedTime(
-        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        formatManilaTime()
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +107,7 @@ function DFTCLayoutInner() {
       await queryClient.refetchQueries(undefined, { throwOnError: true });
       await queryClient.invalidateQueries(undefined, { throwOnError: true });
       setLastSyncedTime(
-        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        formatManilaTime()
       );
     } catch (e) {
       console.error("Data resync failed:", e);
@@ -118,11 +124,8 @@ function DFTCLayoutInner() {
 
   // Replace the workspace content while the account is still on an
   // admin-provisioned temporary password. `rotated` is cleared the moment the
-  // POST succeeds: change_password() revokes every session and purges the
-  // cached snapshot before returning, so the next /auth/me can come back 401
-  // and null out `user` — and with no dismiss affordance, a gate derived from
-  // the flag alone would strand the user. The rotation already committed
-  // server-side; refreshUser() only reconciles the cache, so it is best-effort.
+  // The password change revokes every session server-side, and the current
+  // browser is logged out explicitly after the rotation.
   const [rotated, setRotated] = useState(false);
   const pendingChangePassword = user?.must_change_password === true && !rotated;
 
@@ -157,11 +160,8 @@ function DFTCLayoutInner() {
 
   const handlePasswordRotated = async () => {
     setRotated(true);
-    try {
-      await refreshUser?.();
-    } catch {
-      // Deliberately swallowed — see above.
-    }
+    await logout();
+    navigate("/login", { replace: true });
   };
 
   return (

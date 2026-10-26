@@ -778,7 +778,6 @@ export default function DFTCInput() {
                     )}
                   </div>
                   <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[12px]">
-                    <span className="text-[var(--hw-neutral-500)]">{file.savedDate}</span>
                     <span className="font-semibold text-[var(--hw-neutral-900)]">{file.records ?? 0} records</span>
                   </div>
                 </button>

@@ -549,10 +549,12 @@ function DFTCUpload() {
         let attempts = 0;
         while (!isFinished && attempts < 300) {
           attempts++;
-          await new Promise((r) => setTimeout(r, 2000));
+          // Use the lightweight status endpoint and stay below the API rate
+          // limit while the background import and forecast are running.
+          await new Promise((r) => setTimeout(r, 15000));
           if (!mountedRef.current) return;
           try {
-            const statusRes = await ingestionApi.getHistoryDetail(importId);
+            const statusRes = await ingestionApi.getHistoryStatus(importId);
             const forecastFailed = statusRes?.status === "completed_with_forecast_error";
             const forecastPending = statusRes?.status === "waiting_for_complete_series";
             if (statusRes?.status === "completed" || statusRes?.status === "success" || forecastFailed || forecastPending) {

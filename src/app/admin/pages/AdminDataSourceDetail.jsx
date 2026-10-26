@@ -12,6 +12,7 @@ import {
   ChevronUp
 } from "lucide-react";
 import { adminApi } from "../../../services/api";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 
 const PAGE_SIZE = 20;
 const META_COLS = [
@@ -39,7 +40,6 @@ const DETAIL_COLS = {
     { key: "price_min", label: "Min Price" },
     { key: "price_max", label: "Max Price" },
     { key: "prevail_price", label: "Prevailing Price" },
-    { key: "observation_status", label: "Observation Status" },
   ],
   arrival: [
     { key: "commodity_name", label: "Commodity" },
@@ -67,10 +67,35 @@ const DETAIL_COLS = {
 
 function formatDT(v) {
   if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return String(v);
-  return d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDateTime(v) || String(v);
 }
+
+function formatDetailValue(value) {
+  if (value == null || value === "") return "—";
+  if (typeof value !== "string") return String(value);
+  const trimmed = value.trim();
+  const key = trimmed.toLowerCase().replace(/[\s_-]+/g, "");
+  if (key.includes("bankerohan") || key.includes("bangkerohan")) return "Bankerohan";
+  if (key.includes("dftc")) return "DFTC";
+  if (key.includes("openstat")) return "OpenStat";
+  if (key === "api") return "API";
+  return trimmed
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+const SOURCE_NAME_LABELS = {
+  bankerohan_daily_retail: "Bankerohan Daily Retail",
+  bankerohan_daily_wholesale: "Bankerohan Daily Wholesale",
+  dftc_daily_retail: "DFTC Daily Retail",
+  dftc_daily_wholesale: "DFTC Daily Wholesale",
+  dftc_volume: "DFTC Arrival Volume",
+  psa_openstat: "PSA OpenStat",
+  open_meteo: "Open-Meteo Weather API",
+};
+
+const formatSourceName = (value) => SOURCE_NAME_LABELS[value] || formatDetailValue(value);
 
 function buildTable(items) {
   const presentTypes = Array.from(new Set(items.map((it) => it.record_type)));
@@ -90,7 +115,7 @@ function buildTable(items) {
     });
     detailCols.forEach((c) => {
       const val = it.detail && it.detail[c.key];
-      row[c.key] = val != null ? String(val) : "—";
+      row[c.key] = formatDetailValue(val);
     });
     return { row, columns };
   });
@@ -115,9 +140,6 @@ function AdminDataSourceDetail() {
   const error = queryErr ? (queryErr.message || "Failed to load data source.") : null;
 
   const src = dataSource || {};
-  const statusCode = src.status;
-  const statusColor = statusCode === "Updated" ? "text-emerald-700" : (statusCode === "Failed" ? "text-red-600" : (statusCode === "Requires Review" ? "text-amber-700" : "text-[var(--hw-neutral-600)]"));
-  const statusLabel = statusCode || "No data uploaded";
   const btnPrimary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors";
   const btnSecondary = "flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors";
 
@@ -136,11 +158,9 @@ function AdminDataSourceDetail() {
           </button>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h1 className="text-[18px] sm:text-[20px] font-bold text-[var(--hw-neutral-900)]">{src.source_name || "Data Source"}</h1>
+              <h1 className="text-[18px] sm:text-[20px] font-bold text-[var(--hw-neutral-900)]">{formatSourceName(src.source_name || "Data Source")}</h1>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className="text-[12px] text-[var(--hw-neutral-800)]">{src.source_type || src.ingestion_method || "—"}</span>
-                <span className="text-[var(--hw-neutral-300)]">·</span>
-                <span className={`text-[13px] font-semibold ${statusColor}`}>{statusLabel}</span>
+                <span className="text-[12px] text-[var(--hw-neutral-800)]">{formatDetailValue(src.source_type || src.ingestion_method)}</span>
               </div>
             </div>
           </div>
@@ -163,9 +183,9 @@ function AdminDataSourceDetail() {
           <div className="divide-y divide-[var(--hw-neutral-100)]">
             {[
     { label: "ID", value: src.id || "-" },
-    { label: "Source type", value: src.source_type || "-" },
-    { label: "Ingestion method", value: src.ingestion_method || "-" },
-    { label: "Update frequency", value: src.update_frequency || "-" },
+    { label: "Source type", value: formatDetailValue(src.source_type) },
+    { label: "Ingestion method", value: formatDetailValue(src.ingestion_method) },
+    { label: "Update frequency", value: formatDetailValue(src.update_frequency) },
     { label: "Last successful update", value: formatDT(src.last_successful_update), highlight: !!src.last_successful_update }
   ].map((row) => <div key={row.label} className="flex flex-col xs:flex-row xs:items-center justify-between gap-1 xs:gap-3 px-4 sm:px-5 py-2.5 sm:py-3">
                 <p className="text-[13px] text-[var(--hw-neutral-800)]">{row.label}</p>

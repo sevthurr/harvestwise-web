@@ -38,9 +38,11 @@ describe("Public Auth - Phone Validation", () => {
     expect(isValidPhPhone("08123456789")).toBe(false);
   });
 
-  it("normalizes +639... to 09...", () => {
-    expect(normalizePhPhone("+639171234567")).toBe("09171234567");
-    expect(normalizePhPhone("09171234567")).toBe("09171234567");
+  it("normalizes Philippine mobile numbers to +63 E.164", () => {
+    expect(normalizePhPhone("+639171234567")).toBe("+639171234567");
+    expect(normalizePhPhone("09171234567")).toBe("+639171234567");
+    expect(normalizePhPhone("639171234567")).toBe("+639171234567");
+    expect(normalizePhPhone("9171234567")).toBe("+639171234567");
   });
 });
 
@@ -66,7 +68,7 @@ describe("Public Auth - Unified Contact Detection & Payload Mapping", () => {
     const res = validateContact("+639171234567");
     expect(res.isValid).toBe(true);
     expect(res.type).toBe("phone");
-    expect(res.normalized).toBe("09171234567");
+    expect(res.normalized).toBe("+639171234567");
   });
 
   it("detects and normalizes email input", () => {
@@ -101,7 +103,7 @@ describe("Public Auth - Unified Contact Detection & Payload Mapping", () => {
       ...(phoneCheck.type === "email" && { email: phoneCheck.normalized }),
       password: "Password123!",
     };
-    expect(phonePayload.phone).toBe("09171234567");
+    expect(phonePayload.phone).toBe("+639171234567");
     expect(phonePayload.email).toBeUndefined();
 
     // Simulate email registration
@@ -237,12 +239,12 @@ describe("Public Auth - Live Contact Input Control Rules", () => {
     expect(detectContactMode("09user@gmail.com")).toBe("email");
   });
 
-  it("limits number of digits to 11 for local PH numbers and truncates excess digits", () => {
+  it("limits local PH input and canonicalizes excess input to +63", () => {
     // Exactly the user's reported example:
     const overflowInput = "092983129839123812938219382193819238";
     const formatted = formatContactInput(overflowInput);
-    expect(formatted).toBe("09298312983");
-    expect(formatted.length).toBe(11);
+    expect(formatted).toBe("+639298312983");
+    expect(formatted.length).toBe(13);
   });
 
   it("limits number of digits to 13 for +63 numbers and truncates excess digits", () => {
@@ -253,8 +255,12 @@ describe("Public Auth - Live Contact Input Control Rules", () => {
   });
 
   it("strips hyphens and spaces from phone numbers", () => {
-    expect(formatContactInput("0929-831-2983")).toBe("09298312983");
+    expect(formatContactInput("0929-831-2983")).toBe("+639298312983");
     expect(formatContactInput("+63 929 831 2983")).toBe("+639298312983");
+  });
+
+  it("canonicalizes a complete local number while typing", () => {
+    expect(formatContactInput("9171234567")).toBe("+639171234567");
   });
 
   it("applies email rules: strips spaces and allows standard length", () => {

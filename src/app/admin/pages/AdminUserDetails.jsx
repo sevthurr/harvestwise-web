@@ -14,7 +14,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
-import { formatDate } from "../../global/utils/apiTransforms";
+import { formatDate, formatPersonName } from "../../global/utils/apiTransforms";
 
 const EditForm = ({ user, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -173,7 +173,7 @@ function AdminUserDetails() {
         setUser({
           ...u,
           roleName: u.role?.role_name,
-          name: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
+          name: formatPersonName(`${u.first_name || ""} ${u.last_name || ""}`),
         });
       })
       .catch(() => {

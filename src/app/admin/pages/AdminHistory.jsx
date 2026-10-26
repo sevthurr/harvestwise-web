@@ -7,40 +7,29 @@ import {
   ACTIVITY_TYPES
 } from "../components/analytics/adminHistoryMockData";
 import { ingestionApi } from "../../../services/api";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 
 const PAGE_SIZE = 20;
 
 function formatHistoryDT(v) {
   if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return String(v);
-  return d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDateTime(v) || String(v);
+}
+
+function historyErrorMessage(message) {
+  return /forecast/i.test(message || "") ? "Price forecasting failed." : message;
 }
 
 function mapHistory(rec) {
-  const sourceModule = rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
+  const isApiSync = !rec.original_file_name;
+  const sourceModule = isApiSync ? "OpenStat API Sync" : rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
   const result = rec.error_message
-    ? rec.error_message
+    ? historyErrorMessage(rec.error_message)
     : rec.records_imported != null
     ? `${rec.records_imported} records processed`
     : "Processed";
 
-  let status = "Completed";
-  if (rec.status === "failed") status = "Failed";
-
-  let activity = "Data Import";
-  if (rec.original_file_name || (rec.file_format && rec.file_format.startsWith('.'))) {
-    activity = "File Upload";
-  } else if (rec.file_format && !rec.file_format.startsWith('.')) {
-    activity = "API Sync";
-  }
-
-  const duration = (() => {
-    if (!rec.finished_at || !rec.started_at) return "—";
-    const ms = new Date(rec.finished_at).getTime() - new Date(rec.started_at).getTime();
-    if (Number.isNaN(ms) || ms < 0) return "—";
-    return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-  })();
+  const activity = isApiSync ? "OpenStat API Sync" : "File Upload";
 
   return {
     id: rec.id,
@@ -51,7 +40,6 @@ function mapHistory(rec) {
     submittedBy: rec.uploaded_by_name || rec.uploaded_by_user_id || "Admin",
     recordsCount: rec.records_imported != null ? String(rec.records_imported) : "—",
     result,
-    status,
     // Only fields ImportHistoryResponse actually returns. The previous shape
     // advertised Commodity/Variety/Module, which the list endpoint never
     // sends, so those search branches were permanently dead.
@@ -59,7 +47,6 @@ function mapHistory(rec) {
       "Submission ID": rec.submission_id || "—",
       "File format": rec.file_format || "—",
       "Uploaded by": rec.uploaded_by_name || rec.uploaded_by_user_id || "—",
-      Duration: duration,
     }
   };
 }
@@ -109,7 +96,6 @@ function AdminHistory({ embedded = false }) {
         const haystack = [
           r.sourceModule,
           r.activity,
-          r.status,
           r.result,
           r.submittedBy,
           r.recordsCount,
@@ -162,7 +148,7 @@ function AdminHistory({ embedded = false }) {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search file name, submission ID, status, result, or uploader..."
+              placeholder="Search file name, submission ID, result, or uploader..."
               className="w-full pl-9 pr-3.5 py-2 text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white focus:bg-white border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20 transition text-[var(--hw-neutral-800)] placeholder:text-[var(--hw-neutral-400)]"
             />
           </div>
@@ -275,7 +261,7 @@ function AdminHistory({ embedded = false }) {
                         {r.result || "No result summary available."}
                       </td>
                       <td className="px-5 py-3.5 text-[12px] text-[var(--hw-neutral-600)]">
-                        {r.initiatedBy || "System"}
+                        {r.submittedBy || "System"}
                       </td>
                     </tr>
                   );
@@ -352,7 +338,7 @@ function AdminHistory({ embedded = false }) {
                 <p className="text-[13px] text-[var(--hw-neutral-700)]">{r.result || "No result summary available."}</p>
                 <div className="flex items-center justify-between text-[11px] text-[var(--hw-neutral-500)] pt-2 border-t border-[var(--hw-neutral-100)]">
                   <span>{r.datetime || "-"}</span>
-                  <span>{r.initiatedBy || "System"}</span>
+                  <span>{r.submittedBy || "System"}</span>
                 </div>
               </div>
             );
