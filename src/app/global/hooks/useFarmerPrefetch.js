@@ -4,6 +4,7 @@ import { apiGet, apiPost, parseResponse } from "../api";
 import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
 import { toCamelCase } from "../utils/apiTransforms";
+import { getPreferredCropMatcher } from "../../farmer/utils/cropPreferences";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
 export const SUPPORTED_PRICES_KEY = ["prices", "supported-list"];
@@ -193,6 +194,9 @@ export async function seedFarmerOfflineBundle(queryClient) {
   const bundle = await parseResponse(res);
 
   const profile = bundle.profile || null;
+  const preferredMatcher = getPreferredCropMatcher(
+    profile?.preferred_crops || profile?.preferredCrops || []
+  );
   if (profile) {
     queryClient.setQueryData(FARMER_PROFILE_KEY, profile);
     // Several legacy farmer pages still use this key. Keep it backed by the
@@ -223,7 +227,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
   if (Array.isArray(bundle.price_detail)) {
     bundle.price_detail.forEach((entry) => {
       const camel = toCamelCase(entry);
-      if (!camel.commodityId || !camel.selectedPriceType) return;
+      if (!camel.commodityId || !camel.selectedPriceType || !preferredMatcher.isPreferred(camel)) return;
       // Same transformation the page's queryFn applies, so a bundle hit and a
       // network hit are byte-identical in the cache.
       queryClient.setQueryData(
@@ -244,7 +248,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
       // because CommodityDetail.jsx camelCases inside its own queryFn.
       const commodityId = entry.commodity_id;
       const priceTypeKey = entry.selected_price_type;
-      if (!commodityId || !priceTypeKey) return;
+      if (!commodityId || !priceTypeKey || !preferredMatcher.isPreferred(entry)) return;
       // Selected price type, not BUNDLE_TREND_PRICE_TYPE: the server builds this
       // section from get_price_detail, which echoes back the type it was asked
       // for, and keying off the echo keeps the two sides from drifting.
@@ -290,25 +294,28 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   const safePrefetch = (queryKey, queryFn) =>
     queryClient.prefetchQuery({ queryKey, queryFn, staleTime: STALE_TIME }).catch(() => {});
 
-  const cropIds = [...new Set((bundle.crop_plans || [])
+  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY) || {};
+  const preferredCrops = profile.preferred_crops || profile.preferredCrops || [];
+  const preferredMatcher = getPreferredCropMatcher(preferredCrops);
+  const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
+  const priceItems = [...(bundle.price_trends || []), ...supportedItems];
+  const preferredPriceIds = [...new Set(priceItems
+    .filter((item) => preferredMatcher.isPreferred(item))
+    .map((item) => item.commodity_id || item.commodityId)
+    .filter(Boolean))];
+  const preferredCropIds = [...new Set((bundle.crop_plans || [])
+    .filter((plan) => preferredMatcher.isPreferred(plan))
     .map((plan) => plan.commodity_id || plan.commodityId)
     .filter(Boolean))];
-  const priceIds = [...new Set((bundle.price_trends || [])
-    .map((item) => item.commodity_id || item.commodityId)
-    .filter(Boolean))];
-  const supportedPriceIds = (queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [])
-    .map((item) => item.commodity_id || item.commodityId)
-    .filter(Boolean);
   const supportedVarietyById = new Map(
-    (queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [])
+    supportedItems
       .map((item) => [
         item.commodity_id || item.commodityId,
         item.variety ?? item.variety_name ?? null,
       ])
       .filter(([id]) => Boolean(id))
   );
-  const allPriceIds = [...new Set([...priceIds, ...supportedPriceIds])];
-  const basisIds = [...new Set([...cropIds, ...allPriceIds])];
+  const basisIds = [...new Set([...preferredCropIds, ...preferredPriceIds])];
   const quarters = ["Q1", "Q2", "Q3", "Q4"];
 
   const requests = [
@@ -333,7 +340,7 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     }),
   ];
 
-  allPriceIds.forEach((commodityId) => {
+  preferredPriceIds.forEach((commodityId) => {
     const variety = supportedVarietyById.get(commodityId) || null;
     FARMER_PRICE_TYPES.forEach((priceTypeKey) => {
       FARMER_PRICE_HORIZONS.forEach((horizon) => {
@@ -424,7 +431,8 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   // Crop Factors and Crop Cycle Details use a parameterized advisory result
   // for each saved crop plan. Recreate the exact key and payload from the
   // normalized offline crop record.
-  const cachedCrops = queryClient.getQueryData(["farmer", "crops"]) || [];
+  const cachedCrops = (queryClient.getQueryData(["farmer", "crops"]) || [])
+    .filter((crop) => preferredMatcher.isPreferred(crop));
   cachedCrops.forEach((crop) => {
     const totalCost = crop.totalCost || 0;
     const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
@@ -496,7 +504,7 @@ export async function prefetchFarmerFullData(queryClient) {
     staleTime: STALE_TIME,
   }).catch(() => {});
   await queryClient.prefetchQuery({
-    queryKey: ["marketCalendar"],
+    queryKey: ["marketCalendar", "v2"],
     queryFn: fetchMarketCalendar,
     staleTime: STALE_TIME,
   }).catch(() => {});

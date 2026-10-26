@@ -36,8 +36,22 @@ function firstDay(y, m) {
 function dateStr(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+export function dateOnly(value) {
+  return value ? String(value).split("T")[0] : "";
+}
+
+export function eventCoversDate(date, event) {
+  const start = dateOnly(event?.date);
+  const end = dateOnly(event?.endDate) || start;
+  return Boolean(start && date >= start && date <= end);
+}
+
+function isEnabled(value) {
+  return value === true || value === 1 || String(value).toLowerCase() === "true";
+}
+
 function formatDate(ds) {
-  const [y, m, d] = ds.split("-").map(Number);
+  const [y, m, d] = dateOnly(ds).split("-").map(Number);
   return `${MONTH_SHORT[m - 1]} ${d}, ${y}`;
 }
 
@@ -67,7 +81,7 @@ const CalendarGrid = ({ year, month, selectedDate, onSelect, events }) => {
   for (let d = 1; d <= total; d++) cells.push({ day: d, key: `d-${d}` });
 
   const getEventForDate = (ds) => {
-    return events.filter((e) => !e.endDate ? e.date === ds : ds >= e.date && ds <= e.endDate);
+    return events.filter((e) => eventCoversDate(ds, e));
   };
 
   return <div>
@@ -114,14 +128,15 @@ function MarketCalendarPage() {
 
   // Fetch market calendar events with React Query
   const { data: rawMarketEvents, isLoading: loadingEvents } = useQuery({
-    queryKey: ["marketCalendar"],
+    queryKey: ["marketCalendar", "v2"],
     queryFn: async () => {
       const marketRes = await apiGet('/market/calendar');
       if (!marketRes.ok) return [];
       const data = await parseResponse(marketRes);
       return data.items || [];
     },
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: true,
   });
 
   // Use normalized farmer crop plans
@@ -143,13 +158,14 @@ function MarketCalendarPage() {
       if (!origDate) return;
 
       // Use original date from DB — no year remapping
-      const eventDate = String(origDate);
+      const eventDate = dateOnly(origDate);
+      const eventEnd = dateOnly(camelItem.eventEnd);
 
-      if (camelItem.isPublicHoliday || camelItem.holidayName) {
+      if (isEnabled(camelItem.isPublicHoliday) || camelItem.holidayName) {
         marketEvents.push({
           id: `${camelItem.id || 'cal'}-holiday-${eventDate}`,
           date: eventDate,
-          endDate: camelItem.eventEnd,
+          endDate: eventEnd,
           category: camelItem.holidayName ? "national-holiday-regular" : "national-holiday-special",
           title: camelItem.holidayName || "Public Holiday",
           description: camelItem.holidayName || "Public Holiday",
@@ -158,11 +174,11 @@ function MarketCalendarPage() {
         });
       }
 
-      if (camelItem.isLocalEvent || camelItem.eventName) {
+      if (isEnabled(camelItem.isLocalEvent) || camelItem.eventName) {
         marketEvents.push({
           id: `${camelItem.id || 'cal'}-local-${eventDate}`,
           date: eventDate,
-          endDate: camelItem.eventEnd,
+          endDate: eventEnd,
           category: "local-event",
           title: camelItem.eventName || "Davao Local Event",
           description: camelItem.eventName || "Davao City Local Event",
@@ -171,11 +187,11 @@ function MarketCalendarPage() {
         });
       }
 
-      if (camelItem.isPayday) {
+      if (isEnabled(camelItem.isPayday)) {
         marketEvents.push({
           id: `${camelItem.id || 'cal'}-payday-${eventDate}`,
           date: eventDate,
-          endDate: camelItem.eventEnd,
+          endDate: eventEnd,
           category: "payday",
           title: "Payday Period",
           description: "Payday Period",
@@ -194,7 +210,7 @@ function MarketCalendarPage() {
       if (pDate) {
         cropEvents.push({
           id: `crop-plant-${c.id}`,
-          date: pDate,
+          date: dateOnly(pDate),
           category: "crop-planting",
           title: `Planting: ${name}`,
           description: `Target/actual planting for ${name}`,
@@ -207,7 +223,7 @@ function MarketCalendarPage() {
       if (hDate) {
         cropEvents.push({
           id: `crop-harvest-${c.id}`,
-          date: hDate,
+          date: dateOnly(hDate),
           category: "crop-harvest",
           title: `Expected Harvest: ${name}`,
           description: `Expected harvest window for ${name}`,
@@ -226,10 +242,12 @@ function MarketCalendarPage() {
     const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
     return allEvents.filter(e => {
       if (!e.date) return false;
+      const eventDate = dateOnly(e.date);
+      const eventEnd = dateOnly(e.endDate) || eventDate;
       // Event starts in this month, or spans into this month
-      const eventStartMonth = e.date.substring(0, 7);
+      const eventStartMonth = eventDate.substring(0, 7);
       if (eventStartMonth === monthPrefix) return true;
-      if (e.endDate && e.endDate >= `${monthPrefix}-01` && e.date <= `${monthPrefix}-31`) return true;
+      if (eventEnd >= `${monthPrefix}-01` && eventDate <= `${monthPrefix}-31`) return true;
       return false;
     });
   }, [allEvents, year, month]);
@@ -249,7 +267,7 @@ function MarketCalendarPage() {
 
   const selectedEvents = useMemo(() => {
     if (!selectedDate) return [];
-    const list = events.filter((e) => !e.endDate ? e.date === selectedDate : selectedDate >= e.date && selectedDate <= e.endDate);
+    const list = events.filter((e) => eventCoversDate(selectedDate, e));
     return list.slice().sort((a, b) => {
       const aPref = a.isPreferred ? 1 : 0;
       const bPref = b.isPreferred ? 1 : 0;

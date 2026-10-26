@@ -408,7 +408,7 @@ function AdminAuditLogs() {
             <input
               id="audit-user-filter"
               type="text"
-              placeholder="Search user ID…"
+              placeholder="Search actor name or user ID…"
               value={userSearch}
               onChange={(e) => { setUserSearch(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"

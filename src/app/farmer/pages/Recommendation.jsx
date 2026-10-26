@@ -697,7 +697,7 @@ function RecommendationPage() {
 
   // Reuse prefetched market calendar
   const { data: rawMarketEvents = [], isLoading: eventsLoading } = useQuery({
-    queryKey: ["marketCalendar"],
+    queryKey: ["marketCalendar", "v2"],
     queryFn: async () => {
       const res = await apiGet("/market/calendar");
       if (!res.ok) return [];

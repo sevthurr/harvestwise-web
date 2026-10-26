@@ -1393,6 +1393,7 @@ function AdminAnalytics() {
     const params = new URLSearchParams();
     if (scopedCommodity) params.set("commodity", scopedCommodity);
     if (scopedVariety) params.set("variety", scopedVariety);
+    if (moduleOutputs?.output_id) params.set("output", moduleOutputs.output_id);
     navigate(`/admin/modules/basis/${targetId}?${params.toString()}`);
   };
 
@@ -1710,18 +1711,31 @@ function AdminAnalytics() {
                           </span>
                         </div>
                       </div>
-                      {card.issues?.length > 0 && (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
-                          <p className="font-semibold mb-0.5">Issues</p>
-                          <ul className="list-disc pl-4 space-y-0.5">
-                            {card.issues.map((issue, i) => <li key={i}>{issue}</li>)}
-                          </ul>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
+
+              {moduleCards.some((card) => card.issues?.length > 0) && (
+                <div className="mt-4 rounded-xl border border-[var(--hw-neutral-200)] bg-white shadow-[var(--shadow-xs)] overflow-hidden">
+                  <div className="px-4 sm:px-5 py-3 border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
+                    <h3 className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Issues</h3>
+                    <p className="text-[11.5px] text-[var(--hw-neutral-600)] mt-0.5">
+                      Reliability notes affecting the module outputs above.
+                    </p>
+                  </div>
+                  <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {moduleCards.filter((card) => card.issues?.length > 0).map((card) => (
+                      <div key={`${card.moduleKey}-issues`} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-800 min-w-0">
+                        <p className="font-semibold mb-1">{card.module}</p>
+                        <ul className="list-disc pl-4 space-y-0.5 break-words">
+                          {card.issues.map((issue, i) => <li key={i}>{issue}</li>)}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>

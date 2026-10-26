@@ -1957,24 +1957,6 @@ function AdminAnalyticsBasis() {
                     onChange={setArrivalGranularity}
                     options={ARRIVAL_GRANULARITY_OPTIONS}
                   />
-                  {arrivalYears.length > 0 && (arrivalGranularity === "monthly" || arrivalGranularity === "weekly") && (
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
-                      <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
-                      <select
-                        value={arrivalActiveYear ?? ""}
-                        onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
-                        aria-label="Arrival year"
-                        className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
-                      >
-                        {arrivalYears.map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -2050,13 +2032,33 @@ function AdminAnalyticsBasis() {
             </div>
 
             <div className={vizCardClass}>
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
-                  Arrival Volume Sources Distribution
-                </p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-                  Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div>
+                  <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                    Arrival Volume Sources Distribution
+                  </p>
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                    Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
+                  </p>
+                </div>
+                {arrivalYears.length > 0 && (arrivalGranularity === "monthly" || arrivalGranularity === "weekly") && (
+                  <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
+                    <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
+                    <select
+                      value={arrivalActiveYear ?? ""}
+                      onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
+                      aria-label="Arrival year"
+                      className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
+                    >
+                      {arrivalYears.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
+                  </div>
+                )}
               </div>
               <ArrivalSourcePieChart
                 showEmpty={!arrivalSourcePieData.length}

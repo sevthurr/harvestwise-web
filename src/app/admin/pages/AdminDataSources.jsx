@@ -21,6 +21,12 @@ function fmtISO(dateStr) {
   return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : "";
 }
 
+function parseCalendarDate(value) {
+  const dateOnly = String(value || "").split("T")[0];
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day) : null;
+}
+
 function toApiEvent(form, { includeStatus = true } = {}) {
   const payload = {
     event_name: form.name,
@@ -51,7 +57,8 @@ function mapEvent(ev) {
     id: ev.id,
     name: ev.event_name || "Untitled",
     type: ev.event_type || "Others",
-    date: new Date(ev.start_date),
+    date: parseCalendarDate(ev.start_date),
+    endDate: parseCalendarDate(ev.end_date || ev.start_date),
     from: fmtDate(ev.start_date),
     to: ev.end_date ? fmtDate(ev.end_date) : fmtDate(ev.start_date),
     source: ev.source || "Manual Entry",
@@ -113,7 +120,7 @@ function filterEnd(f) {
 function eventCoversDate(event, year, month, day) {
   const target = new Date(year, month, day);
   const start = event.date;
-  const end = event.to ? new Date(event.to) : start;
+  const end = event.endDate || start;
   return start <= target && end >= target;
 }
 const FMT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -242,7 +249,7 @@ function AdminDataSources() {
   };
 
   const { data: eventsData } = useQuery({
-    queryKey: ["adminCalendarEvents"],
+    queryKey: ["adminCalendarEvents", "v2"],
     queryFn: calendarApi.listEvents,
     staleTime: 1000 * 60 * 5,
   });
@@ -306,7 +313,7 @@ function AdminDataSources() {
   const filteredEvents = useMemo(() => {
     const end = filterEnd(calFilter);
     return events.filter((e) => {
-      const eventEnd = e.to ? new Date(e.to) : e.date;
+      const eventEnd = e.endDate || e.date;
       return eventEnd >= TODAY_DATE && e.date <= end;
     }).sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [events, calFilter]);
@@ -315,7 +322,7 @@ function AdminDataSources() {
       const monthStart = new Date(calYear, calMonth, 1);
       const monthEnd = new Date(calYear, calMonth + 1, 0);
       return events.filter((e) => {
-        const eventEnd = e.to ? new Date(e.to) : e.date;
+        const eventEnd = e.endDate || e.date;
         return e.date <= monthEnd && eventEnd >= monthStart;
       });
     },

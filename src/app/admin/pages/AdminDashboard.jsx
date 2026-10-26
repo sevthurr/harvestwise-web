@@ -338,8 +338,6 @@ function AdminDashboard() {
                   return (
                     <tr
                       key={i}
-                      onClick={() => row.path && navigate(row.path)}
-                      className="cursor-pointer"
                     >
                       <td className="px-5 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap w-20">
                         {row.time || "—"}
@@ -373,8 +371,7 @@ function AdminDashboard() {
               return (
                 <div
                   key={i}
-                  onClick={() => row.path && navigate(row.path)}
-                  className="px-5 py-3 flex items-start justify-between gap-2 cursor-pointer"
+                  className="px-5 py-3 flex items-start justify-between gap-2"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-medium text-[var(--hw-neutral-800)] leading-snug">

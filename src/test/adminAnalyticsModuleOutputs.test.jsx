@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import AdminAnalytics from '../app/admin/pages/AdminAnalytics';
 import { analyticsApi } from '../services/api';
 import { apiGet, parseResponse } from '../app/global/api';
@@ -54,9 +54,15 @@ const renderPage = () =>
     <MemoryRouter initialEntries={['/admin/modules/analytics']}>
       <Routes>
         <Route path="/admin/modules/analytics" element={<AdminAnalytics />} />
+        <Route path="*" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>
   );
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location-search">{location.search}</output>;
+}
 
 describe('AdminAnalytics module outputs', () => {
   beforeEach(() => {
@@ -78,7 +84,7 @@ describe('AdminAnalytics module outputs', () => {
     analyticsApi.listThresholds.mockResolvedValue({ items: [] });
     analyticsApi.listThresholdRules.mockResolvedValue({ items: [] });
     analyticsApi.listModuleOutputs.mockResolvedValue({ items: [RECORD] });
-    analyticsApi.computeModuleOutputs.mockResolvedValue({ commodity_id: 'COM-0001' });
+    analyticsApi.computeModuleOutputs.mockResolvedValue({ commodity_id: 'COM-0001', output_id: 'MCR-0001' });
     analyticsApi.listWeatherRules.mockResolvedValue({ items: [] });
     analyticsApi.getHistoricalSeasonalProduction.mockResolvedValue({});
     // The Weights & Thresholds tab's Arrival Pressure card reads this. Default
@@ -118,5 +124,14 @@ describe('AdminAnalytics module outputs', () => {
     await waitFor(() => expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('Processed Results')).not.toBeInTheDocument();
     expect(analyticsApi.listModuleOutputs).not.toHaveBeenCalled();
+  });
+
+  it('passes the persisted output id to the module basis page', async () => {
+    renderPage();
+    await waitFor(() => expect(analyticsApi.computeModuleOutputs).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByText('Price Outlook'));
+
+    expect(screen.getByTestId('location-search')).toHaveTextContent('output=MCR-0001');
   });
 });

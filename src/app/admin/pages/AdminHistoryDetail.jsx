@@ -152,7 +152,6 @@ function AdminHistoryDetail() {
         <div className="flex flex-wrap items-center gap-2 mt-1.5">
           <span className="text-[13px] font-medium text-[var(--hw-neutral-700)]">{record.activity || "-"}</span>
         </div>
-        <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">{record.datetime || "-"}</p>
       </div>
 
       {/* 1. Summary */}
