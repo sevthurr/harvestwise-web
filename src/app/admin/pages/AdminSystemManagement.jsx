@@ -753,9 +753,12 @@ const AccountRequestsTab = ({ showToast }) => {
 const SecurityTab = ({ showToast }) => {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
   const { data: securityData, isLoading, isError } = useQuery({
     queryKey: ["adminSystemSecurity"],
     queryFn: adminApi.getSystemSecurity,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   useEffect(() => {
     if (securityData) setSettings(securityData);
@@ -766,6 +769,7 @@ const SecurityTab = ({ showToast }) => {
     try {
       const saved = await adminApi.updateSystemSecurity(settings);
       setSettings(saved);
+      queryClient.setQueryData(["adminSystemSecurity"], saved);
       showToast("System security settings saved.");
     } catch {
       showToast("Failed to save system security settings.", "error");
