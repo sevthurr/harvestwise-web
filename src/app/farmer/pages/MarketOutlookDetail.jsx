@@ -21,7 +21,11 @@ import {
   normalizePriceTrendCode,
 } from "../utils/farmerCodes";
 import { useLanguage } from "../../global/contexts/LanguageContext";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import {
+  fetchFarmerProfile,
+  fetchMonthlyRecommendations,
+  monthlyRecommendationsKey,
+} from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
@@ -166,12 +170,8 @@ function MarketOutlookDetailPage() {
 
   // Fetch all recommendations — we pick the row matching commodityId
   const { data: recsData, isLoading: recsLoading } = useQuery({
-    queryKey: ["market", "monthly-recommendations"],
-    queryFn: async () => {
-      const res = await apiGet("/market/monthly-recommendations");
-      if (!res.ok) throw new Error("Failed to load recommendations");
-      return parseResponse(res);
-    },
+    queryKey: monthlyRecommendationsKey(),
+    queryFn: () => fetchMonthlyRecommendations(),
     staleTime: 1000 * 60 * 30,
   });
 

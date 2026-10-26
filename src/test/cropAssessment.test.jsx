@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLanguage } from "../app/global/contexts/LanguageContext";
 import { t as translate } from "../app/global/i18n";
@@ -10,8 +10,11 @@ import {
   CROP_DURATIONS,
   getCropDuration,
   suggestHarvestDate,
-  DEFAULT_ASSESSMENT
+  DEFAULT_ASSESSMENT,
+  SQM_PER_HECTARE,
+  toSqm
 } from "../app/farmer/components/recommend/types";
+import { Step2FarmHarvest } from "../app/farmer/components/recommend/Step2FarmHarvest";
 
 vi.mock("../app/global/contexts/LanguageContext", () => ({
   useLanguage: vi.fn(),
@@ -220,5 +223,84 @@ describe("Crop Assessment Updates", () => {
     expect(screen.getAllByText("Talong").length).toBeGreaterThan(0);
     expect(screen.getByText(/You need to sell Talong/i)).toBeDefined();
     expect(screen.getByText(/₱40\/kg/)).toBeDefined();
+  });
+});
+
+describe("Step 2 farm area unit conversion (sq m <-> ha)", () => {
+  function Step2Harness() {
+    const [data, setData] = React.useState({
+      ...DEFAULT_ASSESSMENT,
+      farmAreaUnit: "sqm",
+    });
+    return (
+      <Step2FarmHarvest
+        data={data}
+        onChange={(patch) => setData((d) => ({ ...d, ...patch }))}
+        errors={{}}
+      />
+    );
+  }
+
+  it("converts hectares to the sq m value the API stores", () => {
+    expect(SQM_PER_HECTARE).toBe(10000);
+    expect(toSqm(0.5, "ha")).toBe(5000);
+    expect(toSqm(1.25, "ha")).toBe(12500);
+    expect(toSqm(500, "sqm")).toBe(500);
+    expect(toSqm("", "ha")).toBeNull();
+    expect(toSqm(0, "sqm")).toBeNull();
+  });
+
+  it("sends farm_area in sq m when the farmer saved with hectares selected", async () => {
+    const { buildDraftPayload } = await import("../app/farmer/pages/Assess");
+    const draft = buildDraftPayload({
+      ...DEFAULT_ASSESSMENT,
+      commodity: "COM-0001",
+      commodityId: "COM-0001",
+      farmArea: 0.5,
+      farmAreaUnit: "ha",
+      harvestQuantity: 600,
+      simpleCost: 20000,
+    });
+    expect(draft.farm_area).toBe(5000);
+
+    const sqmDraft = buildDraftPayload({
+      ...DEFAULT_ASSESSMENT,
+      farmArea: 500,
+      farmAreaUnit: "sqm",
+    });
+    expect(sqmDraft.farm_area).toBe(500);
+  });
+
+  it("sends farm_area in sq m when the advisory is saved as a crop plan", async () => {
+    const { buildCropPlanPayload } = await import(
+      "../app/farmer/components/recommend/RecommendationResult"
+    );
+    const payload = buildCropPlanPayload(
+      {
+        ...DEFAULT_ASSESSMENT,
+        commodity: "COM-0001",
+        farmArea: 2,
+        farmAreaUnit: "ha",
+        harvestQuantity: 600,
+        simpleCost: 20000,
+      },
+      "Planning"
+    );
+    expect(payload.farm_area).toBe(20000);
+  });
+
+  it("shows the equivalent in the other unit and converts the typed value on unit switch", () => {
+    renderWithProviders(<Step2Harness />);
+    const areaInput = screen.getByPlaceholderText("e.g. 500");
+
+    fireEvent.change(areaInput, { target: { value: "500" } });
+    expect(screen.getByText(/≈ 0\.05 ha/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "ha" }));
+    expect(Number(areaInput.value)).toBe(0.05);
+    expect(screen.getByText(/≈ 500 sq m/)).toBeInTheDocument();
+
+    fireEvent.change(areaInput, { target: { value: "0.5" } });
+    expect(screen.getByText(/≈ 5,000 sq m/)).toBeInTheDocument();
   });
 });

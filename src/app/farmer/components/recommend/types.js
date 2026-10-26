@@ -200,6 +200,15 @@ const makeDefaultExpenses = () => DEFAULT_EXPENSES_DEF.map((exp, i) => ({
   amount: "",
   isCustom: false
 }));
+// The server stores CropPlan.farm_area in square metres (see farming/model.py,
+// "Farm area in sq m"). The Step 2 unit toggle only changes what the farmer
+// types, so every payload must be normalized back to sq m before it is sent.
+const SQM_PER_HECTARE = 10000;
+function toSqm(area, unit) {
+  const n = typeof area === "number" ? area : Number(area);
+  if (area === "" || area == null || !Number.isFinite(n) || n <= 0) return null;
+  return Math.round((unit === "ha" ? n * SQM_PER_HECTARE : n) * 100) / 100;
+}
 const DEFAULT_ASSESSMENT = {
   commodity: "",
   variant: "",
@@ -240,6 +249,7 @@ export {
   COMMODITY_OPTIONS,
   CROP_DURATIONS,
   DEFAULT_ASSESSMENT,
+  SQM_PER_HECTARE,
   STEP_LABELS,
   TOTAL_STEPS,
   formatDurationLabel,
@@ -248,5 +258,6 @@ export {
   getHarvestHorizon,
   getTotalCost,
   makeDefaultExpenses,
-  suggestHarvestDate
+  suggestHarvestDate,
+  toSqm
 };

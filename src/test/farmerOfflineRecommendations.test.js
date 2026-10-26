@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 
 const { apiGet, parseResponse } = vi.hoisted(() => ({
@@ -14,6 +14,11 @@ import {
 } from "../app/global/hooks/useFarmerPrefetch";
 
 describe("farmer offline recommendation snapshot", () => {
+  beforeEach(() => {
+    apiGet.mockClear();
+    parseResponse.mockClear();
+  });
+
   it("seeds every farmer recommendation query key from the raw snapshot", async () => {
     const recommendations = [{
       commodity_id: "COM-0004",
@@ -76,5 +81,27 @@ describe("farmer offline recommendation snapshot", () => {
       "prices", "historicalAvg", "COM-0038", "bangkerohan_retail", "monthly", null,
     ])).toEqual(bundle);
     expect(client.getQueryData(["farmer", "arrival-pressure", "COM-0038"])).toEqual(bundle);
+  });
+
+  it("warms only the current month recommendation endpoint", async () => {
+    const bundle = {
+      profile: null,
+      crop_plans: [],
+      price_trends: [],
+      price_detail: [],
+      price_trend: [],
+      advisory_summary: [],
+    };
+    apiGet.mockResolvedValue({ ok: true, status: 200 });
+    parseResponse.mockResolvedValue(bundle);
+
+    await prefetchFarmerFullData(new QueryClient());
+
+    const recommendationCalls = apiGet.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.startsWith("/market/monthly-recommendations"));
+    expect(recommendationCalls).toEqual([
+      `/market/monthly-recommendations?reference_month=${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
+    ]);
   });
 });

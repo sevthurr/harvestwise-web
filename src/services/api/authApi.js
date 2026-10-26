@@ -32,6 +32,10 @@ export function resetPassword(email, code, newPassword) {
   });
 }
 
+export function verifyRegistrationEmailOtp(email, code) {
+  return apiPost("/auth/verify-email-otp", { email, code });
+}
+
 // ---------------------------------------------------------------------------
 // Google OAuth (Supabase-brokered)
 // `idToken` is the Supabase-issued JWT (`session.access_token`) — verified by
