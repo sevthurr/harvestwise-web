@@ -19,6 +19,25 @@ export const DEFAULT_WEATHER_LON = DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 // bundle seeds. Mirrors queryClient.js's 30-min default.
 export const STALE_TIME = 1000 * 60 * 30; // 30 mins
 
+export function currentReferenceMonth(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+export function monthlyRecommendationsKey(referenceMonth = currentReferenceMonth()) {
+  return ["market", "monthly-recommendations", referenceMonth];
+}
+
+export async function fetchMonthlyRecommendations(referenceMonth = currentReferenceMonth()) {
+  const suffix = referenceMonth ? `?reference_month=${referenceMonth}` : "";
+  const response = await apiGet(`/market/monthly-recommendations${suffix}`);
+  if (!response.ok) {
+    const error = new Error("Failed to load monthly recommendations");
+    error.status = response.status;
+    throw error;
+  }
+  return parseResponse(response);
+}
+
 // The horizon the server bundles price detail for. Must match the server's
 // BUNDLE_DETAIL_HORIZON and the page's default period chip.
 export const BUNDLE_DETAIL_PERIOD = 7;
@@ -142,9 +161,7 @@ export function fetchWeatherAdvisory(lat, lon) {
 
 // Monthly recommendations transformed for the Dashboard card.
 export async function fetchDashboardRecommendations() {
-  const res = await apiGet("/market/monthly-recommendations");
-  if (!res.ok) return [];
-  const recsData = await parseResponse(res);
+  const recsData = await fetchMonthlyRecommendations();
   const rawItems =
     recsData?.items || recsData?.recommendations || (Array.isArray(recsData) ? recsData : []);
   return transformDashboardRecommendations(rawItems);
@@ -275,6 +292,8 @@ export async function seedFarmerOfflineBundle(queryClient) {
     // Seed the raw recommendation keys used by the farmer pages. Without
     // these aliases, offline pages see an empty query and render presentation
     // defaults instead of the snapshot's persisted recommendations.
+    queryClient.setQueryData(monthlyRecommendationsKey(), recommendations);
+    // Keep the legacy aliases for persisted snapshots created by older clients.
     queryClient.setQueryData(["market", "monthly-recommendations"], recommendations);
     queryClient.setQueryData(["recommendations", "list"], recommendations);
     const now = new Date();
@@ -412,21 +431,12 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     );
   });
 
-  // Recommendation pages allow browsing months. Warm the complete current
-  // year so changing the month while offline does not create a cache miss.
-  const year = new Date().getFullYear();
-  for (let month = 1; month <= 12; month += 1) {
-    const referenceMonth = `${year}-${String(month).padStart(2, "0")}-01`;
-    requests.push(
-      safePrefetch(["monthly-recommendations", referenceMonth], async () => {
-        const response = await apiGet(
-          `/market/monthly-recommendations?reference_month=${referenceMonth}`
-        );
-        if (!response.ok) return { items: [] };
-        return parseResponse(response);
-      })
-    );
-  }
+  // Warm only the current month. Other months are fetched on demand by the
+  // recommendation page, avoiding a 12-request burst against the public
+  // market rate limit during every farmer session.
+  requests.push(
+    safePrefetch(monthlyRecommendationsKey(), () => fetchMonthlyRecommendations())
+  );
 
   // Crop Factors and Crop Cycle Details use a parameterized advisory result
   // for each saved crop plan. Recreate the exact key and payload from the

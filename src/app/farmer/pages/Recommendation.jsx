@@ -30,7 +30,11 @@ import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 import { explainRainfall } from "../../global/components/shared/weatherExplanations";
 import { resolveFactorCondition } from "../utils/factorColors";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import {
+  fetchFarmerProfile,
+  fetchMonthlyRecommendations,
+  monthlyRecommendationsKey,
+} from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 
@@ -713,21 +717,8 @@ function RecommendationPage() {
   // Monthly crop recommendations
   const formattedRefMonth = `${viewYear}-${String(viewMonth).padStart(2, "0")}-01`;
   const { data: recommendationsData, isLoading: recommendationsLoading } = useQuery({
-    queryKey: ["monthly-recommendations", formattedRefMonth],
-    queryFn: async () => {
-      const res = await apiGet(`/market/monthly-recommendations?reference_month=${formattedRefMonth}`);
-      if (!res.ok) {
-        const fallbackRes = await apiGet("/market/monthly-recommendations");
-        if (!fallbackRes.ok) return { items: [] };
-        return parseResponse(fallbackRes);
-      }
-      const data = await parseResponse(res);
-      if (!data.items || data.items.length === 0) {
-        const fallbackRes = await apiGet("/market/monthly-recommendations");
-        if (fallbackRes.ok) return parseResponse(fallbackRes);
-      }
-      return data;
-    },
+    queryKey: monthlyRecommendationsKey(formattedRefMonth),
+    queryFn: () => fetchMonthlyRecommendations(formattedRefMonth),
     staleTime: 1000 * 60 * 30,
   });
 

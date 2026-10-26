@@ -12,7 +12,10 @@ import { CheckCircle2, Sprout } from "lucide-react";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { SkeletonListRow } from "../shared/FarmerSkeletons";
-import { apiGet, parseResponse } from "../../../global/api";
+import {
+  fetchMonthlyRecommendations,
+  monthlyRecommendationsKey,
+} from "../../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../../utils/cropPreferences";
 import { PreferredStar } from "../shared/PreferredStar";
 
@@ -87,21 +90,8 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
   const localizedMonth = t(`farmer.calendar.months.${currentMonthKey}`, {}, rawMonthName);
 
   const { data: recommendationsData, isLoading } = useQuery({
-    queryKey: ["monthly-recommendations", formattedRefMonth],
-    queryFn: async () => {
-      const res = await apiGet(`/market/monthly-recommendations?reference_month=${formattedRefMonth}`);
-      if (!res.ok) {
-        const fallbackRes = await apiGet("/market/monthly-recommendations");
-        if (!fallbackRes.ok) return { items: [] };
-        return parseResponse(fallbackRes);
-      }
-      const data = await parseResponse(res);
-      if (!data.items || data.items.length === 0) {
-        const fallbackRes = await apiGet("/market/monthly-recommendations");
-        if (fallbackRes.ok) return parseResponse(fallbackRes);
-      }
-      return data;
-    },
+    queryKey: monthlyRecommendationsKey(formattedRefMonth),
+    queryFn: () => fetchMonthlyRecommendations(formattedRefMonth),
     staleTime: 1000 * 60 * 30,
   });
 

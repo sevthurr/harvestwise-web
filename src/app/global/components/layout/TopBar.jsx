@@ -116,26 +116,13 @@ const TopBar = ({
         {/* Right: sync · bell · avatar */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {cacheStatusCopy && (
-            <div
-              className={`flex items-center gap-1 px-1.5 sm:px-2 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium whitespace-nowrap ${
-                cacheStatus === "error"
-                  ? "bg-amber-50 text-amber-700"
-                  : cacheStatus === "preparing"
-                  ? "bg-blue-50 text-blue-700"
-                  : "bg-emerald-50 text-emerald-700"
-              }`}
+            <span
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)]"
               title={cacheStatusCopy}
               aria-label={cacheStatusCopy}
             >
-              {cacheStatus === "preparing" ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : cacheStatus === "error" ? (
-                <AlertCircle className="w-4 h-4" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4" />
-              )}
-              <span className="hidden sm:inline">{cacheStatusCopy}</span>
-            </div>
+              <Info className="w-4 h-4" />
+            </span>
           )}
           <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
 

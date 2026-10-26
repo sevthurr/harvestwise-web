@@ -1,10 +1,30 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { SQM_PER_HECTARE, toSqm } from "./types";
 
 const Step2FarmHarvest = ({ data, onChange, errors }) => {
   const { t } = useLanguage();
   const [helpOpen, setHelpOpen] = useState(false);
+  // What the farmer typed, expressed in the other unit. The stored value is
+  // always sq m (see buildDraftPayload), so this is display-only feedback.
+  const areaSqm = toSqm(data.farmArea, data.farmAreaUnit);
+  const areaEquivalent = areaSqm == null
+    ? null
+    : data.farmAreaUnit === "ha"
+      ? `\u2248 ${areaSqm.toLocaleString("en-PH", { maximumFractionDigits: 2 })} sq m`
+      : `\u2248 ${(areaSqm / SQM_PER_HECTARE).toLocaleString("en-PH", { maximumFractionDigits: 4 })} ha`;
+  const switchUnit = (nextUnit) => {
+    if (nextUnit === data.farmAreaUnit) return;
+    const current = Number(data.farmArea);
+    const converted =
+      data.farmArea === "" || !Number.isFinite(current) || current <= 0
+        ? data.farmArea
+        : nextUnit === "ha"
+          ? Math.round((current / SQM_PER_HECTARE) * 10000) / 10000
+          : Math.round(current * SQM_PER_HECTARE * 100) / 100;
+    onChange({ farmAreaUnit: nextUnit, farmArea: converted });
+  };
   return (
     <div className="space-y-6">
       {/* Farm area */}
@@ -32,7 +52,7 @@ const Step2FarmHarvest = ({ data, onChange, errors }) => {
               <button
                 key={u}
                 type="button"
-                onClick={() => onChange({ farmAreaUnit: u })}
+                onClick={() => switchUnit(u)}
                 className={`px-3 py-2.5 text-sm font-medium transition-colors ${data.farmAreaUnit === u ? "bg-[var(--hw-green-700)] text-white" : "bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"}`}
               >
                 {u === "sqm" ? "sq m" : "ha"}
@@ -40,6 +60,9 @@ const Step2FarmHarvest = ({ data, onChange, errors }) => {
             ))}
           </div>
         </div>
+        {areaEquivalent && (
+          <p className="mt-1.5 text-xs text-[var(--hw-neutral-700)]">{areaEquivalent}</p>
+        )}
         {errors.farmArea && <p className="mt-1.5 text-sm text-red-600">{errors.farmArea}</p>}
       </div>
 

@@ -24,12 +24,20 @@ export function requestPasswordReset(email) {
   return apiPost("/auth/forgot-password", { email });
 }
 
+export function requestRegistrationEmailOtp(email) {
+  return apiPost("/auth/register/request-email-otp", { email });
+}
+
 export function resetPassword(email, code, newPassword) {
   return apiPost("/auth/reset-password", {
     email,
     code,
     new_password: newPassword,
   });
+}
+
+export function verifyRegistrationEmailOtp(email, code) {
+  return apiPost("/auth/verify-email-otp", { email, code });
 }
 
 // ---------------------------------------------------------------------------

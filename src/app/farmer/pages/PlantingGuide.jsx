@@ -14,12 +14,15 @@ import {
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { toCamelCase } from "../../global/utils/apiTransforms";
-import { apiGet, parseResponse } from "../../global/api";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { ADVISORY_CODES, normalizeAdvisoryCode } from "../utils/farmerCodes";
 import { formatMonthShort } from "../utils/formatters";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import {
+  fetchFarmerProfile,
+  fetchMonthlyRecommendations,
+  monthlyRecommendationsKey,
+} from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 
@@ -113,11 +116,9 @@ function PlantingGuidePage() {
 
   // Fetch monthly crop recommendations from API (persisted to IndexedDB)
   const { data: advisories = [], isLoading: loading } = useQuery({
-    queryKey: ["recommendations", "list"],
+    queryKey: monthlyRecommendationsKey(),
     queryFn: async () => {
-      const response = await apiGet('/market/monthly-recommendations');
-      if (!response.ok) return [];
-      const data = await parseResponse(response);
+      const data = await fetchMonthlyRecommendations();
       const rawItems = data?.items || data?.recommendations || (Array.isArray(data) ? data : []);
       return rawItems.map(rec => {
         const camelRec = toCamelCase(rec);

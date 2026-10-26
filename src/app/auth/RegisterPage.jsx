@@ -6,6 +6,7 @@ import { useAuth, roleHome } from "../global/contexts/AuthContext";
 import { useLanguage } from "../global/contexts/LanguageContext";
 import { Footer } from "../global/components/Footer";
 import { apiPost, parseResponse } from "../global/api";
+import { authApi } from "../../services/api";
 import { usePWAInstall } from "../global/hooks/usePWAInstall";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
 import { useGoogleAuth } from "./useGoogleAuth";
@@ -125,6 +126,11 @@ function RegisterPage() {
   const [googleConsentStep, setGoogleConsentStep] = useState(null);
   const [pendingGoogleAuth, setPendingGoogleAuth] = useState(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [emailOtpStep, setEmailOtpStep] = useState(null);
+  const [emailOtpCode, setEmailOtpCode] = useState("");
+  const [emailOtpSending, setEmailOtpSending] = useState(false);
+  const [emailOtpError, setEmailOtpError] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
 
   const capitalizeWords = (v) => v.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -174,16 +180,7 @@ function RegisterPage() {
     return e;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!agreed) return;
-
-    const errs = validate();
-    if (Object.keys(errs).length) {
-      setErrors(errs);
-      return;
-    }
-
+  const doRegister = async () => {
     setLoading(true);
     try {
       const contactCheck = validateContact(form.contact.trim());
@@ -221,6 +218,55 @@ function RegisterPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!agreed) return;
+
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+
+    const contactCheck = validateContact(form.contact.trim());
+    // For email registrations, verify the address with an OTP first.
+    if (contactCheck.type === "email" && !emailVerified) {
+      setEmailOtpSending(true);
+      setEmailOtpError("");
+      try {
+        await authApi.requestRegistrationEmailOtp(contactCheck.normalized);
+        setEmailOtpStep("verify");
+      } catch (err) {
+        setEmailOtpError(err?.message || "Could not send the verification code. Try again.");
+      } finally {
+        setEmailOtpSending(false);
+      }
+      return;
+    }
+
+    await doRegister();
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    const contactCheck = validateContact(form.contact.trim());
+    if (!emailOtpCode.trim()) {
+      setEmailOtpError("Enter the verification code.");
+      return;
+    }
+    setEmailOtpSending(true);
+    setEmailOtpError("");
+    try {
+      await authApi.verifyRegistrationEmailOtp(contactCheck.normalized, emailOtpCode.trim());
+      setEmailVerified(true);
+      setEmailOtpStep(null);
+      await doRegister();
+    } catch (err) {
+      setEmailOtpError(err?.message || "Invalid or expired code. Try again.");
+    } finally {
+      setEmailOtpSending(false);
     }
   };
 
@@ -675,6 +721,40 @@ function RegisterPage() {
           </Link>
         </p>
       </div>
+
+      {emailOtpStep === "verify" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4">
+            <h2 className="text-[18px] font-bold text-[var(--hw-neutral-900)]">Verify your email</h2>
+            <p className="text-[13px] text-[var(--hw-neutral-600)]">Enter the code sent to {form.contact.trim()}.</p>
+            <input
+              type="text"
+              value={emailOtpCode}
+              onChange={(e) => setEmailOtpCode(e.target.value)}
+              placeholder="Verification code"
+              className={inputCls}
+            />
+            {emailOtpError && <p className="text-[12px] text-red-600">{emailOtpError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => { setEmailOtpStep(null); setEmailOtpCode(""); }}
+                className="h-10 px-3.5 text-[13px] font-medium border border-[var(--hw-neutral-200)] rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleVerifyEmailOtp}
+                disabled={emailOtpSending}
+                className="h-10 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-xl disabled:opacity-60"
+              >
+                {emailOtpSending ? "Verifying…" : "Verify"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer lang={authLang} className="mt-2" />
 
