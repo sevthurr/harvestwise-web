@@ -14,6 +14,7 @@ import {
   ChevronLeft
 } from "lucide-react";
 import { ingestionApi } from "../../../services/api";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { parseFileReal } from "../../global/utils/excelFilePreview";
 import { useFileDropZone } from "../../global/hooks/useFileDropZone";
@@ -561,10 +562,12 @@ function AdminImport() {
         let attempts = 0;
         while (!isFinished && attempts < 300) {
           attempts++;
-          await new Promise((r) => setTimeout(r, 2000));
+          // Poll slowly enough that an upload cannot exhaust the endpoint's
+          // per-minute request budget.
+          await new Promise((r) => setTimeout(r, 15000));
           if (!mountedRef.current) return;
           try {
-            const statusRes = await ingestionApi.getHistoryDetail(importId);
+            const statusRes = await ingestionApi.getHistoryStatus(importId);
             const forecastFailed = statusRes?.status === "completed_with_forecast_error";
             const forecastPending = statusRes?.status === "waiting_for_complete_series";
             if (statusRes?.status === "completed" || statusRes?.status === "success" || forecastFailed || forecastPending) {
@@ -582,7 +585,7 @@ function AdminImport() {
                 validRows: validationResult.valid,
                 rejectedRows: validationResult.rejected,
                 fileFormat: file?.name ? ("." + file.name.split(".").pop().toLowerCase()) : ".xlsx",
-                finishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+                finishedAt: formatDateTime(new Date().toISOString()),
               });
               setImportProgress(100);
               setUploadMessage(

@@ -44,6 +44,7 @@ import { analyticsApi } from "../../../services/api";
 import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } from "../../../hooks/useAnalyticsOutputs";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { useIsMobile } from "../../global/components/ui/use-mobile";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 
 const PRODUCTION_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -384,18 +385,9 @@ const DEFAULT_BASIS_TEMPLATES = {
       "Peak production quarter": "-",
       "Lean production quarter": "-",
       "Historical baseline period": "-",
-      "Source areas": "-",
-      "Q1 ratio threshold": "-",
-      "Q2 ratio threshold": "-",
-      "Q3 ratio threshold": "-"
     },
     quarterlyProfiles: [],
-    thresholds: [
-      { classification: "Low", rule: "PSA production ratio < 0.72" },
-      { classification: "Lower Middle", rule: "PSA production ratio 0.72–0.99" },
-      { classification: "Upper Middle", rule: "PSA production ratio 0.99–1.20" },
-      { classification: "High", rule: "PSA production ratio ≥ 1.20" }
-    ],
+    thresholds: [],
     resultExplanation: "No explanation available."
   },
   "weather-risk": {
@@ -551,7 +543,7 @@ function generateDatasets(module) {
     return { columns: cols, rows: [] };
   }
   if (module === "Historical Seasonal Production Level") {
-    const cols = ["Year", "Quarter", "Commodity", "Variety", "Source Areas", "Production Volume", "Unit"];
+    const cols = ["Year", "Quarter", "Commodity", "Production Volume", "Unit"];
     return { columns: cols, rows: [] };
   }
   const cols = ["Date", "Location", "Rainfall", "Temperature Range", "Humidity", "Wind", "Source"];
@@ -686,14 +678,22 @@ const DETAIL_MODULE_PERIODS = {
 };
 
 const PRICE_OUTLOOK_SOURCE_LABELS = {
-  bankerohan_daily_retail: "Bangkerohan Retail",
-  bankerohan_daily_wholesale: "Bangkerohan Wholesale",
+  bankerohan_daily_retail: "Bankerohan Retail",
+  bankerohan_daily_wholesale: "Bankerohan Wholesale",
   dftc_daily_retail: "DFTC Retail",
   dftc_daily_wholesale: "DFTC Wholesale",
 };
 
 const priceOutlookSourceLabel = (source) =>
   PRICE_OUTLOOK_SOURCE_LABELS[source] || source || "-";
+
+const standardizeMarket = (market) => {
+  const value = String(market || "").trim();
+  const key = value.toLowerCase().replace(/[\s_-]+/g, "");
+  if (key.includes("bankerohan") || key.includes("bangkerohan")) return "Bankerohan";
+  if (key.includes("dftc")) return "DFTC";
+  return value || "-";
+};
 
 // Modal listing every Data Reliability classification band with its score range
 // and meaning. Ranges and meanings come from the scoring layer
@@ -1120,7 +1120,7 @@ function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
   const raw = detail?.basis_inputs?.[DETAIL_MODULE_KEYS[resultId]] || {};
   const classification = detail?.[DETAIL_CLASSIFICATION_FIELDS[resultId]] || "Not processed";
   const processedAt = detail?.generated_at
-    ? new Date(detail.generated_at).toLocaleString("en-US", { dateStyle: "medium" })
+    ? formatDateTime(detail.generated_at)
     : "-";
 
   let basisInputs;
@@ -1541,27 +1541,13 @@ function AdminAnalyticsBasis() {
         "Peak production quarter": peakText,
         "Lean production quarter": leanText,
         "Historical baseline period": isProcessed ? baselinePeriodText : "-",
-        "Source areas": productionSummary?.source_areas?.length
-          ? productionSummary.source_areas.map((area) => area.name).join(", ")
-          : "No geographic source rows available",
-        "Q1 ratio threshold": quartiles ? Number(quartiles.q1).toFixed(4) : "-",
-        "Q2 ratio threshold": quartiles ? Number(quartiles.q2).toFixed(4) : "-",
-        "Q3 ratio threshold": quartiles ? Number(quartiles.q3).toFixed(4) : "-"
       },
-      thresholds: quartiles ? [
-        { classification: "Low", rule: `Seasonal ratio < ${Number(quartiles.q1).toFixed(4)}` },
-        { classification: "Lower Middle", rule: `Seasonal ratio ≥ ${Number(quartiles.q1).toFixed(4)} and < ${Number(quartiles.q2).toFixed(4)}` },
-        { classification: "Upper Middle", rule: `Seasonal ratio ≥ ${Number(quartiles.q2).toFixed(4)} and < ${Number(quartiles.q3).toFixed(4)}` },
-        { classification: "High", rule: `Seasonal ratio ≥ ${Number(quartiles.q3).toFixed(4)}` }
-      ] : result.thresholds,
+      thresholds: [],
       productionVolumes: quarterRecords,
-      productionSources: productionSummary?.source_areas || [],
       records: rawRecords.map((record) => ({
         Year: record.reference_year,
         Quarter: record.reference_quarter,
         Commodity: selectedCommodity,
-        Variety: selectedVariety,
-        "Source Areas": "Aggregate production_record",
         "Production Volume": `${Number(record.volume_produced).toLocaleString()} MT`,
         Unit: "MT"
       })),
@@ -1602,7 +1588,7 @@ function AdminAnalyticsBasis() {
         Date: row.price_date ? formatForecastDate(row.price_date) : "-",
         Commodity: row.commodity_name || selectedCommodity,
         Variety: row.variety || selectedVariety,
-        Market: row.market || "-",
+        Market: standardizeMarket(row.market),
         "Price Type": row.price_type || "-",
         Price: row.prevail_price != null ? `₱${Number(row.prevail_price).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "-",
         Source: priceOutlookSourceLabel(priceOutlook?.source)
@@ -1624,7 +1610,7 @@ function AdminAnalyticsBasis() {
         ? `${arrivalSummary.record_count} record(s) · latest ${formatForecastDate(arrivalSummary.latest_arrival_date)}`
         : "-",
       processedAt: arrivalSummary?.processed_at
-        ? new Date(arrivalSummary.processed_at).toLocaleString("en-US", { dateStyle: "medium" })
+        ? formatDateTime(arrivalSummary.processed_at)
         : "-",
       classification: processed ? arrivalSummary.classification : "Not processed",
       basisInputs: {
@@ -1749,14 +1735,16 @@ function AdminAnalyticsBasis() {
               onChange={handleCommodityChange}
             />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-black mb-1">Variety</label>
-            <CustomVarietyDropdown
-              value={selectedVariety}
-              options={availableVariants}
-              onChange={handleVarietyChange}
-            />
-          </div>
+          {resultId !== "historical-production" && (
+            <div>
+              <label className="block text-[11px] font-semibold text-black mb-1">Variety</label>
+              <CustomVarietyDropdown
+                value={selectedVariety}
+                options={availableVariants}
+                onChange={handleVarietyChange}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1969,24 +1957,6 @@ function AdminAnalyticsBasis() {
                     onChange={setArrivalGranularity}
                     options={ARRIVAL_GRANULARITY_OPTIONS}
                   />
-                  {arrivalYears.length > 0 && (arrivalGranularity === "monthly" || arrivalGranularity === "weekly") && (
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
-                      <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
-                      <select
-                        value={arrivalActiveYear ?? ""}
-                        onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
-                        aria-label="Arrival year"
-                        className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
-                      >
-                        {arrivalYears.map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -2062,13 +2032,33 @@ function AdminAnalyticsBasis() {
             </div>
 
             <div className={vizCardClass}>
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
-                  Arrival Volume Sources Distribution
-                </p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-                  Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div>
+                  <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                    Arrival Volume Sources Distribution
+                  </p>
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                    Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
+                  </p>
+                </div>
+                {arrivalYears.length > 0 && (arrivalGranularity === "monthly" || arrivalGranularity === "weekly") && (
+                  <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
+                    <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
+                    <select
+                      value={arrivalActiveYear ?? ""}
+                      onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
+                      aria-label="Arrival year"
+                      className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
+                    >
+                      {arrivalYears.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
+                  </div>
+                )}
               </div>
               <ArrivalSourcePieChart
                 showEmpty={!arrivalSourcePieData.length}
@@ -2188,14 +2178,6 @@ function AdminAnalyticsBasis() {
               </div>
             </div>
 
-            {/* Production Sources Pie Chart (Enlarged) */}
-            <div className={vizCardClass}>
-              <div>
-                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">Production Sources Distribution</p>
-                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">Historical production volume share across major supplying areas (Davao City, Davao Del Sur, Bukidnon).</p>
-              </div>
-              <ProductionSourcePieChart showEmpty={!displayResult.productionSources || displayResult.productionSources.length === 0} data={displayResult.productionSources} height={380} />
-            </div>
           </>
         )}
 
@@ -2295,7 +2277,7 @@ function AdminAnalyticsBasis() {
             )}
           </div>
         </div>
-      ) : (
+      ) : resultId !== "historical-production" ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Threshold Applied Card */}
           <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden h-full flex flex-col justify-between">
@@ -2348,7 +2330,7 @@ function AdminAnalyticsBasis() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Historical Average Price Section (Only on Price Outlook Basis, below Result Explanation) */}
       {(resultId === "price-outlook" || result.module === "Price Outlook") && (

@@ -93,12 +93,6 @@ describe('AdminHistory search', () => {
     await search(container, 'duplicate header', 1);
   });
 
-  it('matches on status', async () => {
-    const { container } = await renderHistory([ARRIVAL, PRICE]);
-    await search(container, 'failed', 1);
-    await search(container, 'completed', 1);
-  });
-
   it('matches on the uploader', async () => {
     const { container } = await renderHistory([ARRIVAL, PRICE]);
     await search(container, 'kaye', 1);
@@ -134,5 +128,6 @@ describe('AdminHistory search', () => {
     expect(placeholder).not.toMatch(/commodity/i);
     expect(placeholder).not.toMatch(/variety/i);
     expect(placeholder).not.toMatch(/module/i);
+    expect(placeholder).not.toMatch(/status/i);
   });
 });

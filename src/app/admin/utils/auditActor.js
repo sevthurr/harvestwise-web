@@ -1,3 +1,5 @@
+import { formatPersonName } from "../../global/utils/apiTransforms";
+
 /**
  * auditActor.js
  *
@@ -21,7 +23,7 @@
  */
 export function formatActorLabel(row) {
   const id = row?.user_id;
-  const name = (row?.actor_name ?? "").trim();
+  const name = formatPersonName(row?.actor_name ?? "");
   if (name && id) return `${name} (${id})`;
   return name || id || "System";
 }

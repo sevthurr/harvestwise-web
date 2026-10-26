@@ -31,6 +31,36 @@ export function toCamelCase(obj) {
   return obj;
 }
 
+/** Format API identifiers as consistent user-facing admin labels. */
+export function formatDisplayLabel(value) {
+  if (value == null) return "";
+  const normalized = String(value).trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (!normalized) return "";
+  const canonical = {
+    "open meteo": "Open-Meteo Weather API",
+    openstat: "OpenStat",
+  };
+  if (canonical[normalized.toLowerCase()]) return canonical[normalized.toLowerCase()];
+  const acronyms = new Set(["api", "dftc", "hspl", "id", "kpi", "psa", "q1", "q2", "q3"]);
+  return normalized.split(" ").map((word) => {
+    const lower = word.toLowerCase();
+    if (lower === "openstat") return "OpenStat";
+    if (acronyms.has(lower)) return lower.toUpperCase();
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(" ");
+}
+
+/** Format a person name while preserving a readable word boundary. */
+export function formatPersonName(value) {
+  if (value == null) return "";
+  return String(value).trim().split(/[._\s]+/).filter(Boolean)
+    .map((word) => {
+      if (/^[A-Z0-9]{2,3}$/.test(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
 /**
  * Format ISO date to human-readable format (matches mock format)
  * 
@@ -46,7 +76,8 @@ export function formatDate(isoDate) {
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: 'Asia/Manila'
   });
 }
 
@@ -93,6 +124,17 @@ export function parseApiDateTime(value) {
 
 export function formatApiTime(value) {
   const date = parseApiDateTime(value);
+  if (!date) return null;
+  return date.toLocaleTimeString("en-PH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila",
+  });
+}
+
+export function formatManilaTime(value = new Date()) {
+  const date = value instanceof Date ? value : parseApiDateTime(value);
   if (!date) return null;
   return date.toLocaleTimeString("en-PH", {
     hour: "2-digit",

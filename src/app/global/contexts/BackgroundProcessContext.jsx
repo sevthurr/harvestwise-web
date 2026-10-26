@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import { useQueryClient } from "@tanstack/react-query";
 import { ingestionApi } from "../../../services/api";
 import { useNotificationEvent } from "./NotificationStreamContext";
+import { formatManilaTime } from "../utils/apiTransforms";
 
 const BackgroundProcessContext = createContext(null);
 
@@ -33,7 +34,7 @@ const INGESTION_QUERY_PREFIXES = [
 ];
 
 async function verifyImportStatus(importId) {
-  const poll = ingestionApi.getHistoryDetail(importId);
+  const poll = ingestionApi.getHistoryStatus(importId);
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error("verify timeout")), VERIFY_TIMEOUT)
   );
@@ -66,7 +67,7 @@ export const BackgroundProcessProvider = ({ children }) => {
   const activeImportIdRef = useRef(null);
 
   const [lastUpdatedTime, setLastUpdatedTime] = useState(() =>
-    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    formatManilaTime()
   );
 
   const startProcess = useCallback(({ title, statusText = "Processing...", initialProgress = 10, importId = null }) => {
@@ -93,7 +94,7 @@ export const BackgroundProcessProvider = ({ children }) => {
   }, []);
 
   const finishProcess = useCallback((message = "Completed", isError = false) => {
-    const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const nowStr = formatManilaTime();
     setLastUpdatedTime(nowStr);
     activeImportIdRef.current = null;
     setProcessState(prev => ({
@@ -195,7 +196,7 @@ export const BackgroundProcessProvider = ({ children }) => {
 
 const dummyFallback = {
   processState: { active: false, title: "", progress: 0, statusText: "", eta: "", completed: false, error: false },
-  lastUpdatedTime: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  lastUpdatedTime: formatManilaTime(),
   startProcess: () => {},
   updateProgress: () => {},
   finishProcess: () => {},

@@ -2,6 +2,7 @@ import React from "react";
 import { Clock, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { formatManilaTime } from "../../utils/apiTransforms";
 
 /**
  * BackgroundProcessBadge:
@@ -65,7 +66,7 @@ export const LastUpdatedButton = ({ onClick, isSyncing = false, lastUpdatedTime 
   // (manual resync, background process) instead of the badge reacting to
   // every in-flight query in the app.
   const activeSync = isSyncing;
-  const timeDisplay = lastUpdatedTime || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timeDisplay = lastUpdatedTime || formatManilaTime();
 
   return (
     <button

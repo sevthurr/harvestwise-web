@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
@@ -7,6 +7,7 @@ import { authApi } from "../../../services/api";
 import { parseResponse } from "../../global/api";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { isValidEmail } from "../../auth/authValidation";
+import { Loader2 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
@@ -230,7 +231,8 @@ const AccountTab = ({ showToast }) => {
 };
 
 const SecurityTab = ({ showToast }) => {
-  const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  const { user, refreshUser, logout } = useAuth();
   const { t } = useLanguage();
   const isSuperAdmin = (user?.role?.role_name ?? "").toLowerCase() === "superadmin";
   const [twoFAEnabled, setTwoFAEnabled] = useState(Boolean(user?.is_totp_enabled));
@@ -239,6 +241,7 @@ const SecurityTab = ({ showToast }) => {
   const [setupData, setSetupData] = useState(null); // { secret, qr_code } from POST /totp/setup
   const [setupCode, setSetupCode] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
+  const twoFAEnableInFlight = useRef(false);
   const [disablePw, setDisablePw] = useState("");
   const [disableCode, setDisableCode] = useState("");
   const [showDisableModal, setShowDisableModal] = useState(false);
@@ -270,7 +273,8 @@ const SecurityTab = ({ showToast }) => {
       showToast(
         err.status === 403
           ? "TOTP setup is restricted to SuperAdmin accounts."
-          : (err.message || "Could not start 2FA setup.")
+          : (err.message || "Could not start 2FA setup."),
+        "error"
       );
     } finally {
       setSetupLoading(false);
@@ -278,7 +282,8 @@ const SecurityTab = ({ showToast }) => {
   };
 
   const handleTwoFAConfirm = async () => {
-    if (!setupCode || setupCode.length !== 6) return;
+    if (setupLoading || twoFAEnableInFlight.current || !setupCode || setupCode.length !== 6) return;
+    twoFAEnableInFlight.current = true;
     try {
       setSetupLoading(true);
       const res = await authApi.enableTotp(setupCode);
@@ -291,16 +296,26 @@ const SecurityTab = ({ showToast }) => {
       showToast("Two-Factor Authentication enabled.");
       try { await refreshUser(); } catch {}
     } catch (err) {
+      if (err.status === 409 && /already enabled/i.test(err.message || "")) {
+        setTwoFAEnabled(true);
+        setSetupData(null);
+        setSetupCode("");
+        showToast("Two-Factor Authentication is already enabled.");
+        try { await refreshUser(); } catch {}
+        return;
+      }
       const msg = (err.status === 429 ? "Too many attempts. " : "") + (err.message || "Invalid code.");
-      showToast(msg);
+      showToast(msg, "error");
     } finally {
       setSetupLoading(false);
+      twoFAEnableInFlight.current = false;
     }
   };
 
   const handleTwoFADisable = async () => {
-    if (!disablePw || !disableCode || disableCode.length !== 6) return;
+    if (setupLoading || !disablePw || !disableCode || disableCode.length !== 6) return;
     try {
+      setSetupLoading(true);
       const res = await authApi.disableTotp(disablePw, disableCode);
       await parseResponse(res);
       setTwoFAEnabled(false);
@@ -310,13 +325,16 @@ const SecurityTab = ({ showToast }) => {
       showToast("Two-Factor Authentication disabled.");
       try { await refreshUser(); } catch {}
     } catch (err) {
-      showToast(err.message || "Could not disable 2FA.");
+      showToast(err.message || "Could not disable 2FA.", "error");
+    } finally {
+      setSetupLoading(false);
     }
   };
 
   const handleRegenerateCodes = async () => {
-    if (!verifyCode || verifyCode.length !== 6) return;
+    if (setupLoading || !verifyCode || verifyCode.length !== 6) return;
     try {
+      setSetupLoading(true);
       const res = await authApi.regenerateRecoveryCodes(verifyCode);
       const data = await parseResponse(res);
       setVerifyCode("");
@@ -324,7 +342,9 @@ const SecurityTab = ({ showToast }) => {
       setShowRecoverModal(true);
       showToast("Recovery codes regenerated.");
     } catch (err) {
-      showToast(err.message || "Could not regenerate recovery codes.");
+      showToast(err.message || "Could not regenerate recovery codes.", "error");
+    } finally {
+      setSetupLoading(false);
     }
   };
 
@@ -340,6 +360,20 @@ const SecurityTab = ({ showToast }) => {
 
   return (
     <div className="space-y-4">
+      {setupLoading && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center bg-black/35 backdrop-blur-[1px]"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3 rounded-xl bg-white px-5 py-4 shadow-xl">
+            <Loader2 className="h-5 w-5 animate-spin text-[var(--hw-green-700)]" />
+            <span className="text-[13px] font-semibold text-[var(--hw-neutral-800)]">
+              Updating security settings…
+            </span>
+          </div>
+        </div>
+      )}
       {/* Card 1: Two-Factor Authentication */}
       <Card>
         <SectionLabel>Two-Factor Authentication</SectionLabel>
@@ -472,7 +506,10 @@ const SecurityTab = ({ showToast }) => {
         <SectionLabel>Change Password</SectionLabel>
         <PasswordChangeForm
           idPrefix="adm-cpw"
-          onSuccess={() => showToast("Password updated successfully.")}
+          onSuccess={async () => {
+            await logout();
+            navigate("/login", { replace: true });
+          }}
           onCancel={handlePasswordCancel}
           // Keeps this page's behaviour of surfacing the server's own message
           // instead of the shared fallback copy.
@@ -613,7 +650,7 @@ function AdminSettings() {
   const tabBarRef = useRef(null);
   const tabFromUrl = params.get("tab") || "account";
   const [activeTab, setActiveTab] = useState(tabFromUrl);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const t = params.get("tab") || "account";
@@ -631,9 +668,8 @@ function AdminSettings() {
     if (btn) btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [activeTab]);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
   };
 
   return (
@@ -671,7 +707,7 @@ function AdminSettings() {
       {activeTab === "account" && <AccountTab showToast={showToast} />}
       {activeTab === "security" && <SecurityTab showToast={showToast} />}
 
-      {toast && <Toast msg={toast} onDismiss={() => setToast("")} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

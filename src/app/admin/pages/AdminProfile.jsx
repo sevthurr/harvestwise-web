@@ -4,6 +4,7 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
+import { formatPersonName } from "../../global/utils/apiTransforms";
 
 function extractRoleName(role, fallback = "Admin") {
   if (!role) return fallback;
@@ -37,7 +38,7 @@ function formatFullName(first, middle, last, suffix, email) {
   if (typeof suffix === "string" && suffix.trim() && suffix !== "None" && suffix !== "—") {
     parts.push(suffix.trim());
   }
-  if (parts.length > 0) return parts.join(" ");
+  if (parts.length > 0) return formatPersonName(parts.join(" "));
   if (typeof email === "string" && email.trim()) return email.trim();
   return "Admin";
 }

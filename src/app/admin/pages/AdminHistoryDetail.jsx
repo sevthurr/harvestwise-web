@@ -1,22 +1,29 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ChevronLeft, ChevronRight, Inbox, Loader2 } from "lucide-react";
-import { STATUS_CFG, STEP_STATUS_CFG } from "../components/analytics/adminHistoryMockData";
+import { formatDateTime } from "../../global/utils/apiTransforms";
 import { ingestionApi } from "../../../services/api";
 
 const PAGE_SIZE = 20;
 
 function formatDT(v) {
   if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return String(v);
-  return d.toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDateTime(v) || String(v);
+}
+
+function sourceNameFor(rec) {
+  if (!rec.original_file_name) return "PSA OpenStat";
+  const fileName = (rec.original_file_name || "").toLowerCase();
+  if (fileName.includes("dftc")) return "Davao Food Terminal Complex (DFTC)";
+  if (fileName.includes("bankerohan")) return "Bankerohan Public Market";
+  return rec.file_format || "—";
 }
 
 function mapDetail(rec) {
-  const source = rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
+  const isApiSync = !rec.original_file_name;
+  const source = isApiSync ? "OpenStat API Sync" : rec.original_file_name || `Import ${rec.submission_id || rec.id}`;
   const result = rec.error_message
-    ? rec.error_message
+    ? (/forecast/i.test(rec.error_message) ? "Price forecasting failed." : rec.error_message)
     : rec.records_imported != null
       ? `${rec.records_imported.toLocaleString()} records imported`
       : "No result summary available.";
@@ -25,12 +32,11 @@ function mapDetail(rec) {
     historyId: rec.id,
     datetime: formatDT(rec.finished_at || rec.started_at),
     sourceModule: source,
-    activity: "File Upload",
+    activity: isApiSync ? "OpenStat API Sync" : "File Upload",
     result,
-    status: rec.status,
     initiatedBy: rec.uploaded_by_name || rec.uploaded_by_user_id || "System",
-    details: rec.error_message ? { "Error message": rec.error_message, "File format": rec.file_format || "—" } : (rec.file_format ? { "File format": rec.file_format } : {}),
-    relatedArea: rec.file_format || "—"
+    details: rec.error_message ? { "Error message": /forecast/i.test(rec.error_message) ? "Price forecasting failed." : rec.error_message, "File format": rec.file_format || "—" } : (rec.file_format ? { "File format": rec.file_format } : {}),
+    relatedArea: sourceNameFor(rec)
   };
 }
 
@@ -120,13 +126,11 @@ function AdminHistoryDetail() {
     );
   }
 
-  const statusCfg = STATUS_CFG[record.status] || { color: "text-[var(--hw-neutral-700)]", dot: "bg-[var(--hw-neutral-400)]" };
   const columns = recordsData.columns || [];
   const pageRows = recordsData.rows || [];
   const totalRecords = recordsData.total || 0;
   const totalPages = recordsData.total_pages || (totalRecords > 0 ? Math.ceil(totalRecords / PAGE_SIZE) : 0);
 
-  const hasSteps = false;
   const supportsProcessedRecords = true;
 
   return (
@@ -147,13 +151,7 @@ function AdminHistoryDetail() {
         </h1>
         <div className="flex flex-wrap items-center gap-2 mt-1.5">
           <span className="text-[13px] font-medium text-[var(--hw-neutral-700)]">{record.activity || "-"}</span>
-          <span className="text-[var(--hw-neutral-300)]">·</span>
-          <span className={`flex items-center gap-1.5 text-[13px] font-semibold ${statusCfg.color}`}>
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusCfg.dot}`} />
-            {record.status || "-"}
-          </span>
         </div>
-        <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">{record.datetime || "-"}</p>
       </div>
 
       {/* 1. Summary */}
@@ -166,7 +164,6 @@ function AdminHistoryDetail() {
             { label: "History ID", value: record.historyId || "-", mono: true },
             { label: "Source / Module", value: record.sourceModule || "-", mono: false },
             { label: "Activity Type", value: record.activity || "-", mono: false },
-            { label: "Status", value: record.status || "-", mono: false, statusColor: statusCfg.color },
             { label: "Date & Time", value: record.datetime || "-", mono: false },
             { label: "Initiated By", value: record.initiatedBy || "System", mono: false },
             { label: "Result", value: record.result || "No result summary available.", mono: false },
@@ -211,37 +208,7 @@ function AdminHistoryDetail() {
         </div>
       )}
 
-      {/* 3. Processing Steps (Only displayed when meaningful steps exist) */}
-      {hasSteps && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-          <div className="px-6 py-3.5 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[12px] font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider">Processing Steps</p>
-          </div>
-          <div className="p-6">
-            <div className="space-y-3 max-w-xl">
-              {record.steps.map((step, idx) => {
-                const cfg = STEP_STATUS_CFG[step.status] || { color: "text-[var(--hw-neutral-700)]", dot: "bg-[var(--hw-neutral-400)]" };
-                return (
-                  <div key={step.label} className="flex items-center justify-between gap-3 text-[13px]">
-                    <div className="flex items-center gap-3">
-                      <span className="w-5 h-5 rounded-full bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)] text-[11px] font-bold flex items-center justify-center flex-shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span className="font-medium text-[var(--hw-neutral-900)]">{step.label}</span>
-                    </div>
-                    <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${cfg.color}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                      {step.status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Processed Records (Only displayed for activities that produce row-level outputs) */}
+      {/* 3. Processed Records (Only displayed for activities that produce row-level outputs) */}
       {supportsProcessedRecords && (
         <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
           <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)] flex flex-col xs:flex-row xs:items-center justify-between gap-2">

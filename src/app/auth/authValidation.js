@@ -3,11 +3,11 @@
  */
 
 const PH_MOBILE_09_REGEX = /^09\d{9}$/;
-const PH_MOBILE_63_REGEX = /^\+639\d{9}$/;
+const PH_MOBILE_63_REGEX = /^\+?639\d{9}$/;
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 /**
- * Checks if input matches either 09XXXXXXXXX or +639XXXXXXXXX.
+ * Checks if input matches a local or international Philippine mobile form.
  */
 export function isValidPhPhone(raw) {
   if (!raw) return false;
@@ -16,14 +16,14 @@ export function isValidPhPhone(raw) {
 }
 
 /**
- * Normalizes PH mobile number to 09XXXXXXXXX canonical format.
+ * Normalizes PH mobile number to +639XXXXXXXXX canonical format.
  */
 export function normalizePhPhone(raw) {
   if (!raw) return "";
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("+63")) {
-    return "0" + trimmed.slice(3);
-  }
+  const trimmed = raw.trim().replace(/[\s().-]+/g, "");
+  if (PH_MOBILE_09_REGEX.test(trimmed)) return "+63" + trimmed.slice(1);
+  if (PH_MOBILE_63_REGEX.test(trimmed)) return "+" + trimmed.replace(/^\+/, "");
+  if (/^9\d{9}$/.test(trimmed)) return "+63" + trimmed;
   return trimmed;
 }
 
@@ -177,8 +177,15 @@ export function formatContactInput(value) {
       // +63 format: '+' followed by at most 12 digits (+639XXXXXXXXX = 13 characters)
       return "+" + digitsOnly.slice(0, 12);
     } else {
-      // Local PH format: at most 11 digits (09XXXXXXXXX)
-      return digitsOnly.slice(0, 11);
+      // Convert a complete local number to the canonical +63 form.
+      if (digitsOnly.startsWith("639") && digitsOnly.length >= 12) {
+        return "+" + digitsOnly.slice(0, 12);
+      }
+      const local = digitsOnly.slice(0, 11);
+      if (local.length === 10 && local.startsWith("9")) return "+63" + local;
+      return local.length === 11 && local.startsWith("09")
+        ? "+63" + local.slice(1)
+        : local;
     }
   }
 
