@@ -237,7 +237,7 @@ function RegisterPage() {
       setEmailOtpSending(true);
       setEmailOtpError("");
       try {
-        await authApi.requestPasswordReset(contactCheck.normalized);
+        await authApi.requestRegistrationEmailOtp(contactCheck.normalized);
         setEmailOtpStep("verify");
       } catch (err) {
         setEmailOtpError(err?.message || "Could not send the verification code. Try again.");

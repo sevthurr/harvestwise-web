@@ -24,6 +24,10 @@ export function requestPasswordReset(email) {
   return apiPost("/auth/forgot-password", { email });
 }
 
+export function requestRegistrationEmailOtp(email) {
+  return apiPost("/auth/register/request-email-otp", { email });
+}
+
 export function resetPassword(email, code, newPassword) {
   return apiPost("/auth/reset-password", {
     email,
