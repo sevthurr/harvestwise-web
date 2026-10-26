@@ -204,7 +204,7 @@ function MyCropsPage() {
 
   useEffect(() => {
     if (recommendationSync === undefined) return;
-    queryClient.invalidateQueries({ queryKey: ["monthly-recommendations"] });
+    queryClient.invalidateQueries({ queryKey: ["market", "monthly-recommendations"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard", "recommendations"] });
   }, [queryClient, recommendationSync]);
 

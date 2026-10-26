@@ -18,7 +18,7 @@ import {
   Cloud
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { getTotalCost, formatPeso, COMMODITY_OPTIONS, suggestHarvestDate } from "./types";
+import { getTotalCost, formatPeso, COMMODITY_OPTIONS, suggestHarvestDate, toSqm } from "./types";
 import { findCatalogOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
@@ -168,7 +168,7 @@ function buildCropPlanPayload(data, status = "Draft") {
     commodity_id: data.commodityId || data.commodity,
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
-    farm_area: typeof data.farmArea === "number" && data.farmArea > 0 ? data.farmArea : null,
+    farm_area: toSqm(data.farmArea, data.farmAreaUnit),
     expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
     expected_farmgate_price: typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
     status,
@@ -733,5 +733,6 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   );
 };
 export {
-  RecommendationResult
+  RecommendationResult,
+  buildCropPlanPayload
 };

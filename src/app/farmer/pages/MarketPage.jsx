@@ -1,7 +1,11 @@
 import { useState, useMemo } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import {
+  fetchFarmerProfile,
+  fetchMonthlyRecommendations,
+  monthlyRecommendationsKey,
+} from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import {
@@ -280,12 +284,8 @@ function MarketOverviewPage() {
 
   // Live recommendations
   const { data: recsData, isLoading: recsLoading } = useQuery({
-    queryKey: ["market", "monthly-recommendations"],
-    queryFn: async () => {
-      const res = await apiGet("/market/monthly-recommendations");
-      if (!res.ok) throw new Error("Failed to load recommendations");
-      return parseResponse(res);
-    },
+    queryKey: monthlyRecommendationsKey(),
+    queryFn: () => fetchMonthlyRecommendations(),
     staleTime: 1000 * 60 * 30,
   });
 

@@ -8,7 +8,8 @@ import {
   STEP_LABELS,
   TOTAL_STEPS,
   getTotalCost,
-  makeDefaultExpenses
+  makeDefaultExpenses,
+  toSqm
 } from "../components/recommend/types";
 import { RecommendEntry } from "../components/recommend/RecommendEntry";
 import { StepProgress } from "../components/recommend/StepProgress";
@@ -65,7 +66,7 @@ function buildDraftPayload(data) {
     commodity_id: data.commodityId || data.commodity,
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
-    farm_area: typeof data.farmArea === "number" && data.farmArea > 0 ? data.farmArea : null,
+    farm_area: toSqm(data.farmArea, data.farmAreaUnit),
     expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
     expected_farmgate_price: data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
     cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
@@ -778,5 +779,6 @@ function AssessPage() {
 export {
   AssessPage as default,
   StepActions,
+  buildDraftPayload,
   validateStep
 };
