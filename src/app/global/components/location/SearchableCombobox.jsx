@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Search, ChevronDown, Check, X, Plus } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { capitalizeNameInput } from "../../utils/apiTransforms";
 
 export function SearchableCombobox({
   id = "searchable-combobox",
@@ -10,6 +11,7 @@ export function SearchableCombobox({
   placeholder = "Search or select...",
   searchPlaceholder,
   allowCustom = true,
+  capitalizeCustom = false,
   disabled = false,
   emptyMessage,
   onKeyDown,
@@ -48,7 +50,7 @@ export function SearchableCombobox({
   }, [normalizedOptions, searchQuery]);
 
   const handleSelect = (val) => {
-    onChange(val);
+    onChange(capitalizeCustom ? capitalizeNameInput(val) : val);
     setSearchQuery("");
     setIsOpen(false);
   };

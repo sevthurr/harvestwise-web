@@ -35,6 +35,7 @@ import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/componen
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiDelete, apiGet, apiPost, apiPut, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -249,7 +250,7 @@ function AddCommodityModal({ onClose, onAdd }) {
             <input
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); setError(""); }}
+              onChange={(e) => { setName(capitalizeNameInput(e.target.value)); setError(""); }}
               placeholder="e.g. Batong (Negrostar)"
               className={`w-full px-3 py-2.5 rounded-xl border text-[13px] text-[var(--hw-neutral-900)] bg-white focus:outline-none focus:border-[var(--hw-green-700)] ${error && !name.trim() ? "border-red-400" : "border-[var(--hw-neutral-200)]"}`}
               autoFocus
@@ -275,7 +276,7 @@ function AddCommodityModal({ onClose, onAdd }) {
             <input
               type="text"
               value={variant}
-              onChange={(e) => setVariant(e.target.value)}
+              onChange={(e) => setVariant(capitalizeNameInput(e.target.value))}
               placeholder="e.g. Regular, Local, Large"
               className="w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
@@ -906,6 +907,12 @@ function DFTCPriceInput() {
   // per-cell draft metadata (server version + last editor) so autosave can send
   // an optimistic-concurrency check and a 409 can be attributed to a person.
   const draftMetaRef = useRef(emptyTabMaps());
+  // Kept for diagnostics and backwards-compatible state tracking; the draft
+  // timestamp below is the authoritative discard signal.
+  const lastRemoteCellCountRef = useRef(0);
+  // The draft timestamp is the generation token. It changes on every shared
+  // write and on discard without requiring another database column.
+  const draftUpdatedAtRef = useRef(null);
   // The day has already been finalized; the button becomes "Re-finalize" and a
   // finalize must bump the submission version rather than create a new one.
   const [draftFinalized, setDraftFinalized] = useState(false);
@@ -1003,15 +1010,13 @@ function DFTCPriceInput() {
         const items = await fetchCatalogItems();
         if (cancelled) return;
         applyCatalogItems(items);
-        const hasLocalDraft = (() => {
-          try { return localStorage.getItem("dftc_price_draft") === "true"; } catch { return false; }
-        })();
+        addCatalogRows(items.map((item) => item.id), items);
         // Read the date at fire time, not from the first-render closure: this
         // continuation resumes after the catalog await, and the user may have
         // already picked a different day. Using the stale date would issue a
         // second prefill for today that takes a higher sequence number and
         // overwrites the day the user actually selected.
-        if (!hasLocalDraft && !cancelled) {
+        if (!cancelled) {
           await loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
         }
       } catch {
@@ -1026,7 +1031,9 @@ function DFTCPriceInput() {
   // inputters never overwrite each other wholesale, and a 409 on one cell does
   // not discard the rest. Best-effort: a failure keeps the localStorage fallback
   // and surfaces a message rather than losing the typed value.
-  const pushDraftCells = useCallback(async () => {
+  const pushInFlightRef = useRef(null);
+  const pushDraftCells = useCallback(() => {
+    const flush = async () => {
     // The debounce fires after this callback was created. draftRef.current is
     // re-assigned every render and always holds the latest committed state, so
     // read it here instead of closing over selectedDate/tabFields. Otherwise a
@@ -1114,6 +1121,8 @@ function DFTCPriceInput() {
 
     setDraftSavingCells(new Set([...pending, ...cleared].map((p) => p.key)));
     let conflict = "";
+    const clearedSuccessfully = [];
+    const savedSuccessfully = [];
     for (const { key, params } of cleared) {
       try {
         const qs = new URLSearchParams(params).toString();
@@ -1121,6 +1130,7 @@ function DFTCPriceInput() {
         const tabId = key.split("|")[0];
         const vid = key.slice(tabId.length + 1);
         draftMetaRef.current[tabId]?.delete(vid);
+        clearedSuccessfully.push(key);
       } catch (err) {
         if (err?.status === 409 || err?.statusCode === 409) {
           conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
@@ -1131,7 +1141,13 @@ function DFTCPriceInput() {
     }
     for (const { key, cell } of pending) {
       try {
-        const res = await parseResponse(await apiPut("/dftc/price-draft/cell", cell));
+        const res = await parseResponse(await apiPut("/dftc/price-draft/cell", {
+          ...cell,
+          // Read immediately before each request because the previous cell's
+          // successful write advances the shared draft timestamp.
+          expected_draft_updated_at: draftUpdatedAtRef.current,
+        }));
+        if (res?.draft_updated_at) draftUpdatedAtRef.current = res.draft_updated_at;
         const tabId = key.split("|")[0];
         const vid = key.slice(tabId.length + 1);
         if (res?.version !== undefined && draftMetaRef.current[tabId]) {
@@ -1142,16 +1158,52 @@ function DFTCPriceInput() {
             updatedBy: res.updated_by_user_id,
           });
         }
+        savedSuccessfully.push({ key, cell });
       } catch (err) {
         if (err?.status === 409 || err?.statusCode === 409) {
-          conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
+          if (err?.detail?.code === "draft_discarded") {
+            const tabId = key.split("|")[0];
+            const vid = key.slice(tabId.length + 1);
+            dirtyRef.current.delete(key);
+            draftMetaRef.current[tabId]?.delete(vid);
+          }
+          conflict = err?.detail?.code === "draft_discarded"
+            ? "The shared draft was discarded by the other inputter."
+            : "Someone else edited these prices while you were typing. Review the values and try again.";
         } else {
           console.error("Draft cell autosave failed:", err);
         }
       }
     }
+    // A successful autosave is no longer a local edit. Clearing this marker is
+    // important: it lets a discard made by the other inputter remove the same
+    // value from this form on the next shared-draft poll. Keep the marker only
+    // when the user typed again while the request was in flight.
+    for (const key of clearedSuccessfully) {
+      const tabId = key.split("|")[0];
+      const vid = key.slice(tabId.length + 1);
+      if (!hasValue(draftRef.current.tabFields[tabId]?.[vid])) dirtyRef.current.delete(key);
+    }
+    for (const { key, cell } of savedSuccessfully) {
+      const tabId = key.split("|")[0];
+      const vid = key.slice(tabId.length + 1);
+      const current = draftRef.current.tabFields[tabId]?.[vid];
+      if (sameField(current, priceField(cell.prevail_price, cell.uom))) dirtyRef.current.delete(key);
+    }
     setDraftSavingCells(new Set());
-    if (conflict) setDraftConflict(conflict);
+      if (conflict) setDraftConflict(conflict);
+    };
+
+    // Autosave timers and finalization can fire close together. Queue them so
+    // optimistic cell versions are never submitted concurrently by this page.
+    const previous = pushInFlightRef.current || Promise.resolve();
+    const next = previous.catch(() => { }).then(flush);
+    pushInFlightRef.current = next;
+    next.then(
+      () => { if (pushInFlightRef.current === next) pushInFlightRef.current = null; },
+      () => { if (pushInFlightRef.current === next) pushInFlightRef.current = null; },
+    );
+    return next;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pull the shared draft for the selected day and merge it into the form
@@ -1175,6 +1227,30 @@ function DFTCPriceInput() {
     // The user may have switched days while the request was in flight. A
     // response for the old day must never land on the new one's form.
     if (draftRef.current.selectedDate !== date) return false;
+
+    const remoteDraftToken = data.updated_at || null;
+    const sharedDiscarded = Boolean(data.id) && data.cells.length === 0 &&
+      draftUpdatedAtRef.current !== null &&
+      remoteDraftToken !== draftUpdatedAtRef.current;
+    if (remoteDraftToken !== null) draftUpdatedAtRef.current = remoteDraftToken;
+    lastRemoteCellCountRef.current = data.cells.length;
+
+    // Discard is authoritative. Clear this page's unsaved edits as well as
+    // the cells that had already been autosaved, otherwise the discarded
+    // values can be written back by the next debounce.
+    const discarded = [];
+    if (sharedDiscarded) {
+      for (const tab of MARKET_TABS) {
+        const keys = new Set([
+          ...Object.keys(draftRef.current.tabFields[tab.id] || {})
+            .filter((vid) => dirtyRef.current.has(`${tab.id}|${vid}`)),
+          ...draftMetaRef.current[tab.id].keys(),
+        ]);
+        for (const vid of keys) discarded.push([tab.id, vid]);
+        draftMetaRef.current[tab.id].clear();
+      }
+      for (const [tabId, vid] of discarded) dirtyRef.current.delete(`${tabId}|${vid}`);
+    }
 
     // A cell whose commodity the form has no row for is healed here: the
     // catalogue is refreshed and the missing row added before the cells are
@@ -1210,7 +1286,7 @@ function DFTCPriceInput() {
     }
 
     // 2. A cell the server no longer holds was cleared by the other inputter.
-    const removed = [];
+    const removed = [...discarded];
     for (const tab of MARKET_TABS) {
       const map = draftMetaRef.current[tab.id];
       if (!map) continue;
@@ -1258,9 +1334,53 @@ function DFTCPriceInput() {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
       syncRef.current().catch(() => { });
-    }, 10000);
-    return () => clearInterval(id);
+    }, 15000);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible" && navigator.onLine !== false) {
+        syncRef.current().catch(() => { });
+      }
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
+    };
   }, [draftFinalized]);
+
+  // Commodity catalogue live-sync: another inputter may register a commodity or
+  // variety while this page stays open. Re-run the page's own catalogue helpers
+  // on a timer so those rows appear without a full reload.
+  const catalogPollRef = useRef(null);
+  useEffect(() => {
+    catalogPollRef.current = async () => {
+      try {
+        const items = await fetchCatalogItems();
+        applyCatalogItems(items);
+        addCatalogRows(items.map((item) => item.id), items);
+      } catch {
+        // Offline or a server error: keep what is on screen.
+      }
+    };
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      catalogPollRef.current?.().catch(() => { });
+    }, 60000);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") catalogPollRef.current?.().catch(() => { });
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
+    };
+  }, []);
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1294,6 +1414,9 @@ function DFTCPriceInput() {
     if (navTimer.current) clearTimeout(navTimer.current);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (oldTimer.current) clearTimeout(oldTimer.current);
+    // Do not leave the last edit device-local when the user navigates away
+    // before the debounce fires.
+    if (dirtyRef.current.size > 0) pushDraftCells().catch(() => { });
   }, []);
 
   function readDraftData() {
@@ -1335,15 +1458,34 @@ function DFTCPriceInput() {
     }
   }, [location.state]);
 
-  function discardDraft() {
+  async function discardDraft() {
+    // Discard the shared server draft first so it cannot be re-layered back
+    // onto the form by the next prefill.
+    try {
+      await apiDelete(`/dftc/price-draft?reporting_date=${selectedDate}`);
+    } catch {
+      // A failed delete must not block the local clear.
+    }
     setDraftDismissed(true);
     setHasDraft(false);
     try {
       localStorage.removeItem("dftc_price_draft");
       localStorage.removeItem("dftc_price_draft_data");
     } catch { }
+    // Invalidate any prefill request that was already in flight. Its response
+    // must not repopulate the form after the user discarded the draft.
+    prefillSeqRef.current += 1;
     setTabFields(emptyTabFields());
-    loadDayPrefill(selectedDate);
+    dirtyRef.current = new Set();
+    draftMetaRef.current = emptyTabMaps();
+    draftUpdatedAtRef.current = null;
+    prefilledRef.current = emptyTabMaps();
+    carriedRef.current = emptyTabSets();
+    setDraftFinalized(false);
+    setSameDayCount(0);
+    setCarriedCount(0);
+    setUnrenderableCount(0);
+    setCarriedDate(null);
   }
 
   // Load existing prices for the given date across all 5 price columns, then
@@ -1398,6 +1540,7 @@ function DFTCPriceInput() {
         const draftRes = await apiGet(`/dftc/price-draft?reporting_date=${date}`);
         const draftData = await parseResponse(draftRes);
         if (draftData && Array.isArray(draftData.cells)) {
+          draftUpdatedAtRef.current = draftData.updated_at || null;
           draftFinalized = draftData.status === "saved";
           if (draftData.cells.length) {
             // Same healing as the live resync: a commodity the form has no
@@ -1480,6 +1623,7 @@ function DFTCPriceInput() {
 
     setDateError("");
     setSelectedDate(newDate);
+    lastRemoteCellCountRef.current = 0;
     setDataName(`DFTC Price Monitoring — ${formatDateLabel(newDate)}`);
     setCollapsed(new Set(PRICE_CATEGORIES.map((c) => c.id)));
     loadDayPrefill(newDate);
@@ -1488,8 +1632,27 @@ function DFTCPriceInput() {
 
   async function registerCommodity(body) {
     try {
-      return await parseResponse(await apiPost("/dftc/commodities", body));
-    } catch { return null; }
+      const registered = await parseResponse(await apiPost("/dftc/commodities", body));
+      if (registered?.id) {
+        const baseName = COMMODITY_NAME_OVERRIDES[registered.name] ?? registered.name;
+        const baseKey = nameSlug(baseName);
+        const map = catalogRef.current || new Map();
+        map.set(baseKey, map.get(baseKey) ?? registered.id);
+        if (registered.variety) {
+          map.set(`${baseKey}-${nameSlug(registered.variety)}`, registered.id);
+        }
+        catalogRef.current = map;
+        catalogItemsRef.current = [
+          ...catalogItemsRef.current.filter((item) => item.id !== registered.id),
+          registered,
+        ];
+      }
+      return registered;
+    } catch (error) {
+      console.error("Failed to register DFTC commodity:", error);
+      setSaveError("Could not sync this commodity/variety. Please retry after the connection recovers.");
+      return null;
+    }
   }
 
   function getField(tabId, variantId, defaultUom = "kg") {
@@ -1779,6 +1942,19 @@ function DFTCPriceInput() {
       ...prev,
       [commodityId]: [...prev[commodityId] ?? [], { id: newId, name: trimmed }]
     }));
+    const parentCategory = PRICE_CATEGORIES.find((category) =>
+      category.commodities.some((commodity) => commodity.id === commodityId) ||
+      (customCommodities[category.id] ?? []).some((commodity) => commodity.id === commodityId)
+    );
+    const parentCommodity = parentCategory && getAllCommodities(parentCategory).find((commodity) => commodity.id === commodityId);
+    if (parentCommodity) {
+      registerCommodity({
+        name: COMMODITY_NAME_OVERRIDES[parentCommodity.name] ?? parentCommodity.name,
+        category: parentCategory.name,
+        variety: trimmed,
+        unit_of_measure: "kg",
+      });
+    }
     setAddingVariant(null);
     setVariantInput("");
     triggerAutosave();
@@ -1813,6 +1989,12 @@ function DFTCPriceInput() {
       ...prev,
       [categoryId]: [...prev[categoryId] ?? [], newCom]
     }));
+    registerCommodity({
+      name,
+      category: cat?.name,
+      variety: variantName === "Base" ? null : variantName,
+      unit_of_measure: uom,
+    });
     return null;
   }
 
@@ -2884,7 +3066,7 @@ function DFTCPriceInput() {
                               autoFocus
                               type="text"
                               value={variantInput}
-                              onChange={(e) => setVariantInput(e.target.value)}
+                        onChange={(e) => setVariantInput(capitalizeNameInput(e.target.value))}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") commitVariant(com.id);
                                 if (e.key === "Escape") { setAddingVariant(null); setVariantInput(""); }

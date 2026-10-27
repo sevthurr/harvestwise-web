@@ -17,7 +17,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
-import { formatDateTime, formatDisplayLabel, formatPersonName } from "../../global/utils/apiTransforms";
+import { capitalizeNameInput, formatDateTime, formatDisplayLabel, formatPersonName } from "../../global/utils/apiTransforms";
 
 
 const TABS = [
@@ -76,7 +76,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="First name"
               className={inputCls}
               value={form.firstName}
-              onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, firstName: capitalizeNameInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -87,7 +87,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="Last name"
               className={inputCls}
               value={form.lastName}
-              onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, lastName: capitalizeNameInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -100,7 +100,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="Middle name"
               className={inputCls}
               value={form.middleName}
-              onChange={(e) => setForm((f) => ({ ...f, middleName: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, middleName: capitalizeNameInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -172,7 +172,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="e.g. Market Monitoring Staff"
               className={inputCls}
               value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, position: capitalizeNameInput(e.target.value) }))}
             />
           </div>
         </div>

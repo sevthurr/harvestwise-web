@@ -395,7 +395,11 @@ function DFTCFilePreview({ file, onClose }) {
     ? reportPreviewData.subtitle.replace("Prevailing Market Prices as of ", "")
     : formatDisplayDate(file.reportingDate || file.savedDate);
   const reportReference = reportPreviewData?.report_reference_no || file.reportId || file.reportReferenceNo || file.fileId || "—";
+  // The names selected in the final review card are authoritative for the
+  // printed report. Backend attribution remains the fallback for older reports
+  // that have no saved review metadata.
   const encodedByName = file.encodedBy || backendEncodedBy || getEncodedByName(file);
+  const reviewedByName = personnel.preparedBy || backendPreparedBy || file.reviewedBy || file.preparedBy || "—";
 
   async function downloadImages() {
     setDlState("generating-img");
@@ -647,7 +651,8 @@ function DFTCFilePreview({ file, onClose }) {
         ["Class", "A"],
         ["Records Included", String(recordsIncluded || 1)],
         ["Saved Date", file.savedDate || "—"],
-        ["Encoded By", encodedByName]
+        ["Encoded By", encodedByName],
+        ["Reviewed By", reviewedByName]
       ]}
       format={format}
       onFormatChange={setFormat}

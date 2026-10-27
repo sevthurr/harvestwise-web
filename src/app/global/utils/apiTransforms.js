@@ -61,6 +61,11 @@ export function formatPersonName(value) {
     .join(" ");
 }
 
+/** Capitalize the first letter of each name word while preserving spacing. */
+export function capitalizeNameInput(value) {
+  return String(value).replace(/(^|\s)([a-z])/gi, (_, boundary, letter) => `${boundary}${letter.toUpperCase()}`);
+}
+
 /**
  * Format ISO date to human-readable format (matches mock format)
  * 

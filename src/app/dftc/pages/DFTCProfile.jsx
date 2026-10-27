@@ -55,13 +55,12 @@ function DFTCProfile() {
     : (user?.username ? user.username.slice(0, 2).toUpperCase() : "—");
 
   const phone = user?.phone || "—";
-  const isPhoneVerified = !!user?.phone_verified_at;
   const email = user?.email || "—";
   const isEmailVerified = !!user?.email_verified_at;
   const roleName = user?.role?.role_name || user?.role || "DFTC";
   const position = user?.position || staff.position_title || "—";
   const accountStatus = user?.is_active === false ? "Inactive" : "Active";
-  const lastLogin = formatDateTime(user?.last_login_at || user?.last_login || user?.created_at);
+  const lastLogin = formatDateTime(user?.last_login || user?.last_login_at || user?.created_at);
 
   if (isLoading && !user) {
     return (
@@ -120,16 +119,6 @@ function DFTCProfile() {
               <Phone className="w-3.5 h-3.5 text-black flex-shrink-0" />
               <span className="text-[15px] text-black">{phone}</span>
             </div>
-            {phone !== "—" ? (
-              isPhoneVerified ? (
-                <div className="flex items-center gap-1">
-                  <Check className="w-3 h-3 text-emerald-500" />
-                  <p className="text-[12px] text-emerald-600">Verified</p>
-                </div>
-              ) : (
-                <p className="text-[12px] text-[var(--hw-neutral-500)]">Not verified</p>
-              )
-            ) : null}
           </div>
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">

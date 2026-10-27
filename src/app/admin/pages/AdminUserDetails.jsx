@@ -14,7 +14,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
-import { formatDate, formatPersonName } from "../../global/utils/apiTransforms";
+import { capitalizeNameInput, formatDate, formatPersonName } from "../../global/utils/apiTransforms";
 
 const EditForm = ({ user, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -29,7 +29,12 @@ const EditForm = ({ user, onSave, onCancel }) => {
     position: user?.position || ""
   });
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    const value = ["firstName", "lastName", "middleName", "position"].includes(k)
+      ? capitalizeNameInput(e.target.value)
+      : e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
+  };
 
   const handleSave = () => {
     onSave({

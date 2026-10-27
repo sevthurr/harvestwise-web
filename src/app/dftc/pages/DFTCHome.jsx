@@ -145,10 +145,10 @@ function DFTCHome() {
       reportingDate: file.reportingDate || file.savedDate,
       savedDate: file.savedDate,
       records: file.records,
-      encodedBy: file.encodedBy || meta.encodedBy || "MARIA S. SANTOS",
-      encodedByRole: file.encodedByRole || meta.encodedByRole || "Data Analyst",
-      reviewedBy: file.reviewedBy || meta.reviewedBy || "MARIA S. SANTOS",
-      reviewedByRole: file.reviewedByRole || meta.reviewedByRole || "Data Analyst"
+      encodedBy: meta.encodedBy || file.encodedBy || "MARIA S. SANTOS",
+      encodedByRole: meta.encodedByRole || file.encodedByRole || "Data Analyst",
+      reviewedBy: meta.reviewedBy || file.reviewedBy || "MARIA S. SANTOS",
+      reviewedByRole: meta.reviewedByRole || file.reviewedByRole || "Data Analyst"
     });
   };
 

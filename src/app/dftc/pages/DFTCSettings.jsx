@@ -8,6 +8,7 @@ import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { isValidEmail, isFakeEmailDomain } from "../../auth/authValidation";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
@@ -105,7 +106,9 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
     }
   };
   const set = (k) => (e) => {
-    const value = e.target.value;
+    const value = ["firstName", "lastName", "middleName"].includes(k)
+      ? capitalizeNameInput(e.target.value)
+      : e.target.value;
     setForm((f) => ({ ...f, [k]: value }));
     if (k === "email") {
       if (value.trim() && !isValidEmail(value)) {
@@ -132,10 +135,10 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       last_name: form.lastName,
       middle_name: form.middleName || null,
       suffix: form.suffix === "None" ? null : form.suffix,
-      position_title: form.position || null,
-      phone: form.phone || null,
-      email: form.email || null
+      position_title: form.position || null
     };
+    if (form.phone !== phone) payload.phone = form.phone || null;
+    if (form.email !== email) payload.email = form.email || null;
     if (currentPassword) payload.current_password = currentPassword;
     try {
       await parseResponse(await apiPut("/dftc/staff/me", payload));

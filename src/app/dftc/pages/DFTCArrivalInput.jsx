@@ -26,9 +26,10 @@ import {
 } from "./dftc-add-data-data";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
-import { apiGet, apiPost, parseResponse } from "../../global/api";
+import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -251,7 +252,7 @@ function AddCommodityModal({ onClose, onAdd }) {
             <input
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); setError(""); }}
+              onChange={(e) => { setName(capitalizeNameInput(e.target.value)); setError(""); }}
               placeholder="e.g. Squash, Ginger"
               className="w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
               autoFocus
@@ -279,7 +280,7 @@ function AddCommodityModal({ onClose, onAdd }) {
             <input
               type="text"
               value={variant}
-              onChange={(e) => setVariant(e.target.value)}
+              onChange={(e) => setVariant(capitalizeNameInput(e.target.value))}
               placeholder="e.g. Suprema, Red, Native"
               className="w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
@@ -734,6 +735,7 @@ export default function DFTCArrivalInput() {
   const [collapsed, setCollapsed] = useState(() => new Set(PRICE_CATEGORIES.map((c) => c.id)));
   const [customVariants, setCustomVariants] = useState({});
   const [customCommodities, setCustomCommodities] = useState({});
+  const arrivalDraftStateRef = useRef({});
   const [addingVariant, setAddingVariant] = useState(null);
   const [variantInput, setVariantInput] = useState("");
   const [addCommodityOpen, setAddCommodityOpen] = useState(false);
@@ -750,6 +752,8 @@ export default function DFTCArrivalInput() {
     try { return localStorage.getItem("dftc_arrival_draft") === "true"; } catch { return false; }
   });
   const [draftDismissed, setDraftDismissed] = useState(false);
+  const arrivalDraftVersionRef = useRef(0);
+  const arrivalDraftPollRef = useRef(null);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
   const reviewScrollRef = useRef(null);
@@ -798,6 +802,11 @@ export default function DFTCArrivalInput() {
     return new Date().toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   });
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  arrivalDraftStateRef.current = {
+    periodType, selectedDate, selectedWeek, selectedMonth, selectedYear,
+    fields, customVariants, customCommodities,
+  };
 
   // Calculate reporting label, subtitle, and effective date
   const effectivePeriodInfo = useMemo(() => {
@@ -901,30 +910,60 @@ export default function DFTCArrivalInput() {
     if (found) setReviewedByRole(found.role);
   }
 
+  // Hoisted fetch+apply so both the mount load and the live-sync poll share
+  // one implementation.
+  async function loadCommodityCatalog() {
+    const data = await parseResponse(await apiGet("/dftc/commodities"));
+    const items = Array.isArray(data) ? data : data?.items ?? [];
+    const map = new Map();
+    for (const row of items) {
+      const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
+      map.set(nameSlug(baseName), row.id);
+      if (row.variety) {
+        map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
+      }
+    }
+    catalogRef.current = map;
+    catalogItemsRef.current = items;
+    addCatalogRows(items);
+  }
+
   // Load commodity catalog map from DB
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const data = await parseResponse(await apiGet("/dftc/commodities"));
-        if (cancelled) return;
-        const items = Array.isArray(data) ? data : data?.items ?? [];
-        const map = new Map();
-        for (const row of items) {
-          const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
-          map.set(nameSlug(baseName), row.id);
-          if (row.variety) {
-            map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
-          }
-        }
-        catalogRef.current = map;
-        catalogItemsRef.current = items;
-        addCatalogRows(catalogItemsRef.current);
+        await loadCommodityCatalog();
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  // Commodity catalogue live-sync: another inputter may register a commodity or
+  // variety while this page stays open. Re-run the page's own catalogue helper
+  // on a timer so those rows appear without a full reload.
+  const catalogPollRef = useRef(null);
+  useEffect(() => {
+    catalogPollRef.current = () => loadCommodityCatalog();
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      catalogPollRef.current?.().catch(() => { });
+    }, 60000);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") catalogPollRef.current?.().catch(() => { });
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
+    };
   }, []);
 
   // ── Rows the grid gained from the DB catalogue ────────────────────────────
@@ -1019,27 +1058,25 @@ export default function DFTCArrivalInput() {
     // Any edit means the user is acting on the failure notice.
     setSaveError("");
     setSaveStatus("saving");
-    saveTimer.current = setTimeout(() => {
+    saveTimer.current = setTimeout(async () => {
+      const payload = arrivalDraftStateRef.current;
       try {
         localStorage.setItem("dftc_arrival_draft", "true");
-        localStorage.setItem(
-          "dftc_arrival_draft_data",
-          JSON.stringify({
-            periodType,
-            selectedDate,
-            selectedWeek,
-            selectedMonth,
-            selectedYear,
-            fields,
-            customVariants,
-            customCommodities
-          })
-        );
+        localStorage.setItem("dftc_arrival_draft_data", JSON.stringify(payload));
       } catch { }
+      try {
+        const saved = await parseResponse(await apiPut("/dftc/arrival-draft", {
+          reporting_date: effectivePeriodInfo.iso,
+          payload,
+          expected_version: arrivalDraftVersionRef.current || null,
+        }));
+        arrivalDraftVersionRef.current = saved?.version || arrivalDraftVersionRef.current;
+        setHasDraft(true);
+      } catch { /* local fallback remains available */ }
       setSaveStatus("savedNew");
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 30000);
     }, 1500);
-  }, [periodType, selectedDate, selectedWeek, selectedMonth, selectedYear, fields, customVariants, customCommodities]);
+  }, [periodType, selectedDate, selectedWeek, selectedMonth, selectedYear, effectivePeriodInfo.iso, fields, customVariants, customCommodities]);
 
   function restoreDraft() {
     try {
@@ -1065,7 +1102,54 @@ export default function DFTCArrivalInput() {
     }
   }, [location.state]);
 
-  function discardDraft() {
+  // The server draft is shared by both inputters. Local storage is only the
+  // offline fallback for dates with no server draft yet.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const draft = await parseResponse(
+          await apiGet(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`)
+        );
+        if (cancelled) return;
+        arrivalDraftVersionRef.current = draft?.version || 0;
+        if (draft?.id) {
+          const payload = draft.payload || {};
+          setFields(payload.fields || {});
+          setCustomVariants(payload.customVariants || {});
+          setCustomCommodities(migrateDraftCommodities(payload.customCommodities || {}));
+          setHasDraft(Object.keys(payload.fields || {}).length > 0);
+        }
+        // Device-local data remains available through the explicit Resume
+        // Draft action; it must not override shared server state on open.
+      } catch { /* local fallback remains available offline */ }
+    })();
+    return () => { cancelled = true; };
+  }, [effectivePeriodInfo.iso]);
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState !== "visible" || navigator.onLine === false) return;
+      try {
+        const draft = await parseResponse(
+          await apiGet(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`)
+        );
+        if (!draft?.id || (draft.version || 0) <= arrivalDraftVersionRef.current) return;
+        arrivalDraftVersionRef.current = draft.version;
+        const payload = draft.payload || {};
+        setFields(payload.fields || {});
+        setCustomVariants(payload.customVariants || {});
+        setCustomCommodities(migrateDraftCommodities(payload.customCommodities || {}));
+        setHasDraft(Object.keys(payload.fields || {}).length > 0);
+      } catch { /* shared polling is best effort */ }
+    }, 15000);
+    return () => clearInterval(id);
+  }, [effectivePeriodInfo.iso]);
+
+  async function discardDraft() {
+    try {
+      await apiDelete(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`);
+    } catch { /* local state is still cleared */ }
     setDraftDismissed(true);
     setHasDraft(false);
     try {
@@ -1199,6 +1283,19 @@ export default function DFTCArrivalInput() {
       ...prev,
       [commodityId]: [...prev[commodityId] ?? [], { id: newId, name: trimmed }]
     }));
+    const parentCategory = PRICE_CATEGORIES.find((category) =>
+      category.commodities.some((commodity) => commodity.id === commodityId) ||
+      (customCommodities[category.id] ?? []).some((commodity) => commodity.id === commodityId)
+    );
+    const parentCommodity = parentCategory && getAllCommodities(parentCategory).find((commodity) => commodity.id === commodityId);
+    if (parentCommodity) {
+      registerCommodity({
+        name: COMMODITY_NAME_OVERRIDES[parentCommodity.name] ?? parentCommodity.name,
+        category: parentCategory.name,
+        variety: trimmed,
+        unit_of_measure: "kg",
+      }).catch(() => { });
+    }
     setAddingVariant(null);
     setVariantInput("");
     triggerAutosave();
@@ -1230,6 +1327,12 @@ export default function DFTCArrivalInput() {
       ...prev,
       [categoryId]: [...prev[categoryId] ?? [], newCom]
     }));
+    registerCommodity({
+      name,
+      category: cat?.name,
+      variety: variantName === "Base" ? null : variantName,
+      unit_of_measure: uom,
+    }).catch(() => { });
     return null;
   }
 
@@ -1261,8 +1364,23 @@ export default function DFTCArrivalInput() {
 
   async function registerCommodity(body) {
     try {
-      return await parseResponse(await apiPost("/dftc/commodities", body));
-    } catch {
+      const registered = await parseResponse(await apiPost("/dftc/commodities", body));
+      if (registered?.id) {
+        const baseName = COMMODITY_NAME_OVERRIDES[registered.name] ?? registered.name;
+        const baseKey = nameSlug(baseName);
+        const map = catalogRef.current || new Map();
+        map.set(baseKey, map.get(baseKey) ?? registered.id);
+        if (registered.variety) map.set(`${baseKey}-${nameSlug(registered.variety)}`, registered.id);
+        catalogRef.current = map;
+        catalogItemsRef.current = [
+          ...catalogItemsRef.current.filter((item) => item.id !== registered.id),
+          registered,
+        ];
+      }
+      return registered;
+    } catch (error) {
+      console.error("Failed to register DFTC commodity:", error);
+      setSaveError("Could not sync this commodity/variety. Please retry after the connection recovers.");
       return null;
     }
   }
@@ -1478,6 +1596,7 @@ export default function DFTCArrivalInput() {
     setSaveProgressStage("Consolidating arrival volume records...");
 
     try {
+      await apiDelete(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`);
       localStorage.setItem(
         `dftc_arrival_personnel_${effectivePeriodInfo.iso}`,
         JSON.stringify({
@@ -2414,7 +2533,7 @@ export default function DFTCArrivalInput() {
                                   autoFocus
                                   type="text"
                                   value={variantInput}
-                                  onChange={(e) => setVariantInput(e.target.value)}
+                                  onChange={(e) => setVariantInput(capitalizeNameInput(e.target.value))}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") commitVariant(com.id);
                                     if (e.key === "Escape") { setAddingVariant(null); setVariantInput(""); }

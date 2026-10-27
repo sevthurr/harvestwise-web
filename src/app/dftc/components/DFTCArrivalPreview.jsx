@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
@@ -213,6 +213,22 @@ function DFTCArrivalPreview({ file, onClose }) {
     },
     enabled: !!submissionId
   });
+
+  const backendEncodedBy = reportPreviewData?.encoded_by && reportPreviewData.encoded_by !== "DFTC Encoder"
+    ? reportPreviewData.encoded_by
+    : null;
+  const backendPreparedBy = reportPreviewData?.prepared_by && reportPreviewData.prepared_by !== "DFTC Officer"
+    ? reportPreviewData.prepared_by
+    : null;
+
+  useEffect(() => {
+    setPersonnel((prev) => ({
+      encodedBy: backendEncodedBy || file?.encodedBy || prev.encodedBy || DEFAULT_PERSONNEL.encodedBy,
+      encodedByRole: file?.encodedByRole || prev.encodedByRole || DEFAULT_PERSONNEL.encodedByRole,
+      preparedBy: backendPreparedBy || file?.reviewedBy || file?.preparedBy || prev.preparedBy || DEFAULT_PERSONNEL.preparedBy,
+      preparedByRole: file?.reviewedByRole || file?.preparedByRole || prev.preparedByRole || DEFAULT_PERSONNEL.preparedByRole
+    }));
+  }, [file, backendEncodedBy, backendPreparedBy]);
 
   // Every catalogue commodity, blank where nothing was collected. Merged on
   // commodity_id by the server — this file does no name matching, so it cannot
