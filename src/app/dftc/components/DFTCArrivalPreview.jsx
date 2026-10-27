@@ -80,7 +80,7 @@ function ArrivalVolumeReportPage({
   const cell = (bg, extra = {}) => ({ background: bg, border: "1px solid #000", padding: "4px 8px", textAlign: "right", fontSize: 12, ...extra });
 
   return (
-    <div className="bg-white p-4 md:p-6 w-full min-w-[660px]" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+    <div className="bg-white p-4 md:p-6 w-full max-w-[960px] mx-auto box-border" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
       {isFirst && (
         <div style={{ textAlign: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: "bold", textTransform: "uppercase", lineHeight: 1.3 }}>Davao Food Terminal Complex Arrival Volume</div>
@@ -109,7 +109,7 @@ function ArrivalVolumeReportPage({
             <tr key={`${r.commodity_name}-${r.variety}-${offset + i}`}>
               <td style={cellL({ textAlign: "center", width: 40 })}>{offset + i + 1}</td>
               <td style={cellL()}><strong>{r.commodity_name || "—"}</strong></td>
-              <td style={cellL({ textAlign: "center" })}>{r.variety || "Base"}</td>
+              <td style={cellL({ textAlign: "center" })}>{r.variety || "Regular"}</td>
               <td style={cellL({ textAlign: "center", width: 60 })}>{r.unit || "kg"}</td>
               <td style={cellL({ textAlign: "center", width: 90 })}>{r.arrival_date || "—"}</td>
               <td style={cell(BANK_BG)}>{numStr(r.farm_source_volume_kg)}</td>
@@ -277,15 +277,29 @@ function DFTCArrivalPreview({ file, onClose }) {
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
+      
+      const canvases = [];
       for (let i = 0; i < totalPages; i++) {
         const el = pageRefs.current[i];
         if (!el) continue;
         const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
-        if (i > 0) pdf.addPage("a4", "landscape");
-        const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
-        const w = canvas.width * ratio;
-        const h = canvas.height * ratio;
-        pdf.addImage(canvas.toDataURL("image/png"), "PNG", (pdfW - w) / 2, (pdfH - h) / 2, w, h);
+        canvases.push(canvas);
+      }
+
+      if (canvases.length > 0) {
+        const baseWidth = canvases[0].width || 960;
+        const uniformRatio = (pdfW - 16) / baseWidth;
+
+        for (let i = 0; i < canvases.length; i++) {
+          const canvas = canvases[i];
+          if (i > 0) pdf.addPage("a4", "landscape");
+          const w = canvas.width * uniformRatio;
+          const h = canvas.height * uniformRatio;
+          const x = (pdfW - w) / 2;
+          const y = h < pdfH ? (pdfH - h) / 2 : 8;
+
+          pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, y, w, Math.min(h, pdfH - 16));
+        }
       }
       pdf.save(`DFTC-Arrival-Volume-${reportingDateShort || "report"}.pdf`);
       setDlState("idle");
@@ -352,7 +366,7 @@ function DFTCArrivalPreview({ file, onClose }) {
         const row = ws.addRow([
           i + 1,
           r.commodity_name || "",
-          r.variety || "Base",
+          r.variety || "Regular",
           r.unit || "kg",
           r.arrival_date || "",
           r.farm_source_volume_kg ?? "",
@@ -504,7 +518,7 @@ function DFTCArrivalPreview({ file, onClose }) {
     if (format === "PDF") {
       return (
         <DFTCPreviewZoomContainer label="Arrival Volume PDF (A4 Landscape)">
-          <div className="space-y-5">
+          <div className="space-y-5 w-full max-w-[960px] mx-auto">
             {pages.map((_, idx) => (
               <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">

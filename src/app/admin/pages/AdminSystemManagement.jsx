@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import {
   Card,
   SectionLabel,
@@ -27,12 +26,12 @@ const TABS = [
   { id: "health", label: "System Health" }
 ];
 
-const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState({
+const AddUserModal = ({ onClose, onAdd }) => {
+  const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     middleName: "",
     suffix: "None",
-    phone: "",
     email: "",
     role: "DFTC",
     position: ""
@@ -51,7 +50,6 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
         lastName: form.lastName,
         middleName: form.middleName || null,
         suffix: form.suffix === "None" ? null : form.suffix,
-        phone: form.phone || null,
         email: form.email || null,
         role: form.role,
         is_active: true,
@@ -123,31 +121,17 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <FieldLabel htmlFor="au-phone">Phone Number</FieldLabel>
-            <input
-              id="au-phone"
-              type="tel"
-              placeholder="09XX XXX XXXX"
-              maxLength={PHONE_MAX_LENGTH}
-              className={inputCls}
-              value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))}
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="au-email">Email</FieldLabel>
-            <input
-              id="au-email"
-              type="email"
-              required
-              placeholder="user@example.com"
-              className={inputCls}
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            />
-          </div>
+        <div>
+          <FieldLabel htmlFor="au-email">Email</FieldLabel>
+          <input
+            id="au-email"
+            type="email"
+            required
+            placeholder="user@example.com"
+            className={inputCls}
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -73,7 +73,7 @@ function toLayout(categories) {
 }
 
 describe("report page layout", () => {
-  it("splits the served categories across four pages, in served order", () => {
+  it("splits the served categories across pages in served order", () => {
     const pages = PAGE_CATEGORY_GROUPS.map(
       (group) => group.map((name) => CATEGORIES.find((c) => c.name === name)).filter(Boolean)
     );
@@ -81,7 +81,8 @@ describe("report page layout", () => {
       ["Lowland Vegetables"],
       ["Highland Vegetables"],
       ["Spices", "Rootcrops"],
-      ["Fruits", "Others"],
+      ["Fruits"],
+      ["Others"],
     ]);
   });
 

@@ -730,6 +730,9 @@ function MobileVariantRow({ v, f, carriedFrom, onUpdateSample, onUpdateUom }) {
                       min="0"
                       step="0.01"
                       value={s}
+                      onKeyDown={(e) => {
+                        if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                      }}
                       onChange={(e) => onUpdateSample(i, e.target.value)}
                       placeholder="0.00"
                       className="flex-1 px-2 text-[12px] text-[var(--hw-neutral-900)] focus:outline-none min-w-0 bg-transparent text-right pr-2.5"
@@ -1043,7 +1046,8 @@ function DFTCPriceInput() {
         const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
         const baseKey = nameSlug(baseName);
         const variantName = v?.name;
-        const variantKey = variantName && variantName !== "Base"
+        const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+        const variantKey = !isBaseOrRegular
           ? `${baseKey}-${nameSlug(variantName)}`
           : baseKey;
         const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
@@ -1058,7 +1062,7 @@ function DFTCPriceInput() {
             const registered = await registerCommodity({
               name: baseName,
               category: cat?.name,
-              variety: variantName && variantName !== "Base" ? variantName : null,
+              variety: !isBaseOrRegular ? variantName : null,
               unit_of_measure: f.uom || "kg",
             });
             if (registered?.id) {
@@ -1498,11 +1502,17 @@ function DFTCPriceInput() {
 
   function updateSample(variantId, sampleIdx, value) {
     dirtyRef.current.add(`${activeTabId}|${variantId}`);
+    // Strip any non-numerical characters (e.g. e, E, +, -, etc.)
+    let cleanVal = String(value).replace(/[^0-9.]/g, "");
+    const parts = cleanVal.split(".");
+    if (parts.length > 2) {
+      cleanVal = parts[0] + "." + parts.slice(1).join("");
+    }
     setTabFields((prev) => {
       const curTabMap = prev[activeTabId] || {};
       const existing = curTabMap[variantId] || emptyField();
       const newSamples = [...existing.samples];
-      newSamples[sampleIdx] = value;
+      newSamples[sampleIdx] = cleanVal;
       const computed = computePrices(newSamples);
       return {
         ...prev,
@@ -1660,8 +1670,8 @@ function DFTCPriceInput() {
           commodityId: com.id,
           commodityName: com.name,
           categoryId: cat.id,
-          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
-          variantName: item.variety || "Base",
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-regular`,
+          variantName: item.variety || "Regular",
           dbId: item.id,
         };
       }
@@ -1675,8 +1685,8 @@ function DFTCPriceInput() {
       commodityId: baseSlug,
       commodityName: baseName,
       categoryId: cat.id,
-      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
-      variantName: item.variety || "Base",
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-regular`,
+      variantName: item.variety || "Regular",
       dbId: item.id,
     };
   }
@@ -1833,8 +1843,10 @@ function DFTCPriceInput() {
     if (!map) return com.id;
     const baseName = COMMODITY_NAME_OVERRIDES[com.name] ?? com.name;
     const baseKey = nameSlug(baseName);
-    const variantKey = v && v.name && v.name !== "Base"
-      ? `${baseKey}-${nameSlug(v.name)}`
+    const variantName = v?.name;
+    const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+    const variantKey = !isBaseOrRegular
+      ? `${baseKey}-${nameSlug(variantName)}`
       : baseKey;
     return map.get(variantKey) ?? map.get(baseKey) ?? null;
   }
@@ -1982,13 +1994,26 @@ function DFTCPriceInput() {
     // values that are on screen.
     try {
       await pushDraftCells();
-    } catch { /* covered by the finalize error below */ }
+    } catch (err) {
+      console.error("Failed to push draft cells before finalize:", err);
+      setIsSaving(false);
+      setSaveError(
+        err?.message
+          ? `Could not save prices before finalizing: ${err.message}`
+          : "Could not sync prices before finalizing. Please try again."
+      );
+      return;
+    }
 
     setSaveProgress(70);
     setSaveProgressStage("Consolidating price monitoring records...");
     try {
       const res = await parseResponse(
-        await apiPost("/dftc/price-draft/finalize", { reporting_date: selectedDate }),
+        await apiPost("/dftc/price-draft/finalize", {
+          reporting_date: selectedDate,
+          encoded_by: encodedBy,
+          reviewed_by: reviewedBy,
+        }),
       );
       const count = res?.record_count ?? 0;
 
@@ -2273,9 +2298,9 @@ function DFTCPriceInput() {
                           </td>
                           <td style={{ background: LEFT_BG, border: "1px solid #999", padding: "4px 8px" }}>
                             {r.vi === 0 ? (
-                              <span><strong>{r.com.name}</strong> {r.v.name && r.v.name !== "Base" ? `(${r.v.name})` : ""}</span>
+                              <span><strong>{r.com.name}</strong> {r.v.name && r.v.name !== "Base" && r.v.name !== "Regular" ? `(${r.v.name})` : ""}</span>
                             ) : (
-                              <span style={{ paddingLeft: 16 }}>{r.v.name && r.v.name !== "Base" ? `(${r.v.name})` : ""}</span>
+                              <span style={{ paddingLeft: 16 }}>{r.v.name && r.v.name !== "Base" && r.v.name !== "Regular" ? `(${r.v.name})` : (r.v.name || "")}</span>
                             )}
                           </td>
                           <td style={{ background: LEFT_BG, border: "1px solid #999", padding: "4px 8px", textAlign: "center" }}>
@@ -2730,7 +2755,7 @@ function DFTCPriceInput() {
           });
           if (catCommodities.length === 0) return null;
 
-          const isCol = collapsed.has(cat.id);
+          const isCol = searchQuery.trim() ? false : collapsed.has(cat.id);
           const catEntered = getAllCommodities(cat).reduce((acc, com) =>
             acc + getVariants(com).filter((v) => hasValue(getField(activeTabId, v.id))).length, 0);
 
@@ -2756,7 +2781,7 @@ function DFTCPriceInput() {
 
               {!isCol && catCommodities.map((com) => {
                 const variants = getVariants(com).filter((v) => matchesVariant(com, v));
-                const colCom = collapsedComs.has(com.id);
+                const colCom = searchQuery.trim() ? false : collapsedComs.has(com.id);
                 return (
                   <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                     {/* Commodity Header */}
@@ -2833,6 +2858,9 @@ function DFTCPriceInput() {
                                   min="0"
                                   step="0.01"
                                   value={s}
+                                  onKeyDown={(e) => {
+                                    if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                                  }}
                                   onChange={(e) => updateSample(v.id, i, e.target.value)}
                                   placeholder="0.00"
                                   className="w-full px-1 text-[11px] text-[var(--hw-neutral-900)] focus:outline-none min-w-0 bg-transparent text-right pr-1.5"

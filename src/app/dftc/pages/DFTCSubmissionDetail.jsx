@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, AlertCircle, Loader2, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, Loader2, Info } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { apiGet, parseResponse } from "../../global/api";
 import { formatMarketName, formatDateOrMonth } from "./dftcSavedDatasets";
@@ -94,6 +94,107 @@ const cardCls = "bg-white rounded-2xl border border-[var(--hw-neutral-200)] shad
 const tdCls = "px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[var(--hw-neutral-800)] text-[13px] sm:text-[14px]";
 const tdBold = `${tdCls} font-medium text-[var(--hw-neutral-900)]`;
 const thCls = "px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-800)] whitespace-nowrap";
+
+function capitalizeFirstLetter(str) {
+  if (!str) return "—";
+  return String(str).charAt(0).toUpperCase() + String(str).slice(1);
+}
+
+const PAGE_SIZE = 20;
+
+function Pagination({ page, total, pageSize = PAGE_SIZE, onChange }) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return null;
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  // Sliding window with ellipsis for numbered pagination
+  const pageNumbers = [];
+  if (pages <= 7) {
+    for (let i = 1; i <= pages; i++) pageNumbers.push(i);
+  } else {
+    pageNumbers.push(1);
+    if (page > 3) pageNumbers.push("...");
+    const windowStart = Math.max(2, page - 1);
+    const windowEnd = Math.min(pages - 1, page + 1);
+    for (let i = windowStart; i <= windowEnd; i++) {
+      if (!pageNumbers.includes(i)) pageNumbers.push(i);
+    }
+    if (page < pages - 2) pageNumbers.push("...");
+    if (!pageNumbers.includes(pages)) pageNumbers.push(pages);
+  }
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-[var(--hw-neutral-100)] text-[12.5px] sm:text-[13px] text-[var(--hw-neutral-600)]">
+      <p className="text-center sm:text-left text-[12.5px] sm:text-[13px] font-medium text-[var(--hw-neutral-700)]">
+        Showing {start}–{end} of {total.toLocaleString()} records
+      </p>
+
+      {/* Mobile view: Compact Prev / Page X of Y / Next */}
+      <div className="flex sm:hidden items-center justify-between w-full pt-2 border-t border-[var(--hw-neutral-100)]">
+        <button
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          Prev
+        </button>
+        <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">
+          Page {page} of {pages}
+        </span>
+        <button
+          disabled={page >= pages}
+          onClick={() => onChange(page + 1)}
+          className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* Desktop / Tablet view: Sliding window with ellipsis so numbers never wrap or overflow */}
+      <div className="hidden sm:flex items-center gap-1">
+        <button
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          className="px-2.5 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          Prev
+        </button>
+
+        {pageNumbers.map((item, idx) => {
+          if (item === "...") {
+            return (
+              <span key={`ellipsis-${idx}`} className="px-2 py-1 text-[var(--hw-neutral-400)] select-none">
+                …
+              </span>
+            );
+          }
+          return (
+            <button
+              key={item}
+              onClick={() => onChange(item)}
+              className={`min-w-[32px] h-8 px-2 py-1 text-[12px] border rounded-lg transition-colors cursor-pointer ${
+                item === page
+                  ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white font-semibold"
+                  : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
+            >
+              {item}
+            </button>
+          );
+        })}
+
+        <button
+          disabled={page >= pages}
+          onClick={() => onChange(page + 1)}
+          className="px-2.5 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ValTabNav({ active, onChange, ds }) {
   const tabs = [
@@ -201,7 +302,20 @@ function DFTCSubmissionDetail() {
     const formattedStatus = apiSubmission.status
       ? apiSubmission.status.charAt(0).toUpperCase() + apiSubmission.status.slice(1).toLowerCase()
       : "Saved";
-    const submitterFullName = apiSubmission.submitted_by_name || apiSubmission.submitter_name || (apiSubmission.user ? `${apiSubmission.user.first_name || ""} ${apiSubmission.user.last_name || ""}`.trim() : null) || currentUserName;
+    let storedPersonnel = null;
+    try {
+      if (apiSubmission.reporting_date) {
+        storedPersonnel = JSON.parse(localStorage.getItem(`dftc_report_personnel_${apiSubmission.reporting_date}`));
+      }
+    } catch {}
+
+    const submitterFullName = (isManual && storedPersonnel?.reviewedBy)
+      ? storedPersonnel.reviewedBy
+      : (apiSubmission.submitted_by_name || apiSubmission.submitter_name || (apiSubmission.user ? `${apiSubmission.user.first_name || ""} ${apiSubmission.user.last_name || ""}`.trim() : null) || "DFTC Personnel");
+
+    const encoderFullName = (isManual && storedPersonnel?.encodedBy)
+      ? storedPersonnel.encodedBy
+      : (apiSubmission.encoded_by || apiSubmission.encoded_by_name || "MARIA S. SANTOS");
 
     const analyticsRecords = Array.isArray(apiSubmission.analytics_records) ? apiSubmission.analytics_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => r.is_top10) : [];
     const otherRecords = Array.isArray(apiSubmission.other_records) ? apiSubmission.other_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => !r.is_top10) : [];
@@ -212,6 +326,7 @@ function DFTCSubmissionDetail() {
       datasetId: apiSubmission.id,
       datasetType: dType,
       savedBy: submitterFullName,
+      encodedBy: encoderFullName,
       savedDateTime: formatDateTime(apiSubmission.saved_at || apiSubmission.created_at),
       savedIso: apiSubmission.saved_at ? apiSubmission.saved_at.slice(0, 10) : "",
       totalRecords: apiSubmission.record_count ?? 0,
@@ -237,6 +352,8 @@ function DFTCSubmissionDetail() {
   }, [apiSubmission, currentUserName]);
 
   const [valTab, setValTab] = useState("analytics");
+  const [analyticsPage, setAnalyticsPage] = useState(1);
+  const [otherPage, setOtherPage] = useState(1);
   const [showDelete, setShowDelete] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retried, setRetried] = useState(false);
@@ -299,18 +416,29 @@ function DFTCSubmissionDetail() {
   const showValidation = effectiveStatus === "Saved";
   const isManual = ds.entryMethod === "Manual Input";
 
-  const INFO_ROWS = [
-    ...(isManual
-      ? [["Entry Source", "Manual Data Entry"]]
-      : [["Uploaded File", ds.fileName || "—"], ["File Type", ds.fileType || "xlsx"]]),
-    ["Dataset Type", ds.datasetType],
-    ["Market / Facility", ds.market],
-    ...(!isArrival && ds.priceType !== "—" ? [["Price Type", ds.priceType]] : []),
-    ["Date Coverage", ds.dateCoverage],
-    ["Submission Method", ds.submissionMethod || ds.entryMethod],
-    ["Saved By", ds.savedBy],
-    ["Saved Date and Time", ds.savedDateTime]
-  ];
+  const INFO_ROWS = isManual
+    ? [
+        ["Entry Source", "Manual Data Entry"],
+        ["Dataset Type", ds.datasetType],
+        ["Market / Facility", ds.market],
+        ...(!isArrival && ds.priceType !== "—" ? [["Price Type", ds.priceType]] : []),
+        ["Date Coverage", ds.dateCoverage],
+        ["Submission Method", "Manual Input"],
+        ["Saved By", ds.savedBy],
+        ["Encoded By", ds.encodedBy],
+        ["Saved Date and Time", ds.savedDateTime]
+      ]
+    : [
+        ["Uploaded File", ds.fileName || "—"],
+        ["File Type", ds.fileType || "xlsx"],
+        ["Dataset Type", ds.datasetType],
+        ["Market / Facility", ds.market],
+        ...(!isArrival && ds.priceType !== "—" ? [["Price Type", ds.priceType]] : []),
+        ["Date Coverage", ds.dateCoverage],
+        ["Submission Method", "File Upload"],
+        ["Uploaded By", ds.savedBy],
+        ["Uploaded Date and Time", ds.savedDateTime]
+      ];
 
   return (
     <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
@@ -341,8 +469,6 @@ function DFTCSubmissionDetail() {
           <span className="font-medium text-[var(--hw-neutral-800)]">{ds.datasetType}</span>
           <span className="text-[var(--hw-neutral-300)]">•</span>
           <span>{ds.savedDateTime}</span>
-          <span className="text-[var(--hw-neutral-300)]">•</span>
-          <span>Saved by <strong className="text-[var(--hw-neutral-800)] font-medium">{ds.savedBy}</strong></span>
         </div>
       </div>
 
@@ -417,15 +543,15 @@ function DFTCSubmissionDetail() {
         </div>
       )}
 
-      {/* Validation Result */}
+      {/* Saved Records */}
       {showValidation && (
         <div className={`${cardCls} overflow-hidden`}>
           <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)]">
-            <p className="text-[14.5px] sm:text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation Result</p>
+            <p className="text-[14.5px] sm:text-[15px] font-semibold text-[var(--hw-neutral-900)]">Saved Records</p>
             <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-600)] mt-0.5">Saved records are read-only.</p>
           </div>
 
-          <ValTabNav active={valTab} onChange={setValTab} ds={ds} />
+          <ValTabNav active={valTab} onChange={(t) => { setValTab(t); }} ds={ds} />
 
           {/* Analytics-Supported Records */}
           {valTab === "analytics" && (
@@ -441,61 +567,79 @@ function DFTCSubmissionDetail() {
                   No analytics-supported records in this dataset.
                 </div>
               ) : (
-                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
-                  {isArrival ? (
-                    <table className="w-full min-w-[580px]">
-                      <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                        <tr>
-                          {["Row", "Commodity", "Variety", "Date / Month", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
-                            <th key={h} className={thCls}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                        {ds.analyticsRecords.map((r, idx) => (
-                          <tr key={idx}>
-                            <td className={tdCls}>{idx + 1}</td>
-                            <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
-                            <td className={tdCls}>{r.variety || "—"}</td>
-                            <td className={tdCls}>{formatDateOrMonth(r.dateMonth || r.arrival_date)}</td>
-                            <td className={tdCls}>{r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg).toLocaleString() : (r.farmSource != null ? Number(r.farmSource).toLocaleString() : "—")}</td>
-                            <td className={tdCls}>{r.other_source_volume_kg != null ? Number(r.other_source_volume_kg).toLocaleString() : (r.otherSource != null ? Number(r.otherSource).toLocaleString() : "—")}</td>
-                            <td className={tdBold}>{r.volume_kg != null ? Number(r.volume_kg).toLocaleString() : (r.combinedTotal != null ? Number(r.combinedTotal).toLocaleString() : "—")}</td>
-                            <td className={tdCls}>{r.unit || "kg"}</td>
+                <>
+                  <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
+                    {isArrival ? (
+                      <table className="w-full min-w-[580px]">
+                        <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                          <tr>
+                            {["Row", "Commodity", "Variety", "Date / Month", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
+                              <th key={h} className={thCls}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <table className="w-full min-w-[620px]">
-                      <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                        <tr>
-                          {(ds.hasMarketAndType
-                            ? ["Row", "Commodity", "Category", "Variety", "Market", "Type", "Date", "UOM", "Price"]
-                            : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
-                          ).map((h) => (
-                            <th key={h} className={thCls}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                        {ds.analyticsRecords.map((r, idx) => (
-                          <tr key={idx}>
-                            <td className={tdCls}>{idx + 1}</td>
-                            <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
-                            <td className={tdCls}>{r.category || "—"}</td>
-                            <td className={tdCls}>{r.variety || "—"}</td>
-                            {ds.hasMarketAndType && <td className={tdCls}>{formatMarketName(r.source_name || r.market) || "—"}</td>}
-                            {ds.hasMarketAndType && <td className={tdCls}>{r.price_type || "—"}</td>}
-                            <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
-                            <td className={tdCls}>{r.uom || "kg"}</td>
-                            <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                          {ds.analyticsRecords
+                            .slice((analyticsPage - 1) * PAGE_SIZE, analyticsPage * PAGE_SIZE)
+                            .map((r, idx) => {
+                              const actualIdx = (analyticsPage - 1) * PAGE_SIZE + idx;
+                              return (
+                                <tr key={actualIdx}>
+                                  <td className={tdCls}>{actualIdx + 1}</td>
+                                  <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
+                                  <td className={tdCls}>{r.variety || "—"}</td>
+                                  <td className={tdCls}>{formatDateOrMonth(r.dateMonth || r.arrival_date)}</td>
+                                  <td className={tdCls}>{r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg).toLocaleString() : (r.farmSource != null ? Number(r.farmSource).toLocaleString() : "—")}</td>
+                                  <td className={tdCls}>{r.other_source_volume_kg != null ? Number(r.other_source_volume_kg).toLocaleString() : (r.otherSource != null ? Number(r.otherSource).toLocaleString() : "—")}</td>
+                                  <td className={tdBold}>{r.volume_kg != null ? Number(r.volume_kg).toLocaleString() : (r.combinedTotal != null ? Number(r.combinedTotal).toLocaleString() : "—")}</td>
+                                  <td className={tdCls}>{r.unit || "kg"}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="w-full min-w-[620px]">
+                        <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                          <tr>
+                            {(ds.hasMarketAndType
+                              ? ["Row", "Commodity", "Category", "Variety", "Market", "Price Type", "Date", "UOM", "Price"]
+                              : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
+                            ).map((h) => (
+                              <th key={h} className={thCls}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                          {ds.analyticsRecords
+                            .slice((analyticsPage - 1) * PAGE_SIZE, analyticsPage * PAGE_SIZE)
+                            .map((r, idx) => {
+                              const actualIdx = (analyticsPage - 1) * PAGE_SIZE + idx;
+                              return (
+                                <tr key={actualIdx}>
+                                  <td className={tdCls}>{actualIdx + 1}</td>
+                                  <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
+                                  <td className={tdCls}>{r.category || "—"}</td>
+                                  <td className={tdCls}>{r.variety || "—"}</td>
+                                  {ds.hasMarketAndType && <td className={tdCls}>{formatMarketName(r.source_name || r.market) || "—"}</td>}
+                                  {ds.hasMarketAndType && <td className={tdCls}>{capitalizeFirstLetter(r.price_type)}</td>}
+                                  <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
+                                  <td className={tdCls}>{r.uom || "kg"}</td>
+                                  <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  <Pagination
+                    page={analyticsPage}
+                    total={ds.analyticsRecords.length}
+                    pageSize={PAGE_SIZE}
+                    onChange={setAnalyticsPage}
+                  />
+                </>
               )}
             </>
           )}
@@ -514,61 +658,79 @@ function DFTCSubmissionDetail() {
                   No other commodity records in this dataset.
                 </div>
               ) : (
-                <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
-                  {isArrival ? (
-                    <table className="w-full min-w-[580px]">
-                      <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                        <tr>
-                          {["Row", "Commodity", "Variety", "Date / Month", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
-                            <th key={h} className={thCls}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                        {ds.otherRecords.map((r, idx) => (
-                          <tr key={idx}>
-                            <td className={tdCls}>{idx + 1}</td>
-                            <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
-                            <td className={tdCls}>{r.variety || "—"}</td>
-                            <td className={tdCls}>{formatDateOrMonth(r.dateMonth || r.arrival_date)}</td>
-                            <td className={tdCls}>{r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg).toLocaleString() : (r.farmSource != null ? Number(r.farmSource).toLocaleString() : "—")}</td>
-                            <td className={tdCls}>{r.other_source_volume_kg != null ? Number(r.other_source_volume_kg).toLocaleString() : (r.otherSource != null ? Number(r.otherSource).toLocaleString() : "—")}</td>
-                            <td className={tdBold}>{r.volume_kg != null ? Number(r.volume_kg).toLocaleString() : (r.combinedTotal != null ? Number(r.combinedTotal).toLocaleString() : "—")}</td>
-                            <td className={tdCls}>{r.unit || "kg"}</td>
+                <>
+                  <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
+                    {isArrival ? (
+                      <table className="w-full min-w-[580px]">
+                        <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                          <tr>
+                            {["Row", "Commodity", "Variety", "Date / Month", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
+                              <th key={h} className={thCls}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <table className="w-full min-w-[620px]">
-                      <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                        <tr>
-                          {(ds.hasMarketAndType
-                            ? ["Row", "Commodity", "Category", "Variety", "Market", "Type", "Date", "UOM", "Price"]
-                            : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
-                          ).map((h) => (
-                            <th key={h} className={thCls}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                        {ds.otherRecords.map((r, idx) => (
-                          <tr key={idx}>
-                            <td className={tdCls}>{idx + 1}</td>
-                            <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
-                            <td className={tdCls}>{r.category || "—"}</td>
-                            <td className={tdCls}>{r.variety || "—"}</td>
-                            {ds.hasMarketAndType && <td className={tdCls}>{formatMarketName(r.source_name || r.market) || "—"}</td>}
-                            {ds.hasMarketAndType && <td className={tdCls}>{r.price_type || "—"}</td>}
-                            <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
-                            <td className={tdCls}>{r.uom || "kg"}</td>
-                            <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                          {ds.otherRecords
+                            .slice((otherPage - 1) * PAGE_SIZE, otherPage * PAGE_SIZE)
+                            .map((r, idx) => {
+                              const actualIdx = (otherPage - 1) * PAGE_SIZE + idx;
+                              return (
+                                <tr key={actualIdx}>
+                                  <td className={tdCls}>{actualIdx + 1}</td>
+                                  <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
+                                  <td className={tdCls}>{r.variety || "—"}</td>
+                                  <td className={tdCls}>{formatDateOrMonth(r.dateMonth || r.arrival_date)}</td>
+                                  <td className={tdCls}>{r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg).toLocaleString() : (r.farmSource != null ? Number(r.farmSource).toLocaleString() : "—")}</td>
+                                  <td className={tdCls}>{r.other_source_volume_kg != null ? Number(r.other_source_volume_kg).toLocaleString() : (r.otherSource != null ? Number(r.otherSource).toLocaleString() : "—")}</td>
+                                  <td className={tdBold}>{r.volume_kg != null ? Number(r.volume_kg).toLocaleString() : (r.combinedTotal != null ? Number(r.combinedTotal).toLocaleString() : "—")}</td>
+                                  <td className={tdCls}>{r.unit || "kg"}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="w-full min-w-[620px]">
+                        <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                          <tr>
+                            {(ds.hasMarketAndType
+                              ? ["Row", "Commodity", "Category", "Variety", "Market", "Price Type", "Date", "UOM", "Price"]
+                              : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
+                            ).map((h) => (
+                              <th key={h} className={thCls}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                          {ds.otherRecords
+                            .slice((otherPage - 1) * PAGE_SIZE, otherPage * PAGE_SIZE)
+                            .map((r, idx) => {
+                              const actualIdx = (otherPage - 1) * PAGE_SIZE + idx;
+                              return (
+                                <tr key={actualIdx}>
+                                  <td className={tdCls}>{actualIdx + 1}</td>
+                                  <td className={tdBold}>{r.commodity || r.commodity_name || "—"}</td>
+                                  <td className={tdCls}>{r.category || "—"}</td>
+                                  <td className={tdCls}>{r.variety || "—"}</td>
+                                  {ds.hasMarketAndType && <td className={tdCls}>{formatMarketName(r.source_name || r.market) || "—"}</td>}
+                                  {ds.hasMarketAndType && <td className={tdCls}>{capitalizeFirstLetter(r.price_type)}</td>}
+                                  <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
+                                  <td className={tdCls}>{r.uom || "kg"}</td>
+                                  <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  <Pagination
+                    page={otherPage}
+                    total={ds.otherRecords.length}
+                    pageSize={PAGE_SIZE}
+                    onChange={setOtherPage}
+                  />
+                </>
               )}
             </>
           )}
