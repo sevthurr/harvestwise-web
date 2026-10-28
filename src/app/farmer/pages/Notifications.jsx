@@ -18,9 +18,12 @@ function formatTimestamp(iso) {
   if (!iso) return "";
   try {
     const d = parseApiDateTime(iso);
+    if (!d) return "";
     const now = new Date();
-    const diffMs = now - d;
+    const diffMs = now.getTime() - d.getTime();
+    if (diffMs < 0) return "just now";
     const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHrs = Math.floor(diffMins / 60);
     if (diffHrs < 24) return `${diffHrs}h ago`;

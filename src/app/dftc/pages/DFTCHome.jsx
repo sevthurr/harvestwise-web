@@ -145,10 +145,10 @@ function DFTCHome() {
       reportingDate: file.reportingDate || file.savedDate,
       savedDate: file.savedDate,
       records: file.records,
-      encodedBy: file.encodedBy || meta.encodedBy || "MARIA S. SANTOS",
-      encodedByRole: file.encodedByRole || meta.encodedByRole || "Data Analyst",
-      reviewedBy: file.reviewedBy || meta.reviewedBy || "MARIA S. SANTOS",
-      reviewedByRole: file.reviewedByRole || meta.reviewedByRole || "Data Analyst"
+      encodedBy: meta.encodedBy || file.encodedBy || "MARIA S. SANTOS",
+      encodedByRole: meta.encodedByRole || file.encodedByRole || "Data Analyst",
+      reviewedBy: meta.reviewedBy || file.reviewedBy || "MARIA S. SANTOS",
+      reviewedByRole: meta.reviewedByRole || file.reviewedByRole || "Data Analyst"
     });
   };
 
@@ -384,39 +384,57 @@ function DFTCHome() {
             </div>
           ) : (
             <div className="space-y-3 max-h-64 sm:max-h-72 overflow-y-auto pr-1">
-              {(homeData?.price_movement || []).map((item) => (
-                <button
-                  key={item.commodity_id}
-                  onClick={() => navigate(`/dftc/trends?commodity=${item.commodity_id}`)}
-                  className="w-full flex items-center justify-between gap-3 text-left hover:bg-[var(--hw-neutral-50)] rounded-lg p-2 -m-2 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <CommodityIllustration
-                      commodityId={item.commodity_id}
-                      commodityName={item.crop_name}
-                      className="w-8 h-8 shrink-0 object-contain"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">
-                        {item.crop_name}{item.variety ? ` · ${item.variety}` : ""}
+              {(homeData?.price_movement || []).map((item) => {
+                const targetMarket = formatMarketName(item.market);
+                const marketParam = (targetMarket === "DFTC Taboan" || targetMarket === "Bankerohan Public Market")
+                  ? targetMarket
+                  : (String(item.market || "").toLowerCase().includes("dftc") ? "DFTC Taboan" : "Bankerohan Public Market");
+                const priceTypeParam = (item.price_type && String(item.price_type).toLowerCase().includes("wholesale"))
+                  ? "Wholesale"
+                  : "Retail";
+                const commParam = item.crop_name || item.commodity_id;
+                const queryParts = [
+                  "tab=price",
+                  `commodity=${encodeURIComponent(commParam)}`,
+                  item.variety ? `variety=${encodeURIComponent(item.variety)}` : null,
+                  `market=${encodeURIComponent(marketParam)}`,
+                  `price_type=${encodeURIComponent(priceTypeParam)}`
+                ].filter(Boolean);
+
+                return (
+                  <button
+                    key={item.commodity_id}
+                    onClick={() => navigate(`/dftc/trends?${queryParts.join("&")}`)}
+                    className="w-full flex items-center justify-between gap-3 text-left hover:bg-[var(--hw-neutral-50)] rounded-lg p-2 -m-2 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <CommodityIllustration
+                        commodityId={item.commodity_id}
+                        commodityName={item.crop_name}
+                        className="w-8 h-8 shrink-0 object-contain"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-medium text-[var(--hw-neutral-900)] truncate">
+                          {item.crop_name}{item.variety ? ` · ${item.variety}` : ""}
+                        </p>
+                        <p className="text-[12px] text-[var(--hw-neutral-800)] truncate">
+                          {formatMarketName(item.market)} · {item.price_type || "Retail"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                        {item.current_price != null ? `₱${item.current_price}/${item.unit || ""}` : "\u2014"}
                       </p>
-                      <p className="text-[12px] text-[var(--hw-neutral-800)] truncate">
-                        {formatMarketName(item.market)} · {item.price_type || "Retail"}
+                      <p className={`text-[12px] font-medium ${item.direction === "down" ? "text-red-600" : item.direction === "up" ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}>
+                        {item.change_pct != null
+                          ? `${item.direction === "down" ? "↓" : "↑"} ${Math.abs(item.change_pct)}%`
+                          : "\u2014"}
                       </p>
                     </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-                      {item.current_price != null ? `₱${item.current_price}/${item.unit || ""}` : "\u2014"}
-                    </p>
-                    <p className={`text-[12px] font-medium ${item.direction === "down" ? "text-red-600" : item.direction === "up" ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}>
-                      {item.change_pct != null
-                        ? `${item.direction === "down" ? "↓" : "↑"} ${Math.abs(item.change_pct)}%`
-                        : "\u2014"}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
           <button
@@ -431,7 +449,10 @@ function DFTCHome() {
           loadingHome={loadingHome}
           latestArrivalVolume={homeData?.latest_arrival_volume}
           onViewTrends={() => navigate("/dftc/trends?tab=arrival")}
-          onSelectCommodity={(commodityId) => navigate(`/dftc/trends?tab=arrival&commodity=${commodityId}`)}
+          onSelectCommodity={(commodityName, commodityId) => {
+            const target = commodityName || commodityId;
+            navigate(`/dftc/trends?tab=arrival&commodity=${encodeURIComponent(target)}`);
+          }}
         />
       </div>
     </div>

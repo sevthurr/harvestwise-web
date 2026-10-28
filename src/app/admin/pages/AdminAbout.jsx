@@ -10,7 +10,7 @@ const SECTIONS = [
 ];
 
 const FAQS = [
-  { q: "How do I add a DFTC user?", a: "Go to System Management > User Accounts and click Add User." },
+  { q: "How do I add a DFTC user?", a: "Go to System Management > User Accounts and click Add DFTC User." },
   { q: "Where do I manage roles and permissions?", a: "Go to System Management > Roles & Permissions." },
   { q: "Where do I check system health?", a: "Go to System Management > System Health." },
   { q: "Where do I review uploaded datasets?", a: "Go to Data and open the relevant data source or upload record." },

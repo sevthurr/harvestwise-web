@@ -26,9 +26,10 @@ import {
 } from "./dftc-add-data-data";
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
-import { apiGet, apiPost, parseResponse } from "../../global/api";
+import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -251,7 +252,7 @@ function AddCommodityModal({ onClose, onAdd }) {
             <input
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); setError(""); }}
+              onChange={(e) => { setName(capitalizeNameInput(e.target.value)); setError(""); }}
               placeholder="e.g. Squash, Ginger"
               className="w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
               autoFocus
@@ -279,7 +280,7 @@ function AddCommodityModal({ onClose, onAdd }) {
             <input
               type="text"
               value={variant}
-              onChange={(e) => setVariant(e.target.value)}
+              onChange={(e) => setVariant(capitalizeNameInput(e.target.value))}
               placeholder="e.g. Suprema, Red, Native"
               className="w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[13px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
             />
@@ -663,6 +664,9 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
             min="0"
             step="any"
             value={f.farmSource}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
             onChange={(e) => onUpdateFarm(e.target.value)}
             placeholder="0"
             className="w-full px-2 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px]"
@@ -675,6 +679,9 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
             min="0"
             step="any"
             value={f.otherSource}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
             onChange={(e) => onUpdateOther(e.target.value)}
             placeholder="0"
             className="w-full px-2 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px]"
@@ -698,8 +705,8 @@ export default function DFTCArrivalInput() {
   const queryClient = useQueryClient();
   const navState = location.state;
 
-  // Period / Frequency selection: 'daily' | 'weekly' | 'monthly'
-  const [periodType, setPeriodType] = useState(() => navState?.periodType || "daily");
+  // Period / Frequency selection: 'monthly' (Daily and Weekly removed per requirements)
+  const [periodType, setPeriodType] = useState(() => navState?.periodType || "monthly");
   const [selectedDate, setSelectedDate] = useState(() => navState?.date ?? localToday());
   const [selectedWeek, setSelectedWeek] = useState(() => navState?.week ?? getCurrentWeekOfMonth());
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -734,6 +741,7 @@ export default function DFTCArrivalInput() {
   const [collapsed, setCollapsed] = useState(() => new Set(PRICE_CATEGORIES.map((c) => c.id)));
   const [customVariants, setCustomVariants] = useState({});
   const [customCommodities, setCustomCommodities] = useState({});
+  const arrivalDraftStateRef = useRef({});
   const [addingVariant, setAddingVariant] = useState(null);
   const [variantInput, setVariantInput] = useState("");
   const [addCommodityOpen, setAddCommodityOpen] = useState(false);
@@ -750,6 +758,8 @@ export default function DFTCArrivalInput() {
     try { return localStorage.getItem("dftc_arrival_draft") === "true"; } catch { return false; }
   });
   const [draftDismissed, setDraftDismissed] = useState(false);
+  const arrivalDraftVersionRef = useRef(0);
+  const arrivalDraftPollRef = useRef(null);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
   const reviewScrollRef = useRef(null);
@@ -798,6 +808,11 @@ export default function DFTCArrivalInput() {
     return new Date().toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   });
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  arrivalDraftStateRef.current = {
+    periodType, selectedDate, selectedWeek, selectedMonth, selectedYear,
+    fields, customVariants, customCommodities,
+  };
 
   // Calculate reporting label, subtitle, and effective date
   const effectivePeriodInfo = useMemo(() => {
@@ -901,30 +916,60 @@ export default function DFTCArrivalInput() {
     if (found) setReviewedByRole(found.role);
   }
 
+  // Hoisted fetch+apply so both the mount load and the live-sync poll share
+  // one implementation.
+  async function loadCommodityCatalog() {
+    const data = await parseResponse(await apiGet("/dftc/commodities"));
+    const items = Array.isArray(data) ? data : data?.items ?? [];
+    const map = new Map();
+    for (const row of items) {
+      const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
+      map.set(nameSlug(baseName), row.id);
+      if (row.variety) {
+        map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
+      }
+    }
+    catalogRef.current = map;
+    catalogItemsRef.current = items;
+    addCatalogRows(items);
+  }
+
   // Load commodity catalog map from DB
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const data = await parseResponse(await apiGet("/dftc/commodities"));
-        if (cancelled) return;
-        const items = Array.isArray(data) ? data : data?.items ?? [];
-        const map = new Map();
-        for (const row of items) {
-          const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
-          map.set(nameSlug(baseName), row.id);
-          if (row.variety) {
-            map.set(`${nameSlug(baseName)}-${nameSlug(row.variety)}`, row.id);
-          }
-        }
-        catalogRef.current = map;
-        catalogItemsRef.current = items;
-        addCatalogRows(catalogItemsRef.current);
+        await loadCommodityCatalog();
       } catch {
         if (!cancelled) catalogRef.current = null;
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  // Commodity catalogue live-sync: another inputter may register a commodity or
+  // variety while this page stays open. Re-run the page's own catalogue helper
+  // on a timer so those rows appear without a full reload.
+  const catalogPollRef = useRef(null);
+  useEffect(() => {
+    catalogPollRef.current = () => loadCommodityCatalog();
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      catalogPollRef.current?.().catch(() => { });
+    }, 60000);
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") catalogPollRef.current?.().catch(() => { });
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
+    };
   }, []);
 
   // ── Rows the grid gained from the DB catalogue ────────────────────────────
@@ -951,8 +996,8 @@ export default function DFTCArrivalInput() {
           commodityId: com.id,
           commodityName: com.name,
           categoryId: cat.id,
-          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
-          variantName: item.variety || "Base",
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-regular`,
+          variantName: item.variety || "Regular",
           dbId: item.id
         };
       }
@@ -966,8 +1011,8 @@ export default function DFTCArrivalInput() {
       commodityId: baseSlug,
       commodityName: baseName,
       categoryId: cat.id,
-      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
-      variantName: item.variety || "Base",
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-regular`,
+      variantName: item.variety || "Regular",
       dbId: item.id
     };
   }
@@ -1019,27 +1064,41 @@ export default function DFTCArrivalInput() {
     // Any edit means the user is acting on the failure notice.
     setSaveError("");
     setSaveStatus("saving");
-    saveTimer.current = setTimeout(() => {
+    saveTimer.current = setTimeout(async () => {
+      const payload = arrivalDraftStateRef.current;
       try {
         localStorage.setItem("dftc_arrival_draft", "true");
-        localStorage.setItem(
-          "dftc_arrival_draft_data",
-          JSON.stringify({
-            periodType,
-            selectedDate,
-            selectedWeek,
-            selectedMonth,
-            selectedYear,
-            fields,
-            customVariants,
-            customCommodities
-          })
-        );
+        localStorage.setItem("dftc_arrival_draft_data", JSON.stringify(payload));
+        const enteredCount = Object.values(payload.fields || {}).filter(
+          (f) =>
+            (f.farmSource && String(f.farmSource).trim() !== "") ||
+            (f.otherSource && String(f.otherSource).trim() !== "") ||
+            (f.farm && String(f.farm).trim() !== "") ||
+            (f.other && String(f.other).trim() !== "")
+        ).length;
+        if (enteredCount > 0) {
+          apiPost("/dftc/draft/notify", {
+            data_type: "arrival_volume",
+            reporting_date: effectivePeriodInfo.iso || payload.selectedDate,
+            record_count: enteredCount,
+          }).catch((err) => {
+            console.warn("Draft notification failed:", err);
+          });
+        }
       } catch { }
+      try {
+        const saved = await parseResponse(await apiPut("/dftc/arrival-draft", {
+          reporting_date: effectivePeriodInfo.iso,
+          payload,
+          expected_version: arrivalDraftVersionRef.current || null,
+        }));
+        arrivalDraftVersionRef.current = saved?.version || arrivalDraftVersionRef.current;
+        setHasDraft(true);
+      } catch { /* local fallback remains available */ }
       setSaveStatus("savedNew");
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 30000);
     }, 1500);
-  }, [periodType, selectedDate, selectedWeek, selectedMonth, selectedYear, fields, customVariants, customCommodities]);
+  }, [periodType, selectedDate, selectedWeek, selectedMonth, selectedYear, effectivePeriodInfo.iso, fields, customVariants, customCommodities]);
 
   function restoreDraft() {
     try {
@@ -1065,7 +1124,54 @@ export default function DFTCArrivalInput() {
     }
   }, [location.state]);
 
-  function discardDraft() {
+  // The server draft is shared by both inputters. Local storage is only the
+  // offline fallback for dates with no server draft yet.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const draft = await parseResponse(
+          await apiGet(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`)
+        );
+        if (cancelled) return;
+        arrivalDraftVersionRef.current = draft?.version || 0;
+        if (draft?.id) {
+          const payload = draft.payload || {};
+          setFields(payload.fields || {});
+          setCustomVariants(payload.customVariants || {});
+          setCustomCommodities(migrateDraftCommodities(payload.customCommodities || {}));
+          setHasDraft(Object.keys(payload.fields || {}).length > 0);
+        }
+        // Device-local data remains available through the explicit Resume
+        // Draft action; it must not override shared server state on open.
+      } catch { /* local fallback remains available offline */ }
+    })();
+    return () => { cancelled = true; };
+  }, [effectivePeriodInfo.iso]);
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.visibilityState !== "visible" || navigator.onLine === false) return;
+      try {
+        const draft = await parseResponse(
+          await apiGet(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`)
+        );
+        if (!draft?.id || (draft.version || 0) <= arrivalDraftVersionRef.current) return;
+        arrivalDraftVersionRef.current = draft.version;
+        const payload = draft.payload || {};
+        setFields(payload.fields || {});
+        setCustomVariants(payload.customVariants || {});
+        setCustomCommodities(migrateDraftCommodities(payload.customCommodities || {}));
+        setHasDraft(Object.keys(payload.fields || {}).length > 0);
+      } catch { /* shared polling is best effort */ }
+    }, 15000);
+    return () => clearInterval(id);
+  }, [effectivePeriodInfo.iso]);
+
+  async function discardDraft() {
+    try {
+      await apiDelete(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`);
+    } catch { /* local state is still cleared */ }
     setDraftDismissed(true);
     setHasDraft(false);
     try {
@@ -1080,13 +1186,18 @@ export default function DFTCArrivalInput() {
   }
 
   function updateVolume(variantId, sourceKey, value) {
+    let cleanVal = String(value).replace(/[^0-9.]/g, "");
+    const parts = cleanVal.split(".");
+    if (parts.length > 2) {
+      cleanVal = parts[0] + "." + parts.slice(1).join("");
+    }
     setFields((prev) => {
       const cur = prev[variantId] || emptyArrivalField();
       return {
         ...prev,
         [variantId]: {
           ...cur,
-          [sourceKey]: value
+          [sourceKey]: cleanVal
         }
       };
     });
@@ -1199,6 +1310,19 @@ export default function DFTCArrivalInput() {
       ...prev,
       [commodityId]: [...prev[commodityId] ?? [], { id: newId, name: trimmed }]
     }));
+    const parentCategory = PRICE_CATEGORIES.find((category) =>
+      category.commodities.some((commodity) => commodity.id === commodityId) ||
+      (customCommodities[category.id] ?? []).some((commodity) => commodity.id === commodityId)
+    );
+    const parentCommodity = parentCategory && getAllCommodities(parentCategory).find((commodity) => commodity.id === commodityId);
+    if (parentCommodity) {
+      registerCommodity({
+        name: COMMODITY_NAME_OVERRIDES[parentCommodity.name] ?? parentCommodity.name,
+        category: parentCategory.name,
+        variety: trimmed,
+        unit_of_measure: "kg",
+      }).catch(() => { });
+    }
     setAddingVariant(null);
     setVariantInput("");
     triggerAutosave();
@@ -1230,6 +1354,12 @@ export default function DFTCArrivalInput() {
       ...prev,
       [categoryId]: [...prev[categoryId] ?? [], newCom]
     }));
+    registerCommodity({
+      name,
+      category: cat?.name,
+      variety: variantName === "Base" ? null : variantName,
+      unit_of_measure: uom,
+    }).catch(() => { });
     return null;
   }
 
@@ -1249,8 +1379,10 @@ export default function DFTCArrivalInput() {
     const map = catalogRef.current;
     const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
     const baseKey = nameSlug(baseName);
-    const variantKey = v && v.name && v.name !== "Base"
-      ? `${baseKey}-${nameSlug(v.name)}`
+    const variantName = v?.name;
+    const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+    const variantKey = !isBaseOrRegular
+      ? `${baseKey}-${nameSlug(variantName)}`
       : baseKey;
     if (map) {
       const found = map.get(variantKey) ?? map.get(baseKey);
@@ -1261,8 +1393,23 @@ export default function DFTCArrivalInput() {
 
   async function registerCommodity(body) {
     try {
-      return await parseResponse(await apiPost("/dftc/commodities", body));
-    } catch {
+      const registered = await parseResponse(await apiPost("/dftc/commodities", body));
+      if (registered?.id) {
+        const baseName = COMMODITY_NAME_OVERRIDES[registered.name] ?? registered.name;
+        const baseKey = nameSlug(baseName);
+        const map = catalogRef.current || new Map();
+        map.set(baseKey, map.get(baseKey) ?? registered.id);
+        if (registered.variety) map.set(`${baseKey}-${nameSlug(registered.variety)}`, registered.id);
+        catalogRef.current = map;
+        catalogItemsRef.current = [
+          ...catalogItemsRef.current.filter((item) => item.id !== registered.id),
+          registered,
+        ];
+      }
+      return registered;
+    } catch (error) {
+      console.error("Failed to register DFTC commodity:", error);
+      setSaveError("Could not sync this commodity/variety. Please retry after the connection recovers.");
       return null;
     }
   }
@@ -1390,7 +1537,8 @@ export default function DFTCArrivalInput() {
       const baseName = COMMODITY_NAME_OVERRIDES?.[r.com.name] ?? r.com.name;
       const baseKey = nameSlug(baseName);
       const variantName = r.v.name;
-      const variantKey = variantName && variantName !== "Base"
+      const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+      const variantKey = !isBaseOrRegular
         ? `${baseKey}-${nameSlug(variantName)}`
         : baseKey;
       const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
@@ -1412,7 +1560,7 @@ export default function DFTCArrivalInput() {
         const registered = await registerCommodity({
           name: baseName,
           category: r.cat.name,
-          variety: r.v.name === "Base" ? null : r.v.name,
+          variety: !isBaseOrRegular ? r.v.name : null,
           unit_of_measure: r.uom || "kg"
         });
         if (registered?.id) {
@@ -1478,6 +1626,7 @@ export default function DFTCArrivalInput() {
     setSaveProgressStage("Consolidating arrival volume records...");
 
     try {
+      await apiDelete(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`);
       localStorage.setItem(
         `dftc_arrival_personnel_${effectivePeriodInfo.iso}`,
         JSON.stringify({
@@ -1761,9 +1910,9 @@ export default function DFTCArrivalInput() {
                               </td>
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px" }}>
                                 {r.vi === 0 ? (
-                                  <span><strong>{r.com.name}</strong> {r.v.name && r.v.name !== "Base" ? `(${r.v.name})` : ""}</span>
+                                  <span><strong>{r.com.name}</strong> {r.v.name && r.v.name !== "Base" && r.v.name !== "Regular" ? `(${r.v.name})` : ""}</span>
                                 ) : (
-                                  <span style={{ paddingLeft: 16 }}>{r.v.name && r.v.name !== "Base" ? `(${r.v.name})` : ""}</span>
+                                  <span style={{ paddingLeft: 16 }}>{r.v.name && r.v.name !== "Base" && r.v.name !== "Regular" ? `(${r.v.name})` : (r.v.name || "")}</span>
                                 )}
                               </td>
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "center" }}>
@@ -1904,7 +2053,7 @@ export default function DFTCArrivalInput() {
               disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError)}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalSourceValueCount} inputs)
+              Save {dataName} ({totalEnteredCount} commodities)
             </button>
           </div>
 
@@ -2017,7 +2166,7 @@ export default function DFTCArrivalInput() {
               className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
-              Review ({totalSourceValueCount})
+              Review ({totalEnteredCount})
             </button>
           </div>
         </div>
@@ -2026,130 +2175,43 @@ export default function DFTCArrivalInput() {
         </p>
       </div>
 
-      {/* Controls Bar: Frequency (Daily / Weekly / Monthly) + Date/Period selection (NO source tabs) */}
+      {/* Controls Bar: Monthly Period selection */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] mb-4">
-        <div className="flex items-center justify-between sm:justify-start gap-2">
+        <div className="flex items-center gap-2">
           <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)] shrink-0">Period:</span>
-          <div className="flex rounded-lg border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5 flex-1 sm:flex-none">
-            {[
-              { id: "daily", label: "Daily" },
-              { id: "weekly", label: "Weekly" },
-              { id: "monthly", label: "Monthly" }
-            ].map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPeriodType(p.id)}
-                className={`flex-1 sm:flex-none px-3 py-1 text-[11.5px] sm:text-[12px] font-medium rounded-md transition-colors cursor-pointer text-center ${
-                  periodType === p.id
-                    ? "bg-[var(--hw-green-700)] text-white font-semibold shadow-xs"
-                    : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-white/60"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex rounded-full border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5">
+            <span
+              className="px-3.5 py-1 text-[11.5px] sm:text-[12px] font-semibold rounded-full bg-[var(--hw-green-700)] text-white shadow-xs text-center cursor-default inline-block"
+            >
+              Monthly
+            </span>
           </div>
         </div>
 
         <div className="flex items-center justify-between sm:justify-end gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--hw-neutral-100)]">
-          {periodType === "daily" && (
-            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <label htmlFor="arrival-date-input" className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">
-                Date:
-              </label>
-              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-                <Calendar className="w-3.5 h-3.5 text-[var(--hw-neutral-500)] shrink-0" />
-                <input
-                  id="arrival-date-input"
-                  type="date"
-                  max={localToday()}
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-[118px] sm:w-auto text-[12px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
-                />
-              </div>
-            </div>
-          )}
-
-          {periodType === "weekly" && (
-            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Week:</span>
-                <select
-                  id="arrival-week-select"
-                  aria-label="Select week of month"
-                  value={activeWeekObj.weekNum}
-                  onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {availableWeeks.map((w) => (
-                    <option key={w.weekNum} value={w.weekNum}>
-                      {w.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
-                <select
-                  id="arrival-month-select"
-                  aria-label="Select month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {MONTHS.map((m) => (
-                    <option key={m.val} value={m.val}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Year:</span>
-                <select
-                  id="arrival-year-select"
-                  aria-label="Select year"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {["2025", "2026", "2027"].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {periodType === "monthly" && (
-            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
-              <div className="flex items-center gap-1.5">
-                <select
-                  id="arrival-monthly-month-select"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {MONTHS.map((m) => (
-                    <option key={m.val} value={m.val}>{m.name}</option>
-                  ))}
-                </select>
-                <select
-                  id="arrival-monthly-year-select"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {["2025", "2026", "2027"].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
+          <div className="flex items-center gap-1.5">
+            <select
+              id="arrival-monthly-month-select"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+            >
+              {MONTHS.map((m) => (
+                <option key={m.val} value={m.val}>{m.name}</option>
+              ))}
+            </select>
+            <select
+              id="arrival-monthly-year-select"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+            >
+              {["2025", "2026", "2027"].map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -2235,7 +2297,7 @@ export default function DFTCArrivalInput() {
 
           if (catCommodities.length === 0) return null;
 
-          const isCol = collapsed.has(cat.id);
+          const isCol = searchQuery.trim() ? false : collapsed.has(cat.id);
           const catEntered = getAllCommodities(cat).reduce(
             (acc, com) => acc + getVariants(com).filter((v) => hasValue(getField(v.id))).length,
             0
@@ -2282,7 +2344,7 @@ export default function DFTCArrivalInput() {
 
                   {catCommodities.map((com) => {
                     const variants = getVariants(com).filter((v) => matchesVariant(com, v));
-                    const colCom = collapsedComs.has(com.id);
+                    const colCom = searchQuery.trim() ? false : collapsedComs.has(com.id);
                     return (
                       <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                         {/* Commodity Header with Icon (matching Image 1) */}
@@ -2363,6 +2425,9 @@ export default function DFTCArrivalInput() {
                                     min="0"
                                     step="any"
                                     value={f.farmSource}
+                                    onKeyDown={(e) => {
+                                      if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                                    }}
                                     onChange={(e) => updateVolume(v.id, "farmSource", e.target.value)}
                                     placeholder="0"
                                     className="w-full max-w-[120px] px-2.5 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
@@ -2376,6 +2441,9 @@ export default function DFTCArrivalInput() {
                                     min="0"
                                     step="any"
                                     value={f.otherSource}
+                                    onKeyDown={(e) => {
+                                      if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                                    }}
                                     onChange={(e) => updateVolume(v.id, "otherSource", e.target.value)}
                                     placeholder="0"
                                     className="w-full max-w-[120px] px-2.5 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
@@ -2414,7 +2482,7 @@ export default function DFTCArrivalInput() {
                                   autoFocus
                                   type="text"
                                   value={variantInput}
-                                  onChange={(e) => setVariantInput(e.target.value)}
+                                  onChange={(e) => setVariantInput(capitalizeNameInput(e.target.value))}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") commitVariant(com.id);
                                     if (e.key === "Escape") { setAddingVariant(null); setVariantInput(""); }

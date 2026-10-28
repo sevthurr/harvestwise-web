@@ -99,7 +99,8 @@ const COMMODITY_CATEGORIES = [
       item("Santol", []),
       item("Singkamas", []),
       item("Yakun", []),
-      item("Puso Saging", ["Standard", "Small"])
+      item("Puso Saging", ["Standard", "Small"]),
+      item("Grapes", [])
     ]
   },
   {
@@ -108,7 +109,6 @@ const COMMODITY_CATEGORIES = [
       item("Sweet Corn", []),
       item("Peanut", ["Mani"]),
       item("Poncan", []),
-      item("Grapes", []),
       item("Monggo", []),
       item("Young Corn", []),
       item("Dabong", []),

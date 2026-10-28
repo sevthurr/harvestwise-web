@@ -2,6 +2,8 @@ import React, { useMemo } from "react";
 import { Truck, ArrowRight } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 
+import { isHWCommodity } from "../../global/data/commodities";
+
 /**
  * DFTC home "Latest Arrival Volume" card.
  * Styled similar to Price Movement, displaying latest arrival volumes per commodity
@@ -19,13 +21,26 @@ export function DFTCArrivalVolumeCard({
       latestArrivalVolume.commodities && latestArrivalVolume.commodities.length > 0
         ? latestArrivalVolume.commodities
         : latestArrivalVolume.provenance || [];
-    return raw.map((p) => ({
-      id: p.commodity_id || p.origin_province || p.commodity_name,
-      name: p.commodity_name || p.origin_province,
-      volumeKg: Number(p.volume_kg ?? 0).toLocaleString(undefined, {
-        maximumFractionDigits: 2
-      })
-    }));
+    const mapped = raw.map((p) => {
+      const name = p.commodity_name || p.origin_province || "";
+      const rawVol = Number(p.volume_kg ?? 0);
+      return {
+        id: p.commodity_id || p.origin_province || p.commodity_name,
+        name,
+        rawVolume: rawVol,
+        isTop10: Boolean(isHWCommodity(name) || isHWCommodity(p.commodity_id)),
+        volumeKg: rawVol.toLocaleString(undefined, {
+          maximumFractionDigits: 2
+        })
+      };
+    });
+
+    // Put top 10 commodities first, preserving descending volume within each group
+    return mapped.sort((a, b) => {
+      if (a.isTop10 && !b.isTop10) return -1;
+      if (!a.isTop10 && b.isTop10) return 1;
+      return b.rawVolume - a.rawVolume;
+    });
   }, [latestArrivalVolume]);
 
   const reportingPeriod = latestArrivalVolume?.reporting_period;
@@ -81,7 +96,7 @@ export function DFTCArrivalVolumeCard({
             type="button"
             onClick={() => {
               if (onSelectCommodity) {
-                onSelectCommodity(item.id);
+                onSelectCommodity(item.name || item.id, item.id);
               } else if (onViewTrends) {
                 onViewTrends();
               }

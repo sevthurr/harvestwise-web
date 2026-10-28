@@ -7,6 +7,7 @@ import { authApi } from "../../../services/api";
 import { parseResponse } from "../../global/api";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { isValidEmail } from "../../auth/authValidation";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { Loader2 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
@@ -52,7 +53,10 @@ const AccountTab = ({ showToast }) => {
 
   const set = (k) => (e) => {
     setErrorMsg("");
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+    const value = ["firstName", "lastName", "middleName"].includes(k)
+      ? capitalizeNameInput(e.target.value)
+      : e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
   };
 
   const handlePreSave = () => {

@@ -117,7 +117,7 @@ function addDaysIso(iso, days) {
   return dt.toISOString().slice(0, 10);
 }
 
-export function filterRecordsByPeriod(records, preset, customFrom, customTo) {
+export function filterRecordsByPeriod(records, preset, customFrom, customTo, options = {}) {
   const rows = (records || [])
     .map((row) => ({ ...row, price_date: isoDate(row.price_date || row.date) }))
     .filter((row) => row.price_date);
@@ -129,18 +129,38 @@ export function filterRecordsByPeriod(records, preset, customFrom, customTo) {
   }
 
   if (!rows.length) return [];
+  const days = periodDayCount(preset);
+
+  if (options.matchDayCount) {
+    const dateMap = new Map();
+    for (const r of rows) {
+      if (!dateMap.has(r.price_date)) {
+        dateMap.set(r.price_date, []);
+      }
+      dateMap.get(r.price_date).push(r);
+    }
+    const sortedDates = [...dateMap.keys()].sort((a, b) => b.localeCompare(a));
+    const targetCount = options.includeTransition ? days + 1 : days;
+    const selectedDates = new Set(sortedDates.slice(0, targetCount));
+    return rows.filter((r) => selectedDates.has(r.price_date));
+  }
+
   const latest = rows.reduce(
     (max, row) => (row.price_date > max ? row.price_date : max),
     rows[0].price_date
   );
-  const days = periodDayCount(preset);
   const cutoff = addDaysIso(latest, -(days - 1));
   return rows.filter((row) => row.price_date >= cutoff && row.price_date <= latest);
 }
 
-export function buildHistoricalChartData(varietyDetails, preset = "7d", customFrom, customTo) {
+export function buildHistoricalChartData(varietyDetails, preset = "7d", customFrom, customTo, options = {}) {
   const dateSet = new Set();
   const byVariety = new Map();
+
+  const matchDayCount = options.matchDayCount ?? true;
+  const includeTransition = options.includeTransition ?? (
+    varietyDetails?.some((v) => (v.detail?.forecast?.points || []).length > 0)
+  );
 
   for (const entry of varietyDetails || []) {
     const key = entry.varietyKey;
@@ -148,7 +168,8 @@ export function buildHistoricalChartData(varietyDetails, preset = "7d", customFr
       entry.detail?.recent_records,
       preset,
       customFrom,
-      customTo
+      customTo,
+      { matchDayCount, includeTransition }
     );
     const pricesByDate = new Map();
     for (const row of filtered) {
@@ -177,7 +198,7 @@ export function buildHistoricalChartData(varietyDetails, preset = "7d", customFr
   });
 }
 
-export function buildForecastChartData(varietyDetails) {
+export function buildForecastChartData(varietyDetails, horizon = null) {
   const actualDates = new Set();
   for (const entry of varietyDetails || []) {
     for (const row of entry.detail?.recent_records || []) {
@@ -209,7 +230,11 @@ export function buildForecastChartData(varietyDetails) {
     byVariety.set(key, byDate);
   }
 
-  const dates = [...dateSet].sort((a, b) => a.localeCompare(b));
+  let dates = [...dateSet].sort((a, b) => a.localeCompare(b));
+  if (typeof horizon === "number" && horizon > 0) {
+    dates = dates.slice(0, horizon);
+  }
+
   return dates.map((date) => {
     const point = { date, d: date };
     let firstMid = null;

@@ -382,7 +382,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitt
                     onChange={(e) => setVariety(cropName, e.target.value)}
                     className="w-full h-9 pl-3 pr-8 text-[13px] font-medium text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-700)] appearance-none cursor-pointer truncate"
                   >
-                    <option value="">{t("onboarding.variety_default", {}, "Default")}</option>
+                    <option value="">{t("onboarding.variety_default", {}, "Regular")}</option>
                     {variants.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                   <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--hw-neutral-400)] pointer-events-none" fill="none" viewBox="0 0 10 6">

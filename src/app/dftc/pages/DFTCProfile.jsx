@@ -1,27 +1,12 @@
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Phone, Mail, Check, Loader2 } from "lucide-react";
+import { Mail, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
 import { apiGet, parseResponse } from "../../global/api";
-import { parseApiDateTime } from "../../global/utils/apiTransforms";
-
-function formatDateTime(isoStr) {
-  if (!isoStr) return "—";
-  try {
-    const d = parseApiDateTime(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila" });
-    if (isToday) return `Today, ${timeStr}`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }) + `, ${timeStr}`;
-  } catch {
-    return isoStr;
-  }
-}
+import { formatDateTime } from "../../global/utils/apiTransforms";
 
 function DFTCProfile() {
   const navigate = useNavigate();
@@ -55,13 +40,10 @@ function DFTCProfile() {
     : (user?.username ? user.username.slice(0, 2).toUpperCase() : "—");
 
   const phone = user?.phone || "—";
-  const isPhoneVerified = !!user?.phone_verified_at;
   const email = user?.email || "—";
-  const isEmailVerified = !!user?.email_verified_at;
   const roleName = user?.role?.role_name || user?.role || "DFTC";
   const position = user?.position || staff.position_title || "—";
-  const accountStatus = user?.is_active === false ? "Inactive" : "Active";
-  const lastLogin = formatDateTime(user?.last_login_at || user?.last_login || user?.created_at);
+  const lastLogin = formatDateTime(user?.last_login || user?.last_login_at || user?.created_at) || "—";
 
   if (isLoading && !user) {
     return (
@@ -115,49 +97,16 @@ function DFTCProfile() {
           <Field label="Suffix" value={suffix || "—"} />
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Phone Number</p>
-            <div className="flex items-center gap-2">
-              <Phone className="w-3.5 h-3.5 text-black flex-shrink-0" />
-              <span className="text-[15px] text-black">{phone}</span>
-            </div>
-            {phone !== "—" ? (
-              isPhoneVerified ? (
-                <div className="flex items-center gap-1">
-                  <Check className="w-3 h-3 text-emerald-500" />
-                  <p className="text-[12px] text-emerald-600">Verified</p>
-                </div>
-              ) : (
-                <p className="text-[12px] text-[var(--hw-neutral-500)]">Not verified</p>
-              )
-            ) : null}
-          </div>
-
-          <div className="col-span-2 sm:col-span-1 space-y-0.5">
             <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Email</p>
             <div className="flex items-center gap-2">
               <Mail className="w-3.5 h-3.5 text-black flex-shrink-0" />
               <span className="text-[15px] text-black truncate">{email}</span>
             </div>
-            {email !== "—" ? (
-              isEmailVerified ? (
-                <div className="flex items-center gap-1">
-                  <Check className="w-3 h-3 text-emerald-500" />
-                  <p className="text-[12px] text-emerald-600">Verified</p>
-                </div>
-              ) : (
-                <p className="text-[12px] text-[var(--hw-neutral-500)]">Not verified</p>
-              )
-            ) : null}
           </div>
 
           <div className="col-span-2 space-y-0.5">
             <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Role</p>
             <p className="text-[15px] text-black">{roleName}</p>
-          </div>
-
-          <div className="col-span-2 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Position</p>
-            <p className="text-[15px] text-black">{position}</p>
           </div>
         </div>
       </Card>
@@ -168,8 +117,8 @@ function DFTCProfile() {
         <div className="divide-y divide-[var(--hw-neutral-100)]">
           {[
             { label: "Organization", value: "Davao Food Terminal Complex" },
-            { label: "Account status", value: accountStatus },
-            { label: "Last login", value: lastLogin }
+            { label: "Position", value: position },
+            { label: "Last Login", value: lastLogin }
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between py-3">
               <span className="text-[14px] font-semibold text-black">{row.label}</span>

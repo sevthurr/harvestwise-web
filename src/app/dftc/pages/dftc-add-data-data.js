@@ -110,7 +110,7 @@ const PRICE_CATEGORIES = COMMODITY_CATEGORIES.map((cat) => ({
     const id = HW_NAME_TO_ID[item.name] ?? toId(item.name);
     const variants = item.variants.length
       ? item.variants.map((v) => ({ id: `${id}-${toId(v.name)}`, name: v.name }))
-      : [{ id: `${id}-base`, name: "Base" }];
+      : [{ id: `${id}-regular`, name: "Regular" }];
     return {
       id,
       name: item.name,

@@ -25,6 +25,7 @@ import { UserAvatar } from "../profile/UserAvatar";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
+import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
 
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
@@ -80,6 +81,7 @@ function DFTCLayoutInner() {
     navigate(path);
   };
   const queryClient = useQueryClient();
+  usePrivilegedDataVersion("dftc");
   const isFetching = useIsFetching();
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);

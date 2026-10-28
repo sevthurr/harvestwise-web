@@ -380,6 +380,7 @@ export function FarmLocationFields({ locationState, showCheckButton = false }) {
               "Search or select a Purok / Sitio"
             )}
             allowCustom={true}
+            capitalizeCustom
           />
         </div>
 
@@ -413,6 +414,7 @@ export function FarmLocationFields({ locationState, showCheckButton = false }) {
               "Search or select a Street"
             )}
             allowCustom={true}
+            capitalizeCustom
           />
         </div>
 

@@ -461,8 +461,12 @@ export function resolveMediaUrl(location) {
 export async function parseResponse(res) {
   if (res.ok) return res.json();
   let detail = `Request failed (${res.status})`;
+  let structuredDetail = null;
   try {
     const body = await res.json();
+    if (body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail)) {
+      structuredDetail = body.detail;
+    }
     if (typeof body?.detail === "string" && body.detail.trim()) {
       detail = body.detail;
     } else if (Array.isArray(body?.detail) && body.detail.length) {
@@ -485,5 +489,6 @@ export async function parseResponse(res) {
   } catch { /* ignore parse error */ }
   const err = new Error(detail);
   err.status = res.status;
+  if (structuredDetail) err.detail = structuredDetail;
   throw err;
 }

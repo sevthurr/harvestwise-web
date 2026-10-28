@@ -26,6 +26,7 @@ import { UserAvatar } from "../profile/UserAvatar";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
+import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
 
 const ADMIN_NAV = [
   { id: "dashboard", label: "Dashboard", path: "/admin", Icon: LayoutDashboard },
@@ -104,6 +105,7 @@ const AdminLayoutInner = () => {
   };
 
   const queryClient = useQueryClient();
+  usePrivilegedDataVersion("admin");
   const isFetching = useIsFetching();
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);

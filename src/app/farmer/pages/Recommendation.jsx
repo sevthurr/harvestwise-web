@@ -708,7 +708,8 @@ function RecommendationPage() {
       const data = await parseResponse(res);
       return data.items || [];
     },
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: "always",
   });
 
   // Use normalized farmer crop plans

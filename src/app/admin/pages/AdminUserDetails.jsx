@@ -14,7 +14,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
-import { formatDate, formatPersonName } from "../../global/utils/apiTransforms";
+import { capitalizeNameInput, formatDateTime, formatPersonName } from "../../global/utils/apiTransforms";
 
 const EditForm = ({ user, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -29,7 +29,12 @@ const EditForm = ({ user, onSave, onCancel }) => {
     position: user?.position || ""
   });
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    const value = ["firstName", "lastName", "middleName", "position"].includes(k)
+      ? capitalizeNameInput(e.target.value)
+      : e.target.value;
+    setForm((f) => ({ ...f, [k]: value }));
+  };
 
   const handleSave = () => {
     onSave({
@@ -237,7 +242,7 @@ function AdminUserDetails() {
   const handleDisable = async () => {
     try {
       await adminApi.updateUser(userId, { is_active: false });
-      setUser((u) => (u ? { ...u, is_active: false, status: "Inactive" } : u));
+      setUser((u) => (u ? { ...u, is_active: false, status: "Inactive", account_status: "Inactive" } : u));
       setDisableModal(false);
       showToast("Account disabled successfully.");
     } catch (err) {
@@ -249,7 +254,11 @@ function AdminUserDetails() {
   const handleEnable = async () => {
     try {
       await adminApi.updateUser(userId, { is_active: true });
-      setUser((u) => (u ? { ...u, is_active: true, status: "Active" } : u));
+      setUser((u) => (u ? {
+        ...u,
+        is_active: true,
+        account_status: u.roleName === "DFTC" && !u.last_login ? "Pending Invite" : "Active",
+      } : u));
       setEnableModal(false);
       showToast("Account enabled successfully.");
     } catch (err) {
@@ -282,7 +291,7 @@ function AdminUserDetails() {
         <div>
           <h1 className="text-[20px] sm:text-[22px] font-bold text-black">{user.name || "User Details"}</h1>
           <p className="text-[14px] sm:text-[15px] text-black mt-0.5">
-            {user.roleName || "-"} · {user.is_active ? "Active" : "Inactive"}
+            {user.roleName || "-"} · {user.account_status || (user.is_active ? "Active" : "Inactive")}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
@@ -311,7 +320,7 @@ function AdminUserDetails() {
           {infoRow("Email", user.email || "-")}
           {infoRow("Phone Number", user.phone || "-")}
           {infoRow("Role", user.roleName || "-")}
-          {infoRow("Status", user.is_active ? "Active" : "Inactive")}
+          {infoRow("Status", user.account_status || (user.is_active ? "Active" : "Inactive"))}
         </div>
       </Card>
 
@@ -320,8 +329,8 @@ function AdminUserDetails() {
         <SectionLabel>Access Information</SectionLabel>
         <div className="divide-y divide-[var(--hw-neutral-100)]">
           {infoRow("Role", user.roleName || "-")}
-          {infoRow("Account status", user.is_active ? "Active" : "Inactive")}
-          {infoRow("Date created", user.created_at ? formatDate(user.created_at) : "-")}
+          {infoRow("Account status", user.account_status || (user.is_active ? "Active" : "Inactive"))}
+          {infoRow("Date Added", user.created_at ? formatDateTime(user.created_at) : "-")}
         </div>
       </Card>
 
