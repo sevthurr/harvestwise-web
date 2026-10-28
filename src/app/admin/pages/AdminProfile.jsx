@@ -4,7 +4,7 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
 import { ProfileAvatar } from "../../global/components/profile/ProfileAvatar";
-import { formatPersonName } from "../../global/utils/apiTransforms";
+import { formatPersonName, parseApiDateTime } from "../../global/utils/apiTransforms";
 
 function extractRoleName(role, fallback = "Admin") {
   if (!role) return fallback;
@@ -60,7 +60,7 @@ function AdminProfile() {
   const roleName = extractRoleName(rawRole, "Admin");
 
   const lastLogin = typeof user?.last_login === "string"
-    ? new Date(user.last_login).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    ? (parseApiDateTime(user.last_login) || new Date(user.last_login)).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" })
     : typeof user?.lastLogin === "string"
       ? user.lastLogin
       : "-";

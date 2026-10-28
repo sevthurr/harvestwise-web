@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, parseResponse } from "../api";
 import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
-import { toCamelCase } from "../utils/apiTransforms";
+import { toCamelCase, manilaTodayParts } from "../utils/apiTransforms";
 import { getPreferredCropMatcher } from "../../farmer/utils/cropPreferences";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
@@ -20,7 +20,8 @@ export const DEFAULT_WEATHER_LON = DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 export const STALE_TIME = 1000 * 60 * 30; // 30 mins
 
 export function currentReferenceMonth(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
+  const parts = manilaTodayParts(date);
+  return `${parts.year}-${parts.month}-01`;
 }
 
 export function monthlyRecommendationsKey(referenceMonth = currentReferenceMonth()) {
@@ -296,8 +297,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
     // Keep the legacy aliases for persisted snapshots created by older clients.
     queryClient.setQueryData(["market", "monthly-recommendations"], recommendations);
     queryClient.setQueryData(["recommendations", "list"], recommendations);
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const currentMonth = currentReferenceMonth();
     queryClient.setQueryData(["monthly-recommendations", currentMonth], recommendations);
   }
 

@@ -7,7 +7,7 @@ import {
   ACTIVITY_TYPES
 } from "../components/analytics/adminHistoryMockData";
 import { ingestionApi } from "../../../services/api";
-import { formatDateTime } from "../../global/utils/apiTransforms";
+import { formatDateTime, parseApiDateTime } from "../../global/utils/apiTransforms";
 
 const PAGE_SIZE = 20;
 
@@ -53,8 +53,7 @@ function mapHistory(rec) {
 
 function parseRecordDate(str) {
   if (!str || str === "—") return new Date(0);
-  const parsed = Date.parse(str);
-  return Number.isNaN(parsed) ? new Date(0) : new Date(parsed);
+  return parseApiDateTime(str) || new Date(0);
 }
 
 function AdminHistory({ embedded = false }) {
@@ -81,12 +80,11 @@ function AdminHistory({ embedded = false }) {
     return history.filter((r) => {
       if (filterType && r.activity !== filterType) return false;
       if (dateFrom) {
-        const from = new Date(dateFrom);
+        const from = new Date(`${dateFrom}T00:00:00+08:00`);
         if (parseRecordDate(r.datetime) < from) return false;
       }
       if (dateTo) {
-        const to = new Date(dateTo);
-        to.setHours(23, 59, 59, 999);
+        const to = new Date(`${dateTo}T23:59:59.999+08:00`);
         if (parseRecordDate(r.datetime) > to) return false;
       }
       if (search.trim()) {

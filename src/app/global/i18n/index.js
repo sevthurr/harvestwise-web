@@ -83,10 +83,13 @@ export function formatNumber(val, options = {}, lang = 'ceb') {
 
 export function formatDate(dateVal, options = {}, lang = 'ceb') {
   if (!dateVal) return '';
-  const d = new Date(dateVal);
+  const raw = String(dateVal);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T12:00:00+08:00`)
+    : new Date(dateVal);
   if (isNaN(d.getTime())) return String(dateVal);
 
-  const defaultOpts = { month: 'short', day: 'numeric', year: 'numeric', ...options };
+  const defaultOpts = { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila', ...options };
   const localeCode = lang === 'ceb' ? 'ceb-PH' : lang === 'tl' ? 'tl-PH' : 'en-PH';
   try {
     return d.toLocaleDateString(localeCode, defaultOpts);

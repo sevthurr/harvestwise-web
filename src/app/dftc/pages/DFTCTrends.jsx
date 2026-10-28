@@ -22,6 +22,7 @@ import * as dftcApi from "../../../services/api/dftcApi";
 import { apiGet, parseResponse } from "../../global/api";
 import { getClassificationTextColor } from "./dftcClassificationColors";
 import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
+import { manilaTodayParts, parseManilaDate } from "../../global/utils/apiTransforms";
 
 import {
   buildForecastChartData,
@@ -110,7 +111,7 @@ function formatCustomDateLabel(from, to) {
     if (parts.length < 2) return d;
     return `${months[parseInt(parts[1], 10) - 1]} ${parts[2] ? parseInt(parts[2], 10) : ""}`.trim();
   };
-  const year = from && from.includes("-") ? parseInt(from.split("-")[0], 10) : new Date().getFullYear();
+  const year = from && from.includes("-") ? parseInt(from.split("-")[0], 10) : Number(manilaTodayParts().year);
   return `${fmt(from)}–${fmt(to)}, ${year}`;
 }
 
@@ -1013,7 +1014,7 @@ function DFTCTrends() {
   const [aDatePreset, setADatePreset] = useState("all");
   const [aCustomFrom, setACustomFrom] = useState("");
   const [aCustomTo, setACustomTo] = useState("");
-  const [aYear, setAYear] = useState(new Date().getFullYear());
+  const [aYear, setAYear] = useState(Number(manilaTodayParts().year));
   const [aPage, setAPage] = useState(1);
   const [aShowAll, setAShowAll] = useState(false);
   const [showVolumeTypeInfo, setShowVolumeTypeInfo] = useState(false);
@@ -1160,10 +1161,10 @@ function DFTCTrends() {
 
   const formatChartDate = (iso) => {
     if (!iso) return "";
-    const dObj = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
-    return Number.isNaN(dObj.getTime())
+    const dObj = parseManilaDate(String(iso).slice(0, 10));
+    return !dObj
       ? String(iso)
-      : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "Asia/Manila" });
   };
 
   const pChartData = useMemo(() => {
@@ -1330,7 +1331,7 @@ function DFTCTrends() {
   const filteredArrivalRecords = useMemo(() => {
     let startDate = null;
     let endDate = null;
-    const today = new Date();
+      const today = parseManilaDate(`${manilaTodayParts().year}-${manilaTodayParts().month}-${manilaTodayParts().day}`);
     if (["2m", "3m", "6m"].includes(aDatePreset)) {
       startDate = new Date(today);
       startDate.setMonth(today.getMonth() - Number(aDatePreset.slice(0, -1)));
@@ -1339,8 +1340,8 @@ function DFTCTrends() {
       endDate = aCustomTo ? new Date(`${aCustomTo.slice(0, 10)}T23:59:59`) : null;
     }
     return rawArrivalRecords.filter((record) => {
-      const recordDate = new Date(`${String(record.arrival_date || "").slice(0, 10)}T12:00:00`);
-      if (Number.isNaN(recordDate.getTime())) return false;
+      const recordDate = parseManilaDate(String(record.arrival_date || "").slice(0, 10));
+      if (!recordDate) return false;
       if (!startDate && !endDate && aYear != null && recordDate.getFullYear() !== aYear) {
         return false;
       }
@@ -1370,10 +1371,10 @@ function DFTCTrends() {
     return [...grouped.entries()]
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
       .map(([date, val]) => {
-        const dObj = new Date(`${date}T12:00:00`);
-        const month = Number.isNaN(dObj.getTime())
+      const dObj = parseManilaDate(date);
+        const month = !dObj
           ? date
-          : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+          : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
         return { month, [aCommodity]: val };
       });
   }, [filteredArrivalRecords, aVolumeType, aCommodity]);
@@ -1408,8 +1409,8 @@ function DFTCTrends() {
   const aTableRows = useMemo(() => {
     return filteredArrivalRecords.map((r) => {
       const dStr = r.arrival_date || r.date;
-      const dObj = new Date(dStr);
-      const monthLabel = isNaN(dObj.getTime()) ? dStr : dObj.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+      const dObj = parseManilaDate(dStr);
+      const monthLabel = !dObj ? dStr : dObj.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "Asia/Manila" });
       const farm = r.farm_source_volume_kg ?? null;
       const other = r.other_source_volume_kg ?? null;
       const combined = r.volume_kg ?? (farm != null || other != null ? (farm || 0) + (other || 0) : null);
@@ -1802,7 +1803,7 @@ function DFTCTrends() {
                 className={selectCls + " appearance-none pr-9 cursor-pointer"}
               >
                 {(() => {
-                  return arrivalYears.length > 0 ? arrivalYears : [new Date().getFullYear()];
+                  return arrivalYears.length > 0 ? arrivalYears : [Number(manilaTodayParts().year)];
                 })().map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}

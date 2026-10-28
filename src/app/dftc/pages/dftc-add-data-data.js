@@ -3,6 +3,7 @@ import {
   ALL_COMMODITY_ITEMS,
   HW_NAME_TO_ID
 } from "../../global/data/commodities";
+import { formatDate } from "../../global/utils/apiTransforms";
 
 const UOM_OPTIONS = [
   "kg",
@@ -33,9 +34,7 @@ function getStorageStatusStyle(_status) {
 }
 
 function getFormattedDate(daysAgo = 0) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return formatDate(new Date(Date.now() - daysAgo * 86400000), { month: "short", day: "numeric", year: "numeric" });
 }
 
 // Full combinations for Analytics-Supported (Top-10) Commodities:
