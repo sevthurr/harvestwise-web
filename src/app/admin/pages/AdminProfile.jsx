@@ -59,13 +59,16 @@ function AdminProfile() {
   const rawRole = user?.role_name || user?.role || user?.roleName || user?.roles;
   const roleName = extractRoleName(rawRole, "Admin");
 
-  const lastLogin = typeof user?.lastLogin === "string" ? user.lastLogin : typeof user?.last_login === "string" ? user.last_login : "-";
+  const lastLogin = typeof user?.last_login === "string"
+    ? new Date(user.last_login).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : typeof user?.lastLogin === "string"
+      ? user.lastLogin
+      : "-";
 
   const initials = getInitials(firstName, lastName, email);
   const displayName = formatFullName(firstName, middleName, lastName, suffix, email);
 
 
-  const phoneVerified = Boolean(user?.phone_verified_at || user?.phoneVerifiedAt || user?.phoneVerified);
   const emailVerified = Boolean(
     user?.email_verified_at ||
     user?.emailVerifiedAt ||
@@ -121,19 +124,7 @@ function AdminProfile() {
                 {phone || "-"}
               </span>
             </div>
-            {!phone ? (
-              <p className="text-[12px] text-[var(--hw-neutral-500)]">No phone number</p>
-            ) : phoneVerified ? (
-              <div className="flex items-center gap-1 text-emerald-600">
-                <Check className="w-3.5 h-3.5" />
-                <p className="text-[12px] font-medium">Verified</p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-amber-600">
-                <AlertCircle className="w-3.5 h-3.5" />
-                <p className="text-[12px] font-medium">Not verified</p>
-              </div>
-            )}
+            {!phone && <p className="text-[12px] text-[var(--hw-neutral-500)]">No phone number</p>}
           </div>
 
           {/* Email */}

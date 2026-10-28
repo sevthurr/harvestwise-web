@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 import { Search, Plus, RefreshCw, ChevronDown, ChevronRight, Inbox } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import {
   Card,
   SectionLabel,
@@ -17,7 +16,7 @@ import {
   SUFFIX_OPTIONS
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
-import { formatDateTime, formatDisplayLabel, formatPersonName } from "../../global/utils/apiTransforms";
+import { capitalizeNameInput, formatDateTime, formatDisplayLabel, formatPersonName } from "../../global/utils/apiTransforms";
 
 
 const TABS = [
@@ -27,12 +26,12 @@ const TABS = [
   { id: "health", label: "System Health" }
 ];
 
-const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState({
+const AddUserModal = ({ onClose, onAdd }) => {
+  const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     middleName: "",
     suffix: "None",
-    phone: "",
     email: "",
     role: "DFTC",
     position: ""
@@ -51,7 +50,6 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
         lastName: form.lastName,
         middleName: form.middleName || null,
         suffix: form.suffix === "None" ? null : form.suffix,
-        phone: form.phone || null,
         email: form.email || null,
         role: form.role,
         is_active: true,
@@ -65,7 +63,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
   };
 
   return (
-    <Modal title="Add User" onClose={onClose}>
+    <Modal title="Add DFTC User" onClose={onClose}>
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1" style={{ scrollbarWidth: "none" }}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -76,7 +74,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="First name"
               className={inputCls}
               value={form.firstName}
-              onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, firstName: capitalizeNameInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -87,7 +85,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="Last name"
               className={inputCls}
               value={form.lastName}
-              onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, lastName: capitalizeNameInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -100,7 +98,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="Middle name"
               className={inputCls}
               value={form.middleName}
-              onChange={(e) => setForm((f) => ({ ...f, middleName: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, middleName: capitalizeNameInput(e.target.value) }))}
             />
           </div>
           <div>
@@ -123,31 +121,17 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <FieldLabel htmlFor="au-phone">Phone Number</FieldLabel>
-            <input
-              id="au-phone"
-              type="tel"
-              placeholder="09XX XXX XXXX"
-              maxLength={PHONE_MAX_LENGTH}
-              className={inputCls}
-              value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))}
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="au-email">Email</FieldLabel>
-            <input
-              id="au-email"
-              type="email"
-              required
-              placeholder="user@example.com"
-              className={inputCls}
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            />
-          </div>
+        <div>
+          <FieldLabel htmlFor="au-email">Email</FieldLabel>
+          <input
+            id="au-email"
+            type="email"
+            required
+            placeholder="user@example.com"
+            className={inputCls}
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -172,7 +156,7 @@ const AddUserModal = ({ onClose, onAdd }) => {  const [form, setForm] = useState
               placeholder="e.g. Market Monitoring Staff"
               className={inputCls}
               value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, position: capitalizeNameInput(e.target.value) }))}
             />
           </div>
         </div>
@@ -271,7 +255,7 @@ const UsersTab = ({ showToast }) => {
 
   return (
     <div className="space-y-3.5 sm:space-y-4">
-      {/* Control bar: Search, Role filters, Add User button */}
+      {/* Control bar: Search, Role filters, Add DFTC User button */}
       <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
         {/* Search */}
         <div className="relative flex-1 max-w-full sm:max-w-md">
@@ -285,7 +269,7 @@ const UsersTab = ({ showToast }) => {
           />
         </div>
 
-        {/* Role Filters + Add User */}
+        {/* Role Filters + Add DFTC User */}
         <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {["All", "Farmer", "DFTC"].map((r) => (
@@ -309,7 +293,7 @@ const UsersTab = ({ showToast }) => {
             className="inline-flex items-center gap-1.5 h-8.5 px-3 sm:px-3.5 text-[12px] sm:text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs cursor-pointer shrink-0 ml-auto sm:ml-0"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add User</span>
+            <span>Add DFTC User</span>
           </button>
         </div>
       </div>
@@ -352,7 +336,7 @@ const UsersTab = ({ showToast }) => {
                     </p>
                     <span className={`inline-flex items-center gap-1 text-[11px] font-semibold shrink-0 ${u.is_active ? "text-emerald-700" : "text-[var(--hw-neutral-500)]"}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${u.is_active ? "bg-emerald-500" : "bg-[var(--hw-neutral-400)]"}`} />
-                      {u.is_active ? "Active" : "Inactive"}
+                      {u.account_status || (u.is_active ? "Active" : "Inactive")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-[12px] text-[var(--hw-neutral-600)] mt-0.5 truncate">
@@ -366,6 +350,11 @@ const UsersTab = ({ showToast }) => {
                       </>
                     )}
                   </div>
+                  {u.created_at && (
+                    <p className="text-[11px] text-[var(--hw-neutral-500)] mt-0.5">
+                      Added {formatDateTime(u.created_at)}
+                    </p>
+                  )}
                 </div>
                 <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] shrink-0 self-center" />
               </div>
@@ -388,7 +377,7 @@ const UsersTab = ({ showToast }) => {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
-                {["Name", "Email", "Role", "Status", "Last Login"].map((h) => (
+                {["Name", "Email", "Role", "Status", "Date Added", "Last Login"].map((h) => (
                   <th key={h} className="px-5 py-3.5 text-[12px] font-semibold text-black uppercase tracking-wide whitespace-nowrap">
                     {h}
                   </th>
@@ -422,7 +411,8 @@ const UsersTab = ({ showToast }) => {
                     <td className="px-5 py-3.5 text-[13px] font-semibold text-black whitespace-nowrap">{formatPersonName(`${u.first_name || ""} ${u.last_name || ""}`) || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black">{u.email || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black font-medium">{u.role?.role_name || "-"}</td>
-                    <td className="px-5 py-3.5 text-[13px] text-black">{u.is_active ? "Active" : "Inactive"}</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black">{u.account_status || (u.is_active ? "Active" : "Inactive")}</td>
+                    <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{u.created_at ? formatDateTime(u.created_at) : "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-black whitespace-nowrap">{u.last_login ? formatDateTime(u.last_login) : "-"}</td>
                     <td className="px-5 py-3.5">
                       <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)]" />
@@ -432,7 +422,7 @@ const UsersTab = ({ showToast }) => {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center">
+                  <td colSpan={7} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-1.5 max-w-sm mx-auto">
                       <div className="w-10 h-10 rounded-2xl bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] flex items-center justify-center text-[var(--hw-neutral-400)]">
                         <Inbox className="w-5 h-5" />

@@ -6,8 +6,9 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
-import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
+import { authApi } from "../../../services/api";
 import { isValidEmail, isFakeEmailDomain } from "../../auth/authValidation";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import {
@@ -42,7 +43,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
   const lastName = staff.last_name || user?.last_name || (user?.name && user.name.split(" ").length > 1 ? user.name.split(" ").slice(-1)[0] : "") || "";
   const middleName = staff.middle_name || "";
   const suffix = staff.suffix || user?.suffix || "None";
-  const phone = user?.phone || "";
   const email = user?.email || "";
   const position = user?.position || staff.position_title || "";
 
@@ -51,7 +51,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
     lastName,
     middleName,
     suffix,
-    phone,
     email,
     position
   });
@@ -62,11 +61,10 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       lastName,
       middleName,
       suffix,
-      phone,
       email,
       position
     });
-  }, [firstName, lastName, middleName, suffix, phone, email, position]);
+  }, [firstName, lastName, middleName, suffix, email, position]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -105,7 +103,9 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
     }
   };
   const set = (k) => (e) => {
-    const value = e.target.value;
+    const value = ["firstName", "lastName", "middleName"].includes(k)
+      ? capitalizeNameInput(e.target.value)
+      : e.target.value;
     setForm((f) => ({ ...f, [k]: value }));
     if (k === "email") {
       if (value.trim() && !isValidEmail(value)) {
@@ -133,9 +133,10 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       middle_name: form.middleName || null,
       suffix: form.suffix === "None" ? null : form.suffix,
       position_title: form.position || null,
-      phone: form.phone || null,
       email: form.email || null
     };
+    if (form.phone !== phone) payload.phone = form.phone || null;
+    if (form.email !== email) payload.email = form.email || null;
     if (currentPassword) payload.current_password = currentPassword;
     try {
       await parseResponse(await apiPut("/dftc/staff/me", payload));
@@ -161,15 +162,11 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
         setShowSaveModal(false);
         setCurrentPassword("");
         setFieldErrors((f) => ({ ...f, email: "That email address is already in use by another account." }));
-      } else if (lc.includes("phone number is already in use") || lc.includes("phone number already")) {
-        setShowSaveModal(false);
-        setCurrentPassword("");
-        setFieldErrors((f) => ({ ...f, phone: "That phone number is already in use by another account." }));
       } else if (lc.includes("password you entered is incorrect") || lc.includes("password is incorrect")) {
         // Keep modal open — user can correct the password without reopening it.
         setFieldErrors((f) => ({ ...f, currentPassword: "The password you entered is incorrect. Please try again." }));
       } else if (lc.includes("current password is required")) {
-        setFieldErrors((f) => ({ ...f, currentPassword: "Your current password is required to change your email or phone number." }));
+        setFieldErrors((f) => ({ ...f, currentPassword: "Your current password is required to change your email." }));
       } else if (lc.includes("first name") || lc.includes("last name")) {
         setShowSaveModal(false);
         setCurrentPassword("");
@@ -221,11 +218,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
                 </svg>
               </div>
             </div>
-          </div>
-          <div>
-            <FieldLabel htmlFor="ac-ph">Phone Number</FieldLabel>
-            <input id="ac-ph" type="tel" inputMode="numeric" maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} className={`${inputCls} ${fieldErrors.phone ? "border-red-500 focus:ring-red-500" : ""}`} />
-            {fieldErrors.phone && <p className="mt-1 text-[12px] text-red-600">{fieldErrors.phone}</p>}
           </div>
           <div>
             <FieldLabel htmlFor="ac-em">Email</FieldLabel>
@@ -313,7 +305,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       {showSaveModal && <Modal title="Save account changes?" onClose={() => { setShowSaveModal(false); setFieldErrors({}); setCurrentPassword(""); }}>
           <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your HarvestWise profile.</p>
           <label htmlFor="dftc-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
-            Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
+            Current password <span className="font-normal text-gray-500">(required for email change)</span>
           </label>
           <input
             id="dftc-current-password"
@@ -372,10 +364,65 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
 
 const SecurityTab = ({ showToast }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const googleLink = useGoogleLink({
     redirectTo: `${window.location.origin}/dftc/settings?tab=security`,
     onResult: () => showToast(t("dftc.settings.toast_google_connected", {}, "Google account connected.")),
   });
+
+  const [addPwOpen, setAddPwOpen] = useState(false);
+  const [addPwSending, setAddPwSending] = useState(false);
+  const [addPwCode, setAddPwCode] = useState("");
+  const [addPwNew, setAddPwNew] = useState("");
+  const [addPwConfirm, setAddPwConfirm] = useState("");
+  const [addPwError, setAddPwError] = useState("");
+  const [addPwDone, setAddPwDone] = useState(false);
+
+  const handleSendAddPwOtp = async () => {
+    const email = (user?.email || "").trim().toLowerCase();
+    if (!email) {
+      setAddPwError("No email on file for this account.");
+      return;
+    }
+    setAddPwSending(true);
+    setAddPwError("");
+    try {
+      await authApi.requestPasswordReset(email);
+      setAddPwOpen(true);
+      showToast("A verification code was sent to your email.");
+    } catch (err) {
+      setAddPwError(err?.message || "Could not send the verification code. Try again.");
+    } finally {
+      setAddPwSending(false);
+    }
+  };
+
+  const handleConfirmAddPw = async () => {
+    const email = (user?.email || "").trim().toLowerCase();
+    if (!addPwCode.trim() || !addPwNew) {
+      setAddPwError("Enter the code and a new password.");
+      return;
+    }
+    if (addPwNew !== addPwConfirm) {
+      setAddPwError("Passwords do not match.");
+      return;
+    }
+    setAddPwSending(true);
+    setAddPwError("");
+    try {
+      await authApi.resetPassword(email, addPwCode.trim(), addPwNew);
+      setAddPwDone(true);
+      setAddPwOpen(false);
+      setAddPwCode("");
+      setAddPwNew("");
+      setAddPwConfirm("");
+      showToast("Password added successfully. Please sign in again.");
+    } catch (err) {
+      setAddPwError(err?.message || "Could not set the password. Check the code and try again.");
+    } finally {
+      setAddPwSending(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -386,6 +433,72 @@ const SecurityTab = ({ showToast }) => {
           onSuccess={() => showToast("Password updated successfully.")}
         />
       </Card>
+
+      {googleLink.googleConnected && (
+        <Card>
+          <SectionLabel>{t("dftc.settings.add_password", {}, "Add a password")}</SectionLabel>
+          <p className="text-[13px] text-black mb-3">
+            Your account is signed in with Google. Add a password so you can also sign in with your email and password.
+          </p>
+          {addPwDone ? (
+            <p className="text-[13px] text-emerald-600 font-medium">Password added. Please sign in again to continue.</p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSendAddPwOtp}
+              disabled={addPwSending}
+              className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
+            >
+              {addPwSending ? "Sending…" : "Send verification code to email"}
+            </button>
+          )}
+          {addPwError && <p className="mt-3 text-[13px] text-red-600">{addPwError}</p>}
+
+          {addPwOpen && (
+            <Modal title="Add a password" onClose={() => setAddPwOpen(false)}>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <FieldLabel>Verification code</FieldLabel>
+                  <input
+                    type="text"
+                    value={addPwCode}
+                    onChange={(e) => setAddPwCode(e.target.value)}
+                    className={inputCls}
+                    placeholder="Enter the code sent to your email"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>New password</FieldLabel>
+                  <input
+                    type="password"
+                    value={addPwNew}
+                    onChange={(e) => setAddPwNew(e.target.value)}
+                    className={inputCls}
+                    placeholder="New password"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Confirm password</FieldLabel>
+                  <input
+                    type="password"
+                    value={addPwConfirm}
+                    onChange={(e) => setAddPwConfirm(e.target.value)}
+                    className={inputCls}
+                    placeholder="Confirm password"
+                  />
+                </div>
+                {addPwError && <p className="text-[13px] text-red-600">{addPwError}</p>}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <GhostBtn onClick={() => setAddPwOpen(false)}>Cancel</GhostBtn>
+                <GreenBtn onClick={handleConfirmAddPw} disabled={addPwSending}>
+                  {addPwSending ? "Saving…" : "Set password"}
+                </GreenBtn>
+              </div>
+            </Modal>
+          )}
+        </Card>
+      )}
 
       <EmailOtp2FACard showToast={showToast} />
 

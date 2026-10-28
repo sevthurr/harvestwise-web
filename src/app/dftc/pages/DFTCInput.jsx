@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PenLine,
   Upload,
@@ -12,7 +12,7 @@ import {
   Trash2
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { apiGet, parseResponse } from "../../global/api";
+import { apiDelete, apiGet, parseResponse } from "../../global/api";
 import { DFTCFilePreview } from "../components/DFTCFilePreview";
 import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import {
@@ -74,6 +74,7 @@ function Pagination({ page, total, pageSize = PAGE_SIZE, onChange }) {
 export default function DFTCInput() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const todayStr = getLocalDateString();
 
@@ -147,6 +148,22 @@ export default function DFTCInput() {
     refetchOnMount: "always"
   });
 
+  // Drafts are shared server state. Local storage is only a recovery fallback
+  // for an entry page that was offline, so this page must not list it as the
+  // canonical draft when the API has a shared draft available.
+  const { data: sharedDrafts } = useQuery({
+    queryKey: ["dftc", "shared-drafts", todayStr],
+    queryFn: async () => {
+      const [price, arrival] = await Promise.all([
+        parseResponse(await apiGet(`/dftc/price-draft?reporting_date=${todayStr}`)),
+        parseResponse(await apiGet(`/dftc/arrival-draft?reporting_date=${todayStr}`)),
+      ]);
+      return { price, arrival };
+    },
+    refetchOnMount: "always",
+    refetchInterval: 15000,
+  });
+
   // Fetch compiled daily report preview for today to ensure records count matches the details view
   const { data: todayReportPreview } = useQuery({
     queryKey: ["dftc-report-preview", todayStr],
@@ -187,12 +204,16 @@ export default function DFTCInput() {
   // Today's Draft: unsaved entries in progress
   const draftList = useMemo(() => {
     const drafts = [];
+    const serverPriceDraft = sharedDrafts?.price;
+    const serverArrivalDraft = sharedDrafts?.arrival;
+    const hasServerPriceDraft = Boolean(serverPriceDraft?.id && serverPriceDraft.cells?.length);
+    const hasServerArrivalDraft = Boolean(serverArrivalDraft?.id && Object.keys(serverArrivalDraft.payload?.fields || {}).length);
 
     // 1. Check local price monitoring draft
     try {
       const hasPriceDraft = localStorage.getItem("dftc_price_draft") === "true";
       const rawPriceData = localStorage.getItem("dftc_price_draft_data");
-      if (hasPriceDraft && rawPriceData) {
+      if (!hasServerPriceDraft && hasPriceDraft && rawPriceData) {
         const priceDraft = JSON.parse(rawPriceData);
         let count = 0;
         if (priceDraft?.tabFields) {
@@ -228,7 +249,7 @@ export default function DFTCInput() {
     try {
       const hasArrivalDraft = localStorage.getItem("dftc_arrival_draft") === "true";
       const rawArrivalData = localStorage.getItem("dftc_arrival_draft_data");
-      if (hasArrivalDraft && rawArrivalData) {
+      if (!hasServerArrivalDraft && hasArrivalDraft && rawArrivalData) {
         const arrivalDraft = JSON.parse(rawArrivalData);
         let count = 0;
         if (arrivalDraft?.fields) {
@@ -265,6 +286,33 @@ export default function DFTCInput() {
         });
       }
     } catch {}
+
+    if (hasServerPriceDraft) {
+      drafts.push({
+        id: "server-price-draft",
+        route: "/dftc/price-input",
+        dataName: `DFTC Price Monitoring — ${new Date(todayStr + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`,
+        dataType: "Daily Price Monitoring",
+        market: "Bankerohan & DFTC Taboan",
+        submissionMethod: "Manual Input",
+        savedDate: "Unsaved Draft",
+        records: serverPriceDraft.cells.length,
+        draftData: null,
+      });
+    }
+    if (hasServerArrivalDraft) {
+      drafts.push({
+        id: "server-arrival-draft",
+        route: "/dftc/arrival-input",
+        dataName: `DFTC Arrival Volume — ${new Date(todayStr + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`,
+        dataType: "DFTC Arrival Volume",
+        market: "DFTC Taboan",
+        submissionMethod: "Manual Input",
+        savedDate: "Unsaved Draft",
+        records: Object.keys(serverArrivalDraft.payload?.fields || {}).length,
+        draftData: null,
+      });
+    }
 
     // 3. Any backend submissions with status "draft"
     for (const sub of rawSubmissions) {
@@ -353,7 +401,7 @@ export default function DFTCInput() {
     }
 
     return drafts;
-  }, [rawSubmissions, todayStr, todayReportRecordCount, highlightParam]);
+  }, [rawSubmissions, todayStr, todayReportRecordCount, highlightParam, sharedDrafts]);
 
   const visibleDrafts = useMemo(() => {
     return draftList.filter(d => !deletedDraftIds.has(d.id));
@@ -363,7 +411,17 @@ export default function DFTCInput() {
     if (!deleteModalDraft) return;
     const draft = deleteModalDraft;
 
+    let remoteDeleted = true;
     try {
+      const isPriceDraft = draft.route === "/dftc/price-input";
+      const isArrivalDraft = draft.route === "/dftc/arrival-input";
+      const reportingDate = draft.draftData?.selectedDate || todayStr;
+      if (isPriceDraft) {
+        await apiDelete(`/dftc/price-draft?reporting_date=${encodeURIComponent(reportingDate)}`);
+      } else if (isArrivalDraft) {
+        await apiDelete(`/dftc/arrival-draft?reporting_date=${encodeURIComponent(reportingDate)}`);
+      }
+
       if (draft.id === "local-price-draft") {
         localStorage.removeItem("dftc_price_draft");
         localStorage.removeItem("dftc_price_draft_data");
@@ -377,10 +435,12 @@ export default function DFTCInput() {
         next.add(draft.id);
         return next;
       });
+      await queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", todayStr] });
     } catch (e) {
+      remoteDeleted = false;
       console.error("Failed to delete draft:", e);
     } finally {
-      setDeleteModalDraft(null);
+      if (remoteDeleted) setDeleteModalDraft(null);
     }
   };
 
@@ -437,10 +497,10 @@ export default function DFTCInput() {
       reportingDate: file.reportingDate || file.savedDate,
       savedDate: file.savedDate,
       records: file.records,
-      encodedBy: file.encodedBy || meta.encodedBy || "MARIA S. SANTOS",
-      encodedByRole: file.encodedByRole || meta.encodedByRole || "Data Analyst",
-      reviewedBy: file.reviewedBy || meta.reviewedBy || "MARIA S. SANTOS",
-      reviewedByRole: file.reviewedByRole || meta.reviewedByRole || "Data Analyst"
+      encodedBy: meta.encodedBy || file.encodedBy || "",
+      encodedByRole: meta.encodedByRole || file.encodedByRole || "Data Analyst",
+      reviewedBy: meta.reviewedBy || file.reviewedBy || "",
+      reviewedByRole: meta.reviewedByRole || file.reviewedByRole || "Data Analyst"
     });
   };
 
@@ -586,7 +646,7 @@ export default function DFTCInput() {
                         <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)]">{draft.savedDate || "Unsaved"}</td>
                         <td className="px-5 py-4 text-[13px] font-bold text-[var(--hw-neutral-900)]">{draft.records}</td>
                         <td className="px-5 py-4 text-right">
-                          {(draft.id === "local-price-draft" || draft.id === "local-arrival-draft") && (
+                          {(draft.route === "/dftc/price-input" || draft.route === "/dftc/arrival-input") && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -641,7 +701,7 @@ export default function DFTCInput() {
                         <span className="px-2 py-0.5 text-[10.5px] font-semibold rounded-md bg-amber-100 text-amber-800 border border-amber-300">
                           Draft
                         </span>
-                        {(draft.id === "local-price-draft" || draft.id === "local-arrival-draft") && (
+                        {(draft.route === "/dftc/price-input" || draft.route === "/dftc/arrival-input") && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

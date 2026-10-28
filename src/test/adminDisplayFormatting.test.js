@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDisplayLabel, formatPersonName } from "../app/global/utils/apiTransforms";
+import { capitalizeNameInput, formatDisplayLabel, formatPersonName } from "../app/global/utils/apiTransforms";
 
 describe("admin display formatting", () => {
   it("normalizes identifier labels while preserving admin acronyms", () => {
@@ -10,5 +10,10 @@ describe("admin display formatting", () => {
   it("formats person names from API values and usernames", () => {
     expect(formatPersonName("kaye.mayugba")).toBe("Kaye Mayugba");
     expect(formatPersonName("  jd santos ")).toBe("Jd Santos");
+  });
+
+  it("capitalizes name input without removing spacing while typing", () => {
+    expect(capitalizeNameInput("juan dela cruz")).toBe("Juan Dela Cruz");
+    expect(capitalizeNameInput("juan ")).toBe("Juan ");
   });
 });

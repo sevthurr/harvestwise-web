@@ -187,7 +187,7 @@ function FarmerProfile() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
             {preferredCrops.map((crop) => {
               const name = crop.commodityName || crop.name || "Crop";
-              const variety = crop.varietyName || "Default";
+              const variety = crop.varietyName || "Regular";
               const iconKey = getCommodityIconKey(crop.commodityId, null, name);
               return (
                 <div key={crop.id || crop.commodityId || name} className="flex items-center gap-3 p-2.5 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">

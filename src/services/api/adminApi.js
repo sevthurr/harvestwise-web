@@ -1,5 +1,9 @@
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete, parseResponse } from "../../app/global/api";
 
+export async function getDataVersion() {
+  return parseResponse(await apiGet("/admin/data-version"));
+}
+
 export async function getDashboard(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return parseResponse(await apiGet(`/admin/dashboard${qs ? `?${qs}` : ""}`));

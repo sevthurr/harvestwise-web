@@ -63,6 +63,27 @@ describe('DFTCSubmissions sorting and highlight', () => {
       created_at: `${todayIso}T10:00:00Z`,
       submission_method: 'Manual Input',
       record_count: 8
+    },
+    {
+      id: 'SUB-FILE-PRICE',
+      data_type: 'price',
+      price_type: 'Retail',
+      reporting_date: yesterdayIso,
+      saved_at: `${yesterdayIso}T08:00:00Z`,
+      created_at: `${yesterdayIso}T08:00:00Z`,
+      submission_method: 'File Upload',
+      original_file_name: 'prices_oct27.xlsx',
+      record_count: 10
+    },
+    {
+      id: 'SUB-FILE-ARR',
+      data_type: 'arrival_volume',
+      reporting_date: yesterdayIso,
+      saved_at: `${yesterdayIso}T07:00:00Z`,
+      created_at: `${yesterdayIso}T07:00:00Z`,
+      submission_method: 'File Upload',
+      original_file_name: 'arrivals_oct27.xlsx',
+      record_count: 12
     }
   ];
 
@@ -117,5 +138,53 @@ describe('DFTCSubmissions sorting and highlight', () => {
     const highlightedRows = document.querySelectorAll('tr[data-highlighted="true"]');
     expect(highlightedRows.length).toBe(1);
     expect(highlightedRows[0]).toHaveTextContent('SUB-TODAY-ARR');
+  });
+
+  it('displays Dataset Name as table header and provides only the specified dropdown options', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    renderComponent('/dftc/submissions');
+
+    await screen.findAllByText('SUB-TODAY-PRICE');
+
+    // Table header is "Dataset Name"
+    const ths = Array.from(document.querySelectorAll('th')).map((th) => th.textContent.trim());
+    expect(ths).toContain('Dataset Name');
+    expect(ths).not.toContain('Dataset Type');
+
+    // Dropdown options
+    const select = document.querySelector('select');
+    const options = Array.from(select.querySelectorAll('option')).map((o) => o.textContent.trim());
+    expect(options).toEqual([
+      'All Types',
+      'Price Data - File Upload',
+      'Price Data - Manual Input',
+      'Arrival Data - File Upload',
+      'Arrival Data - Manual Upload'
+    ]);
+
+    // Test filter: Price Data - File Upload
+    fireEvent.change(select, { target: { value: 'Price Data - File Upload' } });
+    expect(screen.getByText('SUB-FILE-PRICE')).toBeInTheDocument();
+    expect(screen.queryByText('SUB-TODAY-PRICE')).not.toBeInTheDocument();
+    expect(screen.queryByText('SUB-TODAY-ARR')).not.toBeInTheDocument();
+    expect(screen.queryByText('SUB-FILE-ARR')).not.toBeInTheDocument();
+
+    // Test filter: Arrival Data - File Upload
+    fireEvent.change(select, { target: { value: 'Arrival Data - File Upload' } });
+    expect(screen.getByText('SUB-FILE-ARR')).toBeInTheDocument();
+    expect(screen.queryByText('SUB-FILE-PRICE')).not.toBeInTheDocument();
+    expect(screen.queryByText('SUB-TODAY-ARR')).not.toBeInTheDocument();
+
+    // Test filter: Price Data - Manual Input
+    fireEvent.change(select, { target: { value: 'Price Data - Manual Input' } });
+    expect(screen.getByText('SUB-TODAY-PRICE')).toBeInTheDocument();
+    expect(screen.queryByText('SUB-FILE-PRICE')).not.toBeInTheDocument();
+    expect(screen.queryByText('SUB-FILE-ARR')).not.toBeInTheDocument();
+
+    // Test filter: Arrival Data - Manual Upload
+    fireEvent.change(select, { target: { value: 'Arrival Data - Manual Upload' } });
+    expect(screen.getByText('SUB-TODAY-ARR')).toBeInTheDocument();
+    expect(screen.queryByText('SUB-TODAY-PRICE')).not.toBeInTheDocument();
+    expect(screen.queryByText('SUB-FILE-PRICE')).not.toBeInTheDocument();
   });
 });

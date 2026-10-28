@@ -1,5 +1,9 @@
 import { apiGet, parseResponse } from "../../app/global/api";
 
+export async function getDataVersion() {
+  return parseResponse(await apiGet("/dftc/data-version"));
+}
+
 /**
  * Fetch the active commodity catalog — every commodity row, top-10 or not.
  * Requires DFTC-staff auth.

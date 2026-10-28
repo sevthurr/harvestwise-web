@@ -25,7 +25,7 @@ import {
   Modal
 } from "../../global/components/ui/hw-ui";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
-import { toCamelCase } from "../../global/utils/apiTransforms";
+import { capitalizeNameInput, toCamelCase } from "../../global/utils/apiTransforms";
 import { FarmLocationFields } from "../../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
@@ -51,7 +51,7 @@ const LANGUAGE_OPTIONS = [
 /* 1. Account Tab                                                             */
 /* -------------------------------------------------------------------------- */
 const AccountTab = ({ showToast, onDeleteAccount }) => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { t, formatDate, langCode } = useLanguage();
   const googleLink = useGoogleLink({
     redirectTo: `${window.location.origin}/farmer/settings?tab=account`,
@@ -146,7 +146,9 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   }, [rawProfile, user]);
 
   const set = (k) => (e) => {
-    const value = e.target.value;
+    const value = ["firstName", "lastName", "middleName"].includes(k)
+      ? capitalizeNameInput(e.target.value)
+      : e.target.value;
     setForm((f) => ({ ...f, [k]: value }));
     if (k === "email") setEmailError(value.trim() && !isValidEmail(value) ? "Enter a valid email address." : "");
   };
@@ -163,14 +165,22 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
         first_name: form.firstName || null,
         last_name: form.lastName || null,
         middle_name: form.middleName || null,
-        suffix: form.suffix === "None" ? null : form.suffix,
-        phone: form.phone || null,
-        email: form.email || null
+        suffix: form.suffix === "None" ? null : form.suffix
       };
+      const profile = rawProfile ? toCamelCase(rawProfile) : {};
+      const originalPhone = profile.phone || user?.phone || "";
+      const originalEmail = profile.email || user?.email || "";
+      if (form.phone !== originalPhone) payload.phone = form.phone || null;
+      if (form.email !== originalEmail) payload.email = form.email || null;
       if (currentPassword) payload.current_password = currentPassword;
       setCurrentPassword("");
       await parseResponse(await apiPut("/farmer/profile", payload));
       queryClient.invalidateQueries({ queryKey: ["farmer", "profile"] });
+      try {
+        await refreshUser();
+      } catch {
+        // The profile save already succeeded; auth refresh is best-effort.
+      }
       showToast("Account updated successfully.");
     } catch (err) {
       showToast(err?.message || "Could not save your account information.", "error");

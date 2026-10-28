@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { calendarApi, adminApi, ingestionApi } from "../../../services/api";
 import AdminHistory from "./AdminHistory";
+import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 
 
 function fmtISO(dateStr) {
@@ -369,7 +370,7 @@ function AdminDataSources() {
         <label className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">Event name *</label>
         <input
     value={form.name}
-    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+    onChange={(e) => setForm((f) => ({ ...f, name: capitalizeNameInput(e.target.value) }))}
     placeholder="e.g. Araw ng Dabaw"
     className={inputCls}
   />

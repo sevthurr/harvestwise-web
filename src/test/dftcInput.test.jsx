@@ -130,6 +130,7 @@ describe('DFTCInput Submit Data Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLocationState = null;
+    Element.prototype.scrollIntoView = vi.fn();
     global.fetch = mockSubmissionsFetch();
     localStorage.clear();
   });
@@ -143,7 +144,7 @@ describe('DFTCInput Submit Data Page', () => {
     expect(screen.getByText('Upload Data')).toBeInTheDocument();
 
     const mainContainer = container.querySelector('.max-w-\\[1440px\\]');
-    expect(mainContainer.className).toContain('space-y-8');
+    expect(mainContainer.className).toContain('space-y-6');
   });
 
   it('accurately displays Today\'s Saved Data table with Submission Method column and 56 consolidated manual records', async () => {
@@ -306,6 +307,20 @@ describe('DFTCInput Submit Data Page', () => {
           })
         };
       }
+      if (String(url).includes('/dftc/reports/arrival-preview')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            rows: [
+              { commodity_name: 'Kamatis', variety: 'Base', volume_kg: 150, unit: 'kg' },
+              { commodity_name: 'Talong', variety: 'Base', volume_kg: 80, unit: 'kg' }
+            ],
+            encoded_by: 'BACKEND ENCODER',
+            prepared_by: 'BACKEND PREPARER'
+          })
+        };
+      }
       if (String(url).includes('/dftc/reports/preview')) {
         return {
           ok: true,
@@ -423,10 +438,10 @@ describe('DFTCInput Submit Data Page', () => {
     expect(draftHeading.compareDocumentPosition(savedHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // Verify draft item is listed
-    expect(screen.getByText('Unsaved Draft')).toBeInTheDocument();
+    expect(screen.getAllByText('Unsaved Draft').length).toBeGreaterThan(0);
 
     // Clicking draft navigates to price input with restoreDraft state
-    const draftRow = screen.getByText('Unsaved Draft').closest('tr');
+    const draftRow = screen.getAllByText('Unsaved Draft')[0].closest('tr');
     fireEvent.click(draftRow);
 
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/price-input', expect.objectContaining({

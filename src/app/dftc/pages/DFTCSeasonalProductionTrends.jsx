@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { getClassificationColor, getClassificationTextColor } from "./dftcClassificationColors";
 import { useIsMobile } from "../../global/components/ui/use-mobile";
+import { SearchableCombobox } from "./DFTCTrends";
 
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -71,18 +72,14 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
       <section className={`${CARD_CLASS} p-3 sm:p-4 md:p-5`}>
         <h2 className="text-[11px] sm:text-[12px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-2 sm:mb-2.5">Filters</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-          <label className="block">
+          <div>
             <span className="block text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1">Commodity</span>
-            <select
+            <SearchableCombobox
+              categories={categories}
               value={commodity}
-              onChange={(event) => onCommodityChange(event.target.value)}
-              className="w-full truncate px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
-            >
-              {categories.flatMap((category) => category.commodities).map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </label>
+              onChange={onCommodityChange}
+            />
+          </div>
           <div>
             <span className="block text-[11px] sm:text-[12px] font-semibold text-[var(--hw-neutral-700)] mb-1">Harvest season</span>
             <div className="grid grid-cols-4 gap-1 sm:gap-2">
@@ -173,7 +170,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
             </div>
 
             {/* In-card seasonal summary stat tiles (Farmer View Basis style) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 pt-3 border-t border-[var(--hw-neutral-100)] mt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5 pt-3 border-t border-[var(--hw-neutral-100)] mt-3">
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
                 <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
                   Selected season
@@ -188,14 +185,6 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                 </p>
                 <p className="sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
                   {summaryProfile?.average_production_mt == null ? "—" : `${Number(summaryProfile.average_production_mt).toLocaleString()} MT`}
-                </p>
-              </div>
-              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
-                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
-                  Production level
-                </p>
-                <p className={`sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold leading-tight ${getClassificationTextColor(summaryProfile?.classification)}`}>
-                  {summaryProfile?.classification || "—"}
                 </p>
               </div>
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">

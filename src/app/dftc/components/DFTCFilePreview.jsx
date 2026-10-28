@@ -124,31 +124,32 @@ function triggerDownload(url, filename) {
   document.body.removeChild(a);
 }
 
-function ReportColumnHeaders() {
+function ReportColumnHeaders({ headerPadding = "5px 8px", headerFontSize = 11 }) {
   const thBase = (bg, extra = {}) => ({
     background: bg,
     border: "1px solid #000",
-    padding: "6px 8px",
+    padding: headerPadding,
     textAlign: "center",
     fontWeight: "bold",
     whiteSpace: "nowrap",
+    fontSize: headerFontSize,
     ...extra
   });
   return (
     <thead>
       <tr>
-        <th rowSpan={2} style={thBase(LEFT_BG, { width: 36, fontSize: 11 })}>No.</th>
-        <th rowSpan={2} style={thBase(LEFT_BG, { minWidth: 160, fontSize: 11 })}>Commodity</th>
-        <th rowSpan={2} style={thBase(LEFT_BG, { width: 72, fontSize: 11 })}>UOM</th>
-        <th colSpan={3} style={thBase(BANK_BG, { fontSize: 11 })}>BANKEROHAN MARKET</th>
-        <th colSpan={2} style={thBase(DFTC_BG, { fontSize: 11 })}>DFTC TABOAN</th>
+        <th rowSpan={2} style={thBase(LEFT_BG)}>No.</th>
+        <th rowSpan={2} style={thBase(LEFT_BG)}>Commodity</th>
+        <th rowSpan={2} style={thBase(LEFT_BG)}>UOM</th>
+        <th colSpan={3} style={thBase(BANK_BG)}>BANKEROHAN MARKET</th>
+        <th colSpan={2} style={thBase(DFTC_BG)}>DFTC TABOAN</th>
       </tr>
       <tr>
         {["Landing", "Wholesale", "Retail"].map((h) => (
-          <th key={h} style={{ background: BANK_BG, border: "1px solid #000", padding: "5px 8px", textAlign: "center", fontSize: 11, width: 85 }}>{h}</th>
+          <th key={h} style={{ background: BANK_BG, border: "1px solid #000", padding: headerPadding, textAlign: "center", fontSize: headerFontSize }}>{h}</th>
         ))}
         {["Wholesale", "Retail"].map((h) => (
-          <th key={h} style={{ background: DFTC_BG, border: "1px solid #000", padding: "5px 8px", textAlign: "center", fontSize: 11, width: 85 }}>{h}</th>
+          <th key={h} style={{ background: DFTC_BG, border: "1px solid #000", padding: headerPadding, textAlign: "center", fontSize: headerFontSize }}>{h}</th>
         ))}
       </tr>
     </thead>
@@ -156,12 +157,17 @@ function ReportColumnHeaders() {
 }
 
 function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, reportDate, personnel }) {
-  const cellL = (extra = {}) => ({ background: LEFT_BG, border: "1px solid #000", padding: "4px 8px", fontSize: 12, ...extra });
-  const cellB = (extra = {}) => ({ background: BANK_BG, border: "1px solid #000", padding: "4px 8px", textAlign: "right", fontSize: 12, ...extra });
-  const cellD = (extra = {}) => ({ background: DFTC_BG, border: "1px solid #000", padding: "4px 8px", textAlign: "right", fontSize: 12, ...extra });
+  const cellPadding = "4px 8px";
+  const cellFontSize = 12;
+  const headerPadding = "5px 8px";
+  const headerFontSize = 11;
+
+  const cellL = (extra = {}) => ({ background: LEFT_BG, border: "1px solid #000", padding: cellPadding, fontSize: cellFontSize, ...extra });
+  const cellB = (extra = {}) => ({ background: BANK_BG, border: "1px solid #000", padding: cellPadding, textAlign: "right", fontSize: cellFontSize, ...extra });
+  const cellD = (extra = {}) => ({ background: DFTC_BG, border: "1px solid #000", padding: cellPadding, textAlign: "right", fontSize: cellFontSize, ...extra });
 
   return (
-    <div className="font-sans bg-white p-4 md:p-6 w-full min-w-[660px]" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+    <div className="font-sans bg-white p-4 md:p-6 w-full max-w-[960px] mx-auto box-border" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
       {isFirst && (
         <div style={{ textAlign: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: "bold", textTransform: "uppercase", lineHeight: 1.3 }}>Davao Food Terminal Complex Price Monitoring</div>
@@ -169,8 +175,18 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
           <div style={{ fontSize: 13, fontWeight: "bold", marginTop: 2 }}>Class A</div>
         </div>
       )}
-      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
-        <ReportColumnHeaders />
+      <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", fontSize: cellFontSize }}>
+        <colgroup>
+          <col style={{ width: "5%" }} />
+          <col style={{ width: "35%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+        </colgroup>
+        <ReportColumnHeaders headerPadding={headerPadding} headerFontSize={headerFontSize} />
         <tbody>
           {categories.map((cat) => (
             <React.Fragment key={cat.name}>
@@ -182,15 +198,15 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
               {cat.commodities.map((com) =>
                 com.variants.map((v, vi) => (
                   <tr key={`${cat.name}-${com.name}-${vi}`}>
-                    <td style={cellL({ textAlign: "center", width: 36 })}>{vi === 0 ? com.no : ""}</td>
-                    <td style={cellL()}>
+                    <td style={cellL({ textAlign: "center" })}>{vi === 0 ? com.no : ""}</td>
+                    <td style={cellL({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
                       {vi === 0 ? (
                         <><strong>{com.name}</strong>{" "}<span style={{ fontWeight: "normal" }}>{v.descriptor}</span></>
                       ) : (
                         <span style={{ paddingLeft: 16 }}>{v.descriptor}</span>
                       )}
                     </td>
-                    <td style={cellL({ textAlign: "center", width: 72 })}>{v.uom}</td>
+                    <td style={cellL({ textAlign: "center" })}>{v.uom}</td>
                     <td style={cellB()}>{v.bankLanding}</td>
                     <td style={cellB()}>{v.bankWholesale}</td>
                     <td style={cellB()}>{v.bankRetail}</td>
@@ -204,20 +220,20 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
         </tbody>
       </table>
       {isLast && personnel && (
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20, paddingTop: 12, borderTop: "1px solid #000" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 8, borderTop: "1px solid #000" }}>
           <div>
-            <div style={{ fontSize: 11, marginBottom: 2 }}>Encoded by:</div>
-            <div style={{ fontSize: 12, fontWeight: "bold", textDecoration: "underline" }}>{personnel.encodedBy}</div>
-            <div style={{ fontSize: 11 }}>{personnel.encodedByRole}</div>
+            <div style={{ fontSize: 10, marginBottom: 1 }}>Encoded by:</div>
+            <div style={{ fontSize: 11, fontWeight: "bold", textDecoration: "underline" }}>{personnel.encodedBy}</div>
+            <div style={{ fontSize: 10 }}>{personnel.encodedByRole}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, marginBottom: 2 }}>Prepared by:</div>
-            <div style={{ fontSize: 12, fontWeight: "bold", textDecoration: "underline" }}>{personnel.preparedBy}</div>
-            <div style={{ fontSize: 11 }}>{personnel.preparedByRole}</div>
+            <div style={{ fontSize: 10, marginBottom: 1 }}>Prepared by:</div>
+            <div style={{ fontSize: 11, fontWeight: "bold", textDecoration: "underline" }}>{personnel.preparedBy}</div>
+            <div style={{ fontSize: 10 }}>{personnel.preparedByRole}</div>
           </div>
         </div>
       )}
-      <div style={{ textAlign: "right", fontSize: 10, marginTop: 8, color: "#555" }}>Page {pageIndex + 1} of {totalPages}</div>
+      <div style={{ textAlign: "right", fontSize: 10, marginTop: 6, color: "#555" }}>Page {pageIndex + 1} of {totalPages}</div>
     </div>
   );
 }
@@ -226,7 +242,7 @@ function PDFPreviewContent({ personnel, reportDate, categories }) {
   const total = PAGE_CATEGORY_GROUPS.length;
   return (
     <DFTCPreviewZoomContainer label="PDF Document (A4 Landscape)">
-      <div className="space-y-5">
+      <div className="space-y-5 w-full max-w-[960px] mx-auto">
         {PAGE_CATEGORY_GROUPS.map((group, idx) => {
           const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
           return (
@@ -235,8 +251,16 @@ function PDFPreviewContent({ personnel, reportDate, categories }) {
                 <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {total}</span>
                 <span className="text-[12px] text-[var(--hw-neutral-800)]">A4 Landscape</span>
               </div>
-              <div>
-                <DFTCReportPage pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />
+              <div className="w-full">
+                <DFTCReportPage
+                  pageIndex={idx}
+                  totalPages={total}
+                  categories={cats}
+                  isFirst={idx === 0}
+                  isLast={idx === total - 1}
+                  reportDate={reportDate}
+                  personnel={idx === total - 1 ? personnel : void 0}
+                />
               </div>
             </div>
           );
@@ -306,7 +330,15 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
       </div>
 
       <DFTCPreviewZoomContainer label={`Image ${page + 1} of ${total}`}>
-        <DFTCReportPage pageIndex={page} totalPages={total} categories={currentCats} isFirst={page === 0} isLast={page === total - 1} reportDate={reportDate} personnel={page === total - 1 ? personnel : void 0} />
+        <DFTCReportPage
+          pageIndex={page}
+          totalPages={total}
+          categories={currentCats}
+          isFirst={page === 0}
+          isLast={page === total - 1}
+          reportDate={reportDate}
+          personnel={page === total - 1 ? personnel : void 0}
+        />
       </DFTCPreviewZoomContainer>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -395,7 +427,11 @@ function DFTCFilePreview({ file, onClose }) {
     ? reportPreviewData.subtitle.replace("Prevailing Market Prices as of ", "")
     : formatDisplayDate(file.reportingDate || file.savedDate);
   const reportReference = reportPreviewData?.report_reference_no || file.reportId || file.reportReferenceNo || file.fileId || "—";
+  // The names selected in the final review card are authoritative for the
+  // printed report. Backend attribution remains the fallback for older reports
+  // that have no saved review metadata.
   const encodedByName = file.encodedBy || backendEncodedBy || getEncodedByName(file);
+  const reviewedByName = personnel.preparedBy || backendPreparedBy || file.reviewedBy || file.preparedBy || "—";
 
   async function downloadImages() {
     setDlState("generating-img");
@@ -440,16 +476,32 @@ function DFTCFilePreview({ file, onClose }) {
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
+      
+      const canvases = [];
       for (let i = 0; i < total; i++) {
         const el = pageRefs.current[i];
         if (!el) continue;
         const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
-        const imgData = canvas.toDataURL("image/png");
-        if (i > 0) pdf.addPage("a4", "landscape");
-        const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
-        const w = canvas.width * ratio;
-        const h = canvas.height * ratio;
-        pdf.addImage(imgData, "PNG", (pdfW - w) / 2, (pdfH - h) / 2, w, h);
+        canvases.push(canvas);
+      }
+
+      if (canvases.length > 0) {
+        // Standardize scaling across all pages so no single page looks zoomed out or disproportionate
+        const baseWidth = canvases[0].width || 960;
+        const uniformRatio = (pdfW - 16) / baseWidth;
+
+        for (let i = 0; i < canvases.length; i++) {
+          const canvas = canvases[i];
+          const imgData = canvas.toDataURL("image/png");
+          if (i > 0) pdf.addPage("a4", "landscape");
+
+          const w = canvas.width * uniformRatio;
+          const h = canvas.height * uniformRatio;
+          const x = (pdfW - w) / 2;
+          const y = h < pdfH ? (pdfH - h) / 2 : 8;
+
+          pdf.addImage(imgData, "PNG", x, y, w, Math.min(h, pdfH - 16));
+        }
       }
       pdf.save(`DFTC-Price-Monitoring-${reportingDateShort}.pdf`);
       setDlState("idle");
@@ -647,7 +699,8 @@ function DFTCFilePreview({ file, onClose }) {
         ["Class", "A"],
         ["Records Included", String(recordsIncluded || 1)],
         ["Saved Date", file.savedDate || "—"],
-        ["Encoded By", encodedByName]
+        ["Encoded By", encodedByName],
+        ["Reviewed By", reviewedByName]
       ]}
       format={format}
       onFormatChange={setFormat}
