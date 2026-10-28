@@ -1232,23 +1232,10 @@ function DFTCTrends() {
     staleTime: 60 * 1000,
   });
 
-  const arrivalCommodityCategories = useMemo(() => {
-    const items = commodityCatalog?.items || [];
-    if (!items.length) return PRICE_CATEGORIES;
-    const byCategory = new Map();
-    items.forEach((item) => {
-      const name = item?.name;
-      if (!name) return;
-      const category = item.category || "Others";
-      if (!byCategory.has(category)) byCategory.set(category, new Set());
-      byCategory.get(category).add(name);
-    });
-    return [...byCategory.entries()].map(([category, names]) => ({
-      id: toId(category),
-      name: category,
-      commodities: [...names].sort((a, b) => a.localeCompare(b)),
-    }));
-  }, [commodityCatalog]);
+  // Arrival trends are intentionally limited to HarvestWise's supported
+  // top-10 commodities. The catalog is still used below to resolve the
+  // selected commodity to its database id.
+  const arrivalCommodityCategories = TOP10_COMMODITY_CATEGORIES;
 
   // When commodity catalog loads, if aCommodity was initialized as an ID (e.g. COM-0051), resolve to name
   useEffect(() => {
