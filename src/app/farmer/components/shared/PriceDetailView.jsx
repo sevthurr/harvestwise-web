@@ -27,6 +27,7 @@ import * as pricesApi from "../../../../services/api/pricesApi";
 import * as analyticsApi from "../../../../services/api/analyticsApi";
 import { Skeleton } from "./FarmerSkeletons";
 import { HistoricalAveragePriceSection } from "../../../global/components/shared/HistoricalAveragePriceSection";
+import { pickUsablePriceOutlook } from "../../utils/advisoryReasons";
 
 const MARKETS = ["Bangkerohan Public Market", "DFTC"];
 
@@ -204,27 +205,23 @@ function PriceSummaryStrip({
 }) {
   if (isStageSpecific) {
     if (isStage2 && hasStage2Forecast) {
+      const historicalPrice = priceOutlookModel?.historicalSeasonalPrice;
+      const forecastPrice = priceOutlookModel?.forecastMidpoint ?? priceOutlookModel?.referencePrice;
+      const dualDifference = historicalPrice > 0 && forecastPrice > 0
+        ? forecastPrice - historicalPrice
+        : null;
+      const dualPercent = dualDifference != null
+        ? (dualDifference / historicalPrice) * 100
+        : null;
+      const dualDirection = dualDifference == null
+        ? "unavailable"
+        : dualDifference > 0
+        ? "above"
+        : dualDifference < 0
+        ? "below"
+        : "same";
       return (
         <div className="space-y-3 pt-2">
-          {/* Dual Assessment Header */}
-          <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                  Dual Assessment
-                </span>
-                <span className="text-[11px] font-medium text-emerald-700">· Forecast & Seasonal Benchmarks</span>
-              </div>
-              <p className="text-[12px] text-emerald-950 mt-0.5">
-                Your crop is planted and covered by an eligible harvest forecast. Both the harvest forecast and historical seasonal benchmarks are displayed below.
-              </p>
-            </div>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-white border border-emerald-300 text-emerald-800 self-start sm:self-auto shrink-0 shadow-xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              Forecast Eligible
-            </span>
-          </div>
-
           {/* Two panels: 1) Forecast Information, 2) Historical Seasonal Information */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {/* Panel 1: Forecast Information (Primary Assessment) */}
@@ -244,9 +241,9 @@ function PriceSummaryStrip({
                 <StatCard
                   label={t("farmer.factors.price.forecast_harvest_price", {}, "Forecast Harvest Price")}
                   value={
-                    priceOutlookModel?.referencePrice != null ? (
+                    forecastPrice != null ? (
                       <>
-                        ₱{priceOutlookModel.referencePrice.toFixed(2)}
+                        ₱{forecastPrice.toFixed(2)}
                         <span className="text-[10px] sm:text-[12px] font-medium text-black">
                           {" "}{t("common.per_kg", {}, "/ kg")}
                         </span>
@@ -258,7 +255,7 @@ function PriceSummaryStrip({
                   sub={
                     priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null
                       ? `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`
-                      : "Expected harvest window"
+                      : `Expected harvest: ${priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—"}`
                   }
                   isLoading={isDataLoading}
                 />
@@ -366,6 +363,27 @@ function PriceSummaryStrip({
                     {t("farmer.factors.price.preserved_historical_benchmark", {}, "Preserved historical benchmark")}
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-200)] p-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-black">
+                  {t("farmer.factors.price.dual_comparison_title", {}, "Forecast vs. Historical Seasonal Average")}
+                </p>
+                <p className="text-[12px] text-black mt-0.5">
+                  {dualDirection === "unavailable"
+                    ? t("farmer.factors.price.dual_comparison_unavailable", {}, "Comparison unavailable because both valid positive prices are required.")
+                    : dualDirection === "same"
+                    ? t("farmer.factors.price.dual_comparison_same", {}, "The forecast is about the same as the historical seasonal average.")
+                    : `The forecast is ${dualDirection} the historical seasonal average by ₱${Math.abs(dualDifference).toFixed(2)}/kg (${Math.abs(dualPercent).toFixed(1)}%).`}
+                </p>
+              </div>
+              <div className="text-[12px] font-semibold text-black whitespace-nowrap">
+                {dualDifference != null
+                  ? `${dualDifference >= 0 ? "+" : "−"}₱${Math.abs(dualDifference).toFixed(2)}/kg · ${dualPercent >= 0 ? "+" : "−"}${Math.abs(dualPercent).toFixed(1)}%`
+                  : "—"}
               </div>
             </div>
           </div>
@@ -678,7 +696,7 @@ function PriceDetailView({
       return null;
     }
 
-    const source = priceOutlookData || (moduleResults ? {
+    const advisorySource = moduleResults ? {
       status: moduleResults.price_outlook_status === "insufficient_data" ? "insufficient_data" : "processed",
       classification: moduleResults.price_outlook,
       forecast_price_change_pct: moduleResults.price_change_pct,
@@ -696,6 +714,7 @@ function PriceDetailView({
       forecast_midpoint: moduleResults.forecast_midpoint,
       lower_forecast: moduleResults.lower_forecast_price,
       upper_forecast: moduleResults.upper_forecast_price,
+      forecast_date: moduleResults.forecast_date,
       explanation: moduleResults.price_explanation,
       crop_stage: cropStage,
       historical_price_change_pct: moduleResults.historical_price_change_pct,
@@ -706,14 +725,36 @@ function PriceDetailView({
       planting_window_start: moduleResults.planting_window_start || plantingWindowStart,
       planting_window_end: moduleResults.planting_window_end || plantingWindowEnd,
       planting_window_label: moduleResults.planting_window_label || plantingWindowLabel,
-    } : null);
+      expected_harvest_date: moduleResults.expected_harvest_date || expectedHarvestDate,
+    } : null;
+    const preferHistorical = ["before_planting", "planning", "draft"].includes(String(cropStage || "").toLowerCase())
+      || !advisorySource?.has_eligible_forecast;
+    const analyticsUsable = pickUsablePriceOutlook(
+      priceOutlookData?.historical_price_outlook,
+      priceOutlookData?.classification,
+    );
+    const advisoryUsable = pickUsablePriceOutlook(
+      advisorySource?.historical_price_outlook,
+      advisorySource?.classification,
+    );
+    const source = advisorySource?.has_eligible_forecast
+      ? advisorySource
+      : ((preferHistorical && (analyticsUsable ? priceOutlookData : null))
+          || (advisoryUsable ? advisorySource : null)
+          || priceOutlookData
+          || advisorySource);
 
     if (!source) return null;
 
     const rawStatus = String(source.status || "").toLowerCase();
     const rawClass = String(source.classification || "").toLowerCase().replace(/[\s-]/g, "_");
+    const historicalFallbackClass = pickUsablePriceOutlook(source.historical_price_outlook);
+    const canUseHistoricalFallback = Boolean(
+      historicalFallbackClass
+      && (source.historical_seasonal_price != null || source.reference_price != null)
+    );
 
-    if (rawStatus === "insufficient_data" || rawClass === "insufficient_data") {
+    if ((rawStatus === "insufficient_data" || rawClass === "insufficient_data") && !canUseHistoricalFallback) {
       return {
         status: "insufficient_data",
         classification: "insufficient_data",
@@ -737,9 +778,21 @@ function PriceDetailView({
       return null;
     }
 
-    const classification = ["favorable", "neutral", "unfavorable"].includes(rawClass) ? rawClass : "neutral";
-    const refPrice = source.reference_price ?? (isStageSpecific ? null : source.forecast_midpoint);
-    const basePrice = source.comparison_baseline ?? (isStageSpecific ? null : (source.current_prevailing_price ?? source.recent_average_price));
+    const fallbackClass = String(historicalFallbackClass || "").toLowerCase().replace(/[\s-]/g, "_");
+    const usableRawClass = ["favorable", "neutral", "unfavorable"].includes(rawClass);
+    const usableHistClass = ["favorable", "neutral", "unfavorable"].includes(fallbackClass);
+    const useHistoricalPrimary = effectiveCropStage === "before_planting"
+      || source.price_reference_type === "historical_seasonal"
+      || (!usableRawClass && usableHistClass);
+    const classification = useHistoricalPrimary && usableHistClass
+      ? fallbackClass
+      : (usableRawClass ? rawClass : (usableHistClass ? fallbackClass : "neutral"));
+    const refPrice = source.reference_price
+      ?? (useHistoricalPrimary ? source.historical_seasonal_price : null)
+      ?? (isStageSpecific ? null : source.forecast_midpoint);
+    const basePrice = source.comparison_baseline
+      ?? (useHistoricalPrimary ? source.macro_baseline_price : null)
+      ?? (isStageSpecific ? null : (source.current_prevailing_price ?? source.recent_average_price));
 
     const isNearHarvest = effectiveCropStage === "near_harvest";
     const availableForecastMidpoint = source.forecast_midpoint ?? (
@@ -750,9 +803,13 @@ function PriceDetailView({
 
     let finalRefPrice = refPrice;
     let finalBasePrice = basePrice;
-    let finalPriceReferenceType = source.price_reference_type || (source.forecast_midpoint ? "forecast" : "historical_seasonal");
-    let finalPriceReferenceLabel = source.price_reference_label || (isStageSpecific ? "Reference Price" : t("farmer.factors.price.estimated_price_label", {}, "Estimated Price"));
-    let finalIsFallback = Boolean(source.is_fallback);
+    let finalPriceReferenceType = source.price_reference_type
+      || (useHistoricalPrimary ? "historical_seasonal" : (source.forecast_midpoint ? "forecast" : "historical_seasonal"));
+    let finalPriceReferenceLabel = source.price_reference_label
+      || (useHistoricalPrimary
+        ? "Historical Seasonal Average Price"
+        : (isStageSpecific ? "Reference Price" : t("farmer.factors.price.estimated_price_label", {}, "Estimated Price")));
+    let finalIsFallback = Boolean(source.is_fallback) || (useHistoricalPrimary && rawClass === "insufficient_data");
 
     if (isNearHarvest && (availableForecastMidpoint != null || finalPriceReferenceType === "forecast")) {
       if (availableForecastMidpoint != null) {
@@ -796,11 +853,34 @@ function PriceDetailView({
         ? (classification !== "neutral" ? classification : (fcPct != null ? (fcPct > 5.0 ? "favorable" : fcPct < -5.0 ? "unfavorable" : "neutral") : "neutral"))
         : (fcPct != null ? (fcPct > 5.0 ? "favorable" : fcPct < -5.0 ? "unfavorable" : "neutral") : null)
     );
+    const expectedDate = source.expected_harvest_date || expectedHarvestDate || moduleResults?.expected_harvest_date;
+    const derivedDaysToHarvest = expectedDate
+      ? Math.ceil((new Date(`${expectedDate}T00:00:00`) - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00")) / 86400000)
+      : null;
+    const forecastDate = source.forecast_date || null;
+    const hasDatedForecast = Boolean(
+      forecastDate &&
+      availableForecastMidpoint != null &&
+      Number(availableForecastMidpoint) > 0 &&
+      (!expectedDate || forecastDate <= expectedDate)
+    );
+    const hasStage2WindowForecast = effectiveCropStage === "during_planting" &&
+      derivedDaysToHarvest != null &&
+      derivedDaysToHarvest >= 1 &&
+      derivedDaysToHarvest <= 28 &&
+      hasDatedForecast;
     const hasEligibleFc = Boolean(
       source.has_eligible_forecast ||
+      hasStage2WindowForecast ||
       (isNearHarvest && (availableForecastMidpoint != null || finalPriceReferenceType === "forecast")) ||
       (effectiveCropStage === "during_planting" && finalPriceReferenceType === "forecast")
     );
+    if (hasStage2WindowForecast && finalPriceReferenceType !== "forecast") {
+      finalRefPrice = availableForecastMidpoint;
+      finalPriceReferenceType = "forecast";
+      finalPriceReferenceLabel = "Forecasted Price";
+      finalIsFallback = false;
+    }
 
     return {
       status: "processed",
@@ -821,8 +901,9 @@ function PriceDetailView({
       historicalPriceOutlook: histClass,
       forecastPriceChangePct: fcPct,
       forecastPriceOutlook: fcClass,
+      forecastDate,
       hasEligibleForecast: hasEligibleFc,
-      daysToHarvest: source.days_to_harvest ?? null,
+      daysToHarvest: source.days_to_harvest ?? derivedDaysToHarvest,
       spot7dAveragePrice: source.spot_7d_average_price,
       recentAverage: source.recent_average_price,
       forecastMidpoint: source.forecast_midpoint ?? finalRefPrice,
@@ -831,9 +912,9 @@ function PriceDetailView({
       plantingWindowStart: source.planting_window_start || plantingWindowStart,
       plantingWindowEnd: source.planting_window_end || plantingWindowEnd,
       plantingWindowLabel: source.planting_window_label || plantingWindowLabel,
-      expectedHarvestDate: source.expected_harvest_date || expectedHarvestDate || moduleResults?.expected_harvest_date,
+      expectedHarvestDate: expectedDate,
     };
-  }, [priceOutlookData, moduleResults, isDataLoading, isStageSpecific, cropStage, plantingWindowStart, plantingWindowEnd, plantingWindowLabel, expectedHarvestDate, t]);
+  }, [priceOutlookData, moduleResults, isDataLoading, isStageSpecific, cropStage, effectiveCropStage, plantingWindowStart, plantingWindowEnd, plantingWindowLabel, expectedHarvestDate, t]);
 
   const varietyDetails = useMemo(() => {
     if (!priceDetailData) return [];
@@ -983,9 +1064,18 @@ function PriceDetailView({
   const isStage2 = effectiveCropStage === "during_planting";
   const hasStage2Forecast = isStage2 && Boolean(priceOutlookModel?.hasEligibleForecast && !priceOutlookModel?.isFallback);
 
-  // Top classification banner config — resolved from live priceOutlookModel
+  // Planning uses the historical seasonal assessment as its primary outlook.
+  // Stage 2 uses the forecast classification once the validated forecast exists.
+  const bannerClassification = effectiveCropStage === "before_planting"
+    ? (priceOutlookModel?.historicalPriceOutlook || priceOutlookModel?.classification)
+    : isStage2 && hasStage2Forecast
+    ? (priceOutlookModel?.forecastPriceOutlook || priceOutlookModel?.classification)
+    : priceOutlookModel?.classification;
+  const normalizedBannerClassification = String(bannerClassification || "")
+    .toLowerCase()
+    .replace(/[\s-]/g, "_");
   const bannerCfg = priceOutlookModel
-    ? PRICE_CLASSIFICATION_BANNER[priceOutlookModel.classification]
+    ? PRICE_CLASSIFICATION_BANNER[normalizedBannerClassification]
     : null;
   const BannerIcon = bannerCfg?.Icon;
 

@@ -1,10 +1,5 @@
 /**
- * Step 1 duration chip behaviour.
- *
- * The chip used to stay on screen with a "-" placeholder when the API had no
- * duration for the selected variety, which read as broken to farmers. It now
- * hides instead, and the label comes from the API catalog first with the
- * CROP_DURATIONS table only as a fallback.
+ * Step 1 harvest window behaviour.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -24,10 +19,6 @@ vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
     langCode: "en",
     t: (key, params, fallback) => {
       const table = {
-        "farmer.assess.typical_duration": `Typical duration: ${params?.label}`,
-        "farmer.assess.duration_ampalaya": "45–75 days",
-        "farmer.assess.duration_ampalaya_galaxy": "48–52 days",
-        "farmer.assess.duration_lettuce": "45–60 days",
       };
       return table[key] ?? fallback ?? key;
     },
@@ -58,7 +49,7 @@ function renderStep1(data) {
   );
 }
 
-describe("Step1CropSchedule duration chip", () => {
+describe("Step1CropSchedule harvest window", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useCommodityCatalog.mockReturnValue({
@@ -67,35 +58,30 @@ describe("Step1CropSchedule duration chip", () => {
     });
   });
 
-  it("renders the API duration label when the catalog has one", () => {
+  it("renders the suggested harvest window as helper text", () => {
     durationForOption.mockReturnValue({ min: 48, max: 52, basis: "DAT" });
     renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
-    // 48 and 52 are both half-month steps, so the label quotes months.
-    expect(screen.getByText(/Typical duration:/)).toBeDefined();
-    expect(screen.getByText(/1\.6–1\.7 months|48–52 days/)).toBeDefined();
-  });
-
-  it("hides the chip when no duration is available from either source", () => {
-    // Neither the API nor CROP_DURATIONS knows this commodity, so the chip
-    // must disappear rather than render a bare "Typical duration:".
-    durationForOption.mockReturnValue(null);
-    renderStep1({ commodity: "saba", variant: "" });
+    expect(screen.getByText(/November 18, 2026 – November 22, 2026/)).toBeDefined();
     expect(screen.queryByText(/Typical duration:/)).toBeNull();
   });
 
-  it("falls back to the variety's own table entry, not the crop-wide range", () => {
+  it("hides the helper text when no duration is available from either source", () => {
+    // Neither the API nor CROP_DURATIONS knows this commodity, so no range
+    // can be displayed.
     durationForOption.mockReturnValue(null);
-    renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
-    // Ampalaya Galaxy is 48–52 in the table; the crop-wide range is 45–75.
-    // Showing 45–75 here would repeat the "too early" bug from the database.
-    expect(screen.getByText(/48–52 days/)).toBeDefined();
-    expect(screen.queryByText(/45–75 days/)).toBeNull();
+    renderStep1({ commodity: "saba", variant: "" });
+    expect(screen.queryByText(/Harvest Window:/)).toBeNull();
   });
 
-  it("shows the crop-wide fallback when neither source knows the variety", () => {
+  it("uses the variety duration to suggest the harvest window", () => {
+    durationForOption.mockReturnValue(null);
+    renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
+    expect(screen.getByText(/November 18, 2026 – November 22, 2026/)).toBeDefined();
+  });
+
+  it("uses the crop-wide fallback when the variety is unknown", () => {
     durationForOption.mockReturnValue(null);
     renderStep1({ commodity: "lettuce", variant: "Curly" });
-    // Curly has no table entry of its own, so the crop range (45–60) is used.
-    expect(screen.getByText(/45–60 days/)).toBeDefined();
+    expect(screen.getByText(/November 15, 2026 – November 30, 2026/)).toBeDefined();
   });
 });

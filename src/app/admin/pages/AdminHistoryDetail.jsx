@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ChevronLeft, ChevronRight, Inbox, Loader2 } from "lucide-react";
-import { formatDateTime } from "../../global/utils/apiTransforms";
+import { formatDateTime, formatDisplayLabel } from "../../global/utils/apiTransforms";
 import { ingestionApi } from "../../../services/api";
 
 const PAGE_SIZE = 20;
@@ -270,6 +270,13 @@ function AdminHistoryDetail() {
                             return (
                               <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-600)] whitespace-nowrap">
                                 {val || "—"}
+                              </td>
+                            );
+                          }
+                          if (col === "Source") {
+                            return (
+                              <td key={col} className="px-4 py-2.5 text-[var(--hw-neutral-600)] whitespace-nowrap">
+                                {val ? formatDisplayLabel(val) : "—"}
                               </td>
                             );
                           }

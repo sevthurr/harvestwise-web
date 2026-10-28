@@ -52,6 +52,25 @@ const LABEL_FIELD = {
 
 const normalizeLevel = (value) => String(value || '').toLowerCase().replace(/\s+/g, '_');
 
+const USABLE_PRICE_OUTLOOKS = new Set(['favorable', 'neutral', 'unfavorable']);
+
+function outlookText(value) {
+  if (value && typeof value === 'object') {
+    return value.classification || value.level || value.outlook || '';
+  }
+  return value;
+}
+
+/** Favorable / Neutral / Unfavorable only — drops Insufficient Data and empty labels. */
+export function pickUsablePriceOutlook(...values) {
+  for (const value of values) {
+    const text = String(outlookText(value) || '').trim();
+    if (!text) continue;
+    if (USABLE_PRICE_OUTLOOKS.has(normalizeLevel(text))) return text;
+  }
+  return null;
+}
+
 const levelOf = (moduleResults, module) => normalizeLevel(moduleResults?.[LABEL_FIELD[module]]);
 
 // ---------------------------------------------------------------------------
@@ -64,12 +83,19 @@ const levelOf = (moduleResults, module) => normalizeLevel(moduleResults?.[LABEL_
 // ---------------------------------------------------------------------------
 
 function priceReason(mr, cropName, horizonDays) {
-  const outlook = normalizeLevel(mr?.price_outlook);
+  const outlookLabel = pickUsablePriceOutlook(mr?.price_outlook, mr?.historical_price_outlook);
+  const outlook = normalizeLevel(outlookLabel);
   if (!outlook) return null;
 
-  const forecast = formatPrice(mr?.forecast_midpoint);
-  const average = formatPrice(mr?.recent_average_price);
-  const difference = formatAbsoluteDifference(mr?.forecast_midpoint, mr?.recent_average_price);
+  const hasEligibleForecast = mr?.has_eligible_forecast === true;
+  const histPrice = mr?.historical_seasonal_price ?? mr?.reference_price;
+  const histBaseline = mr?.macro_baseline_price ?? mr?.comparison_baseline;
+  const forecast = formatPrice(hasEligibleForecast ? mr?.forecast_midpoint : (histPrice ?? mr?.forecast_midpoint));
+  const average = formatPrice(hasEligibleForecast ? mr?.recent_average_price : (histBaseline ?? mr?.recent_average_price));
+  const difference = formatAbsoluteDifference(
+    hasEligibleForecast ? mr?.forecast_midpoint : histPrice,
+    hasEligibleForecast ? mr?.recent_average_price : histBaseline,
+  );
   const full = !!(forecast && average && difference && isValidHorizon(horizonDays));
 
   if (full && outlook === 'favorable') {

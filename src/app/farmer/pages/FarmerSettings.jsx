@@ -797,7 +797,7 @@ const FarmTabForm = ({ initialLoc, initialCrops, availableCrops, showToast, onSa
           <div className="pt-3 border-t border-[var(--hw-neutral-100)] space-y-2">
             <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Preferred variety</p>
             {Object.keys(crops).map((name) => {
-              const vars = getVariants(name);
+              const vars = availableCrops.find((crop) => crop.name === name)?.varieties || getVariants(name);
               if (!vars.length) return null;
               return (
                 <div key={name} className="flex items-center gap-3">
@@ -852,8 +852,9 @@ const FarmTab = ({ showToast }) => {
     async function loadData() {
       try {
         setLoading(true);
-        const [profileRes, cropsRes] = await Promise.allSettled([
+        const [profileRes, cropsRes, pricesRes] = await Promise.allSettled([
           apiGet("/farmer/profile"),
+          apiGet("/farmer/commodities"),
           apiGet("/prices?is_top10=true&page_size=50"),
         ]);
 
@@ -884,25 +885,35 @@ const FarmTab = ({ showToast }) => {
           });
         }
 
-        if (cropsRes.status === "fulfilled" && cropsRes.value.ok && active) {
-          const cData = await parseResponse(cropsRes.value);
-          const items = cData?.items || [];
-          const baseMap = new Map();
-          items.forEach((item) => {
-            const isTop = item.is_top10 === true || item.isTop10 === true;
-            if (!isTop) return;
-            const camel = toCamelCase(item);
-            const name = camel.name || "";
-            if (name && !baseMap.has(name)) {
-              baseMap.set(name, {
-                id: camel.commodityId || camel.id,
-                name: name,
+        if (active) {
+          const cData = cropsRes.status === "fulfilled" && cropsRes.value.ok
+            ? await parseResponse(cropsRes.value)
+            : null;
+          const catalogItems = Array.isArray(cData) ? cData : [];
+          const items = catalogItems.length > 0
+            ? catalogItems
+            : pricesRes.status === "fulfilled" && pricesRes.value.ok
+              ? (await parseResponse(pricesRes.value))?.items || []
+              : [];
+          const topList = items
+            .map((item) => {
+              const camel = toCamelCase(item);
+              return {
+                id: camel.id,
+                name: camel.name || "",
+                varieties: Array.isArray(camel.varieties) ? camel.varieties : [],
                 baseName: camel.baseName,
-              });
-            }
-          });
-          const topList = Array.from(baseMap.values());
-          if (topList.length > 0) setAvailableCrops(topList);
+              };
+            })
+            .filter((item) => item.name && item.id);
+          if (catalogItems.length === 0) {
+            const uniqueTopList = topList.filter(
+              (item, index, list) => list.findIndex((candidate) => candidate.name === item.name) === index
+            );
+            if (uniqueTopList.length > 0) setAvailableCrops(uniqueTopList);
+          } else if (topList.length > 0) {
+            setAvailableCrops(topList);
+          }
         }
       } catch (err) {
         console.warn("Could not load farm profile:", err);

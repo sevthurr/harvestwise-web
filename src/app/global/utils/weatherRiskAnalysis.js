@@ -1,4 +1,4 @@
-import { formatDateTime } from "./apiTransforms";
+import { formatDateTime, formatDate } from "./apiTransforms";
 
 export function buildWeatherRiskAnalysis({
   weatherForecast,
@@ -18,10 +18,8 @@ export function buildWeatherRiskAnalysis({
 
   function formatShortDate(dateStr) {
     if (!dateStr) return isCeb ? "Karon" : isTl ? "Ngayon" : "Today";
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return String(dateStr);
-    const m = MONTHS_SHORT[d.getMonth()] || "";
-    return `${m} ${d.getDate()}`;
+    const formatted = formatDate(dateStr, { month: "short", day: "numeric" }, isCeb ? "ceb" : isTl ? "tl" : "en");
+    return formatted ? formatted.replace(/,\s*\d{4}$/, "") : String(dateStr);
   }
 
   const days = weatherForecast?.status === "ok" && Array.isArray(weatherForecast.days)
@@ -170,7 +168,7 @@ export function buildWeatherRiskAnalysis({
     inputPeriod: periodLabel,
     processedAt: weatherForecast?.fetched_at
       ? formatDateTime(weatherForecast.fetched_at)
-      : new Date().toLocaleDateString(),
+      : new Date().toLocaleDateString("en-PH", { timeZone: "Asia/Manila" }),
     classification,
     basisInputs: {
       Location: locationLabel,

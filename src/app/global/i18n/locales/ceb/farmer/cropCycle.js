@@ -91,8 +91,8 @@ export const cropCycle = {
   view_all_crops: "Tan-awa ang Tanang Tanom",
   update_phase_title: "I-update ang estado sa tanom",
   update_status: "I-update ang estado",
-  put_on_hold: "I-hold una",
-  pause_plan_desc: "I-pause una ang plano sa tanom",
+  put_on_hold: "I-hold usa",
+  pause_plan_desc: "I-pause usa ang plano sa tanom",
   hold_desc: "I-pause ang imong plano. Magpadayon og tubo ang tanom — ang imong mga giplano nga buhaton lamang ang naka-hold.",
   hold_reason_label: "Rason sa pag-hold sa kini nga tanom",
   select_reason: "Pagpili og rason…",
@@ -119,5 +119,5 @@ export const cropCycle = {
   notes_placeholder: "Bisan unsang obserbasyon bahin niining siklo sa tanom…",
   est_gross_revenue: "Tansya sa kinatibuk-ang halin",
   all_amounts_estimates: "Tansya lamang ang tanang kantidad.",
-  remove_farmgate: "Alsa",
+  remove_farmgate: "I-hawa",
 };

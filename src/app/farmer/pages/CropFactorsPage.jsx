@@ -52,32 +52,39 @@ function CropFactorsPage() {
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
   const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
 
-  const { data: planAdvisoryData } = useQuery({
-    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
+  const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
+    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
     queryFn: async () => {
-      try {
-        const pDate = new Date(crop.plantingDate);
-        const hDate = new Date(crop.harvestDate);
-        const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
-        const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
-        const payload = {
-          crop_name: crop.commodityName,
-          planting_date: pDateStr,
-          expected_harvest_date: hDateStr,
-          total_production_cost: updatedTotalCost,
-          expected_yield_kg: qty,
-          crop_stage: explicitStage,
-        };
-        const res = await apiPost("/advisory/plan", payload);
-        if (!res.ok) return null;
-        return await parseResponse(res);
-      } catch {
-        return null;
+      const pDate = new Date(crop.plantingDate);
+      const hDate = new Date(crop.harvestDate);
+      const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
+      const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
+      const payload = {
+        crop_name: crop.commodityName,
+        planting_date: pDateStr,
+        expected_harvest_date: hDateStr,
+        total_production_cost: updatedTotalCost,
+        expected_yield_kg: qty,
+        estimated_selling_price: farmgatePrice,
+        crop_stage: explicitStage,
+      };
+      const res = await apiPost("/advisory/plan", payload);
+      if (!res.ok) {
+        let detail = `Advisory request failed (${res.status}).`;
+        try {
+          const errorBody = await res.json();
+          if (typeof errorBody?.detail === "string") detail = errorBody.detail;
+        } catch {
+          // Keep the status-based message when the server does not return JSON.
+        }
+        throw new Error(detail);
       }
+      return await parseResponse(res);
     },
     enabled: canQueryPlan,
     staleTime: 1000 * 60 * 15,
   });
+  const effectiveModuleResults = state?.moduleResults || planAdvisoryData?.module_results || {};
 
   const commodityIdentifier = crop.commodityId || crop.commodity;
   const selectedQuarter = quarterForDate(crop.harvestDate || crop.plantingDate);
@@ -150,7 +157,8 @@ function CropFactorsPage() {
     (profile) => profile.quarter === selectedQuarter
   );
   const productionTabData = {
-    productionLevel: productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null,
+    productionLevel: effectiveModuleResults.historical_seasonal_production_level ||
+      (productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null),
     quarterlyProfiles: productionSummary?.quarterly_profiles || [],
     selectedQuarter,
     grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
@@ -174,7 +182,8 @@ function CropFactorsPage() {
     lang: currentLang,
   });
   const weatherTabData = {
-    risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
+    risk: effectiveModuleResults.weather_risk ||
+      (weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification),
     forecast_14d: weatherAnalysis.forecast_14d,
     commodityName: crop.commodityName,
     actions: [],
@@ -260,6 +269,9 @@ function CropFactorsPage() {
 
   return (
     <div className="px-2 xs:px-3.5 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
+      {planAdvisoryError && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-[13px] text-amber-800">
+        {planAdvisoryError.message}
+      </div>}
       {/* Breadcrumb */}
       <Breadcrumb
         items={[
@@ -310,7 +322,7 @@ function CropFactorsPage() {
         plantingDate={state?.plantingDate || crop.rawPlantingDate || crop.plantingDate || planAdvisoryData?.planting_date}
         expectedHarvestDate={state?.expectedHarvestDate || crop.rawHarvestDate || crop.harvestDate || planAdvisoryData?.expected_harvest_date}
         plantingSeason={state?.plantingSeason || crop.plantingSeason || null}
-        moduleResults={state?.moduleResults || planAdvisoryData?.module_results}
+        moduleResults={effectiveModuleResults}
         plantingWindowStart={state?.plantingWindowStart || planAdvisoryData?.planting_window_start}
         plantingWindowEnd={state?.plantingWindowEnd || planAdvisoryData?.planting_window_end}
         plantingWindowLabel={state?.plantingWindowLabel || planAdvisoryData?.planting_window_label}

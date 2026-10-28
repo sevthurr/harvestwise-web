@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router";
 import {
   Pencil,
   CheckCircle2,
+  AlertCircle,
   AlertTriangle,
   AlertOctagon,
   TrendingUp,
@@ -50,6 +51,19 @@ import {
   renderComposedMessage,
   normalizeLifecycleStage,
 } from "../utils/advisoryMessageComposer";
+import {
+  composeAdvisoryReasons,
+  pickUsablePriceOutlook,
+  resolveMainFactor,
+} from "../utils/advisoryReasons";
+import { resolveFactorCondition } from "../utils/factorColors";
+import * as analyticsApi from "../../../services/api/analyticsApi";
+import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+
+function quarterForDate(value) {
+  const month = new Date(value || Date.now()).getMonth();
+  return `Q${Math.floor(month / 3) + 1}`;
+}
 
 const ADVISORY_CFG = {
   recommended: { Icon: CheckCircle2, color: "text-emerald-700", border: "border-[var(--hw-neutral-200)]" },
@@ -81,6 +95,16 @@ function resolveWeeklyActionIcon(action) {
   if (action?.key?.includes('completed_3')) return Sprout;
   if (action?.key?.includes('on_hold_1')) return Eye;
   return Sprout;
+}
+
+function renderFactorIcon(iconType, colorClass) {
+  if (iconType === "price") {
+    return <span className={`w-5 h-5 flex items-center justify-center font-bold text-[17px] leading-none flex-shrink-0 mt-0.5 ${colorClass}`}>₱</span>;
+  }
+  if (iconType === "supply") return <Package className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  if (iconType === "production") return <Leaf className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  if (iconType === "weather") return <CloudRain className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  return <TrendingUp className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
 }
 
 const ProfitCalcAccordion = ({
@@ -157,8 +181,10 @@ function CropCycleDetailPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState("update-phase");
   const [addCostOpen, setAddCostOpen] = useState(false);
+  const [additionalCostCategory, setAdditionalCostCategory] = useState("Others");
   const [additionalCost, setAdditionalCost] = useState("");
   const [isSubmittingCost, setIsSubmittingCost] = useState(false);
+  const [addedCostsExpanded, setAddedCostsExpanded] = useState(true);
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
@@ -410,10 +436,11 @@ function CropCycleDetailPage() {
     setActionError(null);
     try {
       await addCostApi(crop.id, {
-        category: "Additional",
+        category: additionalCostCategory || "Others",
         amount: val,
         costType: "additional",
       });
+      setAdditionalCostCategory("Others");
       setAdditionalCost("");
       setAddCostOpen(false);
     } catch (err) {
@@ -443,30 +470,78 @@ function CropCycleDetailPage() {
     crop.phase.toLowerCase().includes("harvest") ? "harvest" : null
   ) : null;
 
-  const { data: planAdvisoryData } = useQuery({
-    queryKey: ["advisory", "plan", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, totalCost, qty, explicitStage],
+  const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
+    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, totalCost, qty, explicitStage],
     queryFn: async () => {
-      try {
-        const pDate = new Date(crop.plantingDate);
-        const hDate = new Date(crop.harvestDate);
-        const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
-        const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
-        const payload = {
-          crop_name: crop.commodityName,
-          planting_date: pDateStr,
-          expected_harvest_date: hDateStr,
-          total_production_cost: totalCost,
-          expected_yield_kg: qty,
-          crop_stage: explicitStage,
-        };
-        const res = await apiPost("/advisory/plan", payload);
-        if (!res.ok) return null;
-        return await parseResponse(res);
-      } catch {
-        return null;
+      const pDate = new Date(crop.plantingDate);
+      const hDate = new Date(crop.harvestDate);
+      const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
+      const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
+      const payload = {
+        crop_name: crop.commodityName,
+        planting_date: pDateStr,
+        expected_harvest_date: hDateStr,
+        total_production_cost: totalCost,
+        expected_yield_kg: qty,
+        estimated_selling_price: crop.farmgatePrice > 0 ? crop.farmgatePrice : undefined,
+        crop_stage: explicitStage,
+      };
+      const res = await apiPost("/advisory/plan", payload);
+      if (!res.ok) {
+        let detail = `Advisory request failed (${res.status}).`;
+        try {
+          const errorBody = await res.json();
+          if (typeof errorBody?.detail === "string") detail = errorBody.detail;
+        } catch {
+          // Keep the status-based message when the server does not return JSON.
+        }
+        throw new Error(detail);
       }
+      return await parseResponse(res);
     },
     enabled: canQueryPlan,
+    staleTime: 1000 * 60 * 15,
+  });
+
+  const arrivalFallbackQuery = useQuery({
+    queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
+    queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 5,
+  });
+  const productionFallbackQuery = useQuery({
+    queryKey: ["farmer", "seasonal-production", commodityIdentifier, quarterForDate(crop.harvestDate || crop.plantingDate)],
+    queryFn: () => analyticsApi.getHistoricalSeasonalProduction(
+      commodityIdentifier,
+      quarterForDate(crop.harvestDate || crop.plantingDate)
+    ),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 30,
+  });
+  const weatherFallbackQuery = useQuery({
+    queryKey: ["farmer", "admin-weather-forecast", 14],
+    queryFn: () => analyticsApi.getWeatherForecast(14),
+    staleTime: 1000 * 60 * 30,
+  });
+  const weatherRulesFallbackQuery = useQuery({
+    queryKey: ["farmer", "weather-rules", commodityIdentifier],
+    queryFn: () => analyticsApi.listWeatherRules(commodityIdentifier),
+    enabled: Boolean(commodityIdentifier),
+    staleTime: 1000 * 60 * 30,
+  });
+  const priceFallbackQuery = useQuery({
+    queryKey: ["farmer", "price-outlook", commodityIdentifier, "bangkerohan_retail", explicitStage, crop.plantingDate, crop.harvestDate],
+    queryFn: () => analyticsApi.getPriceOutlook(
+      commodityIdentifier,
+      "bangkerohan_retail",
+      14,
+      {
+        cropStage: explicitStage,
+        plantingDate: crop.plantingDate,
+        harvestDate: crop.harvestDate,
+      }
+    ),
+    enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 15,
   });
 
@@ -552,6 +627,116 @@ function CropCycleDetailPage() {
     immediateAction: displayImmediateActions[0] || composedAction,
     isOnHold: crop.isOnHold,
   });
+  const fallbackWeather = buildWeatherRiskAnalysis({
+    weatherForecast: weatherFallbackQuery.data,
+    weatherRules: weatherRulesFallbackQuery.data?.items || [],
+    commodityName: crop.commodityName,
+    weatherLoading: weatherFallbackQuery.isLoading || weatherRulesFallbackQuery.isLoading,
+    weatherError: weatherFallbackQuery.error?.message || weatherRulesFallbackQuery.error?.message || "",
+    lang: langCode,
+  });
+  const fallbackArrival = arrivalFallbackQuery.data;
+  const fallbackProduction = productionFallbackQuery.data;
+  const fallbackProductionProfile = fallbackProduction?.quarterly_profiles?.find(
+    (profile) => profile.quarter === quarterForDate(crop.harvestDate || crop.plantingDate)
+  );
+  const fallbackPrice = priceFallbackQuery.data || {};
+  const advisoryModuleResults = planAdvisoryData?.module_results || planAdvisoryData?.moduleResults || {};
+  const hasEligibleForecast = Boolean(
+    advisoryModuleResults.has_eligible_forecast || fallbackPrice.has_eligible_forecast
+  );
+  const planningPriceOutlook = pickUsablePriceOutlook(
+    advisoryModuleResults.historical_price_outlook,
+    fallbackPrice.historical_price_outlook,
+    advisoryModuleResults.price_outlook,
+    fallbackPrice.price_outlook,
+    fallbackPrice.classification,
+  );
+  const previewModuleResults = {
+    ...advisoryModuleResults,
+    price_outlook: (isPlanning || !hasEligibleForecast)
+      ? (planningPriceOutlook || pickUsablePriceOutlook(advisoryModuleResults.price_outlook))
+      : (pickUsablePriceOutlook(
+          advisoryModuleResults.price_outlook,
+          fallbackPrice.price_outlook,
+          fallbackPrice.classification,
+          advisoryModuleResults.historical_price_outlook,
+          fallbackPrice.historical_price_outlook,
+        )),
+    historical_price_outlook: pickUsablePriceOutlook(
+      advisoryModuleResults.historical_price_outlook,
+      fallbackPrice.historical_price_outlook,
+    ) || advisoryModuleResults.historical_price_outlook || fallbackPrice.historical_price_outlook,
+    forecast_price_outlook: advisoryModuleResults.forecast_price_outlook ||
+      fallbackPrice.forecast_price_outlook,
+    historical_seasonal_price: advisoryModuleResults.historical_seasonal_price ??
+      fallbackPrice.historical_seasonal_price,
+    macro_baseline_price: advisoryModuleResults.macro_baseline_price ??
+      fallbackPrice.macro_baseline_price,
+    reference_price: advisoryModuleResults.reference_price ?? fallbackPrice.reference_price,
+    comparison_baseline: advisoryModuleResults.comparison_baseline ?? fallbackPrice.comparison_baseline,
+    has_eligible_forecast: hasEligibleForecast,
+    price_explanation: advisoryModuleResults.price_explanation || fallbackPrice.explanation,
+    recent_average_price: advisoryModuleResults.recent_average_price ??
+      fallbackPrice.recent_average_price,
+    forecast_midpoint: advisoryModuleResults.forecast_midpoint ??
+      fallbackPrice.forecast_midpoint,
+    arrival_pressure: advisoryModuleResults.arrival_pressure ||
+      (fallbackArrival?.status === "processed" ? fallbackArrival.classification : null),
+    current_arrival_kg: advisoryModuleResults.current_arrival_kg ?? fallbackArrival?.current_arrival_kg,
+    historical_seasonal_production_level: advisoryModuleResults.historical_seasonal_production_level ||
+      (fallbackProduction?.status === "processed" ? fallbackProductionProfile?.classification : null),
+    seasonal_production_ratio: advisoryModuleResults.seasonal_production_ratio ??
+      fallbackProductionProfile?.ratio,
+    weather_risk: advisoryModuleResults.weather_risk ||
+      (fallbackWeather.classification === "Not processed" ? null : fallbackWeather.classification),
+    profitability: advisoryModuleResults.profitability ||
+      (sellingBasis != null && costToRecover > 0
+        ? (sellingBasis >= costToRecover ? "Favorable" : "Unfavorable")
+        : null),
+    break_even_price: advisoryModuleResults.break_even_price ?? costToRecover,
+    lower_forecast_price: advisoryModuleResults.lower_forecast_price ?? forecastLo,
+    upper_forecast_price: advisoryModuleResults.upper_forecast_price ?? forecastHi,
+  };
+  const normalizeModuleResult = (value) => {
+    if (value && typeof value === "object") {
+      return value.classification || value.level || value.outlook || value.status || null;
+    }
+    return value;
+  };
+  const normalizedPreviewResults = Object.fromEntries(
+    Object.entries(previewModuleResults).map(([key, value]) => [key, normalizeModuleResult(value)])
+  );
+  const advisoryMeta = planAdvisoryData?.advisory || {};
+  const mainFactor = resolveMainFactor({
+    moduleResults: normalizedPreviewResults,
+    contributions: advisoryMeta.module_contributions,
+    weightsApplied: advisoryMeta.weights_applied,
+    vetoes: advisoryMeta.hard_vetoes,
+    lang: langCode,
+  });
+  const composedReasons = composeAdvisoryReasons({
+    moduleResults: previewModuleResults,
+    contributions: advisoryMeta.module_contributions,
+    vetoes: advisoryMeta.hard_vetoes,
+    cropName: cropDisplayName,
+    horizonDays: 14,
+    extra: {
+      commodityId: commodityIdentifier,
+      harvestDate: crop.harvestDate || crop.plantingDate,
+      plantingDate: crop.plantingDate,
+    },
+  });
+  const factorClassificationRows = [
+    { module: "price_outlook", label: t("farmer.factors.price.factor_title", {}, "Price") },
+    { module: "arrival_pressure", label: t("farmer.factors.arrival.factor_title", {}, "DFTC arrivals") },
+    { module: "historical_seasonal_production_level", label: t("farmer.factors.production.factor_title", {}, "Past production") },
+    { module: "weather_risk", label: t("farmer.factors.weather.factor_title", {}, "Weather") },
+    { module: "profitability", label: t("farmer.factors.profitability.factor_title", {}, "Profitability") },
+  ];
+  const reasonByModule = new Map(
+    composedReasons.filter((reason) => reason.module).map((reason) => [reason.module, reason])
+  );
   const isCompleted = phaseCode === PHASE_CODES.COMPLETED;
   const isActive = !isCompleted;
   const isPlanted = [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST].includes(phaseCode);
@@ -566,6 +751,9 @@ function CropCycleDetailPage() {
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {actionError && <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[13px] text-red-700">{actionError}</div>}
+        {planAdvisoryError && <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-[13px] text-amber-800">
+          {planAdvisoryError.message}
+        </div>}
 
         {/* Breadcrumb */}
         <Breadcrumb
@@ -637,6 +825,83 @@ function CropCycleDetailPage() {
                 </p>
               ) : null;
             })}
+            {isPlanning && normalizedPreviewResults.price_outlook && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] px-3 py-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  {(() => {
+                    const priceCondition = resolveFactorCondition(
+                      "price_outlook",
+                      normalizedPreviewResults.price_outlook
+                    );
+                    return renderFactorIcon(priceCondition.iconType, priceCondition.colorClass);
+                  })()}
+                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
+                    {t("farmer.factors.price.factor_title", {}, "Price outlook")}
+                  </p>
+                </div>
+                <p className={`text-[13px] font-bold ${resolveFactorCondition(
+                  "price_outlook",
+                  normalizedPreviewResults.price_outlook
+                ).colorClass}`}>
+                  {normalizedPreviewResults.price_outlook}
+                </p>
+              </div>
+            )}
+            <div className="mt-4 pt-4 border-t border-[var(--hw-neutral-200)] space-y-3">
+              <p className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+                {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
+              </p>
+              {mainFactor && (
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
+                  <div className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
+                    badge.type === "avoid" ? "bg-red-50 text-red-600" :
+                    badge.type === "caution" ? "bg-amber-50 text-amber-600" :
+                    "bg-emerald-50 text-emerald-700"
+                  }`}>
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
+                    {renderComposedMessage(mainFactor, langCode)}
+                  </p>
+                </div>
+              )}
+              <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+              </p>
+              <div className="space-y-2 sm:space-y-2.5">
+                {factorClassificationRows.map(({ module, label }) => {
+                  const reason = reasonByModule.get(module);
+                  const classification = normalizedPreviewResults[module] || null;
+                  const reasonText = reason
+                    ? renderComposedMessage(reason, langCode)
+                    : t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
+                  const factorCond = resolveFactorCondition(
+                    module,
+                    classification,
+                    reason?.key,
+                    reasonText
+                  );
+                  return (
+                    <div key={module} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
+                          {reason?.labelKey
+                            ? t(reason.labelKey, {}, label)
+                            : label}
+                        </p>
+                        <p className={`text-[12px] font-semibold leading-snug mt-0.5 ${factorCond.colorClass}`}>
+                          {classification || t("farmer.advisory.not_available", {}, "Not available")}
+                        </p>
+                        <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <button
               type="button"
               onClick={() =>
@@ -645,7 +910,7 @@ function CropCycleDetailPage() {
                     cropStage: currentCropStage,
                     plantingDate: crop.rawPlantingDate || crop.plantingDate,
                     expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
-                    moduleResults: planAdvisoryData?.module_results,
+                    moduleResults: previewModuleResults,
                     plantingWindowStart: planAdvisoryData?.planting_window_start,
                     plantingWindowEnd: planAdvisoryData?.planting_window_end,
                     plantingWindowLabel: planAdvisoryData?.planting_window_label,
@@ -790,6 +1055,7 @@ function CropCycleDetailPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    setAdditionalCostCategory("Others");
                     setAdditionalCost("");
                     setAddCostOpen(true);
                   }}
@@ -818,7 +1084,22 @@ function CropCycleDetailPage() {
                     {t("common.cancel", {}, "Cancel")}
                   </button>
                 </div>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] gap-2">
+                  <select
+                    value={additionalCostCategory}
+                    onChange={(e) => setAdditionalCostCategory(e.target.value)}
+                    disabled={isSubmittingCost}
+                    aria-label={t("farmer.cropCycle.cost_category", {}, "Cost")}
+                    className="min-w-0 px-3 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white disabled:opacity-50"
+                  >
+                    <option value="Seeds or planting materials">{t("farmer.assess.expense_seeds", {}, "Seeds or planting materials")}</option>
+                    <option value="Fertilizer">{t("farmer.assess.expense_fertilizer", {}, "Fertilizer")}</option>
+                    <option value="Crop protection">{t("farmer.assess.expense_protection", {}, "Crop protection")}</option>
+                    <option value="Labor">{t("farmer.assess.expense_labor", {}, "Labor")}</option>
+                    <option value="Irrigation">{t("farmer.assess.expense_irrigation", {}, "Irrigation")}</option>
+                    <option value="Transportation">{t("farmer.assess.expense_transport", {}, "Transportation")}</option>
+                    <option value="Others">{t("farmer.assess.expense_other", {}, "Others")}</option>
+                  </select>
                   <input
                     type="number"
                     min="1"
@@ -874,28 +1155,42 @@ function CropCycleDetailPage() {
                   </div>
                   {r.key === "added_costs" && additionalCostsList.length > 0 && (
                     <div className="bg-[var(--hw-neutral-50)] rounded-xl p-2.5 mb-2 space-y-1.5 border border-[var(--hw-neutral-200)]/60">
-                      <div className="flex items-center justify-between text-xs font-semibold text-[var(--hw-neutral-600)] px-1">
+                      <button
+                        type="button"
+                        onClick={() => setAddedCostsExpanded((expanded) => !expanded)}
+                        aria-expanded={addedCostsExpanded}
+                        className="w-full flex items-center justify-between text-xs font-semibold text-[var(--hw-neutral-600)] px-1 text-left"
+                      >
                         <span>{t("farmer.cropCycle.added_cost_records", {}, "Added cost records")}</span>
-                        <span>{additionalCostsList.length} {additionalCostsList.length === 1 ? "entry" : "entries"}</span>
-                      </div>
-                      <div className="divide-y divide-[var(--hw-neutral-200)]/50">
-                        {additionalCostsList.map((c, idx) => {
-                          const dateStr = c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
-                          return (
-                            <div key={c.id || idx} className="flex items-center justify-between py-1.5 px-1 text-xs">
-                              <div className="flex flex-col">
-                                <span className="font-medium text-[var(--hw-neutral-800)]">{c.category || "Additional cost"}</span>
-                                {dateStr && (
-                                  <span className="text-[10px] text-[var(--hw-neutral-500)]">{dateStr}</span>
-                                )}
+                        <span className="flex items-center gap-2">
+                          <span>{additionalCostsList.length} {additionalCostsList.length === 1 ? "entry" : "entries"}</span>
+                          {addedCostsExpanded ? (
+                            <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                          )}
+                        </span>
+                      </button>
+                      {addedCostsExpanded && (
+                        <div className="divide-y divide-[var(--hw-neutral-200)]/50">
+                          {additionalCostsList.map((c, idx) => {
+                            const dateStr = c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
+                            return (
+                              <div key={c.id || idx} className="flex items-center justify-between py-1.5 px-1 text-xs">
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-[var(--hw-neutral-800)]">{c.category || "Additional cost"}</span>
+                                  {dateStr && (
+                                    <span className="text-[10px] text-[var(--hw-neutral-500)]">{dateStr}</span>
+                                  )}
+                                </div>
+                                <span className="font-semibold text-[var(--hw-green-700)]">
+                                  +{formatPeso(c.amount)}
+                                </span>
                               </div>
-                              <span className="font-semibold text-[var(--hw-green-700)]">
-                                +{formatPeso(c.amount)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1007,19 +1302,6 @@ function CropCycleDetailPage() {
                   className="inline-flex items-center gap-1.5 px-3 py-2 border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] text-[13px] font-medium rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors"
                 >
                   {t("farmer.cropCycle.view_prices", {}, "View Prices")}
-                </button>
-              </div>
-            )}
-            {normalizePhaseCode(crop.phase) === PHASE_CODES.PLANNING && (
-              <div className="pt-2 flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setDrawerMode("confirm-planting");
-                    setDrawerOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-                >
-                  {t("farmer.crops.btn_confirm_planting", {}, "Confirm Planting")}
                 </button>
               </div>
             )}
