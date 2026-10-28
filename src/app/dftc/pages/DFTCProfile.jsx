@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Mail, Loader2, Phone } from "lucide-react";
+import { Mail, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { Card, SectionTitle, Field } from "../../global/components/ui/hw-ui";
@@ -95,14 +95,6 @@ function DFTCProfile() {
           <Field label="Last Name" value={lastName || "—"} />
           <Field label="Middle Name" value={middleName || "—"} />
           <Field label="Suffix" value={suffix || "—"} />
-
-          <div className="col-span-2 sm:col-span-1 space-y-0.5">
-            <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Phone Number</p>
-            <div className="flex items-center gap-2">
-              <Phone className="w-3.5 h-3.5 text-black flex-shrink-0" />
-              <span className="text-[15px] text-black">{phone}</span>
-            </div>
-          </div>
 
           <div className="col-span-2 sm:col-span-1 space-y-0.5">
             <p className="text-[12px] font-semibold text-black uppercase tracking-wide">Email</p>

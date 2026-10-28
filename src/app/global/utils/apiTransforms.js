@@ -118,12 +118,12 @@ export function toNumber(value) {
   return parseFloat(value);
 }
 
-/** Parse API datetimes, whose naive values are UTC database timestamps. */
+/** Parse API datetimes, whose naive values are Asia/Manila database timestamps. */
 export function parseApiDateTime(value) {
   if (!value) return null;
   const raw = String(value);
   const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
-  const date = new Date(hasTimezone ? raw : `${raw}Z`);
+  const date = new Date(hasTimezone ? raw : `${raw}+08:00`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 

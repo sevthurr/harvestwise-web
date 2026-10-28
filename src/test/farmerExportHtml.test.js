@@ -32,7 +32,6 @@ const payload = {
     {
       commodity_name: "Ampalaya",
       status: "Planted",
-      selling_method_label: "Directly in the market",
       farm_area: 1500,
       expected_harvest_qty: 300,
       expected_farmgate_price: 25,
@@ -72,7 +71,6 @@ describe("buildFarmerExportHtml", () => {
     expect(html).toContain("juan@example.com");
     expect(html).toContain("Ampalaya");
     expect(html).toContain("Planted");
-    expect(html).toContain("Directly in the market");
     expect(html).toContain("Seeds");
     expect(html).toContain("₱500.00");
     expect(html).toContain("280 kg");

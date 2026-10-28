@@ -167,7 +167,6 @@ export function buildFarmerExportHtml(payload, lang = "ceb") {
         plan.commodity_name || plan.commodity_id || t("farmer.settings.export_crop");
       const details = dl([
         field("farmer.settings.export_status", plan.status),
-        field("farmer.settings.export_selling_method", plan.selling_method_label),
         field("farmer.settings.export_planned_planting", date(plan.planned_planting_date)),
         field("farmer.settings.export_actual_planting", date(plan.actual_planting_date)),
         field("farmer.settings.export_expected_harvest", date(plan.expected_harvest_date)),

@@ -6,6 +6,7 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
+import { authApi } from "../../../services/api";
 import { isValidEmail, isFakeEmailDomain } from "../../auth/authValidation";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -363,10 +364,65 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
 
 const SecurityTab = ({ showToast }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const googleLink = useGoogleLink({
     redirectTo: `${window.location.origin}/dftc/settings?tab=security`,
     onResult: () => showToast(t("dftc.settings.toast_google_connected", {}, "Google account connected.")),
   });
+
+  const [addPwOpen, setAddPwOpen] = useState(false);
+  const [addPwSending, setAddPwSending] = useState(false);
+  const [addPwCode, setAddPwCode] = useState("");
+  const [addPwNew, setAddPwNew] = useState("");
+  const [addPwConfirm, setAddPwConfirm] = useState("");
+  const [addPwError, setAddPwError] = useState("");
+  const [addPwDone, setAddPwDone] = useState(false);
+
+  const handleSendAddPwOtp = async () => {
+    const email = (user?.email || "").trim().toLowerCase();
+    if (!email) {
+      setAddPwError("No email on file for this account.");
+      return;
+    }
+    setAddPwSending(true);
+    setAddPwError("");
+    try {
+      await authApi.requestPasswordReset(email);
+      setAddPwOpen(true);
+      showToast("A verification code was sent to your email.");
+    } catch (err) {
+      setAddPwError(err?.message || "Could not send the verification code. Try again.");
+    } finally {
+      setAddPwSending(false);
+    }
+  };
+
+  const handleConfirmAddPw = async () => {
+    const email = (user?.email || "").trim().toLowerCase();
+    if (!addPwCode.trim() || !addPwNew) {
+      setAddPwError("Enter the code and a new password.");
+      return;
+    }
+    if (addPwNew !== addPwConfirm) {
+      setAddPwError("Passwords do not match.");
+      return;
+    }
+    setAddPwSending(true);
+    setAddPwError("");
+    try {
+      await authApi.resetPassword(email, addPwCode.trim(), addPwNew);
+      setAddPwDone(true);
+      setAddPwOpen(false);
+      setAddPwCode("");
+      setAddPwNew("");
+      setAddPwConfirm("");
+      showToast("Password added successfully. Please sign in again.");
+    } catch (err) {
+      setAddPwError(err?.message || "Could not set the password. Check the code and try again.");
+    } finally {
+      setAddPwSending(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -377,6 +433,72 @@ const SecurityTab = ({ showToast }) => {
           onSuccess={() => showToast("Password updated successfully.")}
         />
       </Card>
+
+      {googleLink.googleConnected && (
+        <Card>
+          <SectionLabel>{t("dftc.settings.add_password", {}, "Add a password")}</SectionLabel>
+          <p className="text-[13px] text-black mb-3">
+            Your account is signed in with Google. Add a password so you can also sign in with your email and password.
+          </p>
+          {addPwDone ? (
+            <p className="text-[13px] text-emerald-600 font-medium">Password added. Please sign in again to continue.</p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSendAddPwOtp}
+              disabled={addPwSending}
+              className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
+            >
+              {addPwSending ? "Sending…" : "Send verification code to email"}
+            </button>
+          )}
+          {addPwError && <p className="mt-3 text-[13px] text-red-600">{addPwError}</p>}
+
+          {addPwOpen && (
+            <Modal title="Add a password" onClose={() => setAddPwOpen(false)}>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <FieldLabel>Verification code</FieldLabel>
+                  <input
+                    type="text"
+                    value={addPwCode}
+                    onChange={(e) => setAddPwCode(e.target.value)}
+                    className={inputCls}
+                    placeholder="Enter the code sent to your email"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>New password</FieldLabel>
+                  <input
+                    type="password"
+                    value={addPwNew}
+                    onChange={(e) => setAddPwNew(e.target.value)}
+                    className={inputCls}
+                    placeholder="New password"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Confirm password</FieldLabel>
+                  <input
+                    type="password"
+                    value={addPwConfirm}
+                    onChange={(e) => setAddPwConfirm(e.target.value)}
+                    className={inputCls}
+                    placeholder="Confirm password"
+                  />
+                </div>
+                {addPwError && <p className="text-[13px] text-red-600">{addPwError}</p>}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <GhostBtn onClick={() => setAddPwOpen(false)}>Cancel</GhostBtn>
+                <GreenBtn onClick={handleConfirmAddPw} disabled={addPwSending}>
+                  {addPwSending ? "Saving…" : "Set password"}
+                </GreenBtn>
+              </div>
+            </Modal>
+          )}
+        </Card>
+      )}
 
       <EmailOtp2FACard showToast={showToast} />
 
