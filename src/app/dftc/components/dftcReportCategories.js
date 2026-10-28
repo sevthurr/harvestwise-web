@@ -13,13 +13,14 @@
 // seed means adding a commodity is a data change, and the report follows.
 
 // Which categories share an A4 landscape sheet. Spices and rootcrops share one;
-// fruits and others share the last. Pure presentation — the catalogue decides
-// what is on the report, this decides what page it lands on.
+// Fruits and Others each have their own dedicated sheet so neither overflows an
+// A4 landscape sheet or causes cropping/zooming.
 const PAGE_CATEGORY_GROUPS = [
   ["Lowland Vegetables"],
   ["Highland Vegetables"],
   ["Spices", "Rootcrops"],
-  ["Fruits", "Others"]
+  ["Fruits"],
+  ["Others"]
 ];
 
 export { PAGE_CATEGORY_GROUPS };

@@ -374,6 +374,27 @@ describe("dftcTrendsPriceData helpers", () => {
       ])
     ).toEqual([]);
   });
+
+  it.each(["7d", "14d", "21d", "28d"])(
+    "matches the number of historical days depending on filter %s before forecast starts",
+    (preset) => {
+      const dayCount = parseInt(preset, 10);
+      const records = Array.from({ length: 40 }, (_, i) => ({
+        price_date: new Date(Date.UTC(2026, 6, 31 - i)).toISOString().slice(0, 10),
+        prevail_price: 70 + (i % 5),
+      }));
+      const historical = buildHistoricalChartData(
+        [
+          {
+            varietyKey: "Diamante Big",
+            detail: detailBody({ horizon: 7, records }),
+          },
+        ],
+        preset
+      );
+      expect(historical).toHaveLength(dayCount + 1);
+    }
+  );
 });
 
 describe("DFTC Trends page prices API integration", () => {
@@ -615,8 +636,7 @@ describe("DFTC Trends page prices API integration", () => {
     await waitFor(() => expect(detailCalls.length).toBeGreaterThan(0));
 
     const openHorizon = async (label) => {
-      const buttons = screen.getAllByRole("button");
-      const horizonBtn = buttons.find((btn) => /Next \d+ days/.test(btn.textContent || ""));
+      const horizonBtn = await screen.findByRole("button", { name: /Next \d+ days/ });
       fireEvent.click(horizonBtn);
       const options = await screen.findAllByText(label);
       fireEvent.click(options[options.length - 1]);
@@ -728,7 +748,7 @@ describe("DFTC Trends page prices API integration", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Q4" }));
     expect(await screen.findByText("Historical seasonal average")).toBeInTheDocument();
-    expect(screen.getByText("Production level")).toBeInTheDocument();
+    expect(screen.queryByText("Production level")).not.toBeInTheDocument();
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
     expect(screen.getByText(/PSA OpenSTAT/)).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Bukidnon" })).toBeInTheDocument();

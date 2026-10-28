@@ -664,6 +664,9 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
             min="0"
             step="any"
             value={f.farmSource}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
             onChange={(e) => onUpdateFarm(e.target.value)}
             placeholder="0"
             className="w-full px-2 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px]"
@@ -676,6 +679,9 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
             min="0"
             step="any"
             value={f.otherSource}
+            onKeyDown={(e) => {
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
             onChange={(e) => onUpdateOther(e.target.value)}
             placeholder="0"
             className="w-full px-2 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px]"
@@ -699,8 +705,8 @@ export default function DFTCArrivalInput() {
   const queryClient = useQueryClient();
   const navState = location.state;
 
-  // Period / Frequency selection: 'daily' | 'weekly' | 'monthly'
-  const [periodType, setPeriodType] = useState(() => navState?.periodType || "daily");
+  // Period / Frequency selection: 'monthly' (Daily and Weekly removed per requirements)
+  const [periodType, setPeriodType] = useState(() => navState?.periodType || "monthly");
   const [selectedDate, setSelectedDate] = useState(() => navState?.date ?? localToday());
   const [selectedWeek, setSelectedWeek] = useState(() => navState?.week ?? getCurrentWeekOfMonth());
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -990,8 +996,8 @@ export default function DFTCArrivalInput() {
           commodityId: com.id,
           commodityName: com.name,
           categoryId: cat.id,
-          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-base`,
-          variantName: item.variety || "Base",
+          variantId: item.variety ? `${com.id}-${nameSlug(item.variety)}` : `${com.id}-regular`,
+          variantName: item.variety || "Regular",
           dbId: item.id
         };
       }
@@ -1005,8 +1011,8 @@ export default function DFTCArrivalInput() {
       commodityId: baseSlug,
       commodityName: baseName,
       categoryId: cat.id,
-      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-base`,
-      variantName: item.variety || "Base",
+      variantId: item.variety ? `${baseSlug}-${nameSlug(item.variety)}` : `${baseSlug}-regular`,
+      variantName: item.variety || "Regular",
       dbId: item.id
     };
   }
@@ -1063,6 +1069,22 @@ export default function DFTCArrivalInput() {
       try {
         localStorage.setItem("dftc_arrival_draft", "true");
         localStorage.setItem("dftc_arrival_draft_data", JSON.stringify(payload));
+        const enteredCount = Object.values(payload.fields || {}).filter(
+          (f) =>
+            (f.farmSource && String(f.farmSource).trim() !== "") ||
+            (f.otherSource && String(f.otherSource).trim() !== "") ||
+            (f.farm && String(f.farm).trim() !== "") ||
+            (f.other && String(f.other).trim() !== "")
+        ).length;
+        if (enteredCount > 0) {
+          apiPost("/dftc/draft/notify", {
+            data_type: "arrival_volume",
+            reporting_date: effectivePeriodInfo.iso || payload.selectedDate,
+            record_count: enteredCount,
+          }).catch((err) => {
+            console.warn("Draft notification failed:", err);
+          });
+        }
       } catch { }
       try {
         const saved = await parseResponse(await apiPut("/dftc/arrival-draft", {
@@ -1164,13 +1186,18 @@ export default function DFTCArrivalInput() {
   }
 
   function updateVolume(variantId, sourceKey, value) {
+    let cleanVal = String(value).replace(/[^0-9.]/g, "");
+    const parts = cleanVal.split(".");
+    if (parts.length > 2) {
+      cleanVal = parts[0] + "." + parts.slice(1).join("");
+    }
     setFields((prev) => {
       const cur = prev[variantId] || emptyArrivalField();
       return {
         ...prev,
         [variantId]: {
           ...cur,
-          [sourceKey]: value
+          [sourceKey]: cleanVal
         }
       };
     });
@@ -1352,8 +1379,10 @@ export default function DFTCArrivalInput() {
     const map = catalogRef.current;
     const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
     const baseKey = nameSlug(baseName);
-    const variantKey = v && v.name && v.name !== "Base"
-      ? `${baseKey}-${nameSlug(v.name)}`
+    const variantName = v?.name;
+    const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+    const variantKey = !isBaseOrRegular
+      ? `${baseKey}-${nameSlug(variantName)}`
       : baseKey;
     if (map) {
       const found = map.get(variantKey) ?? map.get(baseKey);
@@ -1508,7 +1537,8 @@ export default function DFTCArrivalInput() {
       const baseName = COMMODITY_NAME_OVERRIDES?.[r.com.name] ?? r.com.name;
       const baseKey = nameSlug(baseName);
       const variantName = r.v.name;
-      const variantKey = variantName && variantName !== "Base"
+      const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+      const variantKey = !isBaseOrRegular
         ? `${baseKey}-${nameSlug(variantName)}`
         : baseKey;
       const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
@@ -1530,7 +1560,7 @@ export default function DFTCArrivalInput() {
         const registered = await registerCommodity({
           name: baseName,
           category: r.cat.name,
-          variety: r.v.name === "Base" ? null : r.v.name,
+          variety: !isBaseOrRegular ? r.v.name : null,
           unit_of_measure: r.uom || "kg"
         });
         if (registered?.id) {
@@ -1880,9 +1910,9 @@ export default function DFTCArrivalInput() {
                               </td>
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px" }}>
                                 {r.vi === 0 ? (
-                                  <span><strong>{r.com.name}</strong> {r.v.name && r.v.name !== "Base" ? `(${r.v.name})` : ""}</span>
+                                  <span><strong>{r.com.name}</strong> {r.v.name && r.v.name !== "Base" && r.v.name !== "Regular" ? `(${r.v.name})` : ""}</span>
                                 ) : (
-                                  <span style={{ paddingLeft: 16 }}>{r.v.name && r.v.name !== "Base" ? `(${r.v.name})` : ""}</span>
+                                  <span style={{ paddingLeft: 16 }}>{r.v.name && r.v.name !== "Base" && r.v.name !== "Regular" ? `(${r.v.name})` : (r.v.name || "")}</span>
                                 )}
                               </td>
                               <td style={{ background: "#ffffff", border: EXCEL_BORDER, padding: "4px 8px", textAlign: "center" }}>
@@ -2023,7 +2053,7 @@ export default function DFTCArrivalInput() {
               disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError)}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalSourceValueCount} inputs)
+              Save {dataName} ({totalEnteredCount} commodities)
             </button>
           </div>
 
@@ -2136,7 +2166,7 @@ export default function DFTCArrivalInput() {
               className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
-              Review ({totalSourceValueCount})
+              Review ({totalEnteredCount})
             </button>
           </div>
         </div>
@@ -2145,130 +2175,43 @@ export default function DFTCArrivalInput() {
         </p>
       </div>
 
-      {/* Controls Bar: Frequency (Daily / Weekly / Monthly) + Date/Period selection (NO source tabs) */}
+      {/* Controls Bar: Monthly Period selection */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] mb-4">
-        <div className="flex items-center justify-between sm:justify-start gap-2">
+        <div className="flex items-center gap-2">
           <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)] shrink-0">Period:</span>
-          <div className="flex rounded-lg border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5 flex-1 sm:flex-none">
-            {[
-              { id: "daily", label: "Daily" },
-              { id: "weekly", label: "Weekly" },
-              { id: "monthly", label: "Monthly" }
-            ].map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPeriodType(p.id)}
-                className={`flex-1 sm:flex-none px-3 py-1 text-[11.5px] sm:text-[12px] font-medium rounded-md transition-colors cursor-pointer text-center ${
-                  periodType === p.id
-                    ? "bg-[var(--hw-green-700)] text-white font-semibold shadow-xs"
-                    : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)] hover:bg-white/60"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex rounded-full border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5">
+            <span
+              className="px-3.5 py-1 text-[11.5px] sm:text-[12px] font-semibold rounded-full bg-[var(--hw-green-700)] text-white shadow-xs text-center cursor-default inline-block"
+            >
+              Monthly
+            </span>
           </div>
         </div>
 
         <div className="flex items-center justify-between sm:justify-end gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--hw-neutral-100)]">
-          {periodType === "daily" && (
-            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <label htmlFor="arrival-date-input" className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">
-                Date:
-              </label>
-              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-                <Calendar className="w-3.5 h-3.5 text-[var(--hw-neutral-500)] shrink-0" />
-                <input
-                  id="arrival-date-input"
-                  type="date"
-                  max={localToday()}
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-[118px] sm:w-auto text-[12px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
-                />
-              </div>
-            </div>
-          )}
-
-          {periodType === "weekly" && (
-            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Week:</span>
-                <select
-                  id="arrival-week-select"
-                  aria-label="Select week of month"
-                  value={activeWeekObj.weekNum}
-                  onChange={(e) => setSelectedWeek(parseInt(e.target.value, 10))}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {availableWeeks.map((w) => (
-                    <option key={w.weekNum} value={w.weekNum}>
-                      {w.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
-                <select
-                  id="arrival-month-select"
-                  aria-label="Select month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {MONTHS.map((m) => (
-                    <option key={m.val} value={m.val}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Year:</span>
-                <select
-                  id="arrival-year-select"
-                  aria-label="Select year"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {["2025", "2026", "2027"].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {periodType === "monthly" && (
-            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
-              <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
-              <div className="flex items-center gap-1.5">
-                <select
-                  id="arrival-monthly-month-select"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {MONTHS.map((m) => (
-                    <option key={m.val} value={m.val}>{m.name}</option>
-                  ))}
-                </select>
-                <select
-                  id="arrival-monthly-year-select"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-                >
-                  {["2025", "2026", "2027"].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
+          <div className="flex items-center gap-1.5">
+            <select
+              id="arrival-monthly-month-select"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+            >
+              {MONTHS.map((m) => (
+                <option key={m.val} value={m.val}>{m.name}</option>
+              ))}
+            </select>
+            <select
+              id="arrival-monthly-year-select"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+            >
+              {["2025", "2026", "2027"].map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -2354,7 +2297,7 @@ export default function DFTCArrivalInput() {
 
           if (catCommodities.length === 0) return null;
 
-          const isCol = collapsed.has(cat.id);
+          const isCol = searchQuery.trim() ? false : collapsed.has(cat.id);
           const catEntered = getAllCommodities(cat).reduce(
             (acc, com) => acc + getVariants(com).filter((v) => hasValue(getField(v.id))).length,
             0
@@ -2401,7 +2344,7 @@ export default function DFTCArrivalInput() {
 
                   {catCommodities.map((com) => {
                     const variants = getVariants(com).filter((v) => matchesVariant(com, v));
-                    const colCom = collapsedComs.has(com.id);
+                    const colCom = searchQuery.trim() ? false : collapsedComs.has(com.id);
                     return (
                       <div key={com.id} className="border-b border-[var(--hw-neutral-100)] last:border-0">
                         {/* Commodity Header with Icon (matching Image 1) */}
@@ -2482,6 +2425,9 @@ export default function DFTCArrivalInput() {
                                     min="0"
                                     step="any"
                                     value={f.farmSource}
+                                    onKeyDown={(e) => {
+                                      if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                                    }}
                                     onChange={(e) => updateVolume(v.id, "farmSource", e.target.value)}
                                     placeholder="0"
                                     className="w-full max-w-[120px] px-2.5 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"
@@ -2495,6 +2441,9 @@ export default function DFTCArrivalInput() {
                                     min="0"
                                     step="any"
                                     value={f.otherSource}
+                                    onKeyDown={(e) => {
+                                      if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                                    }}
                                     onChange={(e) => updateVolume(v.id, "otherSource", e.target.value)}
                                     placeholder="0"
                                     className="w-full max-w-[120px] px-2.5 py-1 text-right rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-700)]"

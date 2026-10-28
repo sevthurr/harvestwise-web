@@ -266,7 +266,7 @@ export const en = {
     modal_allow: "Allow location",
     modal_cancel: "Cancel",
     preferred_variety: "Preferred variety (optional)",
-    variety_default: "Default",
+    variety_default: "Regular",
     selling_buyer_label: "Usual selling area or buyer type",
     selling_buyer_placeholder: "e.g. Bangkerohan market, direct buyer",
     selling_farmgate: "To a buyer using farmgate price",

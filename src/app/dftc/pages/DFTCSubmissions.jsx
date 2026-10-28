@@ -48,8 +48,20 @@ function getCutoff(preset) {
 function applyFilters(rows, datasetType, savedBy, datePreset, customFrom, customTo) {
   const cutoff = getCutoff(datePreset);
   return rows.filter((r) => {
-    if (datasetType && r.datasetType !== datasetType) return false;
-    if (savedBy && !r.savedBy.toLowerCase().includes(savedBy.toLowerCase())) return false;
+    if (datasetType) {
+      if (datasetType === "Price Data - File Upload") {
+        if (r.isArrival || r.isManual) return false;
+      } else if (datasetType === "Price Data - Manual Input") {
+        if (r.isArrival || !r.isManual) return false;
+      } else if (datasetType === "Arrival Data - File Upload") {
+        if (!r.isArrival || r.isManual) return false;
+      } else if (datasetType === "Arrival Data - Manual Upload" || datasetType === "Arrival Data - Manual Input") {
+        if (!r.isArrival || !r.isManual) return false;
+      } else if (r.datasetType !== datasetType) {
+        return false;
+      }
+    }
+    if (savedBy && !r.savedBy?.toLowerCase().includes(savedBy.toLowerCase()) && !(r.encodedBy && r.encodedBy.toLowerCase().includes(savedBy.toLowerCase()))) return false;
     if (datePreset === "custom") {
       if (customFrom && r.savedIso < customFrom) return false;
       if (customTo && r.savedIso > customTo) return false;
@@ -290,7 +302,9 @@ function DFTCHistory() {
           : pTypeRaw.includes("retail")
           ? "Retail"
           : "";
-        const isManual = (item.submission_method || "").toLowerCase().includes("manual");
+        const methodRaw = (item.submission_method || "").toLowerCase();
+        const hasFile = Boolean(item.original_file_name || item.file_name);
+        const isManual = methodRaw.includes("manual") || (!hasFile && !methodRaw.includes("upload") && !methodRaw.includes("file"));
         const dType = isArrival
           ? "DFTC Arrival Volume"
           : isManual
@@ -314,18 +328,32 @@ function DFTCHistory() {
           ? "Failed"
           : "Saved";
 
-        const submitterFullName =
-          item.submitted_by_name ||
-          item.submitter_name ||
-          (item.user ? `${item.user.first_name || ""} ${item.user.last_name || ""}`.trim() : null) ||
-          currentUserName;
+        let storedPersonnel = null;
+        try {
+          if (item.reporting_date) {
+            storedPersonnel = JSON.parse(localStorage.getItem(`dftc_report_personnel_${item.reporting_date}`));
+          }
+        } catch {}
+
+        const submitterFullName = (isManual && storedPersonnel?.reviewedBy)
+          ? storedPersonnel.reviewedBy
+          : (item.submitted_by_name ||
+             item.submitter_name ||
+             (item.user ? `${item.user.first_name || ""} ${item.user.last_name || ""}`.trim() : null) ||
+             "DFTC Personnel");
+
+        const encoderFullName = (isManual && storedPersonnel?.encodedBy)
+          ? storedPersonnel.encodedBy
+          : (item.encoded_by || item.encoded_by_name || "MARIA S. SANTOS");
 
         return {
           datasetId: item.id,
           fileName: item.original_file_name || item.file_name || null,
           datasetType: dType,
           isArrival,
+          isManual,
           savedBy: submitterFullName,
+          encodedBy: encoderFullName,
           savedDateTime: formatDateTime(item.saved_at || item.created_at),
           savedDateTimeRaw: item.saved_at || item.created_at || "",
           savedIso,
@@ -386,9 +414,9 @@ function DFTCHistory() {
 
   const TABLE_HEADERS = [
     "ID",
-    "Dataset Type",
-    "Saved By",
-    "Saved Date",
+    "Dataset Name",
+    "Personnel",
+    "Date",
     "Total",
     "Analytics-Supported",
     "Other Commodities"
@@ -428,22 +456,18 @@ function DFTCHistory() {
             <div className="relative">
               <select className={selectCls} value={datasetType} onChange={(e) => setDatasetType(e.target.value)}>
                 <option value="">All Types</option>
-                <option>Daily Retail Prices</option>
-                <option>Daily Wholesale Prices</option>
-                <option>Daily Landing Prices</option>
-                <option>Manual Input · Daily Prices</option>
-                <option>Manual Input · Retail Prices</option>
-                <option>Manual Input · Wholesale Prices</option>
-                <option>Manual Input · Landing Prices</option>
-                <option>DFTC Arrival Volume</option>
+                <option value="Price Data - File Upload">Price Data - File Upload</option>
+                <option value="Price Data - Manual Input">Price Data - Manual Input</option>
+                <option value="Arrival Data - File Upload">Arrival Data - File Upload</option>
+                <option value="Arrival Data - Manual Upload">Arrival Data - Manual Upload</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
           </div>
 
-          {/* Saved By */}
+          {/* Personnel (Saved / Encoded / Uploaded By) */}
           <div className="w-full sm:w-auto flex-1 sm:min-w-[150px] min-w-0">
-            <label className={labelCls}>Saved By</label>
+            <label className={labelCls}>Personnel</label>
             <input
               className={inputCls}
               placeholder="All personnel"
@@ -568,7 +592,23 @@ function DFTCHistory() {
                             r.datasetType
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedBy}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">
+                          {r.isManual ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium text-[var(--hw-neutral-900)]">{r.savedBy}</span>
+                              {r.encodedBy && r.encodedBy !== r.savedBy ? (
+                                <span className="text-[11.5px] text-[var(--hw-neutral-500)]">Encoded by {r.encodedBy}</span>
+                              ) : (
+                                <span className="text-[11.5px] text-[var(--hw-neutral-400)]">Manual Entry</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className="font-medium text-[var(--hw-neutral-900)]">{r.savedBy}</span>
+                              <span className="text-[11.5px] text-[var(--hw-neutral-500)]">Uploaded</span>
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedDateTime}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.totalRecords}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.analyticsSupported}</td>
@@ -612,7 +652,7 @@ function DFTCHistory() {
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-[var(--hw-neutral-600)] mt-1">
                     <span>{r.savedDateTime}</span>
                     <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{r.savedBy}</span>
+                    <span>{r.isManual ? (r.encodedBy && r.encodedBy !== r.savedBy ? `${r.savedBy} (Enc: ${r.encodedBy})` : r.savedBy) : `${r.savedBy} (Uploaded)`}</span>
                   </div>
                 </button>
               );
@@ -642,9 +682,6 @@ function DFTCHistory() {
         </>
       )}
 
-      <p className="text-[13px] text-[var(--hw-neutral-800)]">
-        Draft: data entry not yet completed · Saved: dataset saved successfully · Failed: dataset could not be saved
-      </p>
     </div>
   );
 }

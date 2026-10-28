@@ -108,7 +108,7 @@ function collect(items, resolveCommodityId) {
     map.set(vid, {
       commodity_id: item.commodity_id,
       name: item.commodity_name,
-      variety: item.variety || "Base",
+      variety: item.variety || "Regular",
       uom: item.uom || "kg",
       price: item.prevail_price
     });

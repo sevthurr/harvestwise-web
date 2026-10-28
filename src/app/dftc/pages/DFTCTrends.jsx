@@ -1,7 +1,13 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, PieChart as PieChartIcon } from "lucide-react";
-import { COMMODITY_CATEGORIES, getCategoryFor, isHWCommodity } from "../../global/data/commodities";
+import {
+  COMMODITY_CATEGORIES,
+  getCategoryFor,
+  isHWCommodity,
+  HW_ID_TO_NAME,
+  HW_COMMODITY_NAMES
+} from "../../global/data/commodities";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { ForecastPriceTrendChart } from "../../global/components/shared/ForecastPriceTrendChart";
@@ -68,6 +74,12 @@ const PRICE_CATEGORIES = COMMODITY_CATEGORIES.map((cat) => ({
   commodities: cat.items.map((i) => i.name)
 }));
 
+const TOP10_COMMODITY_CATEGORIES = COMMODITY_CATEGORIES.map((cat) => ({
+  id: toId(cat.category),
+  name: cat.category,
+  commodities: cat.items.filter((i) => HW_COMMODITY_NAMES.has(i.name)).map((i) => i.name),
+})).filter((cat) => cat.commodities.length > 0);
+
 function getCommodityCategory(name) {
   return getCategoryFor(name) ?? "—";
 }
@@ -107,7 +119,7 @@ const labelCls = "block text-[11px] sm:text-[12px] font-semibold text-[var(--hw-
 const selectCls = "w-full truncate px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none focus:border-[var(--hw-green-600)] transition-colors";
 const PAGE_SIZE = 20;
 
-function SearchableCombobox({ categories, value, onChange }) {
+export function SearchableCombobox({ categories, value, onChange }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(0);
@@ -774,13 +786,32 @@ function DFTCTrends() {
 
   const resolveCommodityParam = (paramVal) => {
     if (!paramVal) return null;
-    const lower = paramVal.toLowerCase();
-    const allCommodities = PRICE_CATEGORIES.flatMap((c) => c.commodities);
-    return (
-      allCommodities.find(
-        (c) => c.toLowerCase() === lower || toId(c) === lower
-      ) || paramVal
+    const trimmed = String(paramVal).trim();
+    const lower = trimmed.toLowerCase();
+
+    // Check direct ID mapping (e.g. "kamatis" -> "Kamatis")
+    if (HW_ID_TO_NAME[lower]) {
+      return HW_ID_TO_NAME[lower];
+    }
+    for (const [id, name] of Object.entries(HW_ID_TO_NAME)) {
+      if (id.toLowerCase() === lower) return name;
+    }
+
+    // Check all commodity categories (covers all 6 categories, not just top 10)
+    const allCommodityObjects = COMMODITY_CATEGORIES.flatMap((c) => c.items);
+    const directItem = allCommodityObjects.find(
+      (item) => item.name.toLowerCase() === lower || item.id === lower
     );
+    if (directItem) return directItem.name;
+
+    // Check PRICE_CATEGORIES
+    const allCommodities = PRICE_CATEGORIES.flatMap((c) => c.commodities);
+    const found = allCommodities.find(
+      (c) => c.toLowerCase() === lower || toId(c) === lower
+    );
+    if (found) return found;
+
+    return paramVal;
   };
 
   const [activeAlertModal, setActiveAlertModal] = useState(() => {
@@ -815,6 +846,27 @@ function DFTCTrends() {
           setACommodity(resolved);
         } else {
           setPCommodity(resolved);
+        }
+      }
+      const rawVariety = params.get("variety");
+      if (rawVariety) {
+        setPVariety(rawVariety);
+      }
+      const rawMarket = params.get("market");
+      if (rawMarket) {
+        const lowerMarket = rawMarket.toLowerCase();
+        if (lowerMarket.includes("dftc") || lowerMarket.includes("taboan")) {
+          setPMarket("DFTC Taboan");
+        } else if (lowerMarket.includes("bankerohan") || lowerMarket.includes("bkrh")) {
+          setPMarket("Bankerohan Public Market");
+        }
+      }
+      const rawPriceType = params.get("price_type");
+      if (rawPriceType) {
+        if (rawPriceType.toLowerCase().includes("wholesale")) {
+          setPPriceType("Wholesale");
+        } else if (rawPriceType.toLowerCase().includes("retail")) {
+          setPPriceType("Retail");
         }
       }
       const urlAlert = params.get("alert");
@@ -906,9 +958,39 @@ function DFTCTrends() {
     }
     return "Kamatis";
   });
-  const [pVariety, setPVariety] = useState(null);
-  const [pMarket, setPMarket] = useState("Bankerohan Public Market");
-  const [pPriceType, setPPriceType] = useState("Retail");
+  const [pVariety, setPVariety] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("variety") || null;
+    }
+    return null;
+  });
+  const [pMarket, setPMarket] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get("market");
+      if (m) {
+        if (m.toLowerCase().includes("dftc") || m.toLowerCase().includes("taboan")) {
+          return "DFTC Taboan";
+        }
+        if (m.toLowerCase().includes("bankerohan") || m.toLowerCase().includes("bkrh")) {
+          return "Bankerohan Public Market";
+        }
+      }
+    }
+    return "Bankerohan Public Market";
+  });
+  const [pPriceType, setPPriceType] = useState(() => {
+    if (typeof window !== "undefined" && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const pt = params.get("price_type");
+      if (pt) {
+        if (pt.toLowerCase().includes("wholesale")) return "Wholesale";
+        if (pt.toLowerCase().includes("retail")) return "Retail";
+      }
+    }
+    return "Retail";
+  });
   const [pDatePreset, setPDatePreset] = useState("7d");
   const [pCustomFrom, setPCustomFrom] = useState("");
   const [pCustomTo, setPCustomTo] = useState("");
@@ -1051,12 +1133,13 @@ function DFTCTrends() {
         records_limit: 100,
       }),
     enabled: Boolean(pCommodityId) && apiBacked,
+    placeholderData: (prev) => prev,
     staleTime: 60 * 1000,
   });
 
   const isPricesLoading =
     isCatalogLoading ||
-    (Boolean(pCommodityId) && apiBacked && isPriceDetailLoading);
+    (Boolean(pCommodityId) && apiBacked && isPriceDetailLoading && !priceDetailData);
 
   const varietyDetails = useMemo(() => {
     if (!priceDetailData) return [];
@@ -1090,7 +1173,7 @@ function DFTCTrends() {
       pCustomFrom,
       pCustomTo
     ).map((pt) => ({ ...pt, date: formatChartDate(pt.date) }));
-    const forecast = buildForecastChartData(varietyDetails).map((pt) => ({
+    const forecast = buildForecastChartData(varietyDetails, fHorizon).map((pt) => ({
       ...pt,
       date: formatChartDate(pt.date),
     }));
@@ -1098,7 +1181,7 @@ function DFTCTrends() {
       connectTransition: true,
       varietyKeys: [seriesKey],
     });
-  }, [varietyDetails, pDatePreset, pCustomFrom, pCustomTo, seriesKey]);
+  }, [varietyDetails, pDatePreset, pCustomFrom, pCustomTo, seriesKey, fHorizon]);
 
   const pTableRows = useMemo(() => {
     const rows = buildTableRows(
@@ -1165,6 +1248,28 @@ function DFTCTrends() {
       commodities: [...names].sort((a, b) => a.localeCompare(b)),
     }));
   }, [commodityCatalog]);
+
+  // When commodity catalog loads, if aCommodity was initialized as an ID (e.g. COM-0051), resolve to name
+  useEffect(() => {
+    if (!commodityCatalog?.items?.length || !aCommodity) return;
+    const match = commodityCatalog.items.find(
+      (item) => item?.id === aCommodity || item?.commodity_id === aCommodity
+    );
+    if (match && match.name && match.name !== aCommodity) {
+      setACommodity(match.name);
+    }
+  }, [commodityCatalog, aCommodity]);
+
+  // When price catalog loads, if pCommodity was initialized as an ID, resolve to name
+  useEffect(() => {
+    if (!priceCatalogPairs?.length || !pCommodity) return;
+    const match = priceCatalogPairs.find(
+      (pair) => pair?.commodity_id === pCommodity
+    );
+    if (match && match.commodity && match.commodity !== pCommodity) {
+      setPCommodity(match.commodity);
+    }
+  }, [priceCatalogPairs, pCommodity]);
 
   const aCommodityId = useMemo(() => {
     const target = normalizeCommodityLabel(aCommodity);
@@ -1931,7 +2036,7 @@ function DFTCTrends() {
               <SeasonalProductionTrends
                 commodity={sCommodity}
                 commodityId={findCommodityId(catalogPairs, sCommodity, "") || sCommodity}
-                categories={PRICE_CATEGORIES}
+                categories={TOP10_COMMODITY_CATEGORIES}
                 onCommodityChange={setSCommodity}
               />
             )}

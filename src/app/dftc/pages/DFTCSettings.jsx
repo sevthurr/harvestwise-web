@@ -6,7 +6,6 @@ import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { useGoogleLink } from "../../auth/useGoogleLink";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
-import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { isValidEmail, isFakeEmailDomain } from "../../auth/authValidation";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { PageHeader } from "../../global/components/shared/PageHeader";
@@ -43,7 +42,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
   const lastName = staff.last_name || user?.last_name || (user?.name && user.name.split(" ").length > 1 ? user.name.split(" ").slice(-1)[0] : "") || "";
   const middleName = staff.middle_name || "";
   const suffix = staff.suffix || user?.suffix || "None";
-  const phone = user?.phone || "";
   const email = user?.email || "";
   const position = user?.position || staff.position_title || "";
 
@@ -52,7 +50,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
     lastName,
     middleName,
     suffix,
-    phone,
     email,
     position
   });
@@ -63,11 +60,10 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       lastName,
       middleName,
       suffix,
-      phone,
       email,
       position
     });
-  }, [firstName, lastName, middleName, suffix, phone, email, position]);
+  }, [firstName, lastName, middleName, suffix, email, position]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -135,7 +131,8 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       last_name: form.lastName,
       middle_name: form.middleName || null,
       suffix: form.suffix === "None" ? null : form.suffix,
-      position_title: form.position || null
+      position_title: form.position || null,
+      email: form.email || null
     };
     if (form.phone !== phone) payload.phone = form.phone || null;
     if (form.email !== email) payload.email = form.email || null;
@@ -164,15 +161,11 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
         setShowSaveModal(false);
         setCurrentPassword("");
         setFieldErrors((f) => ({ ...f, email: "That email address is already in use by another account." }));
-      } else if (lc.includes("phone number is already in use") || lc.includes("phone number already")) {
-        setShowSaveModal(false);
-        setCurrentPassword("");
-        setFieldErrors((f) => ({ ...f, phone: "That phone number is already in use by another account." }));
       } else if (lc.includes("password you entered is incorrect") || lc.includes("password is incorrect")) {
         // Keep modal open — user can correct the password without reopening it.
         setFieldErrors((f) => ({ ...f, currentPassword: "The password you entered is incorrect. Please try again." }));
       } else if (lc.includes("current password is required")) {
-        setFieldErrors((f) => ({ ...f, currentPassword: "Your current password is required to change your email or phone number." }));
+        setFieldErrors((f) => ({ ...f, currentPassword: "Your current password is required to change your email." }));
       } else if (lc.includes("first name") || lc.includes("last name")) {
         setShowSaveModal(false);
         setCurrentPassword("");
@@ -224,11 +217,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
                 </svg>
               </div>
             </div>
-          </div>
-          <div>
-            <FieldLabel htmlFor="ac-ph">Phone Number</FieldLabel>
-            <input id="ac-ph" type="tel" inputMode="numeric" maxLength={PHONE_MAX_LENGTH} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} className={`${inputCls} ${fieldErrors.phone ? "border-red-500 focus:ring-red-500" : ""}`} />
-            {fieldErrors.phone && <p className="mt-1 text-[12px] text-red-600">{fieldErrors.phone}</p>}
           </div>
           <div>
             <FieldLabel htmlFor="ac-em">Email</FieldLabel>
@@ -316,7 +304,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       {showSaveModal && <Modal title="Save account changes?" onClose={() => { setShowSaveModal(false); setFieldErrors({}); setCurrentPassword(""); }}>
           <p className="text-[14px] text-black mb-5">Your updated account information will be saved to your HarvestWise profile.</p>
           <label htmlFor="dftc-current-password" className="block text-[13px] font-semibold text-black mb-1.5">
-            Current password <span className="font-normal text-gray-500">(required for email or phone changes)</span>
+            Current password <span className="font-normal text-gray-500">(required for email change)</span>
           </label>
           <input
             id="dftc-current-password"
