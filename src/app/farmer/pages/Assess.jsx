@@ -577,7 +577,9 @@ function AssessPage() {
         expected_harvest_date: data.harvestDate,
         total_production_cost: Number(totalCost),
         expected_yield_kg: yieldKg,
-        crop_stage: "before_planting",
+        estimated_selling_price: data.useFarmgate && Number(data.farmgatePrice) > 0
+          ? Number(data.farmgatePrice)
+          : null,
       };
 
       const res = await apiPost("/advisory/plan", payload);

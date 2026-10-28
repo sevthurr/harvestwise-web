@@ -34,22 +34,17 @@ const ReviewRow = ({ label, value, onEdit, t }) => (
   </div>
 );
 
-const VariantComparisonCard = ({ variantItem, farmgatePrice, commodityName, t }) => {
-  const avg = variantItem.avgPrice;
+const MarketPriceCard = ({ variantItem, farmgatePrice, breakEven, commodityName, t }) => {
   const displayName = variantItem.variety
     ? `${commodityName} (${variantItem.variety})`
     : (variantItem.name || commodityName);
-
   const numPrice = typeof farmgatePrice === "number" && farmgatePrice > 0 ? farmgatePrice : null;
-
-  let diff = null;
-  let diffAbs = null;
-  let pctAbs = null;
-  if (numPrice !== null && avg !== null && avg > 0) {
-    diff = numPrice - avg;
-    diffAbs = Math.abs(diff);
-    pctAbs = Math.abs((diff / avg) * 100).toFixed(1);
-  }
+  const hasComparison = numPrice !== null && breakEven !== null;
+  const difference = hasComparison ? numPrice - breakEven : null;
+  const differenceAbs = difference !== null ? Math.abs(difference) : null;
+  const percentage = difference !== null && breakEven > 0
+    ? Math.abs((difference / breakEven) * 100).toFixed(1)
+    : null;
 
   return (
     <div className="p-3.5 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] space-y-2">
@@ -57,47 +52,58 @@ const VariantComparisonCard = ({ variantItem, farmgatePrice, commodityName, t })
         <span className="text-sm font-semibold text-[var(--hw-neutral-900)]">
           {displayName}
         </span>
-        <div className="text-right">
-          <span className="text-xs text-[var(--hw-neutral-600)] block">
-            {t("farmer.assess.current_avg_price", {}, "Current average price")}
-          </span>
-          <span className="text-sm font-bold text-[var(--hw-neutral-900)]">
-            {avg !== null ? `₱${avg.toFixed(2)}/kg` : t("farmer.assess.no_price_data", {}, "No market price data")}
-          </span>
+        <div className="text-right space-y-1">
+          <div>
+            <span className="text-xs text-[var(--hw-neutral-600)] block">
+              {t("farmer.assess.current_market_price", {}, "Current market price")}
+            </span>
+            <span className="text-sm font-bold text-[var(--hw-neutral-900)]">
+              {typeof variantItem.avgPrice === "number"
+                ? `₱${variantItem.avgPrice.toFixed(2)}/kg`
+                : t("farmer.assess.no_market_price", {}, "No current market price")}
+            </span>
+          </div>
+          <div>
+            <span className="text-xs text-[var(--hw-neutral-600)] block">
+              {t("farmer.assess.break_even_price", {}, "Break-even price")}
+            </span>
+            <span className="text-sm font-bold text-[var(--hw-neutral-900)]">
+              {breakEven !== null
+                ? `₱${breakEven}/kg`
+                : t("farmer.assess.no_break_even_data", {}, "No break-even price")}
+            </span>
+          </div>
         </div>
       </div>
-
-      {numPrice !== null && avg !== null ? (
+      {hasComparison ? (
         <div className="pt-2 border-t border-[var(--hw-neutral-200)] flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            {diff > 0.005 ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <TrendingUp className="w-3.5 h-3.5" />
-                +₱{diffAbs.toFixed(2)} (+{pctAbs}%)
-              </span>
-            ) : diff < -0.005 ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                <TrendingDown className="w-3.5 h-3.5" />
-                -₱{diffAbs.toFixed(2)} (-{pctAbs}%)
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                <Minus className="w-3.5 h-3.5" />
-                0%
-              </span>
-            )}
-          </div>
+          {difference > 0.005 ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <TrendingUp className="w-3.5 h-3.5" />
+              +₱{differenceAbs.toFixed(2)} (+{percentage}%)
+            </span>
+          ) : difference < -0.005 ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+              <TrendingDown className="w-3.5 h-3.5" />
+              -₱{differenceAbs.toFixed(2)} (-{percentage}%)
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+              <Minus className="w-3.5 h-3.5" />
+              0%
+            </span>
+          )}
           <p className="text-xs text-[var(--hw-neutral-700)]">
-            {diff > 0.005
-              ? t("farmer.assess.diff_higher", { diff: diffAbs.toFixed(2), pct: pctAbs }, `₱${diffAbs.toFixed(2)} higher (+${pctAbs}%) than current average market price`)
-              : diff < -0.005
-              ? t("farmer.assess.diff_lower", { diff: diffAbs.toFixed(2), pct: pctAbs }, `₱${diffAbs.toFixed(2)} lower (-${pctAbs}%) than current average market price`)
-              : t("farmer.assess.diff_equal", {}, "Equal to current average market price")}
+            {difference > 0.005
+              ? t("farmer.assess.diff_higher_break_even", { diff: differenceAbs.toFixed(2), pct: percentage }, `₱${differenceAbs.toFixed(2)} higher (+${percentage}%) than break-even price`)
+              : difference < -0.005
+                ? t("farmer.assess.diff_lower_break_even", { diff: differenceAbs.toFixed(2), pct: percentage }, `₱${differenceAbs.toFixed(2)} lower (-${percentage}%) than break-even price`)
+                : t("farmer.assess.diff_equal_break_even", {}, "Equal to break-even price")}
           </p>
         </div>
       ) : numPrice === null ? (
         <p className="text-xs text-[var(--hw-neutral-500)] italic pt-1 border-t border-[var(--hw-neutral-200)]">
-          {t("farmer.assess.type_to_compare", {}, "Enter your farmgate price above to see the difference from the average price.")}
+          {t("farmer.assess.type_to_compare_break_even", {}, "Enter your farmgate price above to compare it with your break-even price.")}
         </p>
       ) : null}
     </div>
@@ -292,20 +298,21 @@ const Step4ReviewBreakEven = ({
               {errors?.farmgatePrice && <p className="mt-1.5 text-sm text-red-600">{errors.farmgatePrice}</p>}
             </div>
 
-            {/* Farmgate price vs Market average comparison */}
+            {/* Current market price reference */}
             {displayedVariants.length > 0 && (
               <div className="space-y-2.5 pt-2">
                 <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
                   {!data.variant && displayedVariants.length > 1
-                    ? t("farmer.assess.compare_all_variants", {}, "Comparison across all available varieties:")
-                    : t("farmer.assess.farmgate_price_comparison", {}, "Farmgate price comparison with market average")}
+                    ? t("farmer.assess.current_market_prices", {}, "Current market prices")
+                    : t("farmer.assess.farmgate_price_comparison", {}, "Farmgate price comparison with break-even price")}
                 </p>
                 <div className="space-y-2">
                   {displayedVariants.map((v) => (
-                    <VariantComparisonCard
+                    <MarketPriceCard
                       key={v.id || v.variety || v.name}
                       variantItem={v}
                       farmgatePrice={data.farmgatePrice}
+                      breakEven={breakEven}
                       commodityName={commodityLabel}
                       t={t}
                     />

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   composeAdvisoryReasons,
+  pickUsablePriceOutlook,
   resolveMainFactor,
 } from "../app/farmer/utils/advisoryReasons";
 

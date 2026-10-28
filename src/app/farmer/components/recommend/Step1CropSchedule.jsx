@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Clock, ChevronRight, ChevronLeft } from "lucide-react";
-import { formatDurationLabel, getCropDuration, suggestHarvestDate } from "./types";
+import { Check, ChevronRight, ChevronLeft, CalendarDays } from "lucide-react";
+import { getCropDuration, suggestHarvestDate } from "./types";
 import { durationForOption, findCatalogOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { PlantingActivityContext } from "./PlantingActivityContext";
@@ -11,11 +11,29 @@ import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { fetchFarmerProfile } from "../../../global/hooks/useFarmerPrefetch";
 import { isPreferredCrop } from "../../utils/cropPreferences";
 import { PreferredStar } from "../shared/PreferredStar";
+import { Calendar } from "../../../global/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../../../global/components/ui/popover";
 
 function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+}
+function parseDate(iso) {
+  if (!iso) return undefined;
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+function toIsoDate(date) {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function harvestWindowDays(start, end) {
+  if (!start || !end) return null;
+  return Math.round((parseDate(end) - parseDate(start)) / 864e5) + 1;
 }
 const PAGE_SIZE = 4;
 
@@ -48,16 +66,21 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   // (offline bundle or a crop outside the top 10).
   const apiDuration = durationForOption(selectedOption, data.variant);
   const duration = apiDuration || (data.commodity ? getCropDuration(data.commodity, data.variant) : null);
-  const durationVarKey = data.variant
-    ? `duration_${data.commodity}_${data.variant.toLowerCase().replace(/[^a-z0-9]/g, "_")}`
-    : `duration_${data.commodity}`;
-  const durationLabel = formatDurationLabel(apiDuration, t)
-    || (data.commodity ? t(`farmer.assess.${durationVarKey}`, {}, duration?.label || "") : null);
   const suggestion = suggestHarvestDate(data.plantingDate, apiDuration || data.commodity, data.variant);
   const selectedPage = Math.floor(
     commodityOptions.findIndex((c) => c.id === selectedOption?.id) / PAGE_SIZE
   );
   const [page, setPage] = useState(() => selectedPage >= 0 ? selectedPage : 0);
+  const [isEditingWindow, setIsEditingWindow] = useState(false);
+  const userEditedWindow = useRef(false);
+  const autoWindowKey = [
+    data.plantingDate,
+    data.commodity,
+    data.variant,
+    duration?.min,
+    duration?.max,
+  ].join("|");
+  const previousAutoWindowKey = useRef(null);
 
   useEffect(() => {
     if (selectedPage >= 0) setPage(selectedPage);
@@ -66,13 +89,55 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
   // Auto-calculate suggested harvest date when planting date, crop, variety or
   // its duration changes.
   useEffect(() => {
-    if (suggestion && suggestion.minDate) {
-      onChange({ harvestDate: suggestion.minDate });
+    if (previousAutoWindowKey.current === autoWindowKey && userEditedWindow.current) {
+      return;
     }
-  }, [data.plantingDate, data.commodity, data.variant, duration?.min, duration?.max]);
+    previousAutoWindowKey.current = autoWindowKey;
+    userEditedWindow.current = false;
+    if (suggestion && suggestion.minDate) {
+      onChange({
+        harvestDate: suggestion.minDate,
+        harvestWindowStart: suggestion.minDate,
+        harvestWindowEnd: suggestion.maxDate || suggestion.minDate,
+      });
+    }
+  }, [autoWindowKey, data.plantingDate, data.commodity, data.variant, duration?.min, duration?.max]);
 
-  const applySuggestion = () => {
-    if (suggestion) onChange({ harvestDate: suggestion.minDate });
+  const hasSelectedWindow = Boolean(data.harvestWindowStart || data.harvestWindowEnd);
+  const windowStart = hasSelectedWindow
+    ? data.harvestWindowStart
+    : suggestion?.minDate || data.harvestDate;
+  const windowEnd = hasSelectedWindow
+    ? data.harvestWindowEnd
+    : suggestion?.maxDate || data.harvestDate || suggestion?.minDate;
+  const selectedWindow = {
+    from: isEditingWindow && !userEditedWindow.current ? undefined : parseDate(windowStart),
+    to: isEditingWindow && !userEditedWindow.current ? undefined : parseDate(windowEnd),
+  };
+  const selectedWindowDays = harvestWindowDays(
+    windowStart,
+    windowEnd
+  );
+  const windowLabel = selectedWindow.from && selectedWindow.to
+    ? `${formatDate(toIsoDate(selectedWindow.from))} – ${formatDate(toIsoDate(selectedWindow.to))} (${selectedWindowDays} ${selectedWindowDays === 1 ? "day" : "days"})`
+    : null;
+  const handleWindowSelect = (range) => {
+    userEditedWindow.current = true;
+    const start = toIsoDate(range?.from);
+    const end = toIsoDate(range?.to);
+    if (!end) {
+      onChange({
+        harvestWindowStart: start,
+        harvestWindowEnd: "",
+        harvestDate: "",
+      });
+      return;
+    }
+    onChange({
+      harvestWindowStart: start,
+      harvestWindowEnd: end,
+      harvestDate: end,
+    });
   };
   const suggestionLabel = suggestion ? suggestion.maxDate ? `${formatDate(suggestion.minDate)} – ${formatDate(suggestion.maxDate)}` : formatDate(suggestion.minDate) : null;
 
@@ -193,19 +258,6 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
 
         {errors.commodity && <p className="mt-2 text-sm text-red-600">{errors.commodity}</p>}
 
-        {/* Typical duration chip — hidden when no duration is known for the
-            selected crop/variety. */}
-        {duration && (() => {
-          return (
-            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--hw-neutral-100)] rounded-full">
-              <Clock className="w-3.5 h-3.5 text-[var(--hw-neutral-700)]" />
-              <span className="text-[13px] text-[var(--hw-neutral-900)]">
-                {t("farmer.assess.typical_duration", { label: durationLabel }, `Typical duration: ${durationLabel}`)}
-              </span>
-            </div>
-          );
-        })()}
-
         {/* Variant picker — dropdown, shown only when commodity has 2+ varieties */}
         {data.commodity && (() => {
           const baseName = selectedOption?.name || HW_ID_TO_NAME[data.commodity] || "";
@@ -261,46 +313,42 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
         {errors.plantingDate && <p className="mt-1.5 text-sm text-red-600">{errors.plantingDate}</p>}
       </div>
 
-      {/* Harvest date with suggestion */}
+      {/* Harvest window */}
       <div>
         <label
-          htmlFor="harvest-date"
           className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
         >
-          {t("farmer.assess.expected_harvest_date", {}, "Expected harvest date")}
+          {t("farmer.assess.harvest_window", {}, "Harvest Window")}
         </label>
-        <input
-          id="harvest-date"
-          type="date"
-          value={data.harvestDate}
-          onChange={(e) => onChange({ harvestDate: e.target.value })}
-          className={`
-            w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition
-            focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]
-            ${errors.harvestDate ? "border-red-400 bg-red-50" : "border-[var(--hw-neutral-200)] bg-white"}
-          `}
-        />
+        <Popover
+          onOpenChange={(open) => {
+            setIsEditingWindow(open);
+            if (open) userEditedWindow.current = false;
+          }}
+        >
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-sm text-left outline-none hover:border-[var(--hw-neutral-400)] focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]"
+            >
+              <span className={windowLabel ? "text-[var(--hw-neutral-900)]" : "text-[var(--hw-neutral-500)]"}>
+                {windowLabel || t("farmer.assess.select_harvest_window", {}, "Select start and end dates")}
+              </span>
+              <CalendarDays className="w-4 h-4 text-[var(--hw-neutral-500)]" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <Calendar
+              mode="range"
+              numberOfMonths={1}
+              selected={selectedWindow}
+              onSelect={handleWindowSelect}
+              disabled={{ before: parseDate(data.plantingDate) }}
+            />
+          </PopoverContent>
+        </Popover>
         {errors.harvestDate && <p className="mt-1.5 text-sm text-red-600">{errors.harvestDate}</p>}
 
-        {/* Harvest suggestion */}
-        {suggestionLabel && data.plantingDate && <div className="mt-2 space-y-1.5">
-            <p className="text-[13px] text-[var(--hw-neutral-900)]">
-              {t("farmer.assess.suggested_window_note", {}, "Suggested harvest window based on typical duration:")}
-            </p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[13px] font-medium text-[var(--hw-green-800)] bg-[var(--hw-green-50)] px-2.5 py-1 rounded-lg border border-[var(--hw-green-200)]">
-                {suggestionLabel}
-              </span>
-              {data.harvestDate !== suggestion?.minDate && <button
-                type="button"
-                onClick={applySuggestion}
-                className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors"
-              >
-                {t("farmer.assess.use_this_date", {}, "Use this date")}
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>}
-            </div>
-          </div>}
       </div>
       {
     /* Planting Activity Context — shown once commodity is selected */

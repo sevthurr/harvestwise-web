@@ -3,7 +3,7 @@ import { X, Check, PauseCircle, Play, ChevronDown } from "lucide-react";
 import { PHASE_CONFIG, PHASE_TRANSITIONS, formatPeso } from "./types";
 import { PHASE_CODES, normalizePhaseCode } from "../../utils/farmerCodes";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
-import { suggestHarvestDate, getCropDuration } from "../recommend/types";
+import { suggestHarvestDate } from "../recommend/types";
 
 function toDateInputValue(val) {
   if (!val) return "";
@@ -50,7 +50,6 @@ const UpdatePhaseDrawer = ({
 
   const cropIdentifier = crop?.commodityName || crop?.commodity || crop?.commodityId;
   const cropVariant = crop?.variant || crop?.variety;
-  const cropDuration = cropIdentifier ? getCropDuration(cropIdentifier, cropVariant) : null;
 
   useEffect(() => {
     if (!open || !crop) return;
@@ -67,7 +66,7 @@ const UpdatePhaseDrawer = ({
       setSelectedPhase(transitions[0]);
     }
     const initialPlanting = toDateInputValue(crop.rawPlantingDate || crop.plantingDate) || new Date().toISOString().split("T")[0];
-    const initialArea = crop.farmArea ?? "";
+    const initialArea = crop.farmArea != null && crop.farmArea !== "" ? Math.trunc(Number(crop.farmArea)) : "";
     let initialHarvest = toDateInputValue(crop.rawHarvestDate || crop.harvestDate);
     if (!initialHarvest && initialPlanting) {
       const suggestion = suggestHarvestDate(initialPlanting, cropIdentifier, cropVariant);
@@ -168,8 +167,9 @@ const UpdatePhaseDrawer = ({
               id="actualPlantedArea"
               type="number"
               min="0"
+              step="1"
               value={fields.actualPlantedArea ?? ""}
-              onChange={(e) => set({ actualPlantedArea: e.target.value === "" ? "" : Number(e.target.value) })}
+              onChange={(e) => set({ actualPlantedArea: e.target.value === "" ? "" : Math.trunc(Number(e.target.value)) })}
               placeholder="e.g. 500"
               className={inputCls}
             />
@@ -182,15 +182,6 @@ const UpdatePhaseDrawer = ({
               onChange={(e) => set({ updatedHarvestDate: e.target.value })}
               className={inputCls}
             />
-            {cropDuration?.label && (
-              <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
-                {t(
-                  "farmer.cropCycle.auto_calculated_duration",
-                  { duration: cropDuration.label },
-                  `Auto-filled based on typical duration (${cropDuration.label})`
-                )}
-              </p>
-            )}
           </Field>
         </div>
       );

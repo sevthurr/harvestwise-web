@@ -461,7 +461,7 @@ async function prefetchFarmerPageData(queryClient, bundle) {
             ? "harvest"
             : null;
     const queryKey = [
-      "advisory", "plan", crop.id, crop.commodityName, crop.plantingDate,
+      "advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate,
       crop.harvestDate, totalCost, quantity, explicitStage,
     ];
     requests.push(

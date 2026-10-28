@@ -185,8 +185,20 @@ function FactorDetailPage() {
   } = state || {};
 
   const arrivalSummary = arrivalPressureQuery.data;
+  const moduleClassification = (value) => {
+    if (value && typeof value === "object") {
+      return value.classification || value.level || value.status || value.outlook || null;
+    }
+    return value || null;
+  };
+  const resultArrivalClassification = moduleClassification(moduleResults?.arrival_pressure);
+  const resultProductionClassification = moduleClassification(
+    moduleResults?.historical_seasonal_production_level
+  );
+  const resultWeatherClassification = moduleClassification(moduleResults?.weather_risk);
   const arrivalTab = {
-    arrivalPressure: arrivalSummary?.status === "processed" ? arrivalSummary.classification : null,
+    arrivalPressure: resultArrivalClassification
+      || (arrivalSummary?.status === "processed" ? arrivalSummary.classification : null),
     currentVolumeKg: arrivalSummary?.current_arrival_kg ?? null,
     records: (arrivalSummary?.history_records && arrivalSummary.history_records.length > 0)
       ? arrivalSummary.history_records
@@ -207,7 +219,9 @@ function FactorDetailPage() {
     (profile) => profile.quarter === selectedQuarter
   );
   const productionTab = {
-    productionLevel: productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null,
+    productionLevel: resultProductionClassification
+      || (productionSummary?.status === "processed" ? selectedProductionProfile?.classification : null),
+    classificationOverride: resultProductionClassification,
     quarterlyProfiles: productionSummary?.quarterly_profiles || [],
     selectedQuarter,
     grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
@@ -231,7 +245,8 @@ function FactorDetailPage() {
     lang: currentLang,
   });
   const weatherTab = {
-    risk: weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification,
+    risk: resultWeatherClassification
+      || (weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification),
     forecast_14d: weatherAnalysis.forecast_14d,
     commodityName,
     actions: [],
