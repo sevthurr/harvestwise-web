@@ -123,7 +123,8 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       setEmailError("You cannot use a test or development email address. Enter a real email address that can receive messages.");
       return;
     }
-    setShowSaveModal(true);
+    if (form.email !== email) setShowSaveModal(true);
+    else handleSave();
   };
   const handleSave = async () => {
     setFieldErrors({});
@@ -133,11 +134,9 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       middle_name: form.middleName || null,
       suffix: form.suffix === "None" ? null : form.suffix,
       position_title: form.position || null,
-      email: form.email || null
+      email: form.email !== email ? (form.email || null) : undefined
     };
-    if (form.phone !== phone) payload.phone = form.phone || null;
-    if (form.email !== email) payload.email = form.email || null;
-    if (currentPassword) payload.current_password = currentPassword;
+    if (currentPassword && form.email !== email) payload.current_password = currentPassword;
     try {
       await parseResponse(await apiPut("/dftc/staff/me", payload));
       setShowSaveModal(false);
@@ -434,24 +433,20 @@ const SecurityTab = ({ showToast }) => {
         />
       </Card>
 
-      {googleLink.googleConnected && (
+      {googleLink.googleConnected && user?.has_password === false && !addPwDone && (
         <Card>
           <SectionLabel>{t("dftc.settings.add_password", {}, "Add a password")}</SectionLabel>
           <p className="text-[13px] text-black mb-3">
             Your account is signed in with Google. Add a password so you can also sign in with your email and password.
           </p>
-          {addPwDone ? (
-            <p className="text-[13px] text-emerald-600 font-medium">Password added. Please sign in again to continue.</p>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSendAddPwOtp}
-              disabled={addPwSending}
-              className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
-            >
-              {addPwSending ? "Sending…" : "Send verification code to email"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleSendAddPwOtp}
+            disabled={addPwSending}
+            className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
+          >
+            {addPwSending ? "Sending…" : "Send verification code to email"}
+          </button>
           {addPwError && <p className="mt-3 text-[13px] text-red-600">{addPwError}</p>}
 
           {addPwOpen && (

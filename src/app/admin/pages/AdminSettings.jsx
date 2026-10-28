@@ -69,7 +69,8 @@ const AccountTab = ({ showToast }) => {
       return;
     }
     setErrorMsg("");
-    setShowSaveModal(true);
+    if (form.email !== (user?.email || "")) setShowSaveModal(true);
+    else handleSave();
   };
 
   const handleSave = async () => {
@@ -83,7 +84,7 @@ const AccountTab = ({ showToast }) => {
       if (form.suffix && form.suffix !== "None") payload.suffix = form.suffix;
       if (form.email?.trim()) payload.email = form.email.trim();
       if (form.phone?.trim()) payload.phone = form.phone.trim();
-      if (currentPassword) payload.current_password = currentPassword;
+      if (currentPassword && form.email !== (user?.email || "")) payload.current_password = currentPassword;
       setCurrentPassword("");
       await authApi.updateProfile(payload);
       try {

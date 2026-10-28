@@ -154,7 +154,10 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
   };
   const handlePreSave = () => {
     if (emailError) return;
-    setShowSaveModal(true);
+    const profile = rawProfile ? toCamelCase(rawProfile) : {};
+    const originalEmail = profile.email || user?.email || "";
+    if (form.email !== originalEmail) setShowSaveModal(true);
+    else handleSave();
   };
 
   const handleSave = async () => {
@@ -172,10 +175,10 @@ const AccountTab = ({ showToast, onDeleteAccount }) => {
       const originalEmail = profile.email || user?.email || "";
       if (form.phone !== originalPhone) payload.phone = form.phone || null;
       if (form.email !== originalEmail) payload.email = form.email || null;
-      if (currentPassword) payload.current_password = currentPassword;
+      if (currentPassword && form.email !== originalEmail) payload.current_password = currentPassword;
       setCurrentPassword("");
       await parseResponse(await apiPut("/farmer/profile", payload));
-      queryClient.invalidateQueries({ queryKey: ["farmer", "profile"] });
+      await queryClient.invalidateQueries({ queryKey: ["farmer", "profile"] });
       try {
         await refreshUser();
       } catch {
@@ -580,24 +583,20 @@ const SecurityTab = ({ showToast }) => {
         {pwError && <p className="mt-3 text-[13px] text-red-600">{pwError}</p>}
       </Card>
 
-      {googleLink.googleConnected && (
+      {googleLink.googleConnected && user?.has_password === false && !addPwDone && (
         <Card>
           <SectionLabel>{t("farmer.settings.add_password", {}, "Add a password")}</SectionLabel>
           <p className="text-[13px] text-black mb-3">
             Your account is signed in with Google. Add a password so you can also sign in with your email and password.
           </p>
-          {addPwDone ? (
-            <p className="text-[13px] text-emerald-600 font-medium">Password added. Please sign in again to continue.</p>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSendAddPwOtp}
-              disabled={addPwSending}
-              className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
-            >
-              {addPwSending ? "Sending…" : "Send verification code to email"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleSendAddPwOtp}
+            disabled={addPwSending}
+            className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
+          >
+            {addPwSending ? "Sending…" : "Send verification code to email"}
+          </button>
           {addPwError && <p className="mt-3 text-[13px] text-red-600">{addPwError}</p>}
 
           {addPwOpen && (

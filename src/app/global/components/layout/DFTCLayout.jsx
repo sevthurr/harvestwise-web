@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
-import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { getUnreadCount } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
@@ -82,14 +82,15 @@ function DFTCLayoutInner() {
   };
   const queryClient = useQueryClient();
   usePrivilegedDataVersion("dftc");
-  const isFetching = useIsFetching();
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
     formatManilaTime()
   );
 
-  const isSyncing = isManualSyncing || isFetching > 0;
+  // Page queries are allowed to load independently; only an explicit resync
+  // or an active ingestion process should change the header to "Syncing".
+  const isSyncing = isManualSyncing || processState.active;
 
   // Keep the "Last updated" timestamp in sync when a background process
   // completes and triggers an automatic live resync.
