@@ -150,6 +150,16 @@ describe("CropCycleDetailPage Add Cost flow", () => {
     expect(screen.getAllByText("₱26,500").length).toBeGreaterThanOrEqual(1); // Total recorded cost
     expect(screen.getByText("Added cost records")).toBeInTheDocument();
     expect(screen.getByText("1 entry")).toBeInTheDocument();
+    const recordsToggle = screen.getByRole("button", { name: /Added cost records 1 entry/i });
+    expect(recordsToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Aug 1, 2026")).toBeInTheDocument();
+
+    await user.click(recordsToggle);
+    expect(recordsToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Aug 1, 2026")).not.toBeInTheDocument();
+
+    await user.click(recordsToggle);
+    expect(screen.getByText("Aug 1, 2026")).toBeInTheDocument();
 
     // Click Add cost
     const addCostBtn = screen.getByRole("button", { name: /add cost/i });
@@ -165,7 +175,7 @@ describe("CropCycleDetailPage Add Cost flow", () => {
     await user.click(submitBtn);
 
     expect(addCostApiMock).toHaveBeenCalledWith("CRP-0001", {
-      category: "Additional",
+      category: "Others",
       amount: 300,
       costType: "additional",
     });

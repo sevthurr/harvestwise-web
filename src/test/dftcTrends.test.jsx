@@ -506,7 +506,7 @@ describe("DFTC Trends page prices API integration", () => {
     ]);
   });
 
-  it("offers only catalog-backed commodities on the Price tab, full list on Arrival", async () => {
+  it("offers only catalog-backed commodities on Price and only top-10 commodities on Arrival", async () => {
     installApi();
     renderTrends(<DFTCTrends />);
     await waitFor(() => expect(screen.getByText("Forecast Midpoint")).toBeInTheDocument());
@@ -525,9 +525,7 @@ describe("DFTC Trends page prices API integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
     const arrivalFilter = await openCommodityCombobox("Carrots");
     fireEvent.change(arrivalFilter.input, { target: { value: "Avocado" } });
-    expect(
-      within(arrivalFilter.dropdown()).getByRole("button", { name: /Avocado/ })
-    ).toBeInTheDocument();
+    expect(within(arrivalFilter.dropdown()).getByText("No commodities found")).toBeInTheDocument();
   });
 
   it("keeps the full commodity list while the price catalog is still loading", async () => {
@@ -713,25 +711,20 @@ describe("DFTC Trends page prices API integration", () => {
     );
   });
 
-  it("resolves an arrival commodity that has no top-10 price row through the commodity catalog", async () => {
+  it("does not offer arrival commodities outside the top-10 list", async () => {
     installApi();
     renderTrends(<DFTCTrends />);
 
     fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
     const arrivalFilter = await openCommodityCombobox("Carrots");
     fireEvent.change(arrivalFilter.input, { target: { value: "Saluyot" } });
-    fireEvent.click(
-      within(arrivalFilter.dropdown()).getByRole("button", { name: /Saluyot/ })
+    expect(within(arrivalFilter.dropdown()).getByText("No commodities found")).toBeInTheDocument();
+    expect(analyticsApi.getArrivalPressure).not.toHaveBeenCalledWith(
+      "COM-SAL",
+      null,
+      null,
+      { aggregateVarieties: true }
     );
-
-    await waitFor(() => {
-      expect(analyticsApi.getArrivalPressure).toHaveBeenCalledWith(
-        "COM-SAL",
-        null,
-        null,
-        { aggregateVarieties: true }
-      );
-    });
   });
 
   it("loads and displays the Admin seasonal-production classification in DFTC Trends", async () => {

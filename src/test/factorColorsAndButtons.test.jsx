@@ -43,4 +43,15 @@ describe("Factor condition colors and icons", () => {
     expect(res.colorClass).toBe("text-red-600");
     expect(res.iconType).toBe("production");
   });
+
+  it("resolves moderately high production as upper middle (yellow)", () => {
+    const res = resolveFactorCondition(
+      "historical_seasonal_production_level",
+      "upper_middle",
+      "",
+      "Moderately high historical production"
+    );
+    expect(res.condition).toBe("upper_middle");
+    expect(res.colorClass).toBe("text-yellow-500");
+  });
 });

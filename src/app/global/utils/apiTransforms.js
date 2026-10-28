@@ -77,13 +77,35 @@ export function capitalizeNameInput(value) {
  */
 export function formatDate(isoDate) {
   if (!isoDate) return null;
-  const date = new Date(isoDate);
+  const date = parseManilaDate(isoDate);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     timeZone: 'Asia/Manila'
   });
+}
+
+/** Parse date-only API values without browser-local timezone shifts. */
+export function parseManilaDate(value) {
+  if (!value) return null;
+  const raw = String(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T12:00:00+08:00`)
+    : new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function manilaTodayParts(value = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(value);
+  return Object.fromEntries(parts.filter(({ type }) => type !== "literal").map(({ type, value: part }) => [type, part]));
+}
+
+export function manilaTodayIso() {
+  const { year, month, day } = manilaTodayParts();
+  return `${year}-${month}-${day}`;
 }
 
 /**

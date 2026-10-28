@@ -195,7 +195,7 @@ describe("Crop Assessment Updates", () => {
     expect(farmgateInput.value).toBe("70");
 
     // "Cost to recover" / "Pagbawi sa Gasto" / "Break-even" should be present on Step 4
-    expect(screen.getByText(/Break-even|Cost to recover|Pagbawi sa Gasto/i)).toBeDefined();
+    expect(screen.getAllByText(/Break-even|Cost to recover|Pagbawi sa Gasto/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/You need to sell/i)).toBeDefined();
   });
 
@@ -222,7 +222,7 @@ describe("Crop Assessment Updates", () => {
 
     expect(screen.getAllByText("Talong").length).toBeGreaterThan(0);
     expect(screen.getByText(/You need to sell Talong/i)).toBeDefined();
-    expect(screen.getByText(/₱40\/kg/)).toBeDefined();
+    expect(screen.getAllByText(/₱40\/kg/).length).toBeGreaterThan(0);
   });
 });
 

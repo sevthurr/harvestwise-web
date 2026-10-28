@@ -142,20 +142,9 @@ export function resolveFactorCondition(moduleKey, moduleLevel, reasonKey = "", t
     }
   } else if (iconType === "supply" || iconType === "production") {
     if (
-      rawLvl.includes("high") ||
-      rawLvl.includes("oversupply") ||
-      rawLvl.includes("taas") ||
-      rawLvl.includes("dagsang") ||
-      rawLvl.includes("daghan") ||
-      rk.includes("high") ||
-      txt.includes("taas") ||
-      txt.includes("high") ||
-      txt.includes("oversupply")
-    ) {
-      condition = "unfavorable"; // red
-    } else if (
       rawLvl.includes("upper_middle") ||
       rk.includes("upper_middle") ||
+      txt.includes("moderately high") ||
       rawLvl.includes("moderate") ||
       rawLvl.includes("kasarangan") ||
       txt.includes("upper_middle") ||
@@ -167,9 +156,22 @@ export function resolveFactorCondition(moduleKey, moduleLevel, reasonKey = "", t
     } else if (
       rawLvl.includes("lower_middle") ||
       rk.includes("lower_middle") ||
+      txt.includes("moderately low") ||
       txt.includes("lower_middle")
     ) {
       condition = "lower_middle"; // orange
+    } else if (
+      rawLvl === "high" ||
+      rawLvl.includes("oversupply") ||
+      rawLvl.includes("taas") ||
+      rawLvl.includes("dagsang") ||
+      rawLvl.includes("daghan") ||
+      rk === "high" ||
+      txt.includes("taas") ||
+      txt === "high" ||
+      txt.includes("oversupply")
+    ) {
+      condition = "unfavorable"; // red
     } else if (
       rawLvl.includes("low") ||
       rawLvl.includes("ubos") ||

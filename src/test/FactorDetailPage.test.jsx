@@ -42,10 +42,11 @@ vi.mock("../app/global/api.js", () => ({
 
 // Capture what the tabs receive instead of rendering the whole chart tree.
 vi.mock("../app/farmer/components/shared/FactorDetailTabs.jsx", () => ({
-  FactorDetailTabs: ({ arrival, production }) => (
+  FactorDetailTabs: ({ arrival, production, weather }) => (
     <div>
       <span data-testid="arrival-classification">{arrival?.arrivalPressure ?? "none"}</span>
       <span data-testid="production-level">{production?.productionLevel ?? "none"}</span>
+      <span data-testid="weather-classification">{weather?.risk ?? "none"}</span>
     </div>
   ),
 }));
@@ -136,6 +137,29 @@ describe("FactorDetailPage — arrival and production data", () => {
     expect(getArrivalPressureMock).toHaveBeenCalledWith("COM-0024");
     expect(getSeasonalProductionMock).toHaveBeenCalledWith("COM-0024", "Q4");
     expect(getArrivalPressureMock).not.toHaveBeenCalledWith("lettuce");
+  });
+
+  it("uses recommendation module classifications for the detailed-factors result", async () => {
+    renderPage({
+      title: "Lettuce — Detailed Factors",
+      commodityId: "COM-0025",
+      commodityName: "Lettuce",
+      selectedQuarter: "Q4",
+      moduleResults: {
+        arrival_pressure: "Lower Middle",
+        historical_seasonal_production_level: "Upper Middle",
+        weather_risk: "Severe",
+      },
+      advisoryCode: "avoid_for_now",
+      backPath: "/farmer/assess",
+      backLabel: "Assessment Result",
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("arrival-classification")).toHaveTextContent("Lower Middle")
+    );
+    expect(screen.getByTestId("production-level")).toHaveTextContent("Upper Middle");
+    expect(screen.getByTestId("weather-classification")).toHaveTextContent("Severe");
   });
 
   it("renders the commodity icon before page title and supports clicking previous breadcrumb for back navigation", async () => {
