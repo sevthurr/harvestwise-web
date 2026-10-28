@@ -371,7 +371,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitt
             {t("onboarding.preferred_variety", {}, "Preferred variety (optional)")}
           </p>
           {Object.keys(data.crops).map((cropName) => {
-            const variants = getVariants(cropName);
+            const variants = cropList.find((crop) => crop.name === cropName)?.varieties || getVariants(cropName);
             if (!variants.length) return null;
             return (
               <div key={cropName} className="flex items-center gap-3">

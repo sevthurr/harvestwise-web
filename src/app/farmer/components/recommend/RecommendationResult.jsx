@@ -273,18 +273,29 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   });
   const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName, advisoryMeta);
   const currentPx = data.currentPrice || null;
-  const forecastLo = data.forecastLower || null;
-  const forecastHi = data.forecastUpper || null;
-  const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : currentPx;
-  const sellingBasis = hasFarmgate ? data.farmgatePrice : forecastMid;
+  const forecastLo = data.forecastLower || moduleResults.lower_forecast_price || null;
+  const forecastHi = data.forecastUpper || moduleResults.upper_forecast_price || null;
+  const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : (moduleResults.forecast_midpoint || currentPx);
+  const seasonalRef = moduleResults.reference_price || moduleResults.historical_seasonal_price || null;
+  const hasEligibleForecast = moduleResults.has_eligible_forecast === true;
+  const planningOrNoForecast = cropStage === "before_planting" || !hasEligibleForecast;
+  const sellingBasis = hasFarmgate
+    ? data.farmgatePrice
+    : (planningOrNoForecast ? (seasonalRef || forecastMid) : (forecastMid || seasonalRef));
   const priceBasisLabel = hasFarmgate
     ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price")
+    : planningOrNoForecast
+    ? t("farmer.factors.profitability.based_on_seasonal", {}, "Based on historical seasonal price")
     : t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price");
   const priceBasisShort = hasFarmgate
     ? t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")
+    : planningOrNoForecast
+    ? t("farmer.factors.price.reference_price_label", {}, "Historical seasonal price")
     : t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference");
   const priceBasisDetail = hasFarmgate
-    ? `${t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated Farmgate Price")}: \u20B1${data.farmgatePrice}/kg`
+    ? `${t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}: \u20B1${data.farmgatePrice}/kg`
+    : planningOrNoForecast && seasonalRef != null
+    ? `${t("farmer.factors.price.reference_price_label", {}, "Reference price")}: ₱${Number(seasonalRef).toFixed(2)}/kg`
     : (forecastLo != null && forecastHi != null
         ? t("farmer.factors.price.forecast_reference_range", { forecast_lo: forecastLo, forecast_hi: forecastHi })
         : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: -/kg`);
@@ -452,7 +463,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planted_area", {}, "Actual planted area (sq m)")}</label>
-              <input type="number" min="0" value={plantedForm.actualArea} onChange={(e) => setPlantedForm((f) => ({ ...f, actualArea: e.target.value === "" ? "" : Number(e.target.value) }))} placeholder="e.g. 500" className={inputCls} />
+              <input type="number" min="0" step="1" value={plantedForm.actualArea} onChange={(e) => setPlantedForm((f) => ({ ...f, actualArea: e.target.value === "" ? "" : Math.trunc(Number(e.target.value)) }))} placeholder="e.g. 500" className={inputCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.updated_expected_harvest", {}, "Updated expected harvest date")}</label>

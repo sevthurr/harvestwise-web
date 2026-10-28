@@ -462,7 +462,8 @@ describe("Farmer detailed factors use Admin analytics data", () => {
     // Both panels must be visible
     expect(await screen.findByText("Forecast Information (Primary Basis)")).toBeInTheDocument();
     expect(screen.getByText("Historical Seasonal Information")).toBeInTheDocument();
-    expect(screen.getByText("Forecast Eligible")).toBeInTheDocument();
+    expect(screen.queryByText("Dual Assessment")).not.toBeInTheDocument();
+    expect(screen.queryByText("Forecast Eligible")).not.toBeInTheDocument();
 
     // Check forecast information values
     expect(screen.getByText("₱65.00")).toBeInTheDocument();
