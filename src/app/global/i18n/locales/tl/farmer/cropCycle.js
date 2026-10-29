@@ -110,6 +110,11 @@ export const cropCycle = {
   expected_harvest_qty_opt: "Inaasahang dami ng ani (kg) — opsyonal",
   harvest_started_date: "Petsa kung kailan nagsimula ang pag-aani",
   qty_harvested_so_far: "Dami na naani sa kasalukuyan (kg)",
+  quantity_to_harvest_label: "Dami ng Aanihin (kg)",
+  based_on_estimated_yield: "Batay sa Tinatayang Ani",
+  harvest_quantity_auto_desc: "Awtomatikong batay sa iyong tinatayang ani. Ang bawat tala ng ani ay ibabawas mula rito.",
+  harvest_exceeds_remaining: "Hindi maaaring lumampas sa natitirang ani ({max} kg).",
+  remaining_yield_to_harvest: "Natitirang ani na aanihin (kg)",
   additional_cost_opt: "Karagdagang gastos sa produksyon (₱) — opsyonal",
   final_qty_sold: "Huling dami na naibenta (kg)",
   avg_selling_price: "Karaniwang presyo ng bentahan (₱/kg)",
@@ -120,4 +125,6 @@ export const cropCycle = {
   est_gross_revenue: "Tinatayang kabuuang benta",
   all_amounts_estimates: "Tantiya lamang ang lahat ng halaga.",
   remove_farmgate: "Alisin",
+  final_cost_breakdown_hint: "Ipinapakita ang kabuuang kabuuan: tinantyang gastos ({initial}) + karagdagang gastos ({added})",
+  final_cost_hint: "Ipinapakita ang kabuuang kabuuan para sa huling gastos sa produksyon.",
 };
