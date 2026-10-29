@@ -186,6 +186,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [showPlantedForm, setShowPlantedForm] = useState(false);
+  const [whyExpanded, setWhyExpanded] = useState(false);
   const draftAutosavedRef = useRef(false);
   const [plantedForm, setPlantedForm] = useState({
     actualPlantingDate: data.plantingDate,
@@ -583,60 +584,76 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       </div>
 
       {/* 2. Why this recommendation? Factors card */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-xs p-3.5 sm:p-5 space-y-3">
-        <p className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-          {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
-        </p>
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-xs p-3.5 sm:p-5">
+        <button
+          type="button"
+          onClick={() => setWhyExpanded((v) => !v)}
+          aria-expanded={whyExpanded}
+          className="w-full flex items-center justify-between text-left py-1 hover:opacity-80 transition-opacity cursor-pointer group"
+        >
+          <span className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
+          </span>
+          {whyExpanded ? (
+            <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+          )}
+        </button>
 
-        {mainFactor && (
-          <div className="flex items-start gap-3 p-3 sm:p-3.5 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
-            <div
-              className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                advisoryCode === ADVISORY_CODES.AVOID_FOR_NOW || badge.type === "avoid"
-                  ? "bg-red-50 text-red-600"
-                  : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION || badge.type === "caution"
-                  ? "bg-amber-50 text-amber-600"
-                  : "bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              <AlertCircle className="w-4 h-4" />
-            </div>
-            <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
-              {renderComposedMessage(mainFactor, langCode)}
+        {whyExpanded && (
+          <div className="mt-3 space-y-3">
+            {mainFactor && (
+              <div className="flex items-start gap-3 p-3 sm:p-3.5 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
+                <div
+                  className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
+                    advisoryCode === ADVISORY_CODES.AVOID_FOR_NOW || badge.type === "avoid"
+                      ? "bg-red-50 text-red-600"
+                      : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION || badge.type === "caution"
+                      ? "bg-amber-50 text-amber-600"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+                <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
+                  {renderComposedMessage(mainFactor, langCode)}
+                </p>
+              </div>
+            )}
+
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+              {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
             </p>
+            <div className="space-y-2 sm:space-y-2.5">
+              {composedReasons.map((r, idx) => {
+                const reasonText = renderComposedMessage(r, langCode);
+                const factorCond = resolveFactorCondition(
+                  r.module,
+                  effectivePriceResults?.[r.module] || moduleResults?.[r.module],
+                  r.key,
+                  reasonText
+                );
+
+                return (
+                  <div key={r.module || idx} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                      {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {r.labelKey && (
+                        <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
+                          {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
+                        </p>
+                      )}
+                      <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
-
-        <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-          {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
-        </p>
-        <div className="space-y-2 sm:space-y-2.5">
-          {composedReasons.map((r, idx) => {
-            const reasonText = renderComposedMessage(r, langCode);
-            const factorCond = resolveFactorCondition(
-              r.module,
-              effectivePriceResults?.[r.module] || moduleResults?.[r.module],
-              r.key,
-              reasonText
-            );
-
-            return (
-              <div key={r.module || idx} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
-                <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  {r.labelKey && (
-                    <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
-                      {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
-                    </p>
-                  )}
-                  <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       {/* 3. Estimated Profit card */}
