@@ -199,16 +199,44 @@ const UpdatePhaseDrawer = ({
       );
     }
     if (selectedPhase === "harvested") {
+      const estimatedYield = crop?.harvestQuantity ?? crop?.expectedHarvestQty ?? 0;
       return (
         <div className="space-y-4">
           <Field label={t("farmer.cropCycle.harvest_started_date", {}, "Harvest started date")}>
-            <input type="date" value={fields.actualHarvestDate ?? ""} onChange={(e) => set({ actualHarvestDate: e.target.value })} className={inputCls} />
+            <input
+              type="date"
+              value={fields.actualHarvestDate ?? ""}
+              onChange={(e) => set({ actualHarvestDate: e.target.value })}
+              className={inputCls}
+            />
           </Field>
-          <Field label={t("farmer.cropCycle.qty_harvested_so_far", {}, "Quantity harvested so far (kg)")}>
-            <input type="number" min="0" value={fields.actualHarvestedQty ?? ""} onChange={(e) => set({ actualHarvestedQty: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="e.g. 580" className={inputCls} />
-          </Field>
+          <div>
+            <label className="block text-sm font-medium text-[var(--hw-neutral-700)] mb-1.5">
+              {t("farmer.cropCycle.quantity_to_harvest_label", {}, "Quantity to Harvest (kg)")}
+            </label>
+            <div className="w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] text-sm font-semibold text-[var(--hw-neutral-900)] flex items-center justify-between">
+              <span>{estimatedYield > 0 ? `${Number(estimatedYield).toLocaleString()} kg` : "—"}</span>
+              <span className="text-xs text-[var(--hw-green-700)] font-medium">
+                {t("farmer.cropCycle.based_on_estimated_yield", {}, "Based on Estimated Yield")}
+              </span>
+            </div>
+            <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
+              {t(
+                "farmer.cropCycle.harvest_quantity_auto_desc",
+                {},
+                "Automatically based on your estimated yield (Gibanabana nga Ani). Harvest entries will deduct from this amount."
+              )}
+            </p>
+          </div>
           <Field label={t("farmer.cropCycle.additional_cost_opt", {}, "Additional production cost (₱) — optional")}>
-            <input type="number" min="0" value={fields.updatedTotalCost ?? ""} onChange={(e) => set({ updatedTotalCost: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="e.g. 0" className={inputCls} />
+            <input
+              type="number"
+              min="0"
+              value={fields.updatedTotalCost ?? ""}
+              onChange={(e) => set({ updatedTotalCost: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder="e.g. 0"
+              className={inputCls}
+            />
           </Field>
         </div>
       );
@@ -226,8 +254,9 @@ const UpdatePhaseDrawer = ({
       const cost = typeof fields.finalProductionCost === "number" ? fields.finalProductionCost : overallTotalCost;
       const revenue = qty !== null && price !== null ? qty * price : null;
       const profitLoss = revenue !== null ? revenue - cost : null;
-      const hasAddedCosts = (crop?.addedCosts || 0) > 0;
-      const initialCostEst = crop?.initialCost != null ? crop.initialCost : Math.max(0, overallTotalCost - (crop?.addedCosts || 0));
+      const addedCosts = crop?.addedCosts ?? crop?.added_costs ?? 0;
+      const hasAddedCosts = (addedCosts || 0) > 0;
+      const initialCostEst = crop?.initialCost != null ? crop.initialCost : (crop?.initial_cost != null ? crop.initial_cost : Math.max(0, overallTotalCost - addedCosts));
 
       return (
         <div className="space-y-4">
@@ -269,19 +298,6 @@ const UpdatePhaseDrawer = ({
               placeholder={String(overallTotalCost || 0)}
               className={inputCls}
             />
-            {hasAddedCosts ? (
-              <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
-                {t(
-                  "farmer.cropCycle.final_cost_breakdown_hint",
-                  { initial: formatPeso(initialCostEst), added: formatPeso(crop.addedCosts) },
-                  `Reflects overall total: estimated cost (${formatPeso(initialCostEst)}) + added costs (${formatPeso(crop.addedCosts)})`
-                )}
-              </p>
-            ) : (
-              <p className="text-[11px] text-[var(--hw-neutral-500)] mt-1">
-                {t("farmer.cropCycle.final_cost_hint", {}, "Reflects the overall total for final production cost.")}
-              </p>
-            )}
           </Field>
           <Field id="completionDate" label={t("farmer.cropCycle.completion_date", {}, "Completion date")}>
             <input
@@ -292,17 +308,6 @@ const UpdatePhaseDrawer = ({
               className={inputCls}
             />
           </Field>
-          <Field id="notes" label={t("farmer.cropCycle.notes_opt", {}, "Notes — optional")}>
-            <textarea
-              id="notes"
-              value={fields.notes ?? ""}
-              onChange={(e) => set({ notes: e.target.value })}
-              placeholder={t("farmer.cropCycle.notes_placeholder", {}, "Any observations about this crop cycle…")}
-              rows={2}
-              className={`${inputCls} resize-none`}
-            />
-          </Field>
-
           <div className="bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)]/70 rounded-xl px-4 py-3 space-y-2">
             <div className="flex justify-between items-center text-sm">
               <span className="text-[var(--hw-neutral-600)]">
@@ -331,7 +336,13 @@ const UpdatePhaseDrawer = ({
               </>
             )}
             <p className="text-[11px] text-[var(--hw-neutral-500)]">
-              {t("farmer.cropCycle.all_amounts_estimates", {}, "All amounts are estimates for decision-support records.")}
+              {hasAddedCosts
+                ? t(
+                    "farmer.cropCycle.final_cost_breakdown_hint",
+                    { initial: formatPeso(initialCostEst), added: formatPeso(addedCosts) },
+                    `Nagpakita sa kinatibuk-ang total: gibanabanang gasto (${formatPeso(initialCostEst)}) + dugang nga gasto (${formatPeso(addedCosts)})`
+                  )
+                : t("farmer.cropCycle.all_amounts_estimates", {}, "All amounts are estimates for decision-support records.")}
             </p>
           </div>
         </div>

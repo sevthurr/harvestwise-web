@@ -85,7 +85,25 @@ export function normalizeCropPlan(raw, pricesMap) {
     ? Math.ceil(totalCost / qty)
     : (item.breakevenPricePerKg != null ? Number(item.breakevenPricePerKg) : (item.breakEvenPrice != null ? Number(item.breakEvenPrice) : null));
 
-  const harvestRecords = Array.isArray(item.harvestRecords) ? item.harvestRecords : [];
+  const rawHarvestRecords = Array.isArray(item.harvestRecords)
+    ? item.harvestRecords
+    : (Array.isArray(item.harvest_records)
+      ? item.harvest_records
+      : (Array.isArray(raw?.harvest_records) ? raw.harvest_records : []));
+  const harvestRecords = rawHarvestRecords.map((r, i) => {
+    const rawQty = r.actualHarvestQty ?? r.actual_harvest_qty;
+    const qtyNum = rawQty != null && !isNaN(Number(rawQty)) ? Number(rawQty) : 0;
+    const rawPrice = r.actualSellingPricePerKg ?? r.actual_selling_price_per_kg;
+    const priceNum = rawPrice != null && !isNaN(Number(rawPrice)) ? Number(rawPrice) : null;
+    return {
+      id: r.id || `HVR-${i + 1}`,
+      cropPlanId: r.cropPlanId || r.crop_plan_id || item.id,
+      actualHarvestDate: r.actualHarvestDate || r.actual_harvest_date || null,
+      actualHarvestQty: qtyNum,
+      actualSellingPricePerKg: priceNum,
+      createdAt: r.createdAt || r.created_at || null,
+    };
+  });
   const sortedHarvestRecords = [...harvestRecords].sort((a, b) => {
     const dateDifference = String(b.actualHarvestDate || "").localeCompare(String(a.actualHarvestDate || ""));
     if (dateDifference !== 0) return dateDifference;
@@ -94,9 +112,7 @@ export function normalizeCropPlan(raw, pricesMap) {
   const latestHarvest = sortedHarvestRecords[0] || null;
   const actualHarvestQty = sortedHarvestRecords.length > 0
     ? sortedHarvestRecords.reduce((sum, record) => sum + Number(record.actualHarvestQty || 0), 0)
-    : item.actualHarvestQty != null
-      ? Number(item.actualHarvestQty)
-      : null;
+    : (phase === "harvested" ? 0 : (item.actualHarvestQty != null ? Number(item.actualHarvestQty) : null));
   const pricedHarvestQty = sortedHarvestRecords.reduce(
     (sum, record) => sum + (record.actualSellingPricePerKg != null ? Number(record.actualHarvestQty || 0) : 0),
     0
@@ -111,7 +127,7 @@ export function normalizeCropPlan(raw, pricesMap) {
   );
   const actualSellingPrice = pricedHarvestQty > 0
     ? actualHarvestRevenue / pricedHarvestQty
-    : latestHarvest
+    : (latestHarvest && latestHarvest.actualSellingPricePerKg != null)
       ? Number(latestHarvest.actualSellingPricePerKg)
     : item.actualSellingPrice != null
       ? Number(item.actualSellingPrice)
@@ -402,10 +418,43 @@ const CropsProvider = ({ children }) => {
         actual_selling_price_per_kg: sellingPricePerKg,
       });
       const data = await parseResponse(res);
+      const camel = toCamelCase(data);
+      const rawQty = camel?.actualHarvestQty ?? data?.actual_harvest_qty;
+      const rawPrice = camel?.actualSellingPricePerKg ?? data?.actual_selling_price_per_kg;
+      const recordItem = {
+        id: camel?.id || data?.id || `HVR-${Date.now()}`,
+        cropPlanId: planId,
+        actualHarvestDate: camel?.actualHarvestDate || data?.actual_harvest_date || harvestDate,
+        actualHarvestQty: rawQty != null && !isNaN(Number(rawQty)) ? Number(rawQty) : Number(harvestQty || 0),
+        actualSellingPricePerKg: rawPrice != null && !isNaN(Number(rawPrice))
+          ? Number(rawPrice)
+          : (sellingPricePerKg != null ? Number(sellingPricePerKg) : null),
+        createdAt: camel?.createdAt || data?.created_at || new Date().toISOString(),
+      };
+
+      queryClient.setQueryData(["farmer", "crops"], (old) => {
+        if (!old) return old;
+        return old.map((c) => {
+          if (c.id !== planId) return c;
+          const existing = (c.harvestRecords || []).filter((r) => r.id !== recordItem.id);
+          const updatedRecords = [recordItem, ...existing].sort((a, b) => {
+            const dateDifference = String(b.actualHarvestDate || "").localeCompare(String(a.actualHarvestDate || ""));
+            if (dateDifference !== 0) return dateDifference;
+            return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+          });
+          const totalActualHarvestQty = updatedRecords.reduce((sum, r) => sum + Number(r.actualHarvestQty || 0), 0);
+          return {
+            ...c,
+            harvestRecords: updatedRecords,
+            actualHarvestQty: totalActualHarvestQty,
+          };
+        });
+      });
+
       await refreshCrops();
-      return data;
+      return recordItem;
     },
-    [refreshCrops]
+    [queryClient, refreshCrops]
   );
 
   return (

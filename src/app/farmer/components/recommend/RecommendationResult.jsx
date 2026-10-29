@@ -38,6 +38,7 @@ import {
   composeAdvisoryAction,
   composeImmediateActions,
   resolveMainFactor,
+  pickUsablePriceOutlook,
 } from "../../utils/advisoryReasons";
 import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
 import { apiPost, parseResponse } from "../../../global/api";
@@ -233,13 +234,25 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
   const AdvisoryIcon = advisoryCfg ? advisoryCfg.Icon : null;
   const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");
+  const seasonalRef = moduleResults.reference_price || moduleResults.historical_seasonal_price || null;
+  const hasEligibleForecast = moduleResults.has_eligible_forecast === true;
+  const planningOrNoForecast = cropStage === "before_planting" || !hasEligibleForecast;
+
+  const effectivePriceResults = {
+    ...moduleResults,
+    price_outlook: (planningOrNoForecast && moduleResults.historical_price_outlook)
+      ? (pickUsablePriceOutlook(moduleResults.historical_price_outlook, moduleResults.price_outlook) || moduleResults.price_outlook)
+      : moduleResults.price_outlook,
+    reference_price: moduleResults.reference_price ?? moduleResults.historical_seasonal_price,
+    comparison_baseline: moduleResults.comparison_baseline ?? moduleResults.macro_baseline_price,
+  };
 
   const composedSummary = composeAdvisorySummary(advisoryCode, cropStage, displayName);
   const summaryText = renderComposedMessage(composedSummary, langCode, advisoryCode ? t(`farmer.advisory.${advisoryCode}_summary`, { crop_name: displayName }) : "");
   const advisoryMeta = advisoryResponse?.advisory || {};
   const mainFactor = advisoryCode
     ? resolveMainFactor({
-        moduleResults,
+        moduleResults: effectivePriceResults,
         contributions: advisoryMeta.module_contributions,
         weightsApplied: advisoryMeta.weights_applied,
         vetoes: advisoryMeta.hard_vetoes,
@@ -249,7 +262,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const horizonCandidate = Number(advisoryResponse?.price_horizon || data.horizonDays || 14);
   const horizonDays = [7, 14, 21, 28].includes(horizonCandidate) ? horizonCandidate : 14;
   const composedReasons = composeAdvisoryReasons({
-    moduleResults,
+    moduleResults: effectivePriceResults,
     contributions: advisoryMeta.module_contributions,
     vetoes: advisoryMeta.hard_vetoes,
     cropName: displayName,
@@ -264,21 +277,19 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const immediateActions = composeImmediateActions({
     advisoryCode,
     cropStage,
-    moduleResults,
+    moduleResults: effectivePriceResults,
     cropName: displayName,
     contributions: advisoryMeta.module_contributions,
     vetoes: advisoryMeta.hard_vetoes,
     actionGuidance: advisoryMeta.action_guidance,
     hasFarmgate,
   });
-  const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName, advisoryMeta);
+  const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, effectivePriceResults, displayName, advisoryMeta);
   const currentPx = data.currentPrice || null;
   const forecastLo = data.forecastLower || moduleResults.lower_forecast_price || null;
   const forecastHi = data.forecastUpper || moduleResults.upper_forecast_price || null;
+  // sellingBasis and priceBasisLabel reuse seasonalRef, hasEligibleForecast, planningOrNoForecast from above
   const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : (moduleResults.forecast_midpoint || currentPx);
-  const seasonalRef = moduleResults.reference_price || moduleResults.historical_seasonal_price || null;
-  const hasEligibleForecast = moduleResults.has_eligible_forecast === true;
-  const planningOrNoForecast = cropStage === "before_planting" || !hasEligibleForecast;
   const sellingBasis = hasFarmgate
     ? data.farmgatePrice
     : (planningOrNoForecast ? (seasonalRef || forecastMid) : (forecastMid || seasonalRef));
@@ -532,7 +543,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
                     commodityId: data.commodityId || data.commodity,
                     commodityName,
                     cropStage,
-                    moduleResults,
+                    moduleResults: effectivePriceResults,
                     advisoryCode,
                     advisoryLabel,
                     resultData: data,
@@ -604,7 +615,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
             const reasonText = renderComposedMessage(r, langCode);
             const factorCond = resolveFactorCondition(
               r.module,
-              moduleResults?.[r.module],
+              effectivePriceResults?.[r.module] || moduleResults?.[r.module],
               r.key,
               reasonText
             );
