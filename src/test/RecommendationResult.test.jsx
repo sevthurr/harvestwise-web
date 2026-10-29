@@ -145,4 +145,22 @@ describe("RecommendationResult — View basis navigation", () => {
       );
     });
   });
+
+  it("toggles collapsible 'Why this recommendation?' factors card", async () => {
+    renderResult(baseData);
+
+    const toggle = screen.getByRole("button", { name: /Why this recommendation\?|Ngano kini nga tambag\?/i });
+    expect(toggle).toBeInTheDocument();
+
+    // Initially collapsed: main reasons not visible
+    expect(screen.queryByText(/Main reasons|Pangunang mga rason/i)).not.toBeInTheDocument();
+
+    // Click to expand
+    fireEvent.click(toggle);
+    expect(screen.getByText(/Main reasons|Pangunang mga rason/i)).toBeInTheDocument();
+
+    // Click to collapse
+    fireEvent.click(toggle);
+    expect(screen.queryByText(/Main reasons|Pangunang mga rason/i)).not.toBeInTheDocument();
+  });
 });

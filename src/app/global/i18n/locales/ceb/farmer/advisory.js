@@ -3,6 +3,7 @@ export const advisory = {
     "recommended": "Maayo ang Kondisyon",
     "proceed_with_caution": "Pwede Padayon, Pero Bantayi",
     "avoid_for_now": "Ayaw Sa Itanom Karon",
+    "avoid_harvest": "Ayaw sa e ani karon",
     "high_risk": "Ayaw Sa Itanom Karon",
     "planning": "Pagplano",
     "growing": "Nagtubo",

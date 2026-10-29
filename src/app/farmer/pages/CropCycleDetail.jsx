@@ -173,6 +173,22 @@ function formatHoldReason(reason, t) {
   return reason;
 }
 
+function formatClassification(val, t) {
+  if (!val || typeof val !== "string") return val;
+  const lower = val.trim().toLowerCase().replace(/[\s-]/g, "_");
+  if (lower === "favorable") return t ? t("farmer.calendar.factors.price_level_favorable", {}, "Favorable") : "Favorable";
+  if (lower === "neutral") return t ? t("farmer.calendar.factors.price_level_neutral", {}, "Neutral") : "Neutral";
+  if (lower === "unfavorable") return t ? t("farmer.calendar.factors.price_level_unfavorable", {}, "Unfavorable") : "Unfavorable";
+  if (lower === "low") return t ? t("farmer.factors.arrival.low", {}, "Low") : "Low";
+  if (lower === "lower_middle") return t ? t("farmer.factors.arrival.lower_middle", {}, "Lower Middle") : "Lower Middle";
+  if (lower === "upper_middle") return t ? t("farmer.factors.arrival.upper_middle", {}, "Upper Middle") : "Upper Middle";
+  if (lower === "high") return t ? t("farmer.factors.arrival.high", {}, "High") : "High";
+  if (lower === "suitable") return t ? t("farmer.factors.weather.suitable", {}, "Suitable") : "Suitable";
+  if (lower === "caution") return t ? t("farmer.factors.weather.caution", {}, "Caution") : "Caution";
+  if (lower === "severe") return t ? t("farmer.factors.weather.severe", {}, "Severe") : "Severe";
+  return val.charAt(0).toUpperCase() + val.slice(1);
+}
+
 function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
@@ -185,6 +201,8 @@ function CropCycleDetailPage() {
   const [additionalCost, setAdditionalCost] = useState("");
   const [isSubmittingCost, setIsSubmittingCost] = useState(false);
   const [addedCostsExpanded, setAddedCostsExpanded] = useState(true);
+  const [advisoryExpanded, setAdvisoryExpanded] = useState(true);
+  const [whyExpanded, setWhyExpanded] = useState(false);
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
@@ -203,10 +221,13 @@ function CropCycleDetailPage() {
   const [harvestEntryPrice, setHarvestEntryPrice] = useState("");
   const [isSavingHarvestEntry, setIsSavingHarvestEntry] = useState(false);
 
-  const expectedTotalVolume = crop?.harvestQuantity || crop?.expectedHarvestQty || 0;
-  const savedHarvestProgress = crop?.harvestRecords?.length
-    ? crop.harvestRecords.reduce((sum, record) => sum + Number(record.actualHarvestQty || 0), 0)
-    : Number(crop?.actualHarvestQty ?? crop?.partialHarvestQty ?? 0);
+  const expectedTotalVolume = Number(crop?.harvestQuantity ?? crop?.expectedHarvestQty ?? 0);
+  const savedHarvestProgress = Array.isArray(crop?.harvestRecords) && crop.harvestRecords.length > 0
+    ? crop.harvestRecords.reduce((sum, record) => {
+        const q = record.actualHarvestQty ?? record.actual_harvest_qty;
+        return sum + (q != null && !isNaN(Number(q)) ? Number(q) : 0);
+      }, 0)
+    : 0;
   const parsedHarvestEntry = harvestEntryQty !== "" && !isNaN(Number(harvestEntryQty))
     ? Number(harvestEntryQty)
     : 0;
@@ -214,8 +235,9 @@ function CropCycleDetailPage() {
     ? Number(harvestEntryPrice)
     : null;
   const remainingExpected = expectedTotalVolume > 0
-    ? Math.max(0, expectedTotalVolume - savedHarvestProgress - parsedHarvestEntry)
+    ? Math.max(0, expectedTotalVolume - savedHarvestProgress)
     : "";
+  const isExceedingRemaining = expectedTotalVolume > 0 && parsedHarvestEntry > (expectedTotalVolume - savedHarvestProgress);
   if (!crop) {
     return <div className="px-4 py-8 text-center">
         <p className="text-[var(--hw-neutral-900)]">{t ? t("farmer.empty.crop_not_found") : "Crop not found."}</p>
@@ -231,15 +253,47 @@ function CropCycleDetailPage() {
       !harvestEntryDate
       || !Number.isFinite(quantity)
       || quantity <= 0
+      || (expectedTotalVolume > 0 && quantity > remainingExpected)
       || parsedHarvestPrice == null
       || !Number.isFinite(parsedHarvestPrice)
       || parsedHarvestPrice < 0
-    ) return;
+    ) {
+      if (expectedTotalVolume > 0 && quantity > remainingExpected) {
+        setActionError(
+          t(
+            "farmer.cropCycle.harvest_exceeds_remaining",
+            { max: remainingExpected },
+            `Harvest quantity cannot exceed remaining yield (${remainingExpected} kg).`
+          )
+        );
+      }
+      return;
+    }
 
     setIsSavingHarvestEntry(true);
     setActionError(null);
     try {
-      await saveHarvestRecordApi(crop.id, harvestEntryDate, quantity, parsedHarvestPrice);
+      const savedRec = await saveHarvestRecordApi(crop.id, harvestEntryDate, quantity, parsedHarvestPrice);
+      const rawQty = savedRec?.actualHarvestQty ?? savedRec?.actual_harvest_qty;
+      const rawPrice = savedRec?.actualSellingPricePerKg ?? savedRec?.actual_selling_price_per_kg;
+      const newRecord = {
+        id: savedRec?.id || `HVR-${Date.now()}`,
+        actualHarvestDate: savedRec?.actualHarvestDate || savedRec?.actual_harvest_date || harvestEntryDate,
+        actualHarvestQty: rawQty != null && !isNaN(Number(rawQty)) ? Number(rawQty) : quantity,
+        actualSellingPricePerKg: rawPrice != null && !isNaN(Number(rawPrice))
+          ? Number(rawPrice)
+          : parsedHarvestPrice,
+      };
+      const existing = (crop.harvestRecords || []).filter((r) => r.id !== newRecord.id);
+      const updatedRecords = [newRecord, ...existing];
+      const newSavedProgress = updatedRecords.reduce((sum, r) => {
+        const q = r.actualHarvestQty ?? r.actual_harvest_qty;
+        return sum + (q != null && !isNaN(Number(q)) ? Number(q) : 0);
+      }, 0);
+      updateCrop(crop.id, {
+        harvestRecords: updatedRecords,
+        actualHarvestQty: newSavedProgress,
+      });
       setHarvestEntryQty("");
       setHarvestEntryPrice("");
       setHarvestEntryDate(getLocalDateInputValue());
@@ -349,9 +403,10 @@ function CropCycleDetailPage() {
             });
           }
         } else {
+          const isTransitionToHarvesting = targetStatus === "Harvesting" || action.phase === "harvested";
           await updateCropStatusApi(crop.id, targetStatus, null, {
             additionalCost: addCostNum > 0 ? addCostNum : undefined,
-            actualHarvestQty: actualHarvestQtyVal,
+            actualHarvestQty: isTransitionToHarvesting ? undefined : actualHarvestQtyVal,
             actualHarvestDate: actualHarvestDateVal,
           });
           if (addCostNum > 0) {
@@ -396,10 +451,16 @@ function CropCycleDetailPage() {
               breakEvenPrice: newBreakEven,
               breakevenPricePerKg: newBreakEven,
             } : {}),
-            ...(actualHarvestQtyVal != null ? {
+            ...(isTransitionToHarvesting ? {
+              harvestQuantity: crop.harvestQuantity || crop.expectedHarvestQty,
+              expectedHarvestQty: crop.harvestQuantity || crop.expectedHarvestQty,
+              actualHarvestQty: Array.isArray(crop.harvestRecords) && crop.harvestRecords.length > 0
+                ? crop.harvestRecords.reduce((sum, r) => sum + Number(r.actualHarvestQty || 0), 0)
+                : 0,
+            } : (actualHarvestQtyVal != null ? {
               actualHarvestQty: actualHarvestQtyVal,
               partialHarvestQty: actualHarvestQtyVal,
-            } : {}),
+            } : {})),
             ...(action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {}),
             ...(action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}),
             ...(action.fields?.actualPlantedArea != null && action.fields?.actualPlantedArea !== "" ? { farmArea: Number(action.fields.actualPlantedArea) } : {}),
@@ -461,22 +522,24 @@ function CropCycleDetailPage() {
 
   // Real backend advisory query from existing POST /api/v1/advisory/plan
   const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && qty > 0);
-  const commodityIdentifier = crop.commodityId || crop.commodity;
-  const phaseCode = normalizePhaseCode(crop.phase);
-  const explicitStage = crop.phase ? (
-    crop.phase.toLowerCase().includes("plan") ? "before_planting" :
-    crop.phase.toLowerCase().includes("grow") || crop.phase.toLowerCase().includes("plant") ? "during_planting" :
-    crop.phase.toLowerCase().includes("pre") ? "near_harvest" :
-    crop.phase.toLowerCase().includes("harvest") ? "harvest" : null
+  const commodityIdentifier = crop.commodityId || (typeof crop.commodity === "string" ? crop.commodity : crop.commodity?.id) || crop.commodityName;
+  const phaseCode = normalizePhaseCode(crop.phase) || normalizePhaseCode(crop.status);
+  const explicitStage = (crop.phase || crop.status) ? (
+    (crop.phase || crop.status).toLowerCase().includes("plan") ? "before_planting" :
+    (crop.phase || crop.status).toLowerCase().includes("grow") || (crop.phase || crop.status).toLowerCase().includes("plant") ? "during_planting" :
+    (crop.phase || crop.status).toLowerCase().includes("pre") ? "near_harvest" :
+    (crop.phase || crop.status).toLowerCase().includes("harvest") ? "harvest" : null
   ) : null;
 
+
+  const pDate = crop.plantingDate ? new Date(crop.plantingDate) : null;
+  const hDate = crop.harvestDate ? new Date(crop.harvestDate) : null;
+  const pDateStr = crop.rawPlantingDate || (pDate && !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate);
+  const hDateStr = crop.rawHarvestDate || (hDate && !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate);
+
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
-    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, totalCost, qty, explicitStage],
+    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr, hDateStr, totalCost, qty, explicitStage],
     queryFn: async () => {
-      const pDate = new Date(crop.plantingDate);
-      const hDate = new Date(crop.harvestDate);
-      const pDateStr = !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate;
-      const hDateStr = !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate;
       const payload = {
         crop_name: crop.commodityName,
         planting_date: pDateStr,
@@ -506,7 +569,7 @@ function CropCycleDetailPage() {
   const arrivalFallbackQuery = useQuery({
     queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
     queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
-    enabled: Boolean(commodityIdentifier),
+    enabled: Boolean(!canQueryPlan && commodityIdentifier),
     staleTime: 1000 * 60 * 5,
   });
   const productionFallbackQuery = useQuery({
@@ -515,33 +578,34 @@ function CropCycleDetailPage() {
       commodityIdentifier,
       quarterForDate(crop.harvestDate || crop.plantingDate)
     ),
-    enabled: Boolean(commodityIdentifier),
+    enabled: Boolean(!canQueryPlan && commodityIdentifier),
     staleTime: 1000 * 60 * 30,
   });
   const weatherFallbackQuery = useQuery({
     queryKey: ["farmer", "admin-weather-forecast", 14],
     queryFn: () => analyticsApi.getWeatherForecast(14),
+    enabled: !canQueryPlan,
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesFallbackQuery = useQuery({
     queryKey: ["farmer", "weather-rules", commodityIdentifier],
     queryFn: () => analyticsApi.listWeatherRules(commodityIdentifier),
-    enabled: Boolean(commodityIdentifier),
+    enabled: Boolean(!canQueryPlan && commodityIdentifier),
     staleTime: 1000 * 60 * 30,
   });
   const priceFallbackQuery = useQuery({
-    queryKey: ["farmer", "price-outlook", commodityIdentifier, "bangkerohan_retail", explicitStage, crop.plantingDate, crop.harvestDate],
+    queryKey: ["farmer", "price-outlook", commodityIdentifier, "bangkerohan_retail", explicitStage, pDateStr, hDateStr],
     queryFn: () => analyticsApi.getPriceOutlook(
       commodityIdentifier,
       "bangkerohan_retail",
       14,
       {
         cropStage: explicitStage,
-        plantingDate: crop.plantingDate,
-        harvestDate: crop.harvestDate,
+        plantingDate: pDateStr,
+        harvestDate: hDateStr,
       }
     ),
-    enabled: Boolean(commodityIdentifier),
+    enabled: Boolean(!canQueryPlan && commodityIdentifier),
     staleTime: 1000 * 60 * 15,
   });
 
@@ -551,7 +615,8 @@ function CropCycleDetailPage() {
   const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : (planAdvisoryData?.module_results?.forecast_midpoint || null);
   const stageRef = planAdvisoryData?.module_results?.reference_price;
   const hasFarmgate = typeof farmgatePrice === "number" && farmgatePrice > 0;
-  const currentCropStage = explicitStage || planAdvisoryData?.crop_stage || "before_planting";
+  const isHarvestingPhase = phaseCode === PHASE_CODES.HARVESTED || (crop.status || "").toLowerCase().includes("harvest") || (crop.phase || "").toLowerCase().includes("harvest");
+  const currentCropStage = isHarvestingPhase ? "harvest" : (explicitStage || planAdvisoryData?.crop_stage || "before_planting");
   const isPlanning = currentCropStage === "before_planting" || phaseCode === PHASE_CODES.PLANNING;
   const useForecast = !isPlanning && (
     [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST, PHASE_CODES.ON_HOLD].includes(phaseCode) ||
@@ -655,7 +720,7 @@ function CropCycleDetailPage() {
   const previewModuleResults = {
     ...advisoryModuleResults,
     price_outlook: (isPlanning || !hasEligibleForecast)
-      ? (planningPriceOutlook || pickUsablePriceOutlook(advisoryModuleResults.price_outlook))
+      ? (planningPriceOutlook || pickUsablePriceOutlook(advisoryModuleResults.price_outlook, fallbackPrice.price_outlook, fallbackPrice.classification))
       : (pickUsablePriceOutlook(
           advisoryModuleResults.price_outlook,
           fallbackPrice.price_outlook,
@@ -673,10 +738,11 @@ function CropCycleDetailPage() {
       fallbackPrice.historical_seasonal_price,
     macro_baseline_price: advisoryModuleResults.macro_baseline_price ??
       fallbackPrice.macro_baseline_price,
-    reference_price: advisoryModuleResults.reference_price ?? fallbackPrice.reference_price,
-    comparison_baseline: advisoryModuleResults.comparison_baseline ?? fallbackPrice.comparison_baseline,
+    reference_price: advisoryModuleResults.reference_price ?? fallbackPrice.reference_price ?? advisoryModuleResults.historical_seasonal_price ?? fallbackPrice.historical_seasonal_price,
+    comparison_baseline: advisoryModuleResults.comparison_baseline ?? fallbackPrice.comparison_baseline ?? advisoryModuleResults.macro_baseline_price ?? fallbackPrice.macro_baseline_price,
     has_eligible_forecast: hasEligibleForecast,
     price_explanation: advisoryModuleResults.price_explanation || fallbackPrice.explanation,
+    historical_price_change_pct: advisoryModuleResults.historical_price_change_pct ?? fallbackPrice.historical_price_change_pct ?? fallbackPrice.forecast_price_change_pct,
     recent_average_price: advisoryModuleResults.recent_average_price ??
       fallbackPrice.recent_average_price,
     forecast_midpoint: advisoryModuleResults.forecast_midpoint ??
@@ -737,12 +803,13 @@ function CropCycleDetailPage() {
   const reasonByModule = new Map(
     composedReasons.filter((reason) => reason.module).map((reason) => [reason.module, reason])
   );
-  const isCompleted = phaseCode === PHASE_CODES.COMPLETED;
+  const isCompleted = phaseCode === PHASE_CODES.COMPLETED ||
+    String(crop.status || "").toLowerCase() === "completed" ||
+    String(crop.phase || "").toLowerCase() === "completed";
   const isActive = !isCompleted;
-  const isPlanted = [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST].includes(phaseCode);
-  const isHarvesting = phaseCode === PHASE_CODES.HARVESTED;
-  const pDate = crop.plantingDate ? new Date(crop.plantingDate) : null;
-  const hDate = crop.harvestDate ? new Date(crop.harvestDate) : null;
+  const isPlanted = isActive && [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST].includes(phaseCode);
+  const isHarvesting = isActive && phaseCode === PHASE_CODES.HARVESTED;
+
   const now = new Date();
   const daysSincePlanting = pDate && !isNaN(pDate.getTime()) ? Math.max(0, Math.floor((now - pDate) / (1000 * 60 * 60 * 24))) : null;
   const totalGrowDays = pDate && hDate && !isNaN(pDate.getTime()) && !isNaN(hDate.getTime()) ? Math.max(1, Math.floor((hDate - pDate) / (1000 * 60 * 60 * 24))) : null;
@@ -810,125 +877,329 @@ function CropCycleDetailPage() {
         {/* ── 2. Main advice — white card, colored foreground only ── */}
         {isActive && (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
-            <div className={`flex items-center gap-2 mb-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
-              {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
-              <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
-            </div>
-            <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-              {summaryText}
-            </p>
-            {displayImmediateActions.map((act, idx) => {
-              const text = renderComposedMessage(act, langCode);
-              return text ? (
-                <p key={act.key || idx} className="text-[13px] text-[var(--hw-neutral-700)] font-medium leading-relaxed mt-1.5">
-                  {text}
+            <button
+              type="button"
+              onClick={() => setAdvisoryExpanded((v) => !v)}
+              aria-expanded={advisoryExpanded}
+              aria-label={advisoryLabel}
+              className="w-full flex items-center justify-between gap-2 text-left cursor-pointer group"
+            >
+              <div className={`flex items-center gap-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+                {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
+                <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
+              </div>
+              {advisoryExpanded ? (
+                <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+              )}
+            </button>
+            {advisoryExpanded && (
+              <div className="mt-2.5">
+                <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
+                  {summaryText}
                 </p>
-              ) : null;
-            })}
-            {isPlanning && normalizedPreviewResults.price_outlook && (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] px-3 py-2.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  {(() => {
-                    const priceCondition = resolveFactorCondition(
+                {displayImmediateActions.map((act, idx) => {
+                  const text = renderComposedMessage(act, langCode);
+                  return text ? (
+                    <p key={act.key || idx} className="text-[13px] text-[var(--hw-neutral-700)] font-medium leading-relaxed mt-1.5">
+                      {text}
+                    </p>
+                  ) : null; })}
+                {isPlanning && normalizedPreviewResults.price_outlook && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] px-3 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {(() => {
+                        const priceCondition = resolveFactorCondition(
+                          "price_outlook",
+                          normalizedPreviewResults.price_outlook
+                        );
+                        return renderFactorIcon(priceCondition.iconType, priceCondition.colorClass);
+                      })()}
+                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
+                        {t("farmer.factors.price.factor_title", {}, "Price outlook")}
+                      </p>
+                    </div>
+                    <p className={`text-[13px] font-bold ${resolveFactorCondition(
                       "price_outlook",
                       normalizedPreviewResults.price_outlook
-                    );
-                    return renderFactorIcon(priceCondition.iconType, priceCondition.colorClass);
-                  })()}
-                  <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
-                    {t("farmer.factors.price.factor_title", {}, "Price outlook")}
-                  </p>
+                    ).colorClass}`}>
+                      {formatClassification(normalizedPreviewResults.price_outlook, t)}
+                    </p>
+                  </div>
+                )}
+                <div className="mt-4 pt-4 border-t border-[var(--hw-neutral-200)]">
+                  <button
+                    type="button"
+                    onClick={() => setWhyExpanded((v) => !v)}
+                    aria-expanded={whyExpanded}
+                    className="w-full flex items-center justify-between text-left py-1 hover:opacity-80 transition-opacity cursor-pointer group"
+                  >
+                    <span className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+                      {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
+                    </span>
+                    {whyExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+                    )}
+                  </button>
+                  {whyExpanded && (
+                    <div className="mt-3 space-y-3">
+                      {mainFactor && (
+                        <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
+                          <div className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
+                            badge.type === "avoid" ? "bg-red-50 text-red-600" :
+                            badge.type === "caution" ? "bg-amber-50 text-amber-600" :
+                            "bg-emerald-50 text-emerald-700"
+                          }`}>
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                          <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
+                            {renderComposedMessage(mainFactor, langCode)}
+                          </p>
+                        </div>
+                      )}
+                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+                        {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+                      </p>
+                      <div className="space-y-2 sm:space-y-2.5">
+                        {factorClassificationRows.map(({ module, label }) => {
+                          const reason = reasonByModule.get(module);
+                          const reasonTextCandidate = reason
+                            ? renderComposedMessage(reason, langCode)
+                            : (module === "price_outlook" && (previewModuleResults.price_explanation || fallbackPrice.explanation)
+                              ? (previewModuleResults.price_explanation || fallbackPrice.explanation)
+                              : null);
+                          const extractedClass = (module === "price_outlook" && reasonTextCandidate)
+                            ? (reasonTextCandidate.match(/classified as (Favorable|Neutral|Unfavorable)/i)?.[1] || null)
+                            : null;
+                          const rawClassification = normalizedPreviewResults[module] || (
+                            module === "price_outlook"
+                              ? (reason?.params?.classification || planningPriceOutlook || previewModuleResults.historical_price_outlook || previewModuleResults.price_outlook || fallbackPrice.classification || extractedClass)
+                              : null
+                          );
+                          const classification = formatClassification(rawClassification, t);
+                          const reasonText = reasonTextCandidate || t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
+                          const factorCond = resolveFactorCondition(
+                            module,
+                            rawClassification || classification,
+                            reason?.key,
+                            reasonText
+                          );
+                          return (
+                            <div key={module} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
+                              <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                                {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
+                                  {reason?.labelKey
+                                    ? t(reason.labelKey, {}, label)
+                                    : label}
+                                </p>
+                                <p className={`text-[12px] font-semibold leading-snug mt-0.5 ${factorCond.colorClass}`}>
+                                  {classification || t("farmer.advisory.not_available", {}, "Not available")}
+                                </p>
+                                <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(`/farmer/crops/${crop.id}/factors`, {
+                            state: {
+                              cropStage: currentCropStage,
+                              plantingDate: crop.rawPlantingDate || crop.plantingDate,
+                              expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
+                              moduleResults: previewModuleResults,
+                              plantingWindowStart: planAdvisoryData?.planting_window_start,
+                              plantingWindowEnd: planAdvisoryData?.planting_window_end,
+                              plantingWindowLabel: planAdvisoryData?.planting_window_label,
+                              advisoryCode,
+                              rawAdvisory,
+                              advisoryLabel,
+                              planAdvisoryData,
+                            },
+                          })
+                        }
+                        className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
+                      >
+                        {t("farmer.advisory.view_basis", {}, "View basis →")}
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <p className={`text-[13px] font-bold ${resolveFactorCondition(
-                  "price_outlook",
-                  normalizedPreviewResults.price_outlook
-                ).colorClass}`}>
-                  {normalizedPreviewResults.price_outlook}
-                </p>
               </div>
             )}
-            <div className="mt-4 pt-4 border-t border-[var(--hw-neutral-200)] space-y-3">
-              <p className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-                {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
-              </p>
-              {mainFactor && (
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
-                  <div className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                    badge.type === "avoid" ? "bg-red-50 text-red-600" :
-                    badge.type === "caution" ? "bg-amber-50 text-amber-600" :
-                    "bg-emerald-50 text-emerald-700"
-                  }`}>
-                    <AlertCircle className="w-4 h-4" />
-                  </div>
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
-                    {renderComposedMessage(mainFactor, langCode)}
-                  </p>
+          </div>
+        )}
+
+        {/* ── 3. Crop progress ── */}
+        {isPlanted && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+              {t("farmer.cropCycle.crop_progress", {}, "Crop progress")}
+            </p>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[13px]">
+                <span className="text-[var(--hw-neutral-900)]">
+                  {daysSincePlanting != null && totalGrowDays != null
+                    ? t("farmer.cropCycle.days_of_days", { current: daysSincePlanting, total: totalGrowDays }, `${daysSincePlanting} of ${totalGrowDays} days`)
+                    : "-"}
+                </span>
+                <span className="font-semibold text-[var(--hw-neutral-900)]">
+                  {progressPct != null ? `${progressPct}%` : "-"}
+                </span>
+              </div>
+              <div className="h-2.5 bg-[var(--hw-neutral-200)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--hw-green-600)] rounded-full"
+                  style={{ width: `${progressPct != null ? progressPct : 0}%` }}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: t("farmer.cropCycle.days_planted", {}, "Days planted"), value: daysSincePlanting != null ? `${daysSincePlanting}d` : "-" },
+                { label: t("farmer.cropCycle.days_to_harvest", {}, "Days to harvest"), value: daysToHarvest != null ? `${daysToHarvest}d` : "-" },
+                { label: t("farmer.cropCycle.harvest_est", {}, "Harvest est."), value: crop.harvestDate || "-" }
+              ].map((m) => (
+                <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
+                  <p className="text-xs text-[var(--hw-neutral-900)]">{m.label}</p>
+                  <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mt-0.5">{m.value}</p>
                 </div>
-              )}
-              <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-                {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── 3b. Harvest progress ── */}
+        {isHarvesting && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+              {t("farmer.cropCycle.harvest_progress", {}, "Harvest progress")}
+            </p>
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2">
+              <div>
+                <label htmlFor="harvest-date-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
+                  {t("farmer.cropCycle.harvest_date", {}, "Harvest date")}
+                </label>
+                <input
+                  id="harvest-date-input"
+                  type="date"
+                  value={harvestEntryDate}
+                  onChange={(e) => setHarvestEntryDate(e.target.value)}
+                  className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="harvest-qty-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
+                  {t("farmer.cropCycle.qty_harvested", {}, "Qty (kg)")}
+                </label>
+                <input
+                  id="harvest-qty-input"
+                  type="number"
+                  min="0.01"
+                  max={remainingExpected !== "" && Number(remainingExpected) > 0 ? remainingExpected : undefined}
+                  step="0.01"
+                  value={harvestEntryQty}
+                  onChange={(e) => setHarvestEntryQty(e.target.value)}
+                  placeholder="e.g. 450"
+                  className={`w-full min-w-0 px-2 py-1.5 rounded-xl border text-sm outline-none focus:ring-1 bg-white ${
+                    isExceedingRemaining
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500 text-red-900"
+                      : "border-[var(--hw-neutral-200)] focus:border-[var(--hw-green-600)] focus:ring-[var(--hw-green-600)]"
+                  }`}
+                />
+              </div>
+              <div>
+                <label htmlFor="harvest-price-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
+                  {t("farmer.cropCycle.harvest_price", {}, "Price (₱/kg)")}
+                </label>
+                <input
+                  id="harvest-price-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={harvestEntryPrice}
+                  onChange={(e) => setHarvestEntryPrice(e.target.value)}
+                  placeholder="e.g. 85"
+                  className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveHarvestEntry}
+                disabled={isSavingHarvestEntry || !harvestEntryDate || parsedHarvestEntry <= 0 || isExceedingRemaining || parsedHarvestPrice == null || parsedHarvestPrice < 0}
+                aria-label={t("farmer.cropCycle.save_harvest_entry", {}, "Save harvest entry")}
+                title={t("farmer.cropCycle.save_harvest_entry", {}, "Save harvest entry")}
+                className="h-[34px] w-[38px] inline-flex items-center justify-center rounded-xl bg-[var(--hw-green-700)] text-white hover:bg-[var(--hw-green-800)] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+            {isExceedingRemaining && (
+              <p className="text-xs text-red-600 font-medium">
+                {t(
+                  "farmer.cropCycle.harvest_exceeds_remaining",
+                  { max: remainingExpected },
+                  `Harvest quantity cannot exceed remaining yield (${remainingExpected} kg).`
+                )}
               </p>
-              <div className="space-y-2 sm:space-y-2.5">
-                {factorClassificationRows.map(({ module, label }) => {
-                  const reason = reasonByModule.get(module);
-                  const classification = normalizedPreviewResults[module] || null;
-                  const reasonText = reason
-                    ? renderComposedMessage(reason, langCode)
-                    : t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
-                  const factorCond = resolveFactorCondition(
-                    module,
-                    classification,
-                    reason?.key,
-                    reasonText
-                  );
+            )}
+            <p className="text-xs text-[var(--hw-neutral-700)]">
+              {t("farmer.cropCycle.remaining_expected", {}, "Remaining expected (kg)")}: {remainingExpected === "" ? "—" : remainingExpected}
+            </p>
+            {crop.harvestRecords?.length > 0 && (
+              <div className="rounded-xl border border-[var(--hw-neutral-200)] divide-y divide-[var(--hw-neutral-100)] max-h-40 overflow-y-auto">
+                {crop.harvestRecords.map((record) => {
+                  const recordDate = record.actualHarvestDate || record.actual_harvest_date;
+                  const rawQty = record.actualHarvestQty ?? record.actual_harvest_qty;
+                  const recordQty = rawQty != null && !isNaN(Number(rawQty)) ? Number(rawQty) : 0;
+                  const rawPrice = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg;
+                  const recordPrice = rawPrice != null && !isNaN(Number(rawPrice)) ? Number(rawPrice) : null;
                   return (
-                    <div key={module} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
-                      <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                        {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
-                          {reason?.labelKey
-                            ? t(reason.labelKey, {}, label)
-                            : label}
-                        </p>
-                        <p className={`text-[12px] font-semibold leading-snug mt-0.5 ${factorCond.colorClass}`}>
-                          {classification || t("farmer.advisory.not_available", {}, "Not available")}
-                        </p>
-                        <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
-                      </div>
+                    <div key={record.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 text-xs">
+                      <span className="min-w-0 text-[var(--hw-neutral-700)]">
+                        {formatLocalDate(recordDate) || recordDate || "—"}
+                      </span>
+                      <span className="text-right font-medium text-[var(--hw-neutral-900)]">
+                        {recordQty.toLocaleString()} kg
+                      </span>
+                      <span className="min-w-[72px] text-right text-[var(--hw-neutral-700)]">
+                        {recordPrice != null ? `₱${recordPrice.toFixed(2)}/kg` : "—"}
+                      </span>
                     </div>
                   );
                 })}
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 text-xs bg-[var(--hw-neutral-50)]">
+                  <span className="font-semibold text-[var(--hw-neutral-900)]">
+                    {t("farmer.cropCycle.total_harvested", {}, "Total quantity")}
+                  </span>
+                  <span className="col-span-2 text-right font-semibold text-[var(--hw-neutral-900)]">
+                    {savedHarvestProgress.toLocaleString()} kg
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
             <button
-              type="button"
-              onClick={() =>
-                navigate(`/farmer/crops/${crop.id}/factors`, {
-                  state: {
-                    cropStage: currentCropStage,
-                    plantingDate: crop.rawPlantingDate || crop.plantingDate,
-                    expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
-                    moduleResults: previewModuleResults,
-                    plantingWindowStart: planAdvisoryData?.planting_window_start,
-                    plantingWindowEnd: planAdvisoryData?.planting_window_end,
-                    plantingWindowLabel: planAdvisoryData?.planting_window_label,
-                    advisoryCode,
-                    rawAdvisory,
-                    advisoryLabel,
-                    planAdvisoryData,
-                  },
-                })
-              }
-              className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
+              onClick={() => {
+                setDrawerMode("update-phase");
+                setDrawerOpen(true);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
             >
-              {t("farmer.advisory.view_basis", {}, "View basis →")}
+              <Check className="w-4 h-4" />
+              {t("farmer.cropCycle.mark_completed", {}, "Mark Crop Completed")}
             </button>
           </div>
         )}
 
-        {/* ── 3. Estimated Profit ── */}
+        {/* ── 4. Estimated Profit ── */}
         {isActive && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
               {t("farmer.factors.profitability.title", {}, "Estimated Profit")}
@@ -981,8 +1252,8 @@ function CropCycleDetailPage() {
             </p>
           </div>}
 
-        {/* ── 4. What to do this week ── */}
-        {weeklyActions.length > 0 && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+        {/* ── 5. What to do this week ── */}
+        {isActive && weeklyActions.length > 0 && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
             <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
               {t("farmer.actions.monitoring.weekly_actions_title", {}, "What to do this week")}
             </p>
@@ -1002,47 +1273,6 @@ function CropCycleDetailPage() {
               })}
             </div>
           </div>}
-
-
-
-        {/* ── 6. Crop progress ── */}
-        {isPlanted && (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
-              {t("farmer.cropCycle.crop_progress", {}, "Crop progress")}
-            </p>
-            <div className="space-y-1">
-              <div className="flex justify-between text-[13px]">
-                <span className="text-[var(--hw-neutral-900)]">
-                  {daysSincePlanting != null && totalGrowDays != null
-                    ? t("farmer.cropCycle.days_of_days", { current: daysSincePlanting, total: totalGrowDays }, `${daysSincePlanting} of ${totalGrowDays} days`)
-                    : "-"}
-                </span>
-                <span className="font-semibold text-[var(--hw-neutral-900)]">
-                  {progressPct != null ? `${progressPct}%` : "-"}
-                </span>
-              </div>
-              <div className="h-2.5 bg-[var(--hw-neutral-200)] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[var(--hw-green-600)] rounded-full"
-                  style={{ width: `${progressPct != null ? progressPct : 0}%` }}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: t("farmer.cropCycle.days_planted", {}, "Days planted"), value: daysSincePlanting != null ? `${daysSincePlanting}d` : "-" },
-                { label: t("farmer.cropCycle.days_to_harvest", {}, "Days to harvest"), value: daysToHarvest != null ? `${daysToHarvest}d` : "-" },
-                { label: t("farmer.cropCycle.harvest_est", {}, "Harvest est."), value: crop.harvestDate || "-" }
-              ].map((m) => (
-                <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
-                  <p className="text-xs text-[var(--hw-neutral-900)]">{m.label}</p>
-                  <p className="text-sm font-semibold text-[var(--hw-neutral-900)] mt-0.5">{m.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* ── 7. Cost and selling price ── */}
         {isActive && (
@@ -1333,107 +1563,6 @@ function CropCycleDetailPage() {
                 </button>
               </div>
             )}
-            {isHarvesting && (
-              <div className="pt-2 border-t border-[var(--hw-neutral-100)] space-y-3">
-                <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-                  {t("farmer.cropCycle.harvest_progress", {}, "Harvest progress")}
-                </p>
-                <div className="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2">
-                  <div>
-                    <label htmlFor="harvest-date-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
-                      {t("farmer.cropCycle.harvest_date", {}, "Harvest date")}
-                    </label>
-                    <input
-                      id="harvest-date-input"
-                      type="date"
-                      value={harvestEntryDate}
-                      onChange={(e) => setHarvestEntryDate(e.target.value)}
-                      className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="harvest-qty-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
-                      {t("farmer.cropCycle.qty_harvested", {}, "Qty (kg)")}
-                    </label>
-                    <input
-                      id="harvest-qty-input"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={harvestEntryQty}
-                      onChange={(e) => setHarvestEntryQty(e.target.value)}
-                      placeholder="e.g. 450"
-                      className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="harvest-price-input" className="block text-xs text-[var(--hw-neutral-900)] mb-1">
-                      {t("farmer.cropCycle.harvest_price", {}, "Price (₱/kg)")}
-                    </label>
-                    <input
-                      id="harvest-price-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={harvestEntryPrice}
-                      onChange={(e) => setHarvestEntryPrice(e.target.value)}
-                      placeholder="e.g. 85"
-                      className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveHarvestEntry}
-                    disabled={isSavingHarvestEntry || !harvestEntryDate || parsedHarvestEntry <= 0 || parsedHarvestPrice == null || parsedHarvestPrice < 0}
-                    aria-label={t("farmer.cropCycle.save_harvest_entry", {}, "Save harvest entry")}
-                    title={t("farmer.cropCycle.save_harvest_entry", {}, "Save harvest entry")}
-                    className="h-[34px] w-[38px] inline-flex items-center justify-center rounded-xl bg-[var(--hw-green-700)] text-white hover:bg-[var(--hw-green-800)] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Check className="w-4 h-4" />
-                  </button>
-                </div>
-                <p className="text-xs text-[var(--hw-neutral-700)]">
-                  {t("farmer.cropCycle.remaining_expected", {}, "Remaining expected (kg)")}: {remainingExpected === "" ? "—" : remainingExpected}
-                </p>
-                {crop.harvestRecords?.length > 0 && (
-                  <div className="rounded-xl border border-[var(--hw-neutral-200)] divide-y divide-[var(--hw-neutral-100)] max-h-40 overflow-y-auto">
-                    {crop.harvestRecords.map((record) => (
-                      <div key={record.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 text-xs">
-                        <span className="min-w-0 text-[var(--hw-neutral-700)]">
-                          {formatLocalDate(record.actualHarvestDate) || record.actualHarvestDate}
-                        </span>
-                        <span className="text-right font-medium text-[var(--hw-neutral-900)]">
-                          {Number(record.actualHarvestQty).toLocaleString()} kg
-                        </span>
-                        <span className="min-w-[72px] text-right text-[var(--hw-neutral-700)]">
-                          {record.actualSellingPricePerKg != null
-                            ? `₱${Number(record.actualSellingPricePerKg).toFixed(2)}/kg`
-                            : "—"}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 text-xs bg-[var(--hw-neutral-50)]">
-                      <span className="font-semibold text-[var(--hw-neutral-900)]">
-                        {t("farmer.cropCycle.total_harvested", {}, "Total quantity")}
-                      </span>
-                      <span className="col-span-2 text-right font-semibold text-[var(--hw-neutral-900)]">
-                        {savedHarvestProgress.toLocaleString()} kg
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <button
-                  onClick={() => {
-                    setDrawerMode("update-phase");
-                    setDrawerOpen(true);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                  {t("farmer.cropCycle.mark_completed", {}, "Mark Crop Completed")}
-                </button>
-              </div>
-            )}
           </div>
         )}
 
@@ -1485,21 +1614,26 @@ function CropCycleDetailPage() {
                   {t("farmer.cropCycle.harvest_records", {}, "Harvest entries")}
                 </p>
                 <div className="rounded-xl border border-[var(--hw-neutral-200)] divide-y divide-[var(--hw-neutral-100)]">
-                  {crop.harvestRecords.map((record) => (
-                    <div key={record.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 text-xs">
-                      <span className="min-w-0 text-[var(--hw-neutral-700)]">
-                        {formatLocalDate(record.actualHarvestDate) || record.actualHarvestDate}
-                      </span>
-                      <span className="text-right font-medium text-[var(--hw-neutral-900)]">
-                        {Number(record.actualHarvestQty).toLocaleString()} kg
-                      </span>
-                      <span className="min-w-[72px] text-right text-[var(--hw-neutral-700)]">
-                        {record.actualSellingPricePerKg != null
-                          ? `₱${Number(record.actualSellingPricePerKg).toFixed(2)}/kg`
-                          : "—"}
-                      </span>
-                    </div>
-                  ))}
+                  {crop.harvestRecords.map((record) => {
+                    const recordDate = record.actualHarvestDate || record.actual_harvest_date;
+                    const rawQty = record.actualHarvestQty ?? record.actual_harvest_qty;
+                    const recordQty = rawQty != null && !isNaN(Number(rawQty)) ? Number(rawQty) : 0;
+                    const rawPrice = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg;
+                    const recordPrice = rawPrice != null && !isNaN(Number(rawPrice)) ? Number(rawPrice) : null;
+                    return (
+                      <div key={record.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-2 text-xs">
+                        <span className="min-w-0 text-[var(--hw-neutral-700)]">
+                          {formatLocalDate(recordDate) || recordDate || "—"}
+                        </span>
+                        <span className="text-right font-medium text-[var(--hw-neutral-900)]">
+                          {recordQty.toLocaleString()} kg
+                        </span>
+                        <span className="min-w-[72px] text-right text-[var(--hw-neutral-700)]">
+                          {recordPrice != null ? `₱${recordPrice.toFixed(2)}/kg` : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

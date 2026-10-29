@@ -450,6 +450,161 @@ const EditProfitabilityModal = ({ currentRules, onClose, onSave }) => {
 };
 
 
+// Edit Final Advisory Cutoffs Modal (Recommendation Engine output mapping)
+const EditFinalAdvisoryModal = ({ currentRules, onClose, onSave }) => {
+  const initialRec = currentRules?.recommendedMax != null ? String(currentRules.recommendedMax) : "1.00";
+  const initialAvoid = currentRules?.avoidMin != null ? String(currentRules.avoidMin) : "2.00";
+
+  const [recommendedMax, setRecommendedMax] = useState(initialRec);
+  const [avoidMin, setAvoidMin] = useState(initialAvoid);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const recNum = parseFloat(recommendedMax);
+  const avoidNum = parseFloat(avoidMin);
+  const isValid = !isNaN(recNum) && !isNaN(avoidNum) && recNum > 0 && avoidNum > recNum;
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] transition text-black";
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const err = await onSave({ recommendedMax: recNum, avoidMin: avoidNum });
+      if (err) {
+        setSaveError(err);
+      } else {
+        setSaved(true);
+        setTimeout(onClose, 600);
+      }
+    } catch (e) {
+      setSaveError(e.message || "Failed to save final advisory cutoffs.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 xs:p-4 pt-4 pb-24 sm:p-6">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-7.5rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)] shrink-0">
+          <div>
+            <p className="font-semibold text-black">Edit Final Advisory Cutoffs</p>
+            <p className="text-[12px] text-black">Recommendation Engine output mapping</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1 min-h-0 [scrollbar-width:thin]">
+          <p className="text-[12px] text-black leading-relaxed">
+            Configure composite recommendation score cutoffs. Lower scores indicate more favorable planting conditions.
+          </p>
+
+          <div>
+            <label htmlFor="advisory-recommended-input" className="block text-[12px] font-medium text-black mb-1">
+              Recommended Cutoff (Score &lt;)
+            </label>
+            <input
+              id="advisory-recommended-input"
+              aria-label="Recommended Cutoff (Score <)"
+              type="number"
+              step="0.05"
+              min="0.01"
+              placeholder="e.g. 1.00"
+              value={recommendedMax}
+              onChange={(e) => setRecommendedMax(e.target.value)}
+              className={inputCls}
+            />
+            <p className="text-[11px] text-neutral-500 mt-1">Scores strictly below this value are classified as Recommended.</p>
+          </div>
+
+          <div>
+            <label htmlFor="advisory-avoid-input" className="block text-[12px] font-medium text-black mb-1">
+              Avoid for Now Cutoff (Score &ge;)
+            </label>
+            <input
+              id="advisory-avoid-input"
+              aria-label="Avoid for Now Cutoff (Score ≥)"
+              type="number"
+              step="0.05"
+              min="0.02"
+              placeholder="e.g. 2.00"
+              value={avoidMin}
+              onChange={(e) => setAvoidMin(e.target.value)}
+              className={inputCls}
+            />
+            <p className="text-[11px] text-neutral-500 mt-1">Scores at or above this value are classified as Avoid for Now.</p>
+          </div>
+
+          {/* Decision Rule Preview */}
+          <div className="p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] space-y-2">
+            <p className="text-[9.5px] font-bold text-black uppercase tracking-wider">Decision Rule Preview</p>
+            <div className="space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-emerald-700">Recommended</span>
+                  <p className="text-[10px] text-neutral-500">Most factors support planting</p>
+                </div>
+                <span className="text-black font-mono font-medium">
+                  {isNaN(recNum) ? "-" : `Score < ${recNum.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-amber-700">Proceed with Caution</span>
+                  <p className="text-[10px] text-neutral-500">Some factors add caution</p>
+                </div>
+                <span className="text-black font-mono font-medium">
+                  {isNaN(recNum) || isNaN(avoidNum) ? "-" : `${recNum.toFixed(2)} – ${avoidNum.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-red-700">Avoid for Now</span>
+                  <p className="text-[10px] text-neutral-500">Multiple unfavorable factors</p>
+                </div>
+                <span className="text-black font-mono font-medium">
+                  {isNaN(avoidNum) ? "-" : `Score ≥ ${avoidNum.toFixed(2)}`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {!isValid && (recommendedMax !== "" || avoidMin !== "") && (
+            <p className="text-[12px] text-red-600">
+              Recommended cutoff must be greater than 0 and strictly less than Avoid for Now cutoff.
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 sm:py-4 border-t border-[var(--hw-neutral-100)] shrink-0 bg-white">
+          <div className="flex-1 min-w-0">
+            {saveError && <p className="text-[12px] text-red-600 text-right">{saveError}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!isValid || saving || saved}
+            onClick={handleSave}
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Edit Weather Risk Modal (metric-based crop_weather_rules, persisted via API)
 const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved }) => {
   const [rules, setRules] = useState(null);
@@ -956,6 +1111,26 @@ function AdminAnalytics() {
   const [thresholdsError, setThresholdsError] = useState("");
   const [priceOutlookRuleIds, setPriceOutlookRuleIds] = useState({ fav: null, unfav: null });
   const [profitabilityRuleIds, setProfitabilityRuleIds] = useState({ fav: null, unfav: null });
+  const [advisoryCutoffs, setAdvisoryCutoffs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("hw_advisory_cutoffs");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.recommendedMax != null && parsed.avoidMin != null) {
+          return {
+            recommendedMax: Number(parsed.recommendedMax),
+            avoidMin: Number(parsed.avoidMin)
+          };
+        }
+      }
+    } catch {}
+    return {
+      recommendedMax: 1.0,
+      avoidMin: 2.0
+    };
+  });
+  const [advisoryRuleIds, setAdvisoryRuleIds] = useState({ rec: null, caution: null, avoid: null, moduleId: null });
+  const [editingAdvisoryCutoffs, setEditingAdvisoryCutoffs] = useState(false);
 
   // Module outputs state (computed + persisted via /admin/analytics/outputs)
   const [moduleOutputs, setModuleOutputs] = useState(null);
@@ -1145,6 +1320,31 @@ function AdminAnalytics() {
             localStorage.setItem("hw_profitability_thresholds", JSON.stringify(loaded));
           } catch {}
           setProfitabilityRuleIds({ fav, unfav, moduleId: profModule.id });
+        }
+      }
+
+      const advModule = items.find((m) => m.module_name?.toLowerCase().includes("advisory"));
+      if (advModule) {
+        const rules =
+          advModule.rules && advModule.rules.length > 0
+            ? advModule.rules
+            : (await analyticsApi.listThresholdRules(advModule.id))?.items || [];
+        const recRule = rules.find((r) => (r.classification || "").toLowerCase().includes("recommend"));
+        const cautionRule = rules.find((r) => (r.classification || "").toLowerCase().includes("caution"));
+        const avoidRule = rules.find((r) => (r.classification || "").toLowerCase().includes("avoid"));
+
+        if (recRule || avoidRule) {
+          const recVal = recRule?.threshold_value != null ? Number(recRule.threshold_value) : 1.0;
+          const avoidVal = avoidRule?.threshold_value != null ? Number(avoidRule.threshold_value) : 2.0;
+          const loaded = {
+            recommendedMax: recVal,
+            avoidMin: avoidVal
+          };
+          setAdvisoryCutoffs(loaded);
+          try {
+            localStorage.setItem("hw_advisory_cutoffs", JSON.stringify(loaded));
+          } catch {}
+          setAdvisoryRuleIds({ rec: recRule, caution: cautionRule, avoid: avoidRule, moduleId: advModule.id });
         }
       }
     } catch (err) {
@@ -1581,6 +1781,106 @@ function AdminAnalytics() {
     }
   };
 
+  const handleAdvisoryCutoffsSave = async (updated) => {
+    const recNum = Number(updated.recommendedMax);
+    const avoidNum = Number(updated.avoidMin);
+    if (isNaN(recNum) || isNaN(avoidNum) || recNum <= 0 || avoidNum <= recNum) {
+      return "Invalid cutoff values. Recommended cutoff must be greater than 0 and strictly less than Avoid for Now cutoff.";
+    }
+
+    try {
+      const { items } = await analyticsApi.listThresholds();
+      let advModule = items.find((m) => m.module_name?.toLowerCase().includes("advisory"));
+      if (!advModule) {
+        advModule = await analyticsApi.createThreshold({
+          module_name: "Final Advisory Cutoffs",
+          source_label: "Recommendation Engine output mapping",
+          note: "Maps composite recommendation score to advisory outcome: Recommended, Proceed with Caution, or Avoid for Now."
+        });
+      }
+      const existingRules =
+        advModule.rules && advModule.rules.length > 0
+          ? advModule.rules
+          : (await analyticsApi.listThresholdRules(advModule.id))?.items || [];
+
+      const ensureRule = async (targetRule, classification, operator, value, display, ruleKey) => {
+        if (targetRule && targetRule.id) {
+          await analyticsApi.updateThresholdRule(targetRule.id, {
+            threshold_value: value,
+            display_text: display,
+            operator
+          });
+        } else {
+          const existing = existingRules.find(
+            (r) => (r.classification || "").toLowerCase() === classification.toLowerCase()
+          );
+          if (existing) {
+            await analyticsApi.updateThresholdRule(existing.id, {
+              threshold_value: value,
+              display_text: display,
+              operator
+            });
+          } else {
+            await analyticsApi.createThresholdRule(advModule.id, {
+              rule_key: ruleKey,
+              classification,
+              operator,
+              threshold_value: value,
+              display_text: display
+            });
+          }
+        }
+      };
+
+      const { rec, caution, avoid } = advisoryRuleIds;
+      await ensureRule(
+        rec,
+        "Recommended",
+        "<",
+        recNum,
+        `Score < ${recNum.toFixed(2)}`,
+        "recommended"
+      );
+      await ensureRule(
+        caution,
+        "Proceed with Caution",
+        ">=",
+        recNum,
+        `Score ≥ ${recNum.toFixed(2)}`,
+        "proceed_with_caution"
+      );
+      await ensureRule(
+        avoid,
+        "Avoid for Now",
+        ">=",
+        avoidNum,
+        `Score ≥ ${avoidNum.toFixed(2)}`,
+        "avoid_for_now"
+      );
+
+      const stateVal = {
+        recommendedMax: recNum,
+        avoidMin: avoidNum
+      };
+      try {
+        localStorage.setItem("hw_advisory_cutoffs", JSON.stringify(stateVal));
+      } catch {}
+      setAdvisoryCutoffs(stateVal);
+      await refreshPriceOutlook();
+      return null;
+    } catch (err) {
+      const stateVal = {
+        recommendedMax: recNum,
+        avoidMin: avoidNum
+      };
+      try {
+        localStorage.setItem("hw_advisory_cutoffs", JSON.stringify(stateVal));
+      } catch {}
+      setAdvisoryCutoffs(stateVal);
+      return null;
+    }
+  };
+
   return (
     <>
       {editingPhase && (
@@ -1614,6 +1914,13 @@ function AdminAnalytics() {
           onSaved={() => {
             reloadAnalytics();
           }}
+        />
+      )}
+      {editingAdvisoryCutoffs && (
+        <EditFinalAdvisoryModal
+          currentRules={advisoryCutoffs}
+          onClose={() => setEditingAdvisoryCutoffs(false)}
+          onSave={handleAdvisoryCutoffsSave}
         />
       )}
 
@@ -2265,27 +2572,42 @@ function AdminAnalytics() {
                         <h3 className="text-[15px] font-bold text-black">Final Advisory Cutoffs</h3>
                         <p className="text-[11px] text-black mt-0.5">Recommendation Engine output mapping</p>
                       </div>
+                      <button
+                        onClick={() => setEditingAdvisoryCutoffs(true)}
+                        className="p-1.5 rounded-lg border border-[var(--hw-neutral-200)] text-black hover:bg-[var(--hw-neutral-50)] hover:text-black transition-colors shrink-0 cursor-pointer"
+                        title="Edit Final Advisory Cutoffs"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     <div className="divide-y divide-[var(--hw-neutral-100)] text-[12px]">
                       <div className="py-2.5 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-emerald-700">Recommended</span>
-                          <span className="font-mono text-neutral-400 font-medium">-</span>
+                          <span className="font-mono text-black font-medium">
+                            {advisoryCutoffs ? `< ${advisoryCutoffs.recommendedMax.toFixed(2)}` : "-"}
+                          </span>
                         </div>
                         <p className="text-[11px] text-black">Most factors support planting.</p>
                       </div>
                       <div className="py-2.5 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-amber-700">Proceed with Caution</span>
-                          <span className="font-mono text-neutral-400 font-medium">-</span>
+                          <span className="font-mono text-black font-medium">
+                            {advisoryCutoffs
+                              ? `${advisoryCutoffs.recommendedMax.toFixed(2)} – ${advisoryCutoffs.avoidMin.toFixed(2)}`
+                              : "-"}
+                          </span>
                         </div>
                         <p className="text-[11px] text-black">Some factors add caution.</p>
                       </div>
                       <div className="py-2.5 space-y-0.5">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-red-700">Avoid for Now</span>
-                          <span className="font-mono text-neutral-400 font-medium">-</span>
+                          <span className="font-mono text-black font-medium">
+                            {advisoryCutoffs ? `≥ ${advisoryCutoffs.avoidMin.toFixed(2)}` : "-"}
+                          </span>
                         </div>
                         <p className="text-[11px] text-black">Multiple unfavorable factors.</p>
                       </div>
@@ -2301,4 +2623,4 @@ function AdminAnalytics() {
   );
 }
 
-export { AdminAnalytics as default, EditPriceOutlookModal, EditWeightModal };
+export { AdminAnalytics as default, EditPriceOutlookModal, EditWeightModal, EditProfitabilityModal, EditFinalAdvisoryModal };

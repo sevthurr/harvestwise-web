@@ -201,4 +201,66 @@ describe('AdminAnalytics Price Outlook threshold save', () => {
       })
     );
   });
+
+  it('opens Final Advisory Cutoffs modal and saves updated score cutoffs', async () => {
+    analyticsApi.listThresholds.mockResolvedValue({
+      items: [
+        { id: 'TH-1', module_name: 'Price Outlook', rules: STORED_RULES },
+        { id: 'TH-ADV', module_name: 'Final Advisory Cutoffs', rules: [] },
+      ],
+      total: 2,
+    });
+    analyticsApi.listThresholdRules.mockResolvedValue({ items: [] });
+
+    renderPage();
+
+    await screen.findByText(/Recommendation Engine output mapping/i);
+
+    fireEvent.click(screen.getByTitle('Edit Final Advisory Cutoffs'));
+
+    expect(screen.getByText('Edit Final Advisory Cutoffs')).toBeInTheDocument();
+
+    const recInput = screen.getByLabelText('Recommended Cutoff (Score <)');
+    const avoidInput = screen.getByLabelText('Avoid for Now Cutoff (Score ≥)');
+
+    fireEvent.change(recInput, { target: { value: '0.80' } });
+    fireEvent.change(avoidInput, { target: { value: '1.80' } });
+
+    // Preview dynamically updates
+    expect(screen.getByText('Score < 0.80')).toBeInTheDocument();
+    expect(screen.getByText('0.80 – 1.80')).toBeInTheDocument();
+    expect(screen.getByText('Score ≥ 1.80')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(analyticsApi.createThresholdRule).toHaveBeenCalledTimes(3));
+
+    expect(analyticsApi.createThresholdRule).toHaveBeenCalledWith(
+      'TH-ADV',
+      expect.objectContaining({
+        classification: 'Recommended',
+        operator: '<',
+        threshold_value: 0.8,
+        display_text: 'Score < 0.80',
+      })
+    );
+    expect(analyticsApi.createThresholdRule).toHaveBeenCalledWith(
+      'TH-ADV',
+      expect.objectContaining({
+        classification: 'Proceed with Caution',
+        operator: '>=',
+        threshold_value: 0.8,
+        display_text: 'Score ≥ 0.80',
+      })
+    );
+    expect(analyticsApi.createThresholdRule).toHaveBeenCalledWith(
+      'TH-ADV',
+      expect.objectContaining({
+        classification: 'Avoid for Now',
+        operator: '>=',
+        threshold_value: 1.8,
+        display_text: 'Score ≥ 1.80',
+      })
+    );
+  });
 });

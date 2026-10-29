@@ -2,7 +2,7 @@
  * Step 1 harvest window behaviour.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("../app/farmer/components/recommend/useCommodityCatalog.js", async (importOriginal) => {
@@ -40,11 +40,11 @@ const BASE = {
   commodityId: "COM-0003",
 };
 
-function renderStep1(data) {
+function renderStep1(data, onChange = () => {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <Step1CropSchedule data={{ ...BASE, ...data }} onChange={() => {}} errors={{}} />
+      <Step1CropSchedule data={{ ...BASE, ...data }} onChange={onChange} errors={{}} />
     </QueryClientProvider>
   );
 }
@@ -83,5 +83,40 @@ describe("Step1CropSchedule harvest window", () => {
     durationForOption.mockReturnValue(null);
     renderStep1({ commodity: "lettuce", variant: "Curly" });
     expect(screen.getByText(/November 15, 2026 – November 30, 2026/)).toBeDefined();
+  });
+  it("renders Harvest Window From and Harvest Window To as separate date fields", () => {
+    durationForOption.mockReturnValue(null);
+    renderStep1({
+      commodity: "ampalaya",
+      harvestWindowStart: "2026-12-23",
+      harvestWindowEnd: "2027-02-01",
+    });
+
+    expect(screen.getByText("Harvest Window From")).toBeDefined();
+    expect(screen.getByText("Harvest Window To")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Harvest Window From" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Harvest Window To" })).toBeDefined();
+    expect(screen.getByText("December 23, 2026")).toBeDefined();
+    expect(screen.getByText("February 1, 2027")).toBeDefined();
+  });
+
+  it("updates start date independently when changed", () => {
+    const handleChange = vi.fn();
+    renderStep1({
+      commodity: "ampalaya",
+      harvestWindowStart: "2026-12-23",
+      harvestWindowEnd: "2027-02-01",
+    }, handleChange);
+
+    const fromInputs = document.querySelectorAll('input[type="date"]');
+    // First date input is plantingDate, second is harvestWindowStart
+    const harvestStartInput = fromInputs[1];
+    expect(harvestStartInput).toBeDefined();
+    fireEvent.change(harvestStartInput, { target: { value: "2026-12-25" } });
+
+    expect(handleChange).toHaveBeenCalledWith(expect.objectContaining({
+      harvestWindowStart: "2026-12-25",
+      harvestWindowEnd: "2027-02-01",
+    }));
   });
 });

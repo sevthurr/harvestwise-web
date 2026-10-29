@@ -242,7 +242,7 @@ function CropFactorsPage() {
     state?.advisoryLabel ||
     (rawRec ? t(badge.key) : null) ||
     (isAvoid
-      ? t("farmer.advisory.labels.avoid_for_now", {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
+      ? t(badge.key, {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
       : isCaution
       ? t("farmer.advisory.labels.proceed_with_caution", {}, t("farmer.advisory.recommendation_caution", {}, "Proceed with Caution"))
       : t("farmer.advisory.labels.recommended", {}, t("farmer.advisory.recommendation_recommended", {}, "Recommended")));

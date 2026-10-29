@@ -110,6 +110,11 @@ export const cropCycle = {
   expected_harvest_qty_opt: "Expected harvest quantity (kg) — optional",
   harvest_started_date: "Harvest started date",
   qty_harvested_so_far: "Quantity harvested so far (kg)",
+  quantity_to_harvest_label: "Quantity to Harvest (kg)",
+  based_on_estimated_yield: "Based on Estimated Yield",
+  harvest_quantity_auto_desc: "Automatically based on your estimated yield. Harvest entries will deduct from this amount.",
+  harvest_exceeds_remaining: "Harvest quantity cannot exceed remaining yield ({max} kg).",
+  remaining_yield_to_harvest: "Remaining yield to harvest (kg)",
   additional_cost_opt: "Additional production cost (₱) — optional",
   final_qty_sold: "Final quantity sold (kg)",
   avg_selling_price: "Average selling price (₱/kg)",
@@ -121,4 +126,6 @@ export const cropCycle = {
   all_amounts_estimates: "All amounts are estimates.",
   remove_farmgate: "Remove",
   auto_calculated_duration: "Auto-filled based on typical duration ({duration})",
+  final_cost_breakdown_hint: "Reflects overall total: estimated cost ({initial}) + added costs ({added})",
+  final_cost_hint: "Reflects the overall total for final production cost.",
 };
