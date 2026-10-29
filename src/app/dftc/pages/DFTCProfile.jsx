@@ -30,7 +30,7 @@ function DFTCProfile() {
 
   const firstName = staff.first_name || user?.first_name || "";
   const lastName = staff.last_name || user?.last_name || "";
-  const middleName = staff.middle_name || null;
+  const middleName = staff.middle_name || user?.middle_name || null;
   const suffix = staff.suffix || user?.suffix || null;
 
   const fullName = [firstName, middleName, lastName, suffix].filter(Boolean).join(" ") || user?.name || user?.username || "—";

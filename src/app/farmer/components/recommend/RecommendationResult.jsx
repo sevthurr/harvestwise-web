@@ -38,6 +38,7 @@ import {
   composeAdvisoryAction,
   composeImmediateActions,
   resolveMainFactor,
+  pickUsablePriceOutlook,
 } from "../../utils/advisoryReasons";
 import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
 import { apiPost, parseResponse } from "../../../global/api";
@@ -185,6 +186,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [showPlantedForm, setShowPlantedForm] = useState(false);
+  const [whyExpanded, setWhyExpanded] = useState(false);
   const draftAutosavedRef = useRef(false);
   const [plantedForm, setPlantedForm] = useState({
     actualPlantingDate: data.plantingDate,
@@ -233,13 +235,25 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
   const AdvisoryIcon = advisoryCfg ? advisoryCfg.Icon : null;
   const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");
+  const seasonalRef = moduleResults.reference_price || moduleResults.historical_seasonal_price || null;
+  const hasEligibleForecast = moduleResults.has_eligible_forecast === true;
+  const planningOrNoForecast = cropStage === "before_planting" || !hasEligibleForecast;
+
+  const effectivePriceResults = {
+    ...moduleResults,
+    price_outlook: (planningOrNoForecast && moduleResults.historical_price_outlook)
+      ? (pickUsablePriceOutlook(moduleResults.historical_price_outlook, moduleResults.price_outlook) || moduleResults.price_outlook)
+      : moduleResults.price_outlook,
+    reference_price: moduleResults.reference_price ?? moduleResults.historical_seasonal_price,
+    comparison_baseline: moduleResults.comparison_baseline ?? moduleResults.macro_baseline_price,
+  };
 
   const composedSummary = composeAdvisorySummary(advisoryCode, cropStage, displayName);
   const summaryText = renderComposedMessage(composedSummary, langCode, advisoryCode ? t(`farmer.advisory.${advisoryCode}_summary`, { crop_name: displayName }) : "");
   const advisoryMeta = advisoryResponse?.advisory || {};
   const mainFactor = advisoryCode
     ? resolveMainFactor({
-        moduleResults,
+        moduleResults: effectivePriceResults,
         contributions: advisoryMeta.module_contributions,
         weightsApplied: advisoryMeta.weights_applied,
         vetoes: advisoryMeta.hard_vetoes,
@@ -249,7 +263,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const horizonCandidate = Number(advisoryResponse?.price_horizon || data.horizonDays || 14);
   const horizonDays = [7, 14, 21, 28].includes(horizonCandidate) ? horizonCandidate : 14;
   const composedReasons = composeAdvisoryReasons({
-    moduleResults,
+    moduleResults: effectivePriceResults,
     contributions: advisoryMeta.module_contributions,
     vetoes: advisoryMeta.hard_vetoes,
     cropName: displayName,
@@ -264,21 +278,19 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const immediateActions = composeImmediateActions({
     advisoryCode,
     cropStage,
-    moduleResults,
+    moduleResults: effectivePriceResults,
     cropName: displayName,
     contributions: advisoryMeta.module_contributions,
     vetoes: advisoryMeta.hard_vetoes,
     actionGuidance: advisoryMeta.action_guidance,
     hasFarmgate,
   });
-  const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, moduleResults, displayName, advisoryMeta);
+  const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, effectivePriceResults, displayName, advisoryMeta);
   const currentPx = data.currentPrice || null;
   const forecastLo = data.forecastLower || moduleResults.lower_forecast_price || null;
   const forecastHi = data.forecastUpper || moduleResults.upper_forecast_price || null;
+  // sellingBasis and priceBasisLabel reuse seasonalRef, hasEligibleForecast, planningOrNoForecast from above
   const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : (moduleResults.forecast_midpoint || currentPx);
-  const seasonalRef = moduleResults.reference_price || moduleResults.historical_seasonal_price || null;
-  const hasEligibleForecast = moduleResults.has_eligible_forecast === true;
-  const planningOrNoForecast = cropStage === "before_planting" || !hasEligibleForecast;
   const sellingBasis = hasFarmgate
     ? data.farmgatePrice
     : (planningOrNoForecast ? (seasonalRef || forecastMid) : (forecastMid || seasonalRef));
@@ -532,7 +544,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
                     commodityId: data.commodityId || data.commodity,
                     commodityName,
                     cropStage,
-                    moduleResults,
+                    moduleResults: effectivePriceResults,
                     advisoryCode,
                     advisoryLabel,
                     resultData: data,
@@ -572,60 +584,76 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       </div>
 
       {/* 2. Why this recommendation? Factors card */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-xs p-3.5 sm:p-5 space-y-3">
-        <p className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-          {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
-        </p>
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-xs p-3.5 sm:p-5">
+        <button
+          type="button"
+          onClick={() => setWhyExpanded((v) => !v)}
+          aria-expanded={whyExpanded}
+          className="w-full flex items-center justify-between text-left py-1 hover:opacity-80 transition-opacity cursor-pointer group"
+        >
+          <span className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
+          </span>
+          {whyExpanded ? (
+            <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
+          )}
+        </button>
 
-        {mainFactor && (
-          <div className="flex items-start gap-3 p-3 sm:p-3.5 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
-            <div
-              className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                advisoryCode === ADVISORY_CODES.AVOID_FOR_NOW || badge.type === "avoid"
-                  ? "bg-red-50 text-red-600"
-                  : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION || badge.type === "caution"
-                  ? "bg-amber-50 text-amber-600"
-                  : "bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              <AlertCircle className="w-4 h-4" />
-            </div>
-            <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
-              {renderComposedMessage(mainFactor, langCode)}
+        {whyExpanded && (
+          <div className="mt-3 space-y-3">
+            {mainFactor && (
+              <div className="flex items-start gap-3 p-3 sm:p-3.5 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
+                <div
+                  className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
+                    advisoryCode === ADVISORY_CODES.AVOID_FOR_NOW || badge.type === "avoid"
+                      ? "bg-red-50 text-red-600"
+                      : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION || badge.type === "caution"
+                      ? "bg-amber-50 text-amber-600"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+                <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
+                  {renderComposedMessage(mainFactor, langCode)}
+                </p>
+              </div>
+            )}
+
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
+              {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
             </p>
+            <div className="space-y-2 sm:space-y-2.5">
+              {composedReasons.map((r, idx) => {
+                const reasonText = renderComposedMessage(r, langCode);
+                const factorCond = resolveFactorCondition(
+                  r.module,
+                  effectivePriceResults?.[r.module] || moduleResults?.[r.module],
+                  r.key,
+                  reasonText
+                );
+
+                return (
+                  <div key={r.module || idx} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                      {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {r.labelKey && (
+                        <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
+                          {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
+                        </p>
+                      )}
+                      <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
-
-        <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-          {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
-        </p>
-        <div className="space-y-2 sm:space-y-2.5">
-          {composedReasons.map((r, idx) => {
-            const reasonText = renderComposedMessage(r, langCode);
-            const factorCond = resolveFactorCondition(
-              r.module,
-              moduleResults?.[r.module],
-              r.key,
-              reasonText
-            );
-
-            return (
-              <div key={r.module || idx} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
-                <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  {r.labelKey && (
-                    <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
-                      {t(r.labelKey, {}, r.labelKey.split(".").pop().replace(/_/g, " "))}
-                    </p>
-                  )}
-                  <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       {/* 3. Estimated Profit card */}

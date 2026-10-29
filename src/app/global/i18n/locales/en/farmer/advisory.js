@@ -3,6 +3,7 @@ export const advisory = {
     "recommended": "Recommended",
     "proceed_with_caution": "Proceed with Caution",
     "avoid_for_now": "Avoid for Now",
+    "avoid_harvest": "Avoid for Now",
     "high_risk": "Avoid for Now",
     "planning": "Planning",
     "growing": "Growing",
