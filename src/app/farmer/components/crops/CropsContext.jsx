@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPut, parseResponse } from "../../../global/api";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
 import { parseLocalDate } from "../../utils/formatters";
 import { useAuth } from "../../../global/contexts/AuthContext";
+import { suggestHarvestDate } from "../recommend/types";
 
 const CropsContext = createContext(null);
 
@@ -156,6 +157,30 @@ export function normalizeCropPlan(raw, pricesMap) {
     plantingDate: formatLocalDate(item.actualPlantingDate || item.plannedPlantingDate),
     harvestDate: formatLocalDate(item.expectedHarvestDate),
     expectedHarvestDate: item.expectedHarvestDate || null,
+    harvestWindowStart: (() => {
+      let ws = item.harvestWindowStart || item.harvest_window_start || item.lifecycle?.earliest_harvest_date || item.lifecycle?.earliestHarvestDate;
+      const we = item.harvestWindowEnd || item.harvest_window_end || item.lifecycle?.latest_harvest_date || item.lifecycle?.latestHarvestDate;
+      const rawP = item.actualPlantingDate || item.plannedPlantingDate;
+      if ((!ws || !we || ws === we) && rawP) {
+        const pIso = typeof rawP === "string" && /^\d{4}-\d{2}-\d{2}/.test(rawP) ? rawP.slice(0, 10) : new Date(rawP).toISOString().split("T")[0];
+        const sugg = suggestHarvestDate(pIso, commodityId || commodityName, variant);
+        if (sugg?.minDate) ws = sugg.minDate;
+      }
+      return formatLocalDate(ws) || formatLocalDate(item.expectedHarvestDate);
+    })(),
+    harvestWindowEnd: (() => {
+      const ws = item.harvestWindowStart || item.harvest_window_start || item.lifecycle?.earliest_harvest_date || item.lifecycle?.earliestHarvestDate;
+      let we = item.harvestWindowEnd || item.harvest_window_end || item.lifecycle?.latest_harvest_date || item.lifecycle?.latestHarvestDate;
+      const rawP = item.actualPlantingDate || item.plannedPlantingDate;
+      if ((!ws || !we || ws === we) && rawP) {
+        const pIso = typeof rawP === "string" && /^\d{4}-\d{2}-\d{2}/.test(rawP) ? rawP.slice(0, 10) : new Date(rawP).toISOString().split("T")[0];
+        const sugg = suggestHarvestDate(pIso, commodityId || commodityName, variant);
+        if (sugg?.maxDate) we = sugg.maxDate;
+      }
+      return formatLocalDate(we) || formatLocalDate(item.expectedHarvestDate);
+    })(),
+    rawHarvestWindowStart: item.harvestWindowStart || item.harvest_window_start || item.lifecycle?.earliest_harvest_date || item.lifecycle?.earliestHarvestDate || null,
+    rawHarvestWindowEnd: item.harvestWindowEnd || item.harvest_window_end || item.lifecycle?.latest_harvest_date || item.lifecycle?.latestHarvestDate || null,
     rawPlantingDate: item.actualPlantingDate || item.plannedPlantingDate || null,
     rawHarvestDate: item.expectedHarvestDate || null,
     farmArea: item.farmArea || null,
@@ -193,13 +218,11 @@ export function normalizeCropPlan(raw, pricesMap) {
     advisoryCategory: item.advisoryCategory || item.advisory || item.advisory_category || null,
     advisory: item.advisory || item.advisoryCategory || item.advisory_category || null,
     notes: item.notes || (Array.isArray(item.cropCalendarEntries) ? item.cropCalendarEntries.find((e) => e.notes)?.notes : null) || null,
-    lastUpdated: item.updatedAt
-      ? new Date(item.updatedAt).toLocaleString("en-US", {
+    lastUpdated: (item.updatedAt || item.updated_at || item.createdAt || item.created_at)
+      ? new Date(item.updatedAt || item.updated_at || item.createdAt || item.created_at).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
-          hour: "numeric",
-          minute: "numeric",
         })
       : null,
   };
@@ -361,6 +384,21 @@ const CropsProvider = ({ children }) => {
       }
       if (extra?.finalProductionCost != null || extra?.final_production_cost != null) {
         body.final_production_cost = Number(extra.finalProductionCost ?? extra.final_production_cost);
+      }
+      if (extra?.actualPlantingDate != null || extra?.actual_planting_date != null) {
+        body.actual_planting_date = extra.actualPlantingDate ?? extra.actual_planting_date;
+      }
+      if (extra?.actualPlantedArea != null || extra?.actual_planted_area != null) {
+        body.actual_planted_area = Number(extra.actualPlantedArea ?? extra.actual_planted_area);
+      }
+      if (extra?.updatedHarvestDate != null || extra?.updated_harvest_date != null) {
+        body.updated_harvest_date = extra.updatedHarvestDate ?? extra.updated_harvest_date;
+      }
+      if (extra?.harvestWindowStart != null || extra?.harvest_window_start != null) {
+        body.harvest_window_start = extra.harvestWindowStart ?? extra.harvest_window_start;
+      }
+      if (extra?.harvestWindowEnd != null || extra?.harvest_window_end != null) {
+        body.harvest_window_end = extra.harvestWindowEnd ?? extra.harvest_window_end;
       }
       if (extra?.notes) {
         body.notes = String(extra.notes).trim();

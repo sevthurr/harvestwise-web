@@ -18,6 +18,14 @@ function toDateInputValue(val) {
   return `${year}-${month}-${day}`;
 }
 
+function harvestWindowDays(start, end) {
+  if (!start || !end) return null;
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+  return Math.max(1, Math.round((e - s) / 864e5) + 1);
+}
+
 const HOLD_REASONS = [
   { key: "farmer.cropCycle.hold_reason_market", value: "Waiting for better market conditions", fallback: "Waiting for better market conditions" },
   { key: "farmer.cropCycle.hold_reason_weather", value: "Weather conditions", fallback: "Weather conditions" },
@@ -67,13 +75,20 @@ const UpdatePhaseDrawer = ({
     }
     const initialPlanting = toDateInputValue(crop.rawPlantingDate || crop.plantingDate) || new Date().toISOString().split("T")[0];
     const initialArea = crop.farmArea != null && crop.farmArea !== "" ? Math.trunc(Number(crop.farmArea)) : "";
+    let initialStart = toDateInputValue(crop.rawHarvestWindowStart || crop.harvestWindowStart || crop.harvest_window_start);
+    let initialEnd = toDateInputValue(crop.rawHarvestWindowEnd || crop.harvestWindowEnd || crop.harvest_window_end);
     let initialHarvest = toDateInputValue(crop.rawHarvestDate || crop.harvestDate);
-    if (!initialHarvest && initialPlanting) {
+
+    if ((!initialStart || !initialEnd || initialStart === initialEnd) && initialPlanting) {
       const suggestion = suggestHarvestDate(initialPlanting, cropIdentifier, cropVariant);
       if (suggestion?.minDate) {
-        initialHarvest = suggestion.minDate;
+        if (!initialStart || initialStart === initialEnd) initialStart = suggestion.minDate;
+        if (!initialEnd || initialStart === initialEnd) initialEnd = suggestion.maxDate || suggestion.minDate;
       }
     }
+    if (!initialStart && initialHarvest) initialStart = initialHarvest;
+    if (!initialEnd && initialHarvest) initialEnd = initialHarvest;
+    if (!initialHarvest && initialEnd) initialHarvest = initialEnd;
 
     const overallTotalCost = crop?.totalCost != null && crop?.totalCost !== ""
       ? Number(crop.totalCost)
@@ -90,6 +105,8 @@ const UpdatePhaseDrawer = ({
       actualPlantingDate: initialPlanting,
       actualPlantedArea: initialArea,
       updatedHarvestDate: initialHarvest,
+      updatedHarvestWindowStart: initialStart || "",
+      updatedHarvestWindowEnd: initialEnd || "",
       expectedHarvestQty: crop.expectedHarvestQty ?? crop.harvestQuantity ?? "",
       actualHarvestDate: toDateInputValue(crop.actualHarvestDate) || new Date().toISOString().split("T")[0],
       actualHarvestedQty: crop.actualHarvestQty ?? crop.partialHarvestQty ?? "",
@@ -120,8 +137,42 @@ const UpdatePhaseDrawer = ({
     setFields((f) => ({
       ...f,
       actualPlantingDate: newPlantingDate,
-      ...(suggestion?.minDate ? { updatedHarvestDate: suggestion.minDate } : {}),
+      ...(suggestion?.minDate ? {
+        updatedHarvestDate: suggestion.minDate,
+        updatedHarvestWindowStart: suggestion.minDate,
+        updatedHarvestWindowEnd: suggestion.maxDate || suggestion.minDate,
+      } : {}),
     }));
+  };
+
+  const handleStartDateChange = (newStart) => {
+    setFields((f) => {
+      let nextEnd = f.updatedHarvestWindowEnd;
+      if (newStart && nextEnd && newStart > nextEnd) {
+        nextEnd = newStart;
+      }
+      return {
+        ...f,
+        updatedHarvestWindowStart: newStart,
+        updatedHarvestWindowEnd: nextEnd,
+        updatedHarvestDate: newStart || nextEnd || "",
+      };
+    });
+  };
+
+  const handleEndDateChange = (newEnd) => {
+    setFields((f) => {
+      let nextStart = f.updatedHarvestWindowStart;
+      if (newEnd && nextStart && newEnd < nextStart) {
+        nextStart = newEnd;
+      }
+      return {
+        ...f,
+        updatedHarvestWindowStart: nextStart,
+        updatedHarvestWindowEnd: newEnd,
+        updatedHarvestDate: nextStart || newEnd || "",
+      };
+    });
   };
 
   const handlePhaseConfirm = () => {
@@ -135,6 +186,9 @@ const UpdatePhaseDrawer = ({
       fields: {
         ...fields,
         additionalCost: addCost,
+        harvestWindowStart: fields.updatedHarvestWindowStart,
+        harvestWindowEnd: fields.updatedHarvestWindowEnd,
+        updatedHarvestDate: fields.updatedHarvestWindowEnd || fields.updatedHarvestWindowStart || fields.updatedHarvestDate,
       },
     });
   };
@@ -151,6 +205,11 @@ const UpdatePhaseDrawer = ({
   const renderPhaseFields = () => {
     if (!selectedPhase) return null;
     if (selectedPhase === "growing") {
+      const selectedWindowDays = harvestWindowDays(fields.updatedHarvestWindowStart, fields.updatedHarvestWindowEnd);
+      const daysBadgeText = selectedWindowDays
+        ? t("farmer.assess.duration_days_single", { value: selectedWindowDays }, `${selectedWindowDays} ${selectedWindowDays === 1 ? "day" : "days"}`)
+        : null;
+
       return (
         <div className="space-y-4">
           <Field id="actualPlantingDate" label={t("farmer.cropCycle.actual_planting_date", {}, "Actual planting date")}>
@@ -174,24 +233,108 @@ const UpdatePhaseDrawer = ({
               className={inputCls}
             />
           </Field>
-          <Field id="updatedHarvestDate" label={t("farmer.cropCycle.updated_harvest_date", {}, "Updated expected harvest date")}>
-            <input
-              id="updatedHarvestDate"
-              type="date"
-              value={fields.updatedHarvestDate ?? ""}
-              onChange={(e) => set({ updatedHarvestDate: e.target.value })}
-              className={inputCls}
-            />
-          </Field>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-semibold text-[var(--hw-neutral-700)]">
+                {t("farmer.assess.harvest_window", {}, "Harvest Window")}
+              </label>
+              {daysBadgeText ? (
+                <span className="inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+                  {daysBadgeText}
+                </span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="harvest-window-start"
+                  className="block text-xs font-medium text-[var(--hw-neutral-600)] mb-1"
+                >
+                  {t("common.from", {}, "From")}
+                </label>
+                <input
+                  id="harvest-window-start"
+                  type="date"
+                  value={fields.updatedHarvestWindowStart ?? ""}
+                  min={fields.actualPlantingDate || undefined}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="harvest-window-end"
+                  className="block text-xs font-medium text-[var(--hw-neutral-600)] mb-1"
+                >
+                  {t("common.to", {}, "To")}
+                </label>
+                <input
+                  id="harvest-window-end"
+                  type="date"
+                  value={fields.updatedHarvestWindowEnd ?? ""}
+                  min={fields.updatedHarvestWindowStart || fields.actualPlantingDate || undefined}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
     if (selectedPhase === "pre-harvest") {
+      const selectedWindowDays = harvestWindowDays(fields.updatedHarvestWindowStart, fields.updatedHarvestWindowEnd);
+      const daysBadgeText = selectedWindowDays
+        ? t("farmer.assess.duration_days_single", { value: selectedWindowDays }, `${selectedWindowDays} ${selectedWindowDays === 1 ? "day" : "days"}`)
+        : null;
+
       return (
         <div className="space-y-4">
-          <Field label={t("farmer.cropCycle.updated_harvest_date", {}, "Updated expected harvest date")}>
-            <input type="date" value={fields.updatedHarvestDate ?? ""} onChange={(e) => set({ updatedHarvestDate: e.target.value })} className={inputCls} />
-          </Field>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-semibold text-[var(--hw-neutral-700)]">
+                {t("farmer.assess.harvest_window", {}, "Harvest Window")}
+              </label>
+              {daysBadgeText ? (
+                <span className="inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+                  {daysBadgeText}
+                </span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="preharvest-window-start"
+                  className="block text-xs font-medium text-[var(--hw-neutral-600)] mb-1"
+                >
+                  {t("common.from", {}, "From")}
+                </label>
+                <input
+                  id="preharvest-window-start"
+                  type="date"
+                  value={fields.updatedHarvestWindowStart ?? ""}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="preharvest-window-end"
+                  className="block text-xs font-medium text-[var(--hw-neutral-600)] mb-1"
+                >
+                  {t("common.to", {}, "To")}
+                </label>
+                <input
+                  id="preharvest-window-end"
+                  type="date"
+                  value={fields.updatedHarvestWindowEnd ?? ""}
+                  min={fields.updatedHarvestWindowStart || undefined}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+          </div>
           <Field label={t("farmer.cropCycle.expected_harvest_qty_opt", {}, "Expected harvest quantity (kg) — optional")}>
             <input type="number" min="0" value={fields.expectedHarvestQty ?? ""} onChange={(e) => set({ expectedHarvestQty: e.target.value === "" ? "" : Number(e.target.value) })} placeholder="e.g. 600" className={inputCls} />
           </Field>
@@ -480,7 +623,7 @@ const UpdatePhaseDrawer = ({
                   ? t("farmer.cropCycle.advance_phase", {}, "Or advance to a new phase")
                   : t("farmer.cropCycle.move_to", { name: crop.commodityName || "-" }, `Move ${crop.commodityName || '-'} to`)}
               </p>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {transitions.map((phase) => {
                   const cfg = PHASE_CONFIG[phase];
                   const Icon = cfg.icon;
@@ -488,11 +631,12 @@ const UpdatePhaseDrawer = ({
                   return (
                     <button
                       key={phase}
+                      type="button"
                       onClick={() => setSelectedPhase(phase)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-colors text-left ${selected ? `${cfg.bg} ${cfg.border}` : "bg-white border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"}`}
+                      className="w-full flex items-center gap-3 py-2 text-left bg-transparent border-0 transition-colors"
                     >
-                      <Icon className={`w-5 h-5 ${selected ? cfg.color : "text-[var(--hw-neutral-400)]"}`} />
-                      <span className={`font-medium text-sm ${selected ? cfg.color : "text-[var(--hw-neutral-700)]"}`}>
+                      <Icon className={`w-5 h-5 ${cfg.color} flex-shrink-0`} />
+                      <span className="font-semibold text-sm text-black">
                         {t(cfg.labelKey || `farmer.phases.${phase}`, {}, cfg.label)}
                       </span>
                       {selected && <Check className={`w-4 h-4 ml-auto ${cfg.color}`} />}
@@ -514,14 +658,15 @@ const UpdatePhaseDrawer = ({
 
           {/* Put on hold — only when NOT already on hold and not completed */}
           {!crop.isOnHold && !isCompleted && (
-            <div className="pt-1 border-t border-[var(--hw-neutral-100)]">
+            <div className="pt-2 border-t border-[var(--hw-neutral-100)]">
               <button
+                type="button"
                 onClick={() => setView("hold-reason")}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 py-2 text-left bg-transparent border-0 transition-colors"
               >
-                <PauseCircle className="w-5 h-5 text-amber-600" />
+                <PauseCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <span className="font-medium text-sm text-amber-700">
+                  <span className="font-semibold text-sm text-amber-700">
                     {t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}
                   </span>
                   <p className="text-[11px] text-amber-600 mt-0.5">

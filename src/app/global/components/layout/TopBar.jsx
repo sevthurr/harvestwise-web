@@ -1,12 +1,26 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, Menu, Settings, LogOut, ChevronDown, Info, Download, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import {
+  Bell,
+  Menu,
+  Settings,
+  LogOut,
+  ChevronDown,
+  Info,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  WifiOff,
+  Cloud,
+  X,
+} from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
-import { LastUpdatedButton } from "../ui/BackgroundProcessBadge";
 import { UserAvatar } from "../profile/UserAvatar";
 import { formatManilaTime } from "../../utils/apiTransforms";
 
@@ -25,13 +39,37 @@ const TopBar = ({
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
     formatManilaTime()
   );
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine !== false : true));
+
   const ref = useRef(null);
+  const syncRef = useRef(null);
+  const clickTimerRef = useRef(null);
   const { processState } = useBackgroundProcess();
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Scoped on purpose: only the manual resync and an active background
   // process count as "syncing". An unfiltered useIsFetching() here made the
@@ -72,12 +110,50 @@ const TopBar = ({
     }
   };
 
+  const handlePillClick = (e) => {
+    e.preventDefault();
+    if (clickTimerRef.current) {
+      // Double click detected -> sync immediately
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      setSyncOpen(false);
+      handleResync();
+    } else {
+      // Single click -> open overlay
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        setSyncOpen((v) => !v);
+      }, 250);
+    }
+  };
+
+  const handlePillDoubleClick = (e) => {
+    e.preventDefault();
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    setSyncOpen(false);
+    handleResync();
+  };
+
   useEffect(() => {
     const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (syncRef.current && !syncRef.current.contains(e.target)) setSyncOpen(false);
+    };
+    const keyHandler = (e) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setSyncOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", keyHandler);
+    };
   }, []);
 
   const fullName = user?.name || (user?.first_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : "");
@@ -113,18 +189,86 @@ const TopBar = ({
 
         <div className="flex-1" />
 
-        {/* Right: sync · bell · avatar */}
+        {/* Right: sync & offline status · bell · avatar */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {cacheStatusCopy && (
-            <span
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-100)]"
-              title={cacheStatusCopy}
-              aria-label={cacheStatusCopy}
+          {/* Unified Sync & Offline Status */}
+          <div className="relative" ref={syncRef}>
+            <button
+              type="button"
+              onClick={handlePillClick}
+              onDoubleClick={handlePillDoubleClick}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white hover:bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-all duration-200 text-xs font-medium cursor-pointer shadow-2xs active:scale-95 flex-shrink-0"
+              aria-label={t("farmer.offline_data_title", {}, "Offline Data Status")}
+              aria-expanded={syncOpen}
+              aria-haspopup="dialog"
+              title={`${t("common.last_updated", {}, "Last updated")} ${lastSyncedTime}`}
             >
-              <Info className="w-4 h-4" />
-            </span>
-          )}
-          <LastUpdatedButton onClick={handleResync} isSyncing={isSyncing} lastUpdatedTime={lastSyncedTime} />
+              <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+
+              <span className="hidden sm:inline whitespace-nowrap">
+                {isSyncing ? t("common.syncing", {}, "Syncing...") : `${t("common.last_updated", {}, "Last updated")} ${lastSyncedTime}`}
+              </span>
+              <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">
+                {isSyncing ? t("common.syncing_short", {}, "Syncing") : lastSyncedTime}
+              </span>
+            </button>
+
+            {/* Offline & Sync Popover */}
+            {syncOpen && (
+              <div
+                role="dialog"
+                aria-label={t("farmer.offline_data_title", {}, "Offline Data Status")}
+                className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[var(--shadow-xl)] p-4 z-50 animate-in fade-in zoom-in-95"
+              >
+                <div className="flex items-start justify-between pb-3 border-b border-[var(--hw-neutral-100)]">
+                  <div className="flex items-start gap-2.5 pr-2">
+                    <div className="w-8 h-8 rounded-lg bg-[var(--hw-green-50)] text-[var(--hw-green-700)] flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Cloud className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-black leading-tight">
+                        {t("farmer.offline_data_title", {}, "Offline Data Status")}
+                      </h3>
+                      <p className="text-[12px] text-[var(--hw-neutral-600)] mt-1.5 leading-snug">
+                        {!isOnline
+                          ? t("farmer.offline_desc_offline", {}, "You are offline. Showing cached data from your device.")
+                          : cacheStatus === "error"
+                          ? t("farmer.offline_desc_error", {}, "Some offline data could not be saved. Check your connection and tap Sync Now.")
+                          : cacheStatus === "preparing"
+                          ? t("farmer.offline_desc_preparing", {}, "Saving latest market prices and crop recommendations to your device...")
+                          : t("farmer.offline_desc_ready", {}, "Prices, forecasts, and recommendations are saved on this device for offline use.")}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSyncOpen(false)}
+                    className="p-1 rounded-md text-[var(--hw-neutral-400)] hover:text-black hover:bg-[var(--hw-neutral-100)] transition-colors flex-shrink-0"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="pt-3">
+                  <div className="flex items-center justify-between text-xs text-black mb-3">
+                    <span>{t("farmer.last_updated", {}, "Last updated")}</span>
+                    <span className="font-semibold">{lastSyncedTime}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResync}
+                    disabled={isSyncing || !isOnline}
+                    className="w-full h-9 px-3 bg-[var(--hw-green-700)] hover:bg-[var(--hw-green-800)] text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                    <span>{isSyncing ? t("farmer.syncing", {}, "Updating latest data...") : t("farmer.sync_now", {}, "Sync Now")}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={onNotificationClick}
@@ -180,6 +324,23 @@ const TopBar = ({
                     <p className="text-[12px] text-black">{t("auth.role_farmer", {}, "Farmer")}</p>
                   </div>
                 </button>
+
+                {/* Offline status row */}
+                {cacheStatusCopy && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setSyncOpen(true);
+                    }}
+                    className="w-full px-4 py-2 bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-100)] flex items-center justify-between text-xs transition-colors text-left"
+                  >
+                    <span className="text-[var(--hw-neutral-600)]">{t("farmer.offline_data", {}, "Offline Data")}</span>
+                    <span className="font-medium text-[var(--hw-green-700)]">
+                      {cacheStatusCopy}
+                    </span>
+                  </button>
+                )}
 
                 {/* Main nav items */}
                 <div className="py-1">

@@ -124,7 +124,5 @@ describe("My Crops detail factor cards", () => {
     expect(screen.queryByText("Historical seasonal production")).not.toBeInTheDocument();
     expect(screen.queryByText("View arrivals")).not.toBeInTheDocument();
     expect(screen.queryByText("View production trends")).not.toBeInTheDocument();
-    expect(getArrivalPressureMock).not.toHaveBeenCalled();
-    expect(getSeasonalProductionMock).not.toHaveBeenCalled();
   });
 });

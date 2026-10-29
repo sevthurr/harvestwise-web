@@ -52,6 +52,8 @@ export const assess = {
   step4_title: "Pagsusuri at Pagbawi ng Gastos",
   target_planting_date: "Target na petsa ng pagtatanim",
   expected_harvest_date: "Inaasahang petsa ng pag-aani",
+  harvest_window: "Panahon ng Pag-aani",
+  typical_plant_to_harvest_duration: "Karaniwang tagal mula pagtatanim hanggang pag-aani: {duration}",
   suggested_window_note: "Iminungkahing panahon ng ani batay sa karaniwang tagal:",
   use_this_date: "Gamitin ang petsang ito",
   typical_duration: "Karaniwang tagal: {label}",

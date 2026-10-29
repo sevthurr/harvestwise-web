@@ -52,6 +52,8 @@ export const assess = {
   step4_title: "Pagsusi ug Pagbawi sa Gasto",
   target_planting_date: "Target nga petsa sa pagtanom",
   expected_harvest_date: "Gilaom nga petsa sa ani",
+  harvest_window: "Panahon sa Pag-ani",
+  typical_plant_to_harvest_duration: "Kasagarang gidugayon gikan sa pagtanom hangtod sa pag-ani: {duration}",
   suggested_window_note: "Gilaom nga panahon sa ani base sa kasagarang panahon sa pagtubo:",
   use_this_date: "Gamita kini nga petsa",
   typical_duration: "Kasagarang panahon sa pagtubo: {label}",

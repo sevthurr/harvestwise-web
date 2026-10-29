@@ -45,8 +45,10 @@ describe("UpdatePhaseDrawer auto-fill harvest date", () => {
     );
 
     // Carrots duration is 90-120 days. 90 days from 2026-10-14 is 2027-01-12.
-    const harvestInput = screen.getByLabelText(/Updated expected harvest date/i);
-    expect(harvestInput.value).toBe("2027-01-12");
+    const startInput = screen.getByLabelText(/^From$/i);
+    const endInput = screen.getByLabelText(/^To$/i);
+    expect(startInput.value).toBe("2027-01-12");
+    expect(endInput.value).toBe("2027-02-11");
   });
 
   it("re-calculates updatedHarvestDate when actualPlantingDate changes", () => {
@@ -62,11 +64,13 @@ describe("UpdatePhaseDrawer auto-fill harvest date", () => {
     );
 
     const plantingInput = screen.getByLabelText(/Actual planting date/i);
-    const harvestInput = screen.getByLabelText(/Updated expected harvest date/i);
+    const startInput = screen.getByLabelText(/^From$/i);
+    const endInput = screen.getByLabelText(/^To$/i);
 
     // Change planting date to 2026-11-01. 90 days from 2026-11-01 is 2027-01-30.
     fireEvent.change(plantingInput, { target: { value: "2026-11-01" } });
-    expect(harvestInput.value).toBe("2027-01-30");
+    expect(startInput.value).toBe("2027-01-30");
+    expect(endInput.value).toBe("2027-03-01");
   });
 
   it("auto-fills correctly for other crops with different durations like kamatis (55 days)", () => {
@@ -91,8 +95,10 @@ describe("UpdatePhaseDrawer auto-fill harvest date", () => {
     );
 
     // Kamatis duration is 55-65 days. 55 days from 2026-10-01 is 2026-11-25.
-    const harvestInput = screen.getByLabelText(/Updated expected harvest date/i);
-    expect(harvestInput.value).toBe("2026-11-25");
+    const startInput = screen.getByLabelText(/^From$/i);
+    const endInput = screen.getByLabelText(/^To$/i);
+    expect(startInput.value).toBe("2026-11-25");
+    expect(endInput.value).toBe("2026-12-05");
   });
 
   it("renders action button and Put on Hold card in confirm-planting mode", () => {

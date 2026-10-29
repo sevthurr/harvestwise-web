@@ -52,6 +52,8 @@ export const assess = {
   step4_title: "Review & Break-Even",
   target_planting_date: "Target planting date",
   expected_harvest_date: "Expected harvest date",
+  harvest_window: "Harvest Window",
+  typical_plant_to_harvest_duration: "Typical plant-to-harvest duration: {duration}",
   suggested_window_note: "Suggested harvest window based on typical duration:",
   use_this_date: "Use this date",
   typical_duration: "Typical duration: {label}",
