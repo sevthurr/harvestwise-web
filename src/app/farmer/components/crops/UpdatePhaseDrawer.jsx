@@ -41,6 +41,7 @@ const UpdatePhaseDrawer = ({
   crop,
   onClose,
   onConfirm,
+  submitting = false,
   mode = "update-phase",
 }) => {
   const { t } = useLanguage();
@@ -176,7 +177,7 @@ const UpdatePhaseDrawer = ({
   };
 
   const handlePhaseConfirm = () => {
-    if (!selectedPhase) return;
+    if (!selectedPhase || submitting) return;
     const addCost = fields.updatedTotalCost !== "" && fields.updatedTotalCost != null
       ? Number(fields.updatedTotalCost)
       : (fields.additionalCost !== "" && fields.additionalCost != null ? Number(fields.additionalCost) : null);
@@ -194,11 +195,12 @@ const UpdatePhaseDrawer = ({
   };
 
   const handleHoldConfirm = () => {
-    if (!holdValid) return;
+    if (!holdValid || submitting) return;
     onConfirm({ kind: "hold", reason: resolvedReason });
   };
 
   const handleResume = () => {
+    if (submitting) return;
     onConfirm({ kind: "resume" });
   };
 
@@ -564,14 +566,15 @@ const UpdatePhaseDrawer = ({
                   setView("main");
                 }
               }}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors text-center"
+              disabled={submitting}
+              className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors text-center disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {t("common.cancel", {}, "Cancel")}
             </button>
             <button
               type="button"
               onClick={handleHoldConfirm}
-              disabled={!holdValid}
+              disabled={!holdValid || submitting}
               className="flex-1 py-2.5 px-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm font-semibold hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-xs"
             >
               <PauseCircle className="w-4 h-4 text-amber-600" />
@@ -699,8 +702,9 @@ const UpdatePhaseDrawer = ({
         <div className="px-5 py-3.5 pb-6 md:pb-4 border-t border-[var(--hw-neutral-200)] bg-white flex items-center gap-3 flex-shrink-0">
           <button
             type="button"
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors text-center"
+            onClick={submitting ? undefined : onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] transition-colors text-center disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("common.cancel", {}, "Cancel")}
           </button>
@@ -708,14 +712,16 @@ const UpdatePhaseDrawer = ({
             <button
               type="button"
               onClick={handlePhaseConfirm}
-              disabled={!selectedPhase}
+              disabled={!selectedPhase || submitting}
               className="flex-1 py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-sm"
             >
               <Check className="w-4 h-4" />
               <span>
                 {mode === "confirm-planting"
                   ? t("farmer.crops.btn_confirm_planting", {}, "Confirm Planting")
-                  : (selectedPhase === "completed"
+                  : submitting
+                    ? t("common.saving", {}, "Saving…")
+                    : (selectedPhase === "completed"
                       ? t("common.confirm", {}, "Confirm")
                       : t("farmer.cropCycle.update_status", {}, "Update status"))}
               </span>
@@ -725,7 +731,8 @@ const UpdatePhaseDrawer = ({
             <button
               type="button"
               onClick={handleResume}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              disabled={submitting}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-semibold hover:bg-[var(--hw-green-800)] transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4" />
               <span>{t("common.continue", {}, "Continue")}</span>

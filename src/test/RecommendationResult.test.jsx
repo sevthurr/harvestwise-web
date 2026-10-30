@@ -74,6 +74,8 @@ const baseData = {
   variant: "Ball",
   plantingDate: "2026-10-20",
   harvestDate: "2026-12-01",
+  harvestWindowStart: "2026-12-18",
+  harvestWindowEnd: "2026-12-22",
   farmArea: 500,
   harvestQuantity: 600,
   costMethod: "simple",
@@ -100,6 +102,13 @@ beforeEach(() => {
 });
 
 describe("RecommendationResult — View basis navigation", () => {
+  it("shows the selected harvest window and formats both dates consistently", () => {
+    renderResult(baseData);
+
+    expect(screen.getByText("Oct 20, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Dec 18, 2026 — Dec 22, 2026")).toBeInTheDocument();
+  });
+
   it("passes the real commodity id, not the catalog icon key, to the factors page", () => {
     renderResult(baseData);
 

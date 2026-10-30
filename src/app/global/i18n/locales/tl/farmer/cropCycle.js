@@ -128,4 +128,11 @@ export const cropCycle = {
   remove_farmgate: "Alisin",
   final_cost_breakdown_hint: "Ipinapakita ang kabuuang kabuuan: tinantyang gastos ({initial}) + karagdagang gastos ({added})",
   final_cost_hint: "Ipinapakita ang kabuuang kabuuan para sa huling gastos sa produksyon.",
+  already_completed: "Nakumpleto na ang pananim na ito. Na-load na ang pinakabagong impormasyon.",
+  action_failed: "Hindi nakumpleto ang pagkilos. Pakisubukan muli.",
+  save_harvest_failed: "Hindi ma-save ang tala ng ani. Pakisubukan muli.",
+  add_cost_failed: "Hindi maidagdag ang gastos. Pakisubukan muli.",
+  remove_farmgate_failed: "Hindi maalis ang farmgate na presyo. Pakisubukan muli.",
+  save_farmgate_failed: "Hindi ma-save ang farmgate na presyo. Pakisubukan muli.",
+  advisory_request_failed: "Hindi ma-load ang payo para sa pananim. Pakisubukan muli mamaya.",
 };

@@ -66,6 +66,18 @@ function renderFactorIcon(iconType, colorClass) {
   return <TrendingUp className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
 }
 
+function formatDisplayDate(value) {
+  if (!value) return "";
+  const raw = String(value).slice(0, 10);
+  const [year, month, day] = raw.split("-").map(Number);
+  if (!year || !month || !day) return String(value);
+  return new Date(year, month - 1, day).toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 // Presentation config for each advisory badge state: icon, text colour and card
 // border. The `type` values come from `composeAdvisoryBadge`.
 const ADVISORY_CFG = {
@@ -289,6 +301,12 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   });
   const composedAction = immediateActions[0] || composeAdvisoryAction(advisoryCode, cropStage, effectivePriceResults, displayName, advisoryMeta);
   const currentPx = data.currentPrice || null;
+  const harvestWindowStart = data.harvestWindowStart || data.harvest_window_start;
+  const harvestWindowEnd = data.harvestWindowEnd || data.harvest_window_end;
+  const plantingDateDisplay = formatDisplayDate(data.plantingDate);
+  const harvestDateDisplay = harvestWindowStart && harvestWindowEnd
+    ? `${formatDisplayDate(harvestWindowStart)} — ${formatDisplayDate(harvestWindowEnd)}`
+    : formatDisplayDate(harvestWindowStart || harvestWindowEnd || data.harvestDate);
   const forecastLo = data.forecastLower || moduleResults.lower_forecast_price || null;
   const forecastHi = data.forecastUpper || moduleResults.upper_forecast_price || null;
   // sellingBasis and priceBasisLabel reuse seasonalRef, hasEligibleForecast, planningOrNoForecast from above
@@ -563,18 +581,18 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
         )}
 
         {/* Date chips */}
-        {(data.plantingDate || data.harvestDate) && (
+        {(data.plantingDate || data.harvestDate || harvestWindowStart || harvestWindowEnd) && (
           <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-[13px]">
             {data.plantingDate && (
               <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2 border border-[var(--hw-neutral-100)]">
                 <p className="text-[var(--hw-neutral-600)] text-[11px] sm:text-[12px]">{t("farmer.assess.planting_date", {}, "Planting date")}</p>
-                <p className="font-semibold text-[var(--hw-neutral-900)] mt-0.5">{data.plantingDate}</p>
+                <p className="font-semibold text-[var(--hw-neutral-900)] mt-0.5">{plantingDateDisplay}</p>
               </div>
             )}
-            {data.harvestDate && (
+            {harvestDateDisplay && (
               <div className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2 border border-[var(--hw-neutral-100)]">
                 <p className="text-[var(--hw-neutral-600)] text-[11px] sm:text-[12px]">{t("farmer.assess.expected_harvest", {}, "Expected harvest")}</p>
-                <p className="font-semibold text-[var(--hw-neutral-900)] mt-0.5">{data.harvestDate}</p>
+                <p className="font-semibold text-[var(--hw-neutral-900)] mt-0.5">{harvestDateDisplay}</p>
               </div>
             )}
           </div>

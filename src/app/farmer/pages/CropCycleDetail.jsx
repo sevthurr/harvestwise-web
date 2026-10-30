@@ -212,6 +212,7 @@ function CropCycleDetailPage() {
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [reasonsExpanded, setReasonsExpanded] = useState(false);
   const crop = crops.find((c) => c.id === cropId);
   const [farmgatePrice, setFarmgatePrice] = useState(() =>
@@ -305,7 +306,7 @@ function CropCycleDetailPage() {
       setHarvestEntryPrice("");
       setHarvestEntryDate(getLocalDateInputValue());
     } catch (err) {
-      setActionError(err.message || "Failed to save harvest entry. Please try again.");
+      setActionError(t("farmer.cropCycle.save_harvest_failed", {}, "Failed to save the harvest entry. Please try again."));
     } finally {
       setIsSavingHarvestEntry(false);
     }
@@ -356,6 +357,7 @@ function CropCycleDetailPage() {
     );
   }
   const handleDrawerAction = async (action) => {
+    if (isSubmittingAction) return;
     const statusMap = {
       [PHASE_CODES.PLANNING]: "Planning",
       [PHASE_CODES.GROWING]: "Planted",
@@ -369,6 +371,7 @@ function CropCycleDetailPage() {
       completed: "Completed"
     };
 
+    setIsSubmittingAction(true);
     setActionError(null);
     try {
       if (action.kind === "phase") {
@@ -512,7 +515,19 @@ function CropCycleDetailPage() {
       }
       setDrawerOpen(false);
     } catch (err) {
-      setActionError(err.message || "Action failed. Please try again.");
+      if (err.status === 409 && /already completed/i.test(err.message || "")) {
+        await refreshCrops();
+        setDrawerOpen(false);
+        setActionError(t(
+          "farmer.cropCycle.already_completed",
+          {},
+          "This crop was already completed. The latest information has been loaded."
+        ));
+      } else {
+        setActionError(t("farmer.cropCycle.action_failed", {}, "The action could not be completed. Please try again."));
+      }
+    } finally {
+      setIsSubmittingAction(false);
     }
   };
 
@@ -531,7 +546,7 @@ function CropCycleDetailPage() {
       setAdditionalCost("");
       setAddCostOpen(false);
     } catch (err) {
-      setActionError(err.message || "Failed to add cost. Please try again.");
+      setActionError(t("farmer.cropCycle.add_cost_failed", {}, "Failed to add the cost. Please try again."));
     } finally {
       setIsSubmittingCost(false);
     }
@@ -586,14 +601,11 @@ function CropCycleDetailPage() {
       };
       const res = await apiPost("/advisory/plan", payload);
       if (!res.ok) {
-        let detail = `Advisory request failed (${res.status}).`;
-        try {
-          const errorBody = await res.json();
-          if (typeof errorBody?.detail === "string") detail = errorBody.detail;
-        } catch {
-          // Keep the status-based message when the server does not return JSON.
-        }
-        throw new Error(detail);
+        throw new Error(t(
+          "farmer.cropCycle.advisory_request_failed",
+          {},
+          "The crop advisory could not be loaded. Please try again later."
+        ));
       }
       return await parseResponse(res);
     },
@@ -1478,12 +1490,12 @@ function CropCycleDetailPage() {
                           setActionError(null);
                           try {
                             const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: null });
-                            if (!res.ok) throw new Error("Failed to remove farmgate price.");
+                            if (!res.ok) throw new Error(t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
                             setFarmgatePrice("");
                             updateCrop(crop.id, { farmgatePrice: null });
                             await refreshCrops();
                           } catch (err) {
-                            setActionError(err.message || "Failed to remove farmgate price. Please try again.");
+                            setActionError(err.message || t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
                           }
                         }}
                         className="text-[12px] font-medium text-red-600 hover:opacity-70"
@@ -1520,13 +1532,13 @@ function CropCycleDetailPage() {
                       setActionError(null);
                       try {
                         const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: v });
-                        if (!res.ok) throw new Error("Failed to save farmgate price.");
+                        if (!res.ok) throw new Error(t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
                         setFarmgatePrice(v);
                         updateCrop(crop.id, { farmgatePrice: v });
                         await refreshCrops();
                         setEditFarmgate(false);
                       } catch (err) {
-                        setActionError(err.message || "Failed to save farmgate price. Please try again.");
+                        setActionError(err.message || t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
                       }
                     }}
                     className="px-3 py-2 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
@@ -1698,6 +1710,7 @@ function CropCycleDetailPage() {
         open={drawerOpen}
         crop={crop}
         mode={drawerMode}
+        submitting={isSubmittingAction}
         onClose={() => setDrawerOpen(false)}
         onConfirm={handleDrawerAction}
       />
