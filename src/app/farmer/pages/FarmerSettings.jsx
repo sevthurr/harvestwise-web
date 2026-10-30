@@ -30,7 +30,12 @@ import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
 import { queryClient } from "../../global/lib/queryClient";
 import { useRemovalRequest } from "../../global/hooks/useRemovalRequest";
-import { loadFarmerOfflineData, fetchFarmerProfile, fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
+import {
+  FARMER_COMMODITIES_KEY,
+  FARMER_PROFILE_KEY,
+  loadFarmerOfflineData,
+  fetchFarmerProfile,
+} from "../../global/hooks/useFarmerPrefetch";
 import { buildFarmerExportHtml } from "../utils/farmerExportHtml";
 
 const TABS = [
@@ -751,9 +756,15 @@ const FarmTab = ({ showToast }) => {
       try {
         setLoading(true);
         const [profileRes, cropsRes, pricesRes] = await Promise.allSettled([
-          apiGet("/farmer/profile"),
-          apiGet("/farmer/commodities"),
-          apiGet("/prices?is_top10=true&page_size=50"),
+          queryClient.getQueryData(FARMER_PROFILE_KEY)
+            ? Promise.resolve({ ok: true, json: async () => queryClient.getQueryData(FARMER_PROFILE_KEY) })
+            : apiGet("/farmer/profile"),
+          queryClient.getQueryData(FARMER_COMMODITIES_KEY)
+            ? Promise.resolve({ ok: true, json: async () => queryClient.getQueryData(FARMER_COMMODITIES_KEY) })
+            : apiGet("/farmer/commodities"),
+          queryClient.getQueryData(["prices", "list"])
+            ? Promise.resolve({ ok: true, json: async () => queryClient.getQueryData(["prices", "list"]) })
+            : apiGet("/prices?is_top10=true&page_size=50"),
         ]);
 
         if (profileRes.status === "fulfilled" && profileRes.value.ok && active) {
