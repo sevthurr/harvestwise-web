@@ -452,6 +452,41 @@ describe('DFTCInput Submit Data Page', () => {
     localStorage.removeItem('dftc_price_draft_data');
   });
 
+  it('clears the local price cache when deleting a server draft', async () => {
+    localStorage.setItem('dftc_price_draft', 'true');
+    localStorage.setItem('dftc_price_draft_data', JSON.stringify({ selectedDate: todayIso }));
+
+    global.fetch = vi.fn(async (url, options = {}) => {
+      if (url.includes('/dftc/submissions')) {
+        return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      }
+      if (url.includes('/dftc/price-draft') && options.method === 'DELETE') {
+        return { ok: true, status: 200, json: async () => ({ deleted_cells: 2 }) };
+      }
+      if (url.includes('/dftc/price-draft')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: 'DRF-1', status: 'draft', cells: [{ id: 'DCL-1' }] })
+        };
+      }
+      if (url.includes('/dftc/arrival-draft')) {
+        return { ok: true, status: 200, json: async () => ({ payload: {} }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ rows: [] }) };
+    });
+
+    renderDFTCInput();
+    await waitFor(() => expect(screen.getByTitle('Delete draft')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('Delete draft'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('dftc_price_draft')).toBeNull();
+      expect(localStorage.getItem('dftc_price_draft_data')).toBeNull();
+    });
+  });
+
   it('ensures Encoded By and Prepared By are not editable select elements in file preview', async () => {
     global.fetch = mockSubmissionsFetch();
     renderDFTCInput();

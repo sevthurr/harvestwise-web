@@ -422,10 +422,10 @@ export default function DFTCInput() {
         await apiDelete(`/dftc/arrival-draft?reporting_date=${encodeURIComponent(reportingDate)}`);
       }
 
-      if (draft.id === "local-price-draft") {
+      if (isPriceDraft) {
         localStorage.removeItem("dftc_price_draft");
         localStorage.removeItem("dftc_price_draft_data");
-      } else if (draft.id === "local-arrival-draft") {
+      } else if (isArrivalDraft) {
         localStorage.removeItem("dftc_arrival_draft");
         localStorage.removeItem("dftc_arrival_draft_data");
       }

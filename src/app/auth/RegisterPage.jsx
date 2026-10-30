@@ -100,6 +100,11 @@ const Field = ({ id, label, required = false, optional = false, optionalText = "
 const inputCls =
   "w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]";
 
+export function getGoogleRegistrationDestination(roleName) {
+  const role = roleName || "Farmer";
+  return role.toLowerCase() === "farmer" ? "/onboarding" : roleHome(role);
+}
+
 function RegisterPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -311,7 +316,15 @@ function RegisterPage() {
       const me = await login(pendingGoogleAuth);
       setGoogleConsentStep(null);
       setPendingGoogleAuth(null);
-      navigate(roleHome(me.role?.role_name || "Farmer"), { replace: true });
+      // Google registration may create a fresh farmer account before this
+      // callback. Keep new farmers (or any account flagged as needing
+      // onboarding) in the setup flow instead of dropping them on the
+      // dashboard with an incomplete profile.
+      if (pendingGoogleAuth?.onboarding_required || me?.role?.role_name?.toLowerCase() === "farmer") {
+        navigate("/onboarding", { replace: true });
+      } else {
+        navigate(getGoogleRegistrationDestination(me?.role?.role_name), { replace: true });
+      }
     } catch (err) {
       setGoogleConsentStep(null);
       setErrors({
