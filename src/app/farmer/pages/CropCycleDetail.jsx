@@ -209,8 +209,6 @@ function CropCycleDetailPage() {
   const [additionalCost, setAdditionalCost] = useState("");
   const [isSubmittingCost, setIsSubmittingCost] = useState(false);
   const [addedCostsExpanded, setAddedCostsExpanded] = useState(true);
-  const [advisoryExpanded, setAdvisoryExpanded] = useState(true);
-  const [whyExpanded, setWhyExpanded] = useState(false);
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
@@ -376,6 +374,7 @@ function CropCycleDetailPage() {
       if (action.kind === "phase") {
         const targetStatus = statusMap[action.phase] || "Planning";
         const isComp = targetStatus === "Completed";
+        const isTransitionToHarvesting = targetStatus === "Harvesting" || action.phase === "harvested";
         const addCostNum = action.fields?.additionalCost != null && action.fields?.additionalCost !== ""
           ? Number(action.fields.additionalCost)
           : (action.fields?.updatedTotalCost != null && action.fields?.updatedTotalCost !== "" ? Number(action.fields.updatedTotalCost) : 0);
@@ -412,7 +411,6 @@ function CropCycleDetailPage() {
             });
           }
         } else {
-          const isTransitionToHarvesting = targetStatus === "Harvesting" || action.phase === "harvested";
           await updateCropStatusApi(crop.id, targetStatus, null, {
             additionalCost: addCostNum > 0 ? addCostNum : undefined,
             actualHarvestQty: isTransitionToHarvesting ? undefined : actualHarvestQtyVal,
@@ -548,8 +546,6 @@ function CropCycleDetailPage() {
     (c) => c.costType === "additional"
   );
 
-  // Real backend advisory query from existing POST /api/v1/advisory/plan
-  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && qty > 0);
   const commodityIdentifier = crop.commodityId || (typeof crop.commodity === "string" ? crop.commodity : crop.commodity?.id) || crop.commodityName;
   const phaseCode = normalizePhaseCode(crop.phase) || normalizePhaseCode(crop.status);
   const explicitStage = (crop.phase || crop.status) ? (
@@ -564,6 +560,17 @@ function CropCycleDetailPage() {
   const hDate = crop.harvestDate ? new Date(crop.harvestDate) : null;
   const pDateStr = crop.rawPlantingDate || (pDate && !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate);
   const hDateStr = crop.rawHarvestDate || (hDate && !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate);
+
+  // The advisory schema requires a strictly future harvest date. During a crop
+  // update, local state can briefly contain the actual harvest date or an
+  // incomplete date pair, so do not send an invalid advisory request.
+  const validAdvisoryDates =
+    /^\d{4}-\d{2}-\d{2}$/.test(pDateStr) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(hDateStr) &&
+    pDateStr < hDateStr;
+  const canQueryPlan = Boolean(
+    crop.commodityName && validAdvisoryDates && totalCost > 0 && qty > 0
+  );
 
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
     queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr, hDateStr, totalCost, qty, explicitStage],
@@ -986,164 +993,85 @@ function CropCycleDetailPage() {
         {/* ── 2. Main advice — white card, colored foreground only ── */}
         {isActive && (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
+            <div className={`flex items-center gap-2 mb-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+              {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
+              <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
+            </div>
+            <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
+              {summaryText ? summaryText.split(/(?<=[.!?])\s+/)[0] : ""}
+            </p>
+            <div className="mt-4 pt-3 border-t border-[var(--hw-neutral-200)]">
+              <button
+                type="button"
+                onClick={() => setReasonsExpanded((prev) => !prev)}
+                className="w-full flex items-center justify-between text-left group py-1"
+                aria-expanded={reasonsExpanded}
+              >
+                <span className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                  {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] group-hover:text-[var(--hw-green-800)] transition-colors">
+                  {reasonsExpanded ? t("common.hide", {}, "Hide") : t("common.show", {}, "Show")}
+                  {reasonsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </span>
+              </button>
+
+              {reasonsExpanded && (
+                <div className="mt-2.5 space-y-2">
+                  {factorClassificationRows.map(({ module, label }) => {
+                    const reason = reasonByModule.get(module);
+                    const rawClassification = normalizedPreviewResults[module] || null;
+                    const translatedClassification = formatClassification(rawClassification, t);
+                    const reasonText = reason
+                      ? renderComposedMessage(reason, langCode)
+                      : t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
+                    const factorCond = resolveFactorCondition(module, rawClassification, reason?.key, reasonText);
+
+                    return (
+                      <div key={module} className="p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)]/70 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0">
+                              {renderFactorIcon(factorCond.iconType, factorCond.colorClass, "w-4 h-4")}
+                            </div>
+                            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] truncate">
+                              {reason?.labelKey ? t(reason.labelKey, {}, label) : label}
+                            </p>
+                          </div>
+                          <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] flex-shrink-0">
+                            {translatedClassification}
+                          </span>
+                        </div>
+                        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed pl-9">{reasonText}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setAdvisoryExpanded((v) => !v)}
-              aria-expanded={advisoryExpanded}
-              aria-label={advisoryLabel}
-              className="w-full flex items-center justify-between gap-2 text-left cursor-pointer group"
+              onClick={() =>
+                navigate(`/farmer/crops/${crop.id}/factors`, {
+                  state: {
+                    cropStage: currentCropStage,
+                    plantingDate: crop.rawPlantingDate || crop.plantingDate,
+                    expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
+                    moduleResults: previewModuleResults,
+                    plantingWindowStart: planAdvisoryData?.planting_window_start,
+                    plantingWindowEnd: planAdvisoryData?.planting_window_end,
+                    plantingWindowLabel: planAdvisoryData?.planting_window_label,
+                    advisoryCode,
+                    rawAdvisory,
+                    advisoryLabel,
+                    planAdvisoryData,
+                  },
+                })
+              }
+              className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
             >
-              <div className={`flex items-center gap-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
-                {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
-                <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
-              </div>
-              {advisoryExpanded ? (
-                <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-              )}
+              {t("farmer.advisory.view_basis", {}, "View basis →")}
             </button>
-            {advisoryExpanded && (
-              <div className="mt-2.5">
-                <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-                  {summaryText}
-                </p>
-                {displayImmediateActions.map((act, idx) => {
-                  const text = renderComposedMessage(act, langCode);
-                  return text ? (
-                    <p key={act.key || idx} className="text-[13px] text-[var(--hw-neutral-700)] font-medium leading-relaxed mt-1.5">
-                      {text}
-                    </p>
-                  ) : null; })}
-                {isPlanning && normalizedPreviewResults.price_outlook && (
-                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] px-3 py-2.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {(() => {
-                        const priceCondition = resolveFactorCondition(
-                          "price_outlook",
-                          normalizedPreviewResults.price_outlook
-                        );
-                        return renderFactorIcon(priceCondition.iconType, priceCondition.colorClass);
-                      })()}
-                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
-                        {t("farmer.factors.price.factor_title", {}, "Price outlook")}
-                      </p>
-                    </div>
-                    <p className={`text-[13px] font-bold ${resolveFactorCondition(
-                      "price_outlook",
-                      normalizedPreviewResults.price_outlook
-                    ).colorClass}`}>
-                      {formatClassification(normalizedPreviewResults.price_outlook, t)}
-                    </p>
-                  </div>
-                )}
-                <div className="mt-4 pt-4 border-t border-[var(--hw-neutral-200)]">
-                  <button
-                    type="button"
-                    onClick={() => setWhyExpanded((v) => !v)}
-                    aria-expanded={whyExpanded}
-                    className="w-full flex items-center justify-between text-left py-1 hover:opacity-80 transition-opacity cursor-pointer group"
-                  >
-                    <span className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-                      {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
-                    </span>
-                    {whyExpanded ? (
-                      <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-                    )}
-                  </button>
-                  {whyExpanded && (
-                    <div className="mt-3 space-y-3">
-                      {mainFactor && (
-                        <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
-                          <div className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                            badge.type === "avoid" ? "bg-red-50 text-red-600" :
-                            badge.type === "caution" ? "bg-amber-50 text-amber-600" :
-                            "bg-emerald-50 text-emerald-700"
-                          }`}>
-                            <AlertCircle className="w-4 h-4" />
-                          </div>
-                          <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
-                            {renderComposedMessage(mainFactor, langCode)}
-                          </p>
-                        </div>
-                      )}
-                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-                        {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
-                      </p>
-                      <div className="space-y-2 sm:space-y-2.5">
-                        {factorClassificationRows.map(({ module, label }) => {
-                          const reason = reasonByModule.get(module);
-                          const reasonTextCandidate = reason
-                            ? renderComposedMessage(reason, langCode)
-                            : (module === "price_outlook" && (previewModuleResults.price_explanation || fallbackPrice.explanation)
-                              ? (previewModuleResults.price_explanation || fallbackPrice.explanation)
-                              : null);
-                          const extractedClass = (module === "price_outlook" && reasonTextCandidate)
-                            ? (reasonTextCandidate.match(/classified as (Favorable|Neutral|Unfavorable)/i)?.[1] || null)
-                            : null;
-                          const rawClassification = normalizedPreviewResults[module] || (
-                            module === "price_outlook"
-                              ? (reason?.params?.classification || planningPriceOutlook || previewModuleResults.historical_price_outlook || previewModuleResults.price_outlook || fallbackPrice.classification || extractedClass)
-                              : null
-                          );
-                          const classification = formatClassification(rawClassification, t);
-                          const reasonText = reasonTextCandidate || t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
-                          const factorCond = resolveFactorCondition(
-                            module,
-                            rawClassification || classification,
-                            reason?.key,
-                            reasonText
-                          );
-                          return (
-                            <div key={module} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
-                              <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                                {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
-                                  {reason?.labelKey
-                                    ? t(reason.labelKey, {}, label)
-                                    : label}
-                                </p>
-                                <p className={`text-[12px] font-semibold leading-snug mt-0.5 ${factorCond.colorClass}`}>
-                                  {classification || t("farmer.advisory.not_available", {}, "Not available")}
-                                </p>
-                                <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(`/farmer/crops/${crop.id}/factors`, {
-                            state: {
-                              cropStage: currentCropStage,
-                              plantingDate: crop.rawPlantingDate || crop.plantingDate,
-                              expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
-                              moduleResults: previewModuleResults,
-                              plantingWindowStart: planAdvisoryData?.planting_window_start,
-                              plantingWindowEnd: planAdvisoryData?.planting_window_end,
-                              plantingWindowLabel: planAdvisoryData?.planting_window_label,
-                              advisoryCode,
-                              rawAdvisory,
-                              advisoryLabel,
-                              planAdvisoryData,
-                            },
-                          })
-                        }
-                        className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
-                      >
-                        {t("farmer.advisory.view_basis", {}, "View basis →")}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
