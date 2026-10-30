@@ -1147,8 +1147,8 @@ function DFTCPriceInput() {
       try {
         const res = await parseResponse(await apiPut("/dftc/price-draft/cell", {
           ...cell,
-          // Read immediately before each request because the previous cell's
-          // successful write advances the shared draft timestamp.
+          // The server uses this only to reject writes after a discard. It
+          // does not block saves to a different cell by another inputter.
           expected_draft_updated_at: draftUpdatedAtRef.current,
         }));
         if (res?.draft_updated_at) draftUpdatedAtRef.current = res.draft_updated_at;
