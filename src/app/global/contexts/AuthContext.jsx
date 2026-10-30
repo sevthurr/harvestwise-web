@@ -89,7 +89,19 @@ export function AuthProvider({ children }) {
 
       try {
         await completeLegacyTokenMigration();
-        const me = await apiGet('/api/v1/auth/me').then(parseResponse);
+        let me;
+        try {
+          me = await apiGet('/api/v1/auth/me').then(parseResponse);
+        } catch (error) {
+          // HttpOnly cookies survive a page reload, but sessionActive is only
+          // an in-memory hint and starts false. If the short-lived access
+          // cookie expired while the refresh cookie is still valid, refresh
+          // before treating the session as gone. Otherwise the server session
+          // remains active and the next login is rejected as another device.
+          if (error?.status !== 401) throw error;
+          await parseResponse(await apiPost('/api/v1/auth/refresh', {}));
+          me = await apiGet('/api/v1/auth/me').then(parseResponse);
+        }
         markSessionActive();
         setUser(me);
         // Cache user profile for offline restoration
@@ -206,6 +218,19 @@ export function AuthProvider({ children }) {
         localStorage.removeItem(PENDING_LOGOUT_KEY);
       }
     } catch (error) {
+      // If logout was attempted after the access cookie expired while this
+      // tab had not restored sessionActive yet, use the refresh cookie once
+      // so the server-side session is actually deleted.
+      if (error?.status === 401 && !offline) {
+        try {
+          await parseResponse(await apiPost('/api/v1/auth/refresh', {}));
+          await apiPost('/api/v1/auth/logout', {});
+          localStorage.removeItem(PENDING_LOGOUT_KEY);
+        } catch {
+          // The refresh session is already unavailable; local logout below
+          // still clears the browser state.
+        }
+      }
       // Keep a marker so the HttpOnly cookie session is revoked once the
       // browser reconnects. A local logout must never depend on the network.
       if (!error?.status) {
