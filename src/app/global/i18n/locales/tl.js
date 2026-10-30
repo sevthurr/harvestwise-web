@@ -84,6 +84,9 @@ export const tl = {
     pw_panel_title: "Palitan ang iyong pansamantalang password",
     pw_panel_body: "Para sa kaligtasan ng iyong account, palitan ang pansamantalang password na natanggap mo ng password na alam mo lamang.",
     pw_panel_restricted: "Nasa pansamantalang password pa ang iyong account, kaya hindi pa available ang iba pang bahagi ng app hangga't hindi mo ito natatapos.",
+    pw_panel_set_title: "Magdagdag ng password sa iyong account",
+    pw_panel_set_body: "Wala pang lokal na password ang iyong Google account. Magdagdag nito upang makapag-sign in gamit ang email at password.",
+    pw_panel_set_restricted: "Kailangan mong magdagdag ng password bago gamitin ang iba pang bahagi ng HarvestWise.",
     error_title: "May problema",
     error_body: "Hindi natuloy ang pag-load ng page na ito dahil sa hindi inaasahang error.",
     error_reload: "I-reload",
@@ -141,6 +144,7 @@ export const tl = {
     confirm_password_label: "Kumpirmahin ang Password",
     confirm_password_required: "Kumpirmahin ang Password *",
     confirm_password_placeholder: "Ulitin ang iyong password",
+    passwords_match: "Magkapareho ang mga password.",
     forgot_password: "Nakalimutan ang password?",
     forgot_password_title: "Nakalimutan ang iyong password?",
     forgot_password_subtitle: "Ilagay ang iyong email para makatanggap ng reset code.",
@@ -873,4 +877,3 @@ export const tl = {
     terms: termsLegal,
   }
 };
-
