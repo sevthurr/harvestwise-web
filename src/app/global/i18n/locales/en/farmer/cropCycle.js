@@ -53,6 +53,7 @@ export const cropCycle = {
   days_planted: "Days planted",
   days_to_harvest: "Days to harvest",
   harvest_est: "Harvest est.",
+  harvest_window: "Harvest window",
   days_of_days: "{current} of {total} days",
   cost_and_selling_price: "Cost and selling price",
   add_cost: "Add cost",

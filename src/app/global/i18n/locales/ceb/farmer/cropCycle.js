@@ -53,6 +53,7 @@ export const cropCycle = {
   days_planted: "Mga adlaw nga natanom",
   days_to_harvest: "Mga adlaw una maani",
   harvest_est: "Tansya sa ani",
+  harvest_window: "Panahon sa pag-ani",
   days_of_days: "{current} sa {total} ka adlaw",
   cost_and_selling_price: "Gasto ug presyo sa pagbaligya",
   add_cost: "Magdugang og gasto",

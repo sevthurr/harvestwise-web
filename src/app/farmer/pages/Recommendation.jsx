@@ -695,9 +695,14 @@ function RecommendationPage() {
   }, [highlightParam]);
 
   // Farmer profile coordinates reused by the weather advisory query (defaults to Davao City center)
-  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
-  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
-  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
+  const { data: profileData } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 5,
+    initialData: () => queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]),
+  });
+  const weatherLat = profileData?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+  const weatherLon = profileData?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
 
   // Reuse prefetched market calendar
   const { data: rawMarketEvents = [], isLoading: eventsLoading } = useQuery({
@@ -724,12 +729,6 @@ function RecommendationPage() {
   });
 
   const rawRecommendations = recommendationsData?.items ?? [];
-
-  const { data: profileData } = useQuery({
-    queryKey: ["farmer", "profile"],
-    queryFn: fetchFarmerProfile,
-    staleTime: 1000 * 60 * 5,
-  });
 
   const preferredCrops = useMemo(() => {
     return profileData?.preferred_crops || profileData?.preferredCrops || [];

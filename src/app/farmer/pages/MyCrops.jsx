@@ -351,7 +351,7 @@ function MyCropsPage() {
           </div>
           <button
             onClick={() => navigate("/farmer/assess")}
-            className="self-start sm:self-auto flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] sm:text-sm font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
+            className="self-end sm:self-auto flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-[var(--hw-green-700)] text-white text-[13px] sm:text-sm font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
           >
             <Plus className="w-4 h-4" />
             <span>{t("farmer.crops.add_crop_btn", {}, "Add crop")}</span>
