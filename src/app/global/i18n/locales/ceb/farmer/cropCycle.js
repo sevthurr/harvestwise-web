@@ -128,4 +128,11 @@ export const cropCycle = {
   remove_farmgate: "I-hawa",
   final_cost_breakdown_hint: "Nagpakita sa kinatibuk-ang total: gibanabanang gasto ({initial}) + dugang nga gasto ({added})",
   final_cost_hint: "Nagpakita sa kinatibuk-ang total para sa kataposang gasto sa produksyon.",
+  already_completed: "Nahuman na kini nga tanom. Na-load na ang pinakabag-ong impormasyon.",
+  action_failed: "Wala mahuman ang aksyon. Palihog sulayi pag-usab.",
+  save_harvest_failed: "Napakyas sa pag-save sa rekord sa ani. Palihog sulayi pag-usab.",
+  add_cost_failed: "Napakyas sa pagdugang sa gasto. Palihog sulayi pag-usab.",
+  remove_farmgate_failed: "Napakyas sa pagtangtang sa presyo sa farmgate. Palihog sulayi pag-usab.",
+  save_farmgate_failed: "Napakyas sa pag-save sa presyo sa farmgate. Palihog sulayi pag-usab.",
+  advisory_request_failed: "Dili ma-load ang tambag para sa tanom. Palihog sulayi pag-usab unya.",
 };
