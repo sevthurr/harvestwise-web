@@ -84,6 +84,9 @@ export const en = {
     pw_panel_title: "Change your temporary password",
     pw_panel_body: "To keep your account secure, please replace the temporary password you received with a password only you know.",
     pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step.",
+    pw_panel_set_title: "Add a password to your account",
+    pw_panel_set_body: "Your Google account does not have a local password yet. Add one to enable email-and-password sign-in.",
+    pw_panel_set_restricted: "You must add a password before using the rest of HarvestWise.",
     error_title: "Something went wrong",
     error_body: "An unexpected error stopped this page from loading.",
     error_reload: "Reload",
@@ -141,6 +144,7 @@ export const en = {
     confirm_password_label: "Confirm Password",
     confirm_password_required: "Confirm Password *",
     confirm_password_placeholder: "Repeat your password",
+    passwords_match: "Passwords match.",
     forgot_password: "Forgot password?",
     forgot_password_title: "Forgot your password?",
     forgot_password_subtitle: "Enter your email and we’ll send you a reset code.",
@@ -915,4 +919,3 @@ export const en = {
     terms: termsLegal,
   }
 };
-

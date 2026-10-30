@@ -114,6 +114,8 @@ export const settings = {
   offline_sync_alerts: "Offline sync reminders",
   offline_sync_alerts_desc: "Reminders to sync your data when reconnecting to the internet.",
   change_password: "Change Password",
+  add_password: "Add a password",
+  add_password_desc: "Add a password so you can also sign in with your email and password.",
   current_password: "Current password",
   new_password: "New password",
   confirm_new_password: "Confirm new password",

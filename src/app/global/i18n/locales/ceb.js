@@ -84,6 +84,9 @@ export const ceb = {
     pw_panel_title: "Palita ang imong temporary password",
     pw_panel_body: "Arong safe ang imong account, palita ang temporary password nga natanggap nimo ng password nga ikaw lang ang nakamakat.",
     pw_panel_restricted: "Temporary password pa gikan ang imong account, kaya dili pa available ang uban nga parte sa app hangtod sa matapos nimo niini.",
+    pw_panel_set_title: "Idugang ang password sa imong account",
+    pw_panel_set_body: "Ang imong Google account wala pay lokal nga password. Idugang kini aron maka-sign in ka gamit ang email ug password.",
+    pw_panel_set_restricted: "Kinahanglan nimo magdugang og password sa dili pa magamit ang ubang bahin sa HarvestWise.",
     error_title: "Naay nasayop",
     error_body: "Naundang ang pag-load niini nga panid tungod sa wala damha nga sayop.",
     error_reload: "I-reload",
@@ -141,6 +144,7 @@ export const ceb = {
     confirm_password_label: "Kumpirmaha ang Password",
     confirm_password_required: "Kumpirmaha ang Password *",
     confirm_password_placeholder: "Isubli ang imong password",
+    passwords_match: "Pareho ang mga password.",
     forgot_password: "Nakalimot sa password?",
     forgot_password_title: "Nakalimot ka sa imong password?",
     forgot_password_subtitle: "Ibutang ang imong email aron makadawat og reset code.",
@@ -881,4 +885,3 @@ export const ceb = {
     terms: termsLegal,
   }
 };
-

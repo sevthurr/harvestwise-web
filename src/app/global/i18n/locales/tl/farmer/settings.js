@@ -114,6 +114,8 @@ export const settings = {
   offline_sync_alerts: "Mga paalala sa pag-sync offline",
   offline_sync_alerts_desc: "Paalala na i-sync ang iyong datos kapag nagkaroon muli ng internet.",
   change_password: "Baguhin ang Password",
+  add_password: "Magdagdag ng password",
+  add_password_desc: "Magdagdag ng password upang makapag-sign in ka rin gamit ang iyong email at password.",
   current_password: "Kasalukuyang password",
   new_password: "Bagong password",
   confirm_new_password: "Kumpirmahin ang bagong password",

@@ -55,7 +55,8 @@ const Layout = () => {
   // rotation already committed server-side; refreshUser() only reconciles the
   // cache, so it is best-effort. Same reasoning as AuthContext.patchUser.
   const [rotated, setRotated] = useState(false);
-  const pendingPasswordChange = user?.must_change_password === true && !rotated;
+  const pendingPasswordChange =
+    (user?.must_change_password === true || user?.has_password === false) && !rotated;
 
   const handlePasswordRotated = async () => {
     setRotated(true);
@@ -148,7 +149,10 @@ const Layout = () => {
 
         <FarmerMain>
           {pendingPasswordChange ? (
-            <ChangePasswordPanel onRotated={handlePasswordRotated} />
+            <ChangePasswordPanel
+              onRotated={handlePasswordRotated}
+              needsPassword={user?.has_password === false}
+            />
           ) : (
             <>
               <Suspense

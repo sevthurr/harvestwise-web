@@ -567,6 +567,19 @@ function RegisterPage() {
                 {showCfm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {form.confirmPassword && (
+              <p
+                role="status"
+                aria-live="polite"
+                className={`text-[12px] mt-1 ${
+                  form.password === form.confirmPassword ? "text-emerald-600" : "text-red-600"
+                }`}
+              >
+                {form.password === form.confirmPassword
+                  ? t("auth.passwords_match", {}, "Passwords match.")
+                  : t("auth.errors.password_mismatch", {}, "Passwords do not match.")}
+              </p>
+            )}
             {errors.confirmPassword && (
               <p role="alert" className="text-[12px] text-red-600 mt-1">{errors.confirmPassword}</p>
             )}
@@ -820,4 +833,3 @@ function RegisterPage() {
 }
 
 export { RegisterPage as default };
-
