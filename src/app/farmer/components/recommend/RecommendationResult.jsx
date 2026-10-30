@@ -169,6 +169,8 @@ function buildCropPlanPayload(data, status = "Draft") {
     commodity_id: data.commodityId || data.commodity,
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
+    harvest_window_start: data.harvestWindowStart || data.harvest_window_start || null,
+    harvest_window_end: data.harvestWindowEnd || data.harvest_window_end || null,
     farm_area: toSqm(data.farmArea, data.farmAreaUnit),
     expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
     expected_farmgate_price: typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,

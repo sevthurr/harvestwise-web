@@ -98,4 +98,19 @@ export const advisory = {
   "view_basis": "Tingnan ang batayan →",
   "proceed_with_caution_summary": "Maaari pa ring magpatuloy ang {crop_name}, ngunit bantayan ang mga kondisyon at panganib.",
   "avoid_for_now_summary": "Hindi paborable ang kondisyon para sa pagtatanim ng {crop_name} sa ngayon.",
+  "classifications": {
+    "favorable": "Maganda",
+    "neutral": "Halos Pareho",
+    "unfavorable": "Hindi Maganda",
+    "marginal": "Malapit sa Pagbawi ng Gastos",
+    "low": "Mababa",
+    "lower_middle": "Katamtamang Mababa",
+    "upper_middle": "Katamtamang Mataas",
+    "high": "Mataas",
+    "suitable": "Maganda",
+    "caution": "Kailangang Bantayan",
+    "moderate": "Katamtaman",
+    "severe": "Mataas ang Panganib",
+    "not_processed": "Hindi pa nasuri"
+  }
 };

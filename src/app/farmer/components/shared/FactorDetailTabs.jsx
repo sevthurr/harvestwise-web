@@ -554,7 +554,7 @@ const ProductionTab = ({ data, commodityName }) => {
   const { t } = useLanguage();
   const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
-  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(currentQuarter);
+  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(data?.selectedQuarter || currentQuarter);
   const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter));
   const normLevel = normalizeProductionLevel(
     data?.classificationOverride || selectedProfile?.classification || data?.productionLevel
@@ -610,9 +610,9 @@ const ProductionTab = ({ data, commodityName }) => {
     : null;
   const levelColor = (classification) => {
     const level = normalizeProductionLevel(classification);
-    if (level === "high") return "#ef4444";
-    if (level === "upper_middle") return "#f59e0b";
-    if (level === "lower_middle") return "#84cc16";
+    if (level === "high") return "#dc2626";
+    if (level === "upper_middle") return "#ea580c";
+    if (level === "lower_middle") return "#eab308";
     return "#16a34a";
   };
 
@@ -691,11 +691,23 @@ const ProductionTab = ({ data, commodityName }) => {
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-4 mt-2 justify-center text-[11px] text-black">
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /><span>{t("farmer.factors.arrival.level_low", {}, "Low")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-lime-500 inline-block" /><span>{t("farmer.factors.arrival.level_lower_middle", {}, "Lower Middle")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400 inline-block" /><span>{t("farmer.factors.arrival.level_upper_middle", {}, "Upper Middle")}</span></div>
-              <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500 inline-block" /><span>{t("farmer.factors.arrival.level_high", {}, "High")}</span></div>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 justify-center">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#16a34a]" />
+                <span className="text-[11px] font-medium text-black">{t("farmer.factors.arrival.level_low", {}, "Low")}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#eab308]" />
+                <span className="text-[11px] font-medium text-black">{t("farmer.factors.arrival.level_lower_middle", {}, "Lower Middle")}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#ea580c]" />
+                <span className="text-[11px] font-medium text-black">{t("farmer.factors.arrival.level_upper_middle", {}, "Upper Middle")}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#dc2626]" />
+                <span className="text-[11px] font-medium text-black">{t("farmer.factors.arrival.level_high", {}, "High")}</span>
+              </div>
             </div>
             <p className="text-center text-[10px] text-black mt-1">
               Across all available years · click the selected quarter again to show Q1–Q4

@@ -709,11 +709,11 @@ function PriceDetailView({
   const currentLang = effectiveLanguage || langCode || "ceb";
   const [market, setMarket] = useState("Bangkerohan Public Market");
   const [priceType, setPriceType] = useState("Retail");
-  const [historicalRange, setHistoricalRange] = useState("14d");
-  const [horizon, setHorizon] = useState("14d");
+  const [historicalRange, setHistoricalRange] = useState("7d");
+  const [horizon, setHorizon] = useState("7d");
   const [variety, setVariety] = useState(null);
 
-  const days = HDAYS[horizon] || 14;
+  const days = HDAYS[horizon] || 7;
   const pPriceTypeKey = toPriceTypeKey(market, priceType);
 
   // 1. Top-10 catalog, to resolve commodity IDs & catalog varieties.

@@ -353,9 +353,6 @@ function ArrivalVolumeTrendChart({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 justify-center">
-        <span className="text-[11px] font-semibold text-black">
-          {t("farmer.factors.arrival.classification_label", {}, "Classification")}:
-        </span>
         <div className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#16a34a]" />
           <span className="text-[11px] font-medium text-black">{t("farmer.factors.arrival.level_low", {}, "Low")}</span>

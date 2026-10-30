@@ -14,16 +14,20 @@ vi.mock("../app/farmer/components/recommend/useCommodityCatalog.js", async (impo
   };
 });
 
-vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
-  useLanguage: () => ({
-    langCode: "en",
-    t: (key, params, fallback) => {
-      const table = {
-      };
-      return table[key] ?? fallback ?? key;
-    },
-  }),
-}));
+let mockLang = "en";
+vi.mock("../app/global/contexts/LanguageContext.jsx", async () => {
+  const { t } = await import("../app/global/i18n/index.js");
+  return {
+    useLanguage: () => ({
+      langCode: mockLang,
+      effectiveLanguage: mockLang,
+      t: (key, params, fallback) => {
+        const res = t(key, params, mockLang);
+        return res === key && fallback ? fallback : res;
+      },
+    }),
+  };
+});
 
 vi.mock("../app/farmer/components/recommend/PlantingActivityContext.jsx", () => ({
   PlantingActivityContext: () => null,
@@ -58,31 +62,73 @@ describe("Step1CropSchedule harvest window", () => {
     });
   });
 
-  it("renders the suggested harvest window as helper text", () => {
+  it("renders the suggested harvest window in From and To inputs and duration subtext", () => {
     durationForOption.mockReturnValue({ min: 48, max: 52, basis: "DAT" });
     renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
-    expect(screen.getByText(/November 18, 2026 – November 22, 2026/)).toBeDefined();
-    expect(screen.queryByText(/Typical duration:/)).toBeNull();
+    const fromInput = document.getElementById("harvest-window-start");
+    const toInput = document.getElementById("harvest-window-end");
+    expect(fromInput?.value).toBe("2026-11-18");
+    expect(toInput?.value).toBe("2026-11-22");
+    expect(screen.getByText(/5 days/)).toBeDefined();
+    expect(screen.getByText(/Typical plant-to-harvest duration: 48–52 days/)).toBeDefined();
   });
 
-  it("hides the helper text when no duration is available from either source", () => {
+  it("hides the duration subtext when no duration is available from either source", () => {
     // Neither the API nor CROP_DURATIONS knows this commodity, so no range
     // can be displayed.
     durationForOption.mockReturnValue(null);
     renderStep1({ commodity: "saba", variant: "" });
-    expect(screen.queryByText(/Harvest Window:/)).toBeNull();
+    expect(screen.queryByText(/Typical plant-to-harvest duration:/)).toBeNull();
   });
 
   it("uses the variety duration to suggest the harvest window", () => {
     durationForOption.mockReturnValue(null);
     renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
-    expect(screen.getByText(/November 18, 2026 – November 22, 2026/)).toBeDefined();
+    const fromInput = document.getElementById("harvest-window-start");
+    const toInput = document.getElementById("harvest-window-end");
+    expect(fromInput?.value).toBe("2026-11-18");
+    expect(toInput?.value).toBe("2026-11-22");
+    expect(screen.getByText(/Typical plant-to-harvest duration: 48–52 days/)).toBeDefined();
   });
 
   it("uses the crop-wide fallback when the variety is unknown", () => {
     durationForOption.mockReturnValue(null);
     renderStep1({ commodity: "lettuce", variant: "Curly" });
-    expect(screen.getByText(/November 15, 2026 – November 30, 2026/)).toBeDefined();
+    const fromInput = document.getElementById("harvest-window-start");
+    const toInput = document.getElementById("harvest-window-end");
+    expect(fromInput?.value).toBe("2026-11-15");
+    expect(toInput?.value).toBe("2026-11-30");
+    expect(screen.getByText(/Typical plant-to-harvest duration: 45–60 days/)).toBeDefined();
+  });
+
+  it("shows variety dropdown for commodities with 1 variety like Ampalaya", () => {
+    durationForOption.mockReturnValue(null);
+    renderStep1({ commodity: "ampalaya", variant: "" });
+    expect(screen.getByText("Variety")).toBeDefined();
+  });
+
+  it("renders natural Bisaya translations for Harvest Window, From, To, days, and duration subtext", () => {
+    mockLang = "ceb";
+    durationForOption.mockReturnValue({ min: 48, max: 52, basis: "DAT" });
+    renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
+    expect(screen.getByText("Panahon sa Pag-ani")).toBeDefined();
+    expect(screen.getByText("Gikan")).toBeDefined();
+    expect(screen.getByText("Hangtod")).toBeDefined();
+    expect(screen.getByText(/5 ka adlaw/)).toBeDefined();
+    expect(screen.getByText(/Kasagarang gidugayon gikan sa pagtanom hangtod sa pag-ani: 48–52 ka adlaw/)).toBeDefined();
+    mockLang = "en";
+  });
+
+  it("renders natural Tagalog translations for Harvest Window, From, To, days, and duration subtext", () => {
+    mockLang = "tl";
+    durationForOption.mockReturnValue({ min: 48, max: 52, basis: "DAT" });
+    renderStep1({ commodity: "ampalaya", variant: "Galaxy" });
+    expect(screen.getByText("Panahon ng Pag-aani")).toBeDefined();
+    expect(screen.getByText("Mula")).toBeDefined();
+    expect(screen.getByText("Hanggang")).toBeDefined();
+    expect(screen.getByText(/5 araw/)).toBeDefined();
+    expect(screen.getByText(/Karaniwang tagal mula pagtatanim hanggang pag-aani: 48–52 na araw/)).toBeDefined();
+    mockLang = "en";
   });
   it("renders Harvest Window From and Harvest Window To as separate date fields", () => {
     durationForOption.mockReturnValue(null);

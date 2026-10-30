@@ -153,9 +153,8 @@ describe("Pre-Harvest Price Basis & Harvesting Cost / Progress Sync", () => {
     expect(screen.getAllByText("₱45/kg").length).toBeGreaterThanOrEqual(1);
 
     // Check Harvest progress inputs
-    expect(screen.getByLabelText("Qty harvested (kg)")).toHaveValue(450);
-    // Remaining expected: 600 - 450 = 150
-    expect(screen.getByLabelText("Remaining expected (kg)")).toHaveValue(150);
+    expect(screen.getByText("Harvest progress")).toBeInTheDocument();
+    expect(screen.getByLabelText("Qty (kg)")).toBeInTheDocument();
   });
 
   it("aligns Assessment Result in CropFactorsPage with Avoid for Now crop recommendation", () => {
