@@ -54,7 +54,6 @@ import {
 import {
   composeAdvisoryReasons,
   pickUsablePriceOutlook,
-  resolveMainFactor,
 } from "../utils/advisoryReasons";
 import { resolveFactorCondition } from "../utils/factorColors";
 import * as analyticsApi from "../../../services/api/analyticsApi";
@@ -774,13 +773,6 @@ function CropCycleDetailPage() {
     Object.entries(previewModuleResults).map(([key, value]) => [key, normalizeModuleResult(value)])
   );
   const advisoryMeta = planAdvisoryData?.advisory || {};
-  const mainFactor = resolveMainFactor({
-    moduleResults: normalizedPreviewResults,
-    contributions: advisoryMeta.module_contributions,
-    weightsApplied: advisoryMeta.weights_applied,
-    vetoes: advisoryMeta.hard_vetoes,
-    lang: langCode,
-  });
   const composedReasons = composeAdvisoryReasons({
     moduleResults: previewModuleResults,
     contributions: advisoryMeta.module_contributions,
@@ -946,20 +938,6 @@ function CropCycleDetailPage() {
                   </button>
                   {whyExpanded && (
                     <div className="mt-3 space-y-3">
-                      {mainFactor && (
-                        <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
-                          <div className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                            badge.type === "avoid" ? "bg-red-50 text-red-600" :
-                            badge.type === "caution" ? "bg-amber-50 text-amber-600" :
-                            "bg-emerald-50 text-emerald-700"
-                          }`}>
-                            <AlertCircle className="w-4 h-4" />
-                          </div>
-                          <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
-                            {renderComposedMessage(mainFactor, langCode)}
-                          </p>
-                        </div>
-                      )}
                       <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
                         {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
                       </p>
