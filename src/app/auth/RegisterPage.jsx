@@ -316,10 +316,15 @@ function RegisterPage() {
       const me = await login(pendingGoogleAuth);
       setGoogleConsentStep(null);
       setPendingGoogleAuth(null);
-      // Google registration creates the farmer account before this callback.
-      // Keep the new farmer in the existing setup flow instead of dropping
-      // them on the dashboard with an incomplete profile.
-      navigate(getGoogleRegistrationDestination(me.role?.role_name), { replace: true });
+      // Google registration may create a fresh farmer account before this
+      // callback. Keep new farmers (or any account flagged as needing
+      // onboarding) in the setup flow instead of dropping them on the
+      // dashboard with an incomplete profile.
+      if (pendingGoogleAuth?.onboarding_required || me?.role?.role_name?.toLowerCase() === "farmer") {
+        navigate("/onboarding", { replace: true });
+      } else {
+        navigate(getGoogleRegistrationDestination(me?.role?.role_name), { replace: true });
+      }
     } catch (err) {
       setGoogleConsentStep(null);
       setErrors({

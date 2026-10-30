@@ -199,7 +199,11 @@ function LoginPage() {
         return;
       }
       const me = await login(data);
-      navigate(roleHome(me.role.role_name), { replace: true });
+      if (data?.onboarding_required) {
+        navigate("/onboarding", { replace: true });
+      } else {
+        navigate(roleHome(me.role.role_name), { replace: true });
+      }
     },
   });
 
