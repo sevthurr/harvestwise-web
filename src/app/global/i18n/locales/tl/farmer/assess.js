@@ -57,6 +57,7 @@ export const assess = {
   harvest_window_to: "Panahon ng Pag-aani Hanggang",
   select_start_date: "Piliin ang petsa ng pagsisimula",
   select_end_date: "Piliin ang petsa ng pagtatapos",
+  typical_plant_to_harvest_duration: "Karaniwang tagal mula pagtatanim hanggang pag-aani: {duration}",
   suggested_window_note: "Iminungkahing panahon ng ani batay sa karaniwang tagal:",
   use_this_date: "Gamitin ang petsang ito",
   typical_duration: "Karaniwang tagal: {label}",

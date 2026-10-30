@@ -9,6 +9,7 @@ import { normalizePhaseCode, PHASE_CODES, normalizeAdvisoryCode, ADVISORY_CODES 
 import { apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { hasValidAdvisoryDatePair } from "../../global/utils/apiTransforms";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
@@ -50,7 +51,12 @@ function CropFactorsPage() {
 
   const updatedTotalCost = crop.totalCost || 0;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
-  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
+  const canQueryPlan = Boolean(
+    crop.commodityName &&
+    hasValidAdvisoryDatePair(crop.plantingDate, crop.harvestDate) &&
+    updatedTotalCost > 0 &&
+    qty > 0
+  );
 
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
     queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],

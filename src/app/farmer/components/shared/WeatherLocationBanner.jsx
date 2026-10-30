@@ -1,13 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CloudSun, X } from "lucide-react";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { useAuth } from "../../../global/contexts/AuthContext";
+import { fetchFarmerProfile } from "../../../global/hooks/useFarmerPrefetch";
 
 const DISMISS_STORAGE_KEY = "hw_dismissed_weather_location_banner";
 
 export function WeatherLocationBanner({ className = "" }) {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dismissed, setDismissed] = useState(() => {
     try {
@@ -17,10 +20,34 @@ export function WeatherLocationBanner({ className = "" }) {
     }
   });
 
-  const profile = queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]);
-  const hasFarmLocation = Boolean(profile?.latitude != null && profile?.longitude != null && (profile?.barangay || profile?.location_name));
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: fetchFarmerProfile,
+    staleTime: 1000 * 60 * 10,
+    initialData: () => queryClient.getQueryData(["farmer", "profile"]) || queryClient.getQueryData(["dashboard", "profile"]),
+  });
 
-  if (dismissed || hasFarmLocation) {
+  const p = profile || {};
+  const u = user || {};
+
+  const barangay = p.barangay || u.barangay;
+  const district = p.district || u.district;
+  const purok = p.purok_sitio || p.purokSitio || u.purok_sitio || u.purokSitio;
+  const street = p.street || u.street;
+  const locationName = p.location_name || p.locationName || u.location_name || u.locationName;
+  const hasCoords = (p.latitude != null && p.longitude != null) || (u.latitude != null && u.longitude != null);
+
+  const hasFarmLocation = Boolean(
+    barangay ||
+    district ||
+    purok ||
+    street ||
+    locationName ||
+    hasCoords
+  );
+
+  // If dismissed, if location is already set, or while loading initial profile without cached data, don't show banner
+  if (dismissed || hasFarmLocation || (isLoading && !profile && !user)) {
     return null;
   }
 

@@ -43,6 +43,10 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 30,        // 30 min before data is considered stale
       gcTime: SEVEN_DAYS,                // keep in memory for 7 days
       retry: shouldRetry,
+      // Exponential backoff with jitter for network/server errors that are
+      // worth retrying. The jitter prevents a thundering-herd retry when a
+      // server-wide 5xx recovers.
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex + Math.random() * 500, 30000),
       // The offline layer is the service worker: vite.config.js caches every
       // /api/v1/ GET under NetworkFirst for 7 days. React Query's default
       // networkMode ('online') refuses to issue the request at all while the

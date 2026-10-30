@@ -127,9 +127,9 @@ describe("Farmer detailed factors use Admin analytics data", () => {
     expect(screen.getByText("150 MT")).toBeInTheDocument();
     expect(screen.getByText("+50 MT (+50.0%)")).toBeInTheDocument();
     expect(JSON.parse(screen.getByTestId("production-chart").getAttribute("data-profiles"))).toEqual([
-      { quarter: "Q1", production: 75, classification: "Low" },
-      { quarter: "Q2", production: 150, classification: "High" },
-      { quarter: "Q3", production: 100, classification: "Upper Middle" },
+      { year: "Q1", Q1: 75 },
+      { year: "Q2", Q2: 150 },
+      { year: "Q3", Q3: 100 },
     ]);
   });
 
@@ -180,7 +180,7 @@ describe("Farmer detailed factors use Admin analytics data", () => {
 
     expect(await screen.findByText("Favorable Price")).toBeInTheDocument();
     expect(screen.getByText("The Admin Price Outlook classifies this forecast as Favorable.")).toBeInTheDocument();
-    expect(outlookSpy).toHaveBeenCalledWith("COM-1", "bangkerohan_retail", 14);
+    expect(outlookSpy).toHaveBeenCalledWith("COM-1", "bangkerohan_retail", 7);
   });
 
   it("Stage 1 displays historical seasonal price outlook and multi-year baseline, ignoring forecast", async () => {
@@ -234,7 +234,7 @@ describe("Farmer detailed factors use Admin analytics data", () => {
     expect(outlookSpy).toHaveBeenCalledWith(
       "COM-1",
       "bangkerohan_retail",
-      14,
+      7,
       expect.objectContaining({
         cropStage: "before_planting",
         plantingDate: "2026-08-01",

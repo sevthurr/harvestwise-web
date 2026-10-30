@@ -7,7 +7,6 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { isValidEmail } from "../../auth/authValidation";
 import { PHONE_MAX_LENGTH, sanitizePhoneInput } from "../../global/phoneInput";
 import { useGoogleLink } from "../../auth/useGoogleLink";
-import { authApi } from "../../../services/api";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { PasswordChangeForm } from "../../global/components/settings/PasswordChangeForm";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
@@ -31,7 +30,12 @@ import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
 import { queryClient } from "../../global/lib/queryClient";
 import { useRemovalRequest } from "../../global/hooks/useRemovalRequest";
-import { loadFarmerOfflineData, fetchFarmerProfile, fetchPricesList } from "../../global/hooks/useFarmerPrefetch";
+import {
+  FARMER_COMMODITIES_KEY,
+  FARMER_PROFILE_KEY,
+  loadFarmerOfflineData,
+  fetchFarmerProfile,
+} from "../../global/hooks/useFarmerPrefetch";
 import { buildFarmerExportHtml } from "../utils/farmerExportHtml";
 
 const TABS = [
@@ -513,137 +517,36 @@ const SecurityTab = ({ showToast }) => {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [pwError, setPwError] = useState("");
-  const [addPwOpen, setAddPwOpen] = useState(false);
-  const [addPwSending, setAddPwSending] = useState(false);
-  const [addPwCode, setAddPwCode] = useState("");
-  const [addPwNew, setAddPwNew] = useState("");
-  const [addPwConfirm, setAddPwConfirm] = useState("");
-  const [addPwError, setAddPwError] = useState("");
-  const [addPwDone, setAddPwDone] = useState(false);
   const googleLink = useGoogleLink({
     redirectTo: `${window.location.origin}/farmer/settings?tab=security`,
     onResult: () => showToast(t("farmer.settings.toast_google_connected", {}, "Google account connected.")),
   });
 
-  const handleSendAddPwOtp = async () => {
-    const email = (user?.email || "").trim().toLowerCase();
-    if (!email) {
-      setAddPwError("No email on file for this account.");
-      return;
-    }
-    setAddPwSending(true);
-    setAddPwError("");
-    try {
-      await authApi.requestPasswordReset(email);
-      setAddPwOpen(true);
-      showToast("A verification code was sent to your email.");
-    } catch (err) {
-      setAddPwError(err?.message || "Could not send the verification code. Try again.");
-    } finally {
-      setAddPwSending(false);
-    }
-  };
-
-  const handleConfirmAddPw = async () => {
-    const email = (user?.email || "").trim().toLowerCase();
-    if (!addPwCode.trim() || !addPwNew) {
-      setAddPwError("Enter the code and a new password.");
-      return;
-    }
-    if (addPwNew !== addPwConfirm) {
-      setAddPwError("Passwords do not match.");
-      return;
-    }
-    setAddPwSending(true);
-    setAddPwError("");
-    try {
-      await authApi.resetPassword(email, addPwCode.trim(), addPwNew);
-      setAddPwDone(true);
-      setAddPwOpen(false);
-      setAddPwCode("");
-      setAddPwNew("");
-      setAddPwConfirm("");
-      showToast("Password added successfully. Please sign in again.");
-    } catch (err) {
-      setAddPwError(err?.message || "Could not set the password. Check the code and try again.");
-    } finally {
-      setAddPwSending(false);
-    }
-  };
-
   return (
     <div className="space-y-4">
       <Card>
-        <SectionLabel>{t("farmer.settings.change_password", {}, "Change Password")}</SectionLabel>
+        <SectionLabel>
+          {user?.has_password === false
+            ? t("farmer.settings.add_password", {}, "Add a password")
+            : t("farmer.settings.change_password", {}, "Change Password")}
+        </SectionLabel>
+        {user?.has_password === false && (
+          <p className="text-[13px] text-black mb-3">
+            {t(
+              "farmer.settings.add_password_desc",
+              {},
+              "Add a password so you can also sign in with your email and password."
+            )}
+          </p>
+        )}
         <PasswordChangeForm
           idPrefix="f-cpw"
+          requireCurrentPassword={user?.has_password !== false}
           onSuccess={() => showToast(t("farmer.settings.toast_pw_success", {}, "Password updated successfully."))}
           onError={() => setPwError(t("farmer.settings.toast_pw_error", {}, "Could not update password. Check your current password and try again."))}
         />
         {pwError && <p className="mt-3 text-[13px] text-red-600">{pwError}</p>}
       </Card>
-
-      {googleLink.googleConnected && user?.has_password === false && !addPwDone && (
-        <Card>
-          <SectionLabel>{t("farmer.settings.add_password", {}, "Add a password")}</SectionLabel>
-          <p className="text-[13px] text-black mb-3">
-            Your account is signed in with Google. Add a password so you can also sign in with your email and password.
-          </p>
-          <button
-            type="button"
-            onClick={handleSendAddPwOtp}
-            disabled={addPwSending}
-            className="h-9 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-lg hover:bg-[var(--hw-green-800)] disabled:opacity-50 transition-colors"
-          >
-            {addPwSending ? "Sending…" : "Send verification code to email"}
-          </button>
-          {addPwError && <p className="mt-3 text-[13px] text-red-600">{addPwError}</p>}
-
-          {addPwOpen && (
-            <Modal title="Add a password" onClose={() => setAddPwOpen(false)}>
-              <div className="space-y-3 mb-4">
-                <div>
-                  <FieldLabel>Verification code</FieldLabel>
-                  <input
-                    type="text"
-                    value={addPwCode}
-                    onChange={(e) => setAddPwCode(e.target.value)}
-                    className={inputCls}
-                    placeholder="Enter the code sent to your email"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>New password</FieldLabel>
-                  <input
-                    type="password"
-                    value={addPwNew}
-                    onChange={(e) => setAddPwNew(e.target.value)}
-                    className={inputCls}
-                    placeholder="New password"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Confirm password</FieldLabel>
-                  <input
-                    type="password"
-                    value={addPwConfirm}
-                    onChange={(e) => setAddPwConfirm(e.target.value)}
-                    className={inputCls}
-                    placeholder="Confirm password"
-                  />
-                </div>
-                {addPwError && <p className="text-[13px] text-red-600">{addPwError}</p>}
-              </div>
-              <div className="flex gap-2 justify-end">
-                <GhostBtn onClick={() => setAddPwOpen(false)}>Cancel</GhostBtn>
-                <GreenBtn onClick={handleConfirmAddPw} disabled={addPwSending}>
-                  {addPwSending ? "Saving…" : "Set password"}
-                </GreenBtn>
-              </div>
-            </Modal>
-          )}
-        </Card>
-      )}
 
       <Card>
         <SectionLabel>{t("farmer.settings.google_card_title", {}, "Google Sign-In")}</SectionLabel>
@@ -853,9 +756,15 @@ const FarmTab = ({ showToast }) => {
       try {
         setLoading(true);
         const [profileRes, cropsRes, pricesRes] = await Promise.allSettled([
-          apiGet("/farmer/profile"),
-          apiGet("/farmer/commodities"),
-          apiGet("/prices?is_top10=true&page_size=50"),
+          queryClient.getQueryData(FARMER_PROFILE_KEY)
+            ? Promise.resolve({ ok: true, json: async () => queryClient.getQueryData(FARMER_PROFILE_KEY) })
+            : apiGet("/farmer/profile"),
+          queryClient.getQueryData(FARMER_COMMODITIES_KEY)
+            ? Promise.resolve({ ok: true, json: async () => queryClient.getQueryData(FARMER_COMMODITIES_KEY) })
+            : apiGet("/farmer/commodities"),
+          queryClient.getQueryData(["prices", "list"])
+            ? Promise.resolve({ ok: true, json: async () => queryClient.getQueryData(["prices", "list"]) })
+            : apiGet("/prices?is_top10=true&page_size=50"),
         ]);
 
         if (profileRes.status === "fulfilled" && profileRes.value.ok && active) {

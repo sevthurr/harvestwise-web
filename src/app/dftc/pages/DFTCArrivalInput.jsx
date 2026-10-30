@@ -30,6 +30,7 @@ import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../global/
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
+import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -700,6 +701,7 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
 
 // ─── DFTCArrivalInput Main Component ─────────────────────────────────────────
 export default function DFTCArrivalInput() {
+  const { data: catalogData } = useDftcCatalog();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -916,11 +918,11 @@ export default function DFTCArrivalInput() {
     if (found) setReviewedByRole(found.role);
   }
 
-  // Hoisted fetch+apply so both the mount load and the live-sync poll share
-  // one implementation.
-  async function loadCommodityCatalog() {
-    const data = await parseResponse(await apiGet("/dftc/commodities"));
-    const items = Array.isArray(data) ? data : data?.items ?? [];
+  // Apply the shared catalog query so Price Input and Arrival Input never
+  // issue separate catalog requests while both pages are mounted.
+  useEffect(() => {
+    if (!catalogData) return;
+    const items = Array.isArray(catalogData) ? catalogData : catalogData?.items ?? [];
     const map = new Map();
     for (const row of items) {
       const baseName = COMMODITY_NAME_OVERRIDES[row.name] ?? row.name;
@@ -932,46 +934,13 @@ export default function DFTCArrivalInput() {
     catalogRef.current = map;
     catalogItemsRef.current = items;
     addCatalogRows(items);
-  }
+  }, [catalogData]);
 
-  // Load commodity catalog map from DB
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        await loadCommodityCatalog();
-      } catch {
-        if (!cancelled) catalogRef.current = null;
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // The shared catalog hook owns refresh and visibility handling.
 
   // Commodity catalogue live-sync: another inputter may register a commodity or
   // variety while this page stays open. Re-run the page's own catalogue helper
   // on a timer so those rows appear without a full reload.
-  const catalogPollRef = useRef(null);
-  useEffect(() => {
-    catalogPollRef.current = () => loadCommodityCatalog();
-  });
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      catalogPollRef.current?.().catch(() => { });
-    }, 60000);
-    const refreshOnReturn = () => {
-      if (document.visibilityState === "visible") catalogPollRef.current?.().catch(() => { });
-    };
-    document.addEventListener("visibilitychange", refreshOnReturn);
-    window.addEventListener("focus", refreshOnReturn);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", refreshOnReturn);
-      window.removeEventListener("focus", refreshOnReturn);
-    };
-  }, []);
-
   // ── Rows the grid gained from the DB catalogue ────────────────────────────
   /** Identity of a rendered row: its commodity and its variety, by name. */
   function variantIdentity(commodityName, variantName) {

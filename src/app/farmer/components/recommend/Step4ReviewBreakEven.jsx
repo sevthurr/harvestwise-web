@@ -20,13 +20,13 @@ import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
 const ReviewRow = ({ label, value, onEdit, t }) => (
   <div className="flex items-start justify-between gap-3 py-2.5">
     <div className="min-w-0">
-      <p className="text-xs text-[var(--hw-neutral-700)]">{label}</p>
-      <p className="text-sm font-medium text-[var(--hw-neutral-900)] mt-0.5">{value || "—"}</p>
+      <p className="text-xs font-semibold text-black">{label}</p>
+      <p className="text-sm font-bold text-black mt-0.5">{value || "—"}</p>
     </div>
     <button
       type="button"
       onClick={onEdit}
-      className="flex-shrink-0 flex items-center gap-1 text-xs font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors mt-0.5"
+      className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors mt-0.5"
     >
       <Pencil className="w-3 h-3" />
       {t ? t("common.edit", {}, "Edit") : "Edit"}
@@ -47,53 +47,47 @@ const MarketPriceCard = ({ variantItem, farmgatePrice, breakEven, commodityName,
     : null;
 
   return (
-    <div className="p-3.5 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] space-y-2">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-sm font-semibold text-[var(--hw-neutral-900)]">
-          {displayName}
-        </span>
-        <div className="text-right space-y-1">
-          <div>
-            <span className="text-xs text-[var(--hw-neutral-600)] block">
-              {t("farmer.assess.current_market_price", {}, "Current market price")}
-            </span>
-            <span className="text-sm font-bold text-[var(--hw-neutral-900)]">
-              {typeof variantItem.avgPrice === "number"
-                ? `₱${variantItem.avgPrice.toFixed(2)}/kg`
-                : t("farmer.assess.no_market_price", {}, "No current market price")}
-            </span>
-          </div>
-          <div>
-            <span className="text-xs text-[var(--hw-neutral-600)] block">
-              {t("farmer.assess.break_even_price", {}, "Break-even price")}
-            </span>
-            <span className="text-sm font-bold text-[var(--hw-neutral-900)]">
-              {breakEven !== null
-                ? `₱${breakEven}/kg`
-                : t("farmer.assess.no_break_even_data", {}, "No break-even price")}
-            </span>
-          </div>
+    <div className="p-3 rounded-xl border border-slate-200 bg-white shadow-xs space-y-2">
+      {/* Full crop and variety name without truncation */}
+      <p className="text-sm font-bold text-black">
+        {displayName}
+      </p>
+
+      {/* Two clean metric blocks */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="p-2 rounded-lg border border-slate-200 bg-white">
+          <span className="text-[11px] font-medium text-black block leading-tight">
+            {t("farmer.assess.current_market_price", {}, "Current market price")}
+          </span>
+          <span className="text-sm font-bold text-black mt-0.5 block">
+            {typeof variantItem.avgPrice === "number"
+              ? `₱${variantItem.avgPrice.toFixed(2)}/kg`
+              : t("farmer.assess.no_market_price", {}, "No current market price")}
+          </span>
+        </div>
+        <div className="p-2 rounded-lg border border-slate-200 bg-white">
+          <span className="text-[11px] font-medium text-black block leading-tight">
+            {t("farmer.assess.break_even_price", {}, "Break-even price")}
+          </span>
+          <span className="text-sm font-bold text-black mt-0.5 block">
+            {breakEven !== null
+              ? `₱${breakEven}/kg`
+              : t("farmer.assess.no_break_even_data", {}, "No break-even price")}
+          </span>
         </div>
       </div>
-      {hasComparison ? (
-        <div className="pt-2 border-t border-[var(--hw-neutral-200)] flex items-center justify-between gap-2 flex-wrap">
+
+      {/* Comparison row */}
+      {hasComparison && (
+        <div className="flex items-center gap-1.5 pt-0.5">
           {difference > 0.005 ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              <TrendingUp className="w-3.5 h-3.5" />
-              +₱{differenceAbs.toFixed(2)} (+{percentage}%)
-            </span>
+            <TrendingUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           ) : difference < -0.005 ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-              <TrendingDown className="w-3.5 h-3.5" />
-              -₱{differenceAbs.toFixed(2)} (-{percentage}%)
-            </span>
+            <TrendingDown className="w-4 h-4 text-amber-600 flex-shrink-0" />
           ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-              <Minus className="w-3.5 h-3.5" />
-              0%
-            </span>
+            <Minus className="w-4 h-4 text-blue-600 flex-shrink-0" />
           )}
-          <p className="text-xs text-[var(--hw-neutral-700)]">
+          <p className="text-xs font-semibold text-black leading-tight">
             {difference > 0.005
               ? t("farmer.assess.diff_higher_break_even", { diff: differenceAbs.toFixed(2), pct: percentage }, `₱${differenceAbs.toFixed(2)} higher (+${percentage}%) than break-even price`)
               : difference < -0.005
@@ -101,11 +95,7 @@ const MarketPriceCard = ({ variantItem, farmgatePrice, breakEven, commodityName,
                 : t("farmer.assess.diff_equal_break_even", {}, "Equal to break-even price")}
           </p>
         </div>
-      ) : numPrice === null ? (
-        <p className="text-xs text-[var(--hw-neutral-500)] italic pt-1 border-t border-[var(--hw-neutral-200)]">
-          {t("farmer.assess.type_to_compare_break_even", {}, "Enter your farmgate price above to compare it with your break-even price.")}
-        </p>
-      ) : null}
+      )}
     </div>
   );
 };
@@ -242,12 +232,12 @@ const Step4ReviewBreakEven = ({
   return (
     <div className="space-y-5">
       {/* 1. Farmgate price section (Transferred before Pagbawi sa Gasto) */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 sm:p-4 space-y-3">
         <div>
-          <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">
+          <p className="text-sm font-bold text-black">
             {t("farmer.assess.how_will_you_sell", {}, "How will you sell?")}
           </p>
-          <label className="flex items-start gap-3 cursor-pointer mt-2.5">
+          <label className="flex items-start gap-2.5 cursor-pointer mt-2">
             <input
               type="checkbox"
               checked={data.useFarmgate}
@@ -255,13 +245,13 @@ const Step4ReviewBreakEven = ({
                 useFarmgate: e.target.checked,
                 farmgatePrice: e.target.checked ? data.farmgatePrice : ""
               })}
-              className="mt-0.5 w-4 h-4 rounded border-[var(--hw-neutral-300)] text-[var(--hw-green-700)] focus:ring-[var(--hw-green-600)] cursor-pointer"
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-[var(--hw-green-700)] focus:ring-[var(--hw-green-600)] cursor-pointer"
             />
             <div>
-              <p className="text-sm text-[var(--hw-neutral-900)]">
+              <p className="text-xs sm:text-sm font-semibold text-black">
                 {t("farmer.assess.sell_farmgate_check", {}, "I will sell the produce to a buyer using farmgate price.")}
               </p>
-              <p className="text-[12px] text-[var(--hw-neutral-900)] mt-0.5">
+              <p className="text-[11px] sm:text-[12px] text-black mt-0.5 font-normal">
                 {t("farmer.assess.farmgate_explainer", {}, "Farmgate price is the price a buyer may pay you. You can update this later.")}
               </p>
             </div>
@@ -269,16 +259,16 @@ const Step4ReviewBreakEven = ({
         </div>
 
         {data.useFarmgate ? (
-          <div className="space-y-3 pt-2 border-t border-[var(--hw-neutral-100)]">
+          <div className="space-y-3 pt-2 border-t border-slate-200">
             <div>
               <label
                 htmlFor="farmgate-price"
-                className="block text-sm font-semibold text-[var(--hw-neutral-700)] mb-1.5"
+                className="block text-xs sm:text-sm font-bold text-black mb-1"
               >
                 {t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-[var(--hw-neutral-700)] flex-shrink-0">₱</span>
+                <span className="text-sm font-bold text-black flex-shrink-0">₱</span>
                 <input
                   id="farmgate-price"
                   type="number"
@@ -288,20 +278,20 @@ const Step4ReviewBreakEven = ({
                   onChange={(e) => onChange({ farmgatePrice: e.target.value === "" ? "" : Number(e.target.value) })}
                   placeholder="e.g. 70"
                   className={`
-                    flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none transition
+                    flex-1 px-3 py-2 rounded-xl border text-sm font-semibold text-black outline-none transition
                     focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]
-                    ${errors?.farmgatePrice ? "border-red-400 bg-red-50" : "border-[var(--hw-neutral-200)] bg-white"}
+                    ${errors?.farmgatePrice ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"}
                   `}
                 />
-                <span className="text-sm text-[var(--hw-neutral-700)] flex-shrink-0">/kg</span>
+                <span className="text-sm font-bold text-black flex-shrink-0">/kg</span>
               </div>
-              {errors?.farmgatePrice && <p className="mt-1.5 text-sm text-red-600">{errors.farmgatePrice}</p>}
+              {errors?.farmgatePrice && <p className="mt-1 text-sm font-semibold text-red-600">{errors.farmgatePrice}</p>}
             </div>
 
             {/* Current market price reference */}
             {displayedVariants.length > 0 && (
-              <div className="space-y-2.5 pt-2">
-                <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
+              <div className="space-y-2 pt-1">
+                <p className="text-xs font-bold text-black uppercase tracking-wide">
                   {!data.variant && displayedVariants.length > 1
                     ? t("farmer.assess.current_market_prices", {}, "Current market prices")
                     : t("farmer.assess.farmgate_price_comparison", {}, "Farmgate price comparison with break-even price")}
@@ -318,49 +308,54 @@ const Step4ReviewBreakEven = ({
                     />
                   ))}
                 </div>
+                {(!data.farmgatePrice || Number(data.farmgatePrice) <= 0) && (
+                  <p className="text-xs font-medium text-black pt-1">
+                    {t("farmer.assess.type_to_compare_break_even", {}, "Enter your farmgate price above to compare it with your break-even price.")}
+                  </p>
+                )}
               </div>
             )}
           </div>
         ) : (
-          <p className="text-[13px] text-[var(--hw-neutral-700)] italic pt-1 border-t border-[var(--hw-neutral-100)]">
+          <p className="text-xs font-medium text-black pt-2 border-t border-slate-200">
             {t("farmer.assess.market_reference_note", {}, "Market price will be used as reference. Actual buyer price may be different.")}
           </p>
         )}
       </div>
 
       {/* 2. Cost to recover / Pagbawi sa Gasto */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 space-y-3">
+        <p className="text-xs font-bold text-black uppercase tracking-wide">
           {t("farmer.factors.profitability.cost_to_recover_short_label", {}, "Cost to recover per kg")}
         </p>
 
         {breakEven !== null ? (
           <>
-            <p className="font-semibold text-[var(--hw-neutral-900)] leading-snug">
+            <p className="font-bold text-black leading-snug">
               {t("farmer.assess.need_to_sell", {
                 crop: displayLabel,
                 price: breakEven
               }, `You need to sell ${displayLabel} for at least ₱${breakEven}/kg to recover your expected costs.`)}
             </p>
-            <p className="text-sm text-[var(--hw-neutral-900)] leading-relaxed">
+            <p className="text-sm font-medium text-black leading-relaxed">
               {t("farmer.assess.cost_to_recover_sub", {}, "A selling price above this amount means estimated profit. Below means a possible loss.")}
             </p>
 
             {/* Expandable calculation */}
-            <div className="rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden">
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setCalcOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
+                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 transition-colors text-left"
               >
-                <span className="text-sm font-medium text-[var(--hw-neutral-900)]">
+                <span className="text-sm font-bold text-black">
                   {t("farmer.assess.how_calculated", {}, "How was this calculated?")}
                 </span>
-                {calcOpen ? <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] flex-shrink-0" />}
+                {calcOpen ? <ChevronUp className="w-4 h-4 text-black flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-black flex-shrink-0" />}
               </button>
               {calcOpen && (
-                <div className="px-3 pb-3 border-t border-[var(--hw-neutral-100)]">
-                  <p className="mt-2.5 text-sm text-[var(--hw-neutral-900)] leading-relaxed">
+                <div className="px-3 pb-3 border-t border-slate-200">
+                  <p className="mt-2.5 text-sm font-medium text-black leading-relaxed">
                     {t("farmer.assess.how_calculated_desc", {
                       cost: formatPeso(totalCost),
                       harvest: data.harvestQuantity || 0,
@@ -372,9 +367,9 @@ const Step4ReviewBreakEven = ({
             </div>
           </>
         ) : (
-          <div className="flex items-start gap-2 text-amber-700">
+          <div className="flex items-start gap-2 text-amber-800">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <p className="text-sm">
+            <p className="text-sm font-semibold">
               {t("farmer.assess.enter_harvest_qty_to_calc", {}, "Enter an expected harvest quantity to calculate your break-even price.")}
             </p>
           </div>
@@ -382,13 +377,13 @@ const Step4ReviewBreakEven = ({
       </div>
 
       {/* 3. Review of inputs */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--hw-neutral-100)]">
-          <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200">
+          <p className="text-xs font-bold text-black uppercase tracking-wide">
             {t("farmer.assess.review_inputs_title", {}, "Review of inputs")}
           </p>
         </div>
-        <div className="px-4 divide-y divide-[var(--hw-neutral-100)]">
+        <div className="px-4 divide-y divide-slate-200">
           <ReviewRow label={t("farmer.prices.category_vegetables", {}, "Vegetable")} value={displayLabel} onEdit={() => onEditStep(1)} t={t} />
           {data.variant && <ReviewRow label={t("farmer.commodityDetail.variety", {}, "Variety")} value={data.variant} onEdit={() => onEditStep(1)} t={t} />}
           <ReviewRow label={t("farmer.assess.target_planting_date", {}, "Target planting date")} value={data.plantingDate} onEdit={() => onEditStep(1)} t={t} />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   Pencil,
@@ -17,6 +17,7 @@ import {
   Package,
   Leaf,
   PauseCircle,
+  Play,
   Droplets,
   Tractor,
   Eye,
@@ -30,6 +31,20 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { formatLocalDate, useCrops } from "../components/crops/CropsContext";
 import { PhasePill } from "../components/crops/CropCard";
 import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
+import { suggestHarvestDate } from "../components/recommend/types";
+
+function toDateInputValue(val) {
+  if (!val) return "";
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+    return val.slice(0, 10);
+  }
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -96,15 +111,24 @@ function resolveWeeklyActionIcon(action) {
   return Sprout;
 }
 
-function renderFactorIcon(iconType, colorClass) {
+function renderFactorIcon(iconType, colorClass, sizeClass = "w-5 h-5") {
   if (iconType === "price") {
-    return <span className={`w-5 h-5 flex items-center justify-center font-bold text-[17px] leading-none flex-shrink-0 mt-0.5 ${colorClass}`}>₱</span>;
+    return <span className={`${sizeClass} flex items-center justify-center font-bold text-[15px] leading-none flex-shrink-0 ${colorClass}`}>₱</span>;
   }
-  if (iconType === "supply") return <Package className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
-  if (iconType === "production") return <Leaf className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
-  if (iconType === "weather") return <CloudRain className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
-  return <TrendingUp className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  if (iconType === "supply") return <Package className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
+  if (iconType === "production") return <Leaf className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
+  if (iconType === "weather") return <CloudRain className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
+  return <TrendingUp className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
 }
+
+export function formatClassification(raw, t) {
+  if (!raw) return t ? t("farmer.advisory.not_available", {}, "Not available") : "Not available";
+  const key = String(raw).toLowerCase().trim().replace(/[-\s]+/g, "_");
+  const fallback = String(raw);
+  return t ? t(`farmer.advisory.classifications.${key}`, {}, fallback) : fallback;
+}
+
+
 
 const ProfitCalcAccordion = ({
   qty,
@@ -172,22 +196,6 @@ function formatHoldReason(reason, t) {
   return reason;
 }
 
-function formatClassification(val, t) {
-  if (!val || typeof val !== "string") return val;
-  const lower = val.trim().toLowerCase().replace(/[\s-]/g, "_");
-  if (lower === "favorable") return t ? t("farmer.calendar.factors.price_level_favorable", {}, "Favorable") : "Favorable";
-  if (lower === "neutral") return t ? t("farmer.calendar.factors.price_level_neutral", {}, "Neutral") : "Neutral";
-  if (lower === "unfavorable") return t ? t("farmer.calendar.factors.price_level_unfavorable", {}, "Unfavorable") : "Unfavorable";
-  if (lower === "low") return t ? t("farmer.factors.arrival.low", {}, "Low") : "Low";
-  if (lower === "lower_middle") return t ? t("farmer.factors.arrival.lower_middle", {}, "Lower Middle") : "Lower Middle";
-  if (lower === "upper_middle") return t ? t("farmer.factors.arrival.upper_middle", {}, "Upper Middle") : "Upper Middle";
-  if (lower === "high") return t ? t("farmer.factors.arrival.high", {}, "High") : "High";
-  if (lower === "suitable") return t ? t("farmer.factors.weather.suitable", {}, "Suitable") : "Suitable";
-  if (lower === "caution") return t ? t("farmer.factors.weather.caution", {}, "Caution") : "Caution";
-  if (lower === "severe") return t ? t("farmer.factors.weather.severe", {}, "Severe") : "Severe";
-  return val.charAt(0).toUpperCase() + val.slice(1);
-}
-
 function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
@@ -200,11 +208,11 @@ function CropCycleDetailPage() {
   const [additionalCost, setAdditionalCost] = useState("");
   const [isSubmittingCost, setIsSubmittingCost] = useState(false);
   const [addedCostsExpanded, setAddedCostsExpanded] = useState(true);
-  const [advisoryExpanded, setAdvisoryExpanded] = useState(true);
-  const [whyExpanded, setWhyExpanded] = useState(false);
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+  const [reasonsExpanded, setReasonsExpanded] = useState(false);
   const crop = crops.find((c) => c.id === cropId);
   const [farmgatePrice, setFarmgatePrice] = useState(() =>
     crop?.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : ""
@@ -297,7 +305,7 @@ function CropCycleDetailPage() {
       setHarvestEntryPrice("");
       setHarvestEntryDate(getLocalDateInputValue());
     } catch (err) {
-      setActionError(err.message || "Failed to save harvest entry. Please try again.");
+      setActionError(t("farmer.cropCycle.save_harvest_failed", {}, "Failed to save the harvest entry. Please try again."));
     } finally {
       setIsSavingHarvestEntry(false);
     }
@@ -348,6 +356,7 @@ function CropCycleDetailPage() {
     );
   }
   const handleDrawerAction = async (action) => {
+    if (isSubmittingAction) return;
     const statusMap = {
       [PHASE_CODES.PLANNING]: "Planning",
       [PHASE_CODES.GROWING]: "Planted",
@@ -361,11 +370,13 @@ function CropCycleDetailPage() {
       completed: "Completed"
     };
 
+    setIsSubmittingAction(true);
     setActionError(null);
     try {
       if (action.kind === "phase") {
         const targetStatus = statusMap[action.phase] || "Planning";
         const isComp = targetStatus === "Completed";
+        const isTransitionToHarvesting = targetStatus === "Harvesting" || action.phase === "harvested";
         const addCostNum = action.fields?.additionalCost != null && action.fields?.additionalCost !== ""
           ? Number(action.fields.additionalCost)
           : (action.fields?.updatedTotalCost != null && action.fields?.updatedTotalCost !== "" ? Number(action.fields.updatedTotalCost) : 0);
@@ -402,11 +413,15 @@ function CropCycleDetailPage() {
             });
           }
         } else {
-          const isTransitionToHarvesting = targetStatus === "Harvesting" || action.phase === "harvested";
           await updateCropStatusApi(crop.id, targetStatus, null, {
             additionalCost: addCostNum > 0 ? addCostNum : undefined,
             actualHarvestQty: isTransitionToHarvesting ? undefined : actualHarvestQtyVal,
             actualHarvestDate: actualHarvestDateVal,
+            actualPlantingDate: action.fields?.actualPlantingDate,
+            actualPlantedArea: action.fields?.actualPlantedArea,
+            updatedHarvestDate: action.fields?.updatedHarvestDate,
+            harvestWindowStart: action.fields?.harvestWindowStart || action.fields?.updatedHarvestWindowStart,
+            harvestWindowEnd: action.fields?.harvestWindowEnd || action.fields?.updatedHarvestWindowEnd,
           });
           if (addCostNum > 0) {
             try {
@@ -460,8 +475,22 @@ function CropCycleDetailPage() {
               actualHarvestQty: actualHarvestQtyVal,
               partialHarvestQty: actualHarvestQtyVal,
             } : {})),
-            ...(action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {}),
-            ...(action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}),
+            ...(action.fields?.actualPlantingDate ? {
+              plantingDate: formatLocalDate(action.fields.actualPlantingDate) || action.fields.actualPlantingDate,
+              rawPlantingDate: action.fields.actualPlantingDate,
+            } : {}),
+            ...(action.fields?.updatedHarvestDate ? {
+              harvestDate: formatLocalDate(action.fields.updatedHarvestDate) || action.fields.updatedHarvestDate,
+              rawHarvestDate: action.fields.updatedHarvestDate,
+            } : {}),
+            ...(action.fields?.harvestWindowStart || action.fields?.updatedHarvestWindowStart ? {
+              harvestWindowStart: formatLocalDate(action.fields.harvestWindowStart || action.fields.updatedHarvestWindowStart),
+              rawHarvestWindowStart: action.fields.harvestWindowStart || action.fields.updatedHarvestWindowStart,
+            } : {}),
+            ...(action.fields?.harvestWindowEnd || action.fields?.updatedHarvestWindowEnd ? {
+              harvestWindowEnd: formatLocalDate(action.fields.harvestWindowEnd || action.fields.updatedHarvestWindowEnd),
+              rawHarvestWindowEnd: action.fields.harvestWindowEnd || action.fields.updatedHarvestWindowEnd,
+            } : {}),
             ...(action.fields?.actualPlantedArea != null && action.fields?.actualPlantedArea !== "" ? { farmArea: Number(action.fields.actualPlantedArea) } : {}),
             ...(action.fields?.expectedHarvestQty != null && action.fields?.expectedHarvestQty !== "" ? { harvestQuantity: Number(action.fields.expectedHarvestQty) } : {})
           })
@@ -485,7 +514,19 @@ function CropCycleDetailPage() {
       }
       setDrawerOpen(false);
     } catch (err) {
-      setActionError(err.message || "Action failed. Please try again.");
+      if (err.status === 409 && /already completed/i.test(err.message || "")) {
+        await refreshCrops();
+        setDrawerOpen(false);
+        setActionError(t(
+          "farmer.cropCycle.already_completed",
+          {},
+          "This crop was already completed. The latest information has been loaded."
+        ));
+      } else {
+        setActionError(t("farmer.cropCycle.action_failed", {}, "The action could not be completed. Please try again."));
+      }
+    } finally {
+      setIsSubmittingAction(false);
     }
   };
 
@@ -504,7 +545,7 @@ function CropCycleDetailPage() {
       setAdditionalCost("");
       setAddCostOpen(false);
     } catch (err) {
-      setActionError(err.message || "Failed to add cost. Please try again.");
+      setActionError(t("farmer.cropCycle.add_cost_failed", {}, "Failed to add the cost. Please try again."));
     } finally {
       setIsSubmittingCost(false);
     }
@@ -519,8 +560,6 @@ function CropCycleDetailPage() {
     (c) => c.costType === "additional"
   );
 
-  // Real backend advisory query from existing POST /api/v1/advisory/plan
-  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && qty > 0);
   const commodityIdentifier = crop.commodityId || (typeof crop.commodity === "string" ? crop.commodity : crop.commodity?.id) || crop.commodityName;
   const phaseCode = normalizePhaseCode(crop.phase) || normalizePhaseCode(crop.status);
   const explicitStage = (crop.phase || crop.status) ? (
@@ -536,6 +575,17 @@ function CropCycleDetailPage() {
   const pDateStr = crop.rawPlantingDate || (pDate && !isNaN(pDate.getTime()) ? pDate.toISOString().split("T")[0] : crop.plantingDate);
   const hDateStr = crop.rawHarvestDate || (hDate && !isNaN(hDate.getTime()) ? hDate.toISOString().split("T")[0] : crop.harvestDate);
 
+  // The advisory schema requires a strictly future harvest date. During a crop
+  // update, local state can briefly contain the actual harvest date or an
+  // incomplete date pair, so do not send an invalid advisory request.
+  const validAdvisoryDates =
+    /^\d{4}-\d{2}-\d{2}$/.test(pDateStr) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(hDateStr) &&
+    pDateStr < hDateStr;
+  const canQueryPlan = Boolean(
+    crop.commodityName && validAdvisoryDates && totalCost > 0 && qty > 0
+  );
+
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
     queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr, hDateStr, totalCost, qty, explicitStage],
     queryFn: async () => {
@@ -550,14 +600,11 @@ function CropCycleDetailPage() {
       };
       const res = await apiPost("/advisory/plan", payload);
       if (!res.ok) {
-        let detail = `Advisory request failed (${res.status}).`;
-        try {
-          const errorBody = await res.json();
-          if (typeof errorBody?.detail === "string") detail = errorBody.detail;
-        } catch {
-          // Keep the status-based message when the server does not return JSON.
-        }
-        throw new Error(detail);
+        throw new Error(t(
+          "farmer.cropCycle.advisory_request_failed",
+          {},
+          "The crop advisory could not be loaded. Please try again later."
+        ));
       }
       return await parseResponse(res);
     },
@@ -805,8 +852,79 @@ function CropCycleDetailPage() {
   const now = new Date();
   const daysSincePlanting = pDate && !isNaN(pDate.getTime()) ? Math.max(0, Math.floor((now - pDate) / (1000 * 60 * 60 * 24))) : null;
   const totalGrowDays = pDate && hDate && !isNaN(pDate.getTime()) && !isNaN(hDate.getTime()) ? Math.max(1, Math.floor((hDate - pDate) / (1000 * 60 * 60 * 24))) : null;
-  const progressPct = daysSincePlanting != null && totalGrowDays != null ? Math.min(100, Math.round(daysSincePlanting / totalGrowDays * 100)) : null;
   const daysToHarvest = hDate && !isNaN(hDate.getTime()) ? Math.max(0, Math.floor((hDate - now) / (1000 * 60 * 60 * 24))) : null;
+
+  const harvestWindowInfo = useMemo(() => {
+    let startStr = crop.harvestWindowStart;
+    let endStr = crop.harvestWindowEnd;
+    let rawStart = crop.rawHarvestWindowStart;
+    let rawEnd = crop.rawHarvestWindowEnd;
+
+    if ((!startStr || !endStr || startStr === endStr) && (crop.rawPlantingDate || crop.plantingDate)) {
+      const pRaw = toDateInputValue(crop.rawPlantingDate || crop.plantingDate);
+      const sugg = suggestHarvestDate(pRaw, crop.commodityId || crop.commodityName || crop.commodity, crop.variant || crop.variety);
+      if (sugg?.minDate && sugg?.maxDate) {
+        rawStart = rawStart || sugg.minDate;
+        rawEnd = rawEnd || sugg.maxDate;
+        startStr = startStr || formatLocalDate(sugg.minDate);
+        endStr = endStr || formatLocalDate(sugg.maxDate);
+      }
+    }
+    const dStart = rawStart ? new Date(rawStart) : (crop.rawHarvestDate || crop.harvestDate ? new Date(crop.rawHarvestDate || crop.harvestDate) : null);
+    const dEnd = rawEnd ? new Date(rawEnd) : (crop.rawHarvestDate || crop.harvestDate ? new Date(crop.rawHarvestDate || crop.harvestDate) : null);
+
+    const display = startStr && endStr && startStr !== endStr ? `${startStr} – ${endStr}` : (startStr || endStr || crop.harvestDate || "—");
+
+    return {
+      startStr,
+      endStr,
+      dStart: dStart && !isNaN(dStart.getTime()) ? dStart : null,
+      dEnd: dEnd && !isNaN(dEnd.getTime()) ? dEnd : null,
+      display,
+    };
+  }, [
+    crop.harvestWindowStart,
+    crop.harvestWindowEnd,
+    crop.rawHarvestWindowStart,
+    crop.rawHarvestWindowEnd,
+    crop.rawPlantingDate,
+    crop.plantingDate,
+    crop.commodityId,
+    crop.commodityName,
+    crop.commodity,
+    crop.variant,
+    crop.variety,
+    crop.rawHarvestDate,
+    crop.harvestDate,
+  ]);
+
+  const harvestWindowDisplay = harvestWindowInfo.display;
+
+  const growDaysStart = pDate && harvestWindowInfo.dStart ? Math.max(1, Math.round((harvestWindowInfo.dStart - pDate) / (1000 * 60 * 60 * 24))) : null;
+  const growDaysEnd = pDate && harvestWindowInfo.dEnd ? Math.max(1, Math.round((harvestWindowInfo.dEnd - pDate) / (1000 * 60 * 60 * 24))) : null;
+  const totalGrowDaysMax = growDaysEnd || totalGrowDays || 0;
+
+  const progressPct = daysSincePlanting != null && totalGrowDaysMax > 0
+    ? Math.min(100, Math.round((daysSincePlanting / totalGrowDaysMax) * 100))
+    : 0;
+
+  const remainingDaysToHarvest = totalGrowDaysMax > 0 && daysSincePlanting != null
+    ? Math.max(0, totalGrowDaysMax - daysSincePlanting)
+    : (daysToHarvest ?? 0);
+
+  const harvestWindowDaySpan = useMemo(() => {
+    if (harvestWindowInfo.dStart && harvestWindowInfo.dEnd) {
+      return Math.max(1, Math.round((harvestWindowInfo.dEnd - harvestWindowInfo.dStart) / (1000 * 60 * 60 * 24)) + 1);
+    }
+    return 1;
+  }, [harvestWindowInfo.dStart, harvestWindowInfo.dEnd]);
+
+  const formatDaysText = (count) => {
+    if (count == null || isNaN(count)) return "-";
+    if (langCode === "ceb") return `${count} ka adlaw`;
+    if (langCode === "tl") return `${count} araw`;
+    return `${count} days`;
+  };
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {actionError && <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[13px] text-red-700">{actionError}</div>}
@@ -832,7 +950,14 @@ function CropCycleDetailPage() {
                   <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
                     {crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName}
                   </h1>
-                  <div className="mt-1"><PhasePill phase={crop.phase} isOnHold={crop.isOnHold} /></div>
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                    <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
+                  </div>
+                  {crop.isOnHold && crop.holdReason && (
+                    <p className="text-xs text-[var(--hw-neutral-700)] mt-1.5 leading-snug">
+                      <span className="font-semibold text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}:</span> {formatHoldReason(crop.holdReason, t)}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => {
@@ -844,175 +969,113 @@ function CropCycleDetailPage() {
                   <Pencil className="w-3.5 h-3.5" />{t("farmer.cropCycle.update_phase", {}, "Update phase")}
                 </button>
               </div>
-              <div className="mt-2 space-y-0.5 text-xs text-[var(--hw-neutral-900)]">
-                {phaseCode === PHASE_CODES.PLANNING ? <p>{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: {crop.plantingDate || "-"}</p> : <p>{t("farmer.advisory.labels.planted", {}, "Planted")}: {crop.plantingDate || "-"}</p>}
-                <p>{t("farmer.calendar.labels.expected_harvest", {}, "Est. harvest")}: {crop.harvestDate || "-"}</p>
-                <p>{t("farmer.assess.farm_area_label", {}, "Farm area")}: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
+              <div className="mt-2.5 space-y-1 text-[13px] text-[var(--hw-neutral-600)]" style={{ fontSize: "13px", lineHeight: "1.45" }}>
+                {phaseCode === PHASE_CODES.PLANNING ? (
+                  <p>
+                    <span className="text-[var(--hw-neutral-600)]">{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: </span>
+                    <span className="font-medium text-[var(--hw-neutral-900)]">{crop.plantingDate || "-"}</span>
+                  </p>
+                ) : (
+                  <p>
+                    <span className="text-[var(--hw-neutral-600)]">{t("farmer.advisory.labels.planted", {}, "Planted")}: </span>
+                    <span className="font-medium text-[var(--hw-neutral-900)]">{crop.plantingDate || "-"}</span>
+                  </p>
+                )}
+                <p>
+                  <span className="text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.harvest_window", {}, "Harvest window")}: </span>
+                  <span className="font-medium text-[var(--hw-neutral-900)]">{harvestWindowDisplay}</span>
+                </p>
+                <p>
+                  <span className="text-[var(--hw-neutral-600)]">{t("farmer.assess.farm_area_label", {}, "Farm area")}: </span>
+                  <span className="font-medium text-[var(--hw-neutral-900)]">{crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</span>
+                </p>
               </div>
-              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">{t("common.last_updated", {}, "Last updated")} {crop.lastUpdated || "-"}</p>
             </div>
           </div>
         </div>
 
-        {/* ── On Hold reason — shown between header and advisory ── */}
-        {crop.isOnHold && <div className="bg-white border border-[var(--hw-neutral-200)] rounded-2xl px-4 py-3.5 flex items-start gap-3">
-            <PauseCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-[13px] font-bold text-amber-700">{t("farmer.advisory.labels.on_hold", {}, "On hold")}</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">
-                <span className="text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}:</span> {formatHoldReason(crop.holdReason, t)}
-              </p>
-              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-500)]">{t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
-            </div>
-          </div>}
-
         {/* ── 2. Main advice — white card, colored foreground only ── */}
         {isActive && (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4">
+            <div className={`flex items-center gap-2 mb-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
+              {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
+              <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
+            </div>
+            <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
+              {summaryText ? summaryText.split(/(?<=[.!?])\s+/)[0] : ""}
+            </p>
+            <div className="mt-4 pt-3 border-t border-[var(--hw-neutral-200)]">
+              <button
+                type="button"
+                onClick={() => setReasonsExpanded((prev) => !prev)}
+                className="w-full flex items-center justify-between text-left group py-1"
+                aria-expanded={reasonsExpanded}
+              >
+                <span className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                  {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] group-hover:text-[var(--hw-green-800)] transition-colors">
+                  {reasonsExpanded ? t("common.hide", {}, "Hide") : t("common.show", {}, "Show")}
+                  {reasonsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </span>
+              </button>
+
+              {reasonsExpanded && (
+                <div className="mt-2.5 space-y-2">
+                  {factorClassificationRows.map(({ module, label }) => {
+                    const reason = reasonByModule.get(module);
+                    const rawClassification = normalizedPreviewResults[module] || null;
+                    const translatedClassification = formatClassification(rawClassification, t);
+                    const reasonText = reason
+                      ? renderComposedMessage(reason, langCode)
+                      : t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
+                    const factorCond = resolveFactorCondition(module, rawClassification, reason?.key, reasonText);
+
+                    return (
+                      <div key={module} className="p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)]/70 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0">
+                              {renderFactorIcon(factorCond.iconType, factorCond.colorClass, "w-4 h-4")}
+                            </div>
+                            <p className="text-[14px] font-bold text-[var(--hw-neutral-900)] truncate">
+                              {reason?.labelKey ? t(reason.labelKey, {}, label) : label}
+                            </p>
+                          </div>
+                          <span className="text-[13px] font-semibold text-[var(--hw-neutral-900)] flex-shrink-0">
+                            {translatedClassification}
+                          </span>
+                        </div>
+                        <p className="text-[13px] text-[var(--hw-neutral-900)] leading-relaxed pl-9">{reasonText}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setAdvisoryExpanded((v) => !v)}
-              aria-expanded={advisoryExpanded}
-              aria-label={advisoryLabel}
-              className="w-full flex items-center justify-between gap-2 text-left cursor-pointer group"
+              onClick={() =>
+                navigate(`/farmer/crops/${crop.id}/factors`, {
+                  state: {
+                    cropStage: currentCropStage,
+                    plantingDate: crop.rawPlantingDate || crop.plantingDate,
+                    expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
+                    moduleResults: previewModuleResults,
+                    plantingWindowStart: planAdvisoryData?.planting_window_start,
+                    plantingWindowEnd: planAdvisoryData?.planting_window_end,
+                    plantingWindowLabel: planAdvisoryData?.planting_window_label,
+                    advisoryCode,
+                    rawAdvisory,
+                    advisoryLabel,
+                    planAdvisoryData,
+                  },
+                })
+              }
+              className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
             >
-              <div className={`flex items-center gap-2 ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>
-                {AdvisoryIcon ? <AdvisoryIcon className="w-5 h-5 flex-shrink-0" /> : <Sprout className="w-5 h-5 flex-shrink-0" />}
-                <p className={`text-[15px] font-bold ${advisoryCfg?.color || "text-[var(--hw-neutral-700)]"}`}>{advisoryLabel}</p>
-              </div>
-              {advisoryExpanded ? (
-                <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-              )}
+              {t("farmer.advisory.view_basis", {}, "View basis →")}
             </button>
-            {advisoryExpanded && (
-              <div className="mt-2.5">
-                <p className="text-[14px] text-[var(--hw-neutral-900)] leading-snug">
-                  {summaryText}
-                </p>
-                {displayImmediateActions.map((act, idx) => {
-                  const text = renderComposedMessage(act, langCode);
-                  return text ? (
-                    <p key={act.key || idx} className="text-[13px] text-[var(--hw-neutral-700)] font-medium leading-relaxed mt-1.5">
-                      {text}
-                    </p>
-                  ) : null; })}
-                {isPlanning && normalizedPreviewResults.price_outlook && (
-                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] px-3 py-2.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {(() => {
-                        const priceCondition = resolveFactorCondition(
-                          "price_outlook",
-                          normalizedPreviewResults.price_outlook
-                        );
-                        return renderFactorIcon(priceCondition.iconType, priceCondition.colorClass);
-                      })()}
-                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] truncate">
-                        {t("farmer.factors.price.factor_title", {}, "Price outlook")}
-                      </p>
-                    </div>
-                    <p className={`text-[13px] font-bold ${resolveFactorCondition(
-                      "price_outlook",
-                      normalizedPreviewResults.price_outlook
-                    ).colorClass}`}>
-                      {formatClassification(normalizedPreviewResults.price_outlook, t)}
-                    </p>
-                  </div>
-                )}
-                <div className="mt-4 pt-4 border-t border-[var(--hw-neutral-200)]">
-                  <button
-                    type="button"
-                    onClick={() => setWhyExpanded((v) => !v)}
-                    aria-expanded={whyExpanded}
-                    className="w-full flex items-center justify-between text-left py-1 hover:opacity-80 transition-opacity cursor-pointer group"
-                  >
-                    <span className="text-[12px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-                      {t("farmer.advisory.why_recommendation_title", {}, "Why this recommendation?")}
-                    </span>
-                    {whyExpanded ? (
-                      <ChevronUp className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-500)] group-hover:text-[var(--hw-neutral-700)] transition-colors flex-shrink-0" />
-                    )}
-                  </button>
-                  {whyExpanded && (
-                    <div className="mt-3 space-y-3">
-                      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
-                        {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}
-                      </p>
-                      <div className="space-y-2 sm:space-y-2.5">
-                        {factorClassificationRows.map(({ module, label }) => {
-                          const reason = reasonByModule.get(module);
-                          const reasonTextCandidate = reason
-                            ? renderComposedMessage(reason, langCode)
-                            : (module === "price_outlook" && (previewModuleResults.price_explanation || fallbackPrice.explanation)
-                              ? (previewModuleResults.price_explanation || fallbackPrice.explanation)
-                              : null);
-                          const extractedClass = (module === "price_outlook" && reasonTextCandidate)
-                            ? (reasonTextCandidate.match(/classified as (Favorable|Neutral|Unfavorable)/i)?.[1] || null)
-                            : null;
-                          const rawClassification = normalizedPreviewResults[module] || (
-                            module === "price_outlook"
-                              ? (reason?.params?.classification || planningPriceOutlook || previewModuleResults.historical_price_outlook || previewModuleResults.price_outlook || fallbackPrice.classification || extractedClass)
-                              : null
-                          );
-                          const classification = formatClassification(rawClassification, t);
-                          const reasonText = reasonTextCandidate || t("farmer.advisory.not_available", {}, "Assessment data is not available yet.");
-                          const factorCond = resolveFactorCondition(
-                            module,
-                            rawClassification || classification,
-                            reason?.key,
-                            reasonText
-                          );
-                          return (
-                            <div key={module} className="flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-100)]">
-                              <div className="w-8 h-8 rounded-lg bg-white border border-[var(--hw-neutral-200)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                                {renderFactorIcon(factorCond.iconType, factorCond.colorClass)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className={`text-[13px] font-semibold leading-snug ${factorCond.colorClass}`}>
-                                  {reason?.labelKey
-                                    ? t(reason.labelKey, {}, label)
-                                    : label}
-                                </p>
-                                <p className={`text-[12px] font-semibold leading-snug mt-0.5 ${factorCond.colorClass}`}>
-                                  {classification || t("farmer.advisory.not_available", {}, "Not available")}
-                                </p>
-                                <p className="text-[12px] text-[var(--hw-neutral-800)] leading-snug mt-0.5">{reasonText}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(`/farmer/crops/${crop.id}/factors`, {
-                            state: {
-                              cropStage: currentCropStage,
-                              plantingDate: crop.rawPlantingDate || crop.plantingDate,
-                              expectedHarvestDate: crop.rawHarvestDate || crop.harvestDate,
-                              moduleResults: previewModuleResults,
-                              plantingWindowStart: planAdvisoryData?.planting_window_start,
-                              plantingWindowEnd: planAdvisoryData?.planting_window_end,
-                              plantingWindowLabel: planAdvisoryData?.planting_window_label,
-                              advisoryCode,
-                              rawAdvisory,
-                              advisoryLabel,
-                              planAdvisoryData,
-                            },
-                          })
-                        }
-                        className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--hw-green-700)] text-white text-[13px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] transition-colors shadow-xs"
-                      >
-                        {t("farmer.advisory.view_basis", {}, "View basis →")}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1419,12 +1482,12 @@ function CropCycleDetailPage() {
                           setActionError(null);
                           try {
                             const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: null });
-                            if (!res.ok) throw new Error("Failed to remove farmgate price.");
+                            if (!res.ok) throw new Error(t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
                             setFarmgatePrice("");
                             updateCrop(crop.id, { farmgatePrice: null });
                             await refreshCrops();
                           } catch (err) {
-                            setActionError(err.message || "Failed to remove farmgate price. Please try again.");
+                            setActionError(err.message || t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
                           }
                         }}
                         className="text-[12px] font-medium text-red-600 hover:opacity-70"
@@ -1461,13 +1524,13 @@ function CropCycleDetailPage() {
                       setActionError(null);
                       try {
                         const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: v });
-                        if (!res.ok) throw new Error("Failed to save farmgate price.");
+                        if (!res.ok) throw new Error(t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
                         setFarmgatePrice(v);
                         updateCrop(crop.id, { farmgatePrice: v });
                         await refreshCrops();
                         setEditFarmgate(false);
                       } catch (err) {
-                        setActionError(err.message || "Failed to save farmgate price. Please try again.");
+                        setActionError(err.message || t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
                       }
                     }}
                     className="px-3 py-2 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
@@ -1639,6 +1702,7 @@ function CropCycleDetailPage() {
         open={drawerOpen}
         crop={crop}
         mode={drawerMode}
+        submitting={isSubmittingAction}
         onClose={() => setDrawerOpen(false)}
         onConfirm={handleDrawerAction}
       />

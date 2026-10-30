@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent, act, within } from '@testing-librar
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DFTCPriceInput from '../app/dftc/pages/DFTCPriceInput';
-import { clearPrefillCache } from '../app/dftc/pages/dftcPricePrefill';
+import { buildPrefillSnapshot, clearPrefillCache } from '../app/dftc/pages/dftcPricePrefill';
 
 // The catalog row the form renders. PRICE_CATEGORIES is rendered from the DB
 // catalog map, so the slug below is what resolveCommodityId looks up.
@@ -244,6 +244,27 @@ describe('DFTCPriceInput Multi-Market Unified Entry & Review', () => {
     });
     const called = global.fetch.mock.calls.map((c) => c[0]);
     expect(called.some((u) => u.includes('/dftc/reports/preview'))).toBe(false);
+  });
+
+  it('limits parallel price prefill requests to protect the database pool', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    global.fetch = vi.fn(async () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ items: [], total: 0 })
+      };
+    });
+
+    await buildPrefillSnapshot(TODAY, () => null);
+
+    expect(global.fetch).toHaveBeenCalledTimes(5);
+    expect(maximumActive).toBeLessThanOrEqual(2);
   });
 
   it('renders all 5 market tabs, date picker, and categories collapsed initially', async () => {

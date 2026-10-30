@@ -98,4 +98,19 @@ export const advisory = {
   "view_basis": "View basis →",
   "proceed_with_caution_summary": "{crop_name} may still proceed, but monitor conditions and risks closely.",
   "avoid_for_now_summary": "Conditions are not favorable for planting {crop_name} at this time.",
+  "classifications": {
+    "favorable": "Favorable",
+    "neutral": "Neutral",
+    "unfavorable": "Unfavorable",
+    "marginal": "Marginal",
+    "low": "Low",
+    "lower_middle": "Lower Middle",
+    "upper_middle": "Upper Middle",
+    "high": "High",
+    "suitable": "Suitable",
+    "caution": "Caution",
+    "moderate": "Moderate",
+    "severe": "Severe",
+    "not_processed": "Not processed"
+  }
 };

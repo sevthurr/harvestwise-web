@@ -561,11 +561,16 @@ function PriceSummaryStrip({
         )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
           <StatCard
-            label={t("farmer.factors.price.harvest_window_average_label", {}, "Harvest Window Average")}
+            label={
+              priceOutlookModel?.priceReferenceType === "historical_seasonal" ||
+              String(priceOutlookModel?.priceReferenceLabel || "").toLowerCase().includes("historical seasonal")
+                ? t("farmer.factors.price.historical_seasonal_average_label", {}, "Historical Seasonal Average Price")
+                : (priceOutlookModel?.priceReferenceLabel || t("farmer.factors.price.reference_price_label", {}, "Reference Price"))
+            }
             value={
-              (priceOutlookModel?.historicalSeasonalPrice ?? priceOutlookModel?.referencePrice) != null ? (
+              priceOutlookModel?.referencePrice != null ? (
                 <>
-                  ₱{(priceOutlookModel.historicalSeasonalPrice ?? priceOutlookModel.referencePrice).toFixed(2)}
+                  ₱{priceOutlookModel.referencePrice.toFixed(2)}
                   <span className="text-[10px] sm:text-[12px] font-medium text-black">
                     {" "}{t("common.per_kg", {}, "/ kg")}
                   </span>
@@ -574,15 +579,19 @@ function PriceSummaryStrip({
                 "—"
               )
             }
-            sub={t("farmer.factors.price.harvest_season_avg", {}, "Expected harvest period avg")}
             isLoading={isDataLoading}
           />
           <StatCard
-            label={t("farmer.factors.price.macro_baseline_label", {}, "Macro Baseline")}
+            label={
+              priceOutlookModel?.priceReferenceType === "historical_seasonal" ||
+              String(priceOutlookModel?.comparisonBaselineLabel || "").toLowerCase().includes("macro baseline")
+                ? t("farmer.factors.price.macro_baseline_label", {}, "Multi-Year Macro Baseline")
+                : (priceOutlookModel?.comparisonBaselineLabel || t("farmer.factors.price.baseline_price_label", {}, "Baseline Price"))
+            }
             value={
-              (priceOutlookModel?.macroBaselinePrice ?? priceOutlookModel?.comparisonBaseline) != null ? (
+              priceOutlookModel?.comparisonBaseline != null ? (
                 <>
-                  ₱{(priceOutlookModel.macroBaselinePrice ?? priceOutlookModel.comparisonBaseline).toFixed(2)}
+                  ₱{priceOutlookModel.comparisonBaseline.toFixed(2)}
                   <span className="text-[10px] sm:text-[12px] font-medium text-black">
                     {" "}{t("common.per_kg", {}, "/ kg")}
                   </span>
@@ -591,27 +600,44 @@ function PriceSummaryStrip({
                 "—"
               )
             }
-            sub={t("farmer.factors.price.historical_benchmark", {}, "Multi-year commodity baseline")}
             isLoading={isDataLoading}
           />
           <StatCard
-            label={t("farmer.factors.price.historical_outlook_label", {}, "Historical Price Outlook")}
-            value={histChangeDisplay !== "—" ? histChangeDisplay : changeDisplay}
-            valueColor={histChangeDisplay !== "—" ? histChangeColor : changeColor}
-            sub={t("farmer.factors.price.vs_macro_baseline", {}, "vs. macro baseline")}
+            label={t("farmer.factors.price.expected_price_change_label", {}, "Expected Price Change")}
+            value={changeDisplay}
+            valueColor={changeColor}
             isLoading={isDataLoading}
           />
-          <div className="bg-[var(--hw-neutral-50)] rounded-xl p-2 sm:p-3 flex flex-col justify-between min-w-0 border border-[var(--hw-neutral-100)]">
-            <p className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-wide mb-0.5 sm:mb-1">
-              {t("farmer.factors.price.classification_label", {}, "Classification")}
-            </p>
-            <div>
-              <ClassificationBadge classification={priceOutlookModel?.historicalPriceOutlook || priceOutlookModel?.classification} />
-            </div>
-            <p className="text-[9px] sm:text-[11px] text-black mt-1">
-              {isStage2 ? t("farmer.factors.price.stage_planting", {}, "Stage 2: Planting") : t("farmer.factors.price.stage_planning", {}, "Stage 1: Planning")}
-            </p>
-          </div>
+          <StatCard
+            label={t("farmer.factors.price.data_source_label", {}, "Price Basis & Stage")}
+            value={
+              priceOutlookModel?.status === "insufficient_data" ? (
+                <span className="text-slate-600 font-semibold">{t("farmer.calendar.factors.price_level_insufficient", {}, "Insufficient Data")}</span>
+              ) : priceOutlookModel?.isFallback ? (
+                <span className="text-amber-700 font-semibold">{t("farmer.factors.price.fallback_source", {}, "Historical Fallback")}</span>
+              ) : priceOutlookModel?.priceReferenceType === "historical_seasonal" ? (
+                <span className="text-emerald-700 font-semibold">{t("farmer.factors.price.seasonal_source", {}, "Historical Seasonal")}</span>
+              ) : priceOutlookModel?.priceReferenceType === "forecast" ? (
+                <span className="text-blue-700 font-semibold">{t("farmer.factors.price.forecast_source", {}, "Forecasting")}</span>
+              ) : priceOutlookModel?.priceReferenceType === "current_observed" ? (
+                <span className="text-teal-700 font-semibold">{t("farmer.factors.price.observed_source", {}, "Observed Market")}</span>
+              ) : (
+                <span className="text-black font-semibold">{t("farmer.factors.price.standard_source", {}, "Market Data")}</span>
+              )
+            }
+            sub={
+              effectiveCropStage === "before_planting"
+                ? t("farmer.factors.price.stage_planning", {}, "Stage 1: Planning")
+                : effectiveCropStage === "during_planting"
+                ? t("farmer.factors.price.stage_planting", {}, "Stage 2: Planting")
+                : effectiveCropStage === "near_harvest"
+                ? t("farmer.factors.price.stage_near_harvest", {}, "Stage 3: Near Harvest")
+                : effectiveCropStage === "harvest"
+                ? t("farmer.factors.price.stage_harvest", {}, "Stage 4: Harvest")
+                : t("farmer.factors.price.stage_active", {}, "Active Crop Stage")
+            }
+            isLoading={isDataLoading}
+          />
         </div>
       </div>
     );
@@ -709,11 +735,11 @@ function PriceDetailView({
   const currentLang = effectiveLanguage || langCode || "ceb";
   const [market, setMarket] = useState("Bangkerohan Public Market");
   const [priceType, setPriceType] = useState("Retail");
-  const [historicalRange, setHistoricalRange] = useState("14d");
-  const [horizon, setHorizon] = useState("14d");
+  const [historicalRange, setHistoricalRange] = useState("7d");
+  const [horizon, setHorizon] = useState("7d");
   const [variety, setVariety] = useState(null);
 
-  const days = HDAYS[horizon] || 14;
+  const days = HDAYS[horizon] || 7;
   const pPriceTypeKey = toPriceTypeKey(market, priceType);
 
   // 1. Top-10 catalog, to resolve commodity IDs & catalog varieties.

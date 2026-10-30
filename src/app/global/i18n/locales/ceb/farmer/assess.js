@@ -57,6 +57,7 @@ export const assess = {
   harvest_window_to: "Panahon sa Ani Hangtod",
   select_start_date: "Pilia ang petsa sa pagsugod",
   select_end_date: "Pilia ang petsa sa pagtapos",
+  typical_plant_to_harvest_duration: "Kasagarang gidugayon gikan sa pagtanom hangtod sa pag-ani: {duration}",
   suggested_window_note: "Gilaom nga panahon sa ani base sa kasagarang panahon sa pagtubo:",
   use_this_date: "Gamita kini nga petsa",
   typical_duration: "Kasagarang panahon sa pagtubo: {label}",

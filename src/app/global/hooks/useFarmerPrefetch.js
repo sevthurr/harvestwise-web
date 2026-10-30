@@ -3,10 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, parseResponse } from "../api";
 import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
-import { toCamelCase, manilaTodayParts } from "../utils/apiTransforms";
+import { toCamelCase, manilaTodayParts, hasValidAdvisoryDatePair } from "../utils/apiTransforms";
 import { getPreferredCropMatcher } from "../../farmer/utils/cropPreferences";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
+export const FARMER_COMMODITIES_KEY = ["farmer", "commodities"];
 export const SUPPORTED_PRICES_KEY = ["prices", "supported-list"];
 // Must stay identical to DAVAO_CITY_FALLBACK_COORDINATES: the weather pages key
 // their advisory query off that constant, so a farmer with no farm location
@@ -137,6 +138,10 @@ export async function fetchSupportedPricesList() {
 // Raw farmer profile shared by Dashboard and every farmer page.
 export function fetchFarmerProfile() {
   return apiGet("/farmer/profile").then(parseResponse);
+}
+
+export function fetchFarmerCommodities() {
+  return apiGet("/farmer/commodities").then(parseResponse);
 }
 
 export function fetchCropPlans(pricesMap) {
@@ -447,7 +452,9 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     const totalCost = crop.totalCost || 0;
     const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
     const canQuery = Boolean(
-      crop.id && crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && quantity > 0
+      crop.id && crop.commodityName &&
+      hasValidAdvisoryDatePair(crop.plantingDate, crop.harvestDate) &&
+      totalCost > 0 && quantity > 0
     );
     if (!canQuery) return;
     const rawPhase = String(crop.phase || "").toLowerCase();
@@ -494,6 +501,7 @@ export async function prefetchFarmerOfflineData(queryClient) {
     prefetch(["dashboard", "prices"], fetchDashboardPrices),
     prefetch(["dashboard", "recommendations"], fetchDashboardRecommendations),
     prefetch(FARMER_PROFILE_KEY, fetchFarmerProfile),
+    prefetch(FARMER_COMMODITIES_KEY, fetchFarmerCommodities),
     prefetch(["farmer", "crops"], fetchCropPlans),
     prefetch(["marketCalendar"], fetchMarketCalendar),
   ]);
@@ -560,6 +568,14 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     } catch {
       await prefetchFarmerOfflineData(queryClient);
     }
+    // Settings → Farm Profile uses these exact cache keys. Warm the catalogue
+    // alongside the login bundle so opening that tab does not wait on a second
+    // round trip after the farmer is already signed in.
+    await queryClient.prefetchQuery({
+      queryKey: FARMER_COMMODITIES_KEY,
+      queryFn: fetchFarmerCommodities,
+      staleTime: STALE_TIME,
+    }).catch(() => {});
     lastFarmerOfflineLoadAt = Date.now();
     scheduleFullFarmerPrefetch(queryClient);
   })().finally(() => {

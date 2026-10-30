@@ -57,6 +57,7 @@ export const assess = {
   harvest_window_to: "Harvest Window To",
   select_start_date: "Select start date",
   select_end_date: "Select end date",
+  typical_plant_to_harvest_duration: "Typical plant-to-harvest duration: {duration}",
   suggested_window_note: "Suggested harvest window based on typical duration:",
   use_this_date: "Use this date",
   typical_duration: "Typical duration: {label}",

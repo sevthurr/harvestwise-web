@@ -151,7 +151,7 @@ describe("HarvestWise Farmer Dashboard Sections Ordering (Bisaya/Cebuano)", () =
       expect(saveHarvestRecordApiMock).toHaveBeenCalledWith("CRP-0002", "2026-10-30", 150, 85);
     });
   });
-  it("toggles advisory card and 'Why this recommendation' collapsible sections", async () => {
+  it("shows the advisory summary and toggles the main reasons section", async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -164,29 +164,16 @@ describe("HarvestWise Farmer Dashboard Sections Ordering (Bisaya/Cebuano)", () =
       </QueryClientProvider>
     );
 
-    // 1. "Why this recommendation?" toggle exists
-    const whyToggle = screen.getByRole("button", { name: /Ngano kini nga tambag\?|Why this recommendation\?/i });
-    expect(whyToggle).toBeInTheDocument();
-
-    // Factors and View basis button are initially collapsed
-    expect(screen.queryByText(/Tan-awa ang basehan|View basis/i)).not.toBeInTheDocument();
-
-    // 2. Click to expand "Why this recommendation?"
-    await user.click(whyToggle);
+    // The advisory summary and View basis action remain visible while reasons are collapsed.
     expect(screen.getByText(/Tan-awa ang basehan|View basis/i)).toBeInTheDocument();
+    const reasonsToggle = screen.getByRole("button", { name: /Ipakita|Show/i });
+    expect(reasonsToggle).toBeInTheDocument();
 
-    // 3. Click again to collapse
-    await user.click(whyToggle);
-    expect(screen.queryByText(/Tan-awa ang basehan|View basis/i)).not.toBeInTheDocument();
-
-    // 4. Advisory card header can collapse entire advice body
-    const cardToggle = screen.getByRole("button", { name: /Maayo ang Kondisyon|Ayaw sa e ani karon|Ayaw Sa Itanom Karon|Pwede Padayon/i });
-    await user.click(cardToggle);
-    expect(screen.queryByRole("button", { name: /Ngano kini nga tambag\?|Why this recommendation\?/i })).not.toBeInTheDocument();
-
-    // Click again to re-expand entire card
-    await user.click(cardToggle);
-    expect(screen.getByRole("button", { name: /Ngano kini nga tambag\?|Why this recommendation\?/i })).toBeInTheDocument();
+    // Expand and collapse the main reasons section.
+    await user.click(reasonsToggle);
+    expect(screen.getByRole("button", { name: /Itago|Hide/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Itago|Hide/i }));
+    expect(screen.getByRole("button", { name: /Ipakita|Show/i })).toBeInTheDocument();
   });
   it("displays 'Ayaw sa e ani karon' (Cebuano) or 'Avoid for Now' (English) when crop is in harvesting stage and advisory is high risk", () => {
     cropState.current = {

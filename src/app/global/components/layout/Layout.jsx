@@ -48,14 +48,12 @@ const Layout = () => {
 
   // ── Must-change-password block ─────────────────────────────────────────
   // Replaces the workspace content, not an overlay. `rotated` is cleared the
-  // moment the POST succeeds: change_password() revokes every session and
-  // purges the cached snapshot before returning, so the next /auth/me can come
-  // back 401 and null out `user` — and with no dismiss affordance, a gate
-  // derived from the flag alone would strand the user with no way forward. The
-  // rotation already committed server-side; refreshUser() only reconciles the
-  // cache, so it is best-effort. Same reasoning as AuthContext.patchUser.
+  // moment the POST succeeds. The backend preserves the session when an
+  // OAuth-only user sets their first password; refreshUser() reconciles the
+  // updated user snapshot and is best-effort.
   const [rotated, setRotated] = useState(false);
-  const pendingPasswordChange = user?.must_change_password === true && !rotated;
+  const pendingPasswordChange =
+    (user?.must_change_password === true || user?.has_password === false) && !rotated;
 
   const handlePasswordRotated = async () => {
     setRotated(true);
@@ -148,7 +146,10 @@ const Layout = () => {
 
         <FarmerMain>
           {pendingPasswordChange ? (
-            <ChangePasswordPanel onRotated={handlePasswordRotated} />
+            <ChangePasswordPanel
+              onRotated={handlePasswordRotated}
+              needsPassword={user?.has_password === false}
+            />
           ) : (
             <>
               <Suspense

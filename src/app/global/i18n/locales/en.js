@@ -32,6 +32,8 @@ export const en = {
     filter: "Filter",
     refresh: "Refresh",
     close: "Close",
+    show: "Show",
+    hide: "Hide",
     allow: "Allow",
     loading: "Loading...",
     saving: "Saving...",
@@ -45,8 +47,11 @@ export const en = {
     items: "items",
     updated: "Updated",
     last_updated: "Last updated",
+    just_now: "Just now",
     date: "Date",
     time: "Time",
+    from: "From",
+    to: "To",
     actions: "Actions",
     currency_symbol: "₱",
     per_kg: "/ kg",
@@ -79,6 +84,9 @@ export const en = {
     pw_panel_title: "Change your temporary password",
     pw_panel_body: "To keep your account secure, please replace the temporary password you received with a password only you know.",
     pw_panel_restricted: "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step.",
+    pw_panel_set_title: "Add a password to your account",
+    pw_panel_set_body: "Your Google account does not have a local password yet. Add one to enable email-and-password sign-in.",
+    pw_panel_set_restricted: "You must add a password before using the rest of HarvestWise.",
     error_title: "Something went wrong",
     error_body: "An unexpected error stopped this page from loading.",
     error_reload: "Reload",
@@ -136,6 +144,7 @@ export const en = {
     confirm_password_label: "Confirm Password",
     confirm_password_required: "Confirm Password *",
     confirm_password_placeholder: "Repeat your password",
+    passwords_match: "Passwords match.",
     forgot_password: "Forgot password?",
     forgot_password_title: "Forgot your password?",
     forgot_password_subtitle: "Enter your email and we’ll send you a reset code.",
@@ -342,6 +351,13 @@ export const en = {
     offline_preparing: "Preparing offline data",
     offline_ready: "Offline data ready",
     offline_incomplete: "Offline data incomplete",
+    offline_data_title: "Offline Data Status",
+    offline_desc_ready: "Prices, forecasts, and recommendations are saved on this device for offline use.",
+    offline_desc_preparing: "Saving latest market prices and crop recommendations to your device...",
+    offline_desc_error: "Some offline data could not be saved. Check your connection and tap Sync Now.",
+    offline_mode_active: "Offline Mode Active",
+    offline_desc_offline: "You are offline. Showing cached data from your device.",
+    offline_view_settings: "Manage Offline Data",
 
     advisory: {
       recommended_summary: "Current conditions support your {crop_name} plan.",
@@ -903,4 +919,3 @@ export const en = {
     terms: termsLegal,
   }
 };
-
