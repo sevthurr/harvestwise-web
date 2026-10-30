@@ -24,6 +24,7 @@ export const MARKET_TABS = [
 ];
 
 const emptyTabsById = () => Object.fromEntries(MARKET_TABS.map((t) => [t.id, new Map()]));
+const PREFILL_CONCURRENCY = 2;
 
 /** "2026-10-05" → "2026-10-04". Returns null for anything unparseable. */
 export function previousIsoDate(date) {
@@ -119,8 +120,9 @@ function collect(items, resolveCommodityId) {
 /**
  * Build the prefill snapshot for one date.
  *
- * The selected date is fetched for all 5 tabs in parallel. Promise.allSettled
- * keeps one unavailable market from discarding the other four.
+ * The selected date is fetched with bounded concurrency. Two DFTC users can
+ * otherwise open ten database-backed requests at once, exhausting the API's
+ * small production connection pool before the draft request runs.
  */
 export async function buildPrefillSnapshot(date, resolveCommodityId) {
   const snapshot = {
@@ -133,7 +135,11 @@ export async function buildPrefillSnapshot(date, resolveCommodityId) {
   };
   if (!date || typeof resolveCommodityId !== "function") return snapshot;
 
-  const sameDayResults = await Promise.allSettled(MARKET_TABS.map((tab) => fetchDay(tab, date)));
+  const sameDayResults = [];
+  for (let i = 0; i < MARKET_TABS.length; i += PREFILL_CONCURRENCY) {
+    const batch = MARKET_TABS.slice(i, i + PREFILL_CONCURRENCY);
+    sameDayResults.push(...await Promise.allSettled(batch.map((tab) => fetchDay(tab, date))));
+  }
   MARKET_TABS.forEach((tab, i) => {
     const res = sameDayResults[i];
     if (res.status !== "fulfilled") return;
