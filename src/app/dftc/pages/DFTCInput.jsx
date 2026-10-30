@@ -161,7 +161,11 @@ export default function DFTCInput() {
       return { price, arrival };
     },
     refetchOnMount: "always",
-    refetchInterval: 15000,
+    // The entry pages already synchronize their active draft. Keep this
+    // overview poll as a low-frequency fallback and never run it in a hidden
+    // tab, where several mounted queries can otherwise create a request burst.
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   // Fetch compiled daily report preview for today to ensure records count matches the details view
