@@ -114,7 +114,7 @@ export const router = createBrowserRouter([
   { path: "/register",   element: <RegisterPage />, errorElement: <RouteErrorElement /> },
   { path: "/forgot-password", element: <ForgotPasswordPage />, errorElement: <RouteErrorElement /> },
   { path: "/reset-password", element: <ResetPasswordPage />, errorElement: <RouteErrorElement /> },
-  { path: "/onboarding", element: <ProtectedRoute requiredRole="Farmer"><OnboardingPage /></ProtectedRoute>, errorElement: <RouteErrorElement /> },
+  { path: "/onboarding", element: <OnboardingPage />, errorElement: <RouteErrorElement /> },
   { path: "/privacy",    element: <PrivacyPolicyPage />, errorElement: <RouteErrorElement /> },
   { path: "/terms",      element: <TermsPage />, errorElement: <RouteErrorElement /> },
   { path: "/about",      element: <Navigate to="/" replace />, errorElement: <RouteErrorElement /> },
