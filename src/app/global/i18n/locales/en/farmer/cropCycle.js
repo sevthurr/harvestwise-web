@@ -12,6 +12,7 @@ export const cropCycle = {
   view_production_trends: "View production trends",
   arrival_pressure: "Arrival pressure",
   seasonal_production: "Historical seasonal production",
+  production_chart_note: "Across all available years · click the selected quarter again to show Q1–Q4",
   supply_high: "High",
   supply_moderate: "Moderate",
   supply_low: "Low",

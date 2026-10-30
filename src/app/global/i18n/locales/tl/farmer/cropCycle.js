@@ -12,6 +12,7 @@ export const cropCycle = {
   view_production_trends: "Tingnan ang mga trend ng produksyon",
   arrival_pressure: "Presyur ng dating ani",
   seasonal_production: "Makasaysayang produksyon ayon sa panahon",
+  production_chart_note: "Sa lahat ng available na taon · i-click muli ang napiling quarter para ipakita ang Q1–Q4",
   supply_high: "Mataas",
   supply_moderate: "Katamtaman",
   supply_low: "Mababa",
