@@ -36,6 +36,7 @@ import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiDelete, apiGet, apiPost, apiPut, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
+import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -766,6 +767,10 @@ function DFTCPriceInput() {
   const queryClient = useQueryClient();
   const navState = location.state;
 
+  // Shared commodity catalog — deduplicated across Price Input and Arrival
+  // Input through React Query so both pages issue at most one request.
+  const { data: catalogData } = useDftcCatalog();
+
   const [selectedDate, setSelectedDate] = useState(() => navState?.date || localToday());
   const [activeTabId, setActiveTabId] = useState("bangkerohan-retail");
 
@@ -856,6 +861,9 @@ function DFTCPriceInput() {
   // is nowhere to put the row, so a draft that references one must not
   // re-fetch the catalogue on every poll.
   const unplaceableRef = useRef(new Set());
+  // Tracks whether the initial catalog-driven prefill has run, so catalog
+  // refetches (60s, window focus) update the map without re-triggering prefill.
+  const prefillInitRef = useRef(false);
   // Stable identity for the commodity resolver: the prefill module keys its
   // session memo on it, so a fresh closure per render would defeat the cache.
   // It only reads catalogRef, which never changes identity.
@@ -1005,30 +1013,23 @@ function DFTCPriceInput() {
     if (found) setReviewedByRole(found.role);
   }
 
-  // Load commodity catalog map from DB
+  // Apply the shared catalog query data when it arrives. Both the mount load
+  // and the periodic refetch (60s, window focus) are handled by the shared
+  // useDftcCatalog hook, so there is only one network request across both
+  // DFTC input pages.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const items = await fetchCatalogItems();
-        if (cancelled) return;
-        applyCatalogItems(items);
-        addCatalogRows(items.map((item) => item.id), items);
-        // Read the date at fire time, not from the first-render closure: this
-        // continuation resumes after the catalog await, and the user may have
-        // already picked a different day. Using the stale date would issue a
-        // second prefill for today that takes a higher sequence number and
-        // overwrites the day the user actually selected.
-        if (!cancelled) {
-          await loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
-        }
-      } catch {
-        if (!cancelled) catalogRef.current = null;
-      }
-    })();
-    return () => { cancelled = true; };
+    if (!catalogData) return;
+    applyCatalogItems(catalogData);
+    addCatalogRows(catalogData.map((item) => item.id), catalogData);
+    // Load the day prefill on the first catalog arrival only — subsequent
+    // refetches just update the map, they do not re-trigger prefill.
+    // The ref below tracks whether the initial prefill has run.
+    if (!prefillInitRef.current) {
+      prefillInitRef.current = true;
+      loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [catalogData]);
 
   // Push every dirty field to the shared draft. One request per cell so two
   // inputters never overwrite each other wholesale, and a 409 on one cell does
@@ -1127,6 +1128,29 @@ function DFTCPriceInput() {
     let conflict = "";
     const clearedSuccessfully = [];
     const savedSuccessfully = [];
+    const acknowledgeConflict = (key, detail) => {
+      const separator = key.indexOf("|");
+      const tabId = separator === -1 ? "" : key.slice(0, separator);
+      const vid = separator === -1 ? key : key.slice(separator + 1);
+      const currentVersion = detail?.current_version;
+      if (detail?.code === "draft_discarded") {
+        dirtyRef.current.delete(key);
+        draftMetaRef.current[tabId]?.delete(vid);
+        return;
+      }
+      // A conflict is expected shared-edit behavior. Stop replaying the stale
+      // version, but retain the server version so a later user edit can save
+      // against the current row instead of creating a retry loop.
+      dirtyRef.current.delete(key);
+      if (Number.isInteger(currentVersion)) {
+        const previous = draftMetaRef.current[tabId]?.get(vid) || {};
+        draftMetaRef.current[tabId]?.set(vid, {
+          ...previous,
+          version: currentVersion,
+          updatedBy: detail?.updated_by_user_id ?? previous.updatedBy,
+        });
+      }
+    };
     for (const { key, params } of cleared) {
       try {
         const qs = new URLSearchParams(params).toString();
@@ -1137,6 +1161,7 @@ function DFTCPriceInput() {
         clearedSuccessfully.push(key);
       } catch (err) {
         if (err?.status === 409 || err?.statusCode === 409) {
+          acknowledgeConflict(key, err?.detail);
           conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
         } else {
           console.error("Draft cell delete failed:", err);
@@ -1165,12 +1190,7 @@ function DFTCPriceInput() {
         savedSuccessfully.push({ key, cell });
       } catch (err) {
         if (err?.status === 409 || err?.statusCode === 409) {
-          if (err?.detail?.code === "draft_discarded") {
-            const tabId = key.split("|")[0];
-            const vid = key.slice(tabId.length + 1);
-            dirtyRef.current.delete(key);
-            draftMetaRef.current[tabId]?.delete(vid);
-          }
+          acknowledgeConflict(key, err?.detail);
           conflict = err?.detail?.code === "draft_discarded"
             ? "The shared draft was discarded by the other inputter."
             : "Someone else edited these prices while you were typing. Review the values and try again.";
@@ -1353,38 +1373,9 @@ function DFTCPriceInput() {
     };
   }, [draftFinalized]);
 
-  // Commodity catalogue live-sync: another inputter may register a commodity or
-  // variety while this page stays open. Re-run the page's own catalogue helpers
-  // on a timer so those rows appear without a full reload.
-  const catalogPollRef = useRef(null);
-  useEffect(() => {
-    catalogPollRef.current = async () => {
-      try {
-        const items = await fetchCatalogItems();
-        applyCatalogItems(items);
-        addCatalogRows(items.map((item) => item.id), items);
-      } catch {
-        // Offline or a server error: keep what is on screen.
-      }
-    };
-  });
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      catalogPollRef.current?.().catch(() => { });
-    }, 60000);
-    const refreshOnReturn = () => {
-      if (document.visibilityState === "visible") catalogPollRef.current?.().catch(() => { });
-    };
-    document.addEventListener("visibilitychange", refreshOnReturn);
-    window.addEventListener("focus", refreshOnReturn);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", refreshOnReturn);
-      window.removeEventListener("focus", refreshOnReturn);
-    };
-  }, []);
+  // Commodity catalogue live-sync is now handled by the shared useDftcCatalog
+  // hook above, which refetches every 60 seconds and on window focus. The old
+  // manual poll and its setInterval are removed to avoid duplicate requests.
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);

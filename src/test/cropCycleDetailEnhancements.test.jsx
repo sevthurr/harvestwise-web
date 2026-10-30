@@ -55,4 +55,23 @@ describe("CropCycleDetail Enhancements", () => {
     expect(en.common.show).toBe("Show");
     expect(en.common.hide).toBe("Hide");
   });
+
+  it("has localized crop action and conflict messages in all languages", () => {
+    const keys = [
+      "already_completed",
+      "action_failed",
+      "save_harvest_failed",
+      "add_cost_failed",
+      "remove_farmgate_failed",
+      "save_farmgate_failed",
+      "advisory_request_failed",
+    ];
+    for (const key of keys) {
+      expect(typeof en.farmer.cropCycle[key]).toBe("string");
+      expect(typeof tl.farmer.cropCycle[key]).toBe("string");
+      expect(typeof ceb.farmer.cropCycle[key]).toBe("string");
+      expect(tl.farmer.cropCycle[key]).not.toBe(en.farmer.cropCycle[key]);
+      expect(ceb.farmer.cropCycle[key]).not.toBe(en.farmer.cropCycle[key]);
+    }
+  });
 });
