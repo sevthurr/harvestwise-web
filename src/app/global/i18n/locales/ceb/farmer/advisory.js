@@ -98,4 +98,19 @@ export const advisory = {
   "view_basis": "Tan-awa ang basehan →",
   "proceed_with_caution_summary": "Mahimo pa ring itanom ang {crop_name}, apan bantayan pag-ayo ang mga kondisyon ug risk.",
   "avoid_for_now_summary": "Dili maayo ang kahimtang sa pagtanom sa {crop_name} karong panahona.",
+  "classifications": {
+    "favorable": "Maayo",
+    "neutral": "Halos Pareho",
+    "unfavorable": "Dili Maayo",
+    "marginal": "Duol sa Pagbawi sa Gasto",
+    "low": "Ubos",
+    "lower_middle": "Katamtamang Ubos",
+    "upper_middle": "Katamtamang Taas",
+    "high": "Taas",
+    "suitable": "Maayo",
+    "caution": "Kinahanglan Bantayan",
+    "moderate": "Katamtaman",
+    "severe": "Taas ang Risk",
+    "not_processed": "Wala pa masusi"
+  }
 };

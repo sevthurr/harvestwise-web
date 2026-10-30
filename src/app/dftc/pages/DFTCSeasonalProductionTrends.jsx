@@ -150,7 +150,6 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 mt-2 justify-center text-[10.5px] sm:text-[11px]">
-              <span className="font-semibold text-[var(--hw-neutral-500)]">Classification:</span>
               <div className="flex items-center gap-1.5">
                 <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#16a34a]" />
                 <span className="font-medium text-[var(--hw-neutral-700)]">Low</span>

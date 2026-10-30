@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import {
   Pencil,
@@ -17,6 +17,7 @@ import {
   Package,
   Leaf,
   PauseCircle,
+  Play,
   Droplets,
   Tractor,
   Eye,
@@ -30,6 +31,20 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { formatLocalDate, useCrops } from "../components/crops/CropsContext";
 import { PhasePill } from "../components/crops/CropCard";
 import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
+import { suggestHarvestDate } from "../components/recommend/types";
+
+function toDateInputValue(val) {
+  if (!val) return "";
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val)) {
+    return val.slice(0, 10);
+  }
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -97,15 +112,24 @@ function resolveWeeklyActionIcon(action) {
   return Sprout;
 }
 
-function renderFactorIcon(iconType, colorClass) {
+function renderFactorIcon(iconType, colorClass, sizeClass = "w-5 h-5") {
   if (iconType === "price") {
-    return <span className={`w-5 h-5 flex items-center justify-center font-bold text-[17px] leading-none flex-shrink-0 mt-0.5 ${colorClass}`}>₱</span>;
+    return <span className={`${sizeClass} flex items-center justify-center font-bold text-[15px] leading-none flex-shrink-0 ${colorClass}`}>₱</span>;
   }
-  if (iconType === "supply") return <Package className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
-  if (iconType === "production") return <Leaf className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
-  if (iconType === "weather") return <CloudRain className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
-  return <TrendingUp className={`w-5 h-5 flex-shrink-0 mt-0.5 ${colorClass}`} />;
+  if (iconType === "supply") return <Package className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
+  if (iconType === "production") return <Leaf className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
+  if (iconType === "weather") return <CloudRain className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
+  return <TrendingUp className={`${sizeClass} flex-shrink-0 ${colorClass}`} />;
 }
+
+export function formatClassification(raw, t) {
+  if (!raw) return t ? t("farmer.advisory.not_available", {}, "Not available") : "Not available";
+  const key = String(raw).toLowerCase().trim().replace(/[-\s]+/g, "_");
+  const fallback = String(raw);
+  return t ? t(`farmer.advisory.classifications.${key}`, {}, fallback) : fallback;
+}
+
+
 
 const ProfitCalcAccordion = ({
   qty,
@@ -173,22 +197,6 @@ function formatHoldReason(reason, t) {
   return reason;
 }
 
-function formatClassification(val, t) {
-  if (!val || typeof val !== "string") return val;
-  const lower = val.trim().toLowerCase().replace(/[\s-]/g, "_");
-  if (lower === "favorable") return t ? t("farmer.calendar.factors.price_level_favorable", {}, "Favorable") : "Favorable";
-  if (lower === "neutral") return t ? t("farmer.calendar.factors.price_level_neutral", {}, "Neutral") : "Neutral";
-  if (lower === "unfavorable") return t ? t("farmer.calendar.factors.price_level_unfavorable", {}, "Unfavorable") : "Unfavorable";
-  if (lower === "low") return t ? t("farmer.factors.arrival.low", {}, "Low") : "Low";
-  if (lower === "lower_middle") return t ? t("farmer.factors.arrival.lower_middle", {}, "Lower Middle") : "Lower Middle";
-  if (lower === "upper_middle") return t ? t("farmer.factors.arrival.upper_middle", {}, "Upper Middle") : "Upper Middle";
-  if (lower === "high") return t ? t("farmer.factors.arrival.high", {}, "High") : "High";
-  if (lower === "suitable") return t ? t("farmer.factors.weather.suitable", {}, "Suitable") : "Suitable";
-  if (lower === "caution") return t ? t("farmer.factors.weather.caution", {}, "Caution") : "Caution";
-  if (lower === "severe") return t ? t("farmer.factors.weather.severe", {}, "Severe") : "Severe";
-  return val.charAt(0).toUpperCase() + val.slice(1);
-}
-
 function CropCycleDetailPage() {
   const { cropId } = useParams();
   const navigate = useNavigate();
@@ -206,6 +214,7 @@ function CropCycleDetailPage() {
   const [editFarmgate, setEditFarmgate] = useState(false);
   const [farmgateDraft, setFarmgateDraft] = useState("");
   const [actionError, setActionError] = useState(null);
+  const [reasonsExpanded, setReasonsExpanded] = useState(false);
   const crop = crops.find((c) => c.id === cropId);
   const [farmgatePrice, setFarmgatePrice] = useState(() =>
     crop?.farmgatePrice != null && crop.farmgatePrice > 0 ? crop.farmgatePrice : ""
@@ -408,6 +417,11 @@ function CropCycleDetailPage() {
             additionalCost: addCostNum > 0 ? addCostNum : undefined,
             actualHarvestQty: isTransitionToHarvesting ? undefined : actualHarvestQtyVal,
             actualHarvestDate: actualHarvestDateVal,
+            actualPlantingDate: action.fields?.actualPlantingDate,
+            actualPlantedArea: action.fields?.actualPlantedArea,
+            updatedHarvestDate: action.fields?.updatedHarvestDate,
+            harvestWindowStart: action.fields?.harvestWindowStart || action.fields?.updatedHarvestWindowStart,
+            harvestWindowEnd: action.fields?.harvestWindowEnd || action.fields?.updatedHarvestWindowEnd,
           });
           if (addCostNum > 0) {
             try {
@@ -461,8 +475,22 @@ function CropCycleDetailPage() {
               actualHarvestQty: actualHarvestQtyVal,
               partialHarvestQty: actualHarvestQtyVal,
             } : {})),
-            ...(action.fields?.actualPlantingDate ? { plantingDate: action.fields.actualPlantingDate } : {}),
-            ...(action.fields?.updatedHarvestDate ? { harvestDate: action.fields.updatedHarvestDate } : {}),
+            ...(action.fields?.actualPlantingDate ? {
+              plantingDate: formatLocalDate(action.fields.actualPlantingDate) || action.fields.actualPlantingDate,
+              rawPlantingDate: action.fields.actualPlantingDate,
+            } : {}),
+            ...(action.fields?.updatedHarvestDate ? {
+              harvestDate: formatLocalDate(action.fields.updatedHarvestDate) || action.fields.updatedHarvestDate,
+              rawHarvestDate: action.fields.updatedHarvestDate,
+            } : {}),
+            ...(action.fields?.harvestWindowStart || action.fields?.updatedHarvestWindowStart ? {
+              harvestWindowStart: formatLocalDate(action.fields.harvestWindowStart || action.fields.updatedHarvestWindowStart),
+              rawHarvestWindowStart: action.fields.harvestWindowStart || action.fields.updatedHarvestWindowStart,
+            } : {}),
+            ...(action.fields?.harvestWindowEnd || action.fields?.updatedHarvestWindowEnd ? {
+              harvestWindowEnd: formatLocalDate(action.fields.harvestWindowEnd || action.fields.updatedHarvestWindowEnd),
+              rawHarvestWindowEnd: action.fields.harvestWindowEnd || action.fields.updatedHarvestWindowEnd,
+            } : {}),
             ...(action.fields?.actualPlantedArea != null && action.fields?.actualPlantedArea !== "" ? { farmArea: Number(action.fields.actualPlantedArea) } : {}),
             ...(action.fields?.expectedHarvestQty != null && action.fields?.expectedHarvestQty !== "" ? { harvestQuantity: Number(action.fields.expectedHarvestQty) } : {})
           })
@@ -813,8 +841,79 @@ function CropCycleDetailPage() {
   const now = new Date();
   const daysSincePlanting = pDate && !isNaN(pDate.getTime()) ? Math.max(0, Math.floor((now - pDate) / (1000 * 60 * 60 * 24))) : null;
   const totalGrowDays = pDate && hDate && !isNaN(pDate.getTime()) && !isNaN(hDate.getTime()) ? Math.max(1, Math.floor((hDate - pDate) / (1000 * 60 * 60 * 24))) : null;
-  const progressPct = daysSincePlanting != null && totalGrowDays != null ? Math.min(100, Math.round(daysSincePlanting / totalGrowDays * 100)) : null;
   const daysToHarvest = hDate && !isNaN(hDate.getTime()) ? Math.max(0, Math.floor((hDate - now) / (1000 * 60 * 60 * 24))) : null;
+
+  const harvestWindowInfo = useMemo(() => {
+    let startStr = crop.harvestWindowStart;
+    let endStr = crop.harvestWindowEnd;
+    let rawStart = crop.rawHarvestWindowStart;
+    let rawEnd = crop.rawHarvestWindowEnd;
+
+    if ((!startStr || !endStr || startStr === endStr) && (crop.rawPlantingDate || crop.plantingDate)) {
+      const pRaw = toDateInputValue(crop.rawPlantingDate || crop.plantingDate);
+      const sugg = suggestHarvestDate(pRaw, crop.commodityId || crop.commodityName || crop.commodity, crop.variant || crop.variety);
+      if (sugg?.minDate && sugg?.maxDate) {
+        rawStart = rawStart || sugg.minDate;
+        rawEnd = rawEnd || sugg.maxDate;
+        startStr = startStr || formatLocalDate(sugg.minDate);
+        endStr = endStr || formatLocalDate(sugg.maxDate);
+      }
+    }
+    const dStart = rawStart ? new Date(rawStart) : (crop.rawHarvestDate || crop.harvestDate ? new Date(crop.rawHarvestDate || crop.harvestDate) : null);
+    const dEnd = rawEnd ? new Date(rawEnd) : (crop.rawHarvestDate || crop.harvestDate ? new Date(crop.rawHarvestDate || crop.harvestDate) : null);
+
+    const display = startStr && endStr && startStr !== endStr ? `${startStr} – ${endStr}` : (startStr || endStr || crop.harvestDate || "—");
+
+    return {
+      startStr,
+      endStr,
+      dStart: dStart && !isNaN(dStart.getTime()) ? dStart : null,
+      dEnd: dEnd && !isNaN(dEnd.getTime()) ? dEnd : null,
+      display,
+    };
+  }, [
+    crop.harvestWindowStart,
+    crop.harvestWindowEnd,
+    crop.rawHarvestWindowStart,
+    crop.rawHarvestWindowEnd,
+    crop.rawPlantingDate,
+    crop.plantingDate,
+    crop.commodityId,
+    crop.commodityName,
+    crop.commodity,
+    crop.variant,
+    crop.variety,
+    crop.rawHarvestDate,
+    crop.harvestDate,
+  ]);
+
+  const harvestWindowDisplay = harvestWindowInfo.display;
+
+  const growDaysStart = pDate && harvestWindowInfo.dStart ? Math.max(1, Math.round((harvestWindowInfo.dStart - pDate) / (1000 * 60 * 60 * 24))) : null;
+  const growDaysEnd = pDate && harvestWindowInfo.dEnd ? Math.max(1, Math.round((harvestWindowInfo.dEnd - pDate) / (1000 * 60 * 60 * 24))) : null;
+  const totalGrowDaysMax = growDaysEnd || totalGrowDays || 0;
+
+  const progressPct = daysSincePlanting != null && totalGrowDaysMax > 0
+    ? Math.min(100, Math.round((daysSincePlanting / totalGrowDaysMax) * 100))
+    : 0;
+
+  const remainingDaysToHarvest = totalGrowDaysMax > 0 && daysSincePlanting != null
+    ? Math.max(0, totalGrowDaysMax - daysSincePlanting)
+    : (daysToHarvest ?? 0);
+
+  const harvestWindowDaySpan = useMemo(() => {
+    if (harvestWindowInfo.dStart && harvestWindowInfo.dEnd) {
+      return Math.max(1, Math.round((harvestWindowInfo.dEnd - harvestWindowInfo.dStart) / (1000 * 60 * 60 * 24)) + 1);
+    }
+    return 1;
+  }, [harvestWindowInfo.dStart, harvestWindowInfo.dEnd]);
+
+  const formatDaysText = (count) => {
+    if (count == null || isNaN(count)) return "-";
+    if (langCode === "ceb") return `${count} ka adlaw`;
+    if (langCode === "tl") return `${count} araw`;
+    return `${count} days`;
+  };
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-4">
 
         {actionError && <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[13px] text-red-700">{actionError}</div>}
@@ -840,7 +939,14 @@ function CropCycleDetailPage() {
                   <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
                     {crop.variant ? `${crop.commodityName} (${crop.variant})` : crop.commodityName}
                   </h1>
-                  <div className="mt-1"><PhasePill phase={crop.phase} isOnHold={crop.isOnHold} /></div>
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                    <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
+                  </div>
+                  {crop.isOnHold && crop.holdReason && (
+                    <p className="text-xs text-[var(--hw-neutral-700)] mt-1.5 leading-snug">
+                      <span className="font-semibold text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}:</span> {formatHoldReason(crop.holdReason, t)}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => {
@@ -852,27 +958,30 @@ function CropCycleDetailPage() {
                   <Pencil className="w-3.5 h-3.5" />{t("farmer.cropCycle.update_phase", {}, "Update phase")}
                 </button>
               </div>
-              <div className="mt-2 space-y-0.5 text-xs text-[var(--hw-neutral-900)]">
-                {phaseCode === PHASE_CODES.PLANNING ? <p>{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: {crop.plantingDate || "-"}</p> : <p>{t("farmer.advisory.labels.planted", {}, "Planted")}: {crop.plantingDate || "-"}</p>}
-                <p>{t("farmer.calendar.labels.expected_harvest", {}, "Est. harvest")}: {crop.harvestDate || "-"}</p>
-                <p>{t("farmer.assess.farm_area_label", {}, "Farm area")}: {crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</p>
+              <div className="mt-2.5 space-y-1 text-[13px] text-[var(--hw-neutral-600)]" style={{ fontSize: "13px", lineHeight: "1.45" }}>
+                {phaseCode === PHASE_CODES.PLANNING ? (
+                  <p>
+                    <span className="text-[var(--hw-neutral-600)]">{t("farmer.calendar.labels.planned_planting", {}, "Planned planting")}: </span>
+                    <span className="font-medium text-[var(--hw-neutral-900)]">{crop.plantingDate || "-"}</span>
+                  </p>
+                ) : (
+                  <p>
+                    <span className="text-[var(--hw-neutral-600)]">{t("farmer.advisory.labels.planted", {}, "Planted")}: </span>
+                    <span className="font-medium text-[var(--hw-neutral-900)]">{crop.plantingDate || "-"}</span>
+                  </p>
+                )}
+                <p>
+                  <span className="text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.harvest_window", {}, "Harvest window")}: </span>
+                  <span className="font-medium text-[var(--hw-neutral-900)]">{harvestWindowDisplay}</span>
+                </p>
+                <p>
+                  <span className="text-[var(--hw-neutral-600)]">{t("farmer.assess.farm_area_label", {}, "Farm area")}: </span>
+                  <span className="font-medium text-[var(--hw-neutral-900)]">{crop.farmArea != null ? `${crop.farmArea} sq m` : "- sq m"}</span>
+                </p>
               </div>
-              <p className="text-xs text-[var(--hw-neutral-900)] mt-1">{t("common.last_updated", {}, "Last updated")} {crop.lastUpdated || "-"}</p>
             </div>
           </div>
         </div>
-
-        {/* ── On Hold reason — shown between header and advisory ── */}
-        {crop.isOnHold && <div className="bg-white border border-[var(--hw-neutral-200)] rounded-2xl px-4 py-3.5 flex items-start gap-3">
-            <PauseCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-[13px] font-bold text-amber-700">{t("farmer.advisory.labels.on_hold", {}, "On hold")}</p>
-              <p className="text-[13px] text-[var(--hw-neutral-900)]">
-                <span className="text-[var(--hw-neutral-600)]">{t("farmer.cropCycle.hold_reason_label", {}, "Reason for putting this crop on hold")}:</span> {formatHoldReason(crop.holdReason, t)}
-              </p>
-              {crop.holdDate && <p className="text-[12px] text-[var(--hw-neutral-500)]">{t("farmer.cropCycle.put_on_hold", {}, "Put on hold")}: {crop.holdDate}</p>}
-            </div>
-          </div>}
 
         {/* ── 2. Main advice — white card, colored foreground only ── */}
         {isActive && (

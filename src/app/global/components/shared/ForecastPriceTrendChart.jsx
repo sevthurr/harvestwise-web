@@ -157,7 +157,7 @@ function ForecastPriceTrendChart({
 
   useEffect(() => {
     setRange({ start: 0, end: Math.max(0, dataLen - 1) });
-  }, [dataLen]);
+  }, [chartData, dataLen]);
 
   // Determine whether unified actual-vs-forecast mode is active
   const isUnified = useMemo(() => {
@@ -257,7 +257,6 @@ function ForecastPriceTrendChart({
   }, []);
 
   const chartHeight = isMobile ? Math.min(height, 220) : height;
-  const chartMinWidth = isMobile ? Math.max(600, dataLen * 48) : "100%";
 
   // Wheel zoom
   useEffect(() => {
@@ -342,21 +341,20 @@ function ForecastPriceTrendChart({
   return (
     <div
       ref={containerRef}
-      style={{ touchAction: "pan-x pan-y" }}
+      style={{ touchAction: "pan-y" }}
       className="w-full flex flex-col justify-between"
     >
-      <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
-        <div style={{ minWidth: chartMinWidth }}>
-          <ResponsiveContainer width="100%" height={chartHeight}>
-        <ComposedChart
-          data={displayData}
-          margin={{
-            top: isMobile ? 24 : 26,
-            right: isMobile ? 8 : 16,
-            bottom: 4,
-            left: isMobile ? -6 : 0,
-          }}
-        >
+      <div className="w-full">
+        <ResponsiveContainer width="100%" height={chartHeight}>
+          <ComposedChart
+            data={displayData}
+            margin={{
+              top: isMobile ? 24 : 26,
+              right: isMobile ? 8 : 16,
+              bottom: 4,
+              left: isMobile ? -6 : 0,
+            }}
+          >
           <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--hw-neutral-100)" />
           <XAxis
             dataKey={dateKey}
@@ -545,9 +543,8 @@ function ForecastPriceTrendChart({
               tickFormatter={(val) => formatChartDate(val) || val}
             />
           )}
-        </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Legend */}
