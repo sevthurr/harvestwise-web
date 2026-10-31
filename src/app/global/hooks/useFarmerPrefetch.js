@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, parseResponse } from "../api";
 import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
-import { toCamelCase, manilaTodayParts } from "../utils/apiTransforms";
+import { toCamelCase, manilaTodayParts, hasValidAdvisoryDatePair } from "../utils/apiTransforms";
 import { getPreferredCropMatcher } from "../../farmer/utils/cropPreferences";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
@@ -452,7 +452,9 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     const totalCost = crop.totalCost || 0;
     const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
     const canQuery = Boolean(
-      crop.id && crop.commodityName && crop.plantingDate && crop.harvestDate && totalCost > 0 && quantity > 0
+      crop.id && crop.commodityName &&
+      hasValidAdvisoryDatePair(crop.plantingDate, crop.harvestDate) &&
+      totalCost > 0 && quantity > 0
     );
     if (!canQuery) return;
     const rawPhase = String(crop.phase || "").toLowerCase();

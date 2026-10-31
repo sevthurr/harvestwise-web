@@ -710,7 +710,11 @@ const ProductionTab = ({ data, commodityName }) => {
               </div>
             </div>
             <p className="text-center text-[10px] text-black mt-1">
-              Across all available years · click the selected quarter again to show Q1–Q4
+              {t(
+                "farmer.cropCycle.production_chart_note",
+                {},
+                "Across all available years · click the selected quarter again to show Q1–Q4"
+              )}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5 mt-3">
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
