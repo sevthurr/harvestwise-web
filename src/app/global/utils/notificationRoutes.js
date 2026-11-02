@@ -253,18 +253,32 @@ export function resolveNotificationRoute(item, role = "Farmer") {
     case "import_event":
       if (meta.import_id) return `/admin/history/${meta.import_id}`;
       return "/admin/import";
-    case "data_event":
+    case "data_event": {
+      const action = String(meta.action || "");
+      if (action.startsWith("calendar.")) return "/admin/data-sources?tab=calendar";
+      if (action.startsWith("export.")) return item.route || "/admin/audit-logs";
+      if (action.startsWith("dftc.")) return "/admin/data-sources?tab=history";
       if (meta.source) return `/admin/data-sources?tab=sources&highlight=${encodeURIComponent(meta.source)}`;
-      return "/admin/data-sources";
-    case "system_event":
-      if (String(meta.action || "").startsWith("system.weather")) {
+      return item.route || "/admin/data-sources";
+    }
+    case "system_event": {
+      const action = String(meta.action || "");
+      if (action.startsWith("system.weather") || action.startsWith("system.sync")) {
         return "/admin/data-sources?tab=api-sync";
       }
       return "/admin/system?tab=health";
+    }
     case "config_event": {
       const action = String(meta.action || "");
       const param = meta.param || meta.rule || "";
-      if (action.startsWith("config.threshold") || action.startsWith("config.adaptive_weight")) {
+      if (action.startsWith("config.security_policy")) {
+        return "/admin/system?tab=security";
+      }
+      if (
+        action.startsWith("config.threshold") ||
+        action.startsWith("config.adaptive_weight") ||
+        action.startsWith("config.crop_weather")
+      ) {
         return param ? `/admin/modules?tab=weights&highlight=${encodeURIComponent(param)}` : "/admin/modules?tab=weights";
       }
       return "/admin/modules";

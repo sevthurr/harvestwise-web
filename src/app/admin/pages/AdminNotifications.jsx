@@ -29,13 +29,137 @@ function fmtTimestamp(isoStr) {
     const d = parseApiDateTime(isoStr);
     if (isNaN(d.getTime())) return isoStr;
     const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Manila" });
-    if (isToday) return `Today · ${timeStr}`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }) + ` · ${timeStr}`;
+    const diffMs = Math.max(0, now.getTime() - d.getTime());
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    let relStr = "";
+    if (diffMins < 1) {
+      relStr = "Just now";
+    } else if (diffMins < 60) {
+      relStr = `${diffMins} min${diffMins === 1 ? "" : "s"} ago`;
+    } else if (diffHours < 24) {
+      relStr = `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+    } else {
+      relStr = `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+    }
+
+    const timeStr = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Manila",
+    });
+    const dateStr = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "Asia/Manila",
+    });
+    return `${relStr} · ${dateStr}, ${timeStr}`;
   } catch {
     return isoStr;
   }
+}
+
+const ACTION_TITLE_MAP = {
+  "system.weather_sync": "Open-Meteo Weather Forecast Sync",
+  "system.weather_backfill": "Open-Meteo Historical Weather Backfill",
+  "system.sync_completed": "PSA OpenStat Data Sync Completed",
+  "system.sync_failed": "PSA OpenStat Data Sync Failed",
+  "import.upload_received": "Dataset Upload Received",
+  "import.completed": "Dataset Import Completed",
+  "import.failed": "Dataset Import Failed",
+  "config.crop_weather_rule_created": "Weather Risk Threshold Created",
+  "config.crop_weather_rule_updated": "Weather Risk Threshold Updated",
+  "config.crop_weather_rule_deleted": "Weather Risk Threshold Deleted",
+  "config.threshold_rule_created": "Module Threshold Rule Created",
+  "config.threshold_rule_updated": "Module Threshold Rule Updated",
+  "config.threshold_rule_deleted": "Module Threshold Rule Deleted",
+  "config.threshold_module_created": "Threshold Module Created",
+  "config.threshold_module_updated": "Threshold Module Updated",
+  "config.threshold_module_deleted": "Threshold Module Deleted",
+  "config.adaptive_weight_created": "Adaptive Module Weights Created",
+  "config.adaptive_weight_updated": "Adaptive Module Weights Updated",
+  "config.security_policy_updated": "System Security Policy Updated",
+  "calendar.event_created": "Calendar Event Added",
+  "calendar.event_updated": "Calendar Event Updated",
+  "calendar.event_deleted": "Calendar Event Deleted",
+  "export.audit_logs_pdf": "Audit Logs Report Exported",
+  "user.created": "User Account Created",
+  "user.updated": "User Account Updated",
+  "user.profile_updated": "Admin Profile Updated",
+  "user.profile_picture_updated": "Profile Picture Updated",
+  "user.activated": "User Account Activated",
+  "user.deactivated": "User Account Deactivated",
+  "user.role_changed": "User Role Changed",
+  "auth.password_changed": "Account Password Changed",
+  "analytics.outputs_computed": "Module Outputs Recomputed",
+  "dftc.submission_received": "DFTC Data Submission Received",
+  "dftc.submission_status_changed": "DFTC Submission Status Updated",
+};
+
+function humanizeNotificationTitle(rawTitle, metadata) {
+  const action = metadata?.action;
+  if (action && ACTION_TITLE_MAP[action]) {
+    return ACTION_TITLE_MAP[action];
+  }
+  if (rawTitle === "System · Weather Sync") {
+    return "Open-Meteo Weather Forecast Sync";
+  }
+  return rawTitle || "Notification";
+}
+
+function humanizeNotificationSummary(rawBody, actorName) {
+  if (!rawBody || typeof rawBody !== "string") return "";
+  let text = rawBody.trim();
+
+  // Clean legacy Open-Meteo raw dict strings if present
+  if (text.includes("Open-Meteo forecast sync") && text.includes("—")) {
+    const writtenMatch = text.match(/'written':\s*(\d+)/);
+    const locMatch = text.match(/'locations':\s*\[([^\]]*)\]/);
+    const written = writtenMatch ? parseInt(writtenMatch[1], 10) : 0;
+    const locs = locMatch
+      ? locMatch[1]
+          .split(",")
+          .map((s) => s.replace(/['"]/g, "").trim())
+          .filter(Boolean)
+      : [];
+    if (written > 0 && locs.length > 0) {
+      text = `Synced ${written} 14-day weather forecast record(s) from Open-Meteo for ${locs.join(", ")}.`;
+    } else if (written > 0) {
+      text = `Verified ${written} Open-Meteo weather forecast record(s) (all locations are up to date).`;
+    } else {
+      text = "Open-Meteo weather forecast is already up to date.";
+    }
+  } else if (text.includes("PSA OpenSTAT sync") && text.includes("—")) {
+    // Clean legacy PSA OpenSTAT raw dict strings if present
+    const insMatch = text.match(/'rows_inserted':\s*(\d+)/);
+    const updMatch = text.match(/'rows_updated':\s*(\d+)/);
+    const skpMatch = text.match(/'rows_skipped':\s*(\d+)/);
+    const ins = insMatch ? parseInt(insMatch[1], 10) : 0;
+    const upd = updMatch ? parseInt(updMatch[1], 10) : 0;
+    const skp = skpMatch ? parseInt(skpMatch[1], 10) : 0;
+    text = `PSA OpenStat sync completed: ${ins} new record(s) added, ${upd} updated, ${skp} unchanged.`;
+  }
+
+  if (actorName && !text.toLowerCase().includes(actorName.toLowerCase())) {
+    return `${actorName}: ${text}`;
+  }
+
+  return text;
+}
+
+function resolveActorDisplay(item, metadata) {
+  const actor =
+    metadata?.actor_name ||
+    metadata?.submitter_name ||
+    (String(metadata?.action || "").startsWith("system.") && !metadata?.actor_id
+      ? "System"
+      : null) ||
+    (String(item?.title || "").startsWith("System ·") ? "System" : null);
+  return actor || "System";
 }
 
 function AdminNotifications() {
@@ -92,17 +216,21 @@ function AdminNotifications() {
   const notifications = useMemo(() => {
     if (!notificationsData?.items) return [];
 
-    return notificationsData.items.map((item) => ({
-      id: item.id,
-      category: item.category,
-      title: item.title,
-      summary: item.body,
-      timestamp: fmtTimestamp(item.created_at),
-      read: isRead(item),
-      metadata: item.metadata || item.payload,
-      route: item.route,
-      rawItem: item,
-    }));
+    return notificationsData.items.map((item) => {
+      const meta = item.metadata || item.payload || {};
+      const actorName = resolveActorDisplay(item, meta);
+      return {
+        id: item.id,
+        category: item.category,
+        title: humanizeNotificationTitle(item.title, meta),
+        summary: humanizeNotificationSummary(item.body, actorName),
+        timestamp: fmtTimestamp(item.created_at),
+        read: isRead(item),
+        metadata: meta,
+        route: item.route,
+        rawItem: item,
+      };
+    });
   }, [notificationsData, isRead]);
 
   // Locally-acknowledged items the server has not caught up with yet must not
