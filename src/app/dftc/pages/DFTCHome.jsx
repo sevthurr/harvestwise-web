@@ -18,6 +18,13 @@ import { DFTCFilePreview } from "../components/DFTCFilePreview";
 import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
 import {
+  DFTC_HOME_KEY,
+  DFTC_SUBMISSIONS_KEY,
+  DFTC_WORKSPACE_STALE_TIME,
+  fetchDftcHome,
+  fetchDftcSubmissions,
+} from "../../global/hooks/dftcWorkspaceQueries";
+import {
   buildSavedDatasetsList,
   formatMarketName,
   getLocalDateString,
@@ -39,23 +46,21 @@ function DFTCHome() {
   const todayStr = getLocalDateString(todayDate);
 
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
-    queryKey: ["dftc", "submissions"],
-    queryFn: async () => {
-      const res = await apiGet("/dftc/submissions?page=1&page_size=50");
-      return parseResponse(res);
-    },
-    staleTime: 30000,
-    refetchOnMount: true
+    queryKey: DFTC_SUBMISSIONS_KEY,
+    queryFn: fetchDftcSubmissions,
+    staleTime: DFTC_WORKSPACE_STALE_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const { data: homeData, isLoading: loadingHome } = useQuery({
-    queryKey: ["dftc", "home"],
-    queryFn: async () => {
-      const res = await apiGet("/dftc/home");
-      return parseResponse(res);
-    },
-    staleTime: 30000,
-    refetchOnMount: true
+    queryKey: DFTC_HOME_KEY,
+    queryFn: fetchDftcHome,
+    staleTime: DFTC_WORKSPACE_STALE_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const kpis = homeData?.kpis || {};
