@@ -68,10 +68,11 @@ export function usePriceOutlook(enabled, commodityId, priceTypeKey = "bangkeroha
   return { data, error };
 }
 
-export function useArrivalPressure(enabled, commodityRef, year = null, source = null) {
+export function useArrivalPressure(enabled, commodityRef, year = null, source = null, options = {}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const aggregateVarieties = !!options.aggregateVarieties;
 
   useEffect(() => {
     let active = true;
@@ -85,10 +86,13 @@ export function useArrivalPressure(enabled, commodityRef, year = null, source = 
         setLoading(true);
         setError("");
         let result;
-        if (source != null && source !== "overall") {
-          result = await analyticsApi.getArrivalPressure(commodityRef, year, source);
-        } else if (year != null) {
-          result = await analyticsApi.getArrivalPressure(commodityRef, year);
+        if (aggregateVarieties || (source != null && source !== "overall") || year != null) {
+          result = await analyticsApi.getArrivalPressure(
+            commodityRef,
+            year,
+            source,
+            { aggregateVarieties }
+          );
         } else {
           result = await analyticsApi.getArrivalPressure(commodityRef);
         }
@@ -106,8 +110,7 @@ export function useArrivalPressure(enabled, commodityRef, year = null, source = 
     return () => {
       active = false;
     };
-  }, [enabled, commodityRef, year, source]);
+  }, [enabled, commodityRef, year, source, aggregateVarieties]);
 
   return { data, loading, error };
 }
-

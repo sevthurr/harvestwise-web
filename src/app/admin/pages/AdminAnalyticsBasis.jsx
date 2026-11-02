@@ -21,7 +21,7 @@ import {
   SHORT_BAND_EXPLANATIONS,
   buildReliabilitySummary,
   buildReliabilityExplanation,
-  buildReliabilityRuleLines
+  formatReliabilityDate
 } from "../utils/reliabilityExplanations";
 import { CommodityIllustration, getCommodityIconKey } from "../../global/components/shared/CommodityIllustrations";
 import { CLASSIFICATION_COLORS } from "../components/analytics/adminAnalyticsMockData";
@@ -79,9 +79,7 @@ const ARRIVAL_SOURCE_OPTIONS = [
 // always one point per month wearing a day label. Monthly is the only
 // granularity the DFTC workbook can actually supply.
 const ARRIVAL_GRANULARITY_OPTIONS = [
-  { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
   { value: "annually", label: "Annually" },
 ];
 const ARRIVAL_CLASSIFICATION_TONES = {
@@ -704,7 +702,6 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
   const [expandedSection, setExpandedSection] = useState({
     availability: false,
     timeliness: false,
-    validity: false,
   });
 
   const toggleSection = (dim) => {
@@ -732,84 +729,167 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
   const e = evidence || {};
   const modulePolicy = rules?.module_policies?.[resultId] || null;
 
-  // Helper to determine current assessment value summary text per dimension
-  const getCurrentAssessmentText = (dim) => {
-    const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+  // Helper to determine the concise evidence sentence per dimension
+  const getEvidenceSentence = (dim) => {
     if (resultId === "price-outlook") {
       if (dim === "availability") {
         const obs = e.available != null ? e.available : (e.observed_reporting_days != null ? e.observed_reporting_days : "-");
-        const req = e.required != null ? e.required : (e.expected_reporting_days != null ? e.expected_reporting_days : "-");
-        return `${obs} of ${req} expected reporting days have usable price observations. Availability: ${scoreVal}.`;
+        const req = e.required != null ? e.required : (e.expected_reporting_days != null ? e.expected_reporting_days : 14);
+        return `${obs} of ${req} expected reporting days have usable price observations.`;
       }
       if (dim === "timeliness") {
-        const lat = e.latest_date || "N/A";
+        const lat = e.latest_date ? formatReliabilityDate(e.latest_date) : "N/A";
         const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : 0);
-        return `Latest observation: ${lat}. Missed reporting days: ${missed}. Timeliness: ${scoreVal}.`;
-      }
-      if (dim === "validity") {
-        const usable = e.usable_records != null ? e.usable_records : (e.valid_records != null ? e.valid_records : "-");
-        return `${usable} usable price observations were included in the reliability assessment. Validity: ${scoreVal}.`;
+        let bracketDesc = "0–2 missed days bracket (within 2-day allowance)";
+        if (missed <= 2) bracketDesc = "0–2 missed days bracket (within 2-day allowance)";
+        else if (missed <= 4) bracketDesc = "3–4 missed days bracket";
+        else if (missed <= 6) bracketDesc = "5–6 missed days bracket";
+        else if (missed <= 10) bracketDesc = "7–10 missed days bracket";
+        else bracketDesc = ">10 missed days bracket (critical staleness)";
+        return `Latest observation: ${lat}. ${missed} missed reporting ${Number(missed) === 1 ? "day" : "days"} (${bracketDesc}).`;
       }
     } else if (resultId === "arrival-pressure") {
       if (dim === "availability") {
         const obs = e.available != null ? e.available : (e.available_months != null ? e.available_months : "-");
         const req = e.required != null ? e.required : 12;
-        return `${obs} of ${req} monthly arrival observations are available. Availability: ${scoreVal}.`;
+        return `${obs} of ${req} monthly arrival observations are available.`;
       }
       if (dim === "timeliness") {
-        const lat = e.latest_arrival_month || e.latest_date || "N/A";
+        const rawLat = e.latest_arrival_month || e.latest_date || null;
+        const lat = rawLat ? formatReliabilityDate(rawLat) : "N/A";
         const elapsed = e.elapsed_calendar_months != null ? e.elapsed_calendar_months : "-";
-        return `Latest observation: ${lat}. Age: ${elapsed} calendar months. Timeliness: ${scoreVal}.`;
-      }
-      if (dim === "validity") {
-        const usable = e.usable_records != null ? e.usable_records : (e.valid_records != null ? e.valid_records : "-");
-        return `${usable} usable monthly arrival observations recorded with positive or non-null volume. Validity: ${scoreVal}.`;
+        const monthWord = Number(elapsed) === 1 ? "calendar month" : "calendar months";
+        return `Latest observation: ${lat}. Age: ${elapsed} ${monthWord}.`;
       }
     } else if (resultId === "historical-production") {
       if (dim === "availability") {
         const obs = e.available != null ? e.available : "-";
         const req = e.required != null ? e.required : 20;
-        return `${obs} usable quarters are available (target: ${req} quarters / 5 years). Availability: ${scoreVal}.`;
+        return `${obs} usable quarters are available (target: ${req} quarters / 5 years).`;
       }
       if (dim === "timeliness") {
-        const lat = e.latest_period || (e.latest_year ? `${e.latest_year} ${e.latest_quarter || ""}`.trim() : "N/A");
+        const rawLat = e.latest_period || (e.latest_year ? `${e.latest_year} ${e.latest_quarter || ""}`.trim() : null);
+        const lat = rawLat ? formatReliabilityDate(rawLat) : "N/A";
         const overdue = e.days_overdue != null ? e.days_overdue : 0;
-        const missing = e.earliest_missing_period || "subsequent quarter";
-        const statusText = overdue === 0 ? `${missing} is not overdue` : `${missing} is ${overdue} days overdue`;
-        return `Latest production period: ${lat}. ${statusText}. Timeliness: ${scoreVal}.`;
-      }
-      if (dim === "validity") {
-        const usable = e.usable_records != null ? e.usable_records : "-";
-        return `${usable} usable quarters with reported positive volume. Validity: ${scoreVal}.`;
+        const missing = e.earliest_missing_period ? formatReliabilityDate(e.earliest_missing_period) : "next expected quarter";
+        const deadline = e.grace_deadline ? ` of ${formatReliabilityDate(e.grace_deadline)}` : "";
+        const overdueWord = overdue === 1 ? "day" : "days";
+        const statusText = overdue === 0
+          ? `${missing} is not overdue${e.grace_deadline ? ` (grace deadline: ${formatReliabilityDate(e.grace_deadline)})` : ""}`
+          : `${missing} is ${overdue} ${overdueWord} overdue past the HarvestWise grace deadline${deadline}`;
+        return `Latest production period: ${lat}. ${statusText}.`;
       }
     } else if (resultId === "weather-risk") {
       if (dim === "availability") {
-        const obs = e.available != null ? e.available : "-";
+        const rawObs = e.available != null ? e.available : (e.usable_forecast_dates != null ? e.usable_forecast_dates : "-");
         const req = e.required != null ? e.required : 14;
-        return `${obs} of ${req} forecast days are available in the 14-day window. Availability: ${scoreVal}.`;
+        const obs = typeof rawObs === "number" ? Math.min(rawObs, req) : rawObs;
+        return `${obs} of ${req} forecast days are available in the 14-day window. Only forecast dates with complete, physically usable measurements count toward the required 14-day coverage.`;
       }
       if (dim === "timeliness") {
-        const age = e.age_hours != null ? `${e.age_hours} hours old` : (e.unverified_freshness ? "timestamp unverified" : "fresh");
-        return `Forecast retrieval age: ${age}. Timeliness: ${scoreVal}.`;
-      }
-      if (dim === "validity") {
-        const obs = e.valid_records != null ? e.valid_records : (e.available != null ? e.available : "-");
-        return `${obs} forecast dates with verified meteorological metrics. Validity: ${scoreVal}.`;
+        let age = "fresh";
+        if (e.unverified_freshness) {
+          age = "timestamp unverified";
+        } else if (e.age_hours != null) {
+          age = e.age_hours >= 48
+            ? `${e.age_hours} hours average age (~${(e.age_hours / 24).toFixed(1)} days)`
+            : `${e.age_hours} hours average age`;
+        }
+        return `Forecast retrieval freshness: ${age}.`;
       }
     }
-    return `Evaluated score: ${scoreVal}.`;
+    return "Evaluated based on recorded system observations.";
+  };
+
+  // Helper to determine current assessment value summary text per dimension
+  const getCurrentAssessmentText = (dim) => {
+    const dimTitle = dim.charAt(0).toUpperCase() + dim.slice(1);
+    const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+    const sentence = getEvidenceSentence(dim);
+    return `${sentence} ${dimTitle}: ${scoreVal}.`;
+  };
+
+  // Default scoring brackets when API policy metadata omits explicit brackets
+  const getDefaultBrackets = (dim) => {
+    if (resultId === "price-outlook" && dim === "availability") {
+      const req = e.required != null ? e.required : (e.expected_reporting_days != null ? e.expected_reporting_days : 14);
+      return [
+        {
+          condition: `${req} observed reporting days (Full coverage)`,
+          score: 1.0,
+          min: req,
+          max: null,
+          explanation: `All ${req} expected Monday–Friday reporting days have usable price observations.`,
+        },
+        {
+          condition: `1–${req - 1} observed reporting days (Partial coverage)`,
+          score: `observed reporting days ÷ ${req}`,
+          min: 1,
+          max: req - 1,
+          explanation: `Partial coverage: the score scales proportionally with the number of observed reporting days out of ${req}.`,
+        },
+        {
+          condition: "0 observed reporting days (No coverage)",
+          score: 0.0,
+          min: 0,
+          max: 0,
+          explanation: "No usable price observations are available in the assessment window.",
+          safeguard: "Critical failure cap applies (final factor ≤ 0.39, Low)",
+        },
+      ];
+    }
+    if (resultId === "weather-risk" && dim === "availability") {
+      const req = e.required || 14;
+      return [
+        {
+          condition: `${req} usable forecast dates (Full coverage)`,
+          score: 1.0,
+          min: req,
+          max: null,
+          explanation: "Only forecast dates with complete, physically usable measurements count toward the required 14-day coverage.",
+        },
+        {
+          condition: `1–${req - 1} usable forecast dates (Partial coverage)`,
+          score: `usable forecast dates ÷ ${req}`,
+          min: 1,
+          max: req - 1,
+          explanation: "Partial coverage: only forecast dates passing physical measurement checks count toward the 14-day target.",
+        },
+        {
+          condition: "0 usable forecast dates (No coverage)",
+          score: 0.0,
+          min: 0,
+          max: 0,
+          explanation: "No forecast dates in the 14-day window have complete, physically usable measurements.",
+          safeguard: "Critical failure cap applies (final factor ≤ 0.39, Low)",
+        },
+      ];
+    }
+    return [];
   };
 
   // Helper to check if a bracket row is active
   const isBracketActive = (dim, bracket) => {
-    if (resultId === "price-outlook" && dim === "timeliness") {
-      const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : null);
-      if (missed == null) return false;
-      if (bracket.min != null && bracket.max != null) {
-        return missed >= bracket.min && missed <= bracket.max;
+    if (resultId === "price-outlook") {
+      if (dim === "availability") {
+        const count = e.available != null ? e.available : e.observed_reporting_days;
+        if (count == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return count >= bracket.min && count <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return count >= bracket.min;
+        }
       }
-      if (bracket.min != null && bracket.max == null) {
-        return missed >= bracket.min;
+      if (dim === "timeliness") {
+        const missed = e.missed_reporting_days != null ? e.missed_reporting_days : (e.missed_reporting_weekdays != null ? e.missed_reporting_weekdays : null);
+        if (missed == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return missed >= bracket.min && missed <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return missed >= bracket.min;
+        }
       }
     } else if (resultId === "arrival-pressure") {
       if (dim === "availability") {
@@ -817,6 +897,9 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
         if (count == null) return false;
         if (bracket.min != null && bracket.max != null) {
           return count >= bracket.min && count <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return count >= bracket.min;
         }
       }
       if (dim === "timeliness") {
@@ -850,91 +933,69 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
           return overdue >= bracket.min;
         }
       }
-    } else if (resultId === "weather-risk" && dim === "timeliness") {
-      if (e.unverified_freshness && bracket.min == null) {
-        return true;
+    } else if (resultId === "weather-risk") {
+      if (dim === "availability") {
+        const count = e.available != null ? e.available : e.usable_forecast_dates;
+        if (count == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return count >= bracket.min && count <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return count >= bracket.min;
+        }
       }
-      const hours = e.age_hours;
-      if (hours == null) return false;
-      if (bracket.min != null && bracket.max != null) {
-        return hours >= bracket.min && hours <= bracket.max;
-      }
-      if (bracket.min != null && bracket.max == null) {
-        return hours >= bracket.min;
+      if (dim === "timeliness") {
+        if (e.unverified_freshness && bracket.min == null) {
+          return true;
+        }
+        const hours = e.age_hours;
+        if (hours == null) return false;
+        if (bracket.min != null && bracket.max != null) {
+          return hours >= bracket.min && hours <= bracket.max;
+        }
+        if (bracket.min != null && bracket.max == null) {
+          return hours >= bracket.min;
+        }
       }
     }
     return false;
   };
 
-  const renderScoringTable = (dim) => {
+  const renderScoringContent = (dim) => {
     const dimTitle = dim.charAt(0).toUpperCase() + dim.slice(1);
     const policy = modulePolicy?.[dim];
 
     if (!policy) {
       return (
-        <p className="text-[12px] text-[var(--hw-neutral-600)] italic">
-          Scoring rules metadata unavailable for this dimension.
-        </p>
-      );
-    }
-
-    if (policy.rule_type === "brackets" && policy.brackets) {
-      return (
-        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
-          <table className="w-full text-left text-[12px]">
-            <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-              <tr>
-                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
-                  Condition / Evidence Range
-                </th>
-                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
-                  {dimTitle}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--hw-neutral-200)]">
-              {policy.brackets.map((b, idx) => {
-                const active = isBracketActive(dim, b);
-                return (
-                  <tr
-                    key={idx}
-                    className={active ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]" : "text-black"}
-                  >
-                    <td className="px-3 sm:px-4 py-1.5 align-top">
-                      <div>
-                        {b.condition}
-                        {b.safeguard && (
-                          <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
-                            * {b.safeguard}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
-                      {typeof b.score === "number" ? b.score.toFixed(2) : b.score}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          <p className="text-[12.5px] text-black font-medium leading-relaxed">
+            {getCurrentAssessmentText(dim)}
+          </p>
+          <p className="text-[12px] text-[var(--hw-neutral-600)] italic">
+            Scoring rules metadata unavailable for this dimension.
+          </p>
         </div>
       );
     }
 
-    if (policy.rule_type === "ratio") {
-      const obs = e.available != null ? e.available : "-";
-      const req = e.required != null ? e.required : "-";
-      const scoreVal = dimensions?.[dim] != null ? Number(dimensions[dim]).toFixed(2) : "-";
+    const brackets = (resultId === "price-outlook" && dim === "availability")
+      ? getDefaultBrackets(dim)
+      : (Array.isArray(policy.brackets) && policy.brackets.length > 0
+          ? policy.brackets
+          : getDefaultBrackets(dim));
 
-      return (
-        <div className="space-y-2 mt-2">
-          <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)]">
+    return (
+      <div className="space-y-2">
+        <p className="text-[12.5px] text-black font-medium leading-relaxed">
+          {getCurrentAssessmentText(dim)}
+        </p>
+        {brackets.length > 0 && (
+          <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
             <table className="w-full text-left text-[12px]">
               <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                 <tr>
                   <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
-                    Formula / Calculation
+                    Condition / Evidence Range
                   </th>
                   <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
                     {dimTitle}
@@ -942,64 +1003,40 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--hw-neutral-200)]">
-                <tr className="bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]">
-                  <td className="px-3 sm:px-4 py-2 align-top">
-                    <div>{policy.formula}</div>
-                    <div className="text-[11px] font-normal text-[var(--hw-green-800)] mt-0.5">
-                      Actual evidence: {obs} usable of {req} required {policy.unit} = {scoreVal}
-                    </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2 align-top whitespace-nowrap">
-                    {scoreVal}
-                  </td>
-                </tr>
+                {brackets.map((b, idx) => {
+                  const active = isBracketActive(dim, b);
+                  return (
+                    <tr
+                      key={idx}
+                      className={active ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-900)]" : "text-black"}
+                    >
+                      <td className="px-3 sm:px-4 py-1.5 align-top">
+                        <div>
+                          {b.condition}
+                          {dim !== "availability" && b.explanation && (
+                            <span className="block text-[11.5px] text-[var(--hw-neutral-700)] font-normal mt-0.5">
+                              {b.explanation}
+                            </span>
+                          )}
+                          {b.safeguard && (
+                            <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
+                              * {b.safeguard}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
+                        {typeof b.score === "number" ? b.score.toFixed(2) : b.score}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          <p className="text-[11.5px] text-[var(--hw-neutral-600)] leading-relaxed">
-            {policy.description}
-          </p>
-        </div>
-      );
-    }
-
-    if (policy.rule_type === "rule_based" && policy.checks) {
-      return (
-        <div className="overflow-x-auto rounded-xl border border-[var(--hw-neutral-200)] mt-2">
-          <table className="w-full text-left text-[12px]">
-            <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-              <tr>
-                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
-                  Condition / Rule
-                </th>
-                <th className="px-3 sm:px-4 py-2 font-semibold text-black whitespace-nowrap">
-                  {dimTitle}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--hw-neutral-200)]">
-              {policy.checks.map((chk, idx) => (
-                <tr key={idx} className="text-black">
-                  <td className="px-3 sm:px-4 py-1.5 align-top">
-                    <div>{chk.condition}</div>
-                    {chk.safeguard && (
-                      <span className="block text-[11px] text-amber-700 font-normal mt-0.5">
-                        * {chk.safeguard}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 sm:px-4 py-1.5 align-top whitespace-nowrap">
-                    {typeof chk.score === "number" ? chk.score.toFixed(2) : chk.score}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    return null;
+        )}
+      </div>
+    );
   };
 
   return (
@@ -1077,9 +1114,8 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
             <p className="text-[12px] font-bold text-black uppercase tracking-wider">Scoring Rules</p>
             <div className="space-y-2">
               {[
-                { key: "availability", label: "Availability (40%)" },
-                { key: "timeliness", label: "Timeliness (30%)" },
-                { key: "validity", label: "Validity (30%)" },
+                { key: "availability", label: "Availability (50%)" },
+                { key: "timeliness", label: "Timeliness (50%)" },
               ].map(({ key, label }) => {
                 const isOpen = !!expandedSection[key];
                 return (
@@ -1098,11 +1134,8 @@ const ReliabilityExplanationModal = ({ resultId, level, factor, bands, dimension
                       />
                     </button>
                     {isOpen && (
-                      <div className="p-3 sm:p-4 bg-white border-t border-[var(--hw-neutral-200)] space-y-2">
-                        <p className="text-[12.5px] text-black font-medium leading-relaxed">
-                          {getCurrentAssessmentText(key)}
-                        </p>
-                        {renderScoringTable(key)}
+                      <div className="p-3 sm:p-4 bg-white border-t border-[var(--hw-neutral-200)]">
+                        {renderScoringContent(key)}
                       </div>
                     )}
                   </div>
@@ -1275,10 +1308,26 @@ function AdminAnalyticsBasis() {
     return () => { active = false; };
   }, []);
 
-  const selectedCommodityRecord = useMemo(
-    () => commodityRecords.find((item) => item.name === selectedCommodity) || null,
-    [commodityRecords, selectedCommodity]
-  );
+  const selectedCommodityRecord = useMemo(() => {
+    if (!commodityRecords.length) return null;
+    const isSpecificVariety =
+      selectedVariety &&
+      selectedVariety !== "All Varieties" &&
+      selectedVariety !== "All";
+    if (isSpecificVariety) {
+      const match = commodityRecords.find(
+        (item) =>
+          item.name?.toLowerCase() === selectedCommodity?.toLowerCase() &&
+          item.variety?.toLowerCase() === selectedVariety?.toLowerCase()
+      );
+      if (match) return match;
+    }
+    return (
+      commodityRecords.find(
+        (item) => item.name?.toLowerCase() === selectedCommodity?.toLowerCase()
+      ) || null
+    );
+  }, [commodityRecords, selectedCommodity, selectedVariety]);
 
   // Fetch 14-day weather forecast + crop weather rules when on the weather-risk module
   useEffect(() => {
@@ -1358,12 +1407,8 @@ function AdminAnalyticsBasis() {
 
   const arrivalSeries = useMemo(
     () => {
-      // Quarterly and annually naturally span all years; year filter only applies
-      // to monthly and weekly where a single-year view is meaningful.
-      const yearFilter =
-        arrivalGranularity === "quarterly" || arrivalGranularity === "annually"
-          ? null
-          : arrivalActiveYear;
+      // Annually naturally spans all years; year filter applies to monthly view.
+      const yearFilter = arrivalGranularity === "annually" ? null : arrivalActiveYear;
       return bucketArrivals(arrivalRecords, { granularity: arrivalGranularity, year: yearFilter });
     },
     [arrivalRecords, arrivalGranularity, arrivalActiveYear]
@@ -1393,7 +1438,7 @@ function AdminAnalyticsBasis() {
   const arrivalChartData = useMemo(() => {
     const withLabels = arrivalSeries.map((bucket) => ({
       ...bucket,
-      tipLabel: `${bucket.label} ${bucket.year}`,
+      tipLabel: arrivalGranularity === "annually" ? String(bucket.year) : `${bucket.label} ${bucket.year}`,
       classification: classifyArrival(bucket.total_kg, arrivalChartQuartiles)
     }));
     return arrivalGranularity === "monthly"
@@ -1554,7 +1599,6 @@ function AdminAnalyticsBasis() {
       resultExplanation: isProcessed
         ? `Long-term historical seasonal benchmark derived from ${recordCount} quarterly PSA production records${productionSummary?.years_covered ? ` (${productionSummary.years_covered})` : ""}. Peak production historically occurs in ${peakQ || "Q2"}${peakProfile ? ` (avg ${formatMt(peakProfile.average_production_mt)}, ${peakProfile.classification})` : ""}, while leanest production occurs in ${leanQ || "Q3"}${leanProfile ? ` (avg ${formatMt(leanProfile.average_production_mt)}, ${leanProfile.classification})` : ""}.`
         : (productionError || productionSummary?.message || (productionLoading ? "Loading historical production data…" : "No historical production data is available for this scope.")),
-      basisMissing: isProcessed ? null : (productionError || productionSummary?.message || null)
     };
   }, [result, resultId, productionSummary, productionError, productionLoading, selectedCommodity, selectedVariety, productionQuarter]);
   const priceResult = useMemo(() => {
@@ -1583,13 +1627,14 @@ function AdminAnalyticsBasis() {
         : [],
       varieties: [{ variety: selectedVariety }],
       resultExplanation: processed ? priceOutlook.explanation : (priceOutlookError || priceOutlook?.explanation || "Price Outlook could not be calculated for this forecast."),
-      basisMissing: processed ? null : (priceOutlookError || priceOutlook?.explanation || null),
       records: (priceOutlook?.price_records || []).map((row) => ({
         Date: row.price_date ? formatForecastDate(row.price_date) : "-",
         Commodity: row.commodity_name || selectedCommodity,
         Variety: row.variety || selectedVariety,
         Market: standardizeMarket(row.market),
-        "Price Type": row.price_type || "-",
+        "Price Type": row.price_type
+          ? row.price_type.charAt(0).toUpperCase() + row.price_type.slice(1).toLowerCase()
+          : "-",
         Price: row.prevail_price != null ? `₱${Number(row.prevail_price).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "-",
         Source: priceOutlookSourceLabel(priceOutlook?.source)
       }))
@@ -1635,7 +1680,6 @@ function AdminAnalyticsBasis() {
         ? `Arrival pressure is classified as ${arrivalSummary.classification} from ${arrivalSummary.record_count} DFTC arrival record(s) (latest ${formatForecastDate(arrivalSummary.latest_arrival_date)}), totalling ${kg(arrivalSummary.total_volume_kg)}.`
         : (arrivalError || arrivalSummary?.message || (arrivalLoading ? "Loading arrival volume data…" : "No arrival volume data is available for this scope.")),
       moduleWarnings: arrivalSummary?.warnings || [],
-      basisMissing: processed ? null : (arrivalError || arrivalSummary?.message || null)
     };
   }, [result, resultId, arrivalSummary, arrivalError, arrivalLoading, selectedCommodity, selectedVariety, selectedCommodityRecord]);
   const weatherResult = useMemo(() => {
@@ -1858,7 +1902,7 @@ function AdminAnalyticsBasis() {
               <div className="flex justify-between items-center gap-4 px-4 sm:px-6 py-2.5 sm:py-3.5">
                 <span className="text-[13px] text-black font-medium">Reliability score</span>
                 <span className="text-[13px] font-semibold text-black">
-                  {Number(result.reliabilityFactor).toFixed(4)}
+                  {Number(result.reliabilityFactor).toFixed(2)}
                 </span>
               </div>
             )}
@@ -1957,6 +2001,24 @@ function AdminAnalyticsBasis() {
                     onChange={setArrivalGranularity}
                     options={ARRIVAL_GRANULARITY_OPTIONS}
                   />
+                  {arrivalYears.length > 0 && arrivalGranularity === "monthly" && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
+                      <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
+                      <select
+                        value={arrivalActiveYear ?? ""}
+                        onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
+                        aria-label="Arrival year"
+                        className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
+                      >
+                        {arrivalYears.map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2032,33 +2094,13 @@ function AdminAnalyticsBasis() {
             </div>
 
             <div className={vizCardClass}>
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                <div>
-                  <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
-                    Arrival Volume Sources Distribution
-                  </p>
-                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-                    Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
-                  </p>
-                </div>
-                {arrivalYears.length > 0 && (arrivalGranularity === "monthly" || arrivalGranularity === "weekly") && (
-                  <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full bg-white border border-[var(--hw-neutral-200)]">
-                    <Calendar className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />
-                    <select
-                      value={arrivalActiveYear ?? ""}
-                      onChange={(e) => setArrivalYear(parseInt(e.target.value, 10))}
-                      aria-label="Arrival year"
-                      className="text-[12px] font-semibold text-[var(--hw-neutral-800)] bg-transparent outline-none cursor-pointer"
-                    >
-                      {arrivalYears.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-3 h-3 text-[var(--hw-neutral-500)]" />
-                  </div>
-                )}
+              <div>
+                <p className="text-[13px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wide">
+                  Arrival Volume Sources Distribution
+                </p>
+                <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                  Farm Source vs Other Sources{arrivalActiveYear ? ` · ${arrivalActiveYear}` : ""} · kilograms
+                </p>
               </div>
               <ArrivalSourcePieChart
                 showEmpty={!arrivalSourcePieData.length}
@@ -2342,14 +2384,6 @@ function AdminAnalyticsBasis() {
           priceType="Retail"
           priceTypeKey="bangkerohan_retail"
         />
-      )}
-
-      {/* Missing data warning */}
-      {displayResult.basisMissing && (
-        <div className="flex items-start gap-3 border border-amber-200 bg-amber-50/60 rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-[13px] text-amber-800 leading-relaxed font-medium">{displayResult.basisMissing}</p>
-        </div>
       )}
 
       {showReliabilityBands && (

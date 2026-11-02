@@ -15,7 +15,7 @@
  * fail if the join is put back on `rule_key`.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
 
 import AdminAnalytics from '../app/admin/pages/AdminAnalytics';
@@ -30,6 +30,8 @@ vi.mock('../services/api', () => ({
     listModuleOutputs: vi.fn(),
     computeModuleOutputs: vi.fn(),
     listWeatherRules: vi.fn(),
+    updateWeatherRule: vi.fn(),
+    createWeatherRule: vi.fn(),
     getHistoricalSeasonalProduction: vi.fn(),
     getArrivalPressure: vi.fn(),
     updateThresholdRule: vi.fn(),
@@ -102,6 +104,8 @@ describe('AdminAnalytics Price Outlook threshold save', () => {
     analyticsApi.listModuleOutputs.mockResolvedValue({ items: [] });
     analyticsApi.computeModuleOutputs.mockResolvedValue({ commodity_id: 'COM-0001' });
     analyticsApi.listWeatherRules.mockResolvedValue({ items: [] });
+    analyticsApi.updateWeatherRule.mockResolvedValue({});
+    analyticsApi.createWeatherRule.mockResolvedValue({});
     analyticsApi.getHistoricalSeasonalProduction.mockResolvedValue({});
     // The Arrival Pressure card reads this. Return the backend's "not enough
     // records" shape so the card renders its honest empty state.
@@ -200,5 +204,69 @@ describe('AdminAnalytics Price Outlook threshold save', () => {
         display_text: 'Upper Forecast < Break-even Price',
       })
     );
+  });
+
+  it('renders Weather Thresholds modal with non-editable metric and risk level, and saves updated condition and threshold', async () => {
+    const mockWeatherRules = [
+      {
+        id: 'CWR-0010',
+        commodity_id: 'COM-0001',
+        metric_key: 'consecutive_rh_hours_above_90',
+        operator: '>=',
+        threshold_min: 6,
+        threshold_max: null,
+        risk_level: 'severe',
+        unit: 'h',
+        advisory_template: 'High humidity rule.',
+      },
+    ];
+    analyticsApi.listWeatherRules.mockResolvedValue({ items: mockWeatherRules });
+
+    renderPage();
+
+    await screen.findByText('Consecutive hours RH above 90%');
+
+    fireEvent.click(screen.getByTitle('Edit Weather Thresholds'));
+
+    const modalHeading = await screen.findByText('Edit Weather Thresholds');
+    expect(modalHeading).toBeInTheDocument();
+    const modal = modalHeading.closest('div.relative');
+
+    // Verify Metric Name is displayed as section header text, NOT as a <select>
+    expect(within(modal).getByText('Consecutive hours RH above 90%')).toBeInTheDocument();
+    expect(within(modal).queryByRole('combobox', { name: /weather metric/i })).not.toBeInTheDocument();
+
+    // Verify Risk Level is displayed as colored text on the left, NOT as a <select>
+    expect(within(modal).getByText('severe')).toBeInTheDocument();
+    expect(within(modal).queryByRole('combobox', { name: /risk level/i })).not.toBeInTheDocument();
+
+    // Verify Condition is editable
+    const conditionSelect = within(modal).getByRole('combobox');
+    expect(conditionSelect.value).toBe('>=');
+
+    // Verify Threshold Value is editable
+    const thresholdInput = within(modal).getByPlaceholderText('Value in h');
+    expect(thresholdInput.value).toBe('6');
+
+    // Update threshold from 6 to 8
+    fireEvent.change(thresholdInput, { target: { value: '8' } });
+
+    fireEvent.click(within(modal).getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(analyticsApi.updateWeatherRule).toHaveBeenCalledTimes(1));
+
+    expect(analyticsApi.updateWeatherRule).toHaveBeenCalledWith(
+      'CWR-0010',
+      expect.objectContaining({
+        metric_key: 'consecutive_rh_hours_above_90',
+        operator: '>=',
+        threshold_min: 8,
+        threshold_max: null,
+        risk_level: 'severe',
+        unit: 'h',
+      })
+    );
+
+    await screen.findByText('Saved!');
   });
 });
