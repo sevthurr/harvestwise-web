@@ -37,7 +37,6 @@ import {
   composeAdvisoryReasons,
   composeAdvisoryAction,
   composeImmediateActions,
-  resolveMainFactor,
   pickUsablePriceOutlook,
 } from "../../utils/advisoryReasons";
 import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
@@ -265,15 +264,6 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const composedSummary = composeAdvisorySummary(advisoryCode, cropStage, displayName);
   const summaryText = renderComposedMessage(composedSummary, langCode, advisoryCode ? t(`farmer.advisory.${advisoryCode}_summary`, { crop_name: displayName }) : "");
   const advisoryMeta = advisoryResponse?.advisory || {};
-  const mainFactor = advisoryCode
-    ? resolveMainFactor({
-        moduleResults: effectivePriceResults,
-        contributions: advisoryMeta.module_contributions,
-        weightsApplied: advisoryMeta.weights_applied,
-        vetoes: advisoryMeta.hard_vetoes,
-        lang: langCode,
-      })
-    : null;
   const horizonCandidate = Number(advisoryResponse?.price_horizon || data.horizonDays || 14);
   const horizonDays = [7, 14, 21, 28].includes(horizonCandidate) ? horizonCandidate : 14;
   const composedReasons = composeAdvisoryReasons({
@@ -623,24 +613,6 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
 
         {whyExpanded && (
           <div className="mt-3 space-y-3">
-            {mainFactor && (
-              <div className="flex items-start gap-3 p-3 sm:p-3.5 rounded-xl bg-white border border-[var(--hw-neutral-200)] shadow-xs">
-                <div
-                  className={`p-1.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                    advisoryCode === ADVISORY_CODES.AVOID_FOR_NOW || badge.type === "avoid"
-                      ? "bg-red-50 text-red-600"
-                      : advisoryCode === ADVISORY_CODES.PROCEED_WITH_CAUTION || badge.type === "caution"
-                      ? "bg-amber-50 text-amber-600"
-                      : "bg-emerald-50 text-emerald-700"
-                  }`}
-                >
-                  <AlertCircle className="w-4 h-4" />
-                </div>
-                <p className="text-[13px] font-medium text-[var(--hw-neutral-900)] leading-snug pt-0.5">
-                  {renderComposedMessage(mainFactor, langCode)}
-                </p>
-              </div>
-            )}
 
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
               {t("farmer.advisory.advisory_main_reasons", {}, "Main reasons")}

@@ -317,28 +317,8 @@ function DashboardPage() {
         }
       });
       const itemsList = Array.from(baseMap.values());
-      // Populate real increasing / decreasing trend for commodities from their price detail endpoint
-      await Promise.all(
-        itemsList.map(async (item) => {
-          if (item.id) {
-            try {
-              const dRes = await apiGet(`/prices/${item.id}?price_type=${item.priceType || 'bangkerohan_retail'}&horizon=7&records_limit=5`);
-              if (dRes.ok) {
-                const detail = await parseResponse(dRes);
-                if (detail?.forecast) {
-                  item.forecast = detail.forecast;
-                  item.direction = detail.forecast.trend;
-                }
-                if (detail?.recent_records) {
-                  item.recent_records = detail.recent_records;
-                }
-              }
-            } catch {
-              // fallback remains null
-            }
-          }
-        })
-      );
+      // Trend/forecast detail is fetched per card via useQueries below; do not
+      // issue a duplicate round of detail requests here.
       return itemsList;
     },
     staleTime: 1000 * 60 * 5,

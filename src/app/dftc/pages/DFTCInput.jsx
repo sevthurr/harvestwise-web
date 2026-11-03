@@ -9,7 +9,8 @@ import {
   ChevronRight,
   CheckCircle,
   Truck,
-  Trash2
+  Trash2,
+  Loader2
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiDelete, apiGet, parseResponse } from "../../global/api";
@@ -112,6 +113,7 @@ export default function DFTCInput() {
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState(null);
   const [deleteModalDraft, setDeleteModalDraft] = useState(null);
+  const [deletingDraft, setDeletingDraft] = useState(false);
   const [deletedDraftIds, setDeletedDraftIds] = useState(new Set());
 
   // Preserve just-saved submission context across history.replaceState so that freshly saved items
@@ -412,8 +414,9 @@ export default function DFTCInput() {
   }, [draftList, deletedDraftIds]);
 
   const handleDeleteDraft = async () => {
-    if (!deleteModalDraft) return;
+    if (!deleteModalDraft || deletingDraft) return;
     const draft = deleteModalDraft;
+    setDeletingDraft(true);
 
     let remoteDeleted = true;
     try {
@@ -439,11 +442,19 @@ export default function DFTCInput() {
         next.add(draft.id);
         return next;
       });
-      await queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", todayStr] });
+      queryClient.setQueryData(["dftc", "shared-drafts", reportingDate], (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          ...(isPriceDraft ? { price: null } : { arrival: null }),
+        };
+      });
+      await queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", reportingDate] });
     } catch (e) {
       remoteDeleted = false;
       console.error("Failed to delete draft:", e);
     } finally {
+      setDeletingDraft(false);
       if (remoteDeleted) setDeleteModalDraft(null);
     }
   };
@@ -876,24 +887,38 @@ export default function DFTCInput() {
       {/* Delete Draft Confirmation Modal */}
       {deleteModalDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteModalDraft(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => !deletingDraft && setDeleteModalDraft(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <p className="font-semibold text-[var(--hw-neutral-900)]">Delete Draft?</p>
-            <p className="text-[14px] text-[var(--hw-neutral-800)]">
-              This draft will be permanently deleted. This action cannot be undone.
-            </p>
+            {deletingDraft ? (
+              <div className="py-4 text-center" role="status" aria-live="polite">
+                <Loader2 className="w-8 h-8 mx-auto mb-3 text-red-600 animate-spin" aria-hidden="true" />
+                <p className="font-semibold text-[var(--hw-neutral-900)]">Deleting draft…</p>
+                <p className="text-[14px] text-[var(--hw-neutral-600)] mt-1">
+                  Please wait while the shared draft is removed.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="font-semibold text-[var(--hw-neutral-900)]">Delete Draft?</p>
+                <p className="text-[14px] text-[var(--hw-neutral-800)]">
+                  This draft will be permanently deleted. This action cannot be undone.
+                </p>
+              </>
+            )}
             <div className="flex gap-2 pt-2">
               <button
+                disabled={deletingDraft}
                 onClick={() => setDeleteModalDraft(null)}
-                className="flex-1 py-2.5 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+                className="flex-1 py-2.5 border border-[var(--hw-neutral-200)] rounded-xl text-[13px] font-medium text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
+                disabled={deletingDraft}
                 onClick={handleDeleteDraft}
-                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-[13px] font-medium hover:bg-red-700 transition-colors cursor-pointer"
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-[13px] font-medium hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete
+                {deletingDraft ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>

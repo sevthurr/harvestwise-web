@@ -77,3 +77,6 @@ export async function reviewRemovalRequest(requestId, payload) {
   return parseResponse(await apiPatch(`/dftc/removal-requests/${requestId}`, payload));
 }
 
+export async function recordActivity(payload) {
+  return parseResponse(await apiPost("/admin/activity", payload));
+}

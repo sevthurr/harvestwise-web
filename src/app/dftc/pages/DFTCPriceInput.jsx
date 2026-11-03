@@ -37,6 +37,7 @@ import { apiDelete, apiGet, apiPost, apiPut, parseResponse } from "../../global/
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
+import { useDftcStaff } from "../../global/hooks/useDftcStaff";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -887,8 +888,8 @@ function DFTCPriceInput() {
   const resolveDraftCellsRef = useRef(async () => []);
   resolveDraftCellsRef.current = resolveDraftCells;
 
-  // DFTC Personnel from database
-  const [staffList, setStaffList] = useState([]);
+  // DFTC personnel is shared with Arrival Input through React Query.
+  const { data: staffList = [] } = useDftcStaff();
   const [encodedBy, setEncodedBy] = useState("");
   const [encodedByRole, setEncodedByRole] = useState("");
   const [reviewedBy, setReviewedBy] = useState("");
@@ -954,52 +955,23 @@ function DFTCPriceInput() {
     dirty: [...dirtyRef.current]
   };
 
-  // Fetch DFTC staff profiles from database
+  // Restore the selected personnel for the active reporting date once the
+  // shared staff query is available.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiGet("/dftc/staff");
-        const parsed = await parseResponse(res);
-        const items = Array.isArray(parsed) ? parsed : parsed?.items ?? [];
-        if (!cancelled && items.length > 0) {
-          const list = items.map((s) => {
-            const parts = [s.first_name, s.middle_name, s.last_name, s.suffix].filter(Boolean);
-            const name = parts.join(" ").toUpperCase();
-            return {
-              name,
-              role: s.position_title || "DFTC Staff"
-            };
-          });
-          setStaffList(list);
-
-          // Restore previously selected personnel if they exist in the DB staff list
-          let restoredEncoded = null;
-          let restoredReviewed = null;
-          try {
-            const stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`));
-            if (stored?.encodedBy && list.some((s) => s.name === stored.encodedBy)) {
-              restoredEncoded = list.find((s) => s.name === stored.encodedBy);
-            }
-            if (stored?.reviewedBy && list.some((s) => s.name === stored.reviewedBy)) {
-              restoredReviewed = list.find((s) => s.name === stored.reviewedBy);
-            }
-          } catch {}
-
-          const defaultEncoder = restoredEncoded || list[0];
-          const defaultReviewer = restoredReviewed || (list.length > 1 ? list[1] : list[0]);
-
-          setEncodedBy(defaultEncoder.name);
-          setEncodedByRole(defaultEncoder.role);
-          setReviewedBy(defaultReviewer.name);
-          setReviewedByRole(defaultReviewer.role);
-        }
-      } catch {
-        // Staff list will remain empty on network error
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedDate]);
+    if (staffList.length === 0) return;
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`)) || {};
+    } catch {}
+    const restoredEncoded = staffList.find((staff) => staff.name === stored.encodedBy);
+    const restoredReviewed = staffList.find((staff) => staff.name === stored.reviewedBy);
+    const defaultEncoder = restoredEncoded || staffList[0];
+    const defaultReviewer = restoredReviewed || (staffList.length > 1 ? staffList[1] : staffList[0]);
+    setEncodedBy(defaultEncoder.name);
+    setEncodedByRole(defaultEncoder.role);
+    setReviewedBy(defaultReviewer.name);
+    setReviewedByRole(defaultReviewer.role);
+  }, [selectedDate, staffList]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
@@ -2205,6 +2177,10 @@ function DFTCPriceInput() {
       setSaveProgress(100);
       setSaveProgressStage("Price monitoring data saved successfully!");
       clearPrefillCache();
+      queryClient.setQueryData(["dftc", "shared-drafts", selectedDate], (current) => (
+        current ? { ...current, price: null } : current
+      ));
+      queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
       queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });

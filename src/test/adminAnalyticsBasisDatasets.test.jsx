@@ -136,8 +136,8 @@ describe('AdminAnalyticsBasis Datasets Used', () => {
     const table = await openDatasets();
 
     expect(dataRows(table)).toEqual([
-      ['Sep 26', 'Ampalaya', 'All Varieties', 'Bangkerohan', 'retail', '₱78.5', 'Bangkerohan Retail'],
-      ['Sep 25', 'Ampalaya', 'All Varieties', 'Bangkerohan', 'retail', '₱77.25', 'Bangkerohan Retail'],
+      ['Sep 26', 'Ampalaya', 'All Varieties', 'Bankerohan', 'Retail', '₱78.5', 'Bankerohan Retail'],
+      ['Sep 25', 'Ampalaya', 'All Varieties', 'Bankerohan', 'Retail', '₱77.25', 'Bankerohan Retail'],
     ]);
     expect(screen.queryByText('No source records available for this result.')).toBeNull();
   });
@@ -163,3 +163,4 @@ describe('AdminAnalyticsBasis Datasets Used', () => {
     });
   });
 });
+

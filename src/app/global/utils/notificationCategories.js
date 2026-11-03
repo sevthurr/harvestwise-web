@@ -229,9 +229,9 @@ export const NOTIFICATION_CATEGORIES = {
   },
   system_event: {
     Icon: Server,
-    color: "text-red-600",
-    bg: "bg-red-50",
-    urgency: "urgent",
+    color: "text-sky-600",
+    bg: "bg-sky-50",
+    urgency: "information",
   },
   config_event: {
     Icon: SlidersHorizontal,

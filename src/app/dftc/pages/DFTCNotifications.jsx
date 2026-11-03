@@ -13,6 +13,8 @@ import {
   listNotifications,
   markRead as apiMarkRead,
   markAllRead as apiMarkAllRead,
+  NOTIFICATION_STALE_TIME,
+  STAFF_NOTIFICATION_KEY,
 } from "../../../services/api/notificationsApi";
 import { NotificationIcon } from "../../global/components/shared/NotificationIcon";
 import { resolveNotificationRoute } from "../../global/utils/notificationRoutes";
@@ -43,18 +45,27 @@ function DFTCNotifications() {
   const { readIds, isRead, markReadLocally } = useNotificationReadState(auth?.user?.id);
 
   const { data: notificationsData, isLoading, error, refetch } = useQuery({
-    queryKey: ["dftc-notifications"],
+    queryKey: STAFF_NOTIFICATION_KEY,
     queryFn: () => listNotifications(1, 50),
-    refetchOnMount: "always",
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+    staleTime: NOTIFICATION_STALE_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id) => apiMarkRead(id),
-    onMutate: (id) => markReadLocally(id),
+    onMutate: (id) => {
+      const item = (notificationsData?.items ?? []).find((notification) => notification.id === id);
+      if (item && !isRead(item)) {
+        queryClient.setQueryData(["notifications", "unread-count"], (current) =>
+          Math.max(0, (typeof current === "number" ? current : notificationsData?.unread_count ?? 0) - 1),
+        );
+      }
+      markReadLocally(id);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+      queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
   });
@@ -66,14 +77,14 @@ function DFTCNotifications() {
       queryClient.setQueryData(["notifications", "unread-count"], 0);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+      queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
   });
 
   const invalidateFeed = useCallback(
     () => {
-      queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
+      queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
     [queryClient],

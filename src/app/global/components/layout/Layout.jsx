@@ -75,17 +75,12 @@ const Layout = () => {
         return 0;
       }
     },
-    staleTime: 10 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
   const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
-
-  useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
-    if (location.pathname.includes("/notifications")) {
-      queryClient.invalidateQueries({ queryKey: ["farmer-notifications"] });
-    }
-  }, [location.pathname, queryClient]);
 
   // ── SSE: react to NOTIFICATION_CREATED events ──────────────────────────
   const [toast, setToast] = useState(null);

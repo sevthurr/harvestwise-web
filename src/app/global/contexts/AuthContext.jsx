@@ -11,6 +11,7 @@ import {
 import { get, set, del } from 'idb-keyval';
 import { clearQueryPersistedCache, queryClient } from '../lib/queryClient';
 import { loadFarmerOfflineData } from '../hooks/useFarmerPrefetch';
+import { prefetchNotificationFeed } from '../../../services/api/notificationsApi';
 
 const AuthContext = createContext(null);
 
@@ -57,6 +58,13 @@ export function AuthProvider({ children }) {
       } catch {
         setOfflineCacheStatus('error');
       }
+    }
+  };
+
+  const prefetchRoleNotifications = (me) => {
+    const role = (me?.role?.role_name || '').toLowerCase();
+    if (role === 'dftc' || role === 'superadmin' || role === 'admin') {
+      void prefetchNotificationFeed(queryClient, role === 'dftc' ? 'dftc' : 'admin');
     }
   };
 
@@ -107,6 +115,7 @@ export function AuthProvider({ children }) {
         // Cache user profile for offline restoration
         await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
         await seedFarmerOffline(me);
+        prefetchRoleNotifications(me);
       } catch (error) {
         if (error?.status) {
           clearTokens();
@@ -202,6 +211,7 @@ export function AuthProvider({ children }) {
     setUser(me);
     await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
     await seedFarmerOffline(me, { force: true });
+    prefetchRoleNotifications(me);
     return me;
   };
 

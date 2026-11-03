@@ -25,7 +25,7 @@
  * by formatActorLabel() so an actor is never ambiguous in an export.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router";
 
@@ -241,6 +241,7 @@ function AdminAuditLogs() {
   }, [highlightParam]);
   const auth = useOptionalAuth();
   const user = auth?.user;
+  const queryClient = useQueryClient();
   const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
     queryKey: ["adminAuditLogs", actionPrefix, debouncedSearch, debouncedUserSearch, dateFrom, dateTo, page],
     queryFn: () =>
@@ -363,6 +364,20 @@ function AdminAuditLogs() {
         if (!win) doc.save(filename); // pop-up blocked — fall back to download
       } else {
         doc.save(filename);
+      }
+
+      try {
+        const verb = mode === "preview" ? "Previewed" : "Exported";
+        await adminApi.recordActivity({
+          action: "export.audit_logs_pdf",
+          details: `${verb} Audit Logs PDF report '${filename}' (${logs.length} record(s), filter: ${buildFilterLabel()}).`,
+          metadata: { filename, count: logs.length, mode },
+        });
+        queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+        queryClient.invalidateQueries({ queryKey: ["adminAuditLogs"] });
+      } catch (actErr) {
+        console.warn("Could not record export activity:", actErr);
       }
     } catch (err) {
       console.error("PDF generation error:", err);

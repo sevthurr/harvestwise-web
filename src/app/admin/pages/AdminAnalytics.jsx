@@ -608,6 +608,7 @@ const EditFinalAdvisoryModal = ({ currentRules, onClose, onSave }) => {
 // Edit Weather Risk Modal (metric-based crop_weather_rules, persisted via API)
 const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved }) => {
   const [rules, setRules] = useState(null);
+  const [initialRules, setInitialRules] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -619,18 +620,33 @@ const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved })
       try {
         const data = await analyticsApi.listWeatherRules(commodityId);
         if (!active) return;
-        const initial = (data?.items || []).map((r) => ({
-          id: r.id,
-          commodity_id: r.commodity_id,
-          metric_key: r.metric_key,
-          operator: r.operator,
-          threshold_min: r.threshold_min !== null && r.threshold_min !== undefined ? String(r.threshold_min) : "",
-          threshold_max: r.threshold_max !== null && r.threshold_max !== undefined ? String(r.threshold_max) : "",
-          risk_level: r.risk_level,
-          unit: r.unit || "",
-          advisory_template: r.advisory_template || ""
-        }));
-        if (active) setRules(initial);
+        const RISK_ORDER = { suitable: 1, caution: 2, severe: 3 };
+        const METRIC_ORDER = Object.fromEntries(WEATHER_METRICS.map((m, idx) => [m.key, idx]));
+        const initial = (data?.items || [])
+          .map((r) => ({
+            id: r.id,
+            commodity_id: r.commodity_id,
+            metric_key: r.metric_key,
+            operator: r.operator,
+            threshold_min: r.threshold_min !== null && r.threshold_min !== undefined ? String(r.threshold_min) : "",
+            threshold_max: r.threshold_max !== null && r.threshold_max !== undefined ? String(r.threshold_max) : "",
+            risk_level: r.risk_level,
+            unit: r.unit || "",
+            advisory_template: r.advisory_template || ""
+          }))
+          .sort((a, b) => {
+            if (a.metric_key !== b.metric_key) {
+              const orderA = METRIC_ORDER[a.metric_key] ?? 999;
+              const orderB = METRIC_ORDER[b.metric_key] ?? 999;
+              if (orderA !== orderB) return orderA - orderB;
+              return a.metric_key.localeCompare(b.metric_key);
+            }
+            return (RISK_ORDER[a.risk_level?.toLowerCase()] || 0) - (RISK_ORDER[b.risk_level?.toLowerCase()] || 0);
+          });
+        if (active) {
+          setRules(initial);
+          setInitialRules(initial);
+        }
       } catch (err) {
         if (active) setError(err.message || "Failed to load weather rules.");
       }
@@ -642,37 +658,47 @@ const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved })
   const updateRule = (idx, patch) =>
     setRules((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
 
-  const addRule = () => {
-    const metric = WEATHER_METRICS[0];
-    setRules((prev) => [
-      ...(prev || []),
-      {
-        id: null,
-        commodity_id: commodityId,
-        metric_key: metric.key,
-        operator: ">",
-        threshold_min: "",
-        threshold_max: "",
-        risk_level: "caution",
-        unit: metric.unit,
-        advisory_template: ""
-      }
-    ]);
-  };
-
-  const removeRule = (idx) =>
-    setRules((prev) => prev.filter((_, i) => i !== idx));
-
   const handleSave = async () => {
     if (!rules || rules.length === 0) {
       onClose();
       return;
     }
+
+    // Validate inputs to prevent saving invalid threshold bounds
+    for (const r of rules) {
+      const metricLabel = WEATHER_METRICS.find((m) => m.key === r.metric_key)?.label || r.metric_key;
+      if (r.operator === "between") {
+        if (r.threshold_min === "" || r.threshold_max === "") {
+          setError(`Please provide both min and max threshold values for ${metricLabel} (${r.risk_level}).`);
+          return;
+        }
+        if (Number(r.threshold_min) > Number(r.threshold_max)) {
+          setError(`Min value cannot exceed max value for ${metricLabel} (${r.risk_level}).`);
+          return;
+        }
+      } else {
+        if (r.threshold_min === "" && r.threshold_max === "") {
+          setError(`Please provide a threshold value for ${metricLabel} (${r.risk_level}).`);
+          return;
+        }
+      }
+    }
+
+    const origById = Object.fromEntries(initialRules.filter((r) => r.id).map((r) => [r.id, r]));
+    const changedRules = rules.filter((r) => {
+      if (!r.id) return true;
+      const orig = origById[r.id];
+      if (!orig) return true;
+      const minChanged = (r.threshold_min !== "" ? Number(r.threshold_min) : null) !== (orig.threshold_min !== "" ? Number(orig.threshold_min) : null);
+      const maxChanged = (r.threshold_max !== "" ? Number(r.threshold_max) : null) !== (orig.threshold_max !== "" ? Number(orig.threshold_max) : null);
+      return r.operator !== orig.operator || minChanged || maxChanged;
+    });
+
     setSaving(true);
     setError("");
     try {
       await Promise.all(
-        rules.map(async (r) => {
+        changedRules.map(async (r) => {
           const payload = {
             metric_key: r.metric_key,
             operator: r.operator,
@@ -701,16 +727,41 @@ const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved })
     }
   };
 
-  const allMetricOptions = useMemo(() => {
-    const existingKeys = new Set(WEATHER_METRICS.map((m) => m.key));
-    const extras = (rules || [])
-      .filter((r) => r.metric_key && !existingKeys.has(r.metric_key))
-      .map((r) => ({
-        key: r.metric_key,
-        label: r.metric_key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        unit: r.unit || ""
-      }));
-    return [...WEATHER_METRICS, ...extras];
+  const getMetricLabel = (key) => {
+    const found = WEATHER_METRICS.find((m) => m.key === key);
+    return found?.label || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const getRiskTextColor = (riskLevel) => {
+    switch (riskLevel?.toLowerCase()) {
+      case "suitable":
+        return "text-emerald-700";
+      case "caution":
+        return "text-amber-600";
+      case "severe":
+        return "text-red-600";
+      default:
+        return "text-[var(--hw-neutral-800)]";
+    }
+  };
+
+  const groupedRules = useMemo(() => {
+    if (!rules) return [];
+    const groups = [];
+    rules.forEach((rule) => {
+      let g = groups.find((grp) => grp.metric_key === rule.metric_key);
+      if (!g) {
+        g = {
+          metric_key: rule.metric_key,
+          label: getMetricLabel(rule.metric_key),
+          unit: rule.unit || WEATHER_METRICS.find((m) => m.key === rule.metric_key)?.unit || "",
+          rules: []
+        };
+        groups.push(g);
+      }
+      g.rules.push(rule);
+    });
+    return groups;
   }, [rules]);
 
   return (
@@ -718,198 +769,192 @@ const EditWeatherModal = ({ commodity, variety, commodityId, onClose, onSaved })
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[calc(100dvh-7.5rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--hw-neutral-100)] shrink-0">
-          <div>
-            <p className="font-semibold text-black">Edit Weather Thresholds</p>
-            <p className="text-[12px] text-black">{commodity} · {variety || "Standard"}</p>
+          <div className="flex items-center gap-3 min-w-0">
+            {commodity && (
+              <CommodityIllustration
+                commodityId={getCommodityIconKey(null, null, commodity)}
+                className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0"
+              />
+            )}
+            <div className="min-w-0">
+              <p className="font-bold text-[16px] sm:text-[18px] text-black leading-tight truncate">
+                {commodity} · {variety || "Standard"}
+              </p>
+              <p className="text-[12px] font-medium text-[var(--hw-neutral-600)]">
+                Edit Weather Thresholds
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] text-black transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-4 min-h-0 [scrollbar-width:thin]">
-          {error && <p className="text-[12px] text-red-600">{error}</p>}
-          <p className="text-[12px] text-black leading-relaxed">
-            One rule per weather metric stored in <span className="font-mono text-black font-semibold">crop_weather_rules</span>.
-            These rules drive the Weather Risk and crop suitability classifications.
+        <div className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-5 min-h-0 [scrollbar-width:thin]">
+          {error && (
+            <div className="p-3 text-[12px] text-red-700 bg-red-50 rounded-xl border border-red-200">
+              {error}
+            </div>
+          )}
+          <p className="text-[12px] text-[var(--hw-neutral-600)] leading-relaxed">
+            Configure conditions and threshold values for each crop weather rule. Weather metrics and risk levels are fixed to prevent duplicate or conflicting rules.
           </p>
 
           {!rules && !error && <p className="text-[13px] text-black">Loading weather rules…</p>}
           {rules && rules.length === 0 && (
             <p className="text-[13px] text-black">
-              No weather rules configured for this commodity and variety. Add one below.
+              No weather rules configured for this commodity and variety.
             </p>
           )}
 
-          {rules && (
-            <div className="space-y-3">
-              {rules.map((r, i) => (
+          {groupedRules.length > 0 && (
+            <div className="space-y-4">
+              {groupedRules.map((group) => (
                 <div
-                  key={r.id || `new-${i}`}
-                  className="border border-[var(--hw-neutral-200)] rounded-xl p-3 bg-white hover:border-[var(--hw-neutral-300)] transition-colors space-y-2.5 shadow-[var(--shadow-xs)]"
+                  key={group.metric_key}
+                  className="border border-[var(--hw-neutral-200)] rounded-xl p-4 bg-white space-y-3.5 shadow-[var(--shadow-xs)]"
                 >
-                  {/* Line 1: Weather Metric & Risk Level & Delete */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-[11px] font-medium text-black mb-1">
-                        Weather Metric
-                      </label>
-                      <select
-                        value={r.metric_key}
-                        onChange={(e) => {
-                          const metric = allMetricOptions.find((m) => m.key === e.target.value);
-                          updateRule(i, { metric_key: e.target.value, unit: metric?.unit || r.unit });
-                        }}
-                        className="w-full px-2.5 py-1.5 text-[12px] font-medium text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer"
-                      >
-                        {allMetricOptions.map((m) => (
-                          <option key={m.key} value={m.key} className="text-black">
-                            {m.label} {m.unit ? `(${m.unit})` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-end gap-2 shrink-0">
-                      <div className="w-32 sm:w-36">
-                        <label className="block text-[11px] font-medium text-black mb-1">
-                          Risk Level
-                        </label>
-                        <select
-                          value={r.risk_level}
-                          onChange={(e) => updateRule(i, { risk_level: e.target.value })}
-                          className={`w-full px-2.5 py-1.5 text-[12px] font-semibold capitalize bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer ${
-                            r.risk_level?.toLowerCase() === "suitable"
-                              ? "text-emerald-700"
-                              : r.risk_level?.toLowerCase() === "caution"
-                              ? "text-amber-600"
-                              : r.risk_level?.toLowerCase() === "severe"
-                              ? "text-red-600"
-                              : "text-black"
-                          }`}
-                        >
-                          {WEATHER_RISK_LEVELS.map((lvl) => (
-                            <option key={lvl} value={lvl} className="text-black">
-                              {lvl}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {!r.id && (
-                        <button
-                          onClick={() => removeRule(i)}
-                          className="p-1.5 mb-0.5 rounded-lg text-black hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-                          title="Remove rule"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                  {/* Weather Metric Section Header */}
+                  <div className="flex items-center gap-2 pb-2.5 border-b border-[var(--hw-neutral-100)]">
+                    <h3 className="text-[14px] font-bold text-black tracking-tight">
+                      {group.label}
+                    </h3>
+                    {group.unit && (
+                      <span className="text-[11px] font-medium text-[var(--hw-neutral-600)] bg-[var(--hw-neutral-100)] px-2 py-0.5 rounded-md">
+                        {group.unit}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Line 2: Operator / Condition and Threshold Values */}
-                  <div className="grid grid-cols-12 gap-2 items-center bg-[var(--hw-neutral-50)] p-2.5 rounded-lg border border-[var(--hw-neutral-100)] text-[12px]">
-                    <div className="col-span-4 sm:col-span-3">
-                      <label className="block text-[10px] font-medium text-black mb-0.5">
-                        Condition
-                      </label>
-                      <select
-                        value={r.operator}
-                        onChange={(e) => updateRule(i, { operator: e.target.value })}
-                        className="w-full px-2 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer"
-                      >
-                        {WEATHER_OPERATORS.map((op) => (
-                          <option key={op} value={op} className="text-black">
-                            {op === "between"
-                              ? "Between"
-                              : op === ">"
-                              ? "Greater than (>)"
-                              : op === "<"
-                              ? "Less than (<)"
-                              : op === ">="
-                              ? "At least (≥)"
-                              : op === "<="
-                              ? "At most (≤)"
-                              : op}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  {/* Rules for this metric */}
+                  <div className="space-y-3">
+                    {group.rules.map((r) => {
+                      const idx = rules.findIndex((orig) => orig === r);
+                      const unit = group.unit;
 
-                    {r.operator === "between" ? (
-                      <>
-                        <div className="col-span-4 sm:col-span-4">
-                          <label className="block text-[10px] font-medium text-black mb-0.5">
-                            Min Value {r.unit ? `(${r.unit})` : ""}
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            placeholder="Min"
-                            value={r.threshold_min}
-                            onChange={(e) => updateRule(i, { threshold_min: e.target.value })}
-                            className="w-full px-2.5 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
-                          />
+                      return (
+                        <div
+                          key={r.id || `rule-${idx}`}
+                          className="grid grid-cols-12 gap-3 items-center bg-[var(--hw-neutral-50)] p-3 rounded-xl border border-[var(--hw-neutral-100)] text-[12px]"
+                        >
+                          {/* Risk Level on the left as colored text */}
+                          <div className="col-span-12 sm:col-span-3 flex sm:flex-col items-center sm:items-start justify-between sm:justify-center">
+                            <span className="text-[11px] font-medium text-[var(--hw-neutral-500)] sm:mb-0.5">
+                              Risk Level
+                            </span>
+                            <span className={`text-[13px] font-bold capitalize ${getRiskTextColor(r.risk_level)}`}>
+                              {r.risk_level}
+                            </span>
+                          </div>
+
+                          {/* Condition Dropdown */}
+                          <div className={r.operator === "between" ? "col-span-12 sm:col-span-4" : "col-span-12 sm:col-span-4"}>
+                            <label className="block text-[11px] font-medium text-[var(--hw-neutral-700)] mb-1">
+                              Condition
+                            </label>
+                            <select
+                              value={r.operator}
+                              onChange={(e) => {
+                                const newOp = e.target.value;
+                                const currentVal = r.threshold_min !== "" ? r.threshold_min : r.threshold_max;
+                                if (newOp === "between") {
+                                  updateRule(idx, { operator: newOp });
+                                } else if (newOp.includes(">")) {
+                                  updateRule(idx, { operator: newOp, threshold_min: currentVal, threshold_max: "" });
+                                } else {
+                                  updateRule(idx, { operator: newOp, threshold_min: "", threshold_max: currentVal });
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 text-[12px] font-medium text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition cursor-pointer"
+                            >
+                              {WEATHER_OPERATORS.map((op) => (
+                                <option key={op} value={op} className="text-black">
+                                  {op === "between"
+                                    ? "Between"
+                                    : op === ">"
+                                    ? "Greater than (>)"
+                                    : op === "<"
+                                    ? "Less than (<)"
+                                    : op === ">="
+                                    ? "At least (≥)"
+                                    : op === "<="
+                                    ? "At most (≤)"
+                                    : op}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Threshold Input(s) */}
+                          {r.operator === "between" ? (
+                            <div className="col-span-12 sm:col-span-5 grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-[var(--hw-neutral-700)] mb-1 truncate">
+                                  Min Value {unit ? `(${unit})` : ""}
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="Min"
+                                  value={r.threshold_min}
+                                  onChange={(e) => updateRule(idx, { threshold_min: e.target.value })}
+                                  className="w-full px-2.5 py-1.5 text-[12px] font-medium text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-[var(--hw-neutral-700)] mb-1 truncate">
+                                  Max Value {unit ? `(${unit})` : ""}
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="Max"
+                                  value={r.threshold_max}
+                                  onChange={(e) => updateRule(idx, { threshold_max: e.target.value })}
+                                  className="w-full px-2.5 py-1.5 text-[12px] font-medium text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="col-span-12 sm:col-span-5">
+                              <label className="block text-[11px] font-medium text-[var(--hw-neutral-700)] mb-1">
+                                Threshold Value {unit ? `(${unit})` : ""}
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                placeholder={`Value ${unit ? `in ${unit}` : ""}`}
+                                value={r.threshold_min !== "" ? r.threshold_min : r.threshold_max}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (r.operator.includes(">")) {
+                                    updateRule(idx, { threshold_min: val, threshold_max: "" });
+                                  } else {
+                                    updateRule(idx, { threshold_min: "", threshold_max: val });
+                                  }
+                                }}
+                                className="w-full px-2.5 py-1.5 text-[12px] font-medium text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
+                              />
+                            </div>
+                          )}
                         </div>
-                        <div className="col-span-4 sm:col-span-5">
-                          <label className="block text-[10px] font-medium text-black mb-0.5">
-                            Max Value {r.unit ? `(${r.unit})` : ""}
-                          </label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            placeholder="Max"
-                            value={r.threshold_max}
-                            onChange={(e) => updateRule(i, { threshold_max: e.target.value })}
-                            className="w-full px-2.5 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-8 sm:col-span-9">
-                        <label className="block text-[10px] font-medium text-black mb-0.5">
-                          Threshold Value {r.unit ? `(${r.unit})` : ""}
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          placeholder={`Value ${r.unit ? `in ${r.unit}` : ""}`}
-                          value={r.threshold_min !== "" ? r.threshold_min : r.threshold_max}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (r.operator.includes(">")) {
-                              updateRule(i, { threshold_min: val, threshold_max: "" });
-                            } else {
-                              updateRule(i, { threshold_min: "", threshold_max: val });
-                            }
-                          }}
-                          className="w-full px-2.5 py-1.5 text-[12px] text-black bg-white border border-[var(--hw-neutral-200)] rounded-lg outline-none focus:border-[var(--hw-green-600)] transition"
-                        />
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
             </div>
           )}
-
-          <button
-            onClick={addRule}
-            className="text-[12px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors cursor-pointer"
-          >
-            + Add rule
-          </button>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3.5 sm:py-4 border-t border-[var(--hw-neutral-100)] shrink-0 bg-white">
-          <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400">
+          <button onClick={onClose} className="px-4 py-2 text-[13px] font-medium border border-[var(--hw-neutral-200)] text-black rounded-xl hover:bg-[var(--hw-neutral-50)] transition-colors disabled:opacity-50 disabled:text-neutral-400 cursor-pointer">
             Cancel
           </button>
           <button
             disabled={saving}
             onClick={handleSave}
-            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-[13px] font-medium bg-[var(--hw-green-700)] text-white rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             {saved ? "Saved!" : saving ? "Saving…" : "Save Changes"}
           </button>
@@ -1396,7 +1441,8 @@ function AdminAnalytics() {
           : scopedVariety;
       const outputs = await analyticsApi.computeModuleOutputs({
         crop_name: scopedCommodity,
-        variety
+        variety,
+        record_audit: false
       });
       setModuleOutputs(outputs);
       setCommodityId(outputs.commodity_id || "");
@@ -1428,7 +1474,20 @@ function AdminAnalytics() {
     return () => { active = false; };
   }, [commodityId]);
 
-  const currentWeatherRules = commodityId ? weatherRulesByCommodity[commodityId] || [] : [];
+  const currentWeatherRules = useMemo(() => {
+    const raw = commodityId ? weatherRulesByCommodity[commodityId] || [] : [];
+    const RISK_ORDER = { suitable: 1, caution: 2, severe: 3 };
+    const METRIC_ORDER = Object.fromEntries(WEATHER_METRICS.map((m, idx) => [m.key, idx]));
+    return [...raw].sort((a, b) => {
+      if (a.metric_key !== b.metric_key) {
+        const orderA = METRIC_ORDER[a.metric_key] ?? 999;
+        const orderB = METRIC_ORDER[b.metric_key] ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.metric_key.localeCompare(b.metric_key);
+      }
+      return (RISK_ORDER[a.risk_level?.toLowerCase()] || 0) - (RISK_ORDER[b.risk_level?.toLowerCase()] || 0);
+    });
+  }, [commodityId, weatherRulesByCommodity]);
   const weatherMetricLabel = (k) => WEATHER_METRICS.find((m) => m.key === k)?.label || k;
   const weatherRuleSummary = (r) => {
     const unit = r.unit || WEATHER_METRICS.find((m) => m.key === r.metric_key)?.unit || "";
@@ -1527,38 +1586,16 @@ function AdminAnalytics() {
     }
     : {};
 
-  const moduleIssues = (key, moduleOutput, fallback = null) => {
-    const issues = [
-      ...(moduleOutput?.reliability_warnings || []),
-      ...(moduleOutput?.reliability_critical_failure_reasons || []),
-      ...(moduleOutput?.reliability_limitations || []),
-      ...(fallback ? [fallback] : [])
-    ];
-    const warningPrefixes = {
-      "price-outlook": ["Price:"],
-      "arrival-pressure": ["Arrivals:"],
-      "historical-production": ["Production:"],
-      "weather-risk": ["Weather:"]
-    };
-    (moduleOutputs?.warnings || []).forEach((warning) => {
-      if ((warningPrefixes[key] || []).some((prefix) => warning.startsWith(prefix))) issues.push(warning);
-    });
-    if (analyticsError && !moduleOutput) issues.push(analyticsError);
-    return [...new Set(issues.filter(Boolean))];
-  };
-
   const moduleCards = [
     {
       module: "Price Outlook",
       moduleKey: "price-outlook",
       ...(moduleOutputsByCard["price-outlook"] || { classification: "Not processed", source: "-", processed: "-" }),
-      issues: moduleIssues("price-outlook", moduleOutputs?.price_outlook)
     },
     {
       module: "Arrival Pressure",
       moduleKey: "arrival-pressure",
       ...(moduleOutputsByCard["arrival-pressure"] || { classification: "Not processed", source: "-", processed: "-" }),
-      issues: moduleIssues("arrival-pressure", moduleOutputs?.arrival_pressure, arrivalError)
     },
     {
       module: "Historical Seasonal Production Level",
@@ -1578,13 +1615,11 @@ function AdminAnalytics() {
             ? formatDateTime(productionSummary.processed_at)
             : "-"
         }),
-      issues: moduleIssues("historical-production", moduleOutputs?.historical_seasonal_production_level, productionError)
     },
     {
       module: "Weather Risk",
       moduleKey: "weather-risk",
       ...(moduleOutputsByCard["weather-risk"] || { classification: "Not processed", source: "-", processed: "-" }),
-      issues: moduleIssues("weather-risk", moduleOutputs?.weather_risk)
     }
   ];
 
@@ -1913,6 +1948,17 @@ function AdminAnalytics() {
           onClose={() => setEditingWeather(false)}
           onSaved={() => {
             reloadAnalytics();
+            if (commodityId) {
+              analyticsApi
+                .listWeatherRules(commodityId)
+                .then((data) => {
+                  setWeatherRulesByCommodity((prev) => ({
+                    ...prev,
+                    [commodityId]: data?.items || []
+                  }));
+                })
+                .catch(() => {});
+            }
           }}
         />
       )}
@@ -2022,27 +2068,6 @@ function AdminAnalytics() {
                   );
                 })}
               </div>
-
-              {moduleCards.some((card) => card.issues?.length > 0) && (
-                <div className="mt-4 rounded-xl border border-[var(--hw-neutral-200)] bg-white shadow-[var(--shadow-xs)] overflow-hidden">
-                  <div className="px-4 sm:px-5 py-3 border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
-                    <h3 className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">Issues</h3>
-                    <p className="text-[11.5px] text-[var(--hw-neutral-600)] mt-0.5">
-                      Reliability notes affecting the module outputs above.
-                    </p>
-                  </div>
-                  <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {moduleCards.filter((card) => card.issues?.length > 0).map((card) => (
-                      <div key={`${card.moduleKey}-issues`} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-800 min-w-0">
-                        <p className="font-semibold mb-1">{card.module}</p>
-                        <ul className="list-disc pl-4 space-y-0.5 break-words">
-                          {card.issues.map((issue, i) => <li key={i}>{issue}</li>)}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
           </div>

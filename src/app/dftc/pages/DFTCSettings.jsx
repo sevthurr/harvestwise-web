@@ -141,6 +141,7 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       await parseResponse(await apiPut("/dftc/staff/me", payload));
       setShowSaveModal(false);
       setCurrentPassword("");
+      queryClient.invalidateQueries({ queryKey: ["dftc", "staff"] });
       try {
         await refreshUser();
         queryClient.invalidateQueries({ queryKey: ["auth-me-profile"] });

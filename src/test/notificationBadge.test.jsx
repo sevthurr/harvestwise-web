@@ -23,6 +23,8 @@ vi.mock('../app/global/contexts/BackgroundProcessContext', () => ({
 }));
 
 vi.mock('../services/api/notificationsApi', () => ({
+  STAFF_NOTIFICATION_KEY: ['staff-notifications'],
+  prefetchNotificationFeed: vi.fn(),
   getUnreadCount: vi.fn().mockResolvedValue({ unread_count: 0 }),
   subscribeNotificationStream: vi.fn(() => () => {}),
 }));

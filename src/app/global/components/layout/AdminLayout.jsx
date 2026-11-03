@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useIsFetching, useQuery } from "@tanstack/react-query";
-import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { getUnreadCount, prefetchNotificationFeed, STAFF_NOTIFICATION_KEY } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   LayoutDashboard,
@@ -143,7 +143,7 @@ const AdminLayoutInner = () => {
     }
   };
 
-  const { data: unreadData, refetch: refreshUnread } = useQuery({
+  const { data: unreadData } = useQuery({
     queryKey: ["notifications", "unread-count"],
     queryFn: async () => {
       try {
@@ -153,23 +153,20 @@ const AdminLayoutInner = () => {
         return 0;
       }
     },
-    staleTime: 10 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
   const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
 
   useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
-    if (location.pathname.includes("/notifications")) {
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
-    }
-  }, [location.pathname, queryClient]);
+    prefetchNotificationFeed(queryClient, "admin");
+  }, [queryClient, user?.id]);
 
   useNotificationEvent("NOTIFICATION_CREATED", () => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-unread-notifications"] });
-    queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
-    refreshUnread();
+    queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
   });
 
   const handleLogout = async () => {
