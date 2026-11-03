@@ -80,4 +80,3 @@ export async function reviewRemovalRequest(requestId, payload) {
 export async function recordActivity(payload) {
   return parseResponse(await apiPost("/admin/activity", payload));
 }
-
