@@ -14,6 +14,8 @@ export const settings = {
   phone_number: "Numero ng Telepono",
   email_address: "Email Address",
   save_changes: "I-save ang mga Pagbabago",
+  farm_save_confirm_title: "I-save ang mga pagbabago sa profile ng sakahan?",
+  farm_save_confirm_body: "Gagamitin ng HarvestWise ang impormasyong ito upang iangkop ang mga payo sa iyong pananim, konteksto ng panahon, at naka-save na profile.",
   delete_account: "Humiling ng Pag-delete ng Account",
   delete_confirm: "Humiling ng Pag-delete ng Account",
   delete_warning: "Ipinoproseso ang pag-delete ng account pagkatapos ma-verify ang identity. Ang HarvestWise team ang mamamahala sa mga kahilingan.",
