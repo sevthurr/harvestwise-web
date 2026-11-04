@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { renderHook, act, render, screen, waitFor } from '@testing-library/react';
+import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -43,6 +43,9 @@ vi.mock('../app/global/contexts/BackgroundProcessContext', () => ({
 }));
 
 vi.mock('../services/api/notificationsApi', () => ({
+  NOTIFICATION_STALE_TIME: 5 * 60 * 1000,
+  STAFF_NOTIFICATION_KEY: ['staff-notifications'],
+  prefetchNotificationFeed: vi.fn(),
   getUnreadCount: vi.fn().mockResolvedValue({ unread_count: 0 }),
   listNotifications: vi.fn().mockResolvedValue({ items: [], unread_count: 0 }),
   markRead: vi.fn().mockResolvedValue({}),
@@ -368,6 +371,53 @@ describe('D. Real pages receive real SSE frames', () => {
   beforeEach(() => {
     notificationsApi.listNotifications.mockResolvedValue({ items: [], unread_count: 0 });
     notificationsApi.getUnreadCount.mockResolvedValue({ unread_count: 0 });
+  });
+
+  it('reuses a fresh cached feed when a notification page remounts', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AdminNotifications />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AdminNotifications />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1));
+  });
+
+  it('optimistically updates the shared unread count when marking one read', async () => {
+    notificationsApi.listNotifications.mockResolvedValueOnce({
+      items: [{ id: 'N-1', title: 'Import finished', body: 'Done', read: false }],
+      unread_count: 2,
+    });
+    notificationsApi.markRead.mockImplementation(() => new Promise(() => {}));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['notifications', 'unread-count'], 2);
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AdminNotifications />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('Import finished')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Import finished'));
+
+    await waitFor(() => expect(client.getQueryData(['notifications', 'unread-count'])).toBe(1));
   });
 
   it('AdminNotifications refetches on NOTIFICATION_CREATED', async () => {

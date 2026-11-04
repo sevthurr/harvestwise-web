@@ -487,6 +487,39 @@ describe('DFTCInput Submit Data Page', () => {
     });
   });
 
+  it('shows a blocking deleting state until the server draft is removed', async () => {
+    let resolveDelete;
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.includes('/dftc/submissions')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+      }
+      if (url.includes('/dftc/price-draft') && options.method === 'DELETE') {
+        return new Promise((resolve) => {
+          resolveDelete = () => resolve({ ok: true, status: 200, json: async () => ({ deleted_cells: 2 }) });
+        });
+      }
+      if (url.includes('/dftc/price-draft')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: 'DRF-1', status: 'draft', cells: [{ id: 'DCL-1' }] })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+    });
+
+    renderDFTCInput();
+    await waitFor(() => expect(screen.getByTitle('Delete draft')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('Delete draft'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(/Deleting draft/i);
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+
+    resolveDelete();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
   it('ensures Encoded By and Prepared By are not editable select elements in file preview', async () => {
     global.fetch = mockSubmissionsFetch();
     renderDFTCInput();

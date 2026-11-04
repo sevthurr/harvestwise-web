@@ -1,5 +1,13 @@
 import { apiGet, apiPost, parseResponse } from "../../app/global/api";
 
+export const NOTIFICATION_STALE_TIME = 5 * 60 * 1000;
+export const STAFF_NOTIFICATION_KEY = ["staff-notifications"];
+export const NOTIFICATION_KEYS = {
+  farmer: ["farmer-notifications"],
+  dftc: STAFF_NOTIFICATION_KEY,
+  admin: STAFF_NOTIFICATION_KEY,
+};
+
 /**
  * Fetch paginated current user notifications.
  * @param {number} page
@@ -9,6 +17,16 @@ import { apiGet, apiPost, parseResponse } from "../../app/global/api";
 export async function listNotifications(page = 1, pageSize = 30) {
   const res = await apiGet(`/me/notifications?page=${page}&page_size=${pageSize}`);
   return parseResponse(res);
+}
+
+export function prefetchNotificationFeed(queryClient, role) {
+  const queryKey = NOTIFICATION_KEYS[role];
+  if (!queryKey) return Promise.resolve();
+  return queryClient.prefetchQuery({
+    queryKey,
+    queryFn: () => listNotifications(1, 50),
+    staleTime: NOTIFICATION_STALE_TIME,
+  }).catch(() => {});
 }
 
 /**

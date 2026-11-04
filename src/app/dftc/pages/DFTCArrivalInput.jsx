@@ -31,6 +31,7 @@ import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
+import { useDftcStaff } from "../../global/hooks/useDftcStaff";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -800,8 +801,8 @@ export default function DFTCArrivalInput() {
   // memo that walks the catalogue is invalidated.
   const [catalogRowsVersion, setCatalogRowsVersion] = useState(0);
 
-  // DFTC Personnel from database
-  const [staffList, setStaffList] = useState([]);
+  // DFTC personnel is shared with Price Input through React Query.
+  const { data: staffList = [] } = useDftcStaff();
   const [encodedBy, setEncodedBy] = useState("");
   const [encodedByRole, setEncodedByRole] = useState("");
   const [reviewedBy, setReviewedBy] = useState("");
@@ -864,47 +865,23 @@ export default function DFTCArrivalInput() {
         ? "Reporting period cannot start in the future."
         : "";
 
-  // Fetch DFTC staff profiles from database
+  // Restore the selected personnel for the active reporting period once the
+  // shared staff query is available.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiGet("/dftc/staff");
-        const parsed = await parseResponse(res);
-        const items = Array.isArray(parsed) ? parsed : parsed?.items ?? [];
-        if (!cancelled && items.length > 0) {
-          const list = items.map((s) => {
-            const parts = [s.first_name, s.middle_name, s.last_name, s.suffix].filter(Boolean);
-            const name = parts.join(" ").toUpperCase();
-            return { name, role: s.position_title || "DFTC Staff" };
-          });
-          setStaffList(list);
-
-          // Restore previously selected personnel if they exist in DB staff list
-          let restoredEncoded = null;
-          let restoredReviewed = null;
-          try {
-            const stored = JSON.parse(localStorage.getItem(`dftc_arrival_personnel_${effectivePeriodInfo.iso}`));
-            if (stored?.encodedBy && list.some((s) => s.name === stored.encodedBy)) {
-              restoredEncoded = list.find((s) => s.name === stored.encodedBy);
-            }
-            if (stored?.reviewedBy && list.some((s) => s.name === stored.reviewedBy)) {
-              restoredReviewed = list.find((s) => s.name === stored.reviewedBy);
-            }
-          } catch {}
-
-          const defaultEncoder = restoredEncoded || list[0];
-          const defaultReviewer = restoredReviewed || (list.length > 1 ? list[1] : list[0]);
-
-          setEncodedBy(defaultEncoder.name);
-          setEncodedByRole(defaultEncoder.role);
-          setReviewedBy(defaultReviewer.name);
-          setReviewedByRole(defaultReviewer.role);
-        }
-      } catch { }
-    })();
-    return () => { cancelled = true; };
-  }, [effectivePeriodInfo.iso]);
+    if (staffList.length === 0) return;
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(`dftc_arrival_personnel_${effectivePeriodInfo.iso}`)) || {};
+    } catch {}
+    const restoredEncoded = staffList.find((staff) => staff.name === stored.encodedBy);
+    const restoredReviewed = staffList.find((staff) => staff.name === stored.reviewedBy);
+    const defaultEncoder = restoredEncoded || staffList[0];
+    const defaultReviewer = restoredReviewed || (staffList.length > 1 ? staffList[1] : staffList[0]);
+    setEncodedBy(defaultEncoder.name);
+    setEncodedByRole(defaultEncoder.role);
+    setReviewedBy(defaultReviewer.name);
+    setReviewedByRole(defaultReviewer.role);
+  }, [effectivePeriodInfo.iso, staffList]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
@@ -1612,6 +1589,10 @@ export default function DFTCArrivalInput() {
     setHasDraft(false);
     setSaveProgress(100);
     setSaveProgressStage("Arrival volume data saved successfully!");
+    queryClient.setQueryData(["dftc", "shared-drafts", effectivePeriodInfo.iso], (current) => (
+      current ? { ...current, arrival: null } : current
+    ));
+    queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", effectivePeriodInfo.iso] });
     queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
     queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });

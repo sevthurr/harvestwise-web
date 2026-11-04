@@ -69,7 +69,6 @@ import {
 import {
   composeAdvisoryReasons,
   pickUsablePriceOutlook,
-  resolveMainFactor,
 } from "../utils/advisoryReasons";
 import { resolveFactorCondition } from "../utils/factorColors";
 import * as analyticsApi from "../../../services/api/analyticsApi";
@@ -821,13 +820,6 @@ function CropCycleDetailPage() {
     Object.entries(previewModuleResults).map(([key, value]) => [key, normalizeModuleResult(value)])
   );
   const advisoryMeta = planAdvisoryData?.advisory || {};
-  const mainFactor = resolveMainFactor({
-    moduleResults: normalizedPreviewResults,
-    contributions: advisoryMeta.module_contributions,
-    weightsApplied: advisoryMeta.weights_applied,
-    vetoes: advisoryMeta.hard_vetoes,
-    lang: langCode,
-  });
   const composedReasons = composeAdvisoryReasons({
     moduleResults: previewModuleResults,
     contributions: advisoryMeta.module_contributions,

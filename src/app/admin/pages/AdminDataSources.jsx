@@ -129,6 +129,50 @@ function fmtDate(s) {
   const dt = new Date(s);
   return `${FMT_MONTHS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
 }
+function formatNextScheduled(nextSync) {
+  if (!nextSync || nextSync === "-") return "-";
+  const isoDate = new Date(nextSync);
+  if (!isNaN(isoDate.getTime()) && !/^\d+$/.test(nextSync) && String(nextSync).includes("-")) {
+    const m = FMT_MONTHS[isoDate.getMonth()];
+    const d = isoDate.getDate();
+    const y = isoDate.getFullYear();
+    let hours = isoDate.getHours();
+    const minutes = String(isoDate.getMinutes()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return `${m} ${d}, ${y}, ${hours}:${minutes} ${ampm}`;
+  }
+  const match = String(nextSync).match(/every\s+(daily|weekly|monthly)\s+at\s+(\d{1,2}):(\d{2})/i);
+  if (match) {
+    const freq = match[1].toLowerCase();
+    const targetHour = parseInt(match[2], 10);
+    const targetMinute = parseInt(match[3], 10);
+    const now = new Date();
+    const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), targetHour, targetMinute, 0, 0);
+    if (freq === "daily") {
+      if (nextDate <= now) {
+        nextDate.setDate(nextDate.getDate() + 1);
+      }
+    } else if (freq === "weekly") {
+      let daysAhead = (0 - nextDate.getDay() + 7) % 7;
+      nextDate.setDate(nextDate.getDate() + daysAhead);
+      if (nextDate <= now) {
+        nextDate.setDate(nextDate.getDate() + 7);
+      }
+    }
+    const m = FMT_MONTHS[nextDate.getMonth()];
+    const d = nextDate.getDate();
+    const y = nextDate.getFullYear();
+    let hours = nextDate.getHours();
+    const minutes = String(nextDate.getMinutes()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return `${m} ${d}, ${y}, ${hours}:${minutes} ${ampm}`;
+  }
+  return nextSync;
+}
 function parseDateToInput(dateStr) {
   const m = {
     Jan: "01",
@@ -1062,7 +1106,6 @@ function AdminDataSources() {
                           {SOURCE_DISPLAY_NAMES[s.name] || s.name}
                         </button>
                       </div>
-                      <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">{s.apiSource}</p>
                     </div>
                     {MANUAL_FETCH_LABEL[s.name] && (
                       <button
@@ -1079,7 +1122,7 @@ function AdminDataSources() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2">
                     {[
                       { label: "Last sync", value: s.lastSync ? fmtDate(s.lastSync) : "-" },
-                      { label: "Next scheduled", value: s.nextSync || "-" },
+                      { label: "Next scheduled", value: formatNextScheduled(s.nextSync) },
                       { label: "Records fetched", value: s.recordsFetched != null ? s.recordsFetched.toLocaleString() : "0" },
                       { label: "Records accepted", value: s.recordsAccepted != null ? s.recordsAccepted.toLocaleString() : "0" }
                     ].map((f) => <div key={f.label}>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { getUnreadCount } from "../../../../services/api/notificationsApi";
+import { getUnreadCount, prefetchNotificationFeed, STAFF_NOTIFICATION_KEY } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   Home,
@@ -26,6 +26,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
+import { prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
 
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
@@ -132,7 +133,7 @@ function DFTCLayoutInner() {
   const [rotated, setRotated] = useState(false);
   const pendingChangePassword = user?.must_change_password === true && !rotated;
 
-  const { data: unreadData, refetch: refreshUnread } = useQuery({
+  const { data: unreadData } = useQuery({
     queryKey: ["notifications", "unread-count"],
     queryFn: async () => {
       try {
@@ -142,23 +143,21 @@ function DFTCLayoutInner() {
         return 0;
       }
     },
-    staleTime: 10 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
   const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
 
   useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
-    if (location.pathname.includes("/notifications")) {
-      queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
-    }
-  }, [location.pathname, queryClient]);
+    prefetchNotificationFeed(queryClient, "dftc");
+    prefetchDftcWorkspace(queryClient);
+  }, [queryClient, user?.id]);
 
   useNotificationEvent("NOTIFICATION_CREATED", () => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-unread-notifications"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-notifications"] });
-    refreshUnread();
+    queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
   });
 
   const handlePasswordRotated = async () => {
