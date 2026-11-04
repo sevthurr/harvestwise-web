@@ -364,63 +364,69 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     }),
   ];
 
-  preferredPriceIds.forEach((commodityId) => {
-    const variety = supportedVarietyById.get(commodityId) || null;
-    FARMER_PRICE_TYPES.forEach((priceTypeKey) => {
-      FARMER_PRICE_HORIZONS.forEach((horizon) => {
-        requests.push(
+  // Per-commodity requests are deliberately kept out of the shared `requests`
+  // array and fired one preferred commodity at a time: Promise.all inside a
+  // commodity, await between commodities. Warming every preferred commodity's
+  // endpoints at once multiplies already-heavy analytics calls.
+  const preferredPriceIdSet = new Set(preferredPriceIds);
+  const buildCommodityRequests = (commodityId) => {
+    const commodityRequests = [];
+    if (preferredPriceIdSet.has(commodityId)) {
+      const variety = supportedVarietyById.get(commodityId) || null;
+      FARMER_PRICE_TYPES.forEach((priceTypeKey) => {
+        FARMER_PRICE_HORIZONS.forEach((horizon) => {
+          commodityRequests.push(
+            safePrefetch(
+              ["farmer", "admin-price-outlook", commodityId, priceTypeKey, horizon, null, null, null],
+              async () => parseResponse(await apiGet(
+                `/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}`
+              ))
+            ),
+            safePrefetch(
+              ["prices", "detail", commodityId, priceTypeKey, horizon],
+              async () => {
+                const raw = await parseResponse(await apiGet(
+                  `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}&records_limit=5`
+                ));
+                if (priceTypeKey === "bangkerohan_retail" && horizon === BUNDLE_DETAIL_PERIOD) {
+                  queryClient.setQueryData(["price-detail", commodityId], raw);
+                }
+                return toCamelCase(raw);
+              }
+            ),
+          );
+        });
+        commodityRequests.push(
           safePrefetch(
-            ["farmer", "admin-price-outlook", commodityId, priceTypeKey, horizon, null, null, null],
-            async () => parseResponse(await apiGet(
-              `/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}`
-            ))
-          ),
-          safePrefetch(
-            ["prices", "detail", commodityId, priceTypeKey, horizon],
+            ["prices", "trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD, BUNDLE_TREND_RECORDS_LIMIT],
             async () => {
               const raw = await parseResponse(await apiGet(
-                `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}&records_limit=5`
+                `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${BUNDLE_TREND_PERIOD}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
               ));
-              if (priceTypeKey === "bangkerohan_retail" && horizon === BUNDLE_DETAIL_PERIOD) {
-                queryClient.setQueryData(["price-detail", commodityId], raw);
+              if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
+                queryClient.setQueryData(
+                  ["farmer-price-card-trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD],
+                  raw
+                );
               }
-              return toCamelCase(raw);
+              return raw;
             }
-          ),
-        );
-      });
-      requests.push(
-        safePrefetch(
-          ["prices", "trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD, BUNDLE_TREND_RECORDS_LIMIT],
-          async () => {
-            const raw = await parseResponse(await apiGet(
-              `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${BUNDLE_TREND_PERIOD}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
-            ));
-            if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
-              queryClient.setQueryData(
-                ["farmer-price-card-trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD],
-                raw
-              );
-            }
-            return raw;
-          }
-        )
-      );
-      ["weekly", "monthly"].forEach((frequency) => {
-        requests.push(
-          safePrefetch(
-            ["prices", "historicalAvg", commodityId, priceTypeKey, frequency, variety],
-            async () => parseResponse(await apiGet(
-              `/prices/${encodeURIComponent(commodityId)}/historical-averages?price_type=${encodeURIComponent(priceTypeKey)}&frequency=${frequency}&start_offset_days=0${variety ? `&variety=${encodeURIComponent(variety)}` : ""}`
-            ))
           )
         );
+        ["weekly", "monthly"].forEach((frequency) => {
+          commodityRequests.push(
+            safePrefetch(
+              ["prices", "historicalAvg", commodityId, priceTypeKey, frequency, variety],
+              async () => parseResponse(await apiGet(
+                `/prices/${encodeURIComponent(commodityId)}/historical-averages?price_type=${encodeURIComponent(priceTypeKey)}&frequency=${frequency}&start_offset_days=0${variety ? `&variety=${encodeURIComponent(variety)}` : ""}`
+              ))
+            )
+          );
+        });
       });
-    });
-  });
+    }
 
-  basisIds.forEach((commodityId) => {
-    requests.push(
+    commodityRequests.push(
       safePrefetch(["farmer", "arrival-pressure", commodityId], async () =>
         parseResponse(await apiGet(`/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`))
       ),
@@ -434,7 +440,8 @@ async function prefetchFarmerPageData(queryClient, bundle) {
         parseResponse(await apiGet(`/admin/crop-weather-rules?commodity_id=${encodeURIComponent(commodityId)}`))
       ),
     );
-  });
+    return commodityRequests;
+  };
 
   // Warm only the current month. Other months are fetched on demand by the
   // recommendation page, avoiding a 12-request burst against the public
@@ -486,6 +493,10 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       })
     );
   });
+
+  for (const commodityId of basisIds) {
+    await Promise.all(buildCommodityRequests(commodityId));
+  }
 
   await Promise.all(requests);
 }

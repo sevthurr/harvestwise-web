@@ -732,11 +732,20 @@ const FarmTabForm = ({ initialLoc, initialCrops, availableCrops, showToast, onSa
       </GreenBtn>
 
       {showSaveModal && (
-        <Modal title="Save farm profile changes?" onClose={() => setShowSaveModal(false)}>
-          <p className="text-[14px] text-black mb-5">HarvestWise will use this information to personalize your crop advisories, weather context, and saved profile.</p>
+        <Modal
+          title={t("farmer.settings.farm_save_confirm_title", {}, "Save farm profile changes?")}
+          onClose={() => setShowSaveModal(false)}
+        >
+          <p className="text-[14px] text-black mb-5">
+            {t(
+              "farmer.settings.farm_save_confirm_body",
+              {},
+              "HarvestWise will use this information to personalize your crop advisories, weather context, and saved profile.",
+            )}
+          </p>
           <div className="flex gap-2 justify-end">
-            <GhostBtn onClick={() => setShowSaveModal(false)}>Cancel</GhostBtn>
-            <GreenBtn onClick={handleSave}>Save changes</GreenBtn>
+            <GhostBtn onClick={() => setShowSaveModal(false)}>{t("common.cancel", {}, "Cancel")}</GhostBtn>
+            <GreenBtn onClick={handleSave}>{t("farmer.settings.save_changes", {}, "Save changes")}</GreenBtn>
           </div>
         </Modal>
       )}
