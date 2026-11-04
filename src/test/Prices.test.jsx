@@ -98,6 +98,21 @@ describe("Farmer prices page", () => {
     });
   });
 
+  it("shows the forecast midpoint on the commodity card", async () => {
+    getPriceDetailMock.mockResolvedValue({
+      recent_records: [{ prevail_price: 150 }],
+      forecast: {
+        trend: "Rising",
+        forecast_midpoint: 165,
+        horizon_days: 7,
+      },
+    });
+
+    renderPricesPage();
+
+    expect(await screen.findByText("₱165/kg")).toBeInTheDocument();
+  });
+
   it("shows missing trend data without inventing a forecast price", async () => {
     getPriceDetailMock.mockResolvedValue({
       recent_records: [{ prevail_price: 150 }],

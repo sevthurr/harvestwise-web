@@ -14,6 +14,8 @@ export const settings = {
   phone_number: "Phone Number",
   email_address: "Email Address",
   save_changes: "Save Changes",
+  farm_save_confirm_title: "Save farm profile changes?",
+  farm_save_confirm_body: "HarvestWise will use this information to personalize your crop advisories, weather context, and saved profile.",
   delete_account: "Request Account Deletion",
   delete_confirm: "Request Account Deletion",
   delete_warning: "Account deletion is processed after verification. Requests are handled by the HarvestWise team.",
