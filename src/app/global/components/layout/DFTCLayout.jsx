@@ -13,6 +13,7 @@ import {
   LogOut,
   Settings,
   Info,
+  ClipboardList,
   Loader2,
   User
 } from "lucide-react";
@@ -259,6 +260,13 @@ function DFTCLayoutInner() {
   >
                     <Settings className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
                     Settings
+                  </button>
+                  <button
+    onClick={() => go("/dftc/audit-logs")}
+    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
+  >
+                    <ClipboardList className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
+                    Audit Logs
                   </button>
                   <button
     onClick={() => go("/dftc/about")}

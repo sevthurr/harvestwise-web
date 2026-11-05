@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { createAuditLogsPdf } from "../app/admin/utils/auditLogsPdf";
-import { formatActorLabel } from "../app/admin/utils/auditActor";
+import { createAuditLogsPdf } from "../app/global/utils/auditLogsPdf";
+import { formatActorLabel } from "../app/global/utils/auditActor";
 
 const pageText = (doc) =>
   doc.internal.pages

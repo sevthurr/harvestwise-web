@@ -1,4 +1,4 @@
-import { apiGet, parseResponse } from "../../app/global/api";
+import { apiGet, apiPost, parseResponse } from "../../app/global/api";
 
 export async function getDataVersion() {
   return parseResponse(await apiGet("/dftc/data-version"));
@@ -12,3 +12,14 @@ export async function getDataVersion() {
 export async function getCommodityCatalog() {
   return parseResponse(await apiGet("/dftc/commodities"));
 }
+
+export async function getAuditLogs(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return parseResponse(await apiGet(`/dftc/audit-logs${qs ? `?${qs}` : ""}`));
+}
+
+export async function recordActivity(payload) {
+  return parseResponse(await apiPost("/dftc/activity", payload));
+}
+
+export const dftcApi = { getAuditLogs, recordActivity };

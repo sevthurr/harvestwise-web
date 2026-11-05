@@ -14,6 +14,7 @@ import {
   WifiOff,
   Cloud,
   X,
+  ClipboardList,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -350,6 +351,13 @@ const TopBar = ({
                   >
                     <Settings className="w-4 h-4 flex-shrink-0" />
                     {t("nav.settings", {}, "Settings")}
+                  </button>
+                  <button
+                    onClick={() => go("activities")}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
+                  >
+                    <ClipboardList className="w-4 h-4 flex-shrink-0" />
+                    {t("nav.my_activities", {}, "My Activities")}
                   </button>
                   <button
                     onClick={() => go("about")}

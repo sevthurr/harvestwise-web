@@ -94,6 +94,8 @@ const ACTION_TITLE_MAP = {
   "user.activated": "User Account Activated",
   "user.deactivated": "User Account Deactivated",
   "user.role_changed": "User Role Changed",
+  "user.position_changed": "User Position Changed",
+  "position.created": "Position Added",
   "auth.password_changed": "Account Password Changed",
   "analytics.outputs_computed": "Module Outputs Recomputed",
   "dftc.submission_received": "DFTC Data Submission Received",
