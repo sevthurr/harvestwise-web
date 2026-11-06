@@ -115,11 +115,12 @@ function MarketWeatherPage() {
         : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION
         ? 'Caution'
         : 'Suitable',
-      risk: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE ? 'high' : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION ? 'moderate' : 'low'
+      risk: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE ? 'high' : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION ? 'moderate' : 'low',
+      occurrence: d.occurrence || null,
     }));
 
     return {
-      updated_at: new Date().toISOString(),
+      updated_at: data.fetched_at || new Date().toISOString(),
       location_name: data.location || t('farmer.factors.weather.fallback_location'),
       forecast_14d: forecast14,
       weather_summary: data.weather_risk_level ? t('farmer.factors.weather.summary_headline', { risk_level: data.weather_risk_level }) : t('farmer.factors.weather.forecast_fallback_davao'),
@@ -182,7 +183,9 @@ function MarketWeatherPage() {
   const cropAdvisories = transformedWeather?.crop_advisories ?? [];
   const locationName = transformedWeather?.location_name ?? '-';
   const weatherSummary = transformedWeather?.weather_summary ?? 'No weather data available';
-  const updatedAt = transformedWeather?.updated_at ? new Date(transformedWeather.updated_at).toLocaleTimeString() : t('farmer.factors.weather.unknown_time');
+  const updatedAt = transformedWeather?.updated_at
+    ? new Date(transformedWeather.updated_at).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })
+    : t('farmer.factors.weather.unknown_time');
 
   useEffect(() => {
     if (!highlightParam || loading || cropAdvisories.length === 0) return;
@@ -212,6 +215,9 @@ function MarketWeatherPage() {
         </div>
 
         <WeatherLocationBanner />
+        <p className="text-[11px] text-[var(--hw-neutral-500)] -mt-4">
+          {t("farmer.factors.weather.last_updated", { time: updatedAt }, `Last updated: ${updatedAt}`)}
+        </p>
 
         {/* ── 1. 14-day forecast outlook ── */}
         <WeatherForecastOutlook

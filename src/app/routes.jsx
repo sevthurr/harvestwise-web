@@ -65,6 +65,7 @@ import DFTCProfile               from "./dftc/pages/DFTCProfile";
 import DFTCSettings              from "./dftc/pages/DFTCSettings";
 import DFTCAbout                 from "./dftc/pages/DFTCAbout";
 import DFTCAuditLogs             from "./dftc/pages/DFTCAuditLogs";
+import DFTCEditApprovalRequests  from "./dftc/pages/DFTCEditApprovalRequests";
 // Admin workspace
 import AdminDashboard from "./admin/pages/AdminDashboard";
 import AdminDataSources from "./admin/pages/AdminDataSources";
@@ -199,6 +200,7 @@ export const router = createBrowserRouter([
       { path: "settings",                       Component: DFTCSettings   },
       { path: "about",                          Component: DFTCAbout      },
       { path: "audit-logs",                     Component: DFTCAuditLogs },
+      { path: "edit-approval-requests",         Component: DFTCEditApprovalRequests },
     ],
   },
 

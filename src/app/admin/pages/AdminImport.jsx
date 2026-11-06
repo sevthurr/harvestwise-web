@@ -332,6 +332,8 @@ function detectDatasetInfo({ fileName = "", sheetNames = [], rawRows = [], heade
 
 const ISSUE_CODE_LABELS = {
   duplicate: "Duplicate",
+  update: "Updated",
+  updated: "Updated",
   missing_required: "Missing Data",
   invalid_date: "Invalid Date",
   new_commodity: "New Commodity",
@@ -671,10 +673,10 @@ function AdminImport() {
 
   const filteredTableRows = (tableFilter === "valid" ? validationRows : displayedIssueRows).filter((r) => {
     if (tableFilter === "all") return true;
-    if (tableFilter === "valid") return r.result === "valid" || r.result === "valid_with_warning" || (!r.issues || r.issues.length === 0);
+    if (tableFilter === "valid") return r.result === "valid";
     if (tableFilter === "rejected") return r.result === "rejected";
     if (tableFilter === "warning") return r.result === "valid_with_warning";
-    if (tableFilter === "duplicate") return r.issues?.some((i) => i.code === "duplicate");
+    if (tableFilter === "duplicate") return r.result === "valid_with_warning" || r.issues?.some((i) => i.code === "duplicate");
     if (tableFilter === "updated") return r.issues?.some((i) => i.code === "update" || i.code === "updated");
     if (tableFilter === "changed") return r.issues?.some((i) => i.code === "update" || i.code === "updated");
     if (tableFilter === "missing") return r.issues?.some((i) => i.code === "missing_required" || i.code?.includes("missing"));
@@ -688,6 +690,27 @@ function AdminImport() {
     } else {
       setTableFilter(filterKey);
     }
+  };
+
+  // The Updated card is shown only when there are updated rows. It takes the
+  // slot of Unrecognized Commodities (or Missing Values) when that count is
+  // zero; otherwise it is added as an extra card. Neither existing card is
+  // removed — a hidden one returns as soon as its count is non-zero.
+  const showUpdatedCard = validationResult.updated > 0;
+  const hideUnrecognizedCard = showUpdatedCard && validationResult.unrecognizedCommodities === 0;
+  const hideMissingCard = showUpdatedCard && !hideUnrecognizedCard && validationResult.missingValues === 0;
+  const extraKpiCard = showUpdatedCard && !hideUnrecognizedCard && !hideMissingCard;
+  const tailCardKeys = showUpdatedCard
+    ? (hideUnrecognizedCard
+        ? ["missing", "updated"]
+        : hideMissingCard
+          ? ["updated", "new_commodity"]
+          : ["missing", "new_commodity", "updated"])
+    : ["missing", "new_commodity"];
+  const tailCardMeta = {
+    missing: { filter: "missing", label: "Missing Values", value: validationResult.missingValues, color: "text-amber-700" },
+    new_commodity: { filter: "new_commodity", label: "Unrecognized Commodities", value: validationResult.unrecognizedCommodities, color: "text-[var(--hw-neutral-800)]" },
+    updated: { filter: "updated", label: "Updated", value: validationResult.updated, color: "text-blue-700" },
   };
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-[13px] bg-white outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition";
@@ -930,7 +953,8 @@ function AdminImport() {
               <p className="text-[15px] font-semibold text-[var(--hw-neutral-900)]">Validation complete</p>
             </div>
 
-            {/* 6 KPI Cards (2 on mobile, 3 on sm+) */}
+            {/* KPI cards (2 on mobile, 3 on sm+). The Updated card replaces a
+                zero-count Missing/Unrecognized slot. */}
             <div className="space-y-2">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <button
@@ -965,7 +989,7 @@ function AdminImport() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className={`grid grid-cols-2 gap-2 ${extraKpiCard ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
                 <button
                   type="button"
                   onClick={() => handleKpiFilter("duplicate")}
@@ -976,26 +1000,24 @@ function AdminImport() {
                   <p className="text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)]">Duplicates</p>
                   <p className="text-[16px] sm:text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.duplicates}</p>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("missing")}
-                  className={`rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "missing" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)]">Missing Values</p>
-                  <p className="text-[16px] sm:text-[18px] font-bold text-amber-700 mt-0.5">{validationResult.missingValues}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleKpiFilter("new_commodity")}
-                  className={`col-span-2 sm:col-span-1 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
-                    tableFilter === "new_commodity" ? "border-[var(--hw-green-600)]" : "border-transparent"
-                  }`}
-                >
-                  <p className="text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)]">Unrecognized Commodities</p>
-                  <p className="text-[16px] sm:text-[18px] font-bold text-[var(--hw-neutral-800)] mt-0.5">{validationResult.unrecognizedCommodities}</p>
-                </button>
+                {tailCardKeys.map((key, i) => {
+                  const card = tailCardMeta[key];
+                  const isLast = i === tailCardKeys.length - 1;
+                  const mobileSpan = isLast && tailCardKeys.length % 2 === 0 ? " col-span-2 sm:col-span-1" : "";
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleKpiFilter(card.filter)}
+                      className={`${mobileSpan.trim()} rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-left transition-all cursor-pointer bg-[var(--hw-neutral-50)] hover:bg-[var(--hw-neutral-100)] border-2 outline-none ${
+                        tableFilter === card.filter ? "border-[var(--hw-green-600)]" : "border-transparent"
+                      }`}
+                    >
+                      <p className="text-[11px] sm:text-[12px] font-medium text-[var(--hw-neutral-700)]">{card.label}</p>
+                      <p className={`text-[16px] sm:text-[18px] font-bold ${card.color} mt-0.5`}>{card.value}</p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

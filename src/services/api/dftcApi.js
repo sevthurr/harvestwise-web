@@ -22,4 +22,17 @@ export async function recordActivity(payload) {
   return parseResponse(await apiPost("/dftc/activity", payload));
 }
 
-export const dftcApi = { getAuditLogs, recordActivity };
+export async function getEditApprovalRequests(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return parseResponse(await apiGet(`/dftc/edit-approval-requests${qs ? `?${qs}` : ""}`));
+}
+
+export async function approveEditApprovalRequest(id) {
+  return parseResponse(await apiPost(`/dftc/edit-approval-requests/${id}/approve`, {}));
+}
+
+export async function rejectEditApprovalRequest(id, comment) {
+  return parseResponse(await apiPost(`/dftc/edit-approval-requests/${id}/reject`, { comment }));
+}
+
+export const dftcApi = { getAuditLogs, recordActivity, getEditApprovalRequests, approveEditApprovalRequest, rejectEditApprovalRequest };

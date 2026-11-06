@@ -4,6 +4,7 @@ export const navigation = {
   crop_calendar: "Crop Calendar",
   my_crops: "My Crops",
   settings: "Settings",
+  my_activities: "My Activities",
   about: "About HarvestWise",
   profile: "Profile",
   notifications: "Notifications",

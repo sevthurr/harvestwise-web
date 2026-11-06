@@ -1,4 +1,13 @@
 export const weather = {
+  "when_to_expect": "Kailan ito inaasahan",
+  "rain_expected": "Inaasahan ang ulan {window}{probability}.",
+  "hottest_around": "Pinakamainit bandang {time}.",
+  "coolest_around": "Pinakamalamig bandang {time}.",
+  "strongest_wind_around": "Pinakamalakas ang hangin bandang {time}.",
+  "most_humid_around": "Pinakamataas ang halumigmig bandang {time}.",
+  "rain_timing_unavailable": "Inaasahan ang ulan, pero walang eksaktong oras.",
+  "timing_unavailable": "Walang eksaktong oras para sa araw na ito.",
+  "last_updated": "Huling na-update: {time}",
   "weather_suitable": "Paborable at pangkalahatang magandang panahon na may sapat na sikat ng araw sa susunod na {days} araw — angkop at napakainam sa pagpapalaki ng {crop_name}.",
   "weather_caution": "May kondisyon ng panahon na kailangang bantayan para sa {crop_name}. Ang pangunahing dapat bantayan ay {risk_name}.",
   "weather_severe": "Mataas ang panganib sa panahon para sa {crop_name}. Ang pangunahing problema ay {risk_name}.",

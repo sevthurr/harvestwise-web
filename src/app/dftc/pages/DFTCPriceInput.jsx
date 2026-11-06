@@ -38,6 +38,7 @@ import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
 import { useDftcStaff } from "../../global/hooks/useDftcStaff";
+import { useAuth } from "../../global/contexts/AuthContext";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -764,6 +765,8 @@ function MobileVariantRow({ v, f, carriedFrom, onUpdateSample, onUpdateUom }) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 function DFTCPriceInput() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canFinalize = user?.position === "Acting Section Head" || user?.staff_profile?.position_name === "Acting Section Head";
   const location = useLocation();
   const queryClient = useQueryClient();
   const navState = location.state;
@@ -2586,10 +2589,13 @@ function DFTCPriceInput() {
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}
-              disabled={totalEnteredCount === 0 || isSaving}
+              disabled={totalEnteredCount === 0 || isSaving || !canFinalize}
+              title={!canFinalize ? "Only an Acting Section Head can save or finalize review" : undefined}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              {draftFinalized
+              {!canFinalize
+                ? "Only Acting Section Head can save"
+                : draftFinalized
                 ? `Re-finalize ${dataName} (${totalEnteredCount} records)`
                 : `Finalize ${dataName} (${totalEnteredCount} records)`}
             </button>

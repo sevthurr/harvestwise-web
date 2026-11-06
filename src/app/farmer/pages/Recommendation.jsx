@@ -263,6 +263,7 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
           rainfall: f.rainfall_mm ?? f.rainfall ?? f.rainfallMm,
           rainProb: f.rain_probability_pct ?? f.rainProb ?? f.rainPct,
           condition: f.suitability || f.weather_condition || null,
+          occurrence: f.occurrence || null,
         };
       }
     }
