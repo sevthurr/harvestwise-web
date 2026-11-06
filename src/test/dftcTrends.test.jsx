@@ -752,7 +752,7 @@ describe("DFTC Trends page prices API integration", () => {
     expect(screen.getByText("50.00 MT")).toBeInTheDocument();
   });
 
-  it("renders the redesigned clean Top Causes of Price Volatility section with 36px segmented control and empty states", async () => {
+  it("renders the redesigned clean Top Causes of Price Volatility section with minimal date filter and empty states", async () => {
     installApi();
     renderTrends(<DFTCTrends />);
 

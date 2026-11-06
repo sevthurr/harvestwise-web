@@ -1704,10 +1704,8 @@ function DFTCTrends() {
                     </span>
                     {reason && (
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
-                          isIncrease
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                            : "bg-rose-50 text-rose-700 border border-rose-200/60"
+                        className={`inline-flex items-center gap-1 text-[12px] font-medium ${
+                          isIncrease ? "text-emerald-700" : "text-rose-700"
                         }`}
                       >
                         <span>{isIncrease ? "↑" : "↓"}</span>
@@ -1755,9 +1753,6 @@ function DFTCTrends() {
                     <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wider">
                       Forecast Context
                     </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-neutral-100 text-neutral-600">
-                      Model Adjustment
-                    </span>
                   </div>
 
                   <p className="text-[13.5px] text-neutral-600 leading-relaxed">
@@ -1786,8 +1781,8 @@ function DFTCTrends() {
             </p>
           </div>
 
-          {/* Date Filter (36px Segmented Control) */}
-          <div className="inline-flex items-center h-9 p-0.5 rounded-lg border border-neutral-200 bg-white">
+          {/* Minimal Date Filter */}
+          <div className="flex items-center gap-1">
             {[7, 30, 90].map((d) => {
               const isActive = volatilityDays === d;
               return (
@@ -1795,10 +1790,10 @@ function DFTCTrends() {
                   key={d}
                   type="button"
                   onClick={() => setVolatilityDays(d)}
-                  className={`h-full px-3 text-[12px] rounded-md transition-all font-medium cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md text-[12px] transition-colors cursor-pointer ${
                     isActive
-                      ? "bg-[var(--hw-green-700)] text-white shadow-xs"
-                      : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                      ? "bg-neutral-100 text-neutral-900 font-semibold"
+                      : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 font-normal"
                   }`}
                 >
                   Last {d} Days
