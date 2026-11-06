@@ -1679,7 +1679,6 @@ function DFTCTrends() {
           ? Math.abs(latestVolatilityRecord.change_pct)
           : null;
         const reason = latestVolatilityRecord.volatility_reason;
-        const category = latestVolatilityRecord.volatility_category;
         const notes = latestVolatilityRecord.volatility_notes;
         const recordDate = latestVolatilityRecord.price_date
           ? formatChartDate(latestVolatilityRecord.price_date)
@@ -1710,9 +1709,6 @@ function DFTCTrends() {
                       >
                         <span>{isIncrease ? "↑" : "↓"}</span>
                         <span>{reason}</span>
-                        {category && (
-                          <span className="text-neutral-400 font-normal">· {category}</span>
-                        )}
                       </span>
                     )}
                   </div>
