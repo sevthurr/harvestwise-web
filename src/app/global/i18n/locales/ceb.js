@@ -566,7 +566,9 @@ export const ceb = {
         forecast_price_change_label: "Kausaban sa Gitagnang Presyo",
         historical_seasonal_avg_label: "Kasagarang Presyo sa Ting-ani",
         historical_change_label: "Kausaban sa Presyo Kaniadto",
-        price_reference_notice: "Basehan sa presyo: ₱{price}/kg (baseline: ₱{baseline}/kg)."
+        price_reference_notice: "Basehan sa presyo: ₱{price}/kg (baseline: ₱{baseline}/kg).",
+        forecast_historical_only_notice: "Gibase lamang kini sa miaging presyo. Mahimong mausab ang tinuod nga presyo tungod sa panahon, krudo, ug suplay.",
+        forecast_historical_disclaimer_short: "Gibase lamang kini sa miaging presyo. Mahimong mausab ang tinuod nga presyo tungod sa panahon, krudo, ug suplay."
       },
 
 

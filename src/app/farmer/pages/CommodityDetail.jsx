@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2, X } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2, X, Info } from "lucide-react";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -642,7 +642,7 @@ function CommodityDetailPage() {
                 ))}
               </div>
             </div>
-            <div className="mt-4 pt-2 border-t border-[var(--hw-neutral-100)] space-y-1">
+            <div className="mt-4 pt-2 border-t border-[var(--hw-neutral-100)] space-y-1.5">
               <p className="text-[12px] text-[var(--hw-neutral-500)]">
                 {t("farmer.commodityDetail.next_days", { count: period }, `Next ${period} days`)}
               </p>
@@ -650,6 +650,16 @@ function CommodityDetailPage() {
                 <DirIcon className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="text-[12px] font-medium">
                   {advisoryMessage}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] sm:text-[12px] font-medium text-black pt-1">
+                <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-black shrink-0" />
+                <span>
+                  {t(
+                    "farmer.factors.price.forecast_historical_only_notice",
+                    {},
+                    "Forecasts are based on past price trends alone. Actual market prices may vary due to weather, fuel, and supply changes."
+                  )}
                 </span>
               </div>
             </div>

@@ -555,25 +555,59 @@ const ProductionTab = ({ data, commodityName }) => {
   const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
   const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(data?.selectedQuarter || currentQuarter);
+  const [selectedLocation, setSelectedLocation] = useState("all");
+
+  const locations = useMemo(() => {
+    const locSet = new Set();
+    (data?.sourceAreas || data?.sources || []).forEach((s) => {
+      if (s.name) locSet.add(s.name);
+    });
+    (data?.geoRecords || []).forEach((r) => {
+      if (r.location) locSet.add(r.location);
+    });
+    return [...locSet].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [data?.sourceAreas, data?.sources, data?.geoRecords]);
+
   const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter));
   const normLevel = normalizeProductionLevel(
     data?.classificationOverride || selectedProfile?.classification || data?.productionLevel
   );
   const banner = normLevel ? PRODUCTION_BANNER_CFG[normLevel] : null;
   const LevelIcon = banner?.Icon;
+
   const historicalData = useMemo(() => {
     const byYear = new Map();
     (Array.isArray(data?.records) ? data.records : []).forEach((record) => {
-      const year = Number(record.reference_year);
-      const quarter = record.reference_quarter;
-      const volume = Number(record.volume_produced);
-      if (!Number.isFinite(year) || !HARVEST_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return;
-      const row = byYear.get(year) || { year };
-      row[quarter] = (row[quarter] || 0) + volume;
-      byYear.set(year, row);
+      const yr = Number(record.reference_year);
+      if (Number.isFinite(yr) && !byYear.has(yr)) {
+        byYear.set(yr, { year: yr });
+      }
     });
+
+    if (selectedLocation === "all") {
+      (Array.isArray(data?.records) ? data.records : []).forEach((record) => {
+        const year = Number(record.reference_year);
+        const quarter = record.reference_quarter;
+        const volume = Number(record.volume_produced);
+        if (!Number.isFinite(year) || !HARVEST_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return;
+        const row = byYear.get(year) || { year };
+        row[quarter] = (row[quarter] || 0) + volume;
+        byYear.set(year, row);
+      });
+    } else {
+      (Array.isArray(data?.geoRecords) ? data.geoRecords : []).forEach((record) => {
+        if (record.location !== selectedLocation) return;
+        const year = Number(record.reference_year);
+        const quarter = record.reference_quarter;
+        const volume = Number(record.volume_produced);
+        if (!Number.isFinite(year) || !HARVEST_QUARTERS.includes(quarter) || !Number.isFinite(volume)) return;
+        const row = byYear.get(year) || { year };
+        row[quarter] = (row[quarter] || 0) + volume;
+        byYear.set(year, row);
+      });
+    }
     return [...byYear.values()].sort((a, b) => a.year - b.year);
-  }, [data?.records]);
+  }, [data?.records, data?.geoRecords, selectedLocation]);
 
   const chartQuarters = activeHarvestQuarter ? [activeHarvestQuarter] : HARVEST_QUARTERS;
   const chartData = historicalData.length > 0
@@ -593,21 +627,59 @@ const ProductionTab = ({ data, commodityName }) => {
   }, []);
 
   const hasData = chartData.length > 0;
-  const historicalAverage = data?.grandAverageQuarterlyMt != null
-    && Number.isFinite(Number(data.grandAverageQuarterlyMt))
-    ? Number(data.grandAverageQuarterlyMt)
-    : null;
-  const selectedProduction = selectedProfile
-    && selectedProfile.average_production_mt != null
-    && Number.isFinite(Number(selectedProfile.average_production_mt))
-    ? Number(selectedProfile.average_production_mt)
-    : null;
-  const productionDifference = selectedProduction != null && historicalAverage != null
-    ? selectedProduction - historicalAverage
-    : null;
-  const productionDifferencePct = productionDifference != null && historicalAverage > 0
-    ? (productionDifference / historicalAverage) * 100
-    : null;
+
+  const locationStats = useMemo(() => {
+    if (selectedLocation === "all") {
+      const histAvg = data?.grandAverageQuarterlyMt != null
+        && Number.isFinite(Number(data.grandAverageQuarterlyMt))
+        ? Number(data.grandAverageQuarterlyMt)
+        : null;
+      const selProd = selectedProfile
+        && selectedProfile.average_production_mt != null
+        && Number.isFinite(Number(selectedProfile.average_production_mt))
+        ? Number(selectedProfile.average_production_mt)
+        : null;
+      const diff = selProd != null && histAvg != null ? selProd - histAvg : null;
+      const diffPct = diff != null && histAvg > 0 ? (diff / histAvg) * 100 : null;
+      return {
+        historicalAverage: histAvg,
+        selectedProduction: selProd,
+        productionDifference: diff,
+        productionDifferencePct: diffPct,
+      };
+    }
+    const matchingGeo = (Array.isArray(data?.geoRecords) ? data.geoRecords : []).filter(
+      (r) => r.location === selectedLocation && Number.isFinite(Number(r.volume_produced))
+    );
+    const seasonGeo = activeHarvestQuarter
+      ? matchingGeo.filter((r) => r.reference_quarter === activeHarvestQuarter)
+      : matchingGeo;
+    const selProd = seasonGeo.length > 0
+      ? seasonGeo.reduce((sum, r) => sum + Number(r.volume_produced), 0) / seasonGeo.length
+      : null;
+
+    const qAverages = HARVEST_QUARTERS.map((q) => {
+      const qRecords = matchingGeo.filter((r) => r.reference_quarter === q);
+      return qRecords.length > 0
+        ? qRecords.reduce((sum, r) => sum + Number(r.volume_produced), 0) / qRecords.length
+        : 0;
+    });
+    const histAvg = qAverages.some((v) => v > 0)
+      ? qAverages.reduce((sum, v) => sum + v, 0) / 4
+      : null;
+    const diff = selProd != null && histAvg != null ? selProd - histAvg : null;
+    const diffPct = diff != null && histAvg > 0 ? (diff / histAvg) * 100 : null;
+
+    return {
+      historicalAverage: histAvg,
+      selectedProduction: selProd,
+      productionDifference: diff,
+      productionDifferencePct: diffPct,
+    };
+  }, [selectedLocation, data?.grandAverageQuarterlyMt, selectedProfile, data?.geoRecords, activeHarvestQuarter]);
+
+  const { historicalAverage, selectedProduction, productionDifference, productionDifferencePct } = locationStats;
+
   const levelColor = (classification) => {
     const level = normalizeProductionLevel(classification);
     if (level === "high") return "#dc2626";
@@ -641,10 +713,37 @@ const ProductionTab = ({ data, commodityName }) => {
       )}
 
       <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
-        <div>
-          <p className="text-[13px] font-bold text-black">
-            {t("farmer.factors.production.typical_quarterly_title", {}, "Typical Quarterly Production Volume (PSA Data · Q1–Q4)")}
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <p className="text-[13px] font-bold text-black">
+              {t("farmer.factors.production.typical_quarterly_title", {}, "Typical Quarterly Production Volume (PSA Data · Q1–Q4)")}
+            </p>
+            {selectedLocation !== "all" && (
+              <p className="text-[11.5px] text-[var(--hw-neutral-600)] mt-0.5">
+                {selectedLocation} · MT
+              </p>
+            )}
+          </div>
+          {locations.length > 0 && (
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <label htmlFor="farmer-source-filter" className="text-[11.5px] sm:text-[12px] font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">
+                {t("farmer.cropCycle.location_filter_label", {}, "Source:")}
+              </label>
+              <select
+                id="farmer-source-filter"
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-800)] bg-white border border-[var(--hw-neutral-200)] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] shadow-xs"
+              >
+                <option value="all">{t("farmer.cropCycle.all_locations", {}, "All Locations (Overall)")}</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         {chartData.length > 0 ? (
           <div

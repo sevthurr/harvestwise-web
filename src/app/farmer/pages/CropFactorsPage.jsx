@@ -13,6 +13,10 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
 
+function currentQuarter() {
+  return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+}
+
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
   const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
@@ -87,7 +91,7 @@ function CropFactorsPage() {
   const effectiveModuleResults = state?.moduleResults || planAdvisoryData?.module_results || {};
 
   const commodityIdentifier = crop.commodityId || crop.commodity;
-  const selectedQuarter = quarterForDate(crop.harvestDate || crop.plantingDate);
+  const selectedQuarter = state?.selectedQuarter || currentQuarter();
   const arrivalPressureQuery = useQuery({
     queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
     queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
@@ -163,6 +167,8 @@ function CropFactorsPage() {
     selectedQuarter,
     grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
     records: productionSummary?.records || [],
+    geoRecords: productionSummary?.geo_records || [],
+    sourceAreas: productionSummary?.source_areas || [],
     sources: (productionSummary?.source_areas || []).map((area) => ({
       name: area.name,
       value: Number(area.value),

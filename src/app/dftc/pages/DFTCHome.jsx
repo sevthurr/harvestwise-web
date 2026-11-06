@@ -291,85 +291,6 @@ function DFTCHome() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-3.5 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)] flex items-start sm:items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
-            <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
-              Datasets saved and validated in the last 7 days
-            </p>
-          </div>
-          <button
-            onClick={() => navigate("/dftc/submissions")}
-            className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0 text-right"
-          >
-            View Data History
-          </button>
-        </div>
-        {isLoading ? (
-          <div className="p-4 space-y-3 animate-pulse">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
-                <div className="space-y-1.5 flex-1">
-                  <div className="h-4 w-40 bg-[var(--hw-neutral-200)] rounded" />
-                  <div className="h-3 w-56 bg-[var(--hw-neutral-200)] rounded" />
-                </div>
-                <div className="h-4 w-16 bg-[var(--hw-neutral-200)] rounded" />
-              </div>
-            ))}
-          </div>
-        ) : recentSaved.length === 0 ? (
-          <div className="p-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-            No saved datasets from the last 7 days. Encoded or uploaded datasets will appear here.
-          </div>
-        ) : (
-          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[320px] sm:max-h-[360px] overflow-y-auto">
-            {recentSaved.map((row) => (
-              <button
-                key={row.id}
-                onClick={() => handleSelectFile(row)}
-                className="w-full px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-start sm:items-center gap-2.5 sm:gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer group"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    <p className="text-[13.5px] sm:text-[14px] font-semibold sm:font-medium text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
-                      {row.name}
-                    </p>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {row.isToday && (
-                        <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
-                          Today
-                        </span>
-                      )}
-                      <span className="sm:hidden text-[11px] font-medium text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)] px-1.5 py-0.5 rounded">
-                        {row.submissionId || row.id}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-1 sm:mt-0.5">
-                    <span className="font-medium text-[var(--hw-neutral-700)]">{row.market}</span>
-                    <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{row.entryMethod}</span>
-                    <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{row.savedAt}</span>
-                  </div>
-                </div>
-
-                <div className="hidden sm:block shrink-0 text-right">
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.submissionId || row.id}</p>
-                  <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 font-medium capitalize">{row.status}</p>
-                </div>
-
-                <div className="flex sm:flex-col items-center sm:items-end justify-center self-center shrink-0">
-                  <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-600)] transition-colors" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
           <div className="flex items-center justify-between mb-4">
@@ -454,6 +375,85 @@ function DFTCHome() {
             navigate(`/dftc/trends?tab=arrival&commodity=${encodeURIComponent(target)}`);
           }}
         />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="px-3.5 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)] flex items-start sm:items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
+            <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
+              Datasets saved and validated in the last 7 days
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/dftc/submissions")}
+            className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0 text-right"
+          >
+            View Data History
+          </button>
+        </div>
+        {isLoading ? (
+          <div className="p-4 space-y-3 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 w-40 bg-[var(--hw-neutral-200)] rounded" />
+                  <div className="h-3 w-56 bg-[var(--hw-neutral-200)] rounded" />
+                </div>
+                <div className="h-4 w-16 bg-[var(--hw-neutral-200)] rounded" />
+              </div>
+            ))}
+          </div>
+        ) : recentSaved.length === 0 ? (
+          <div className="p-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
+            No saved datasets from the last 7 days. Encoded or uploaded datasets will appear here.
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[320px] sm:max-h-[360px] overflow-y-auto">
+            {recentSaved.map((row) => (
+              <button
+                key={row.id}
+                onClick={() => handleSelectFile(row)}
+                className="w-full px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-start sm:items-center gap-2.5 sm:gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer group"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <p className="text-[13.5px] sm:text-[14px] font-semibold sm:font-medium text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
+                      {row.name}
+                    </p>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {row.isToday && (
+                        <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
+                          Today
+                        </span>
+                      )}
+                      <span className="sm:hidden text-[11px] font-medium text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)] px-1.5 py-0.5 rounded">
+                        {row.submissionId || row.id}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-1 sm:mt-0.5">
+                    <span className="font-medium text-[var(--hw-neutral-700)]">{row.market}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{row.entryMethod}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{row.savedAt}</span>
+                  </div>
+                </div>
+
+                <div className="hidden sm:block shrink-0 text-right">
+                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.submissionId || row.id}</p>
+                  <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 font-medium capitalize">{row.status}</p>
+                </div>
+
+                <div className="flex sm:flex-col items-center sm:items-end justify-center self-center shrink-0">
+                  <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-600)] transition-colors" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

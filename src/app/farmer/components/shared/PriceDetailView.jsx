@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, Minus, ChevronDown, AlertCircle, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, ChevronDown, AlertCircle, CheckCircle2, Info } from "lucide-react";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { ForecastPriceTrendChart } from "../../../global/components/shared/ForecastPriceTrendChart";
 import {
@@ -1199,6 +1199,17 @@ function PriceDetailView({
                 </select>
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[12px] font-medium text-black">
+            <Info className="w-4 h-4 text-black shrink-0" />
+            <span>
+              {t(
+                "farmer.factors.price.forecast_historical_only_notice",
+                {},
+                "Forecasts are based on past price trends alone. Actual market prices may vary due to weather, fuel, and supply changes."
+              )}
+            </span>
           </div>
 
           <div className="w-full">
