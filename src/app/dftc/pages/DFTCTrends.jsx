@@ -85,6 +85,14 @@ function getCommodityCategory(name) {
   return getCategoryFor(name) ?? "—";
 }
 
+function formatMarketSource(src, type) {
+  if (!src) return "—";
+  const s = String(src).toLowerCase();
+  const base = s.includes("bankerohan") ? "Bankerohan" : s.includes("dftc") ? "DFTC" : src;
+  const pType = type || (s.includes("wholesale") ? "Wholesale" : s.includes("retail") ? "Retail" : "");
+  return pType ? `${base} · ${pType}` : base;
+}
+
 function getDateLabel(preset, customFrom, customTo) {
   if (preset === "7d") return "Last 7 days";
   if (preset === "14d") return "Last 14 days";
@@ -1159,16 +1167,8 @@ function DFTCTrends() {
     }));
   }, [varietyDetails, catalogVarietyLabel, priceDetailData]);
 
-  const latestVolatilityRecord = useMemo(() => {
-    for (const entry of varietyDetails || []) {
-      const records = entry.detail?.recent_records || [];
-      const match = records.find((r) => r.is_volatility_flagged || r.volatility_reason);
-      if (match) return match;
-    }
-    return null;
-  }, [varietyDetails]);
-
   const [volatilityDays, setVolatilityDays] = useState(30);
+  const [volatilePage, setVolatilePage] = useState(1);
   const { data: volatilityCausesData } = useQuery({
     queryKey: ["dftc", "volatility-causes", volatilityDays],
     queryFn: async () => {
@@ -1177,6 +1177,15 @@ function DFTCTrends() {
     },
     staleTime: 60 * 1000,
   });
+
+  const volatileRecords = volatilityCausesData?.records || [];
+  const volatilePageSize = 5;
+  const volatileTotalPages = Math.max(1, Math.ceil(volatileRecords.length / volatilePageSize));
+  const currentVolatilePage = Math.min(volatilePage, volatileTotalPages);
+  const pagedVolatileRecords = useMemo(() => {
+    const start = (currentVolatilePage - 1) * volatilePageSize;
+    return volatileRecords.slice(start, start + volatilePageSize);
+  }, [volatileRecords, currentVolatilePage]);
 
   const formatChartDate = (iso) => {
     if (!iso) return "";
@@ -1672,108 +1681,15 @@ function DFTCTrends() {
         </div>
       )}
 
-      {/* ── Price Volatility & Forecast Context (Compact Insight Cards) ── */}
-      {latestVolatilityRecord && (() => {
-        const isIncrease = (latestVolatilityRecord.change_pct ?? 0) >= 0;
-        const changeAbs = latestVolatilityRecord.change_pct != null
-          ? Math.abs(latestVolatilityRecord.change_pct)
-          : null;
-        const reason = latestVolatilityRecord.volatility_reason;
-        const notes = latestVolatilityRecord.volatility_notes;
-        const recordDate = latestVolatilityRecord.price_date
-          ? formatChartDate(latestVolatilityRecord.price_date)
-          : null;
-
-        return (
-          <div className="mb-6 space-y-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[15px] sm:text-[16px] font-semibold text-neutral-900 tracking-tight">
-                Price Volatility &amp; Forecast Context
-              </h3>
-              <span className="text-[12px] font-medium text-neutral-400">· Recent Market Signal</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Card 1: Price Analysis */}
-              <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-4 sm:p-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wider">
-                      Price Analysis
-                    </span>
-                    {reason && (
-                      <span
-                        className={`inline-flex items-center gap-1 text-[12px] font-medium ${
-                          isIncrease ? "text-emerald-700" : "text-rose-700"
-                        }`}
-                      >
-                        <span>{isIncrease ? "↑" : "↓"}</span>
-                        <span>{reason}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-[15px] sm:text-[16px] font-semibold text-neutral-900">
-                        {pCommodity}
-                      </span>
-                      {changeAbs != null && (
-                        <span
-                          className={`text-[14px] font-semibold tabular-nums ${
-                            isIncrease ? "text-emerald-600" : "text-rose-600"
-                          }`}
-                        >
-                          {isIncrease ? "+" : "-"}{changeAbs}%
-                        </span>
-                      )}
-                      {recordDate && (
-                        <span className="text-[12px] text-neutral-400 font-normal">
-                          vs previous period ({recordDate})
-                        </span>
-                      )}
-                    </div>
-                    {notes && (
-                      <p className="text-[13px] text-neutral-500 italic pt-1 line-clamp-2">
-                        &ldquo;{notes}&rdquo;
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Forecast Context */}
-              <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-4 sm:p-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wider">
-                      Forecast Context
-                    </span>
-                  </div>
-
-                  <p className="text-[13.5px] text-neutral-600 leading-relaxed">
-                    Recent {isIncrease ? "upward" : "downward"} movement is linked to{" "}
-                    <strong className="font-semibold text-neutral-900">
-                      {reason || "market conditions"}
-                    </strong>
-                    . The forecast engine surfaces this context alongside projection trajectories.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Top Causes of Price Volatility Analytics ── */}
-      <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-5 sm:p-6 mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-neutral-100">
+      {/* ── Commodities with Sudden Price Change & Reasons ── */}
+      <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-4 sm:p-5 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-neutral-100">
           <div>
             <h3 className="text-[15px] sm:text-[16px] font-semibold text-neutral-900 tracking-tight">
-              Top Causes of Price Volatility
+              Commodities with Sudden Price Change
             </h3>
             <p className="text-[13px] text-neutral-500 mt-0.5">
-              Aggregated drivers for significant commodity price changes
+              Recent significant price movements and documented field causes
             </p>
           </div>
 
@@ -1785,7 +1701,10 @@ function DFTCTrends() {
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setVolatilityDays(d)}
+                  onClick={() => {
+                    setVolatilityDays(d);
+                    setVolatilePage(1);
+                  }}
                   className={`px-2.5 py-1 rounded-md text-[12px] transition-colors cursor-pointer ${
                     isActive
                       ? "bg-neutral-100 text-neutral-900 font-semibold"
@@ -1799,101 +1718,143 @@ function DFTCTrends() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Price Increase Drivers */}
-          <div>
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
-              <span className="text-[13px] font-semibold text-neutral-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Price Increase Drivers
-              </span>
-              {volatilityCausesData?.top_causes_increase?.length > 0 && (
-                <span className="text-[11px] font-medium text-neutral-400">
-                  {volatilityCausesData.top_causes_increase.length} {volatilityCausesData.top_causes_increase.length === 1 ? "driver" : "drivers"}
-                </span>
-              )}
-            </div>
+        {/* Scrollable Container */}
+        <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
+          <table className="w-full min-w-[680px] text-[12px]">
+            <thead>
+              <tr className="border-b border-neutral-100 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider text-left">
+                <th className="pb-2.5 pl-1 font-semibold">Commodity</th>
+                <th className="pb-2.5 font-semibold">Market &amp; Type</th>
+                <th className="pb-2.5 font-semibold">Price</th>
+                <th className="pb-2.5 font-semibold">Change</th>
+                <th className="pb-2.5 font-semibold">Reason</th>
+                <th className="pb-2.5 font-semibold text-right pr-1">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {pagedVolatileRecords.length > 0 ? (
+                pagedVolatileRecords.map((item) => {
+                  const isIncrease = (item.change_pct ?? 0) >= 0;
+                  const changeAbs = item.change_pct != null ? Math.abs(item.change_pct) : null;
+                  const formattedDate = item.price_date ? formatChartDate(item.price_date) : "—";
+                  const marketLabel = formatMarketSource(item.market, item.price_type);
 
-            {volatilityCausesData?.top_causes_increase?.length ? (
-              <ol className="divide-y divide-neutral-100">
-                {volatilityCausesData.top_causes_increase.map((item, idx) => (
-                  <li key={idx} className="flex items-center justify-between py-2 text-[13px]">
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <span className="text-[12px] font-semibold text-neutral-400 w-4 tabular-nums">
-                        {idx + 1}.
-                      </span>
-                      <span className="font-medium text-neutral-800 truncate">
-                        {item.reason}
-                      </span>
-                      <span className="text-[12px] text-neutral-400 shrink-0">
-                        ({item.count})
-                      </span>
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => {
+                        if (item.commodity_name) {
+                          setPCommodity(item.commodity_name);
+                        }
+                      }}
+                      className="hover:bg-neutral-50/70 transition-colors cursor-pointer group"
+                      title="Click to view trend in chart"
+                    >
+                      <td className="py-2.5 pl-1">
+                        <div className="flex items-center gap-1.5 font-medium text-neutral-900 group-hover:text-[var(--hw-green-700)] transition-colors">
+                          <span>{item.commodity_name}</span>
+                          {item.variety && (
+                            <span className="text-neutral-400 font-normal text-[11px]">
+                              · {item.variety}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-neutral-600">
+                        {marketLabel}
+                      </td>
+                      <td className="py-2.5 font-medium text-neutral-900 tabular-nums">
+                        {item.price != null ? `₱${item.price.toFixed(2)}` : "—"}
+                        {item.uom && <span className="text-neutral-400 font-normal text-[11px]"> /{item.uom}</span>}
+                      </td>
+                      <td className="py-2.5">
+                        {changeAbs != null ? (
+                          <span
+                            className={`inline-flex items-center gap-0.5 font-semibold tabular-nums ${
+                              isIncrease ? "text-emerald-700" : "text-rose-700"
+                            }`}
+                          >
+                            <span>{isIncrease ? "↑ +" : "↓ -"}</span>
+                            <span>{changeAbs}%</span>
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5">
+                        <div className="space-y-0.5">
+                          <span
+                            className={`font-medium ${
+                              isIncrease ? "text-emerald-800" : "text-rose-800"
+                            }`}
+                          >
+                            {item.volatility_reason || "Sudden price movement"}
+                          </span>
+                          {item.volatility_notes && (
+                            <p className="text-[11px] text-neutral-500 italic line-clamp-1">
+                              &ldquo;{item.volatility_notes}&rdquo;
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-1 text-right text-neutral-400 tabular-nums">
+                        {formattedDate}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-neutral-400">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-400 mb-2">
+                        <TrendingUp className="w-4 h-4 text-neutral-300" />
+                      </div>
+                      <p className="text-[12.5px]">
+                        No commodities with sudden price changes recorded during this period.
+                      </p>
                     </div>
-                    <span className="text-[12px] font-semibold text-emerald-600 shrink-0 tabular-nums">
-                      {item.percentage}%
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <div className="py-6 flex flex-col items-center justify-center text-center">
-                <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-400 mb-2">
-                  <TrendingUp className="w-4 h-4 text-neutral-300" />
-                </div>
-                <p className="text-[12.5px] text-neutral-400">
-                  No significant causes recorded during this period.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Price Decrease Drivers */}
-          <div>
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
-              <span className="text-[13px] font-semibold text-neutral-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                Price Decrease Drivers
-              </span>
-              {volatilityCausesData?.top_causes_decrease?.length > 0 && (
-                <span className="text-[11px] font-medium text-neutral-400">
-                  {volatilityCausesData.top_causes_decrease.length} {volatilityCausesData.top_causes_decrease.length === 1 ? "driver" : "drivers"}
-                </span>
+                  </td>
+                </tr>
               )}
-            </div>
-
-            {volatilityCausesData?.top_causes_decrease?.length ? (
-              <ol className="divide-y divide-neutral-100">
-                {volatilityCausesData.top_causes_decrease.map((item, idx) => (
-                  <li key={idx} className="flex items-center justify-between py-2 text-[13px]">
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <span className="text-[12px] font-semibold text-neutral-400 w-4 tabular-nums">
-                        {idx + 1}.
-                      </span>
-                      <span className="font-medium text-neutral-800 truncate">
-                        {item.reason}
-                      </span>
-                      <span className="text-[12px] text-neutral-400 shrink-0">
-                        ({item.count})
-                      </span>
-                    </div>
-                    <span className="text-[12px] font-semibold text-rose-600 shrink-0 tabular-nums">
-                      {item.percentage}%
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <div className="py-6 flex flex-col items-center justify-center text-center">
-                <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-400 mb-2">
-                  <TrendingDown className="w-4 h-4 text-neutral-300" />
-                </div>
-                <p className="text-[12.5px] text-neutral-400">
-                  No significant causes recorded during this period.
-                </p>
-              </div>
-            )}
-          </div>
+            </tbody>
+          </table>
         </div>
+
+        {/* Minimal Paging 5 Controls */}
+        {volatileRecords.length > volatilePageSize && (
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-neutral-100 text-[12px] text-neutral-500">
+            <span>
+              Showing{" "}
+              <strong className="text-neutral-700 font-semibold">
+                {(currentVolatilePage - 1) * volatilePageSize + 1}–{Math.min(currentVolatilePage * volatilePageSize, volatileRecords.length)}
+              </strong>{" "}
+              of <strong className="text-neutral-700 font-semibold">{volatileRecords.length}</strong> commodities
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentVolatilePage <= 1}
+                onClick={() => setVolatilePage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-md border border-neutral-200 text-neutral-700 font-medium hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Previous
+              </button>
+              <span className="px-2 text-neutral-400 tabular-nums">
+                {currentVolatilePage} / {volatileTotalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentVolatilePage >= volatileTotalPages}
+                onClick={() => setVolatilePage((p) => Math.min(volatileTotalPages, p + 1))}
+                className="px-2.5 py-1 rounded-md border border-neutral-200 text-neutral-700 font-medium hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Historical Average Price Section — Informational context only */}

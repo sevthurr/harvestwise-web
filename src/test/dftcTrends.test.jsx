@@ -752,25 +752,26 @@ describe("DFTC Trends page prices API integration", () => {
     expect(screen.getByText("50.00 MT")).toBeInTheDocument();
   });
 
-  it("renders the redesigned clean Top Causes of Price Volatility section with minimal date filter and empty states", async () => {
+  it("renders the clean Commodities with Sudden Price Change section with minimal date filter, scrollable table, and paging", async () => {
     installApi();
     renderTrends(<DFTCTrends />);
 
     // Check heading and subtitle
-    expect(await screen.findByRole("heading", { name: "Top Causes of Price Volatility" })).toBeInTheDocument();
-    expect(screen.getByText("Aggregated drivers for significant commodity price changes")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Commodities with Sudden Price Change" })).toBeInTheDocument();
+    expect(screen.getByText("Recent significant price movements and documented field causes")).toBeInTheDocument();
 
-    // Check segmented control buttons
+    // Check date filter buttons
     expect(screen.getByRole("button", { name: "Last 7 Days" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Last 30 Days" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Last 90 Days" })).toBeInTheDocument();
 
-    // Check drivers headings
-    expect(screen.getByText("Price Increase Drivers")).toBeInTheDocument();
-    expect(screen.getByText("Price Decrease Drivers")).toBeInTheDocument();
-
-    // Check empty states
-    expect(screen.getAllByText("No significant causes recorded during this period.")).toHaveLength(2);
+    // Check table column headers
+    expect(screen.getByRole("columnheader", { name: "Commodity" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Market & Type" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Price" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Change" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Reason" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Date" })).toBeInTheDocument();
   });
 });
 
