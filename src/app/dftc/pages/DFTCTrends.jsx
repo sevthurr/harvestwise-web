@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, PieChart as PieChartIcon } from "lucide-react";
+import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, TrendingDown, PieChart as PieChartIcon } from "lucide-react";
 import {
   COMMODITY_CATEGORIES,
   getCategoryFor,
@@ -1672,135 +1672,234 @@ function DFTCTrends() {
         </div>
       )}
 
-      {/* Price Volatility & Forecast Context */}
-      {latestVolatilityRecord && (
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-[var(--shadow-xs)] p-4 sm:p-5 mb-5">
-          <div className="flex items-center gap-2 mb-2.5">
-            <span className="text-amber-800 font-bold text-[13px] sm:text-[14px] flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              Price Volatility & Forecast Context
-            </span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-[12px]">
-            <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200/80 space-y-1.5">
-              <p className="font-bold text-amber-900 text-[12.5px]">Price Analysis</p>
-              <p className="text-neutral-700 leading-relaxed">
-                <strong className="text-neutral-900">{pCommodity}</strong> prices{" "}
-                {latestVolatilityRecord.change_pct != null
-                  ? `${latestVolatilityRecord.change_pct >= 0 ? "increased" : "decreased"} by ${Math.abs(latestVolatilityRecord.change_pct)}%`
-                  : "experienced significant volatility"}{" "}
-                compared to the previous reporting period ({latestVolatilityRecord.price_date ? formatChartDate(latestVolatilityRecord.price_date) : "recent date"}).
-              </p>
-              {latestVolatilityRecord.volatility_reason && (
-                <div className="pt-1">
-                  <span className="text-neutral-600 font-medium">Detected Cause: </span>
-                  <strong className="text-amber-950 font-semibold">{latestVolatilityRecord.volatility_reason}</strong>
-                  {latestVolatilityRecord.volatility_category && (
-                    <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-medium">
-                      {latestVolatilityRecord.volatility_category}
-                    </span>
-                  )}
-                </div>
-              )}
-              {latestVolatilityRecord.volatility_notes && (
+      {/* ── Price Volatility & Forecast Context (Compact Insight Cards) ── */}
+      {latestVolatilityRecord && (() => {
+        const isIncrease = (latestVolatilityRecord.change_pct ?? 0) >= 0;
+        const changeAbs = latestVolatilityRecord.change_pct != null
+          ? Math.abs(latestVolatilityRecord.change_pct)
+          : null;
+        const reason = latestVolatilityRecord.volatility_reason;
+        const category = latestVolatilityRecord.volatility_category;
+        const notes = latestVolatilityRecord.volatility_notes;
+        const recordDate = latestVolatilityRecord.price_date
+          ? formatChartDate(latestVolatilityRecord.price_date)
+          : null;
+
+        return (
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] sm:text-[16px] font-semibold text-neutral-900 tracking-tight">
+                Price Volatility &amp; Forecast Context
+              </h3>
+              <span className="text-[12px] font-medium text-neutral-400">· Recent Market Signal</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Card 1: Price Analysis */}
+              <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-4 sm:p-5 flex flex-col justify-between">
                 <div>
-                  <span className="text-neutral-600 font-medium">Collector Note: </span>
-                  <span className="text-neutral-800 italic">&ldquo;{latestVolatilityRecord.volatility_notes}&rdquo;</span>
-                </div>
-              )}
-            </div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wider">
+                      Price Analysis
+                    </span>
+                    {reason && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-medium ${
+                          isIncrease
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                            : "bg-rose-50 text-rose-700 border border-rose-200/60"
+                        }`}
+                      >
+                        <span>{isIncrease ? "↑" : "↓"}</span>
+                        <span>{reason}</span>
+                        {category && (
+                          <span className="text-neutral-400 font-normal">· {category}</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
 
-            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-1.5">
-              <p className="font-bold text-neutral-900 text-[12.5px]">Forecast Context</p>
-              <p className="text-neutral-700 leading-relaxed">
-                Recent {latestVolatilityRecord.change_pct != null && latestVolatilityRecord.change_pct >= 0 ? "upward" : "downward"} price movement may be partially influenced by{" "}
-                <strong className="text-neutral-900">{latestVolatilityRecord.volatility_reason || "market conditions"}</strong> reported by field collectors.
-                The forecast engine surfaces this context alongside projection trajectories.
-              </p>
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-[15px] sm:text-[16px] font-semibold text-neutral-900">
+                        {pCommodity}
+                      </span>
+                      {changeAbs != null && (
+                        <span
+                          className={`text-[14px] font-semibold tabular-nums ${
+                            isIncrease ? "text-emerald-600" : "text-rose-600"
+                          }`}
+                        >
+                          {isIncrease ? "+" : "-"}{changeAbs}%
+                        </span>
+                      )}
+                      {recordDate && (
+                        <span className="text-[12px] text-neutral-400 font-normal">
+                          vs previous period ({recordDate})
+                        </span>
+                      )}
+                    </div>
+                    {notes && (
+                      <p className="text-[13px] text-neutral-500 italic pt-1 line-clamp-2">
+                        &ldquo;{notes}&rdquo;
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Forecast Context */}
+              <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-4 sm:p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <span className="text-[12px] font-medium text-neutral-500 uppercase tracking-wider">
+                      Forecast Context
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-neutral-100 text-neutral-600">
+                      Model Adjustment
+                    </span>
+                  </div>
+
+                  <p className="text-[13.5px] text-neutral-600 leading-relaxed">
+                    Recent {isIncrease ? "upward" : "downward"} movement is linked to{" "}
+                    <strong className="font-semibold text-neutral-900">
+                      {reason || "market conditions"}
+                    </strong>
+                    . The forecast engine surfaces this context alongside projection trajectories.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Top Causes of Price Volatility Analytics */}
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 mb-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-[var(--hw-neutral-100)]">
+      {/* ── Top Causes of Price Volatility Analytics ── */}
+      <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-5 sm:p-6 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-neutral-100">
           <div>
-            <h3 className="text-[13.5px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)]">
+            <h3 className="text-[15px] sm:text-[16px] font-semibold text-neutral-900 tracking-tight">
               Top Causes of Price Volatility
             </h3>
-            <p className="text-[11.5px] text-[var(--hw-neutral-600)]">
+            <p className="text-[13px] text-neutral-500 mt-0.5">
               Aggregated drivers for significant commodity price changes
             </p>
           </div>
-          <div className="flex items-center gap-1 bg-[var(--hw-neutral-100)] p-0.5 rounded-lg text-[11px]">
-            {[7, 30, 90].map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setVolatilityDays(d)}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                  volatilityDays === d
-                    ? "bg-white text-[var(--hw-neutral-900)] shadow-xs font-semibold"
-                    : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
-                }`}
-              >
-                Last {d} Days
-              </button>
-            ))}
+
+          {/* Date Filter (36px Segmented Control) */}
+          <div className="inline-flex items-center h-9 p-0.5 rounded-lg border border-neutral-200 bg-white">
+            {[7, 30, 90].map((d) => {
+              const isActive = volatilityDays === d;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setVolatilityDays(d)}
+                  className={`h-full px-3 text-[12px] rounded-md transition-all font-medium cursor-pointer ${
+                    isActive
+                      ? "bg-[var(--hw-green-700)] text-white shadow-xs"
+                      : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50"
+                  }`}
+                >
+                  Last {d} Days
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Top Causes of Increase */}
-          <div className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/30">
-            <div className="flex items-center gap-1.5 font-bold text-emerald-800 text-[12.5px] mb-2.5">
-              <span>🔺 Top Causes of Price Increase</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Price Increase Drivers */}
+          <div>
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
+              <span className="text-[13px] font-semibold text-neutral-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Price Increase Drivers
+              </span>
+              {volatilityCausesData?.top_causes_increase?.length > 0 && (
+                <span className="text-[11px] font-medium text-neutral-400">
+                  {volatilityCausesData.top_causes_increase.length} {volatilityCausesData.top_causes_increase.length === 1 ? "driver" : "drivers"}
+                </span>
+              )}
             </div>
+
             {volatilityCausesData?.top_causes_increase?.length ? (
-              <div className="space-y-2">
+              <ol className="divide-y divide-neutral-100">
                 {volatilityCausesData.top_causes_increase.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-[12px] bg-white px-2.5 py-1.5 rounded-lg border border-emerald-100/80">
-                    <span className="text-neutral-800 font-medium truncate">
-                      {idx + 1}. {item.reason}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-[11px] text-neutral-500">({item.count} {item.count === 1 ? "entry" : "entries"})</span>
-                      <strong className="text-emerald-700 font-bold">{item.percentage}%</strong>
+                  <li key={idx} className="flex items-center justify-between py-2 text-[13px]">
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                      <span className="text-[12px] font-semibold text-neutral-400 w-4 tabular-nums">
+                        {idx + 1}.
+                      </span>
+                      <span className="font-medium text-neutral-800 truncate">
+                        {item.reason}
+                      </span>
+                      <span className="text-[12px] text-neutral-400 shrink-0">
+                        ({item.count})
+                      </span>
                     </div>
-                  </div>
+                    <span className="text-[12px] font-semibold text-emerald-600 shrink-0 tabular-nums">
+                      {item.percentage}%
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ol>
             ) : (
-              <p className="text-[12px] text-neutral-500 italic py-2 text-center">
-                No price increase reasons recorded in this period.
-              </p>
+              <div className="py-6 flex flex-col items-center justify-center text-center">
+                <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-400 mb-2">
+                  <TrendingUp className="w-4 h-4 text-neutral-300" />
+                </div>
+                <p className="text-[12.5px] text-neutral-400">
+                  No significant causes recorded during this period.
+                </p>
+              </div>
             )}
           </div>
 
-          {/* Top Causes of Decrease */}
-          <div className="p-3.5 rounded-xl border border-rose-100 bg-rose-50/30">
-            <div className="flex items-center gap-1.5 font-bold text-rose-800 text-[12.5px] mb-2.5">
-              <span>🔻 Top Causes of Price Decrease</span>
+          {/* Price Decrease Drivers */}
+          <div>
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
+              <span className="text-[13px] font-semibold text-neutral-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                Price Decrease Drivers
+              </span>
+              {volatilityCausesData?.top_causes_decrease?.length > 0 && (
+                <span className="text-[11px] font-medium text-neutral-400">
+                  {volatilityCausesData.top_causes_decrease.length} {volatilityCausesData.top_causes_decrease.length === 1 ? "driver" : "drivers"}
+                </span>
+              )}
             </div>
+
             {volatilityCausesData?.top_causes_decrease?.length ? (
-              <div className="space-y-2">
+              <ol className="divide-y divide-neutral-100">
                 {volatilityCausesData.top_causes_decrease.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-[12px] bg-white px-2.5 py-1.5 rounded-lg border border-rose-100/80">
-                    <span className="text-neutral-800 font-medium truncate">
-                      {idx + 1}. {item.reason}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-[11px] text-neutral-500">({item.count} {item.count === 1 ? "entry" : "entries"})</span>
-                      <strong className="text-rose-700 font-bold">{item.percentage}%</strong>
+                  <li key={idx} className="flex items-center justify-between py-2 text-[13px]">
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                      <span className="text-[12px] font-semibold text-neutral-400 w-4 tabular-nums">
+                        {idx + 1}.
+                      </span>
+                      <span className="font-medium text-neutral-800 truncate">
+                        {item.reason}
+                      </span>
+                      <span className="text-[12px] text-neutral-400 shrink-0">
+                        ({item.count})
+                      </span>
                     </div>
-                  </div>
+                    <span className="text-[12px] font-semibold text-rose-600 shrink-0 tabular-nums">
+                      {item.percentage}%
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ol>
             ) : (
-              <p className="text-[12px] text-neutral-500 italic py-2 text-center">
-                No price decrease reasons recorded in this period.
-              </p>
+              <div className="py-6 flex flex-col items-center justify-center text-center">
+                <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-400 mb-2">
+                  <TrendingDown className="w-4 h-4 text-neutral-300" />
+                </div>
+                <p className="text-[12.5px] text-neutral-400">
+                  No significant causes recorded during this period.
+                </p>
+              </div>
             )}
           </div>
         </div>

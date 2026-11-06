@@ -751,6 +751,27 @@ describe("DFTC Trends page prices API integration", () => {
     expect(screen.getByText("30.00 MT")).toBeInTheDocument();
     expect(screen.getByText("50.00 MT")).toBeInTheDocument();
   });
+
+  it("renders the redesigned clean Top Causes of Price Volatility section with 36px segmented control and empty states", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+
+    // Check heading and subtitle
+    expect(await screen.findByRole("heading", { name: "Top Causes of Price Volatility" })).toBeInTheDocument();
+    expect(screen.getByText("Aggregated drivers for significant commodity price changes")).toBeInTheDocument();
+
+    // Check segmented control buttons
+    expect(screen.getByRole("button", { name: "Last 7 Days" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Last 30 Days" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Last 90 Days" })).toBeInTheDocument();
+
+    // Check drivers headings
+    expect(screen.getByText("Price Increase Drivers")).toBeInTheDocument();
+    expect(screen.getByText("Price Decrease Drivers")).toBeInTheDocument();
+
+    // Check empty states
+    expect(screen.getAllByText("No significant causes recorded during this period.")).toHaveLength(2);
+  });
 });
 
 describe("DFTC Trends Alert Commodities Modal", () => {
