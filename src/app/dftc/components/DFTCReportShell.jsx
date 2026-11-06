@@ -1,25 +1,26 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Download, ArrowLeft, AlertCircle, Check } from "lucide-react";
+import { Download, ArrowLeft, AlertCircle } from "lucide-react";
 
 export const DFTC_PERSONNEL_LIST = [
+  { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker I" },
+  { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" },
   { name: "MARIA S. SANTOS", role: "Data Analyst" }
 ];
 
 export const DEFAULT_PERSONNEL = {
   encodedBy: DFTC_PERSONNEL_LIST[0].name,
   encodedByRole: DFTC_PERSONNEL_LIST[0].role,
-  preparedBy: DFTC_PERSONNEL_LIST[0].name,
-  preparedByRole: DFTC_PERSONNEL_LIST[0].role
+  preparedBy: DFTC_PERSONNEL_LIST[1].name,
+  preparedByRole: DFTC_PERSONNEL_LIST[1].role,
+  reviewedBy: DFTC_PERSONNEL_LIST[1].name,
+  reviewedByRole: DFTC_PERSONNEL_LIST[1].role
 };
 
 /**
  * Shared chrome for every DFTC report preview.
  *
- * Price monitoring and arrival volume are different datasets, but they are
- * presented the same way: same header, metadata grid, format tabs, personnel
- * selectors, error strip, and action bar. Only the preview body and the
- * download builders differ, so those stay in each preview component and are
- * passed in here.
+ * Price monitoring and arrival volume are presented in official landscape format:
+ * header, metadata grid, format tabs, personnel selectors, error strip, and action bar.
  */
 function DFTCReportShell({
   title,
@@ -103,7 +104,6 @@ function DFTCReportShell({
       {/* Preview body */}
       <div className="p-1.5 sm:p-3 md:p-6 bg-[var(--hw-neutral-50)] overflow-x-auto">{children}</div>
 
-
       {/* Error state */}
       {isError && (
         <div className="px-4 md:px-6 py-2.5 bg-red-50 border-t border-red-100 shrink-0 flex items-center gap-2">
@@ -144,7 +144,7 @@ function DFTCReportShell({
 
       {/* Hidden off-screen pages for html2canvas rendering */}
       {renderHiddenPages && (
-        <div style={{ position: "fixed", left: -9999, top: 0, width: 960, pointerEvents: "none" }}>
+        <div style={{ position: "fixed", left: -9999, top: 0, width: 1020, pointerEvents: "none" }}>
           {renderHiddenPages()}
         </div>
       )}

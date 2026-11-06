@@ -81,8 +81,7 @@ describe("report page layout", () => {
       ["Lowland Vegetables"],
       ["Highland Vegetables"],
       ["Spices", "Rootcrops"],
-      ["Fruits"],
-      ["Others"],
+      ["Fruits", "Others"],
     ]);
   });
 

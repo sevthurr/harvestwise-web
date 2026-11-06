@@ -3,19 +3,20 @@
 // The commodity catalogue is NOT here. It is served by
 // `/dftc/reports/preview`, read from the commodity master
 // (`commodity.display_order`) and seeded by
-// `api/scripts/data/dftc_price_report.py`. That list used to live in this file
-// as 32 hardcoded commodities with mock price columns, transcribed from the
-// DFTC's published retail price workbook — and it drifted: 19 of the workbook's
-// commodities were missing, Atsal sat under Highland Vegetables, Chinese Pechay
-// under Lowland, and the row numbers did not match the row order.
+// `api/scripts/data/dftc_price_report.py`.
 //
-// The workbook is a document, not a runtime dependency. Keeping the order in the
-// seed means adding a commodity is a data change, and the report follows.
+// Which categories share a sheet:
+// - IMG format: strictly 4 images only (Page 4 shares Fruits and Others).
+// - PDF format: un-cramped pages where Fruits and Others have their own sheets (5 pages).
 
-// Which categories share an A4 landscape sheet. Spices and rootcrops share one;
-// Fruits and Others each have their own dedicated sheet so neither overflows an
-// A4 landscape sheet or causes cropping/zooming.
-const PAGE_CATEGORY_GROUPS = [
+export const IMG_PAGE_CATEGORY_GROUPS = [
+  ["Lowland Vegetables"],
+  ["Highland Vegetables"],
+  ["Spices", "Rootcrops"],
+  ["Fruits", "Others"]
+];
+
+export const PDF_PAGE_CATEGORY_GROUPS = [
   ["Lowland Vegetables"],
   ["Highland Vegetables"],
   ["Spices", "Rootcrops"],
@@ -23,4 +24,4 @@ const PAGE_CATEGORY_GROUPS = [
   ["Others"]
 ];
 
-export { PAGE_CATEGORY_GROUPS };
+export const PAGE_CATEGORY_GROUPS = IMG_PAGE_CATEGORY_GROUPS;
