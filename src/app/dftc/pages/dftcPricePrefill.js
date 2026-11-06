@@ -111,7 +111,12 @@ function collect(items, resolveCommodityId) {
       name: item.commodity_name,
       variety: item.variety || "Regular",
       uom: item.uom || "kg",
-      price: item.prevail_price
+      price: item.prevail_price,
+      volatility_reason_id: item.volatility_reason_id,
+      volatility_reason_name: item.volatility_reason_name,
+      volatility_notes: item.volatility_notes,
+      price_change_percentage: item.price_change_percentage,
+      is_volatility_flagged: item.is_volatility_flagged,
     });
   }
   return { map, unrenderable, count: map.size };

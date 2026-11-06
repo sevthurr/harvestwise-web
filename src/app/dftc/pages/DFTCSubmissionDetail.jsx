@@ -603,8 +603,8 @@ function DFTCSubmissionDetail() {
                         <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                           <tr>
                             {(ds.hasMarketAndType
-                              ? ["Row", "Commodity", "Category", "Variety", "Market", "Price Type", "Date", "UOM", "Price"]
-                              : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
+                              ? ["Row", "Commodity", "Category", "Variety", "Market", "Price Type", "Date", "UOM", "Price", "Observation / Reason"]
+                              : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price", "Observation / Reason"]
                             ).map((h) => (
                               <th key={h} className={thCls}>{h}</th>
                             ))}
@@ -626,6 +626,25 @@ function DFTCSubmissionDetail() {
                                   <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
                                   <td className={tdCls}>{r.uom || "kg"}</td>
                                   <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                                  <td className={tdCls}>
+                                    {r.volatility_reason_name ? (
+                                      <div>
+                                        <span className="font-medium text-[var(--hw-neutral-900)]">{r.volatility_reason_name}</span>
+                                        {r.price_change_percentage != null && (
+                                          <span className="text-[11px] text-[var(--hw-neutral-500)] ml-1">
+                                            ({r.price_change_percentage >= 0 ? "+" : ""}{r.price_change_percentage}%)
+                                          </span>
+                                        )}
+                                        {r.volatility_notes && (
+                                          <span className="text-[11.5px] text-[var(--hw-neutral-500)] block truncate max-w-[200px]" title={r.volatility_notes}>
+                                            {r.volatility_notes}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[var(--hw-neutral-400)]">—</span>
+                                    )}
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -694,8 +713,8 @@ function DFTCSubmissionDetail() {
                         <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
                           <tr>
                             {(ds.hasMarketAndType
-                              ? ["Row", "Commodity", "Category", "Variety", "Market", "Price Type", "Date", "UOM", "Price"]
-                              : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price"]
+                              ? ["Row", "Commodity", "Category", "Variety", "Market", "Price Type", "Date", "UOM", "Price", "Observation / Reason"]
+                              : ["Row", "Commodity", "Category", "Variety", "Date", "UOM", "Price", "Observation / Reason"]
                             ).map((h) => (
                               <th key={h} className={thCls}>{h}</th>
                             ))}
@@ -717,6 +736,25 @@ function DFTCSubmissionDetail() {
                                   <td className={tdCls}>{formatDateOrMonth(r.price_date || r.date)}</td>
                                   <td className={tdCls}>{r.uom || "kg"}</td>
                                   <td className={tdBold}>{r.prevail_price != null ? `₱${Number(r.prevail_price).toFixed(2)}` : (r.price != null ? `₱${Number(r.price).toFixed(2)}` : "—")}</td>
+                                  <td className={tdCls}>
+                                    {r.volatility_reason_name ? (
+                                      <div>
+                                        <span className="font-medium text-[var(--hw-neutral-900)]">{r.volatility_reason_name}</span>
+                                        {r.price_change_percentage != null && (
+                                          <span className="text-[11px] text-[var(--hw-neutral-500)] ml-1">
+                                            ({r.price_change_percentage >= 0 ? "+" : ""}{r.price_change_percentage}%)
+                                          </span>
+                                        )}
+                                        {r.volatility_notes && (
+                                          <span className="text-[11.5px] text-[var(--hw-neutral-500)] block truncate max-w-[200px]" title={r.volatility_notes}>
+                                            {r.volatility_notes}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[var(--hw-neutral-400)]">—</span>
+                                    )}
+                                  </td>
                                 </tr>
                               );
                             })}

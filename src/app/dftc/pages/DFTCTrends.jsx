@@ -1159,6 +1159,25 @@ function DFTCTrends() {
     }));
   }, [varietyDetails, catalogVarietyLabel, priceDetailData]);
 
+  const latestVolatilityRecord = useMemo(() => {
+    for (const entry of varietyDetails || []) {
+      const records = entry.detail?.recent_records || [];
+      const match = records.find((r) => r.is_volatility_flagged || r.volatility_reason);
+      if (match) return match;
+    }
+    return null;
+  }, [varietyDetails]);
+
+  const [volatilityDays, setVolatilityDays] = useState(30);
+  const { data: volatilityCausesData } = useQuery({
+    queryKey: ["dftc", "volatility-causes", volatilityDays],
+    queryFn: async () => {
+      const res = await apiGet(`/dftc/analytics/volatility-causes?days=${volatilityDays}`);
+      return parseResponse(res);
+    },
+    staleTime: 60 * 1000,
+  });
+
   const formatChartDate = (iso) => {
     if (!iso) return "";
     const dObj = parseManilaDate(String(iso).slice(0, 10));
@@ -1653,6 +1672,140 @@ function DFTCTrends() {
         </div>
       )}
 
+      {/* Price Volatility & Forecast Context */}
+      {latestVolatilityRecord && (
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-[var(--shadow-xs)] p-4 sm:p-5 mb-5">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="text-amber-800 font-bold text-[13px] sm:text-[14px] flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              Price Volatility & Forecast Context
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-[12px]">
+            <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200/80 space-y-1.5">
+              <p className="font-bold text-amber-900 text-[12.5px]">Price Analysis</p>
+              <p className="text-neutral-700 leading-relaxed">
+                <strong className="text-neutral-900">{pCommodity}</strong> prices{" "}
+                {latestVolatilityRecord.change_pct != null
+                  ? `${latestVolatilityRecord.change_pct >= 0 ? "increased" : "decreased"} by ${Math.abs(latestVolatilityRecord.change_pct)}%`
+                  : "experienced significant volatility"}{" "}
+                compared to the previous reporting period ({latestVolatilityRecord.price_date ? formatChartDate(latestVolatilityRecord.price_date) : "recent date"}).
+              </p>
+              {latestVolatilityRecord.volatility_reason && (
+                <div className="pt-1">
+                  <span className="text-neutral-600 font-medium">Detected Cause: </span>
+                  <strong className="text-amber-950 font-semibold">{latestVolatilityRecord.volatility_reason}</strong>
+                  {latestVolatilityRecord.volatility_category && (
+                    <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-medium">
+                      {latestVolatilityRecord.volatility_category}
+                    </span>
+                  )}
+                </div>
+              )}
+              {latestVolatilityRecord.volatility_notes && (
+                <div>
+                  <span className="text-neutral-600 font-medium">Collector Note: </span>
+                  <span className="text-neutral-800 italic">&ldquo;{latestVolatilityRecord.volatility_notes}&rdquo;</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-1.5">
+              <p className="font-bold text-neutral-900 text-[12.5px]">Forecast Context</p>
+              <p className="text-neutral-700 leading-relaxed">
+                Recent {latestVolatilityRecord.change_pct != null && latestVolatilityRecord.change_pct >= 0 ? "upward" : "downward"} price movement may be partially influenced by{" "}
+                <strong className="text-neutral-900">{latestVolatilityRecord.volatility_reason || "market conditions"}</strong> reported by field collectors.
+                The forecast engine surfaces this context alongside projection trajectories.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Causes of Price Volatility Analytics */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-[var(--hw-neutral-100)]">
+          <div>
+            <h3 className="text-[13.5px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)]">
+              Top Causes of Price Volatility
+            </h3>
+            <p className="text-[11.5px] text-[var(--hw-neutral-600)]">
+              Aggregated drivers for significant commodity price changes
+            </p>
+          </div>
+          <div className="flex items-center gap-1 bg-[var(--hw-neutral-100)] p-0.5 rounded-lg text-[11px]">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setVolatilityDays(d)}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                  volatilityDays === d
+                    ? "bg-white text-[var(--hw-neutral-900)] shadow-xs font-semibold"
+                    : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+                }`}
+              >
+                Last {d} Days
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Top Causes of Increase */}
+          <div className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/30">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-800 text-[12.5px] mb-2.5">
+              <span>🔺 Top Causes of Price Increase</span>
+            </div>
+            {volatilityCausesData?.top_causes_increase?.length ? (
+              <div className="space-y-2">
+                {volatilityCausesData.top_causes_increase.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[12px] bg-white px-2.5 py-1.5 rounded-lg border border-emerald-100/80">
+                    <span className="text-neutral-800 font-medium truncate">
+                      {idx + 1}. {item.reason}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-[11px] text-neutral-500">({item.count} {item.count === 1 ? "entry" : "entries"})</span>
+                      <strong className="text-emerald-700 font-bold">{item.percentage}%</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12px] text-neutral-500 italic py-2 text-center">
+                No price increase reasons recorded in this period.
+              </p>
+            )}
+          </div>
+
+          {/* Top Causes of Decrease */}
+          <div className="p-3.5 rounded-xl border border-rose-100 bg-rose-50/30">
+            <div className="flex items-center gap-1.5 font-bold text-rose-800 text-[12.5px] mb-2.5">
+              <span>🔻 Top Causes of Price Decrease</span>
+            </div>
+            {volatilityCausesData?.top_causes_decrease?.length ? (
+              <div className="space-y-2">
+                {volatilityCausesData.top_causes_decrease.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[12px] bg-white px-2.5 py-1.5 rounded-lg border border-rose-100/80">
+                    <span className="text-neutral-800 font-medium truncate">
+                      {idx + 1}. {item.reason}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-[11px] text-neutral-500">({item.count} {item.count === 1 ? "entry" : "entries"})</span>
+                      <strong className="text-rose-700 font-bold">{item.percentage}%</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12px] text-neutral-500 italic py-2 text-center">
+                No price decrease reasons recorded in this period.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Historical Average Price Section — Informational context only */}
       <HistoricalAveragePriceSection
         commodityId={pCommodityId}
@@ -1675,7 +1828,7 @@ function DFTCTrends() {
               <table className="w-full min-w-[620px] text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
-                    {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price"].map((h) => (
+                    {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price", "Change", "Volatility Reason"].map((h) => (
                       <th key={h} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -1685,7 +1838,7 @@ function DFTCTrends() {
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                   {pPageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                      <td colSpan={10} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
                         No price records for the selected filters.
                       </td>
                     </tr>
@@ -1701,6 +1854,24 @@ function DFTCTrends() {
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-600)] whitespace-nowrap">kg</td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-bold text-[var(--hw-neutral-900)] whitespace-nowrap">
                           {row.price != null ? `₱${row.price.toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px]">
+                          {row.change_pct != null ? (
+                            <span className={`font-semibold ${row.change_pct > 0 ? "text-emerald-700" : row.change_pct < 0 ? "text-rose-600" : "text-neutral-600"}`}>
+                              {row.change_pct > 0 ? "🔺 +" : row.change_pct < 0 ? "🔻 " : ""}{row.change_pct}%
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px]">
+                          {row.volatility_reason ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full text-[11px]" title={row.volatility_notes || undefined}>
+                              ⚠ {row.volatility_reason}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
                         </td>
                       </tr>
                     ))

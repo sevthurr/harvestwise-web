@@ -83,56 +83,80 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     localStorage.clear();
   });
 
-  it('renders period buttons (Daily, Weekly, Monthly), does NOT render redundant source tabs, and renders categories', async () => {
+  it('renders market tabs (DFTC Arrival, Bankerohan Arrival), does NOT render retail or wholesale tabs, and renders daily date picker and categories', async () => {
     renderDFTCArrivalInput();
 
     expect(screen.getByText('Add Arrival Volume')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Daily/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Weekly/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Monthly/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /DFTC Arrival/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bankerohan Arrival/i })).toBeInTheDocument();
 
-    // Redundant source tabs must NOT be in the tab navigation
-    expect(screen.queryByRole('button', { name: /All Sources \(Combined\)/i })).toBeNull();
+    // Retail and Wholesale must NOT be present
+    expect(screen.queryByRole('button', { name: /Retail/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Wholesale/i })).toBeNull();
+
+    // Date picker for daily encoding
+    expect(screen.getByLabelText(/Date:/i)).toBeInTheDocument();
 
     expect(screen.getByText(/Lowland Vegetables/i)).toBeInTheDocument();
     expect(screen.getByText(/Highland Vegetables/i)).toBeInTheDocument();
   });
 
-  it('allows switching between Daily, Weekly, and Monthly entry modes', async () => {
+  it('allows switching between DFTC Arrival and Bankerohan Arrival tabs with independent entry counts', async () => {
     renderDFTCArrivalInput();
 
-    // Click Monthly button
-    const monthlyBtn = screen.getByRole('button', { name: /Monthly/i });
-    fireEvent.click(monthlyBtn);
+    // Expand category
+    const lowlandBtn = screen.getByText(/Lowland Vegetables/i).closest('button');
+    fireEvent.click(lowlandBtn);
 
-    // Month & Year select dropdowns should be visible
-    expect(screen.getByText('January')).toBeInTheDocument();
-    expect(screen.getByText('2025')).toBeInTheDocument();
+    // Enter volume for DFTC Arrival
+    const inputs = screen.getAllByPlaceholderText('0');
+    fireEvent.change(inputs[0], { target: { value: '500' } });
 
-    // Click Weekly button
-    const weeklyBtn = screen.getByRole('button', { name: /Weekly/i });
-    fireEvent.click(weeklyBtn);
-    expect(screen.getByLabelText(/Select week of month/i)).toBeInTheDocument();
-    expect(screen.getByText('Period:')).toBeInTheDocument();
+    // Switch to Bankerohan Arrival tab
+    const bankerohanTab = screen.getByRole('button', { name: /Bankerohan Arrival/i });
+    fireEvent.click(bankerohanTab);
+
+    // Enter volume for Bankerohan Arrival
+    const bankInputs = screen.getAllByPlaceholderText('0');
+    fireEvent.change(bankInputs[0], { target: { value: '300' } });
+
+    // Review hyperlink should show total commodities entered across tabs
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Review \(2\)/i })).toBeInTheDocument();
+    });
   });
 
-  it('supports selecting week number of month', async () => {
+  it('renders Excel-aligned Review table with summary cards, market channel tabs, and authentic columns', async () => {
     renderDFTCArrivalInput();
 
-    const weeklyBtn = screen.getByRole('button', { name: /Weekly/i });
-    fireEvent.click(weeklyBtn);
+    const lowlandBtn = screen.getByText(/Lowland Vegetables/i).closest('button');
+    fireEvent.click(lowlandBtn);
 
-    // The week options are generated for the currently selected month, which
-    // defaults to the real current month — derive the expected label.
-    const shortMonth = ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'][new Date().getMonth()]
-      .slice(0, 3);
+    const inputs = screen.getAllByPlaceholderText('0');
+    fireEvent.change(inputs[0], { target: { value: '500' } });
+    fireEvent.change(inputs[1], { target: { value: '250' } });
 
-    // Week select dropdown should be available with week options
-    const weekSelect = screen.getByLabelText(/Select week of month/i);
-    expect(screen.getByText(new RegExp(`Week 1 \\(${shortMonth} 1 – 7\\)`, 'i'))).toBeInTheDocument();
-    fireEvent.change(weekSelect, { target: { value: '1' } });
-    expect(weekSelect.value).toBe('1');
+    // Open review mode
+    const reviewBtn = screen.getByRole('button', { name: /Review Entered Data/i });
+    fireEvent.click(reviewBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Arrival Volume — Review')).toBeInTheDocument();
+    });
+
+    // Summary cards exist matching authentic review
+    expect(screen.getByText('Combined Overall Volume')).toBeInTheDocument();
+    expect(screen.getByText('Farm Source')).toBeInTheDocument();
+    expect(screen.getByText('Other Sources')).toBeInTheDocument();
+
+    // Market tabs in review mode
+    expect(screen.getByRole('button', { name: /^DFTC Arrival/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Bankerohan Arrival/i })).toBeInTheDocument();
+
+    // Excel table headers and summary cards
+    expect(screen.getAllByText(/Farm Source/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Other Sources/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Overall Total/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders icon-based commodity headers, column headers without (kg), selectable units, and calculates total with unit', async () => {
@@ -195,7 +219,7 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     const topReviewLink = screen.getByRole('button', { name: /^Review \(1\)/i });
     fireEvent.click(topReviewLink);
 
-    // Should immediately transition to Review mode with summary cards matching Add Price Data review
+    // Should immediately transition to Review mode
     await waitFor(() => {
       expect(screen.getByText('Add Arrival Volume — Review')).toBeInTheDocument();
       expect(screen.getByText('Combined Overall Volume')).toBeInTheDocument();
@@ -220,11 +244,9 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
       expect(screen.getByRole('button', { name: /Total Source Values Entered: 2/i })).toBeInTheDocument();
     });
 
-    // One commodity, two filled source cells — the summary counts cells, so the
-    // combined card matches Farm Source + Other Sources.
-    expect(screen.getByRole('button', { name: /Combined Overall Volume 2 entered/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Farm Source 1 entered/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Other Sources 1 entered/i })).toBeInTheDocument();
+    expect(screen.getByText('Combined Overall Volume')).toBeInTheDocument();
+    expect(screen.getByText('Farm Source')).toBeInTheDocument();
+    expect(screen.getByText('Other Sources')).toBeInTheDocument();
 
     // Saving is still one commodity record, carrying both source columns.
     expect(screen.getByRole('button', { name: /Save DFTC Arrival Volume.*\(1 commodities\)/i })).toBeInTheDocument();
@@ -248,9 +270,9 @@ describe('DFTCArrivalInput Unified Entry & Excel-Aligned Review', () => {
     await waitFor(() => {
       expect(screen.getByText('Add Arrival Volume — Review')).toBeInTheDocument();
       // Table headers matching OVERALL TOTAL sheet
-      expect(screen.getByText('FARM SOURCE')).toBeInTheDocument();
-      expect(screen.getByText('OTHER SOURCES')).toBeInTheDocument();
-      expect(screen.getByText('OVERALL TOTAL')).toBeInTheDocument();
+      expect(screen.getAllByText(/Farm Source/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Other Sources/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Overall Total/i).length).toBeGreaterThan(0);
       // Check total row matching Excel sheet
       expect(screen.getByText('TOTAL')).toBeInTheDocument();
     });

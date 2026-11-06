@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2, X } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, BarChart2, X, AlertCircle } from "lucide-react";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
@@ -31,6 +31,37 @@ const DIR_CFG = {
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus }
 };
 
+const VOLATILITY_REASON_I18N = {
+  "Increased Supply": { ceb: "Midaghan ang Suplay", tl: "Dumami ang Suplay" },
+  "Decreased Supply": { ceb: "Mimenos ang Suplay", tl: "Bumaba ang Suplay" },
+  "Oversupply in Market": { ceb: "Sobra nga Suplay sa Palengke", tl: "Labis na Suplay sa Pamilihan" },
+  "Limited Harvest Volume": { ceb: "Gamay nga Ani", tl: "Mababang Dami ng Ani" },
+  "Crop Failure": { ceb: "Pagkadaot sa Tanom", tl: "Pagkasira ng Pananim" },
+  "Increased Consumer Demand": { ceb: "Misaka ang Panginahanglan", tl: "Tumaas ang Pangangailangan" },
+  "Decreased Consumer Demand": { ceb: "Miubos ang Panginahanglan", tl: "Bumaba ang Pangangailangan" },
+  "Seasonal Demand Increase": { ceb: "Panahon sa Pagsaka sa Panginahanglan", tl: "Pana-panahong Pagtaas ng Pangangailangan" },
+  "Seasonal Demand Decrease": { ceb: "Panahon sa Pag-ubos sa Panginahanglan", tl: "Pana-panahong Pagbaba ng Pangangailangan" },
+  "Heavy Rainfall": { ceb: "Kusog nga Ulan", tl: "Malakas na Ulan" },
+  "Drought": { ceb: "Ting-uga", tl: "Tagtuyot" },
+  "Flooding": { ceb: "Baha", tl: "Baha" },
+  "Typhoon": { ceb: "Bagyo", tl: "Bagyo" },
+  "Extreme Heat": { ceb: "Grabe nga Kainit", tl: "Matinding Init" },
+  "Transportation Cost Increase": { ceb: "Pagsaka sa Plete sa Paghatod", tl: "Pagtaas ng Gastos sa Transportasyon" },
+  "Fuel Price Increase": { ceb: "Pagsaka sa Presyo sa Gasolina", tl: "Pagtaas ng Presyo ng Krudo" },
+  "Delivery Delays": { ceb: "Kadelatar sa Paghatod", tl: "Pagkaantala ng Paghahatid" },
+  "Market Access Issues": { ceb: "Kalisod sa Pag-access sa Palengke", tl: "Kahirapan sa Pag-access sa Pamilihan" },
+  "Trader Buying Surge": { ceb: "Kalit nga Pagpamalit sa mga Komprador", tl: "Biglaang Pamimili ng mga Komprador" },
+  "Import Competition": { ceb: "Kompetisyon sa Import", tl: "Kompetisyon mula sa Import" },
+  "Export Demand Increase": { ceb: "Pagsaka sa Demand sa Export", tl: "Pagtaas ng Demand sa Export" },
+  "Competition from Alternative Products": { ceb: "Kompetisyon sa Alternatibong Produkto", tl: "Kompetisyon mula sa Ibang Produkto" },
+  "Government Intervention": { ceb: "Interbensyon sa Gobyerno", tl: "Interbensyon ng Gobyerno" },
+  "Pest Infestation": { ceb: "Peste sa Tanom", tl: "Peste sa Pananim" },
+  "Disease Outbreak": { ceb: "Sakit sa Tanom", tl: "Sakit sa Pananim" },
+  "Delayed Harvest": { ceb: "Nadelatar nga Pag-ani", tl: "Naantalang Pag-ani" },
+  "Early Harvest": { ceb: "Sayo nga Pag-ani", tl: "Maagang Pag-ani" },
+  "Other": { ceb: "Uban pa", tl: "Iba pa" },
+};
+
 const segCls = (active) =>
   `flex-1 py-2 text-[12px] font-medium transition-colors text-center leading-tight px-1 ${
     active ? "bg-[var(--hw-green-700)] text-white" : "text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
@@ -44,7 +75,8 @@ const periodChipCls = (active) =>
   }`;
 
 function CommodityDetailPage() {
-  const { t } = useLanguage();
+  const { t, langCode, effectiveLanguage } = useLanguage();
+  const currentLang = langCode || effectiveLanguage || "ceb";
   const { commodityId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -106,7 +138,7 @@ function CommodityDetailPage() {
       }
     }
 
-    return { allCommodities: top10Items, topCommodities: uniqueTop10 };
+    return { allCommodities: rawItems, topCommodities: uniqueTop10 };
   }, [pricesListData]);
 
   const priceTypeKey = PRICE_TYPE_KEY[market];
@@ -200,7 +232,8 @@ function CommodityDetailPage() {
       baseName: resolvedDetailData.baseName,
       variety: resolvedDetailData.variety,
       icon: resolvedDetailData.icon,
-      unitOfMeasure: resolvedDetailData.unitOfMeasure || 'kg'
+      unitOfMeasure: resolvedDetailData.unitOfMeasure || 'kg',
+      prices: resolvedDetailData.prices,
     };
   }, [resolvedDetailData]);
 
@@ -295,6 +328,64 @@ function CommodityDetailPage() {
 
   const advisoryMessage = buildPriceAdvisory(forecast, commodity?.baseName || commodity?.name, uom);
 
+  const latestRecord = priceRecords[0];
+  const volatilityAdvisory = useMemo(() => {
+    const rawReason = (latestRecord?.volatilityReason || resolvedDetailData?.volatilityReason || "").trim();
+    const rawCategory = (latestRecord?.volatilityCategory || resolvedDetailData?.volatilityCategory || "").trim();
+    const notes = (latestRecord?.volatilityNotes || resolvedDetailData?.volatilityNotes || "").trim();
+
+    // Do not display advisory on farmer card if no reason was provided, or if reason is "Other" / "Others"
+    if (!rawReason) return null;
+    const lowerReason = rawReason.toLowerCase();
+    const lowerCategory = rawCategory.toLowerCase();
+    if (
+      lowerReason === "other" ||
+      lowerReason === "others" ||
+      lowerCategory === "other" ||
+      lowerCategory === "others"
+    ) {
+      return null;
+    }
+
+    let translatedReason = rawReason;
+    if (rawReason && VOLATILITY_REASON_I18N[rawReason]?.[currentLang]) {
+      translatedReason = VOLATILITY_REASON_I18N[rawReason][currentLang];
+    }
+
+    const reasonText = notes ? `${translatedReason} (${notes})` : translatedReason;
+
+    const changeVal = latestRecord?.change ?? null;
+    const changePctVal = latestRecord?.changePct ?? null;
+    const isFalling = (changeVal != null && changeVal < 0) || (changePctVal != null && changePctVal < 0);
+    const isRising = (changeVal != null && changeVal > 0) || (changePctVal != null && changePctVal > 0);
+
+    const Icon = isFalling ? TrendingDown : isRising ? TrendingUp : AlertCircle;
+    const color = isFalling ? "text-red-500" : isRising ? "text-emerald-600" : "text-amber-600";
+
+    let message = "";
+    if (isFalling) {
+      message = t(
+        "farmer.commodityDetail.volatility_reason_drop",
+        { reason: reasonText },
+        `Reason for sudden price drop: ${reasonText}`
+      );
+    } else if (isRising) {
+      message = t(
+        "farmer.commodityDetail.volatility_reason_rise",
+        { reason: reasonText },
+        `Reason for sudden price increase: ${reasonText}`
+      );
+    } else {
+      message = t(
+        "farmer.commodityDetail.volatility_reason_change",
+        { reason: reasonText },
+        `Reason for sudden price change: ${reasonText}`
+      );
+    }
+
+    return { Icon, color, message };
+  }, [latestRecord, resolvedDetailData, currentLang, t]);
+
   const currentPrice = forecast.currentPrice != null ? forecast.currentPrice : (priceRecords[0]?.prevailPrice ?? null);
   const lowerForecast = forecast.lowerForecast != null ? forecast.lowerForecast : null;
   const upperForecast = forecast.upperForecast != null ? forecast.upperForecast : null;
@@ -352,7 +443,7 @@ function CommodityDetailPage() {
   const variantRows = useMemo(() => {
     if (!familyVariants.length) {
       if (!commodity) return [];
-      const priceVal = forecast.currentPrice ?? priceRecords[0]?.prevailPrice ?? null;
+      const priceVal = forecast.currentPrice ?? resolvedDetailData?.currentPrice ?? priceRecords[0]?.prevailPrice ?? null;
       const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
       const forecastRangeText = (lowerForecast != null && upperForecast != null)
         ? `${formatPrice(lowerForecast)}–${formatPrice(upperForecast)}/${uom}`
@@ -396,7 +487,7 @@ function CommodityDetailPage() {
       let upper = null;
 
       if (isCurrentActive && resolvedDetailData) {
-        priceVal = forecast.currentPrice ?? priceRecords[0]?.prevailPrice ?? getAvailablePrice(v.prices);
+        priceVal = forecast.currentPrice ?? resolvedDetailData.currentPrice ?? priceRecords[0]?.prevailPrice ?? getAvailablePrice(v.prices);
         lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
       } else {
@@ -618,9 +709,17 @@ function CommodityDetailPage() {
                 ))}
               </div>
             </div>
-            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-4 pt-2 border-t border-[var(--hw-neutral-100)]">
-              {t("farmer.commodityDetail.today", {}, "Today")} · {MARKET_LABEL[market] || '–'}
-            </p>
+            <div className="mt-4 pt-2 border-t border-[var(--hw-neutral-100)] space-y-1">
+              <p className="text-[12px] text-[var(--hw-neutral-500)]">
+                {t("farmer.commodityDetail.today", {}, "Today")} · {MARKET_LABEL[market] || '–'}
+              </p>
+              {volatilityAdvisory && (
+                <div className={`flex items-center gap-1 ${volatilityAdvisory.color}`}>
+                  <volatilityAdvisory.Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="text-[12px] font-medium leading-snug">{volatilityAdvisory.message}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Card 2: Forecasted price */}

@@ -33,5 +33,9 @@ export const commodityDetail = {
   btn_retry: "Subukan muli",
   price_trend_details: "Detalye ng Galaw ng Presyo",
   assess_crop_btn: "Suriin ang pananim na ito",
-  select_variety: "Pumili ng barayti"
+  select_variety: "Pumili ng barayti",
+  volatility_reason_drop: "Dahilan ng biglaang pagbaba: {reason}",
+  volatility_reason_rise: "Dahilan ng biglaang pagtaas: {reason}",
+  volatility_reason_change: "Dahilan ng biglaang pagbabago: {reason}",
+  sudden_movement: "Naitalang biglaang galaw ng presyo"
 };
