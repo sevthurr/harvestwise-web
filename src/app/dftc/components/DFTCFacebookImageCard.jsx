@@ -8,24 +8,44 @@ const BANK_BG = "#fff2cc"; // Light buttery yellow for Bankerohan
 const DFTC_BG = "#cfe2f3"; // Light sky blue for DFTC Taboan
 const CATEGORY_BG = "#cbd5e1"; // Solid light slate-grey for category header
 
-function FBTableHeaders({ cellHeader, headerPadding, headerFontSize }) {
+
+// All four Facebook cards share one fixed size. Rows use integer pixel heights with
+// matching line-heights (no table / fractional padding), which html2canvas renders
+// identically to the on-screen preview (no clipped text or overlapping borders).
+const CARD_W = 1020;
+const CARD_H = 1000;
+const HEADER_H = 128;
+const TABLE_HEAD_ROW_H = 24;
+const SIGNATURE_H = 72;
+const FOOTER_H = 16;
+const BODY_PAD = 10;
+const COLS = "6% 34% 10% 10% 10% 10% 10% 10%";
+const FONT = "Arial, Helvetica, sans-serif";
+
+function Cell({ bg, h, children, align = "left", bold = false, italic = false, fontSize, style = {} }) {
   return (
-    <thead>
-      <tr>
-        <th rowSpan={2} style={cellHeader(LEFT_BG, { width: "6%" })}>No.</th>
-        <th rowSpan={2} style={cellHeader(LEFT_BG, { width: "34%", textAlign: "left" })}>Commodity</th>
-        <th rowSpan={2} style={cellHeader(LEFT_BG, { width: "10%" })}>UOM</th>
-        <th colSpan={3} style={cellHeader(BANK_BG)}>BANKEROHAN MARKET</th>
-        <th colSpan={2} style={cellHeader(DFTC_BG)}>DFTC TABOAN</th>
-      </tr>
-      <tr>
-        <th style={cellHeader(BANK_BG, { width: "10%" })}>Landing</th>
-        <th style={cellHeader(BANK_BG, { width: "10%" })}>Wholesale</th>
-        <th style={cellHeader(BANK_BG, { width: "10%" })}>Retail</th>
-        <th style={cellHeader(DFTC_BG, { width: "10%" })}>Wholesale</th>
-        <th style={cellHeader(DFTC_BG, { width: "10%" })}>Retail</th>
-      </tr>
-    </thead>
+    <div
+      style={{
+        boxSizing: "border-box",
+        height: h,
+        lineHeight: `${h - 1}px`,
+        background: bg,
+        borderRight: `1px solid ${BORDER_COLOR}`,
+        borderBottom: `1px solid ${BORDER_COLOR}`,
+        padding: "0 6px",
+        textAlign: align,
+        fontWeight: bold ? "bold" : "normal",
+        fontStyle: italic ? "italic" : "normal",
+        fontSize,
+        fontFamily: FONT,
+        color: "#111827",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        ...style
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -37,270 +57,198 @@ export function DFTCFacebookImageCard({
   personnel,
   isLast = false
 }) {
-  const rowCount = categories.reduce(
-    (sum, cat) => sum + (cat.commodities || []).reduce((cSum, com) => cSum + (com.variants?.length || 1), 0),
+  const units = categories.reduce(
+    (sum, cat) =>
+      sum + 1 + (cat.commodities || []).reduce((cSum, com) => cSum + (com.variants?.length || 1), 0),
     0
   );
+  const sigH = isLast && personnel ? SIGNATURE_H : 0;
+  const avail = CARD_H - 6 - HEADER_H - BODY_PAD * 2 - TABLE_HEAD_ROW_H * 2 - FOOTER_H - sigH - 2;
+  const rowH = Math.max(18, Math.min(30, Math.floor(avail / Math.max(units, 1))));
+  const fontSize = Math.max(10, Math.min(13, rowH - 9));
+  const headFont = Math.max(10, Math.min(12, fontSize));
 
-  // Dynamic row sizing tailored so all 4 Facebook cards share the exact 1020px width
-  // and fit seamlessly in a fixed card height without crowding or clipping
-  const isHeavyPage = rowCount > 22; // Page 4 (Fruits & Others has ~27 rows)
-  const isMediumPage = rowCount > 15; // Page 2 & 3 have ~16-17 rows
-
-  const cellPadding = isHeavyPage ? "2.2px 5px" : isMediumPage ? "3.2px 6px" : "4.5px 7px";
-  const cellFontSize = isHeavyPage ? 10 : isMediumPage ? 10.8 : 11.5;
-  const headerPadding = isHeavyPage ? "2.5px 4px" : isMediumPage ? "3.5px 6px" : "4.5px 6px";
-  const headerFontSize = isHeavyPage ? 10 : isMediumPage ? 10.5 : 11;
-
-  const cellBorder = { border: `1px solid ${BORDER_COLOR}` };
-
-  // Retain exact cell background colors as requested:
-  const cellL = (extra = {}) => ({
-    ...cellBorder,
-    background: LEFT_BG,
-    padding: cellPadding,
-    fontSize: cellFontSize,
-    lineHeight: 1.4,
-    verticalAlign: "middle",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    ...extra
-  });
-  const cellB = (extra = {}) => ({
-    ...cellBorder,
-    background: BANK_BG,
-    padding: cellPadding,
-    textAlign: "right",
-    fontSize: cellFontSize,
-    fontFamily: "Arial, Helvetica, sans-serif",
-    ...extra
-  });
-  const cellD = (extra = {}) => ({
-    ...cellBorder,
-    background: DFTC_BG,
-    padding: cellPadding,
-    textAlign: "right",
-    fontSize: cellFontSize,
-    fontFamily: "Arial, Helvetica, sans-serif",
-    ...extra
-  });
-
-  const cellHeader = (bg, extra = {}) => ({
-    ...cellBorder,
-    background: bg,
-    padding: headerPadding,
-    fontSize: headerFontSize,
-    fontWeight: "bold",
-    textAlign: "center",
-    verticalAlign: "middle",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    ...extra
-  });
-
+  const head = (bg, h, children, extra = {}) => (
+    <Cell bg={bg} h={h} align="center" bold fontSize={headFont} style={extra}>
+      {children}
+    </Cell>
+  );
 
   return (
     <div
-      className="bg-white rounded-2xl overflow-hidden box-border mx-auto shadow-md"
       style={{
-        width: "1020px",
-        minHeight: "700px",
+        boxSizing: "border-box",
+        width: CARD_W,
+        height: CARD_H,
         border: "3px solid #16a34a",
-        fontFamily: "Arial, Helvetica, sans-serif",
+        borderRadius: 16,
+        overflow: "hidden",
+        background: "#ffffff",
+        fontFamily: FONT,
         display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        background: "#ffffff"
+        flexDirection: "column"
       }}
     >
-      <div>
-        {/* Creative Top Header Banner matching Image 2 */}
+      {/* Header */}
+      <div
+        style={{
+          boxSizing: "border-box",
+          height: HEADER_H,
+          borderBottom: "2px solid #16a34a",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#ffffff"
+        }}
+      >
+        <div style={{ fontSize: 20, lineHeight: "26px", fontWeight: "bold", color: "#000000", textTransform: "uppercase" }}>
+          Davao Food Terminal Complex
+        </div>
+        <div style={{ fontSize: 26, lineHeight: "32px", fontWeight: "bold", color: "#16a34a", textTransform: "uppercase" }}>
+          Price Monitoring
+        </div>
         <div
-          className="px-5 pt-3 pb-2 relative flex items-center justify-between"
           style={{
-            background: "#ffffff",
-            borderBottom: "2px solid #16a34a"
+            marginTop: 6,
+            height: 24,
+            lineHeight: "24px",
+            padding: "0 20px",
+            borderRadius: 12,
+            background: "#15803d",
+            color: "#ffffff",
+            fontWeight: "bold",
+            fontSize: 12,
+            textTransform: "uppercase"
           }}
         >
-
-          {/* Center Brand Header */}
-          <div className="text-center flex-1 mx-2">
-            <h1
-              style={{
-                fontSize: "19px",
-                fontWeight: "bold",
-                color: "#000000",
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-                margin: 0,
-                lineHeight: 1.2
-              }}
-            >
-              Davao Food Terminal Complex
-            </h1>
-            <h2
-              style={{
-                fontSize: "23px",
-                fontWeight: "900",
-                color: "#16a34a",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                margin: "2px 0 0 0",
-                lineHeight: 1.2
-              }}
-            >
-              Price Monitoring
-            </h2>
-
-            {/* Date Badge Pill */}
-            <div style={{ display: "flex", justifyContent: "center", marginTop: 5 }}>
-              <span
-                style={{
-                  background: "#15803d",
-                  color: "#ffffff",
-                  padding: "3px 18px",
-                  borderRadius: "9999px",
-                  fontWeight: "bold",
-                  fontSize: "11px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px"
-                }}
-              >
-                Prevailing Market Prices as of {reportDate}
-              </span>
-            </div>
-
-            {/* Class A Badge */}
-            <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
-              <span
-                style={{
-                  background: "#ffffff",
-                  border: "2px solid #16a34a",
-                  color: "#15803d",
-                  fontWeight: "bold",
-                  fontSize: "12px",
-                  padding: "1px 22px",
-                  borderRadius: "9999px",
-                  textTransform: "uppercase",
-                  letterSpacing: "1px"
-                }}
-              >
-                Class A
-              </span>
-            </div>
-          </div>
-
+          Prevailing Market Prices as of {reportDate}
         </div>
-
-        {/* Card Body Table with retained exact cell color scheme */}
-        <div style={{ padding: "8px 10px 4px 10px", background: "#ffffff" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
-            <colgroup>
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "34%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-            </colgroup>
-
-            <FBTableHeaders cellHeader={cellHeader} headerPadding={headerPadding} headerFontSize={headerFontSize} />
-
-            <tbody>
-              {categories.map((cat, catIdx) => (
-                <React.Fragment key={cat.name}>
-                  {/* Full-width slate grey category row matching Image 2 */}
-                  <tr>
-                    <td
-                      colSpan={8}
-                      style={{
-                        background: CATEGORY_BG,
-                        border: `1px solid ${BORDER_COLOR}`,
-                        padding: headerPadding,
-                        fontWeight: "bold",
-                        fontStyle: "italic",
-                        textTransform: "uppercase",
-                        fontSize: cellFontSize + 0.5,
-                        textAlign: "left",
-                        letterSpacing: "0.5px"
-                      }}
-                    >
-                      {cat.name}
-                    </td>
-                  </tr>
-
-                  {/* Category commodities */}
-                  {(cat.commodities || []).map((com) =>
-                    (com.variants || []).map((v, vi) => (
-                      <tr key={`${cat.name}-${com.name}-${vi}`}>
-                        <td style={cellL({ textAlign: "center" })}>{vi === 0 ? com.no : ""}</td>
-                        <td style={cellL({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
-                          {vi === 0 ? (
-                            <>
-                              <strong>{com.name}</strong>{" "}
-                              <span style={{ fontWeight: "normal" }}>{v.descriptor}</span>
-                            </>
-                          ) : (
-                            <span style={{ paddingLeft: 14 }}>{v.descriptor}</span>
-                          )}
-                        </td>
-                        <td style={cellL({ textAlign: "center" })}>{v.uom}</td>
-                        <td style={cellB()}>{v.bankLanding}</td>
-                        <td style={cellB()}>{v.bankWholesale}</td>
-                        <td style={cellB()}>{v.bankRetail}</td>
-                        <td style={cellD()}>{v.dftcWholesale}</td>
-                        <td style={cellD()}>{v.dftcRetail}</td>
-                      </tr>
-                    ))
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Official Signature Block on the 4th Facebook card matching Image 5 */}
-          {isLast && personnel && (
-            <div
-              style={{
-                marginTop: 8,
-                padding: "6px 16px",
-                borderRadius: "8px",
-                border: "1px solid #d1d5db",
-                background: "#f9fafb",
-                display: "flex",
-                justifyContent: "space-around",
-                alignItems: "center"
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#4b5563", fontWeight: "bold", textTransform: "uppercase" }}>Encoded by:</div>
-                <div style={{ fontSize: 12, fontWeight: "bold", textDecoration: "underline", color: "#111827", marginTop: 1 }}>
-                  {personnel.encodedBy}
-                </div>
-                <div style={{ fontSize: 10.5, color: "#374151" }}>{personnel.encodedByRole}</div>
-              </div>
-
-              <div style={{ width: 2, height: 32, background: "#16a34a", opacity: 0.6 }} />
-
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#4b5563", fontWeight: "bold", textTransform: "uppercase" }}>Reviewed by:</div>
-                <div style={{ fontSize: 12, fontWeight: "bold", textDecoration: "underline", color: "#111827", marginTop: 1 }}>
-                  {personnel.reviewedBy || personnel.preparedBy}
-                </div>
-                <div style={{ fontSize: 10.5, color: "#374151" }}>{personnel.reviewedByRole || personnel.preparedByRole}</div>
-              </div>
-            </div>
-          )}
+        <div
+          style={{
+            boxSizing: "border-box",
+            marginTop: 6,
+            height: 24,
+            lineHeight: "20px",
+            padding: "0 24px",
+            borderRadius: 12,
+            border: "2px solid #16a34a",
+            background: "#ffffff",
+            color: "#15803d",
+            fontWeight: "bold",
+            fontSize: 13,
+            textTransform: "uppercase"
+          }}
+        >
+          Class A
         </div>
       </div>
 
-      {/* Modern Wave Footer Decorative Bar matching Image 2 */}
+      {/* Body */}
+      <div style={{ flex: 1, padding: BODY_PAD, background: "#ffffff" }}>
+        <div style={{ borderTop: `1px solid ${BORDER_COLOR}`, borderLeft: `1px solid ${BORDER_COLOR}` }}>
+          {/* Column headers */}
+          <div style={{ display: "grid", gridTemplateColumns: COLS }}>
+            {head(LEFT_BG, TABLE_HEAD_ROW_H * 2, "No.", { gridRow: "1 / span 2", lineHeight: `${TABLE_HEAD_ROW_H * 2 - 1}px` })}
+            {head(LEFT_BG, TABLE_HEAD_ROW_H * 2, "Commodity", { gridRow: "1 / span 2", textAlign: "left", lineHeight: `${TABLE_HEAD_ROW_H * 2 - 1}px` })}
+            {head(LEFT_BG, TABLE_HEAD_ROW_H * 2, "UOM", { gridRow: "1 / span 2", lineHeight: `${TABLE_HEAD_ROW_H * 2 - 1}px` })}
+            {head(BANK_BG, TABLE_HEAD_ROW_H, "BANKEROHAN MARKET", { gridColumn: "4 / span 3" })}
+            {head(DFTC_BG, TABLE_HEAD_ROW_H, "DFTC TABOAN", { gridColumn: "7 / span 2" })}
+            {head(BANK_BG, TABLE_HEAD_ROW_H, "Landing")}
+            {head(BANK_BG, TABLE_HEAD_ROW_H, "Wholesale")}
+            {head(BANK_BG, TABLE_HEAD_ROW_H, "Retail")}
+            {head(DFTC_BG, TABLE_HEAD_ROW_H, "Wholesale")}
+            {head(DFTC_BG, TABLE_HEAD_ROW_H, "Retail")}
+          </div>
+
+          {categories.map((cat) => (
+            <React.Fragment key={cat.name}>
+              <div
+                style={{
+                  boxSizing: "border-box",
+                  height: rowH,
+                  lineHeight: `${rowH - 1}px`,
+                  background: CATEGORY_BG,
+                  borderRight: `1px solid ${BORDER_COLOR}`,
+                  borderBottom: `1px solid ${BORDER_COLOR}`,
+                  padding: "0 6px",
+                  fontWeight: "bold",
+                  fontStyle: "italic",
+                  textTransform: "uppercase",
+                  fontSize: fontSize,
+                  fontFamily: FONT,
+                  color: "#111827",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {cat.name}
+              </div>
+              {(cat.commodities || []).map((com) =>
+                (com.variants || []).map((v, vi) => (
+                  <div key={`${cat.name}-${com.name}-${vi}`} style={{ display: "grid", gridTemplateColumns: COLS }}>
+                    <Cell bg={LEFT_BG} h={rowH} align="center" fontSize={fontSize}>{vi === 0 ? com.no : ""}</Cell>
+                    <Cell bg={LEFT_BG} h={rowH} fontSize={fontSize}>
+                      {vi === 0 ? (
+                        <>
+                          <strong>{com.name}</strong> {v.descriptor}
+                        </>
+                      ) : (
+                        <span style={{ paddingLeft: 14 }}>{v.descriptor}</span>
+                      )}
+                    </Cell>
+                    <Cell bg={LEFT_BG} h={rowH} align="center" fontSize={fontSize}>{v.uom}</Cell>
+                    <Cell bg={BANK_BG} h={rowH} align="right" fontSize={fontSize}>{v.bankLanding}</Cell>
+                    <Cell bg={BANK_BG} h={rowH} align="right" fontSize={fontSize}>{v.bankWholesale}</Cell>
+                    <Cell bg={BANK_BG} h={rowH} align="right" fontSize={fontSize}>{v.bankRetail}</Cell>
+                    <Cell bg={DFTC_BG} h={rowH} align="right" fontSize={fontSize}>{v.dftcWholesale}</Cell>
+                    <Cell bg={DFTC_BG} h={rowH} align="right" fontSize={fontSize}>{v.dftcRetail}</Cell>
+                  </div>
+                ))
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {isLast && personnel && (
+          <div
+            style={{
+              boxSizing: "border-box",
+              marginTop: 8,
+              height: SIGNATURE_H - 8,
+              borderRadius: 8,
+              border: "1px solid #d1d5db",
+              background: "#f9fafb",
+              display: "flex",
+              justifyContent: "space-around",
+              alignItems: "center"
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 10, lineHeight: "14px", color: "#4b5563", fontWeight: "bold", textTransform: "uppercase" }}>Encoded by:</div>
+              <div style={{ fontSize: 12, lineHeight: "17px", fontWeight: "bold", textDecoration: "underline", color: "#111827" }}>
+                {personnel.encodedBy}
+              </div>
+              <div style={{ fontSize: 10.5, lineHeight: "15px", color: "#374151" }}>{personnel.encodedByRole}</div>
+            </div>
+            <div style={{ width: 2, height: 36, background: "#16a34a", opacity: 0.6 }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 10, lineHeight: "14px", color: "#4b5563", fontWeight: "bold", textTransform: "uppercase" }}>Reviewed by:</div>
+              <div style={{ fontSize: 12, lineHeight: "17px", fontWeight: "bold", textDecoration: "underline", color: "#111827" }}>
+                {personnel.reviewedBy || personnel.preparedBy}
+              </div>
+              <div style={{ fontSize: 10.5, lineHeight: "15px", color: "#374151" }}>
+                {personnel.reviewedByRole || personnel.preparedByRole}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div
         style={{
-          height: "16px",
-          background: "linear-gradient(90deg, #15803d 0%, #22c55e 50%, #16a34a 100%)",
-          borderTop: "1.5px solid #16a34a",
-          marginTop: 6
+          height: FOOTER_H,
+          flexShrink: 0,
+          background: "linear-gradient(90deg, #15803d 0%, #22c55e 50%, #16a34a 100%)"
         }}
       />
     </div>
