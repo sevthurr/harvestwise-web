@@ -25,7 +25,7 @@ import {
 } from "../utils/periodicReportExcel";
 import { FULL_MONTH_NAMES, SHORT_MONTH_NAMES, getLocalDateString } from "./dftcSavedDatasets";
 
-const ALL_CATEGORIES = PAGE_CATEGORY_GROUPS.flat();
+const CATEGORY_NAMES = PAGE_CATEGORY_GROUPS.flat();
 
 const STEP_CONFIG = [
   { active: "Select Report", done: "Selected" },
@@ -424,13 +424,22 @@ export default function DFTCGenerateReport() {
     return map;
   }, [pricePreviewData]);
 
-  // Categories including any dynamic commodities returned from backend
+  // Categories from backend `/dftc/reports/preview` (`pricePreviewData.categories`)
+  // plus any dynamic commodities returned in `pricePreviewData.rows`
   const reportCategories = useMemo(() => {
-    const cloned = ALL_CATEGORIES.map((cat) => ({
-      ...cat,
-      commodities: (cat.commodities || []).map((c) => ({
+    const baseCategories =
+      Array.isArray(pricePreviewData?.categories) && pricePreviewData.categories.length > 0
+        ? pricePreviewData.categories
+        : CATEGORY_NAMES.map((catName) => ({
+            name: typeof catName === "string" ? catName : catName?.name || "Lowland Vegetables",
+            commodities: [],
+          }));
+
+    const cloned = baseCategories.map((cat) => ({
+      name: typeof cat === "string" ? cat : cat?.name || "Lowland Vegetables",
+      commodities: (cat?.commodities || []).map((c) => ({
         ...c,
-        variants: (c.variants || []).map((v) => ({ ...v })),
+        variants: (c?.variants || []).map((v) => ({ ...v })),
       })),
     }));
 
@@ -451,14 +460,10 @@ export default function DFTCGenerateReport() {
       const fullKey = `${cKey}__${vKey}`;
       if (knownKeys.has(fullKey)) continue;
 
-      const hasAnyValue =
-        r.daily_values_by_date && Object.keys(r.daily_values_by_date).length > 0;
-      if (!hasAnyValue) continue;
-
-      const targetCatName = (r.category || "LOWLAND VEGETABLES").toUpperCase();
+      const targetCatName = String(r.category || "Lowland Vegetables").toUpperCase();
       const targetCat =
-        cloned.find((c) => c.name.toUpperCase() === targetCatName) ||
-        cloned[cloned.length - 1];
+        cloned.find((c) => String(c.name || "").toUpperCase() === targetCatName) ||
+        cloned[0];
       if (!targetCat) continue;
 
       const existingComm = targetCat.commodities.find(
@@ -1211,7 +1216,7 @@ export default function DFTCGenerateReport() {
                                   textDecoration: "underline",
                                 }}
                               >
-                                {cat.name.toUpperCase()}
+                                {String(cat.name || "").toUpperCase()}
                               </td>
                             </tr>
                           )}

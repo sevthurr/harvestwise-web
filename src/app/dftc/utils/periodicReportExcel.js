@@ -39,6 +39,7 @@ export async function buildPeriodicPriceWorkbook({
   dayColumns = [],
   period = "monthly",
   market = "Bangkerohan Public Market",
+  marketName = "",
   priceType = "Retail",
   periodLabel = "",
   sheetName = "Report",
@@ -47,6 +48,7 @@ export async function buildPeriodicPriceWorkbook({
   reviewedBy = "",
   reviewedByRole = "Market Supervisor",
 }) {
+  const effectiveMarket = marketName || market;
   const wb = new ExcelJS.Workbook();
   const safeSheetName =
     String(sheetName || "Report")
@@ -92,8 +94,8 @@ export async function buildPeriodicPriceWorkbook({
   ws.getColumn(avgColIdx).width = 22;
 
   const isDftc =
-    String(market).toLowerCase().includes("dftc") ||
-    String(market).toLowerCase().includes("taboan");
+    String(effectiveMarket).toLowerCase().includes("dftc") ||
+    String(effectiveMarket).toLowerCase().includes("taboan");
   const marketDisplay = isDftc ? "DFTC Taboan, Davao City" : "Bankerohan, Davao City";
   const avgHeaderLabel =
     period === "weekly" ? "Weekly Average Price" : "Monthly Average Price";
@@ -161,7 +163,7 @@ export async function buildPeriodicPriceWorkbook({
   const firstCat = categories[0];
   const r8 = ws.getRow(8);
   r8.height = 15;
-  r8.getCell(1).value = firstCat ? firstCat.name.toUpperCase() : "LOWLAND VEGETABLES";
+  r8.getCell(1).value = firstCat?.name ? String(firstCat.name).toUpperCase() : "LOWLAND VEGETABLES";
   for (let i = 0; i < numDays; i++) {
     r8.getCell(4 + i).value = dayColumns[i].dayLabel ?? dayColumns[i].dayNum;
   }
@@ -198,7 +200,7 @@ export async function buildPeriodicPriceWorkbook({
     if (catIdx > 0) {
       const catRow = ws.getRow(currentRowIdx++);
       catRow.height = 15;
-      catRow.getCell(1).value = cat.name.toUpperCase();
+      catRow.getCell(1).value = String(cat?.name || "").toUpperCase();
       for (let c = 1; c <= avgColIdx; c++) {
         const cell = catRow.getCell(c);
         cell.fill = headerFill;
@@ -341,6 +343,7 @@ export async function buildPeriodicArrivalWorkbook({
   rows = [],
   dayColumns = [],
   market = "DFTC Taboan",
+  marketName = "",
   periodSubtitle = "",
   encodedBy = "",
   encodedByRole = "Data Analyst",
@@ -348,9 +351,10 @@ export async function buildPeriodicArrivalWorkbook({
   reviewedByRole = "Market Supervisor",
 }) {
   const wb = new ExcelJS.Workbook();
+  const effectiveMarket = marketName || market;
   const isBankerohan =
-    String(market).toLowerCase().includes("bank") ||
-    String(market).toLowerCase().includes("bangk");
+    String(effectiveMarket).toLowerCase().includes("bank") ||
+    String(effectiveMarket).toLowerCase().includes("bangk");
   const titleText = isBankerohan
     ? "VOLUME (KG) OF COMMODITIES DROPPED AT BANKEROHAN PUBLIC MARKET"
     : "VOLUME (KG) OF COMMODITIES DROPPED AT DFTC";
