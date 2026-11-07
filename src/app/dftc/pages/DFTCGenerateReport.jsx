@@ -33,121 +33,6 @@ const STEP_CONFIG = [
   { active: "Download & Record", done: "Recorded" },
 ];
 
-const REPORT_COMBINATION_PRESETS = [
-  {
-    id: "price-weekly-bankerohan-retail",
-    label: "Price Data - Weekly - Bangkerohan Public Market - Retail",
-    dataType: "price",
-    period: "weekly",
-    market: "Bangkerohan Public Market",
-    priceType: "Retail",
-  },
-  {
-    id: "price-weekly-bankerohan-wholesale",
-    label: "Price Data - Weekly - Bangkerohan Public Market - Wholesale",
-    dataType: "price",
-    period: "weekly",
-    market: "Bangkerohan Public Market",
-    priceType: "Wholesale",
-  },
-  {
-    id: "price-weekly-bankerohan-landing",
-    label: "Price Data - Weekly - Bangkerohan Public Market - Landing",
-    dataType: "price",
-    period: "weekly",
-    market: "Bangkerohan Public Market",
-    priceType: "Landing",
-  },
-  {
-    id: "price-weekly-dftc-retail",
-    label: "Price Data - Weekly - DFTC Taboan - Retail",
-    dataType: "price",
-    period: "weekly",
-    market: "DFTC Taboan",
-    priceType: "Retail",
-  },
-  {
-    id: "price-weekly-dftc-wholesale",
-    label: "Price Data - Weekly - DFTC Taboan - Wholesale",
-    dataType: "price",
-    period: "weekly",
-    market: "DFTC Taboan",
-    priceType: "Wholesale",
-  },
-  {
-    id: "price-monthly-bankerohan-retail",
-    label: "Price Data - Monthly - Bangkerohan Public Market - Retail",
-    dataType: "price",
-    period: "monthly",
-    market: "Bangkerohan Public Market",
-    priceType: "Retail",
-  },
-  {
-    id: "price-monthly-bankerohan-wholesale",
-    label: "Price Data - Monthly - Bangkerohan Public Market - Wholesale",
-    dataType: "price",
-    period: "monthly",
-    market: "Bangkerohan Public Market",
-    priceType: "Wholesale",
-  },
-  {
-    id: "price-monthly-bankerohan-landing",
-    label: "Price Data - Monthly - Bangkerohan Public Market - Landing",
-    dataType: "price",
-    period: "monthly",
-    market: "Bangkerohan Public Market",
-    priceType: "Landing",
-  },
-  {
-    id: "price-monthly-dftc-retail",
-    label: "Price Data - Monthly - DFTC Taboan - Retail",
-    dataType: "price",
-    period: "monthly",
-    market: "DFTC Taboan",
-    priceType: "Retail",
-  },
-  {
-    id: "price-monthly-dftc-wholesale",
-    label: "Price Data - Monthly - DFTC Taboan - Wholesale",
-    dataType: "price",
-    period: "monthly",
-    market: "DFTC Taboan",
-    priceType: "Wholesale",
-  },
-  {
-    id: "arrival-weekly-dftc",
-    label: "Arrival Data - Weekly - DFTC Taboan",
-    dataType: "arrival_volume",
-    period: "weekly",
-    market: "DFTC Taboan",
-    priceType: null,
-  },
-  {
-    id: "arrival-weekly-bankerohan",
-    label: "Arrival Data - Weekly - Bangkerohan Public Market",
-    dataType: "arrival_volume",
-    period: "weekly",
-    market: "Bangkerohan Public Market",
-    priceType: null,
-  },
-  {
-    id: "arrival-monthly-dftc",
-    label: "Arrival Data - Monthly - DFTC Taboan",
-    dataType: "arrival_volume",
-    period: "monthly",
-    market: "DFTC Taboan",
-    priceType: null,
-  },
-  {
-    id: "arrival-monthly-bankerohan",
-    label: "Arrival Data - Monthly - Bangkerohan Public Market",
-    dataType: "arrival_volume",
-    period: "monthly",
-    market: "Bangkerohan Public Market",
-    priceType: null,
-  },
-];
-
 function normalizeKey(str) {
   return (str || "")
     .toLowerCase()
@@ -216,20 +101,18 @@ export default function DFTCGenerateReport() {
     return now.getMonth() + 1;
   });
 
-  // Signatories
-  const [encodedBy, setEncodedBy] = useState(
-    () => prefill?.encoded_by || prefill?.encodedBy || DEFAULT_PERSONNEL.encodedBy
-  );
-  const [encodedByRole, setEncodedByRole] = useState(DEFAULT_PERSONNEL.encodedByRole);
-  const [reviewedBy, setReviewedBy] = useState(
-    () => prefill?.submitted_by_name || prefill?.savedBy || DEFAULT_PERSONNEL.reviewedBy
-  );
-  const [reviewedByRole, setReviewedByRole] = useState(DEFAULT_PERSONNEL.reviewedByRole);
-
   const [activeArrivalSheet, setActiveArrivalSheet] = useState("OVERALL TOTAL");
   const [isDownloading, setIsDownloading] = useState(false);
   const [completedSummary, setCompletedSummary] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const generatorDisplayName = useMemo(() => {
+    const fn = user?.first_name || "";
+    const mn = user?.middle_name ? `${user.middle_name} ` : "";
+    const ln = user?.last_name || "";
+    const full = `${fn} ${mn}${ln}`.trim();
+    return full || user?.full_name || user?.email || DEFAULT_PERSONNEL.reviewedBy || "DFTC Personnel";
+  }, [user]);
 
   // If user switches market to DFTC Taboan while Landing is selected, switch to Retail
   useEffect(() => {
@@ -237,42 +120,6 @@ export default function DFTCGenerateReport() {
       setPriceType("Retail");
     }
   }, [market, priceType]);
-
-  // Staff directory query to populate default encoder / reviewer names
-  const { data: staffData } = useQuery({
-    queryKey: ["dftc", "staff-list"],
-    queryFn: async () => {
-      try {
-        const res = await apiGet("/dftc/staff");
-        return parseResponse(res);
-      } catch {
-        return { items: [] };
-      }
-    },
-    staleTime: 60_000,
-  });
-
-  useEffect(() => {
-    if (prefill) return;
-    const staffItems = staffData?.items || [];
-    if (staffItems.length > 0) {
-      const first = staffItems[0];
-      const fullFirst = `${first.first_name || ""} ${first.middle_name ? first.middle_name + " " : ""}${first.last_name || ""}`.trim();
-      if (fullFirst) {
-        setEncodedBy(fullFirst.toUpperCase());
-        if (first.position_title) setEncodedByRole(first.position_title);
-      }
-      const second = staffItems[1] || staffItems[0];
-      const fullSecond = `${second.first_name || ""} ${second.middle_name ? second.middle_name + " " : ""}${second.last_name || ""}`.trim();
-      if (fullSecond) {
-        setReviewedBy(fullSecond.toUpperCase());
-        if (second.position_title) setReviewedByRole(second.position_title);
-      }
-    } else if (user?.first_name) {
-      const uName = `${user.first_name} ${user.last_name || ""}`.trim().toUpperCase();
-      if (uName) setReviewedBy(uName);
-    }
-  }, [staffData, user, prefill]);
 
   // Compute query date, dayColumns, periodLabel, sheetName
   const periodInfo = useMemo(() => {
@@ -342,28 +189,6 @@ export default function DFTCGenerateReport() {
     };
   }, [period, weekAnchorDate, selectedYear, selectedMonth]);
 
-  // Active combination preset ID
-  const currentPresetId = useMemo(() => {
-    const matched = REPORT_COMBINATION_PRESETS.find(
-      (p) =>
-        p.dataType === dataType &&
-        p.period === period &&
-        p.market === market &&
-        (dataType === "arrival_volume" || p.priceType === priceType)
-    );
-    return matched?.id || "";
-  }, [dataType, period, market, priceType]);
-
-  const handlePresetChange = (presetId) => {
-    const found = REPORT_COMBINATION_PRESETS.find((p) => p.id === presetId);
-    if (!found) return;
-    setDataType(found.dataType);
-    setPeriod(found.period);
-    setMarket(found.market);
-    if (found.priceType) setPriceType(found.priceType);
-    setErrorMessage("");
-  };
-
   // Query live preview data from backend when on preview step (or pre-fetching)
   const { data: pricePreviewData, isLoading: loadingPricePreview } = useQuery({
     queryKey: [
@@ -413,12 +238,30 @@ export default function DFTCGenerateReport() {
   const priceLookup = useMemo(() => {
     const map = new Map();
     const rows = pricePreviewData?.rows || [];
+    const mergeRowInto = (key, r) => {
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          ...r,
+          daily_values: { ...(r.daily_values || {}) },
+          daily_values_by_date: { ...(r.daily_values_by_date || {}) },
+        });
+        return;
+      }
+      for (const [k, v] of Object.entries(r.daily_values || {})) {
+        if (v != null) existing.daily_values[k] = v;
+      }
+      for (const [k, v] of Object.entries(r.daily_values_by_date || {})) {
+        if (v != null) existing.daily_values_by_date[k] = v;
+      }
+    };
     for (const r of rows) {
       const cKey = normalizeKey(r.commodity_name);
       const vKey = normalizeKey(r.variety);
-      map.set(`${cKey}__${vKey}`, r);
-      if (!map.has(`${cKey}__`)) {
-        map.set(`${cKey}__`, r);
+      mergeRowInto(`${cKey}__${vKey}`, r);
+      mergeRowInto(`${cKey}__any`, r);
+      if (!vKey) {
+        mergeRowInto(`${cKey}__`, r);
       }
     }
     return map;
@@ -447,7 +290,9 @@ export default function DFTCGenerateReport() {
     for (const cat of cloned) {
       for (const comm of cat.commodities) {
         const cKey = normalizeKey(comm.name);
-        knownKeys.add(`${cKey}__`);
+        if (!comm.variants || comm.variants.length === 0) {
+          knownKeys.add(`${cKey}__`);
+        }
         for (const v of comm.variants || []) {
           knownKeys.add(`${cKey}__${normalizeKey(v.variety)}`);
         }
@@ -460,6 +305,11 @@ export default function DFTCGenerateReport() {
       const fullKey = `${cKey}__${vKey}`;
       if (knownKeys.has(fullKey)) continue;
 
+      const hasAnyPrice =
+        Object.values(r.daily_values_by_date || {}).some((val) => val != null) ||
+        Object.values(r.daily_values || {}).some((val) => val != null);
+      if (!hasAnyPrice) continue;
+
       const targetCatName = String(r.category || "Lowland Vegetables").toUpperCase();
       const targetCat =
         cloned.find((c) => String(c.name || "").toUpperCase() === targetCatName) ||
@@ -470,16 +320,20 @@ export default function DFTCGenerateReport() {
         (c) => normalizeKey(c.name) === cKey
       );
       if (existingComm) {
+        if (!vKey && existingComm.variants.length === 1) {
+          knownKeys.add(fullKey);
+          continue;
+        }
         existingComm.variants.push({
           variety: r.variety || null,
-          uom: r.unit || existingComm.uom || "kg",
+          uom: r.uom || r.unit || existingComm.uom || "kg",
         });
       } else {
         targetCat.commodities.push({
           no: targetCat.commodities.length + 1,
           name: r.commodity_name,
-          uom: r.unit || "kg",
-          variants: [{ variety: r.variety || null, uom: r.unit || "kg" }],
+          uom: r.uom || r.unit || "kg",
+          variants: [{ variety: r.variety || null, uom: r.uom || r.unit || "kg" }],
         });
       }
       knownKeys.add(fullKey);
@@ -488,16 +342,45 @@ export default function DFTCGenerateReport() {
     return cloned;
   }, [pricePreviewData]);
 
+  const singleVariantCommKeys = useMemo(() => {
+    const set = new Set();
+    for (const cat of reportCategories) {
+      for (const comm of cat.commodities || []) {
+        if ((comm.variants || []).length <= 1) {
+          set.add(normalizeKey(comm.name));
+        }
+      }
+    }
+    return set;
+  }, [reportCategories]);
+
   const getPriceDayValue = (commName, variety, dayCol) => {
     const cKey = normalizeKey(commName);
     const vKey = normalizeKey(variety);
-    const row = priceLookup.get(`${cKey}__${vKey}`) || (vKey ? null : priceLookup.get(`${cKey}__`));
-    if (!row) return null;
-    if (row.daily_values_by_date && row.daily_values_by_date[dayCol.isoDate] != null) {
-      return row.daily_values_by_date[dayCol.isoDate];
-    }
-    if (row.daily_values && row.daily_values[dayCol.dayNum] != null) {
-      return row.daily_values[dayCol.dayNum];
+    const readFromRow = (row) => {
+      if (!row) return null;
+      if (row.daily_values_by_date && row.daily_values_by_date[dayCol.isoDate] != null) {
+        return row.daily_values_by_date[dayCol.isoDate];
+      }
+      if (
+        period === "monthly" &&
+        row.daily_values &&
+        row.daily_values[String(dayCol.dayNum)] != null
+      ) {
+        return row.daily_values[String(dayCol.dayNum)];
+      }
+      return null;
+    };
+
+    const exactVal = readFromRow(priceLookup.get(`${cKey}__${vKey}`));
+    if (exactVal != null) return exactVal;
+
+    if (!vKey || singleVariantCommKeys.has(cKey)) {
+      const baseVal = readFromRow(priceLookup.get(`${cKey}__`));
+      if (baseVal != null) return baseVal;
+      if (singleVariantCommKeys.has(cKey)) {
+        return readFromRow(priceLookup.get(`${cKey}__any`));
+      }
     }
     return null;
   };
@@ -506,11 +389,15 @@ export default function DFTCGenerateReport() {
   const arrivalRows = useMemo(() => {
     const rawRows = arrivalPreviewData?.rows || [];
     return rawRows.map((r, idx) => {
-      const farm = r.farm_source != null ? Number(r.farm_source) : null;
-      const other = r.other_sources != null ? Number(r.other_sources) : null;
+      const farmRaw = r.farm_source_volume_kg ?? r.farm_source;
+      const otherRaw = r.other_source_volume_kg ?? r.other_sources;
+      const totalRaw = r.volume_kg ?? r.monthly_total ?? r.overall_total;
+
+      const farm = farmRaw != null ? Number(farmRaw) : null;
+      const other = otherRaw != null ? Number(otherRaw) : null;
       const total =
-        r.overall_total != null
-          ? Number(r.overall_total)
+        totalRaw != null
+          ? Number(totalRaw)
           : farm != null || other != null
           ? (farm || 0) + (other || 0)
           : null;
@@ -536,6 +423,9 @@ export default function DFTCGenerateReport() {
         otherSources: other,
         otherPct,
         overallTotal: total,
+        dailyFarm: r.daily_farm_values || {},
+        dailyOther: r.daily_other_values || {},
+        dailyTotal: r.daily_values || {},
         dailyFarmByDate: r.daily_farm_values_by_date || {},
         dailyOtherByDate: r.daily_other_values_by_date || {},
         dailyTotalByDate: r.daily_values_by_date || {},
@@ -584,7 +474,10 @@ export default function DFTCGenerateReport() {
     }
     let count = 0;
     for (const r of pricePreviewData?.rows || []) {
-      if (r.daily_values_by_date && Object.keys(r.daily_values_by_date).length > 0) {
+      const hasVal =
+        Object.values(r.daily_values_by_date || {}).some((v) => v != null) ||
+        Object.values(r.daily_values || {}).some((v) => v != null);
+      if (hasVal) {
         count++;
       }
     }
@@ -610,10 +503,6 @@ export default function DFTCGenerateReport() {
         dayColumns: periodInfo.dayColumns,
         categories: reportCategories,
         getDayValue: getPriceDayValue,
-        encodedBy,
-        encodedByRole,
-        reviewedBy,
-        reviewedByRole,
       });
     } else {
       wb = await buildPeriodicArrivalWorkbook({
@@ -650,17 +539,18 @@ export default function DFTCGenerateReport() {
         const res = await apiPost("/dftc/reports/generate", {
           data_type: dataType,
           period,
-          reporting_date: periodInfo.reportingDate,
+          market,
           source_id: market,
+          reporting_date: periodInfo.reportingDate,
+          start_date: periodInfo.startDate,
+          end_date: periodInfo.endDate,
           price_type: dataType === "price" ? priceType : null,
           file_name: excelFileName,
-          encoded_by: encodedBy,
-          reviewed_by: reviewedBy,
         });
         const data = await parseResponse(res);
         recorded = {
           submissionId: data?.submission_id || data?.id || "—",
-          reportId: data?.report_id || "—",
+          reportId: data?.generated_report_id || data?.report_id || "—",
           fileName: excelFileName,
           combination: combinationLabel,
           datasetType:
@@ -671,8 +561,7 @@ export default function DFTCGenerateReport() {
           priceType: dataType === "price" ? priceType : "—",
           period: periodInfo.periodLabel,
           recordsCount: data?.record_count ?? activeRecordCount,
-          encodedBy,
-          reviewedBy,
+          generatedBy: data?.submitted_by_name || generatorDisplayName,
           finishedAt: new Date().toLocaleString([], {
             month: "short",
             day: "numeric",
@@ -684,6 +573,8 @@ export default function DFTCGenerateReport() {
         setCompletedSummary(recorded);
         queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
         queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
+        queryClient.invalidateQueries({ queryKey: ["notifications", "staff"] });
+        queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
       }
 
       // 2. Build and download the .xlsx file
@@ -806,58 +697,106 @@ export default function DFTCGenerateReport() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-[var(--hw-neutral-100)]">
-            {/* Report Combination Dropdown */}
-            <div className="sm:col-span-2">
+            {/* Data Type Selector */}
+            <div>
               <label
-                htmlFor="report-preset-select"
+                htmlFor="report-data-type-select"
                 className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5"
               >
-                Report type *
+                Data Type *
               </label>
               <select
-                id="report-preset-select"
-                value={currentPresetId}
-                onChange={(e) => handlePresetChange(e.target.value)}
+                id="report-data-type-select"
+                value={dataType}
+                onChange={(e) => {
+                  setDataType(e.target.value);
+                  setCompletedSummary(null);
+                  setErrorMessage("");
+                }}
                 className={`${inputCls} font-medium cursor-pointer`}
               >
-                <optgroup label="Price Data — Weekly">
-                  {REPORT_COMBINATION_PRESETS.filter(
-                    (p) => p.dataType === "price" && p.period === "weekly"
-                  ).map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Price Data — Monthly">
-                  {REPORT_COMBINATION_PRESETS.filter(
-                    (p) => p.dataType === "price" && p.period === "monthly"
-                  ).map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Arrival Data — Weekly">
-                  {REPORT_COMBINATION_PRESETS.filter(
-                    (p) => p.dataType === "arrival_volume" && p.period === "weekly"
-                  ).map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Arrival Data — Monthly">
-                  {REPORT_COMBINATION_PRESETS.filter(
-                    (p) => p.dataType === "arrival_volume" && p.period === "monthly"
-                  ).map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </optgroup>
+                <option value="price">Price</option>
+                <option value="arrival_volume">Arrival</option>
               </select>
             </div>
+
+            {/* Market Selector */}
+            <div>
+              <label
+                htmlFor="report-market-select"
+                className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5"
+              >
+                Market *
+              </label>
+              <select
+                id="report-market-select"
+                value={market}
+                onChange={(e) => {
+                  const nextMarket = e.target.value;
+                  setMarket(nextMarket);
+                  if (nextMarket === "DFTC Taboan" && priceType === "Landing") {
+                    setPriceType("Retail");
+                  }
+                  setCompletedSummary(null);
+                  setErrorMessage("");
+                }}
+                className={`${inputCls} font-medium cursor-pointer`}
+              >
+                <option value="Bangkerohan Public Market">Bangkerohan Public Market</option>
+                <option value="DFTC Taboan">DFTC</option>
+              </select>
+            </div>
+
+            {/* Frequency Selector */}
+            <div className={dataType === "price" ? "" : "sm:col-span-2"}>
+              <label
+                htmlFor="report-frequency-select"
+                className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5"
+              >
+                Frequency *
+              </label>
+              <select
+                id="report-frequency-select"
+                value={period}
+                onChange={(e) => {
+                  setPeriod(e.target.value);
+                  setCompletedSummary(null);
+                  setErrorMessage("");
+                }}
+                className={`${inputCls} font-medium cursor-pointer`}
+              >
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+
+            {/* Price Type Selector (Only when Price Data Type is selected) */}
+            {dataType === "price" && (
+              <div>
+                <label
+                  htmlFor="report-price-type-select"
+                  className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5"
+                >
+                  Price Type *
+                </label>
+                <select
+                  id="report-price-type-select"
+                  value={priceType}
+                  onChange={(e) => {
+                    setPriceType(e.target.value);
+                    setCompletedSummary(null);
+                    setErrorMessage("");
+                  }}
+                  className={`${inputCls} font-medium cursor-pointer`}
+                >
+                  <option value="Retail">Retail</option>
+                  <option value="Wholesale">Wholesale</option>
+                  {market === "Bangkerohan Public Market" && (
+                    <option value="Landing">Landing</option>
+                  )}
+                </select>
+              </div>
+            )}
 
             {/* Reporting Period Selector */}
             <div className="sm:col-span-2">
@@ -935,30 +874,6 @@ export default function DFTCGenerateReport() {
                 </div>
               )}
             </div>
-
-            {/* Signatories */}
-            <div>
-              <label className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5">
-                Prepared / Encoded By
-              </label>
-              <input
-                type="text"
-                value={encodedBy}
-                onChange={(e) => setEncodedBy(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="block text-[13px] font-medium text-[var(--hw-neutral-700)] mb-1.5">
-                Noted / Reviewed By
-              </label>
-              <input
-                type="text"
-                value={reviewedBy}
-                onChange={(e) => setReviewedBy(e.target.value)}
-                className={inputCls}
-              />
-            </div>
           </div>
 
           {/* Selected Output File Summary Banner */}
@@ -1000,7 +915,7 @@ export default function DFTCGenerateReport() {
                   {excelFileName}
                 </p>
                 <p className="text-[12px] text-[var(--hw-neutral-600)] truncate">
-                  {descriptiveReportTitle} · Prepared by {encodedBy}
+                  {descriptiveReportTitle}
                 </p>
               </div>
             </div>
@@ -1305,20 +1220,6 @@ export default function DFTCGenerateReport() {
                       ))}
                     </tbody>
                   </table>
-
-                  {/* Signatories */}
-                  <div className="mt-6 grid grid-cols-2 gap-8 max-w-xl text-[11px]">
-                    <div>
-                      <div className="italic text-[10px] mb-3">Prepared by:</div>
-                      <div className="font-bold uppercase">{encodedBy}</div>
-                      <div className="text-[10px]">{encodedByRole}</div>
-                    </div>
-                    <div>
-                      <div className="italic text-[10px] mb-3">Noted by:</div>
-                      <div className="font-bold uppercase">{reviewedBy}</div>
-                      <div className="text-[10px]">{reviewedByRole}</div>
-                    </div>
-                  </div>
                 </div>
               </div>
             ) : (
@@ -1674,8 +1575,11 @@ export default function DFTCGenerateReport() {
                             <tbody>
                               {arrivalRows.map((r) => {
                                 const dayMap = isFarmTab ? r.dailyFarmByDate : r.dailyOtherByDate;
+                                const fallbackDayMap = isFarmTab ? r.dailyFarm : r.dailyOther;
                                 const dayVals = periodInfo.dayColumns.map((dc) => {
-                                  const v = dayMap?.[dc.isoDate];
+                                  const v =
+                                    dayMap?.[dc.isoDate] ??
+                                    (period === "monthly" ? fallbackDayMap?.[String(dc.dayNum)] : null);
                                   return v != null && !Number.isNaN(Number(v)) ? Number(v) : null;
                                 });
                                 const rowSum = dayVals.reduce((acc, v) => acc + (v || 0), 0);
@@ -1748,7 +1652,10 @@ export default function DFTCGenerateReport() {
                                 {periodInfo.dayColumns.map((dc) => {
                                   const colTotal = arrivalRows.reduce((acc, r) => {
                                     const map = isFarmTab ? r.dailyFarmByDate : r.dailyOtherByDate;
-                                    const v = map?.[dc.isoDate];
+                                    const fbMap = isFarmTab ? r.dailyFarm : r.dailyOther;
+                                    const v =
+                                      map?.[dc.isoDate] ??
+                                      (period === "monthly" ? fbMap?.[String(dc.dayNum)] : null);
                                     return acc + (v != null && !Number.isNaN(Number(v)) ? Number(v) : 0);
                                   }, 0);
                                   return (
@@ -1892,18 +1799,12 @@ export default function DFTCGenerateReport() {
                 </p>
               </div>
               <div className="col-span-1">
-                <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Prepared / Encoded By</p>
+                <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Generated By</p>
                 <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
-                  {completedSummary?.encodedBy || encodedBy}
+                  {completedSummary?.generatedBy || generatorDisplayName}
                 </p>
               </div>
               <div className="col-span-1">
-                <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Noted / Reviewed By</p>
-                <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5">
-                  {completedSummary?.reviewedBy || reviewedBy}
-                </p>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
                 <p className="text-[11px] font-medium text-[var(--hw-neutral-500)]">Generated Time</p>
                 <p className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
                   {completedSummary?.finishedAt || "Just now"}
