@@ -12,6 +12,7 @@ import {
 } from "./dftcReportCategories";
 import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
 import { DFTCFacebookImageCard } from "./DFTCFacebookImageCard";
+import { renderFBCardToCanvas } from "./dftcFacebookImageCanvas";
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -462,14 +463,23 @@ function DFTCFilePreview({ file, onClose }) {
   async function downloadImages() {
     setDlState("generating-img");
     try {
-      const html2canvas = (await import("html2canvas")).default;
       const JSZip = (await import("jszip")).default;
       const blobs = [];
       const total = IMG_PAGE_CATEGORY_GROUPS.length; // strictly 4
       for (let i = 0; i < total; i++) {
-        const el = pageRefs.current[i];
-        if (!el) continue;
-        const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+        // Drawn on a native canvas from the same layout numbers as the preview card
+        const cats = IMG_PAGE_CATEGORY_GROUPS[i]
+          .map((n) => resolvedCategories.find((c) => c.name === n))
+          .filter(Boolean);
+        const canvas = renderFBCardToCanvas(
+          {
+            categories: cats,
+            reportDate: reportingDate,
+            personnel: i === total - 1 ? personnel : undefined,
+            isLast: i === total - 1
+          },
+          2
+        );
         const blob = await new Promise((resolve, reject) => {
           canvas.toBlob((b) => b ? resolve(b) : reject(new Error("toBlob failed")), "image/png");
         });
