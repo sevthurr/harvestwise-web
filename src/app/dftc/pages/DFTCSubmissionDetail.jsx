@@ -326,7 +326,7 @@ function DFTCSubmissionDetail() {
     const otherRecords = Array.isArray(apiSubmission.other_records) ? apiSubmission.other_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => !r.is_top10) : [];
     const computedCoverage = computeDateCoverage([...analyticsRecords, ...otherRecords, ...(Array.isArray(apiSubmission.records) ? apiSubmission.records : [])], apiSubmission.reporting_date);
     const dateCoverage = (isGeneratedReport && apiSubmission.period_start_date && apiSubmission.period_end_date)
-      ? `${formatDate(apiSubmission.period_start_date)} – ${formatDate(apiSubmission.period_end_date)}`
+      ? `${formatDateOnly(apiSubmission.period_start_date)} – ${formatDateOnly(apiSubmission.period_end_date)}`
       : computedCoverage;
     const hasMarketAndType = !isArrival && ([...analyticsRecords, ...otherRecords].some((r) => r.price_type || r.source_name));
     const entryMethodLabel = isGeneratedReport
