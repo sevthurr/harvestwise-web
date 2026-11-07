@@ -114,8 +114,15 @@ export function formatSavedDate(dateStr) {
   }
 }
 
+export function isSubmissionGeneratedReport(sub) {
+  if (!sub) return false;
+  const m = String(sub.submission_method || "").toLowerCase();
+  return m.includes("generated report");
+}
+
 export function isSubmissionFileUpload(sub) {
   if (!sub) return false;
+  if (isSubmissionGeneratedReport(sub)) return false;
   const m = String(sub.submission_method || "").toLowerCase();
   if (m.includes("upload") || m.includes("file") || m.includes("excel") || m.includes("csv")) {
     return true;
@@ -161,14 +168,19 @@ export function buildSavedDatasetsList(
       dtLower.includes("volume") ||
       fileNameLower.includes("arrival") ||
       fileNameLower.includes("volume");
+    const isGeneratedReport = isSubmissionGeneratedReport(sub);
     const isFileUpload = isSubmissionFileUpload(sub);
-    const submissionMethod = isFileUpload ? "File Upload" : "Manual Input";
+    const submissionMethod = isGeneratedReport
+      ? "Generated Report"
+      : isFileUpload
+      ? "File Upload"
+      : "Manual Input";
     const reportingDate =
       sub.reporting_date ||
       (sub.saved_at ? sub.saved_at.slice(0, 10) : (sub.created_at ? sub.created_at.slice(0, 10) : ""));
 
     // Consolidate ONLY manual price entries for the same reporting date into one unified report
-    if (!isArrival && !isFileUpload && reportingDate) {
+    if (!isArrival && !isFileUpload && !isGeneratedReport && reportingDate) {
       if (!manualPricesByDate.has(reportingDate)) {
         manualPricesByDate.set(reportingDate, []);
       }
@@ -184,21 +196,25 @@ export function buildSavedDatasetsList(
         ? `${market} Arrival Volume — ${formattedRepDate !== "—" ? formattedRepDate : formatSavedDate(sub.saved_at || sub.created_at)}`
         : `${market} ${priceTypeCapitalized ? priceTypeCapitalized + " " : ""}Prices — ${formattedRepDate !== "—" ? formattedRepDate : formatSavedDate(sub.saved_at || sub.created_at)}`;
 
-      const dataName = isFileUpload
+      const dataName = (isFileUpload || isGeneratedReport)
         ? (sub.original_file_name || sub.file_name || defaultName)
         : defaultName;
 
-      const dataType = isArrival
+      const freqLabel = sub.report_period === "weekly" ? "Weekly" : sub.report_period === "monthly" ? "Monthly" : "Daily";
+      const dataType = isGeneratedReport
+        ? (isArrival ? `${freqLabel} Arrival Volume Report` : `${freqLabel} ${priceTypeCapitalized || "Retail"} Price Report`)
+        : isArrival
         ? "DFTC Arrival Volume"
         : (priceTypeCapitalized ? `Daily ${priceTypeCapitalized} Prices` : "Price Dataset");
 
       const savedDate = formatSavedDate(sub.saved_at || sub.created_at);
 
       const isJustSaved =
-        justSaved?.type === "arrival" &&
+        (justSaved?.type === "arrival" || justSaved?.type === "report") &&
         (sub.reporting_date === justSaved.date ||
           sub.reporting_date === todayStr ||
-          sub.submission_id === justSaved.id);
+          sub.submission_id === justSaved.id ||
+          sub.id === justSaved.id);
 
       const recCount = Math.max(
         sub.record_count ?? 0,
@@ -215,6 +231,11 @@ export function buildSavedDatasetsList(
         submissionId: sub.id || sub.submission_id,
         isArrival,
         isFileUpload,
+        isGeneratedReport,
+        reportPeriod: sub.report_period || null,
+        periodStartDate: sub.period_start_date || null,
+        periodEndDate: sub.period_end_date || null,
+        priceType: priceTypeCapitalized || null,
         analyticsRecords: sub.analytics_records || [],
         otherRecords: sub.other_records || [],
         dataName,

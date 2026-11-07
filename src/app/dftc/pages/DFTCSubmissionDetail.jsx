@@ -285,7 +285,9 @@ function DFTCSubmissionDetail() {
   const ds = useMemo(() => {
     if (!apiSubmission) return null;
     const isArrival = apiSubmission.data_type === "arrival_volume";
-    const isManual = (apiSubmission.submission_method || "").toLowerCase().includes("manual");
+    const methodLower = (apiSubmission.submission_method || "").toLowerCase();
+    const isGeneratedReport = methodLower.includes("generated report");
+    const isManual = !isGeneratedReport && methodLower.includes("manual");
     const pTypeRaw = (apiSubmission.price_type || "").toLowerCase();
     const pTypeDisplay = pTypeRaw.includes("wholesale")
       ? "Wholesale"
@@ -294,7 +296,10 @@ function DFTCSubmissionDetail() {
       : pTypeRaw.includes("retail")
       ? "Retail"
       : "";
-    const dType = isArrival
+    const freqLabel = apiSubmission.report_period === "weekly" ? "Weekly" : apiSubmission.report_period === "monthly" ? "Monthly" : "Daily";
+    const dType = isGeneratedReport
+      ? (isArrival ? `${freqLabel} Arrival Volume Report` : `${freqLabel} ${pTypeDisplay || "Retail"} Price Report`)
+      : isArrival
       ? "DFTC Arrival Volume"
       : isManual
       ? (pTypeDisplay ? `Manual Input · ${pTypeDisplay} Prices` : "Manual Input · Daily Prices")
@@ -319,12 +324,22 @@ function DFTCSubmissionDetail() {
 
     const analyticsRecords = Array.isArray(apiSubmission.analytics_records) ? apiSubmission.analytics_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => r.is_top10) : [];
     const otherRecords = Array.isArray(apiSubmission.other_records) ? apiSubmission.other_records : Array.isArray(apiSubmission.records) ? apiSubmission.records.filter((r) => !r.is_top10) : [];
-    const dateCoverage = computeDateCoverage([...analyticsRecords, ...otherRecords, ...(Array.isArray(apiSubmission.records) ? apiSubmission.records : [])], apiSubmission.reporting_date);
+    const computedCoverage = computeDateCoverage([...analyticsRecords, ...otherRecords, ...(Array.isArray(apiSubmission.records) ? apiSubmission.records : [])], apiSubmission.reporting_date);
+    const dateCoverage = (isGeneratedReport && apiSubmission.period_start_date && apiSubmission.period_end_date)
+      ? `${formatDate(apiSubmission.period_start_date)} – ${formatDate(apiSubmission.period_end_date)}`
+      : computedCoverage;
     const hasMarketAndType = !isArrival && ([...analyticsRecords, ...otherRecords].some((r) => r.price_type || r.source_name));
+    const entryMethodLabel = isGeneratedReport
+      ? "Generated Report"
+      : (apiSubmission.submission_method === "Manual Input")
+      ? "Manual Input"
+      : "File Upload";
 
     return {
       datasetId: apiSubmission.id,
       datasetType: dType,
+      isArrival,
+      isGeneratedReport,
       savedBy: submitterFullName,
       encodedBy: encoderFullName,
       savedDateTime: formatDateTime(apiSubmission.saved_at || apiSubmission.created_at),
@@ -341,8 +356,8 @@ function DFTCSubmissionDetail() {
       priceType: isArrival ? "—" : (pTypeDisplay || "All Price Types"),
       hasMarketAndType,
       dateCoverage,
-      entryMethod: (apiSubmission.submission_method === "Manual Input") ? "Manual Input" : "File Upload",
-      submissionMethod: (apiSubmission.submission_method === "Manual Input") ? "Manual Input" : "File Upload",
+      entryMethod: entryMethodLabel,
+      submissionMethod: entryMethodLabel,
       failureReason: apiSubmission.failure_reason || null,
       analyticsRecords,
       otherRecords,
@@ -412,11 +427,26 @@ function DFTCSubmissionDetail() {
   }
 
   const effectiveStatus = retried ? "Saved" : ds.status;
-  const isArrival = ds.datasetType === "DFTC Arrival Volume";
+  const isArrival = Boolean(ds.isArrival || ds.datasetType === "DFTC Arrival Volume");
   const showValidation = effectiveStatus === "Saved";
   const isManual = ds.entryMethod === "Manual Input";
+  const isGeneratedReport = Boolean(ds.isGeneratedReport || ds.entryMethod === "Generated Report");
 
-  const INFO_ROWS = isManual
+  const INFO_ROWS = isGeneratedReport
+    ? [
+        ["Entry Source", "Generated Periodic Report"],
+        ["Report File", ds.fileName || "—"],
+        ["File Type", ds.fileType || "xlsx"],
+        ["Dataset Type", ds.datasetType],
+        ["Market / Facility", ds.market],
+        ...(!isArrival && ds.priceType !== "—" ? [["Price Type", ds.priceType]] : []),
+        ["Date Coverage", ds.dateCoverage],
+        ["Submission Method", "Generated Report"],
+        ["Generated / Noted By", ds.savedBy],
+        ["Prepared / Encoded By", ds.encodedBy],
+        ["Generated Date and Time", ds.savedDateTime]
+      ]
+    : isManual
     ? [
         ["Entry Source", "Manual Data Entry"],
         ["Dataset Type", ds.datasetType],
@@ -669,7 +699,7 @@ function DFTCSubmissionDetail() {
               <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--hw-neutral-100)] flex items-start gap-2 sm:gap-2.5 bg-[var(--hw-neutral-50)]/50">
                 <Info className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0 mt-0.5" />
                 <p className="text-[12.5px] sm:text-[13.5px] text-[var(--hw-neutral-700)] leading-relaxed">
-                  These commodities are not part of HarvestWise crop analytics. Records in this list are retained for DFTC monitoring and will be automatically removed after 30 days.
+                  These commodities are not part of HarvestWise crop analytics. Records in this list are retained for DFTC monitoring and will be automatically removed after 60 days.
                 </p>
               </div>
               {ds.otherRecords.length === 0 ? (

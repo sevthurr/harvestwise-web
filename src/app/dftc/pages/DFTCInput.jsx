@@ -13,7 +13,9 @@ import {
   CheckCircle,
   Truck,
   Trash2,
-  Loader2
+  Loader2,
+  ArrowRight,
+  FileSpreadsheet
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiDelete, apiGet, parseResponse } from "../../global/api";
@@ -222,7 +224,7 @@ export default function DFTCInput() {
 
   const rawSubmissions = submissionsData?.items || [];
 
-  const cutoffDays = dateRangeFilter === "30d" ? 30 : 7;
+  const cutoffDays = dateRangeFilter === "60d" ? 60 : dateRangeFilter === "30d" ? 30 : 7;
   const cutoffDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - cutoffDays);
@@ -573,6 +575,13 @@ export default function DFTCInput() {
   };
 
   const handleSelectFile = (file) => {
+    if (file.isGeneratedReport) {
+      navigate("/dftc/generate-report", {
+        state: { prefill: file }
+      });
+      return;
+    }
+
     let meta = {};
     try {
       const stored = localStorage.getItem(`dftc_report_personnel_${file.reportingDate}`);
@@ -842,7 +851,7 @@ export default function DFTCInput() {
           <div className="min-w-0">
             <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
             <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
-              Datasets saved and validated in the last {dateRangeFilter === "30d" ? "30" : "7"} days
+              Datasets saved and validated in the last {dateRangeFilter === "60d" ? "60" : dateRangeFilter === "30d" ? "30" : "7"} days
             </p>
           </div>
 
@@ -946,7 +955,13 @@ export default function DFTCInput() {
                 }}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
               >
-                <span>{dateRangeFilter === "30d" ? "Last 30 Days" : "Last 7 Days"}</span>
+                <span>
+                  {dateRangeFilter === "60d"
+                    ? "Last 60 Days"
+                    : dateRangeFilter === "30d"
+                    ? "Last 30 Days"
+                    : "Last 7 Days"}
+                </span>
                 <ChevronDown className={`w-3.5 h-3.5 text-[var(--hw-neutral-500)] transition-transform duration-150 ${isDaysDropdownOpen ? "rotate-180" : ""}`} />
               </button>
 
@@ -978,18 +993,33 @@ export default function DFTCInput() {
                     <span>Last 30 Days</span>
                     {dateRangeFilter === "30d" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateRangeFilter("60d");
+                      setIsDaysDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      dateRangeFilter === "60d" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>Last 60 Days</span>
+                    {dateRangeFilter === "60d" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
                 </div>
               )}
             </div>
 
             <span className="hidden sm:inline text-[var(--hw-neutral-200)] font-light">|</span>
 
-            {/* View Data History */}
+            {/* Generate Report */}
             <button
-              onClick={() => navigate("/dftc/submissions")}
-              className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0 cursor-pointer whitespace-nowrap"
+              type="button"
+              onClick={() => navigate("/dftc/generate-report")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-semibold text-white bg-[var(--hw-green-700)] hover:bg-[var(--hw-green-800)] rounded-lg transition-colors shrink-0 cursor-pointer whitespace-nowrap shadow-xs"
             >
-              View Data History
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Generate Report
             </button>
           </div>
         </div>
@@ -1011,7 +1041,7 @@ export default function DFTCInput() {
             <p>
               {datasetTypeFilter !== "all" || dateRangeFilter !== "7d" || searchFilter.trim()
                 ? "No saved datasets match the selected filters."
-                : `No saved datasets from the last ${dateRangeFilter === "30d" ? "30" : "7"} days. Encoded or uploaded datasets will appear here.`}
+                : `No saved datasets from the last ${dateRangeFilter === "60d" ? "60" : dateRangeFilter === "30d" ? "30" : "7"} days. Encoded or uploaded datasets will appear here.`}
             </p>
             {(datasetTypeFilter !== "all" || dateRangeFilter !== "7d" || Boolean(searchFilter.trim())) && (
               <button
@@ -1079,6 +1109,18 @@ export default function DFTCInput() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* View Data History redirect link below Recent Saved Data container */}
+      <div className="flex justify-end -mt-3 md:-mt-6">
+        <button
+          type="button"
+          onClick={() => navigate("/dftc/submissions")}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] hover:bg-[var(--hw-green-50)]/60 rounded-lg transition-colors cursor-pointer group"
+        >
+          <span>View Data History</span>
+          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+        </button>
       </div>
 
       {/* Delete Draft Confirmation Modal */}

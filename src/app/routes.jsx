@@ -54,6 +54,7 @@ import DFTCTrends           from "./dftc/pages/DFTCTrends";
 import DFTCSubmissions      from "./dftc/pages/DFTCSubmissions";
 import DFTCPriceInput       from "./dftc/pages/DFTCPriceInput";
 import DFTCArrivalInput     from "./dftc/pages/DFTCArrivalInput";
+import DFTCGenerateReport   from "./dftc/pages/DFTCGenerateReport";
 import DFTCUpload              from "./dftc/pages/DFTCUpload";
 import DFTCTemporaryRecords    from "./dftc/pages/DFTCTemporaryRecords";
 import DFTCTemporaryRecordDetail from "./dftc/pages/DFTCTemporaryRecordDetail";
@@ -185,6 +186,7 @@ export const router = createBrowserRouter([
       { path: "input/commodity/:commodityName", Component: DFTCCommodityRecords },
       { path: "price-input",       Component: DFTCPriceInput   },
       { path: "arrival-input",     Component: DFTCArrivalInput },
+      { path: "generate-report",   Component: DFTCGenerateReport },
       { path: "trends",            Component: DFTCTrends       },
       { path: "submissions",                  Component: DFTCSubmissions      },
       { path: "submissions/:submissionId",    Component: DFTCSubmissionDetail },
