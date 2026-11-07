@@ -41,21 +41,21 @@ function cell(ctx, x, y, w, h, bg) {
  */
 export function renderFBCardToCanvas({ categories, reportDate, personnel, isLast }, scale = 2) {
   const hasSig = !!(isLast && personnel);
-  const { rows, heights, fontSize } = computeFBLayout(categories, hasSig);
+  const { rows, heights, fontSize, H } = computeFBLayout(categories, hasSig);
   const canvas = document.createElement("canvas");
   canvas.width = FB.W * scale;
-  canvas.height = FB.H * scale;
+  canvas.height = H * scale;
   const ctx = canvas.getContext("2d");
   ctx.scale(scale, scale);
 
   // Card shell
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, FB.W, FB.H);
+  ctx.fillRect(0, 0, FB.W, H);
   ctx.save();
-  roundRect(ctx, 0, 0, FB.W, FB.H, 16);
+  roundRect(ctx, 0, 0, FB.W, H, 16);
   ctx.clip();
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, FB.W, FB.H);
+  ctx.fillRect(0, 0, FB.W, H);
 
   // Header
   const cx = FB.W / 2;
@@ -98,6 +98,7 @@ export function renderFBCardToCanvas({ categories, reportDate, personnel, isLast
   const HR = FB.HEAD_ROW_H;
   const span = (a, b) => colX[b] + colW[b] - colX[a];
 
+  const drawHead = () => {
   // Column headers
   [[0, "No.", "center"], [1, "Commodity", "left"], [2, "UOM", "center"]].forEach(([i, label, al]) => {
     cell(ctx, colX[i], y, colW[i], HR * 2, LEFT_BG);
@@ -112,13 +113,16 @@ export function renderFBCardToCanvas({ categories, reportDate, personnel, isLast
     cell(ctx, colX[i], y + HR, colW[i], HR, i < 6 ? BANK_BG : DFTC_BG);
     text(ctx, label, colX[i] + colW[i] / 2, y + HR + HR / 2, { size: 11, bold: true, align: "center" });
   });
-  y += HR * 2;
 
+
+  };
   // Body rows
   rows.forEach((r, i) => {
     const h = heights[i];
     const mid = y + h / 2;
-    if (r.type === "cat") {
+    if (r.type === "head") {
+      drawHead();
+    } else if (r.type === "cat") {
       cell(ctx, tx, y, tw - 1, h, CATEGORY_BG);
       text(ctx, r.name.toUpperCase(), tx + 6, mid, { size: fontSize, bold: true, italic: true });
     } else {
@@ -145,7 +149,7 @@ export function renderFBCardToCanvas({ categories, reportDate, personnel, isLast
 
   // Signature block
   if (hasSig) {
-    const sigY = FB.H - FB.FOOTER_H - 8 - (FB.SIG_H - 12);
+    const sigY = H - FB.FOOTER_H - 8 - (FB.SIG_H - 12);
     const sigH = FB.SIG_H - 12;
     ctx.fillStyle = "#f9fafb";
     roundRect(ctx, FB.PAD, sigY, FB.W - FB.PAD * 2, sigH, 8);
@@ -177,15 +181,18 @@ export function renderFBCardToCanvas({ categories, reportDate, personnel, isLast
   g.addColorStop(0.5, "#22c55e");
   g.addColorStop(1, "#16a34a");
   ctx.fillStyle = g;
-  ctx.fillRect(0, FB.H - FB.FOOTER_H, FB.W, FB.FOOTER_H);
+  ctx.fillRect(0, H - FB.FOOTER_H, FB.W, FB.FOOTER_H);
   ctx.restore();
 
   // Outer border
   ctx.strokeStyle = "#16a34a";
   ctx.lineWidth = FB.BORDER;
-  roundRect(ctx, FB.BORDER / 2, FB.BORDER / 2, FB.W - FB.BORDER, FB.H - FB.BORDER, 15);
+  roundRect(ctx, FB.BORDER / 2, FB.BORDER / 2, FB.W - FB.BORDER, H - FB.BORDER, 15);
   ctx.stroke();
 
   return canvas;
 }
+
+
+
 

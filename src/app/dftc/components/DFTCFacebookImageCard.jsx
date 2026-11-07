@@ -30,9 +30,13 @@ export const FB = {
   FONT: "Arial, Helvetica, sans-serif"
 };
 
+export const ROW_H = 26;
+
 export function buildFBRows(categories) {
-  const rows = [];
-  categories.forEach((cat) => {
+  const rows = [{ type: "head" }];
+  categories.forEach((cat, idx) => {
+    // Real DFTC postings repeat the column header before ROOTCROPS
+    if (idx > 0 && /root/i.test(cat.name)) rows.push({ type: "head" });
     rows.push({ type: "cat", name: cat.name });
     (cat.commodities || []).forEach((com) =>
       (com.variants || []).forEach((v, vi) => rows.push({ type: "row", com, v, vi }))
@@ -41,26 +45,16 @@ export function buildFBRows(categories) {
   return rows;
 }
 
+// Every card uses the same row height. The card grows with its content, so
+// there is never unused space and rows look identical on all 4 images.
 export function computeFBLayout(categories, hasSignature) {
   const rows = buildFBRows(categories);
-  const tableTop = FB.BORDER + FB.HEADER_H + FB.PAD + FB.HEAD_ROW_H * 2;
-  const tableBottom = FB.H - FB.BORDER - FB.FOOTER_H - FB.PAD - (hasSignature ? FB.SIG_H : 0);
-  const avail = tableBottom - tableTop - 1;
-  const CAT_H = 28;
-  const catCount = rows.filter((r) => r.type === "cat").length;
-  const dataCount = Math.max(rows.length - catCount, 1);
-  const base = Math.floor((avail - catCount * CAT_H) / dataCount);
-  let rem = avail - catCount * CAT_H - base * dataCount;
-  const heights = rows.map((r) => {
-    if (r.type === "cat") return CAT_H;
-    const h = base + (rem > 0 ? 1 : 0);
-    if (rem > 0) rem -= 1;
-    return h;
-  });
-  const fontSize = Math.max(10, Math.min(15, Math.round(base * 0.5)));
-  return { rows, heights, fontSize, tableTop };
+  const heights = rows.map((r) => (r.type === "head" ? FB.HEAD_ROW_H * 2 : ROW_H));
+  const tableH = heights.reduce((a, b) => a + b, 0) + 1;
+  const H =
+    FB.BORDER * 2 + FB.HEADER_H + FB.PAD + tableH + FB.PAD + (hasSignature ? FB.SIG_H : 0) + FB.FOOTER_H;
+  return { rows, heights, fontSize: 13, tableTop: FB.BORDER + FB.HEADER_H + FB.PAD, H };
 }
-
 function Cell({ bg, h, children, align = "left", bold = false, italic = false, fontSize, style = {} }) {
   return (
     <div
@@ -101,7 +95,7 @@ export function DFTCFacebookImageCard({
   isLast = false
 }) {
   const hasSig = !!(isLast && personnel);
-  const { rows, heights, fontSize } = computeFBLayout(categories, hasSig);
+  const { rows, heights, fontSize, H } = computeFBLayout(categories, hasSig);
   const HR = FB.HEAD_ROW_H;
   const headFont = 11;
   const head = (bg, h, children, extra = {}) => (
@@ -116,7 +110,7 @@ export function DFTCFacebookImageCard({
       style={{
         boxSizing: "border-box",
         width: FB.W,
-        height: FB.H,
+        height: H,
         border: `${FB.BORDER}px solid #16a34a`,
         borderRadius: 16,
         overflow: "hidden",
@@ -148,8 +142,10 @@ export function DFTCFacebookImageCard({
       {/* Table */}
       <div style={{ position: "absolute", left: FB.PAD, right: FB.PAD, top: FB.HEADER_H + FB.PAD }}>
         <div style={{ borderTop: `1px solid ${BORDER_COLOR}`, borderLeft: `1px solid ${BORDER_COLOR}` }}>
-          <div style={{ display: "grid", gridTemplateColumns: COLS_CSS }}>
-            {head(LEFT_BG, HR * 2, "No.", { gridRow: "1 / span 2" })}
+{rows.map((r, i) => {
+            const h = heights[i];
+            if (r.type === "head") return <div key={`head-${i}`} style={{ display: "grid", gridTemplateColumns: COLS_CSS }}>
+{head(LEFT_BG, HR * 2, "No.", { gridRow: "1 / span 2" })}
             {head(LEFT_BG, HR * 2, "Commodity", { gridRow: "1 / span 2", justifyContent: "flex-start" })}
             {head(LEFT_BG, HR * 2, "UOM", { gridRow: "1 / span 2" })}
             {head(BANK_BG, HR, "BANKEROHAN MARKET", { gridColumn: "4 / span 3" })}
@@ -159,10 +155,7 @@ export function DFTCFacebookImageCard({
             {head(BANK_BG, HR, "Retail")}
             {head(DFTC_BG, HR, "Wholesale")}
             {head(DFTC_BG, HR, "Retail")}
-          </div>
-
-          {rows.map((r, i) => {
-            const h = heights[i];
+</div>;
             if (r.type === "cat") {
               return (
                 <div
@@ -258,3 +251,4 @@ export function DFTCFacebookImageCard({
     </div>
   );
 }
+
