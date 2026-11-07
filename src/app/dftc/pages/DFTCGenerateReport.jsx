@@ -221,11 +221,15 @@ export default function DFTCGenerateReport() {
         market: market,
         price_type: priceType,
       });
-      const res = await apiGet(`/dftc/reports/preview?${params.toString()}`);
+      const res = await apiGet(`/dftc/reports/preview?${params.toString()}`, {
+        timeoutMs: 30000,
+      });
       return parseResponse(res);
     },
     enabled: dataType === "price" && step !== "configure",
-    staleTime: 0,
+    staleTime: 60000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
   });
 
   const {
@@ -253,11 +257,15 @@ export default function DFTCGenerateReport() {
         source_id: market,
         market: market,
       });
-      const res = await apiGet(`/dftc/reports/arrival-preview?${params.toString()}`);
+      const res = await apiGet(`/dftc/reports/arrival-preview?${params.toString()}`, {
+        timeoutMs: 30000,
+      });
       return parseResponse(res);
     },
     enabled: dataType === "arrival_volume" && step !== "configure",
-    staleTime: 0,
+    staleTime: 60000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
   });
 
   // Lookup map for price rows by normalized commodity + variety
@@ -631,11 +639,19 @@ export default function DFTCGenerateReport() {
     setCompletedSummary(null);
   };
 
+  const isFetchingAny =
+    dataType === "price" ? fetchingPricePreview : fetchingArrivalPreview;
+  const hasPreviewData =
+    dataType === "price"
+      ? Boolean(pricePreviewData?.rows && pricePreviewData.rows.length > 0)
+      : Boolean(arrivalPreviewData?.rows && arrivalPreviewData.rows.length > 0);
+  const isQueryError = dataType === "price" ? isPriceError : isArrivalError;
+
   const isLoadingPreview =
     dataType === "price"
-      ? (loadingPricePreview || fetchingPricePreview) && !pricePreviewData && !isPriceError
-      : (loadingArrivalPreview || fetchingArrivalPreview) && !arrivalPreviewData && !isArrivalError;
-  const isPreviewError = dataType === "price" ? isPriceError : isArrivalError;
+      ? (loadingPricePreview || fetchingPricePreview) && !pricePreviewData
+      : (loadingArrivalPreview || fetchingArrivalPreview) && !arrivalPreviewData;
+  const isPreviewError = isQueryError && !isFetchingAny && !hasPreviewData;
   const previewError = dataType === "price" ? priceError : arrivalError;
   const refetchPreview = dataType === "price" ? refetchPrice : refetchArrival;
   const priceTheme = PRICE_REPORT_THEMES[priceType] || PRICE_REPORT_THEMES.Retail;
@@ -1036,9 +1052,11 @@ export default function DFTCGenerateReport() {
                       <button
                         type="button"
                         onClick={() => refetchPreview()}
-                        className="font-semibold underline hover:text-amber-950 cursor-pointer ml-3 shrink-0"
+                        disabled={isFetchingAny}
+                        className="font-semibold underline hover:text-amber-950 cursor-pointer ml-3 shrink-0 inline-flex items-center gap-1.5"
                       >
-                        Retry
+                        {isFetchingAny && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        <span>{isFetchingAny ? "Retrying..." : "Retry"}</span>
                       </button>
                     </div>
                   )}
