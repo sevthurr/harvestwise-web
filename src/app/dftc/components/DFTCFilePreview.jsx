@@ -14,9 +14,10 @@ import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
 import { DFTCFacebookImageCard } from "./DFTCFacebookImageCard";
 import { renderFBCardToCanvas } from "./dftcFacebookImageCanvas";
 
-const LEFT_BG = "#c6efce";
-const BANK_BG = "#ffeb9c";
-const DFTC_BG = "#dae8fc";
+const LEFT_BG = "#d9ead3";
+const BANK_BG = "#fff2cc";
+const DFTC_BG = "#cfe2f3";
+const CATEGORY_BG = "#cbd5e1";
 
 const USER_ID_TO_NAME = {
   "USR-0001": "MARIA S. SANTOS"
@@ -59,6 +60,19 @@ function formatDisplayDateShort(dateStr) {
     }
   } catch {}
   return String(dateStr);
+}
+
+function getDayName(dateStr, fallbackStr) {
+  for (const s of [dateStr, fallbackStr]) {
+    if (!s) continue;
+    try {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-US", { weekday: "long" });
+      }
+    } catch {}
+  }
+  return new Date().toLocaleDateString("en-US", { weekday: "long" });
 }
 
 function getEncodedByName(file) {
@@ -534,13 +548,15 @@ function DFTCFilePreview({ file, onClose }) {
       }
 
       if (canvases.length > 0) {
-        // Uniform scale based on targetW and maxH so every single page renders at the exact same table width
-        // and is guaranteed to fit within the printable height without cropping.
+        // For Landscape, scale to targetW so horizontal margins are clean and normal (not shrunk/oversized margins).
+        // For Portrait, ensure ratio fits within maxH so tall content is never cropped.
         const baseCanvasWidth = canvases[0]?.width || (isPortrait ? 1520 : 2040);
         const pdfH = pdf.internal.pageSize.getHeight();
         const maxH = pdfH - marginY * 2;
         const maxCanvasHeight = Math.max(...canvases.map((c) => c.height));
-        const uniformRatio = Math.min(targetW / baseCanvasWidth, maxH / maxCanvasHeight);
+        const uniformRatio = isPortrait
+          ? Math.min(targetW / baseCanvasWidth, maxH / maxCanvasHeight)
+          : targetW / baseCanvasWidth;
         const w = baseCanvasWidth * uniformRatio;
         const x = (pdfW - w) / 2;
 
@@ -574,7 +590,8 @@ function DFTCFilePreview({ file, onClose }) {
       const wb = new ExcelJS.Workbook();
       wb.creator = "HarvestWise DFTC System";
       wb.created = new Date();
-      const ws = wb.addWorksheet("Price Monitoring", {
+      const sheetName = getDayName(reportingDate, reportingDateShort);
+      const ws = wb.addWorksheet(sheetName, {
         pageSetup: { orientation: orientation, paperSize: 14, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
       });
       ws.columns = [
@@ -624,7 +641,7 @@ function DFTCFilePreview({ file, onClose }) {
           const cell = row.getCell(c);
           cell.font = { bold: true, size: 10, name: "Arial" };
           cell.alignment = { horizontal: "center", vertical: "middle" };
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg.replace("#", "FF") } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg.replace("#", "FF").toUpperCase() } };
           cell.border = borderAll;
         });
       };
@@ -652,11 +669,11 @@ function DFTCFilePreview({ file, onClose }) {
           applyHStyle(hR2, [4, 5, 6], BANK_BG);
           applyHStyle(hR2, [7, 8], DFTC_BG);
         }
-        const catRow = ws.addRow([cat.name, "", "", "", "", "", "", ""]);
+        const catRow = ws.addRow([cat.name.toUpperCase(), "", "", "", "", "", "", ""]);
         ws.mergeCells(`A${catRow.number}:H${catRow.number}`);
         const cCell = catRow.getCell(1);
-        cCell.font = { bold: true, italic: true, underline: true, size: 10, name: "Arial" };
-        cCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEFT_BG.replace("#", "FF") } };
+        cCell.font = { bold: true, italic: true, size: 10, name: "Arial" };
+        cCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: CATEGORY_BG.replace("#", "FF").toUpperCase() } };
         cCell.border = borderAll;
 
         cat.commodities.forEach((com) => {
@@ -674,19 +691,19 @@ function DFTCFilePreview({ file, onClose }) {
             dataRow.font = { size: 10, name: "Arial" };
             [1, 2, 3].forEach((c) => {
               const cell = dataRow.getCell(c);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEFT_BG.replace("#", "FF") } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEFT_BG.replace("#", "FF").toUpperCase() } };
               cell.border = borderAll;
               if (c === 1 || c === 3) cell.alignment = { horizontal: "center" };
             });
             [4, 5, 6].forEach((c) => {
               const cell = dataRow.getCell(c);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BANK_BG.replace("#", "FF") } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BANK_BG.replace("#", "FF").toUpperCase() } };
               cell.alignment = { horizontal: "right" };
               cell.border = borderAll;
             });
             [7, 8].forEach((c) => {
               const cell = dataRow.getCell(c);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DFTC_BG.replace("#", "FF") } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DFTC_BG.replace("#", "FF").toUpperCase() } };
               cell.alignment = { horizontal: "right" };
               cell.border = borderAll;
             });
