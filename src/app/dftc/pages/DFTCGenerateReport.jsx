@@ -12,11 +12,15 @@ import {
   Loader2,
   RefreshCw,
   Calendar,
+  AlertCircle,
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
 import { useAuth } from "../../global/contexts/AuthContext";
-import { PAGE_CATEGORY_GROUPS } from "../components/dftcReportCategories";
+import {
+  PAGE_CATEGORY_GROUPS,
+  DEFAULT_PRICE_REPORT_CATEGORIES,
+} from "../components/dftcReportCategories";
 import { DEFAULT_PERSONNEL } from "../components/DFTCReportShell";
 import {
   PRICE_REPORT_THEMES,
@@ -190,11 +194,19 @@ export default function DFTCGenerateReport() {
   }, [period, weekAnchorDate, selectedYear, selectedMonth]);
 
   // Query live preview data from backend when on preview step (or pre-fetching)
-  const { data: pricePreviewData, isLoading: loadingPricePreview } = useQuery({
+  const {
+    data: pricePreviewData,
+    isLoading: loadingPricePreview,
+    isFetching: fetchingPricePreview,
+    isError: isPriceError,
+    error: priceError,
+    refetch: refetchPrice,
+  } = useQuery({
     queryKey: [
       "dftc",
       "periodic-price-preview",
-      periodInfo.reportingDate,
+      periodInfo.startDate,
+      periodInfo.endDate,
       period,
       market,
       priceType,
@@ -202,8 +214,11 @@ export default function DFTCGenerateReport() {
     queryFn: async () => {
       const params = new URLSearchParams({
         date: periodInfo.reportingDate,
+        start_date: periodInfo.startDate,
+        end_date: periodInfo.endDate,
         period,
         source_id: market,
+        market: market,
         price_type: priceType,
       });
       const res = await apiGet(`/dftc/reports/preview?${params.toString()}`);
@@ -213,19 +228,30 @@ export default function DFTCGenerateReport() {
     staleTime: 0,
   });
 
-  const { data: arrivalPreviewData, isLoading: loadingArrivalPreview } = useQuery({
+  const {
+    data: arrivalPreviewData,
+    isLoading: loadingArrivalPreview,
+    isFetching: fetchingArrivalPreview,
+    isError: isArrivalError,
+    error: arrivalError,
+    refetch: refetchArrival,
+  } = useQuery({
     queryKey: [
       "dftc",
       "periodic-arrival-preview",
-      periodInfo.reportingDate,
+      periodInfo.startDate,
+      periodInfo.endDate,
       period,
       market,
     ],
     queryFn: async () => {
       const params = new URLSearchParams({
         date: periodInfo.reportingDate,
+        start_date: periodInfo.startDate,
+        end_date: periodInfo.endDate,
         period,
         source_id: market,
+        market: market,
       });
       const res = await apiGet(`/dftc/reports/arrival-preview?${params.toString()}`);
       return parseResponse(res);
@@ -268,15 +294,13 @@ export default function DFTCGenerateReport() {
   }, [pricePreviewData]);
 
   // Categories from backend `/dftc/reports/preview` (`pricePreviewData.categories`)
-  // plus any dynamic commodities returned in `pricePreviewData.rows`
+  // with fallback to official survey catalogue (`DEFAULT_PRICE_REPORT_CATEGORIES`).
+  // Guarantees all commodities and categories always render in preview and export.
   const reportCategories = useMemo(() => {
     const baseCategories =
       Array.isArray(pricePreviewData?.categories) && pricePreviewData.categories.length > 0
         ? pricePreviewData.categories
-        : CATEGORY_NAMES.map((catName) => ({
-            name: typeof catName === "string" ? catName : catName?.name || "Lowland Vegetables",
-            commodities: [],
-          }));
+        : DEFAULT_PRICE_REPORT_CATEGORIES;
 
     const cloned = baseCategories.map((cat) => ({
       name: typeof cat === "string" ? cat : cat?.name || "Lowland Vegetables",
@@ -363,7 +387,6 @@ export default function DFTCGenerateReport() {
         return row.daily_values_by_date[dayCol.isoDate];
       }
       if (
-        period === "monthly" &&
         row.daily_values &&
         row.daily_values[String(dayCol.dayNum)] != null
       ) {
@@ -609,7 +632,12 @@ export default function DFTCGenerateReport() {
   };
 
   const isLoadingPreview =
-    dataType === "price" ? loadingPricePreview : loadingArrivalPreview;
+    dataType === "price"
+      ? (loadingPricePreview || fetchingPricePreview) && !pricePreviewData && !isPriceError
+      : (loadingArrivalPreview || fetchingArrivalPreview) && !arrivalPreviewData && !isArrivalError;
+  const isPreviewError = dataType === "price" ? isPriceError : isArrivalError;
+  const previewError = dataType === "price" ? priceError : arrivalError;
+  const refetchPreview = dataType === "price" ? refetchPrice : refetchArrival;
   const priceTheme = PRICE_REPORT_THEMES[priceType] || PRICE_REPORT_THEMES.Retail;
 
   const inputCls =
@@ -999,6 +1027,22 @@ export default function DFTCGenerateReport() {
                     minWidth: period === "monthly" ? "1380px" : "780px",
                   }}
                 >
+                  {isPreviewError && (
+                    <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-[12px] text-amber-800">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Could not fetch records from server ({previewError?.message || "network error"}). Displaying survey catalogue.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refetchPreview()}
+                        className="font-semibold underline hover:text-amber-950 cursor-pointer ml-3 shrink-0"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
                   {/* Rows 1–6: Official CAgrO-Davao Top-Left Header */}
                   <div className="mb-3 space-y-0.5 text-left">
                     <div style={{ fontSize: "11px", fontStyle: "italic" }}>
