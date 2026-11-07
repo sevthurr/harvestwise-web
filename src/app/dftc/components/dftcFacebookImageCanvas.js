@@ -188,3 +188,4 @@ export function renderFBCardToCanvas({ categories, reportDate, personnel, isLast
 
   return canvas;
 }
+

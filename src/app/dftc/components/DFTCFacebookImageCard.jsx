@@ -46,10 +46,13 @@ export function computeFBLayout(categories, hasSignature) {
   const tableTop = FB.BORDER + FB.HEADER_H + FB.PAD + FB.HEAD_ROW_H * 2;
   const tableBottom = FB.H - FB.BORDER - FB.FOOTER_H - FB.PAD - (hasSignature ? FB.SIG_H : 0);
   const avail = tableBottom - tableTop - 1;
-  const n = Math.max(rows.length, 1);
-  const base = Math.floor(avail / n);
-  let rem = avail - base * n;
-  const heights = rows.map(() => {
+  const CAT_H = 28;
+  const catCount = rows.filter((r) => r.type === "cat").length;
+  const dataCount = Math.max(rows.length - catCount, 1);
+  const base = Math.floor((avail - catCount * CAT_H) / dataCount);
+  let rem = avail - catCount * CAT_H - base * dataCount;
+  const heights = rows.map((r) => {
+    if (r.type === "cat") return CAT_H;
     const h = base + (rem > 0 ? 1 : 0);
     if (rem > 0) rem -= 1;
     return h;
@@ -255,4 +258,3 @@ export function DFTCFacebookImageCard({
     </div>
   );
 }
-
