@@ -73,3 +73,4 @@ describe("DFTCFacebookImageCard", () => {
     expect(screen.getByText("Agricultural Technologist")).toBeInTheDocument();
   });
 });
+
