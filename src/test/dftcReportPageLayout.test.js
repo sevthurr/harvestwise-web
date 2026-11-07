@@ -95,13 +95,14 @@ describe("report page layout", () => {
     expect(new Set(onPages).size).toBe(onPages.length);
   });
 
-  it("splits categories into 2 pages for PDF Long Portrait layout", () => {
+  it("splits categories into 3 pages for PDF Long Portrait layout", () => {
     const onPortraitPages = PDF_PORTRAIT_PAGE_CATEGORY_GROUPS.flat();
     expect(onPortraitPages).toEqual(CATEGORIES.map((c) => c.name));
     expect(new Set(onPortraitPages).size).toBe(onPortraitPages.length);
-    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS).toHaveLength(2);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS).toHaveLength(3);
     expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[0]).toEqual(["Lowland Vegetables", "Highland Vegetables"]);
-    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[1]).toEqual(["Spices", "Rootcrops", "Fruits", "Others"]);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[1]).toEqual(["Spices", "Rootcrops"]);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[2]).toEqual(["Fruits", "Others"]);
   });
 
   it("splits categories into 5 pages for PDF Landscape layout", () => {

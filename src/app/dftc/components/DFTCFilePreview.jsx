@@ -11,6 +11,7 @@ import {
   PDF_PORTRAIT_PAGE_CATEGORY_GROUPS
 } from "./dftcReportCategories";
 import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
+import { DFTCFacebookImageCard } from "./DFTCFacebookImageCard";
 
 const LEFT_BG = "#c6efce";
 const BANK_BG = "#ffeb9c";
@@ -201,9 +202,22 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
                 <ColumnHeaderRows headerPadding={headerPadding} headerFontSize={headerFontSize} />
               )}
               <tr>
-                <td colSpan={3} style={{ ...cellL(), fontWeight: "bold", fontStyle: "italic", textDecoration: "underline", textAlign: "left" }}>{cat.name}</td>
-                <td style={cellB()} /><td style={cellB()} /><td style={cellB()} />
-                <td style={cellD()} /><td style={cellD()} />
+                <td
+                  colSpan={8}
+                  style={{
+                    background: "#cbd5e1",
+                    border: "1px solid #000",
+                    padding: headerPadding,
+                    fontWeight: "bold",
+                    fontStyle: "italic",
+                    textTransform: "uppercase",
+                    fontSize: cellFontSize + 0.5,
+                    textAlign: "left",
+                    letterSpacing: "0.5px"
+                  }}
+                >
+                  {cat.name}
+                </td>
               </tr>
               {cat.commodities.map((com) =>
                 com.variants.map((v, vi) => (
@@ -343,16 +357,14 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
         </button>
       </div>
 
-      <DFTCPreviewZoomContainer label={`Image ${page + 1} of ${total}`}>
-        <DFTCReportPage
+      <DFTCPreviewZoomContainer label={`Facebook Image ${page + 1} of ${total}`}>
+        <DFTCFacebookImageCard
           pageIndex={page}
           totalPages={total}
           categories={currentCats}
-          isFirst={page === 0}
-          isLast={page === total - 1}
           reportDate={reportDate}
           personnel={page === total - 1 ? personnel : void 0}
-          orientation="landscape"
+          isLast={page === total - 1}
         />
       </DFTCPreviewZoomContainer>
 
@@ -512,17 +524,22 @@ function DFTCFilePreview({ file, onClose }) {
       }
 
       if (canvases.length > 0) {
-        // Uniform scale based on targetW so every single page renders at the exact same table width
-        // with clean, balanced margins identical to Arrival Volume.
+        // Uniform scale based on targetW and maxH so every single page renders at the exact same table width
+        // and is guaranteed to fit within the printable height without cropping.
         const baseCanvasWidth = canvases[0]?.width || (isPortrait ? 1520 : 2040);
-        const uniformRatio = targetW / baseCanvasWidth;
+        const pdfH = pdf.internal.pageSize.getHeight();
+        const maxH = pdfH - marginY * 2;
+        const maxCanvasHeight = Math.max(...canvases.map((c) => c.height));
+        const uniformRatio = Math.min(targetW / baseCanvasWidth, maxH / maxCanvasHeight);
+        const w = baseCanvasWidth * uniformRatio;
+        const x = (pdfW - w) / 2;
 
         for (let i = 0; i < canvases.length; i++) {
           const canvas = canvases[i];
           if (i > 0) pdf.addPage(longPaper, isPortrait ? "portrait" : "landscape");
 
           const h = canvas.height * uniformRatio;
-          pdf.addImage(canvas.toDataURL("image/png"), "PNG", marginX, marginY, targetW, h);
+          pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, marginY, w, h);
         }
       }
       const pdfFilename = buildReportExportFilename({
@@ -775,6 +792,24 @@ function DFTCFilePreview({ file, onClose }) {
       renderHiddenPages={() =>
         activeCategoryGroups.map((group, idx) => {
           const cats = group.map((n) => resolvedCategories.find((c) => c.name === n)).filter(Boolean);
+          if (format === "IMG") {
+            return (
+              <div
+                key={idx}
+                ref={(el) => { pageRefs.current[idx] = el; }}
+                style={{ width: 1040 }}
+              >
+                <DFTCFacebookImageCard
+                  pageIndex={idx}
+                  totalPages={activeCategoryGroups.length}
+                  categories={cats}
+                  reportDate={reportingDate}
+                  personnel={idx === activeCategoryGroups.length - 1 ? personnel : void 0}
+                  isLast={idx === activeCategoryGroups.length - 1}
+                />
+              </div>
+            );
+          }
           return (
             <div
               key={idx}

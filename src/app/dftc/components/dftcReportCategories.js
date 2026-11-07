@@ -26,7 +26,8 @@ export const PDF_PAGE_CATEGORY_GROUPS = [
 
 export const PDF_PORTRAIT_PAGE_CATEGORY_GROUPS = [
   ["Lowland Vegetables", "Highland Vegetables"],
-  ["Spices", "Rootcrops", "Fruits", "Others"]
+  ["Spices", "Rootcrops"],
+  ["Fruits", "Others"]
 ];
 
 export const PAGE_CATEGORY_GROUPS = IMG_PAGE_CATEGORY_GROUPS;

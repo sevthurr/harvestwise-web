@@ -61,3 +61,4 @@ describe("DFTCReportShell Orientation Selector", () => {
     expect(screen.queryByRole("button", { name: "Portrait" })).not.toBeInTheDocument();
   });
 });
+
