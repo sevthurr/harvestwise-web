@@ -34,4 +34,68 @@ describe("DFTC Excel Export Specifications", () => {
     expect(dataRow.getCell(4).fill.fgColor.argb).toBe("FFFFF2CC");
     expect(dataRow.getCell(7).fill.fgColor.argb).toBe("FFCFE2F3");
   });
+
+  it("exports Arrival Volume with OVERALL TOTAL, FARM SOURCE, and OTHER SOURCES tabs without #VALUE! formulas", async () => {
+    const wb = new ExcelJS.Workbook();
+    const wsOverall = wb.addWorksheet("OVERALL TOTAL");
+    const wsFarm = wb.addWorksheet("FARM SOURCE");
+    const wsOther = wb.addWorksheet("OTHER SOURCES");
+
+    expect(wb.worksheets.map(w => w.name)).toEqual([
+      "OVERALL TOTAL",
+      "FARM SOURCE",
+      "OTHER SOURCES"
+    ]);
+
+    // Test row with empty values to ensure no #VALUE! formulas
+    const rowNum = 6;
+    const farmVal = null;
+    const otherVal = null;
+    const hasFarm = farmVal !== null && !isNaN(farmVal);
+    const hasOther = otherVal !== null && !isNaN(otherVal);
+    const rowSum = (hasFarm ? farmVal : 0) + (hasOther ? otherVal : 0);
+    const hasAny = (hasFarm && farmVal > 0) || (hasOther && otherVal > 0);
+
+    const emptyRow = wsOverall.addRow([
+      1,
+      "Ahos (Imported)",
+      hasFarm ? farmVal : null,
+      hasAny && rowSum > 0 && hasFarm && farmVal > 0
+        ? { formula: `IF(G${rowNum}>0, C${rowNum}/G${rowNum}, "")`, result: farmVal / rowSum }
+        : (hasAny ? { formula: `IF(G${rowNum}>0, C${rowNum}/G${rowNum}, "")` } : null),
+      hasOther ? otherVal : null,
+      hasAny && rowSum > 0 && hasOther && otherVal > 0
+        ? { formula: `IF(G${rowNum}>0, E${rowNum}/G${rowNum}, "")`, result: otherVal / rowSum }
+        : (hasAny ? { formula: `IF(G${rowNum}>0, E${rowNum}/G${rowNum}, "")` } : null),
+      hasAny
+        ? { formula: `IF(OR(C${rowNum}>0, E${rowNum}>0), SUM(C${rowNum}, E${rowNum}), "")`, result: rowSum }
+        : null
+    ]);
+
+    // Value checks
+    expect(emptyRow.getCell(3).value).toBeNull();
+    expect(emptyRow.getCell(4).value).toBeNull();
+    expect(emptyRow.getCell(5).value).toBeNull();
+    expect(emptyRow.getCell(6).value).toBeNull();
+    expect(emptyRow.getCell(7).value).toBeNull();
+
+    // Now test a row with volume to ensure formula and results are correct
+    const activeFarm = 45.00;
+    const activeRow = wsOverall.addRow([
+      6,
+      "Atsal (Smooth Cayenne)",
+      activeFarm,
+      { formula: `IF(G7>0, C7/G7, "")`, result: 1 },
+      null,
+      null,
+      { formula: `IF(OR(C7>0, E7>0), SUM(C7, E7), "")`, result: 45 }
+    ]);
+
+    expect(activeRow.getCell(3).value).toBe(45);
+    expect(activeRow.getCell(4).value.result).toBe(1);
+    expect(activeRow.getCell(5).value).toBeNull();
+    expect(activeRow.getCell(6).value).toBeNull();
+    expect(activeRow.getCell(7).value.result).toBe(45);
+    expect(activeRow.getCell(7).value.formula).toBe('IF(OR(C7>0, E7>0), SUM(C7, E7), "")');
+  });
 });

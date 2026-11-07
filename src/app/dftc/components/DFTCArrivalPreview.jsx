@@ -437,9 +437,10 @@ function DFTCArrivalPreview({ file, onClose }) {
       });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
-      const margin = isPortrait ? 8 : 10;
-      const maxW = pdfW - margin * 2;
-      const maxH = pdfH - margin * 2;
+      const marginX = isPortrait ? 10 : 14;
+      const marginY = 12;
+      const targetW = pdfW - marginX * 2;
+      const maxH = pdfH - marginY * 2;
 
       const canvases = [];
       for (let i = 0; i < totalPdfPages; i++) {
@@ -453,17 +454,18 @@ function DFTCArrivalPreview({ file, onClose }) {
         const baseCanvasWidth = canvases[0]?.width || (isPortrait ? 1520 : 2040);
         const maxCanvasHeight = Math.max(...canvases.map((c) => c.height));
 
-        const uniformRatio = Math.min(maxW / baseCanvasWidth, maxH / maxCanvasHeight);
+        const uniformRatio = isPortrait
+          ? Math.min(targetW / baseCanvasWidth, maxH / maxCanvasHeight)
+          : targetW / baseCanvasWidth;
         const w = baseCanvasWidth * uniformRatio;
         const x = (pdfW - w) / 2;
-        const y = margin;
 
         for (let i = 0; i < canvases.length; i++) {
           const canvas = canvases[i];
           if (i > 0) pdf.addPage(longPaper, isPortrait ? "portrait" : "landscape");
 
           const h = canvas.height * uniformRatio;
-          pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, y, w, h);
+          pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, marginY, w, h);
         }
       }
       const pdfFilename = buildReportExportFilename({
@@ -565,8 +567,13 @@ function DFTCArrivalPreview({ file, onClose }) {
       const dataStartRow = 6;
       rows.forEach((r, i) => {
         const rowNum = dataStartRow + i;
-        const farmVal = r.farm_source_volume_kg != null ? Number(r.farm_source_volume_kg) : 0;
-        const otherVal = r.other_source_volume_kg != null ? Number(r.other_source_volume_kg) : 0;
+        const farmVal = r.farm_source_volume_kg != null && r.farm_source_volume_kg !== "" ? Number(r.farm_source_volume_kg) : null;
+        const otherVal = r.other_source_volume_kg != null && r.other_source_volume_kg !== "" ? Number(r.other_source_volume_kg) : null;
+        const hasFarm = farmVal !== null && !isNaN(farmVal);
+        const hasOther = otherVal !== null && !isNaN(otherVal);
+        const rowSum = (hasFarm ? farmVal : 0) + (hasOther ? otherVal : 0);
+        const hasAny = (hasFarm && farmVal > 0) || (hasOther && otherVal > 0);
+
         const commodityName = r.variety && r.variety !== "Regular"
           ? `${r.commodity_name || ""} (${r.variety})`
           : r.commodity_name || "";
@@ -574,11 +581,17 @@ function DFTCArrivalPreview({ file, onClose }) {
         const dataRow = ws.addRow([
           i + 1,
           commodityName,
-          farmVal > 0 ? farmVal : (r.farm_source_volume_kg != null ? 0 : ""),
-          { formula: `IF(G${rowNum}>0, C${rowNum}/G${rowNum}, 0)`, result: (farmVal + otherVal) > 0 ? farmVal / (farmVal + otherVal) : 0 },
-          otherVal > 0 ? otherVal : (r.other_source_volume_kg != null ? 0 : ""),
-          { formula: `IF(G${rowNum}>0, E${rowNum}/G${rowNum}, 0)`, result: (farmVal + otherVal) > 0 ? otherVal / (farmVal + otherVal) : 0 },
-          { formula: `C${rowNum}+E${rowNum}`, result: farmVal + otherVal }
+          hasFarm ? farmVal : null,
+          hasAny && rowSum > 0 && hasFarm && farmVal > 0
+            ? { formula: `IF(G${rowNum}>0, C${rowNum}/G${rowNum}, "")`, result: farmVal / rowSum }
+            : (hasAny ? { formula: `IF(G${rowNum}>0, C${rowNum}/G${rowNum}, "")` } : null),
+          hasOther ? otherVal : null,
+          hasAny && rowSum > 0 && hasOther && otherVal > 0
+            ? { formula: `IF(G${rowNum}>0, E${rowNum}/G${rowNum}, "")`, result: otherVal / rowSum }
+            : (hasAny ? { formula: `IF(G${rowNum}>0, E${rowNum}/G${rowNum}, "")` } : null),
+          hasAny
+            ? { formula: `IF(OR(C${rowNum}>0, E${rowNum}>0), SUM(C${rowNum}, E${rowNum}), "")`, result: rowSum }
+            : null
         ]);
 
         dataRow.font = { size: 11, name: "Tahoma" };
@@ -809,6 +822,208 @@ function DFTCArrivalPreview({ file, onClose }) {
       p3.font = { size: 10, name: "Tahoma" };
       ws.mergeCells(`A${p3.number}:E${p3.number}`);
       ws.mergeCells(`F${p3.number}:G${p3.number}`);
+
+      // ==========================================
+      // Tab 2: FARM SOURCE
+      // ==========================================
+      const wsFarm = wb.addWorksheet("FARM SOURCE", {
+        pageSetup: {
+          orientation: orientation,
+          paperSize: 14,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }
+        }
+      });
+      wsFarm.views = [{ state: "frozen", xSplit: 2, ySplit: 5 }];
+      wsFarm.columns = [
+        { key: "no", width: 8 },
+        { key: "commodity", width: 34 },
+        { key: "volume", width: 24 }
+      ];
+
+      // Row 1: Title
+      const f1 = wsFarm.addRow(["VOLUME (KG) OF COMMODITIES DROPPED AT DFTC"]);
+      f1.font = { bold: true, size: 12, name: "Tahoma" };
+      f1.alignment = { horizontal: "center", vertical: "middle" };
+      wsFarm.mergeCells(`A${f1.number}:C${f1.number}`);
+
+      // Row 2: Subtitle
+      const f2 = wsFarm.addRow([`For the Month of ${monthYearStr || reportingDate}`]);
+      f2.font = { size: 12, name: "Tahoma" };
+      f2.alignment = { horizontal: "center", vertical: "middle" };
+      wsFarm.mergeCells(`A${f2.number}:C${f2.number}`);
+
+      // Row 3: Blank
+      wsFarm.addRow([]);
+
+      // Row 4: Note
+      const fNote = wsFarm.addRow([
+        "Source: FARM SOURCE (Directly sourced from the farms of farmer-vendors and transported through the DFTC hauling truck service.)"
+      ]);
+      fNote.font = { italic: true, size: 10, name: "Tahoma" };
+      fNote.alignment = { horizontal: "left", vertical: "middle" };
+      wsFarm.mergeCells(`A${fNote.number}:C${fNote.number}`);
+
+      // Row 5: Header
+      const fHdr = wsFarm.addRow(["No.", "Commodity", "Volume (kg)"]);
+      fHdr.font = { bold: true, size: 11, name: "Tahoma" };
+      [1, 2, 3].forEach((c) => {
+        const cell = fHdr.getCell(c);
+        cell.border = borderThin;
+        cell.alignment = { horizontal: c === 2 ? "left" : "center", vertical: "middle" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${FARM_BG.replace("#", "")}` } };
+      });
+
+      // Data Rows
+      const farmStartRow = 6;
+      rows.forEach((r, i) => {
+        const farmVal = r.farm_source_volume_kg != null && r.farm_source_volume_kg !== "" ? Number(r.farm_source_volume_kg) : null;
+        const hasFarm = farmVal !== null && !isNaN(farmVal);
+        const commodityName = r.variety && r.variety !== "Regular"
+          ? `${r.commodity_name || ""} (${r.variety})`
+          : r.commodity_name || "";
+
+        const dRow = wsFarm.addRow([
+          i + 1,
+          commodityName,
+          hasFarm ? farmVal : null
+        ]);
+        dRow.font = { size: 11, name: "Tahoma" };
+
+        const c1 = dRow.getCell(1);
+        c1.alignment = { horizontal: "center", vertical: "middle" };
+        c1.border = borderThin;
+
+        const c2 = dRow.getCell(2);
+        c2.alignment = { horizontal: "left", vertical: "middle" };
+        c2.border = borderThin;
+
+        const c3 = dRow.getCell(3);
+        c3.numFmt = "_-* #,##0.00_-;-* #,##0.00_-;_-* \"-\"??_-;_-@_-";
+        c3.alignment = { horizontal: "right", vertical: "middle" };
+        c3.border = borderThin;
+      });
+
+      const farmEndRow = farmStartRow + rows.length - 1;
+      const farmTotRow = wsFarm.addRow([
+        "",
+        "TOTAL",
+        { formula: `SUM(C${farmStartRow}:C${farmEndRow})`, result: totalFarmVolume }
+      ]);
+      farmTotRow.font = { bold: true, size: 11, name: "Tahoma" };
+      [1, 2, 3].forEach((c) => {
+        const cell = farmTotRow.getCell(c);
+        cell.border = borderThin;
+        if (c === 2) cell.alignment = { horizontal: "left", vertical: "middle" };
+        else if (c === 3) {
+          cell.alignment = { horizontal: "right", vertical: "middle" };
+          cell.numFmt = "_-* #,##0.00_-;-* #,##0.00_-;_-* \"-\"??_-;_-@_-";
+        }
+      });
+      farmTotRow.getCell(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${FARM_BG.replace("#", "")}` } };
+
+      // ==========================================
+      // Tab 3: OTHER SOURCES
+      // ==========================================
+      const wsOther = wb.addWorksheet("OTHER SOURCES", {
+        pageSetup: {
+          orientation: orientation,
+          paperSize: 14,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }
+        }
+      });
+      wsOther.views = [{ state: "frozen", xSplit: 2, ySplit: 5 }];
+      wsOther.columns = [
+        { key: "no", width: 8 },
+        { key: "commodity", width: 34 },
+        { key: "volume", width: 24 }
+      ];
+
+      // Row 1: Title
+      const o1 = wsOther.addRow(["VOLUME (KG) OF COMMODITIES DROPPED AT DFTC"]);
+      o1.font = { bold: true, size: 12, name: "Tahoma" };
+      o1.alignment = { horizontal: "center", vertical: "middle" };
+      wsOther.mergeCells(`A${o1.number}:C${o1.number}`);
+
+      // Row 2: Subtitle
+      const o2 = wsOther.addRow([`For the Month of ${monthYearStr || reportingDate}`]);
+      o2.font = { size: 12, name: "Tahoma" };
+      o2.alignment = { horizontal: "center", vertical: "middle" };
+      wsOther.mergeCells(`A${o2.number}:C${o2.number}`);
+
+      // Row 3: Blank
+      wsOther.addRow([]);
+
+      // Row 4: Note
+      const oNote = wsOther.addRow([
+        "Source: OTHER SOURCES (Sourced from public markets or external suppliers, not directly from farmer-vendors.)"
+      ]);
+      oNote.font = { italic: true, size: 10, name: "Tahoma" };
+      oNote.alignment = { horizontal: "left", vertical: "middle" };
+      wsOther.mergeCells(`A${oNote.number}:C${oNote.number}`);
+
+      // Row 5: Header
+      const oHdr = wsOther.addRow(["No.", "Commodity", "Volume (kg)"]);
+      oHdr.font = { bold: true, size: 11, name: "Tahoma" };
+      [1, 2, 3].forEach((c) => {
+        const cell = oHdr.getCell(c);
+        cell.border = borderThin;
+        cell.alignment = { horizontal: c === 2 ? "left" : "center", vertical: "middle" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${OTHER_BG.replace("#", "")}` } };
+      });
+
+      // Data Rows
+      const otherStartRow = 6;
+      rows.forEach((r, i) => {
+        const otherVal = r.other_source_volume_kg != null && r.other_source_volume_kg !== "" ? Number(r.other_source_volume_kg) : null;
+        const hasOther = otherVal !== null && !isNaN(otherVal);
+        const commodityName = r.variety && r.variety !== "Regular"
+          ? `${r.commodity_name || ""} (${r.variety})`
+          : r.commodity_name || "";
+
+        const dRow = wsOther.addRow([
+          i + 1,
+          commodityName,
+          hasOther ? otherVal : null
+        ]);
+        dRow.font = { size: 11, name: "Tahoma" };
+
+        const c1 = dRow.getCell(1);
+        c1.alignment = { horizontal: "center", vertical: "middle" };
+        c1.border = borderThin;
+
+        const c2 = dRow.getCell(2);
+        c2.alignment = { horizontal: "left", vertical: "middle" };
+        c2.border = borderThin;
+
+        const c3 = dRow.getCell(3);
+        c3.numFmt = "_-* #,##0.00_-;-* #,##0.00_-;_-* \"-\"??_-;_-@_-";
+        c3.alignment = { horizontal: "right", vertical: "middle" };
+        c3.border = borderThin;
+      });
+
+      const otherEndRow = otherStartRow + rows.length - 1;
+      const otherTotRow = wsOther.addRow([
+        "",
+        "TOTAL",
+        { formula: `SUM(C${otherStartRow}:C${otherEndRow})`, result: totalOtherVolume }
+      ]);
+      otherTotRow.font = { bold: true, size: 11, name: "Tahoma" };
+      [1, 2, 3].forEach((c) => {
+        const cell = otherTotRow.getCell(c);
+        cell.border = borderThin;
+        if (c === 2) cell.alignment = { horizontal: "left", vertical: "middle" };
+        else if (c === 3) {
+          cell.alignment = { horizontal: "right", vertical: "middle" };
+          cell.numFmt = "_-* #,##0.00_-;-* #,##0.00_-;_-* \"-\"??_-;_-@_-";
+        }
+      });
+      otherTotRow.getCell(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${OTHER_BG.replace("#", "")}` } };
 
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
