@@ -221,6 +221,59 @@ describe("CropCycleDetailPage Add Cost flow", () => {
     });
   });
 
+  it("renders sections in the expected order: Harvest progress immediately above Estimated Profit, followed by weekly actions and Cost and selling price", () => {
+    cropState.current = {
+      id: "CRP-0002",
+      commodity: "COM-0025",
+      commodityId: "COM-0025",
+      commodityName: "Lettuce",
+      variant: "Ball",
+      phase: "harvested",
+      status: "Harvesting",
+      harvestQuantity: 600,
+      harvestRecords: [
+        { id: "HVR-1", actualHarvestDate: "2026-10-29", actualHarvestQty: 300, actualSellingPricePerKg: null }
+      ],
+      initialCost: 25000,
+      totalCost: 25000,
+      productionCosts: [],
+      isOnHold: false,
+      farmgatePrice: 30,
+      breakEvenPrice: 9,
+      profitLower: 53000,
+      profitUpper: 70000,
+      weeklyActions: [
+        { text: "Panalipdi ang naani gikan sa ulan ug kaumog." }
+      ],
+    };
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/farmer/crops/CRP-0002"]}>
+          <Routes>
+            <Route path="/farmer/crops/:cropId" element={<CropCycleDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const harvestProgressSection = screen.getByText("Harvest progress");
+    const estimatedProfitSection = screen.getByText("Estimated Profit");
+    const weeklyActionsSection = screen.getByText("What to do this week");
+    const costAndSellingSection = screen.getByText("Cost and selling price");
+
+    expect(harvestProgressSection).toBeInTheDocument();
+    expect(estimatedProfitSection).toBeInTheDocument();
+    expect(weeklyActionsSection).toBeInTheDocument();
+    expect(costAndSellingSection).toBeInTheDocument();
+
+    // Verify ordering: harvestProgress before estimatedProfit, before weeklyActions, before costAndSelling
+    expect(harvestProgressSection.compareDocumentPosition(estimatedProfitSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(estimatedProfitSection.compareDocumentPosition(weeklyActionsSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(weeklyActionsSection.compareDocumentPosition(costAndSellingSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("accumulates multiple added costs as separate records that add up into total cost", () => {
     const raw = {
       id: "CRP-001",

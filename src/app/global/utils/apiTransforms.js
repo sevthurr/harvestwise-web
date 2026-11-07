@@ -96,6 +96,19 @@ export function parseManilaDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** Whether an advisory request has the date-only pair required by the API. */
+export function hasValidAdvisoryDatePair(plantingDate, harvestDate) {
+  const planting = String(plantingDate || "");
+  const harvest = String(harvestDate || "");
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(planting) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(harvest) &&
+    parseManilaDate(planting) !== null &&
+    parseManilaDate(harvest) !== null &&
+    planting < harvest
+  );
+}
+
 export function manilaTodayParts(value = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",

@@ -9,6 +9,7 @@ import { normalizePhaseCode, PHASE_CODES, normalizeAdvisoryCode, ADVISORY_CODES 
 import { apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
+import { hasValidAdvisoryDatePair } from "../../global/utils/apiTransforms";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
@@ -54,7 +55,12 @@ function CropFactorsPage() {
 
   const updatedTotalCost = crop.totalCost || 0;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
-  const canQueryPlan = Boolean(crop.commodityName && crop.plantingDate && crop.harvestDate && updatedTotalCost > 0 && qty > 0);
+  const canQueryPlan = Boolean(
+    crop.commodityName &&
+    hasValidAdvisoryDatePair(crop.plantingDate, crop.harvestDate) &&
+    updatedTotalCost > 0 &&
+    qty > 0
+  );
 
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
     queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
@@ -248,7 +254,7 @@ function CropFactorsPage() {
     state?.advisoryLabel ||
     (rawRec ? t(badge.key) : null) ||
     (isAvoid
-      ? t("farmer.advisory.labels.avoid_for_now", {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
+      ? t(badge.key, {}, t("farmer.advisory.recommendation_avoid", {}, "Avoid for Now"))
       : isCaution
       ? t("farmer.advisory.labels.proceed_with_caution", {}, t("farmer.advisory.recommendation_caution", {}, "Proceed with Caution"))
       : t("farmer.advisory.labels.recommended", {}, t("farmer.advisory.recommendation_recommended", {}, "Recommended")));

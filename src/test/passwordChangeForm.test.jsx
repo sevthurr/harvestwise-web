@@ -108,6 +108,24 @@ describe('PasswordChangeForm', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
+  it('sets a password without asking for a current password when requested', async () => {
+    const fetchMock = mockFetch();
+    window.fetch = fetchMock;
+    const user = userEvent.setup();
+
+    render(<PasswordChangeForm requireCurrentPassword={false} onSuccess={vi.fn()} />);
+
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('New password'), 'New!Pass123');
+    await user.type(screen.getByLabelText('Confirm new password'), 'New!Pass123');
+    await user.click(screen.getByRole('button', { name: 'Update password' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      new_password: 'New!Pass123',
+    });
+  });
+
   it('resets the fields when onCancel is supplied', async () => {
     const onCancel = vi.fn();
     const user = userEvent.setup();

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, PieChart as PieChartIcon } from "lucide-react";
+import { ChevronDown, Search, X, Leaf, Info, AlertCircle, BarChart3, TrendingUp, TrendingDown, PieChart as PieChartIcon } from "lucide-react";
 import {
   COMMODITY_CATEGORIES,
   getCategoryFor,
@@ -83,6 +83,14 @@ const TOP10_COMMODITY_CATEGORIES = COMMODITY_CATEGORIES.map((cat) => ({
 
 function getCommodityCategory(name) {
   return getCategoryFor(name) ?? "—";
+}
+
+function formatMarketSource(src, type) {
+  if (!src) return "—";
+  const s = String(src).toLowerCase();
+  const base = s.includes("bankerohan") ? "Bankerohan" : s.includes("dftc") ? "DFTC" : src;
+  const pType = type || (s.includes("wholesale") ? "Wholesale" : s.includes("retail") ? "Retail" : "");
+  return pType ? `${base} · ${pType}` : base;
 }
 
 function getDateLabel(preset, customFrom, customTo) {
@@ -1159,6 +1167,26 @@ function DFTCTrends() {
     }));
   }, [varietyDetails, catalogVarietyLabel, priceDetailData]);
 
+  const [volatilityDays, setVolatilityDays] = useState(30);
+  const [volatilePage, setVolatilePage] = useState(1);
+  const { data: volatilityCausesData } = useQuery({
+    queryKey: ["dftc", "volatility-causes", volatilityDays],
+    queryFn: async () => {
+      const res = await apiGet(`/dftc/analytics/volatility-causes?days=${volatilityDays}`);
+      return parseResponse(res);
+    },
+    staleTime: 60 * 1000,
+  });
+
+  const volatileRecords = volatilityCausesData?.records || [];
+  const volatilePageSize = 5;
+  const volatileTotalPages = Math.max(1, Math.ceil(volatileRecords.length / volatilePageSize));
+  const currentVolatilePage = Math.min(volatilePage, volatileTotalPages);
+  const pagedVolatileRecords = useMemo(() => {
+    const start = (currentVolatilePage - 1) * volatilePageSize;
+    return volatileRecords.slice(start, start + volatilePageSize);
+  }, [volatileRecords, currentVolatilePage]);
+
   const formatChartDate = (iso) => {
     if (!iso) return "";
     const dObj = parseManilaDate(String(iso).slice(0, 10));
@@ -1660,6 +1688,182 @@ function DFTCTrends() {
         </div>
       )}
 
+      {/* ── Commodities with Sudden Price Change & Reasons ── */}
+      <div className="bg-white rounded-xl border border-neutral-200/80 shadow-xs p-4 sm:p-5 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-neutral-100">
+          <div>
+            <h3 className="text-[15px] sm:text-[16px] font-semibold text-neutral-900 tracking-tight">
+              Commodities with Sudden Price Change
+            </h3>
+            <p className="text-[13px] text-neutral-500 mt-0.5">
+              Recent significant price movements and documented field causes
+            </p>
+          </div>
+
+          {/* Minimal Date Filter */}
+          <div className="flex items-center gap-1">
+            {[7, 30, 90].map((d) => {
+              const isActive = volatilityDays === d;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => {
+                    setVolatilityDays(d);
+                    setVolatilePage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[12px] transition-colors cursor-pointer ${
+                    isActive
+                      ? "bg-neutral-100 text-neutral-900 font-semibold"
+                      : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 font-normal"
+                  }`}
+                >
+                  Last {d} Days
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Scrollable Container */}
+        <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
+          <table className="w-full min-w-[680px] text-[12px]">
+            <thead>
+              <tr className="border-b border-neutral-100 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider text-left">
+                <th className="pb-2.5 pl-1 font-semibold">Commodity</th>
+                <th className="pb-2.5 font-semibold">Market &amp; Type</th>
+                <th className="pb-2.5 font-semibold">Price</th>
+                <th className="pb-2.5 font-semibold">Change</th>
+                <th className="pb-2.5 font-semibold">Reason</th>
+                <th className="pb-2.5 font-semibold text-right pr-1">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {pagedVolatileRecords.length > 0 ? (
+                pagedVolatileRecords.map((item) => {
+                  const isIncrease = (item.change_pct ?? 0) >= 0;
+                  const changeAbs = item.change_pct != null ? Math.abs(item.change_pct) : null;
+                  const formattedDate = item.price_date ? formatChartDate(item.price_date) : "—";
+                  const marketLabel = formatMarketSource(item.market, item.price_type);
+
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => {
+                        if (item.commodity_name) {
+                          setPCommodity(item.commodity_name);
+                        }
+                      }}
+                      className="hover:bg-neutral-50/70 transition-colors cursor-pointer group"
+                      title="Click to view trend in chart"
+                    >
+                      <td className="py-2.5 pl-1">
+                        <div className="flex items-center gap-1.5 font-medium text-neutral-900 group-hover:text-[var(--hw-green-700)] transition-colors">
+                          <span>{item.commodity_name}</span>
+                          {item.variety && (
+                            <span className="text-neutral-400 font-normal text-[11px]">
+                              · {item.variety}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-neutral-600">
+                        {marketLabel}
+                      </td>
+                      <td className="py-2.5 font-medium text-neutral-900 tabular-nums">
+                        {item.price != null ? `₱${item.price.toFixed(2)}` : "—"}
+                        {item.uom && <span className="text-neutral-400 font-normal text-[11px]"> /{item.uom}</span>}
+                      </td>
+                      <td className="py-2.5">
+                        {changeAbs != null ? (
+                          <span
+                            className={`inline-flex items-center gap-0.5 font-semibold tabular-nums ${
+                              isIncrease ? "text-emerald-700" : "text-rose-700"
+                            }`}
+                          >
+                            <span>{isIncrease ? "↑ +" : "↓ -"}</span>
+                            <span>{changeAbs}%</span>
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5">
+                        <div className="space-y-0.5">
+                          <span
+                            className={`font-medium ${
+                              isIncrease ? "text-emerald-800" : "text-rose-800"
+                            }`}
+                          >
+                            {item.volatility_reason || "Sudden price movement"}
+                          </span>
+                          {item.volatility_notes && (
+                            <p className="text-[11px] text-neutral-500 italic line-clamp-1">
+                              &ldquo;{item.volatility_notes}&rdquo;
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-1 text-right text-neutral-400 tabular-nums">
+                        {formattedDate}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-neutral-400">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-400 mb-2">
+                        <TrendingUp className="w-4 h-4 text-neutral-300" />
+                      </div>
+                      <p className="text-[12.5px]">
+                        No commodities with sudden price changes recorded during this period.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Minimal Paging 5 Controls */}
+        {volatileRecords.length > volatilePageSize && (
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-neutral-100 text-[12px] text-neutral-500">
+            <span>
+              Showing{" "}
+              <strong className="text-neutral-700 font-semibold">
+                {(currentVolatilePage - 1) * volatilePageSize + 1}–{Math.min(currentVolatilePage * volatilePageSize, volatileRecords.length)}
+              </strong>{" "}
+              of <strong className="text-neutral-700 font-semibold">{volatileRecords.length}</strong> commodities
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentVolatilePage <= 1}
+                onClick={() => setVolatilePage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-md border border-neutral-200 text-neutral-700 font-medium hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Previous
+              </button>
+              <span className="px-2 text-neutral-400 tabular-nums">
+                {currentVolatilePage} / {volatileTotalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentVolatilePage >= volatileTotalPages}
+                onClick={() => setVolatilePage((p) => Math.min(volatileTotalPages, p + 1))}
+                className="px-2.5 py-1 rounded-md border border-neutral-200 text-neutral-700 font-medium hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Historical Average Price Section — Informational context only */}
       <HistoricalAveragePriceSection
         commodityId={pCommodityId}
@@ -1682,7 +1886,7 @@ function DFTCTrends() {
               <table className="w-full min-w-[620px] text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
-                    {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price"].map((h) => (
+                    {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price", "Change", "Volatility Reason"].map((h) => (
                       <th key={h} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -1692,7 +1896,7 @@ function DFTCTrends() {
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                   {pPageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                      <td colSpan={10} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
                         No price records for the selected filters.
                       </td>
                     </tr>
@@ -1708,6 +1912,24 @@ function DFTCTrends() {
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-600)] whitespace-nowrap">kg</td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-bold text-[var(--hw-neutral-900)] whitespace-nowrap">
                           {row.price != null ? `₱${row.price.toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px]">
+                          {row.change_pct != null ? (
+                            <span className={`font-semibold ${row.change_pct > 0 ? "text-emerald-700" : row.change_pct < 0 ? "text-rose-600" : "text-neutral-600"}`}>
+                              {row.change_pct > 0 ? "🔺 +" : row.change_pct < 0 ? "🔻 " : ""}{row.change_pct}%
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px]">
+                          {row.volatility_reason ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full text-[11px]" title={row.volatility_notes || undefined}>
+                              ⚠ {row.volatility_reason}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
                         </td>
                       </tr>
                     ))

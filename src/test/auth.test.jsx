@@ -13,6 +13,7 @@ import { MemoryRouter } from 'react-router';
 
 // ── Module under test ──────────────────────────────────────────────────────
 import { AuthProvider, useAuth, roleHome } from '../app/global/contexts/AuthContext';
+import { resetFarmerOfflineDedupeForTests } from '../app/global/hooks/useFarmerPrefetch';
 import {
   apiFetch,
   markSessionActive,
@@ -173,6 +174,23 @@ describe('AuthContext — token restoration', () => {
     await waitFor(() => expect(capturedAuth?.loading).toBe(false));
     expect(capturedAuth.isLoggedIn).toBe(false);
     expect(getAccessToken()).toBeNull();
+  });
+
+  it('refreshes an expired access cookie during initial restore', async () => {
+    storeTokens(FAKE_TOKENS);
+
+    vi.stubGlobal('fetch', mockFetch([
+      { ok: false, status: 401, body: { detail: 'Token has expired' } },
+      { ok: true, status: 200, body: { must_change_password: false } },
+      { ok: true, status: 200, body: FAKE_USER_FARMER },
+    ]));
+
+    let capturedAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { capturedAuth = a; }} />);
+
+    await waitFor(() => expect(capturedAuth?.loading).toBe(false));
+    expect(capturedAuth.isLoggedIn).toBe(true);
+    expect(capturedAuth.user.email).toBe('juan@example.com');
   });
 
   it('restores the bounded identity cache only after a network failure', async () => {
@@ -340,6 +358,9 @@ describe('AuthContext — admin role', () => {
 // and /farmer/profile.
 
 describe('AuthContext — farmer offline bundle gating', () => {
+  beforeEach(() => {
+    resetFarmerOfflineDedupeForTests();
+  });
   const snapshotCalls = () =>
     fetch.mock.calls.filter(([url]) => String(url).includes('/farmer/daily-snapshot'));
   const profileCalls = () =>

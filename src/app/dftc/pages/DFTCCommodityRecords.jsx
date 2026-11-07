@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronDown, ChevronUp, Leaf, AlertCircle, FileText } from
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { DFTCFilePreview } from "../components/DFTCFilePreview";
+import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
 import { formatDateOrMonth } from "./dftcSavedDatasets";
 
@@ -281,6 +282,19 @@ function DFTCCommodityRecords() {
     (c) => (c.commodity_name || c.name || "").toLowerCase() === commodity.toLowerCase()
   );
 
+  const { data: fullDetailData } = useQuery({
+    queryKey: ["prices", "commodity-full-detail", commodityItem?.id],
+    queryFn: async () => {
+      if (!commodityItem?.id) return null;
+      const res = await apiGet(`/prices/${commodityItem.id}`);
+      return parseResponse(res);
+    },
+    enabled: Boolean(commodityItem?.id),
+    staleTime: 60 * 1000,
+  });
+
+  const [selectedCollectorNote, setSelectedCollectorNote] = useState(null);
+
   const category = commodityItem?.commodity_category || commodityItem?.category || "Vegetables";
   const iconId = hwId(commodity);
   const hasIcon = hasHWIcon(commodity);
@@ -288,10 +302,37 @@ function DFTCCommodityRecords() {
   // Derive real price records from live backend data
   const allPriceRecords = useMemo(() => {
     if (!commodityItem) return [];
-    const rows = [];
-    const lastUpdated = formatSavedDate(commodityItem.last_updated || commodityItem.updated_at);
     const variety = commodityItem.variety || "—";
     const uom = commodityItem.unit_of_measure || "kg";
+
+    // If full detail recent_records is available, use real historical records
+    if (fullDetailData?.recent_records?.length) {
+      return fullDetailData.recent_records.map((rec) => {
+        const lastUpdated = formatSavedDate(rec.price_date);
+        return {
+          date: lastUpdated,
+          dateIso: rec.price_date || "",
+          variety,
+          category,
+          market: rec.data_source || "Bangkerohan Public Market",
+          priceType: rec.price_type === "wholesale" ? "Wholesale" : "Retail",
+          uom,
+          price: rec.prevail_price,
+          change: rec.change,
+          changePct: rec.change_pct,
+          volatilityReason: rec.volatility_reason,
+          volatilityCategory: rec.volatility_category,
+          volatilityNotes: rec.volatility_notes,
+          isVolatilityFlagged: rec.is_volatility_flagged,
+          entryMethod: "Manual Input",
+          reportId: rec.record_id || "—",
+          encodedBy: rec.recorded_by || "DFTC Staff"
+        };
+      });
+    }
+
+    const rows = [];
+    const lastUpdated = formatSavedDate(commodityItem.last_updated || commodityItem.updated_at);
 
     if (commodityItem.prices?.bangkerohan_retail != null) {
       rows.push({
@@ -303,6 +344,12 @@ function DFTCCommodityRecords() {
         priceType: "Retail",
         uom,
         price: commodityItem.prices.bangkerohan_retail,
+        change: null,
+        changePct: null,
+        volatilityReason: null,
+        volatilityCategory: null,
+        volatilityNotes: null,
+        isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
         encodedBy: "DFTC Staff"
@@ -318,6 +365,12 @@ function DFTCCommodityRecords() {
         priceType: "Wholesale",
         uom,
         price: commodityItem.prices.bangkerohan_wholesale,
+        change: null,
+        changePct: null,
+        volatilityReason: null,
+        volatilityCategory: null,
+        volatilityNotes: null,
+        isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
         encodedBy: "DFTC Staff"
@@ -333,6 +386,12 @@ function DFTCCommodityRecords() {
         priceType: "Landing",
         uom,
         price: commodityItem.prices.dftc_retail,
+        change: null,
+        changePct: null,
+        volatilityReason: null,
+        volatilityCategory: null,
+        volatilityNotes: null,
+        isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
         encodedBy: "DFTC Staff"
@@ -348,13 +407,19 @@ function DFTCCommodityRecords() {
         priceType: "Wholesale",
         uom,
         price: commodityItem.prices.dftc_wholesale,
+        change: null,
+        changePct: null,
+        volatilityReason: null,
+        volatilityCategory: null,
+        volatilityNotes: null,
+        isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
         encodedBy: "DFTC Staff"
       });
     }
     return rows;
-  }, [commodityItem, category]);
+  }, [commodityItem, category, fullDetailData]);
 
   // Derive real arrival records from live backend data
   const allArrivalRecords = useMemo(() => {
@@ -432,9 +497,10 @@ function DFTCCommodityRecords() {
   }
 
   if (previewFile) {
+    const PreviewComponent = previewFile.isArrival ? DFTCArrivalPreview : DFTCFilePreview;
     return (
       <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
-        <DFTCFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
+        <PreviewComponent file={previewFile} onClose={() => setPreviewFile(null)} />
       </div>
     );
   }
@@ -563,6 +629,8 @@ function DFTCCommodityRecords() {
                       <StaticHeader label="Price Type" />
                       <StaticHeader label="UOM" />
                       <SortableHeader label="Price" col="price" sort={pSort} onSort={(c) => toggleSort(c, pSort, setPSort)} />
+                      <StaticHeader label="Change" />
+                      <StaticHeader label="Reason" />
                       <StaticHeader label="Entry Method" />
                       <StaticHeader label="Report ID" />
                       <StaticHeader label="Encoded By" />
@@ -582,6 +650,29 @@ function DFTCCommodityRecords() {
                             <span className="text-[var(--hw-neutral-500)] italic font-normal">—</span>
                           ) : (
                             <span className="text-[var(--hw-neutral-900)]">₱{Number(r.price).toFixed(2)}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-[13px] whitespace-nowrap">
+                          {r.changePct != null ? (
+                            <span className={`font-semibold ${r.changePct > 0 ? "text-emerald-700" : r.changePct < 0 ? "text-rose-600" : "text-neutral-600"}`}>
+                              {r.changePct > 0 ? "🔺 +" : r.changePct < 0 ? "🔻 " : ""}{r.changePct}%
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-[13px] whitespace-nowrap">
+                          {r.volatilityReason ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCollectorNote(r)}
+                              className="inline-flex items-center gap-1 font-medium text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg text-[12px] transition-colors cursor-pointer"
+                              title="Click to view collector notes"
+                            >
+                              <span>⚠ {r.volatilityReason}</span>
+                            </button>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-[13px] text-[var(--hw-neutral-800)] whitespace-nowrap">{r.entryMethod}</td>
@@ -703,10 +794,12 @@ function DFTCCommodityRecords() {
                               onClick={() =>
                                 setPreviewFile({
                                   reportId: r.reportId,
+                                  submissionId: r.reportId,
                                   dataName: `DFTC Arrival Volume — ${formatDateOrMonth(r.dateMonth)}`,
                                   reportingDate: formatDateOrMonth(r.dateMonth),
                                   dataType: "DFTC Arrival Volume",
                                   market: "DFTC Taboan",
+                                  isArrival: true,
                                   entryMethod: r.entryMethod,
                                   records: 1,
                                   savedDate: formatDateOrMonth(r.dateMonth),
@@ -728,6 +821,70 @@ function DFTCCommodityRecords() {
               <TablePagination page={aPage} totalPages={aTotalPages} totalRows={filteredArrivalRecords.length} onPage={setAPage} />
             </>
           )}
+        </div>
+      )}
+      {/* Collector Notes Modal */}
+      {selectedCollectorNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-xl max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--hw-neutral-100)]">
+              <div className="flex items-center gap-2 text-[15px] font-bold text-[var(--hw-neutral-900)]">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <span>Collector Notes</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCollectorNote(null)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-[13px]">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">Reason for Price Change</span>
+                <span className="font-semibold text-neutral-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg inline-block">
+                  {selectedCollectorNote.volatilityReason || "Significant Price Movement"}
+                </span>
+                {selectedCollectorNote.volatilityCategory && (
+                  <span className="ml-2 text-[11px] text-neutral-600 font-medium">
+                    ({selectedCollectorNote.volatilityCategory})
+                  </span>
+                )}
+              </div>
+
+              {selectedCollectorNote.volatilityNotes && (
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">Collector Notes</span>
+                  <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-800 italic leading-relaxed">
+                    &ldquo;{selectedCollectorNote.volatilityNotes}&rdquo;
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-neutral-100 text-[12px]">
+                <div>
+                  <span className="text-neutral-500 block">Recorded By:</span>
+                  <strong className="text-neutral-900">{selectedCollectorNote.encodedBy || "Field Collector"}</strong>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">Recorded On:</span>
+                  <strong className="text-neutral-900">{selectedCollectorNote.date}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedCollectorNote(null)}
+                className="px-4 py-2 rounded-xl bg-[var(--hw-green-700)] text-white font-semibold text-[13px] hover:bg-[var(--hw-green-800)] cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

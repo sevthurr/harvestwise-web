@@ -30,6 +30,9 @@ function DFTCReportShell({
   formats = ["PDF", "Excel", "IMG"],
   format,
   onFormatChange,
+  orientation = "landscape",
+  onOrientationChange,
+  showOrientation = true,
   children,
   personnelList = DFTC_PERSONNEL_LIST,
   personnel = DEFAULT_PERSONNEL,
@@ -86,8 +89,8 @@ function DFTCReportShell({
         </div>
       </div>
 
-      {/* Format tabs */}
-      <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-[var(--hw-neutral-100)]">
+      {/* Format tabs and Orientation selector */}
+      <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-[var(--hw-neutral-100)] flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {formats.map((f) => (
             <button
@@ -99,6 +102,35 @@ function DFTCReportShell({
             </button>
           ))}
         </div>
+
+        {showOrientation && onOrientationChange && (
+          <div className="flex items-center gap-1 bg-[var(--hw-neutral-100)] p-0.5 rounded-xl text-[12px]">
+            <button
+              type="button"
+              onClick={() => onOrientationChange("landscape")}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                orientation === "landscape"
+                  ? "bg-white text-[var(--hw-green-800)] shadow-xs font-semibold"
+                  : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+              }`}
+              title="A4 Landscape Orientation"
+            >
+              Landscape
+            </button>
+            <button
+              type="button"
+              onClick={() => onOrientationChange("portrait")}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                orientation === "portrait"
+                  ? "bg-white text-[var(--hw-green-800)] shadow-xs font-semibold"
+                  : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+              }`}
+              title="A4 Portrait Orientation"
+            >
+              Portrait
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Preview body */}

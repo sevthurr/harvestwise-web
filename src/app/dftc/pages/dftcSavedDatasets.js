@@ -152,10 +152,20 @@ export function buildSavedDatasetsList(
   );
 
   for (const sub of validSubmissions) {
-    const isArrival = sub.data_type === "arrival_volume" || sub.data_type === "arrival";
+    const dtLower = String(sub.data_type || "").toLowerCase();
+    const fileNameLower = String(sub.original_file_name || sub.file_name || "").toLowerCase();
+    const isArrival =
+      dtLower === "arrival_volume" ||
+      dtLower === "arrival" ||
+      dtLower.includes("arrival") ||
+      dtLower.includes("volume") ||
+      fileNameLower.includes("arrival") ||
+      fileNameLower.includes("volume");
     const isFileUpload = isSubmissionFileUpload(sub);
     const submissionMethod = isFileUpload ? "File Upload" : "Manual Input";
-    const reportingDate = sub.reporting_date || (sub.saved_at ? sub.saved_at.slice(0, 10) : "");
+    const reportingDate =
+      sub.reporting_date ||
+      (sub.saved_at ? sub.saved_at.slice(0, 10) : (sub.created_at ? sub.created_at.slice(0, 10) : ""));
 
     // Consolidate ONLY manual price entries for the same reporting date into one unified report
     if (!isArrival && !isFileUpload && reportingDate) {
@@ -197,6 +207,9 @@ export function buildSavedDatasetsList(
 
       const isToday = isSubmissionToday(sub, todayStr);
 
+      const savedBy = sub.submitted_by_name || sub.encoded_by || sub.saved_by || sub.savedBy || "DFTC Personnel";
+      const encodedBy = sub.encoded_by || sub.encodedBy || "DFTC Encoder";
+
       list.push({
         id: sub.submission_id || sub.id,
         submissionId: sub.id || sub.submission_id,
@@ -210,10 +223,14 @@ export function buildSavedDatasetsList(
         market,
         submissionMethod,
         entryMethod: submissionMethod,
+        savedBy,
+        submitted_by_name: savedBy,
+        encoded_by: encodedBy,
+        userId: sub.submitted_by_user_id || sub.user_id,
         savedDate: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
         savedAt: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
         savedAtRaw: isJustSaved && justSaved?.at ? justSaved.at : (sub.saved_at || sub.created_at || ""),
-        reportingDate: sub.reporting_date || (sub.saved_at ? sub.saved_at.slice(0, 10) : ""),
+        reportingDate: reportingDate || (sub.saved_at ? sub.saved_at.slice(0, 10) : ""),
         records: recCount,
         isNew: true,
         isJustSaved: Boolean(isJustSaved),
@@ -252,6 +269,11 @@ export function buildSavedDatasetsList(
       justSaved?.type === "price" && (dateStr === justSaved.date || dateStr === todayStr);
     const isToday = subs.some((s) => isSubmissionToday(s, todayStr));
 
+    const uniqueSubmitters = [...new Set(subs.map((s) => s.submitted_by_name || s.saved_by || s.savedBy).filter(Boolean))];
+    const submittersStr = uniqueSubmitters.length > 0 ? uniqueSubmitters.join(", ") : (latestSub?.submitted_by_name || latestSub?.saved_by || latestSub?.savedBy || "DFTC Personnel");
+    const uniqueEncoders = [...new Set(subs.map((s) => s.encoded_by || s.encodedBy).filter(Boolean))];
+    const encodersStr = uniqueEncoders.length > 0 ? uniqueEncoders.join(", ") : (latestSub?.encoded_by || "DFTC Encoder");
+
     list.push({
       id: `manual-price-${dateStr}`,
       submissionId: latestSub?.id,
@@ -263,6 +285,10 @@ export function buildSavedDatasetsList(
       market: "Bankerohan & DFTC Taboan",
       submissionMethod: "Manual Input",
       entryMethod: "Manual Input",
+      savedBy: submittersStr,
+      submitted_by_name: submittersStr,
+      encoded_by: encodersStr,
+      userId: latestSub?.submitted_by_user_id || latestSub?.user_id,
       savedDate: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
       savedAt: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
       savedAtRaw: isJustSaved && justSaved?.at ? justSaved.at : (latestSub?.saved_at || latestSub?.created_at || ""),

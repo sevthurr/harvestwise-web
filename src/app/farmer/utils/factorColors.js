@@ -50,6 +50,8 @@ export function resolveFactorCondition(moduleKey, moduleLevel, reasonKey = "", t
   if (iconType === "price") {
     if (
       rawLvl.includes("unfavorable") ||
+      rawLvl.includes("below_recent_trend") ||
+      rawLvl.includes("below_trend") ||
       rawLvl.includes("falling") ||
       rawLvl.includes("mous-os") ||
       rawLvl.includes("mubaba") ||
@@ -67,6 +69,8 @@ export function resolveFactorCondition(moduleKey, moduleLevel, reasonKey = "", t
       condition = "unfavorable"; // red
     } else if (
       rawLvl.includes("neutral") ||
+      rawLvl.includes("within_recent_trend") ||
+      rawLvl.includes("within_trend") ||
       rawLvl.includes("moderate") ||
       rawLvl.includes("stable") ||
       rawLvl.includes("kasarangan") ||

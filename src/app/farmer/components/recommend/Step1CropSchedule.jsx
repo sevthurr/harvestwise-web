@@ -138,6 +138,35 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
       harvestWindowEnd: nextEnd,
       harvestDate: nextEnd || newStart || "",
     });
+    setIsToOpen(false);
+  };
+  const handleStartChange = (val) => {
+    userEditedWindow.current = true;
+    if (!val) {
+      onChange({ harvestWindowStart: "", harvestDate: windowEnd || "" });
+      return;
+    }
+    const end = windowEnd;
+    const nextEnd = end && val && end < val ? val : end;
+    onChange({
+      harvestWindowStart: val,
+      harvestWindowEnd: nextEnd,
+      harvestDate: nextEnd || val,
+    });
+  };
+  const handleEndChange = (val) => {
+    userEditedWindow.current = true;
+    if (!val) {
+      onChange({ harvestWindowEnd: "", harvestDate: windowStart || "" });
+      return;
+    }
+    const start = windowStart;
+    const nextStart = start && val && start > val ? val : start;
+    onChange({
+      harvestWindowStart: nextStart,
+      harvestWindowEnd: val,
+      harvestDate: val,
+    });
   };
 
   const handleEndDateChange = (newEnd) => {
@@ -394,6 +423,13 @@ const Step1CropSchedule = ({ data, onChange, errors }) => {
         </div>
         {errors.harvestDate && <p className="mt-1.5 text-sm text-red-600">{errors.harvestDate}</p>}
       </div>
+
+      {suggestionLabel && (
+        <p className="mt-1.5 text-xs text-[var(--hw-neutral-500)]">
+          {suggestionLabel}
+          {selectedWindowDays ? ` (${selectedWindowDays} ${selectedWindowDays === 1 ? "day" : "days"})` : ""}
+        </p>
+      )}
       {
     /* Planting Activity Context — shown once commodity is selected */
   }

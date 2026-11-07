@@ -17,7 +17,7 @@ import { PasswordChangeForm } from "./PasswordChangeForm";
  *
  * Presentational: the layout owns the gate and passes onRotated.
  */
-const ChangePasswordPanel = ({ onRotated }) => {
+const ChangePasswordPanel = ({ onRotated, needsPassword = false }) => {
   const { t } = useLanguage();
 
   return (
@@ -31,16 +31,18 @@ const ChangePasswordPanel = ({ onRotated }) => {
             <div>
               <SectionTitle>
                 {t(
-                  "common.pw_panel_title",
+                  needsPassword ? "common.pw_panel_set_title" : "common.pw_panel_title",
                   {},
-                  "Change your temporary password"
+                  needsPassword ? "Add a password to your account" : "Change your temporary password"
                 )}
               </SectionTitle>
               <p className="text-[13px] leading-relaxed text-black">
                 {t(
-                  "common.pw_panel_body",
+                  needsPassword ? "common.pw_panel_set_body" : "common.pw_panel_body",
                   {},
-                  "To keep your account secure, please replace the temporary password you received with a password only you know."
+                  needsPassword
+                    ? "Your Google account does not have a local password yet. Add one to enable email-and-password sign-in."
+                    : "To keep your account secure, please replace the temporary password you received with a password only you know."
                 )}
               </p>
             </div>
@@ -48,14 +50,20 @@ const ChangePasswordPanel = ({ onRotated }) => {
 
           <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
             {t(
-              "common.pw_panel_restricted",
+              needsPassword ? "common.pw_panel_set_restricted" : "common.pw_panel_restricted",
               {},
-              "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step."
+              needsPassword
+                ? "You must add a password before using the rest of HarvestWise."
+                : "Your account is on a temporary password, so the rest of the app stays unavailable until you finish this step."
             )}
           </p>
 
           {/* No onCancel — this surface must not offer an escape route. */}
-          <PasswordChangeForm onSuccess={onRotated} idPrefix="panel" />
+          <PasswordChangeForm
+            onSuccess={onRotated}
+            requireCurrentPassword={!needsPassword}
+            idPrefix="panel"
+          />
         </Card>
       </div>
     </div>

@@ -57,6 +57,7 @@ const PasswordChangeForm = ({
   onSuccess,
   onError,
   onCancel,
+  requireCurrentPassword = true,
   idPrefix = "pw",
 }) => {
   const { t } = useLanguage();
@@ -72,7 +73,7 @@ const PasswordChangeForm = ({
   };
 
   const handleSave = async () => {
-    if (!pw.current || !pw.newPw || !pw.confirm) {
+    if ((requireCurrentPassword && !pw.current) || !pw.newPw || !pw.confirm) {
       setErrorMsg(t("common.pw_err_required", {}, "Please fill in all fields."));
       return;
     }
@@ -89,7 +90,7 @@ const PasswordChangeForm = ({
     try {
       await parseResponse(
         await apiPost("/auth/change-password", {
-          current_password: pw.current,
+          ...(requireCurrentPassword ? { current_password: pw.current } : {}),
           new_password: pw.newPw
         })
       );
@@ -121,19 +122,21 @@ const PasswordChangeForm = ({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1.5">
-        <FieldLabel htmlFor={ids.current}>
-          {t("common.pw_current", {}, "Current password")}
-        </FieldLabel>
-        <PasswordInput
-          id={ids.current}
-          value={pw.current}
-          visible={show.current}
-          placeholder="••••••••"
-          onChange={updateField("current")}
-          toggleShow={() => toggleShow("current")}
-        />
-      </div>
+      {requireCurrentPassword && (
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor={ids.current}>
+            {t("common.pw_current", {}, "Current password")}
+          </FieldLabel>
+          <PasswordInput
+            id={ids.current}
+            value={pw.current}
+            visible={show.current}
+            placeholder="••••••••"
+            onChange={updateField("current")}
+            toggleShow={() => toggleShow("current")}
+          />
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <FieldLabel htmlFor={ids.newPw}>

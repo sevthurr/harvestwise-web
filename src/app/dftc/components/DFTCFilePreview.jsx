@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
+import { buildReportExportFilename } from "./dftcReportExport";
 import {
   PAGE_CATEGORY_GROUPS,
   IMG_PAGE_CATEGORY_GROUPS,
@@ -238,20 +239,21 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
   );
 }
 
-function PDFPreviewContent({ personnel, reportDate, categories }) {
+function PDFPreviewContent({ personnel, reportDate, categories, orientation = "landscape" }) {
   const pages = PDF_PAGE_CATEGORY_GROUPS.map((group) =>
     group.map((n) => categories.find((c) => c.name === n)).filter(Boolean)
   );
   const total = pages.length;
+  const isPortrait = orientation === "portrait";
 
   return (
-    <DFTCPreviewZoomContainer label="PDF Document (Long Landscape)">
-      <div className="space-y-5 w-full max-w-[1020px] mx-auto">
+    <DFTCPreviewZoomContainer label={`PDF Document (Long ${isPortrait ? "Portrait" : "Landscape"})`}>
+      <div className={`space-y-5 w-full ${isPortrait ? "max-w-[760px]" : "max-w-[1020px]"} mx-auto`}>
         {pages.map((cats, idx) => (
           <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
               <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {total}</span>
-              <span className="text-[12px] text-[var(--hw-neutral-800)]">Long Landscape</span>
+              <span className="text-[12px] text-[var(--hw-neutral-800)]">Long {isPortrait ? "Portrait" : "Landscape"}</span>
             </div>
             <div className="w-full">
               <DFTCReportPage
@@ -361,6 +363,7 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
 
 function DFTCFilePreview({ file, onClose }) {
   const [format, setFormat] = useState("IMG");
+  const [orientation, setOrientation] = useState("landscape");
   const [imgPage, setImgPage] = useState(0);
   const [dlState, setDlState] = useState("idle");
   const [personnel, setPersonnel] = useState(() => ({
@@ -475,17 +478,18 @@ function DFTCFilePreview({ file, onClose }) {
       const jsPDFModule = await import("jspdf");
       const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
 
-      // Philippine Long bond paper: 8.5 x 13 in = 215.9 x 330.2 mm (landscape)
+      const isPortrait = orientation === "portrait";
+      // Philippine Long bond paper: 8.5 x 13 in = 215.9 x 330.2 mm
       const longPaper = [215.9, 330.2];
       const pdf = new jsPDF({
-        orientation: "landscape",
+        orientation: isPortrait ? "portrait" : "landscape",
         unit: "mm",
         format: longPaper
       });
-      const pdfW = pdf.internal.pageSize.getWidth(); // 330.2
-      const marginX = 14; // Proper 14mm (~0.55in) margin on left and right
-      const marginY = 12; // Proper 12mm (~0.47in) margin on top
-      const targetW = pdfW - marginX * 2; // 302.2mm uniform table width across ALL pages
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const marginX = isPortrait ? 10 : 14;
+      const marginY = 12;
+      const targetW = pdfW - marginX * 2;
 
       const total = PDF_PAGE_CATEGORY_GROUPS.length;
       const canvases = [];
@@ -504,13 +508,20 @@ function DFTCFilePreview({ file, onClose }) {
 
         for (let i = 0; i < canvases.length; i++) {
           const canvas = canvases[i];
-          if (i > 0) pdf.addPage(longPaper, "landscape");
+          if (i > 0) pdf.addPage(longPaper, isPortrait ? "portrait" : "landscape");
 
           const h = canvas.height * uniformRatio;
           pdf.addImage(canvas.toDataURL("image/png"), "PNG", marginX, marginY, targetW, h);
         }
       }
-      pdf.save(`DFTC-Price-Monitoring-${reportingDateShort}.pdf`);
+      const pdfFilename = buildReportExportFilename({
+        market: "DFTC Taboan",
+        reportType: "Price",
+        period: "Daily",
+        dateStr: reportingDateShort,
+        ext: "pdf"
+      });
+      pdf.save(pdfFilename);
       setDlState("idle");
     } catch (err) {
       console.error("PDF generation error:", err);
@@ -526,7 +537,7 @@ function DFTCFilePreview({ file, onClose }) {
       wb.creator = "HarvestWise DFTC System";
       wb.created = new Date();
       const ws = wb.addWorksheet("Price Monitoring", {
-        pageSetup: { orientation: "landscape", paperSize: 14, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+        pageSetup: { orientation: orientation, paperSize: 14, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
       });
       ws.columns = [
         { key: "no", width: 6 },
@@ -662,7 +673,14 @@ function DFTCFilePreview({ file, onClose }) {
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
-      triggerDownload(url, `DFTC-Price-Monitoring-${reportingDateShort}.xlsx`);
+      const excelFilename = buildReportExportFilename({
+        market: "DFTC Taboan",
+        reportType: "Price",
+        period: "Daily",
+        dateStr: reportingDateShort,
+        ext: "xlsx"
+      });
+      triggerDownload(url, excelFilename);
       URL.revokeObjectURL(url);
       setDlState("idle");
     } catch (err) {
@@ -725,10 +743,13 @@ function DFTCFilePreview({ file, onClose }) {
         ["Records Included", String(recordsIncluded || 1)],
         ["Saved Date", file.savedDate || "—"],
         ["Encoded By", encodedByName],
-        ["Reviewed By", reviewedByName]
+        ["Prepared By", reviewedByName]
       ]}
       format={format}
       onFormatChange={setFormat}
+      orientation={orientation}
+      onOrientationChange={setOrientation}
+      showOrientation={true}
       personnel={personnel}
       onPersonnelChange={setPersonnel}
       downloadLabel={dlLabel}
@@ -770,6 +791,7 @@ function DFTCFilePreview({ file, onClose }) {
           personnel={personnel}
           reportDate={reportingDate}
           categories={resolvedCategories}
+          orientation={orientation}
         />
       )}
       {format === "Excel" && (

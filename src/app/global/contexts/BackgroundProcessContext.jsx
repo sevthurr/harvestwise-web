@@ -20,7 +20,7 @@ const INGESTION_QUERY_PREFIXES = [
   ["dftc"],
   ["dftc-submissions"],
   ["dftc-home"],
-  ["dftc-notifications"],
+  ["staff-notifications"],
   ["dftc-report-preview"],
   ["prices"],
   ["farmer"],

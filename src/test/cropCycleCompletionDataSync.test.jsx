@@ -36,7 +36,7 @@ describe("Crop Cycle Completion Stage — Actual Production & Sales Data", () =>
     rawHarvestDate: "2026-10-23",
   };
 
-  it("reflects overall total for final production cost (initial + added costs) in the completion form", () => {
+  it("pre-fills overall total for final production cost (initial + added costs) in the completion form", () => {
     render(
       <LanguageProvider>
         <UpdatePhaseDrawer
@@ -56,8 +56,8 @@ describe("Crop Cycle Completion Stage — Actual Production & Sales Data", () =>
     expect(costInput).toBeInTheDocument();
     expect(costInput.value).toBe("25200");
 
-    // Verify hint reflects overall total with breakdown
-    expect(screen.getByText(/Reflects overall total/i)).toBeInTheDocument();
+    // Verify breakdown hint is displayed in the summary box
+    expect(screen.getByText(/Nagpakita sa kinatibuk-ang total|Reflects overall total/i)).toBeInTheDocument();
 
     // Verify Completion date is pre-filled
     const dateInput = screen.getByLabelText(/Completion date/i);
@@ -93,7 +93,7 @@ describe("Crop Cycle Completion Stage — Actual Production & Sales Data", () =>
     expect(screen.getByText("+₱18,480")).toBeInTheDocument();
   });
 
-  it("submits actual production and sales data, notes, and final production cost on confirm", () => {
+  it("submits actual production and sales data and final production cost on confirm without notes field", () => {
     const onConfirm = vi.fn();
     render(
       <LanguageProvider>
@@ -108,13 +108,13 @@ describe("Crop Cycle Completion Stage — Actual Production & Sales Data", () =>
 
     const qtyInput = screen.getByLabelText(/Final quantity sold/i);
     const priceInput = screen.getByLabelText(/Average selling price/i);
-    const notesInput = screen.getByLabelText(/Notes/i);
     const costInput = screen.getByLabelText(/Final production cost/i);
+
+    expect(screen.queryByLabelText(/Notes/i)).not.toBeInTheDocument();
 
     fireEvent.change(qtyInput, { target: { value: "560" } });
     fireEvent.change(priceInput, { target: { value: "78" } });
     fireEvent.change(costInput, { target: { value: "25500" } });
-    fireEvent.change(notesInput, { target: { value: "Harvest completed with strong demand." } });
 
     const confirmBtn = screen.getByRole("button", { name: /confirm/i });
     fireEvent.click(confirmBtn);
@@ -128,7 +128,6 @@ describe("Crop Cycle Completion Stage — Actual Production & Sales Data", () =>
           avgSellingPrice: 78,
           finalProductionCost: 25500,
           completionDate: "2026-10-23",
-          notes: "Harvest completed with strong demand.",
         }),
       })
     );

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { renderComposedMessage, composeAdvisoryBadge } from "../app/farmer/utils/advisoryMessageComposer";
 import {
   composeAdvisoryReasons,
   pickUsablePriceOutlook,
@@ -387,5 +388,94 @@ describe("advisoryReasons — degraded payloads", () => {
       cropName: "Carrots (Big)",
     });
     expect(outSuitable[0].key).toBe("farmer.factors.weather.weather_suitable");
+  });
+
+  it("in planning or when forecast is not available, uses historical seasonal price reference in recommendation card reasons", () => {
+    const out = composeAdvisoryReasons({
+      moduleResults: {
+        price_outlook: "Favorable",
+        historical_price_outlook: "Favorable",
+        historical_seasonal_price: 180.59,
+        macro_baseline_price: 165.95,
+        historical_price_change_pct: 8.8,
+        has_eligible_forecast: false,
+      },
+      contributions: [contrib("price_outlook", "Favorable", 0, BEFORE_PLANTING_WEIGHTS)],
+      vetoes: [],
+      cropName: "Carrots (Big)",
+    });
+
+    const priceReason = out.find((r) => r.module === "price_outlook");
+    expect(priceReason).toBeDefined();
+    expect(priceReason.key).toBe("farmer.factors.price.historical_seasonal_explanation");
+    expect(priceReason.params.price).toBe("180.59");
+    expect(priceReason.params.baseline).toBe("165.95");
+    expect(priceReason.params.pct).toBe("+8.8%");
+    expect(priceReason.params.classification).toBe("Favorable");
+
+    // English rendering matches Image 1 exact wording
+    const textEn = renderComposedMessage(priceReason, "en");
+    expect(textEn).toBe(
+      "Historical seasonal average price (₱180.59/kg) for expected harvest season is +8.8% relative to multi-year macro baseline (₱165.95/kg), classified as Favorable."
+    );
+
+    // Cebuano rendering localizes classification and percentage
+    const textCeb = renderComposedMessage(priceReason, "ceb");
+    expect(textCeb).toContain("Maayo");
+    expect(textCeb).toContain("180.59");
+    expect(textCeb).toContain("165.95");
+
+    // Tagalog rendering localizes classification and percentage
+    const textTl = renderComposedMessage(priceReason, "tl");
+    expect(textTl).toContain("Maganda");
+    expect(textTl).toContain("180.59");
+    expect(textTl).toContain("165.95");
+  });
+
+  it("falls back to price_explanation when numeric fields are absent and forecast is unavailable", () => {
+    const rawExplanation = "Historical seasonal average price (₱180.59/kg) for expected harvest season is +8.8% relative to multi-year macro baseline (₱165.95/kg), classified as Favorable.";
+    const out = composeAdvisoryReasons({
+      moduleResults: {
+        price_outlook: "Favorable",
+        has_eligible_forecast: false,
+        price_explanation: rawExplanation,
+      },
+      contributions: [contrib("price_outlook", "Favorable", 0, BEFORE_PLANTING_WEIGHTS)],
+      vetoes: [],
+      cropName: "Carrots (Big)",
+    });
+
+    const priceReason = out.find((r) => r.module === "price_outlook");
+    expect(priceReason).toBeDefined();
+    expect(priceReason.text).toBe(rawExplanation);
+    expect(renderComposedMessage(priceReason, "en")).toBe(rawExplanation);
+  });
+});
+
+describe("composeAdvisoryBadge stage-aware labels", () => {
+  it("returns avoid_harvest for harvest stage when advisory is avoid_for_now/high_risk", () => {
+    expect(composeAdvisoryBadge("avoid_for_now", "harvest")).toEqual({
+      key: "farmer.advisory.labels.avoid_harvest",
+      type: "avoid",
+    });
+    expect(composeAdvisoryBadge("high_risk", "harvesting")).toEqual({
+      key: "farmer.advisory.labels.avoid_harvest",
+      type: "avoid",
+    });
+    expect(composeAdvisoryBadge("avoid", "harvested")).toEqual({
+      key: "farmer.advisory.labels.avoid_harvest",
+      type: "avoid",
+    });
+  });
+
+  it("returns avoid_for_now for planning stage", () => {
+    expect(composeAdvisoryBadge("avoid_for_now", "planning")).toEqual({
+      key: "farmer.advisory.labels.avoid_for_now",
+      type: "avoid",
+    });
+    expect(composeAdvisoryBadge("avoid_for_now", "before_planting")).toEqual({
+      key: "farmer.advisory.labels.avoid_for_now",
+      type: "avoid",
+    });
   });
 });

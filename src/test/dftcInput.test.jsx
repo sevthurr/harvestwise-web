@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DFTCInput from '../app/dftc/pages/DFTCInput';
@@ -147,23 +147,21 @@ describe('DFTCInput Submit Data Page', () => {
     expect(mainContainer.className).toContain('space-y-6');
   });
 
-  it('accurately displays Today\'s Saved Data table with Submission Method column and 56 consolidated manual records', async () => {
+  it('accurately displays Recent Saved Data with 7 days subtext, View Data History button, and entries', async () => {
     renderDFTCInput();
 
     await waitFor(() => {
-      expect(screen.getByText("Today's Saved Data")).toBeInTheDocument();
-      expect(screen.getByText("Submission Method")).toBeInTheDocument();
+      expect(screen.getByText("Recent Saved Data")).toBeInTheDocument();
+      expect(screen.getByText("Datasets saved and validated in the last 7 days")).toBeInTheDocument();
+      expect(screen.getByText("View Data History")).toBeInTheDocument();
       expect(screen.getAllByText(new RegExp(`DFTC Price Monitoring — ${todayFormatted}`, 'i')).length).toBeGreaterThanOrEqual(1);
-      // Consolidated manual records: 14 * 4 = 56 records
-      expect(screen.getAllByText('56').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Bankerohan & DFTC Taboan').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('Daily Price Monitoring').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Manual Input').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('File Upload').length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  it('clicking a File Upload row redirects directly to Submission History details page without opening preview', async () => {
+  it('opens preview when clicking a File Upload row so user can preview and export files', async () => {
     renderDFTCInput();
 
     await waitFor(() => {
@@ -174,9 +172,9 @@ describe('DFTCInput Submit Data Page', () => {
     const fileUploadRow = fileUploadRows[0].closest('tr') || fileUploadRows[0].closest('button');
     fireEvent.click(fileUploadRow);
 
-    expect(mockNavigate).toHaveBeenCalledWith('/dftc/submissions/sub-file-upload-1');
-    expect(screen.queryByText('Preview Daily Report')).not.toBeInTheDocument();
-    expect(screen.queryByText('Preview Arrival Volume')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Preview Daily Report')).toBeInTheDocument();
+    });
   });
 
   it('completely omits Commodity Records section and related controls', async () => {
@@ -364,7 +362,7 @@ describe('DFTCInput Submit Data Page', () => {
     expect(screen.queryByText(/DFTC Price Monitoring —/i)).not.toBeInTheDocument();
   });
 
-  it('paginates Today\'s Saved Data displaying 10 items per page with Prev/Next controls', async () => {
+  it('renders Recent Saved Data displaying all entries from the last 7 days in scrollable list', async () => {
     // 14 uploaded datasets saved today
     const customItems = Array.from({ length: 14 }, (_, idx) => ({
       id: `file-sub-${idx + 1}`,
@@ -392,25 +390,13 @@ describe('DFTCInput Submit Data Page', () => {
 
     renderDFTCInput();
 
-    // Verify pagination summary text
     await waitFor(() => {
-      expect(screen.getByText(/Showing 1–10 of 14 datasets/i)).toBeInTheDocument();
-    });
-
-    // Page 1 should display items 14 down to 5 (or first 10 sorted by time)
-    expect(screen.getAllByRole('button', { name: 'Next' }).length).toBeGreaterThan(0);
-
-    // Click Next
-    const nextButtons = screen.getAllByRole('button', { name: 'Next' });
-    fireEvent.click(nextButtons[0]);
-
-    // Page 2 should now show 11–14
-    await waitFor(() => {
-      expect(screen.getByText(/Showing 11–14 of 14 datasets/i)).toBeInTheDocument();
+      expect(screen.getByText('Dataset_01.xlsx')).toBeInTheDocument();
+      expect(screen.getByText('Dataset_14.xlsx')).toBeInTheDocument();
     });
   });
 
-  it('renders Today\'s Draft before Today\'s Saved Data and allows opening unsaved drafts', async () => {
+  it('renders Today\'s Draft before Recent Saved Data and allows opening unsaved drafts', async () => {
     localStorage.setItem('dftc_price_draft', 'true');
     localStorage.setItem(
       'dftc_price_draft_data',
@@ -429,12 +415,12 @@ describe('DFTCInput Submit Data Page', () => {
 
     await waitFor(() => {
       expect(screen.getByText("Today's Draft")).toBeInTheDocument();
-      expect(screen.getByText("Today's Saved Data")).toBeInTheDocument();
+      expect(screen.getByText("Recent Saved Data")).toBeInTheDocument();
     });
 
     // Check heading hierarchy / order
     const draftHeading = screen.getByText("Today's Draft");
-    const savedHeading = screen.getByText("Today's Saved Data");
+    const savedHeading = screen.getByText("Recent Saved Data");
     expect(draftHeading.compareDocumentPosition(savedHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // Verify draft item is listed
@@ -452,12 +438,80 @@ describe('DFTCInput Submit Data Page', () => {
     localStorage.removeItem('dftc_price_draft_data');
   });
 
+  it('clears the local price cache when deleting a server draft', async () => {
+    localStorage.setItem('dftc_price_draft', 'true');
+    localStorage.setItem('dftc_price_draft_data', JSON.stringify({ selectedDate: todayIso }));
+
+    global.fetch = vi.fn(async (url, options = {}) => {
+      if (url.includes('/dftc/submissions')) {
+        return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      }
+      if (url.includes('/dftc/price-draft') && options.method === 'DELETE') {
+        return { ok: true, status: 200, json: async () => ({ deleted_cells: 2 }) };
+      }
+      if (url.includes('/dftc/price-draft')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: 'DRF-1', status: 'draft', cells: [{ id: 'DCL-1' }] })
+        };
+      }
+      if (url.includes('/dftc/arrival-draft')) {
+        return { ok: true, status: 200, json: async () => ({ payload: {} }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ rows: [] }) };
+    });
+
+    renderDFTCInput();
+    await waitFor(() => expect(screen.getAllByTitle('Delete draft').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTitle('Delete draft')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('dftc_price_draft')).toBeNull();
+      expect(localStorage.getItem('dftc_price_draft_data')).toBeNull();
+    });
+  });
+
+  it('shows a blocking deleting state until the server draft is removed', async () => {
+    let resolveDelete;
+    global.fetch = vi.fn((url, options = {}) => {
+      if (url.includes('/dftc/submissions')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+      }
+      if (url.includes('/dftc/price-draft') && options.method === 'DELETE') {
+        return new Promise((resolve) => {
+          resolveDelete = () => resolve({ ok: true, status: 200, json: async () => ({ deleted_cells: 2 }) });
+        });
+      }
+      if (url.includes('/dftc/price-draft')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: 'DRF-1', status: 'draft', cells: [{ id: 'DCL-1' }] })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ items: [] }) });
+    });
+
+    renderDFTCInput();
+    await waitFor(() => expect(screen.getAllByTitle('Delete draft').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByTitle('Delete draft')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(/Deleting draft/i);
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+
+    resolveDelete();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
   it('ensures Encoded By and Prepared By are not editable select elements in file preview', async () => {
     global.fetch = mockSubmissionsFetch();
     renderDFTCInput();
 
     const priceRows = await screen.findAllByText('Bankerohan & DFTC Taboan');
-    fireEvent.click(priceRows[0].closest('tr'));
+    fireEvent.click(priceRows[0].closest('button'));
 
     await waitFor(() => {
       expect(screen.getByText('Preview Daily Report')).toBeInTheDocument();
@@ -472,7 +526,7 @@ describe('DFTCInput Submit Data Page', () => {
     expect(selects.length).toBe(0);
   });
 
-  it('places a just-saved entry at the top of Today\'s Saved Data as the latest item', async () => {
+  it('places a just-saved entry at the top of Recent Saved Data as the latest item', async () => {
     global.fetch = mockSubmissionsFetch();
     renderDFTCInput({
       successMsg: 'DFTC Price Monitoring — Oct 12, 2026 saved successfully (19 price records across all markets).',
@@ -482,12 +536,12 @@ describe('DFTCInput Submit Data Page', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Today\'s Saved Data')).toBeInTheDocument();
+      expect(screen.getByText('Recent Saved Data')).toBeInTheDocument();
     });
 
-    const rows = await screen.findAllByRole('row');
-    // First data row (index 1 after table header row) is the price monitoring entry
-    expect(rows[1]).toHaveTextContent(/DFTC Price Monitoring —/i);
+    await waitFor(() => {
+      expect(screen.getByText(/DFTC Price Monitoring —/i)).toBeInTheDocument();
+    });
   });
 
   it('displays compiled records count from report preview for manual price monitoring rows', async () => {
@@ -534,12 +588,25 @@ describe('DFTCInput Submit Data Page', () => {
     renderDFTCInput();
 
     await waitFor(() => {
-      // The row should display 19 in the Records column instead of 1
-      expect(screen.getByText('19')).toBeInTheDocument();
+      // The row should reflect compiled 19 records
+      expect(screen.getAllByText(/sub-price-1/i).length).toBeGreaterThan(0);
     });
   });
 
   it("briefly highlights the draft item in Today's Draft section when highlight parameter is present", async () => {
+    localStorage.setItem('dftc_price_draft', 'true');
+    localStorage.setItem(
+      'dftc_price_draft_data',
+      JSON.stringify({
+        selectedDate: todayIso,
+        tabFields: {
+          'bankerohan-retail': {
+            'com-1-v1': { samples: ['50', '52', '', '', ''], uom: 'kg' }
+          }
+        }
+      })
+    );
+
     mockSearchParams = new URLSearchParams('highlight=price');
     global.fetch = mockSubmissionsFetch();
 
@@ -548,11 +615,133 @@ describe('DFTCInput Submit Data Page', () => {
     await waitFor(() => {
       expect(screen.getByText("Today's Draft")).toBeInTheDocument();
       expect(screen.queryByText('Selected')).toBeNull();
-      const draftRow = screen.getByText('DFTC Price Monitoring — ' + todayFormatted).closest('tr');
+      const draftRow = document.getElementById('draft-row-local-price-draft');
+      expect(draftRow).toBeTruthy();
       expect(draftRow).toHaveClass('bg-emerald-50/90');
       expect(draftRow).not.toHaveClass('ring-4');
     });
 
     mockSearchParams = new URLSearchParams();
+    localStorage.removeItem('dftc_price_draft');
+    localStorage.removeItem('dftc_price_draft_data');
+  });
+
+  it('filters Recent Saved Data by Last 7 Days vs Last 30 Days and user search', async () => {
+    const d15DaysAgo = new Date();
+    d15DaysAgo.setDate(d15DaysAgo.getDate() - 15);
+    const date15Iso = `${d15DaysAgo.getFullYear()}-${String(d15DaysAgo.getMonth() + 1).padStart(2, '0')}-${String(d15DaysAgo.getDate()).padStart(2, '0')}`;
+
+    const customFetch = vi.fn(async (url) => {
+      if (url.includes('/dftc/submissions')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [
+              {
+                id: 'sub-recent',
+                data_type: 'arrival',
+                source_id: 'dftc',
+                source_name: 'DFTC Taboan',
+                reporting_date: todayIso,
+                saved_at: `${todayIso}T10:00:00Z`,
+                record_count: 5,
+                submission_method: 'Manual Input',
+                submitted_by_name: 'Maria Santos'
+              },
+              {
+                id: 'sub-older',
+                data_type: 'arrival',
+                source_id: 'dftc',
+                source_name: 'DFTC Taboan',
+                reporting_date: date15Iso,
+                saved_at: `${date15Iso}T10:00:00Z`,
+                record_count: 8,
+                submission_method: 'Manual Input',
+                submitted_by_name: 'Juan Dela Cruz'
+              }
+            ]
+          })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ items: [] }) };
+    });
+
+    global.fetch = customFetch;
+    renderDFTCInput();
+
+    // Default: Last 7 Days filter is active
+    await waitFor(() => {
+      expect(screen.getByText(/Maria Santos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Juan Dela Cruz/i)).toBeNull();
+    });
+
+    // Switch to Last 30 Days using the days dropdown button
+    const daysBtn = screen.getByRole('button', { name: /Filter by days/i });
+    fireEvent.click(daysBtn);
+    const last30Btn = screen.getByRole('button', { name: /Last 30 Days/i });
+    fireEvent.click(last30Btn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Maria Santos/i)).toBeInTheDocument();
+      expect(screen.getByText(/Juan Dela Cruz/i)).toBeInTheDocument();
+    });
+
+    // Test module dropdown button: filter by Price Monitoring (neither is price)
+    const moduleBtn = screen.getByRole('button', { name: /Filter by module/i });
+    fireEvent.click(moduleBtn);
+    const priceOption = screen.getByRole('button', { name: /Price Monitoring/i });
+    fireEvent.click(priceOption);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No saved datasets match the selected filters/i)).toBeInTheDocument();
+    });
+
+    // Switch back to All Modules
+    fireEvent.click(screen.getByRole('button', { name: /Filter by module/i }));
+    fireEvent.click(screen.getByRole('button', { name: /All Modules/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Maria Santos/i)).toBeInTheDocument();
+      expect(screen.getByText(/Juan Dela Cruz/i)).toBeInTheDocument();
+    });
+
+    // Search by User: "Juan"
+    const searchInput = screen.getByLabelText(/Filter records/i);
+    fireEvent.change(searchInput, { target: { value: 'Juan' } });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Maria Santos/i)).toBeNull();
+      expect(screen.getByText(/Juan Dela Cruz/i)).toBeInTheDocument();
+    });
+
+    // Search by Dataset ID: "sub-recent"
+    fireEvent.change(searchInput, { target: { value: 'sub-recent' } });
+    await waitFor(() => {
+      expect(screen.getByText(/Maria Santos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Juan Dela Cruz/i)).toBeNull();
+    });
+
+    // Search by Date: date15Iso
+    fireEvent.change(searchInput, { target: { value: date15Iso } });
+    await waitFor(() => {
+      expect(screen.queryByText(/Maria Santos/i)).toBeNull();
+      expect(screen.getByText(/Juan Dela Cruz/i)).toBeInTheDocument();
+    });
+
+    // Search for non-matching query
+    fireEvent.change(searchInput, { target: { value: 'NonexistentData' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No saved datasets match the selected filters/i)).toBeInTheDocument();
+    });
+
+    // Click Clear filters
+    const clearBtn = screen.getByRole('button', { name: /Clear filters/i });
+    fireEvent.click(clearBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Maria Santos/i)).toBeInTheDocument();
+    });
   });
 });

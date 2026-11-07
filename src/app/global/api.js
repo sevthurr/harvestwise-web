@@ -372,7 +372,18 @@ export function openEventStream(path, handlers = {}, options = {}) {
             /* fall through; the next iteration will retry the stream */
           }
           await new Promise((r) => setTimeout(r, backoff));
-          backoff = Math.min(backoff * 2, 30000);
+          backoff = Math.min((backoff + Math.random() * 500) * 2, 30000);
+          continue;
+        }
+
+        if (res.status === 503) {
+          // Redis is down — the server returned fail-fast 503 instead of
+          // holding a useless keep-alive connection. Honor Retry-After if
+          // present, otherwise use the exponential backoff.
+          const retryAfter = res.headers.get('Retry-After');
+          const delay = retryAfter ? Math.max(1000, parseInt(retryAfter, 10) * 1000) : backoff;
+          await new Promise((r) => setTimeout(r, delay));
+          backoff = Math.min((backoff + Math.random() * 500) * 2, 30000);
           continue;
         }
 
@@ -421,8 +432,11 @@ export function openEventStream(path, handlers = {}, options = {}) {
       }
 
       if (closed) return;
-      await new Promise((r) => setTimeout(r, backoff));
-      backoff = Math.min(backoff * 2, 30000);
+      // Add jitter so multiple clients reconnecting after a server-side
+      // outage don't all hit the API at the same millisecond.
+      const jitter = Math.random() * backoff * 0.25;
+      await new Promise((r) => setTimeout(r, backoff + jitter));
+      backoff = Math.min((backoff + Math.random() * 500) * 2, 30000);
     }
   };
 

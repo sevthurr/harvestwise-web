@@ -36,6 +36,8 @@ import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiDelete, apiGet, apiPost, apiPut, parseResponse } from "../../global/api";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
+import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
+import { useDftcStaff } from "../../global/hooks/useDftcStaff";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -72,7 +74,20 @@ const DFTC_BG = "#dae8fc";
 const EMPTY_SAMPLES = ["", "", "", "", ""];
 
 function emptyField(uom = "kg") {
-  return { samples: [...EMPTY_SAMPLES], uom, low: null, high: null, prevailing: null };
+  return {
+    samples: [...EMPTY_SAMPLES],
+    uom,
+    low: null,
+    high: null,
+    prevailing: null,
+    volatilityReasonId: null,
+    volatilityReasonName: null,
+    volatilityNotes: "",
+    priceChangePct: null,
+    previousPrice: null,
+    isVolatilityFlagged: false,
+    showManualVolatility: false,
+  };
 }
 
 function emptyTabFields() {
@@ -93,8 +108,21 @@ function carriedSourceDate(carried, tabId, vid, date) {
 }
 
 /** Field shape for a single stored prevailing price. */
-function priceField(price, uom = "kg") {
-  return { samples: [String(price), "", "", "", ""], uom, low: price, high: price, prevailing: price };
+function priceField(price, uom = "kg", extra = {}) {
+  return {
+    samples: [String(price), "", "", "", ""],
+    uom,
+    low: price,
+    high: price,
+    prevailing: price,
+    volatilityReasonId: extra.volatilityReasonId ?? null,
+    volatilityReasonName: extra.volatilityReasonName ?? null,
+    volatilityNotes: extra.volatilityNotes ?? "",
+    priceChangePct: extra.priceChangePct ?? null,
+    previousPrice: extra.previousPrice ?? null,
+    isVolatilityFlagged: Boolean(extra.isVolatilityFlagged),
+    showManualVolatility: Boolean(extra.showManualVolatility || extra.volatilityReasonId || extra.volatilityNotes),
+  };
 }
 
 /** True when two form fields hold the same price, samples, and unit. */
@@ -102,6 +130,9 @@ function sameField(a, b) {
   if (!a || !b) return a === b;
   if (a.uom !== b.uom) return false;
   if (a.low !== b.low || a.high !== b.high || a.prevailing !== b.prevailing) return false;
+  if (a.volatilityReasonId !== b.volatilityReasonId) return false;
+  if (a.volatilityNotes !== b.volatilityNotes) return false;
+  if (a.isVolatilityFlagged !== b.isVolatilityFlagged) return false;
   const sa = a.samples ?? [];
   const sb = b.samples ?? [];
   if (sa.length !== sb.length) return false;
@@ -126,7 +157,13 @@ function mergeDraftTargets(base, targets, removed) {
   for (const tab of MARKET_TABS) next[tab.id] = { ...(base?.[tab.id] || {}) };
   let changed = false;
   for (const { tab, vid, cell } of targets) {
-    const field = priceField(cell.prevail_price, cell.uom);
+    const field = priceField(cell.prevail_price, cell.uom, {
+      volatilityReasonId: cell.volatility_reason_id,
+      volatilityReasonName: cell.volatility_reason_name,
+      volatilityNotes: cell.volatility_notes,
+      priceChangePct: cell.price_change_percentage,
+      isVolatilityFlagged: cell.is_volatility_flagged,
+    });
     if (sameField(next[tab.id][vid], field)) continue;
     next[tab.id][vid] = field;
     changed = true;
@@ -329,6 +366,7 @@ function ConfirmFinalizeModal({
   encodedByRole,
   reviewedBy,
   reviewedByRole,
+  volatileCount = 0,
   onClose,
   onConfirm
 }) {
@@ -360,11 +398,17 @@ function ConfirmFinalizeModal({
               <span className="text-[13px] font-bold text-[var(--hw-green-800)]">{totalRecords}</span>
             </div>
             {skippedCarried > 0 && (
-              <div className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-[12px] text-amber-800">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <div className="flex items-start gap-2 px-1 py-1 text-[12px] text-[var(--hw-neutral-700)]">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px text-amber-600" />
                 <span>
                   {skippedCarried} value{skippedCarried === 1 ? "" : "s"} carried from {formatDateLabel(carriedDate)} {skippedCarried === 1 ? "was" : "were"} left unchanged and will <strong>not</strong> be saved as {formatDateLabel(date)} prices.
                 </span>
+              </div>
+            )}
+            {volatileCount > 0 && (
+              <div className="flex items-center gap-2 px-1 py-1 text-[12px] text-[var(--hw-neutral-700)]">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                <span>Includes <strong className="text-[var(--hw-neutral-900)]">{volatileCount}</strong> documented price volatility reason{volatileCount === 1 ? "" : "s"}.</span>
               </div>
             )}
 
@@ -670,10 +714,44 @@ function ComputedCell({ label, value, accent }) {
 }
 
 // ─── Mobile variant row ──────────────────────────────────────────────────────
-function MobileVariantRow({ v, f, carriedFrom, onUpdateSample, onUpdateUom }) {
+function MobileVariantRow({
+  v,
+  f,
+  carriedFrom,
+  onUpdateSample,
+  onUpdateUom,
+  onUpdateVolatilityReason,
+  onUpdateVolatilityNotes,
+  onToggleManualVolatility,
+  volatilityReasons,
+  volatilityCategories,
+}) {
   const [expanded, setExpanded] = useState(false);
   const hasVal = hasValue(f);
   const { low, high, prevailing } = f;
+
+  const sortedCats = useMemo(() => {
+    if (!volatilityCategories) return [];
+    const cats = [...volatilityCategories];
+    const order = {
+      supply: 1,
+      demand: 2,
+      weather: 3,
+      "logistics & distribution": 4,
+      "production factors": 5,
+      "market factors": 6,
+    };
+    return cats.sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      if (aLower === "other") return 1;
+      if (bLower === "other") return -1;
+      const aScore = order[aLower] || 50;
+      const bScore = order[bLower] || 50;
+      if (aScore !== bScore) return aScore - bScore;
+      return a.localeCompare(b);
+    });
+  }, [volatilityCategories]);
 
   return (
     <div className={`border-b border-[var(--hw-neutral-50)] last:border-0 ${hasVal ? "bg-[var(--hw-green-50)]/30" : ""} ${carriedFrom ? "border-l-2 border-amber-400" : ""}`}>
@@ -692,6 +770,11 @@ function MobileVariantRow({ v, f, carriedFrom, onUpdateSample, onUpdateUom }) {
           {hasVal && (
             <span className="shrink-0 text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-1.5 py-0.5">
               {parseValid(f.samples).length} sample{parseValid(f.samples).length !== 1 ? "s" : ""}
+            </span>
+          )}
+          {f.isVolatilityFlagged && (
+            <span className="shrink-0 text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5">
+              ⚠ Flagged
             </span>
           )}
         </div>
@@ -753,6 +836,115 @@ function MobileVariantRow({ v, f, carriedFrom, onUpdateSample, onUpdateUom }) {
               <ComputedCell label="Prevailing" value={prevailing} accent />
             </div>
           </div>
+
+          {/* Volatility Section (Mobile) */}
+          {(f.isVolatilityFlagged || f.showManualVolatility || f.volatilityReasonId || f.volatilityNotes) ? (
+            <div className="p-2.5 rounded-lg border border-[var(--hw-neutral-200)] text-[12px] space-y-2 mt-2">
+              <div className="flex items-center justify-between gap-1 text-[11.5px]">
+                <span className="text-[var(--hw-neutral-700)] flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  {f.isVolatilityFlagged ? (
+                    <span>
+                      Price movement:{" "}
+                      <strong className="text-[var(--hw-neutral-900)]">
+                        {f.previousPrice != null
+                          ? `previous ₱${fmt(f.previousPrice)} (${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`
+                          : `(${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`}
+                      </strong>
+                    </span>
+                  ) : (
+                    "Collector Observation"
+                  )}
+                </span>
+                {!f.isVolatilityFlagged && onToggleManualVolatility && (
+                  <button
+                    type="button"
+                    onClick={onToggleManualVolatility}
+                    className="text-[11px] text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-[var(--hw-neutral-600)] mb-1">
+                    Reason for Price Change {f.isVolatilityFlagged && <span className="text-red-500">*</span>}
+                  </label>
+                  <select
+                    value={f.volatilityReasonId || ""}
+                    onChange={(e) => onUpdateVolatilityReason && onUpdateVolatilityReason(e.target.value)}
+                    className={`w-full h-8 px-2.5 rounded-lg border text-[11px] bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors ${
+                      f.isVolatilityFlagged && !f.volatilityReasonId
+                        ? "border-red-400 bg-red-50/20"
+                        : "border-[var(--hw-neutral-200)] focus:border-[var(--hw-green-700)]"
+                    }`}
+                  >
+                    <option value="">-- Select reason for price change --</option>
+                    {sortedCats.map((cat) => (
+                      <optgroup key={cat} label={cat}>
+                        {volatilityReasons
+                          ?.filter((r) => r.category === cat && r.is_active !== false)
+                          .map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.reason_name}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {f.isVolatilityFlagged && !f.volatilityReasonId && (
+                    <p className="text-[10px] text-red-600 mt-0.5">A reason is required.</p>
+                  )}
+                </div>
+
+                {/* Only allow additional notes if chosen Other - same field */}
+                {Boolean(
+                  f.volatilityReasonName?.toLowerCase().includes("other") ||
+                  volatilityReasons?.find((r) => r.id === Number(f.volatilityReasonId))?.category === "Other"
+                ) && (
+                  <div className="pt-0.5">
+                    <div className="flex items-center justify-between text-[11px] font-medium text-[var(--hw-neutral-600)] mb-1">
+                      <span>
+                        Specify Reason Details <span className="text-red-500">*</span>
+                      </span>
+                      <span className="text-[10px] text-[var(--hw-neutral-400)]">
+                        {f.volatilityNotes?.length || 0}/255
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={255}
+                      value={f.volatilityNotes || ""}
+                      onChange={(e) => onUpdateVolatilityNotes && onUpdateVolatilityNotes(e.target.value)}
+                      placeholder="Describe the reason for this price change (required, max 255 chars)..."
+                      className={`w-full h-8 px-2.5 rounded-lg border text-[11px] bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors ${
+                        f.isVolatilityFlagged && !f.volatilityNotes?.trim()
+                          ? "border-red-400 bg-red-50/20"
+                          : "border-[var(--hw-neutral-200)] focus:border-[var(--hw-green-700)]"
+                      }`}
+                    />
+                    {f.isVolatilityFlagged && !f.volatilityNotes?.trim() && (
+                      <p className="text-[10px] text-red-600 mt-0.5">Notes required when &apos;Other&apos; is selected.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            hasVal && onToggleManualVolatility && (
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={onToggleManualVolatility}
+                  className="text-[11px] text-neutral-600 hover:text-[var(--hw-green-700)] font-medium underline"
+                >
+                  + Add Reason for Price Change (Optional)
+                </button>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
@@ -765,6 +957,10 @@ function DFTCPriceInput() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const navState = location.state;
+
+  // Shared commodity catalog — deduplicated across Price Input and Arrival
+  // Input through React Query so both pages issue at most one request.
+  const { data: catalogData } = useDftcCatalog();
 
   const [selectedDate, setSelectedDate] = useState(() => navState?.date || localToday());
   const [activeTabId, setActiveTabId] = useState("bangkerohan-retail");
@@ -810,6 +1006,7 @@ function DFTCPriceInput() {
   const [draftDismissed, setDraftDismissed] = useState(false);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
+  const [volatilityCollapsed, setVolatilityCollapsed] = useState(false);
   const reviewScrollRef = useRef(null);
 
   // Slide the review table to the filtered market column so it is visible without manual scrolling
@@ -837,6 +1034,72 @@ function DFTCPriceInput() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState(0);
   const [saveProgressStage, setSaveProgressStage] = useState("Validating price entries...");
+
+  const activeTabMeta = useMemo(
+    () => MARKET_TABS.find((t) => t.id === activeTabId) || MARKET_TABS[0],
+    [activeTabId]
+  );
+
+  const [volatilityReasons, setVolatilityReasons] = useState([]);
+  const [volatilityCategories, setVolatilityCategories] = useState([]);
+  const [benchmarks, setBenchmarks] = useState({});
+
+  const sortedVolatilityCategories = useMemo(() => {
+    const cats = [...volatilityCategories];
+    const order = {
+      supply: 1,
+      demand: 2,
+      weather: 3,
+      "logistics & distribution": 4,
+      "production factors": 5,
+      "market factors": 6,
+    };
+    return cats.sort((a, b) => {
+      const aLower = a.toLowerCase();
+      const bLower = b.toLowerCase();
+      if (aLower === "other") return 1;
+      if (bLower === "other") return -1;
+      const aScore = order[aLower] || 50;
+      const bScore = order[bLower] || 50;
+      if (aScore !== bScore) return aScore - bScore;
+      return a.localeCompare(b);
+    });
+  }, [volatilityCategories]);
+
+  useEffect(() => {
+    let active = true;
+    apiGet("/dftc/volatility-reasons")
+      .then((res) => parseResponse(res))
+      .then((data) => {
+        if (!active || !data) return;
+        setVolatilityReasons(data.items || []);
+        setVolatilityCategories(data.categories || []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeTabMeta.sourceId || !activeTabMeta.priceType || !selectedDate) {
+      setBenchmarks({});
+      return;
+    }
+    let active = true;
+    apiGet(
+      `/dftc/prices/benchmarks?source_id=${activeTabMeta.sourceId}&price_type=${activeTabMeta.priceType}&reporting_date=${selectedDate}`
+    )
+      .then((res) => parseResponse(res))
+      .then((data) => {
+        if (!active || !data) return;
+        setBenchmarks(data.benchmarks || {});
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [activeTabMeta.sourceId, activeTabMeta.priceType, selectedDate]);
   // Guards a reporting date that arrived from navigation state: handleDateChange
   // clamps user input, but a future date passed in via navState bypasses it.
   const [dateError, setDateError] = useState("");
@@ -856,6 +1119,9 @@ function DFTCPriceInput() {
   // is nowhere to put the row, so a draft that references one must not
   // re-fetch the catalogue on every poll.
   const unplaceableRef = useRef(new Set());
+  // Tracks whether the initial catalog-driven prefill has run, so catalog
+  // refetches (60s, window focus) update the map without re-triggering prefill.
+  const prefillInitRef = useRef(false);
   // Stable identity for the commodity resolver: the prefill module keys its
   // session memo on it, so a fresh closure per render would defeat the cache.
   // It only reads catalogRef, which never changes identity.
@@ -879,8 +1145,8 @@ function DFTCPriceInput() {
   const resolveDraftCellsRef = useRef(async () => []);
   resolveDraftCellsRef.current = resolveDraftCells;
 
-  // DFTC Personnel from database
-  const [staffList, setStaffList] = useState([]);
+  // DFTC personnel is shared with Arrival Input through React Query.
+  const { data: staffList = [] } = useDftcStaff();
   const [encodedBy, setEncodedBy] = useState("");
   const [encodedByRole, setEncodedByRole] = useState("");
   const [reviewedBy, setReviewedBy] = useState("");
@@ -946,52 +1212,23 @@ function DFTCPriceInput() {
     dirty: [...dirtyRef.current]
   };
 
-  // Fetch DFTC staff profiles from database
+  // Restore the selected personnel for the active reporting date once the
+  // shared staff query is available.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiGet("/dftc/staff");
-        const parsed = await parseResponse(res);
-        const items = Array.isArray(parsed) ? parsed : parsed?.items ?? [];
-        if (!cancelled && items.length > 0) {
-          const list = items.map((s) => {
-            const parts = [s.first_name, s.middle_name, s.last_name, s.suffix].filter(Boolean);
-            const name = parts.join(" ").toUpperCase();
-            return {
-              name,
-              role: s.position_title || "DFTC Staff"
-            };
-          });
-          setStaffList(list);
-
-          // Restore previously selected personnel if they exist in the DB staff list
-          let restoredEncoded = null;
-          let restoredReviewed = null;
-          try {
-            const stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`));
-            if (stored?.encodedBy && list.some((s) => s.name === stored.encodedBy)) {
-              restoredEncoded = list.find((s) => s.name === stored.encodedBy);
-            }
-            if (stored?.reviewedBy && list.some((s) => s.name === stored.reviewedBy)) {
-              restoredReviewed = list.find((s) => s.name === stored.reviewedBy);
-            }
-          } catch {}
-
-          const defaultEncoder = restoredEncoded || list[0];
-          const defaultReviewer = restoredReviewed || (list.length > 1 ? list[1] : list[0]);
-
-          setEncodedBy(defaultEncoder.name);
-          setEncodedByRole(defaultEncoder.role);
-          setReviewedBy(defaultReviewer.name);
-          setReviewedByRole(defaultReviewer.role);
-        }
-      } catch {
-        // Staff list will remain empty on network error
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedDate]);
+    if (staffList.length === 0) return;
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`)) || {};
+    } catch {}
+    const restoredEncoded = staffList.find((staff) => staff.name === stored.encodedBy);
+    const restoredReviewed = staffList.find((staff) => staff.name === stored.reviewedBy);
+    const defaultEncoder = restoredEncoded || staffList[0];
+    const defaultReviewer = restoredReviewed || (staffList.length > 1 ? staffList[1] : staffList[0]);
+    setEncodedBy(defaultEncoder.name);
+    setEncodedByRole(defaultEncoder.role);
+    setReviewedBy(defaultReviewer.name);
+    setReviewedByRole(defaultReviewer.role);
+  }, [selectedDate, staffList]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
@@ -1005,30 +1242,23 @@ function DFTCPriceInput() {
     if (found) setReviewedByRole(found.role);
   }
 
-  // Load commodity catalog map from DB
+  // Apply the shared catalog query data when it arrives. Both the mount load
+  // and the periodic refetch (60s, window focus) are handled by the shared
+  // useDftcCatalog hook, so there is only one network request across both
+  // DFTC input pages.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const items = await fetchCatalogItems();
-        if (cancelled) return;
-        applyCatalogItems(items);
-        addCatalogRows(items.map((item) => item.id), items);
-        // Read the date at fire time, not from the first-render closure: this
-        // continuation resumes after the catalog await, and the user may have
-        // already picked a different day. Using the stale date would issue a
-        // second prefill for today that takes a higher sequence number and
-        // overwrites the day the user actually selected.
-        if (!cancelled) {
-          await loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
-        }
-      } catch {
-        if (!cancelled) catalogRef.current = null;
-      }
-    })();
-    return () => { cancelled = true; };
+    if (!catalogData) return;
+    applyCatalogItems(catalogData);
+    addCatalogRows(catalogData.map((item) => item.id), catalogData);
+    // Load the day prefill on the first catalog arrival only — subsequent
+    // refetches just update the map, they do not re-trigger prefill.
+    // The ref below tracks whether the initial prefill has run.
+    if (!prefillInitRef.current) {
+      prefillInitRef.current = true;
+      loadDayPrefill(draftRef.current.selectedDate, { preserveEdits: true });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [catalogData]);
 
   // Push every dirty field to the shared draft. One request per cell so two
   // inputters never overwrite each other wholesale, and a 409 on one cell does
@@ -1062,7 +1292,7 @@ function DFTCPriceInput() {
 
         if (hasValCell) {
           let commodity_id = (catalogRef.current &&
-            (catalogRef.current.get(variantKey) ?? catalogRef.current.get(baseKey))) ?? null;
+            (catalogRef.current.get(variantKey) ?? catalogRef.current.get(baseKey))) ?? com?.id ?? null;
           // Register custom-added commodities / new varieties on the fly so
           // their prices reach the DB instead of being skipped as unknown ids.
           if (!variantKnown && com) {
@@ -1099,6 +1329,10 @@ function DFTCPriceInput() {
               prevail_price: f.prevailing ?? null,
               observation_status: "Reported value",
               expected_version: draftMetaRef.current[tab.id]?.get(vid)?.version ?? null,
+              volatility_reason_id: f.volatilityReasonId ?? null,
+              volatility_notes: f.volatilityNotes || null,
+              price_change_percentage: f.priceChangePct ?? null,
+              is_volatility_flagged: Boolean(f.isVolatilityFlagged || f.volatilityReasonId),
             };
             pending.push({ key: `${tab.id}|${vid}`, cell });
           }
@@ -1125,8 +1359,32 @@ function DFTCPriceInput() {
 
     setDraftSavingCells(new Set([...pending, ...cleared].map((p) => p.key)));
     let conflict = "";
+    let lastSaveError = null;
     const clearedSuccessfully = [];
     const savedSuccessfully = [];
+    const acknowledgeConflict = (key, detail) => {
+      const separator = key.indexOf("|");
+      const tabId = separator === -1 ? "" : key.slice(0, separator);
+      const vid = separator === -1 ? key : key.slice(separator + 1);
+      const currentVersion = detail?.current_version;
+      if (detail?.code === "draft_discarded") {
+        dirtyRef.current.delete(key);
+        draftMetaRef.current[tabId]?.delete(vid);
+        return;
+      }
+      // A conflict is expected shared-edit behavior. Stop replaying the stale
+      // version, but retain the server version so a later user edit can save
+      // against the current row instead of creating a retry loop.
+      dirtyRef.current.delete(key);
+      if (Number.isInteger(currentVersion)) {
+        const previous = draftMetaRef.current[tabId]?.get(vid) || {};
+        draftMetaRef.current[tabId]?.set(vid, {
+          ...previous,
+          version: currentVersion,
+          updatedBy: detail?.updated_by_user_id ?? previous.updatedBy,
+        });
+      }
+    };
     for (const { key, params } of cleared) {
       try {
         const qs = new URLSearchParams(params).toString();
@@ -1137,6 +1395,7 @@ function DFTCPriceInput() {
         clearedSuccessfully.push(key);
       } catch (err) {
         if (err?.status === 409 || err?.statusCode === 409) {
+          acknowledgeConflict(key, err?.detail);
           conflict = "Someone else edited these prices while you were typing. Review the values and try again.";
         } else {
           console.error("Draft cell delete failed:", err);
@@ -1147,8 +1406,8 @@ function DFTCPriceInput() {
       try {
         const res = await parseResponse(await apiPut("/dftc/price-draft/cell", {
           ...cell,
-          // Read immediately before each request because the previous cell's
-          // successful write advances the shared draft timestamp.
+          // The server uses this only to reject writes after a discard. It
+          // does not block saves to a different cell by another inputter.
           expected_draft_updated_at: draftUpdatedAtRef.current,
         }));
         if (res?.draft_updated_at) draftUpdatedAtRef.current = res.draft_updated_at;
@@ -1165,17 +1424,13 @@ function DFTCPriceInput() {
         savedSuccessfully.push({ key, cell });
       } catch (err) {
         if (err?.status === 409 || err?.statusCode === 409) {
-          if (err?.detail?.code === "draft_discarded") {
-            const tabId = key.split("|")[0];
-            const vid = key.slice(tabId.length + 1);
-            dirtyRef.current.delete(key);
-            draftMetaRef.current[tabId]?.delete(vid);
-          }
+          acknowledgeConflict(key, err?.detail);
           conflict = err?.detail?.code === "draft_discarded"
             ? "The shared draft was discarded by the other inputter."
             : "Someone else edited these prices while you were typing. Review the values and try again.";
         } else {
           console.error("Draft cell autosave failed:", err);
+          lastSaveError = err;
         }
       }
     }
@@ -1192,11 +1447,21 @@ function DFTCPriceInput() {
       const tabId = key.split("|")[0];
       const vid = key.slice(tabId.length + 1);
       const current = draftRef.current.tabFields[tabId]?.[vid];
-      if (sameField(current, priceField(cell.prevail_price, cell.uom))) dirtyRef.current.delete(key);
+      if (
+        current &&
+        current.prevailing === cell.prevail_price &&
+        (current.volatilityReasonId ?? null) === (cell.volatility_reason_id ?? null) &&
+        (current.volatilityNotes || "") === (cell.volatility_notes || "")
+      ) {
+        dirtyRef.current.delete(key);
+      }
     }
     setDraftSavingCells(new Set());
-      if (conflict) setDraftConflict(conflict);
-    };
+    if (conflict) setDraftConflict(conflict);
+    if (pending.length > 0 && savedSuccessfully.length === 0 && lastSaveError) {
+      throw lastSaveError;
+    }
+  };
 
     // Autosave timers and finalization can fire close together. Queue them so
     // optimistic cell versions are never submitted concurrently by this page.
@@ -1338,7 +1603,7 @@ function DFTCPriceInput() {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
       syncRef.current().catch(() => { });
-    }, 15000);
+    }, 10000);
     const refreshOnReturn = () => {
       if (document.visibilityState === "visible" && navigator.onLine !== false) {
         syncRef.current().catch(() => { });
@@ -1353,38 +1618,9 @@ function DFTCPriceInput() {
     };
   }, [draftFinalized]);
 
-  // Commodity catalogue live-sync: another inputter may register a commodity or
-  // variety while this page stays open. Re-run the page's own catalogue helpers
-  // on a timer so those rows appear without a full reload.
-  const catalogPollRef = useRef(null);
-  useEffect(() => {
-    catalogPollRef.current = async () => {
-      try {
-        const items = await fetchCatalogItems();
-        applyCatalogItems(items);
-        addCatalogRows(items.map((item) => item.id), items);
-      } catch {
-        // Offline or a server error: keep what is on screen.
-      }
-    };
-  });
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      catalogPollRef.current?.().catch(() => { });
-    }, 60000);
-    const refreshOnReturn = () => {
-      if (document.visibilityState === "visible") catalogPollRef.current?.().catch(() => { });
-    };
-    document.addEventListener("visibilitychange", refreshOnReturn);
-    window.addEventListener("focus", refreshOnReturn);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", refreshOnReturn);
-      window.removeEventListener("focus", refreshOnReturn);
-    };
-  }, []);
+  // Commodity catalogue live-sync is now handled by the shared useDftcCatalog
+  // hook above, which refetches every 60 seconds and on window focus. The old
+  // manual poll and its setInterval are removed to avoid duplicate requests.
 
   const triggerAutosave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1551,7 +1787,13 @@ function DFTCPriceInput() {
             // row for yet gets one before the cells are resolved.
             const resolved = await resolveDraftCellsRef.current(draftData.cells);
             for (const { tab, vid, cell } of resolved) {
-              draftByTab[tab.id][vid] = priceField(cell.prevail_price, cell.uom);
+              draftByTab[tab.id][vid] = priceField(cell.prevail_price, cell.uom, {
+                volatilityReasonId: cell.volatility_reason_id,
+                volatilityReasonName: cell.volatility_reason_name,
+                volatilityNotes: cell.volatility_notes,
+                priceChangePct: cell.price_change_percentage,
+                isVolatilityFlagged: cell.is_volatility_flagged,
+              });
               draftMeta[tab.id].set(vid, {
                 commodity_id: cell.commodity_id,
                 uom: cell.uom,
@@ -1575,7 +1817,13 @@ function DFTCPriceInput() {
 
       for (const tab of MARKET_TABS) {
         for (const [vid, entry] of snap.sameDayByTab[tab.id] ?? []) {
-          prefillByTab[tab.id][vid] = priceField(entry.price, entry.uom);
+          prefillByTab[tab.id][vid] = priceField(entry.price, entry.uom, {
+            volatilityReasonId: entry.volatility_reason_id,
+            volatilityReasonName: entry.volatility_reason_name,
+            volatilityNotes: entry.volatility_notes,
+            priceChangePct: entry.price_change_percentage,
+            isVolatilityFlagged: entry.is_volatility_flagged,
+          });
           nextPrefilled[tab.id].set(vid, entry);
         }
         for (const [vid, entry] of snap.carriedByTab[tab.id] ?? []) {
@@ -1663,6 +1911,58 @@ function DFTCPriceInput() {
     return tabFields[tabId]?.[variantId] ?? emptyField(defaultUom);
   }
 
+  function checkVariantVolatility(variantId, currentPrevailing) {
+    if (currentPrevailing == null) return { isFlagged: false, changePct: null, prevPrice: null };
+    const { cat, com, v } = findCommodityRef.current(variantId);
+    if (!com) return { isFlagged: false, changePct: null, prevPrice: null };
+    const baseName = COMMODITY_NAME_OVERRIDES[com?.name] ?? com?.name ?? "";
+    const baseKey = nameSlug(baseName);
+    const variantName = v?.name;
+    const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+    const variantKey = !isBaseOrRegular ? `${baseKey}-${nameSlug(variantName)}` : baseKey;
+    const commodity_id = (catalogRef.current && (catalogRef.current.get(variantKey) ?? catalogRef.current.get(baseKey))) ?? resolveCommodityId(com, v);
+
+    if (!commodity_id) return { isFlagged: false, changePct: null, prevPrice: null };
+    const bench = benchmarks[commodity_id];
+    if (!bench || bench.previous_price == null) {
+      return { isFlagged: false, changePct: null, prevPrice: null };
+    }
+    const prevPrice = Number(bench.previous_price);
+    const curPrice = Number(currentPrevailing);
+    if (prevPrice <= 0) return { isFlagged: false, changePct: null, prevPrice };
+
+    const changePct = Number((((curPrice - prevPrice) / prevPrice) * 100).toFixed(1));
+    const isOverThreshold = Math.abs(changePct) >= 10;
+    const isOutside7d = bench.seven_day_avg != null && Math.abs((((curPrice - bench.seven_day_avg) / bench.seven_day_avg) * 100)) >= 10;
+    const isFlagged = isOverThreshold || isOutside7d;
+
+    return { isFlagged, changePct, prevPrice, avg7d: bench.seven_day_avg };
+  }
+
+  useEffect(() => {
+    if (!benchmarks || Object.keys(benchmarks).length === 0) return;
+    setTabFields((prev) => {
+      const curTab = prev[activeTabId];
+      if (!curTab) return prev;
+      let changed = false;
+      const nextTab = { ...curTab };
+      for (const [vid, field] of Object.entries(curTab)) {
+        if (field.prevailing == null) continue;
+        const vol = checkVariantVolatility(vid, field.prevailing);
+        if (field.isVolatilityFlagged !== vol.isFlagged || field.priceChangePct !== vol.changePct) {
+          nextTab[vid] = {
+            ...field,
+            isVolatilityFlagged: vol.isFlagged,
+            priceChangePct: vol.changePct,
+            previousPrice: vol.prevPrice,
+          };
+          changed = true;
+        }
+      }
+      return changed ? { ...prev, [activeTabId]: nextTab } : prev;
+    });
+  }, [benchmarks, activeTabId]);
+
   function updateSample(variantId, sampleIdx, value) {
     dirtyRef.current.add(`${activeTabId}|${variantId}`);
     // Strip any non-numerical characters (e.g. e, E, +, -, etc.)
@@ -1677,15 +1977,86 @@ function DFTCPriceInput() {
       const newSamples = [...existing.samples];
       newSamples[sampleIdx] = cleanVal;
       const computed = computePrices(newSamples);
+      const volCheck = checkVariantVolatility(variantId, computed.prevailing);
       return {
         ...prev,
         [activeTabId]: {
           ...curTabMap,
-          [variantId]: { ...existing, samples: newSamples, ...computed }
+          [variantId]: {
+            ...existing,
+            samples: newSamples,
+            ...computed,
+            isVolatilityFlagged: volCheck.isFlagged,
+            priceChangePct: volCheck.changePct,
+            previousPrice: volCheck.prevPrice,
+          }
         }
       };
     });
     triggerAutosave();
+  }
+
+  function updateVolatilityReason(variantId, reasonId) {
+    const reasonObj = volatilityReasons.find((r) => r.id === Number(reasonId));
+    const isOther = Boolean(
+      reasonObj &&
+      (reasonObj.category === "Other" || reasonObj.reason_name?.toLowerCase().includes("other"))
+    );
+    dirtyRef.current.add(`${activeTabId}|${variantId}`);
+    setTabFields((prev) => {
+      const curTabMap = prev[activeTabId] || {};
+      const existing = curTabMap[variantId] || emptyField();
+      return {
+        ...prev,
+        [activeTabId]: {
+          ...curTabMap,
+          [variantId]: {
+            ...existing,
+            volatilityReasonId: reasonId ? Number(reasonId) : null,
+            volatilityReasonName: reasonObj ? reasonObj.reason_name : null,
+            volatilityNotes: isOther ? existing.volatilityNotes : "",
+          }
+        }
+      };
+    });
+    triggerAutosave();
+  }
+
+  function updateVolatilityNotes(variantId, notes) {
+    dirtyRef.current.add(`${activeTabId}|${variantId}`);
+    const trimmedNotes = String(notes || "").slice(0, 255);
+    setTabFields((prev) => {
+      const curTabMap = prev[activeTabId] || {};
+      const existing = curTabMap[variantId] || emptyField();
+      return {
+        ...prev,
+        [activeTabId]: {
+          ...curTabMap,
+          [variantId]: {
+            ...existing,
+            volatilityNotes: trimmedNotes,
+          }
+        }
+      };
+    });
+    triggerAutosave();
+  }
+
+  function toggleManualVolatility(variantId) {
+    setTabFields((prev) => {
+      const curTabMap = prev[activeTabId] || {};
+      const existing = curTabMap[variantId] || emptyField();
+      return {
+        ...prev,
+        [activeTabId]: {
+          ...curTabMap,
+          [variantId]: {
+            ...existing,
+            showManualVolatility: !existing.showManualVolatility,
+          }
+        }
+      };
+    });
   }
 
   function updateUom(variantId, uom) {
@@ -2081,6 +2452,40 @@ function DFTCPriceInput() {
     return sum;
   }, [tabFields]);
 
+  const volatileItems = useMemo(() => {
+    const list = [];
+    for (const tab of MARKET_TABS) {
+      for (const [vid, f] of Object.entries(tabFields[tab.id] || {})) {
+        if (hasValue(f) && (f.isVolatilityFlagged || f.volatilityReasonId || f.volatilityNotes)) {
+          const { cat, com, v } = findCommodityRef.current(vid);
+          list.push({
+            tabId: tab.id,
+            tabLabel: tab.label,
+            vid,
+            cat,
+            com,
+            v,
+            field: f,
+          });
+        }
+      }
+    }
+    return list;
+  }, [tabFields]);
+
+  const flaggedVolatileCount = useMemo(() => {
+    return volatileItems.filter((item) => item.field.isVolatilityFlagged).length;
+  }, [volatileItems]);
+
+  const unaddressedVolatile = useMemo(() => {
+    return volatileItems.filter((item) => {
+      if (item.field.isVolatilityFlagged && !item.field.volatilityReasonId) return true;
+      const isOther = item.field.volatilityReasonName?.toLowerCase().includes("other");
+      if (isOther && !item.field.volatilityNotes?.trim()) return true;
+      return false;
+    });
+  }, [volatileItems]);
+
   const activeTab = useMemo(() => {
     return MARKET_TABS.find((t) => t.id === activeTabId) || MARKET_TABS[0];
   }, [activeTabId]);
@@ -2166,11 +2571,28 @@ function DFTCPriceInput() {
       setDateError("Reporting date cannot be after today.");
       return;
     }
+    if (unaddressedVolatile.length > 0) {
+      setSaveError(
+        `Please provide reasons and notes for all ${unaddressedVolatile.length} flagged commodity price movement(s) before finalizing.`
+      );
+      setIsSaving(false);
+      return;
+    }
     setDateError("");
     setSaveError("");
     setIsSaving(true);
     setSaveProgress(30);
     setSaveProgressStage("Sending the day's prices...");
+
+    // Mark every cell with a value as dirty to guarantee all entered market prices
+    // and their volatility reasons/notes are pushed to the server draft before finalize.
+    for (const tab of MARKET_TABS) {
+      for (const [vid, f] of Object.entries(draftRef.current.tabFields[tab.id] || {})) {
+        if (hasValue(f)) {
+          dirtyRef.current.add(`${tab.id}|${vid}`);
+        }
+      }
+    }
 
     // Flush any not-yet-autosaved cell first so review and finalize see the same
     // values that are on screen.
@@ -2214,6 +2636,10 @@ function DFTCPriceInput() {
       setSaveProgress(100);
       setSaveProgressStage("Price monitoring data saved successfully!");
       clearPrefillCache();
+      queryClient.setQueryData(["dftc", "shared-drafts", selectedDate], (current) => (
+        current ? { ...current, price: null } : current
+      ));
+      queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
       queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["dftc-report-preview"] });
@@ -2245,6 +2671,17 @@ function DFTCPriceInput() {
       );
     }
   }
+
+  const handleOpenConfirm = () => {
+    if (unaddressedVolatile.length > 0) {
+      setSaveError(
+        `Please provide reasons and notes for all ${unaddressedVolatile.length} flagged commodity price movement(s) before finalizing.`
+      );
+      return;
+    }
+    setSaveError("");
+    setConfirmOpen(true);
+  };
 
   function SaveStatusIndicator() {
     if (saveStatus === "idle") return null;
@@ -2552,6 +2989,110 @@ function DFTCPriceInput() {
           </div>
         </div>
 
+        {/* Volatility Observations Card on Review Page */}
+        {volatileItems.length > 0 && (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-4 sm:p-6 mb-5">
+            <button
+              type="button"
+              onClick={() => setVolatilityCollapsed((prev) => !prev)}
+              className={`w-full flex items-center justify-between text-left cursor-pointer transition-colors ${
+                volatilityCollapsed ? "" : "pb-3 mb-4 border-b border-[var(--hw-neutral-200)]"
+              }`}
+            >
+              <div>
+                <h3 className="text-[14.5px] sm:text-[15px] font-semibold text-[var(--hw-neutral-900)]">
+                  Price Volatility & Market Observations
+                </h3>
+                {flaggedVolatileCount > 0 && (
+                  <p className="text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                    {flaggedVolatileCount} significant price movement{flaggedVolatileCount === 1 ? "" : "s"}
+                  </p>
+                )}
+              </div>
+              {volatilityCollapsed ? (
+                <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0" />
+              )}
+            </button>
+
+            {!volatilityCollapsed && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 md:gap-y-6">
+                {volatileItems.map((item, idx) => {
+                  const comName = item.com?.name || "Commodity";
+                  const vName = item.v?.name && item.v?.name !== "Regular" && item.v?.name !== "Base" ? item.v.name : null;
+                  const displayName = vName ? `${comName} - ${vName}` : comName;
+                  const changePct = item.field.priceChangePct;
+                  const isMissingReason = item.field.isVolatilityFlagged && !item.field.volatilityReasonId;
+                  const isMissingOtherNotes = item.field.volatilityReasonName?.includes("Other") && !item.field.volatilityNotes?.trim();
+                  const isSecondCol = idx % 2 === 1;
+                  const isBelowFirstRow = idx >= 2;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`space-y-1.5 ${
+                        idx > 0 ? "pt-4 md:pt-0 border-t md:border-t-0 border-[var(--hw-neutral-200)]" : ""
+                      } ${
+                        isSecondCol ? "md:border-l md:border-[var(--hw-neutral-200)] md:pl-8" : "md:pr-8"
+                      } ${
+                        isBelowFirstRow ? "md:border-t md:border-[var(--hw-neutral-200)] md:pt-6" : ""
+                      }`}
+                    >
+                      <h4 className="text-[13.5px] sm:text-[14px] font-semibold text-[var(--hw-neutral-900)]">
+                        {displayName}
+                      </h4>
+
+                      <div className="text-[12px]">
+                        <span className="text-[var(--hw-neutral-500)]">Price: </span>
+                        <span className="text-[var(--hw-neutral-900)] font-medium">
+                          ₱{fmt(item.field.prevailing)}/{item.field.uom || "kg"}
+                        </span>
+                        {item.field.previousPrice != null ? (
+                          <span className="text-[var(--hw-neutral-500)] ml-1 font-normal">
+                            (previous ₱{fmt(item.field.previousPrice)} ({(changePct ?? 0) >= 0 ? "+" : ""}{changePct}%))
+                          </span>
+                        ) : changePct != null ? (
+                          <span className="text-[var(--hw-neutral-500)] ml-1 font-normal">
+                            ({(changePct ?? 0) >= 0 ? "+" : ""}{changePct}%)
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="text-[12px]">
+                        <span className="text-[var(--hw-neutral-500)]">Reason: </span>
+                        <span className="text-[var(--hw-neutral-900)] font-medium">
+                          {item.field.volatilityReasonName || "—"}
+                        </span>
+                      </div>
+
+                      <div className="text-[12px]">
+                        <span className="text-[var(--hw-neutral-500)]">Market: </span>
+                        <span className="text-[var(--hw-neutral-800)] font-normal">{item.tabLabel}</span>
+                      </div>
+
+                      {item.field.volatilityNotes ? (
+                        <div className="text-[12px]">
+                          <span className="text-[var(--hw-neutral-500)]">Notes: </span>
+                          <span className="text-[var(--hw-neutral-800)]">{item.field.volatilityNotes}</span>
+                        </div>
+                      ) : isMissingOtherNotes ? (
+                        <p className="text-[12px] text-amber-700 font-normal">
+                          Note required when &quot;Other&quot; is selected.
+                        </p>
+                      ) : isMissingReason ? (
+                        <p className="text-[12px] text-amber-700 font-normal">
+                          Reason required for significant price movement.
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Save Card */}
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
           <label htmlFor="report-data-name-input" className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-2">Report Data Name</label>
@@ -2618,7 +3159,7 @@ function DFTCPriceInput() {
             )}
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
+              onClick={handleOpenConfirm}
               disabled={totalEnteredCount === 0 || isSaving}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
@@ -2672,6 +3213,7 @@ function DFTCPriceInput() {
               encodedByRole={encodedByRole}
               reviewedBy={reviewedBy}
               reviewedByRole={reviewedByRole}
+              volatileCount={flaggedVolatileCount}
               onClose={() => setConfirmOpen(false)}
               onConfirm={() => {
                 setConfirmOpen(false);
@@ -2776,10 +3318,20 @@ function DFTCPriceInput() {
                 setReviewMode(true);
               }}
               disabled={totalEnteredCount === 0}
-              className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              className="text-[12.5px] sm:text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] underline cursor-pointer inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               title="Review Entered Data"
             >
-              Review ({totalEnteredCount})
+              {flaggedVolatileCount > 0 ? (
+                <>
+                  <span>Review ({totalEnteredCount})</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--hw-neutral-600)] px-1.5 py-0.5 no-underline">
+                    <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+                    <span>{flaggedVolatileCount} with significant price movement</span>
+                  </span>
+                </>
+              ) : (
+                `Review (${totalEnteredCount})`
+              )}
             </button>
           </div>
         </div>
@@ -3070,6 +3622,129 @@ function DFTCPriceInput() {
                             </div>
                           </div>
 
+                          {/* Desktop Volatility Section */}
+                          {(f.isVolatilityFlagged || f.showManualVolatility || f.volatilityReasonId || f.volatilityNotes) ? (
+                            <div className="hidden md:block mx-4 my-2 p-2.5 rounded-lg border border-[var(--hw-neutral-200)] text-[12px] space-y-2 transition-all">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 text-[var(--hw-neutral-700)] text-[11.5px] sm:text-[12px]">
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>
+                                    {f.isVolatilityFlagged ? (
+                                      <>
+                                        Significant price movement detected:{" "}
+                                        <span className="font-semibold text-[var(--hw-neutral-900)]">
+                                          {f.previousPrice != null
+                                            ? `previous ₱${fmt(f.previousPrice)} (${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`
+                                            : `(${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`}
+                                        </span>
+                                        . Please provide a reason for this change.
+                                      </>
+                                    ) : (
+                                      "Collector Market Observation / Price Movement Reason"
+                                    )}
+                                  </span>
+                                </div>
+                                {!f.isVolatilityFlagged && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleManualVolatility(v.id)}
+                                    className="text-[11px] text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-700)] cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                )}
+                              </div>
+
+                              {(() => {
+                                const isOtherReason = Boolean(
+                                  f.volatilityReasonName?.toLowerCase().includes("other") ||
+                                  volatilityReasons.find((r) => r.id === Number(f.volatilityReasonId))?.category === "Other"
+                                );
+                                return (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                    <div>
+                                      <label className="block text-[11px] font-medium text-[var(--hw-neutral-600)] mb-1">
+                                        Reason for Price Change {f.isVolatilityFlagged && <span className="text-red-500">*</span>}
+                                      </label>
+                                      <select
+                                        value={f.volatilityReasonId || ""}
+                                        onChange={(e) => updateVolatilityReason(v.id, e.target.value)}
+                                        className={`w-full h-8 px-2.5 rounded-lg border text-[11.5px] bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors ${
+                                          f.isVolatilityFlagged && !f.volatilityReasonId
+                                            ? "border-red-400 focus:border-red-500 bg-red-50/20"
+                                            : "border-[var(--hw-neutral-200)] focus:border-[var(--hw-green-700)]"
+                                        }`}
+                                      >
+                                        <option value="">-- Select reason for price change --</option>
+                                        {sortedVolatilityCategories.map((cat) => (
+                                          <optgroup key={cat} label={cat}>
+                                            {volatilityReasons
+                                              .filter((r) => r.category === cat && r.is_active !== false)
+                                              .map((r) => (
+                                                <option key={r.id} value={r.id}>
+                                                  {r.reason_name}
+                                                </option>
+                                              ))}
+                                          </optgroup>
+                                        ))}
+                                      </select>
+                                      {f.isVolatilityFlagged && !f.volatilityReasonId && (
+                                        <p className="text-[10px] text-red-600 mt-1">A reason is required for significant price changes.</p>
+                                      )}
+                                    </div>
+
+                                    {/* Web view: notes on the right side in a 2-column layout */}
+                                    {isOtherReason && (
+                                      <div>
+                                        <div className="flex items-center justify-between text-[11px] font-medium text-[var(--hw-neutral-600)] mb-1">
+                                          <span>
+                                            Specify Reason Details <span className="text-red-500">*</span>
+                                          </span>
+                                          <span
+                                            className={`text-[10px] font-normal ${
+                                              (f.volatilityNotes?.length || 0) >= 240
+                                                ? "text-amber-700 font-semibold"
+                                                : "text-[var(--hw-neutral-400)]"
+                                            }`}
+                                          >
+                                            {f.volatilityNotes?.length || 0}/255
+                                          </span>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          maxLength={255}
+                                          value={f.volatilityNotes || ""}
+                                          onChange={(e) => updateVolatilityNotes(v.id, e.target.value)}
+                                          placeholder="Describe the reason for this price change (required, max 255 chars)..."
+                                          className={`w-full h-8 px-2.5 rounded-lg border text-[11.5px] bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors ${
+                                            f.isVolatilityFlagged && !f.volatilityNotes?.trim()
+                                              ? "border-red-400 focus:border-red-500 bg-red-50/20"
+                                              : "border-[var(--hw-neutral-200)] focus:border-[var(--hw-green-700)]"
+                                          }`}
+                                        />
+                                        {f.isVolatilityFlagged && !f.volatilityNotes?.trim() && (
+                                          <p className="text-[10px] text-red-600 mt-1">Please specify the reason when choosing &apos;Other&apos;.</p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          ) : (
+                            hasValue(f) && (
+                              <div className="hidden md:block pl-6 py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleManualVolatility(v.id)}
+                                  className="text-[10.5px] font-medium text-[var(--hw-neutral-500)] hover:text-[var(--hw-green-700)] transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>+ Add Reason for Price Change (Optional)</span>
+                                </button>
+                              </div>
+                            )
+                          )}
+
                           {/* Mobile Variant Row */}
                           <div className="md:hidden">
                             <MobileVariantRow
@@ -3078,6 +3753,11 @@ function DFTCPriceInput() {
                               carriedFrom={carriedSourceDate(carriedRef.current, activeTabId, v.id, carriedDate)}
                               onUpdateSample={(i, val) => updateSample(v.id, i, val)}
                               onUpdateUom={(uom) => updateUom(v.id, uom)}
+                              onUpdateVolatilityReason={(reasonId) => updateVolatilityReason(v.id, reasonId)}
+                              onUpdateVolatilityNotes={(notes) => updateVolatilityNotes(v.id, notes)}
+                              onToggleManualVolatility={() => toggleManualVolatility(v.id)}
+                              volatilityReasons={volatilityReasons}
+                              volatilityCategories={volatilityCategories}
                             />
                           </div>
                         </div>

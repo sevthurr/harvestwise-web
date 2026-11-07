@@ -24,7 +24,7 @@ describe("DFTC Profile & User Creation Specifications", () => {
         id: "usr-dftc-1",
         first_name: "Maria",
         last_name: "Santos",
-        middle_name: null,
+        middle_name: "Maria",
         suffix: null,
         email: "dftc@harvestwise.test",
         email_verified_at: null,
@@ -43,6 +43,7 @@ describe("DFTC Profile & User Creation Specifications", () => {
     const positionElements = screen.getAllByText("Position");
     expect(positionElements.length).toBeGreaterThan(0);
     expect(screen.getByText("Data Analyst")).toBeInTheDocument();
+    expect(screen.getAllByText("Maria").length).toBeGreaterThan(0);
 
     // Work Information has Organization and Position, but NOT Account status or Last login
     expect(screen.getByText("Work Information")).toBeInTheDocument();

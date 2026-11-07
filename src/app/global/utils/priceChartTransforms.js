@@ -172,28 +172,42 @@ export function buildHistoricalChartData(varietyDetails, preset = "7d", customFr
       { matchDayCount, includeTransition }
     );
     const pricesByDate = new Map();
+    const metaByDate = new Map();
     for (const row of filtered) {
       const price = numericPrice(row.prevail_price ?? row.price);
       if (price == null) continue;
       pricesByDate.set(row.price_date, price);
+      metaByDate.set(row.price_date, row);
       dateSet.add(row.price_date);
     }
     byVariety.set(key, pricesByDate);
+    if (!byVariety.has("__meta")) byVariety.set("__meta", new Map());
+    const existingMeta = byVariety.get("__meta");
+    for (const [d, row] of metaByDate) existingMeta.set(d, row);
   }
 
   const dates = [...dateSet].sort((a, b) => a.localeCompare(b));
+  const metaMap = byVariety.get("__meta") || new Map();
   return dates.map((date) => {
     const point = { date, d: date };
     let firstVal = null;
     for (const [key, pricesByDate] of byVariety) {
+      if (key === "__meta") continue;
       const p = pricesByDate.has(date) ? pricesByDate.get(date) : null;
       point[key] = p;
       if (firstVal == null && p != null) firstVal = p;
     }
+    const metaRow = metaMap.get(date);
     point.actual = firstVal;
     point.predicted = null;
     point.lower = null;
     point.upper = null;
+    point.change = metaRow?.change ?? null;
+    point.change_pct = metaRow?.change_pct ?? null;
+    point.volatility_reason = metaRow?.volatility_reason ?? null;
+    point.volatility_category = metaRow?.volatility_category ?? null;
+    point.volatility_notes = metaRow?.volatility_notes ?? null;
+    point.is_volatility_flagged = Boolean(metaRow?.is_volatility_flagged);
     return point;
   });
 }

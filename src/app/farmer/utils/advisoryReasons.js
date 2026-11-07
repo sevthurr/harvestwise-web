@@ -83,13 +83,62 @@ const levelOf = (moduleResults, module) => normalizeLevel(moduleResults?.[LABEL_
 // ---------------------------------------------------------------------------
 
 function priceReason(mr, cropName, horizonDays) {
-  const outlookLabel = pickUsablePriceOutlook(mr?.price_outlook, mr?.historical_price_outlook);
+  let outlookLabel = pickUsablePriceOutlook(mr?.price_outlook, mr?.historical_price_outlook);
+  if (!outlookLabel && mr?.price_explanation) {
+    const match = String(mr.price_explanation).match(/\b(favorable|neutral|unfavorable)\b/i);
+    if (match) outlookLabel = match[1];
+  }
+  if (!outlookLabel && (mr?.historical_seasonal_price != null || mr?.reference_price != null) && (mr?.macro_baseline_price != null || mr?.comparison_baseline != null)) {
+    const p = Number(mr.historical_seasonal_price ?? mr.reference_price);
+    const b = Number(mr.macro_baseline_price ?? mr.comparison_baseline);
+    if (b > 0) {
+      const pct = ((p - b) / b) * 100;
+      outlookLabel = pct >= 5 ? 'Favorable' : (pct <= -5 ? 'Unfavorable' : 'Neutral');
+    }
+  }
   const outlook = normalizeLevel(outlookLabel);
   if (!outlook) return null;
 
   const hasEligibleForecast = mr?.has_eligible_forecast === true;
   const histPrice = mr?.historical_seasonal_price ?? mr?.reference_price;
   const histBaseline = mr?.macro_baseline_price ?? mr?.comparison_baseline;
+
+  // When forecast is not yet available, use historical seasonal price reference result
+  if (!hasEligibleForecast && (histPrice != null || mr?.price_explanation)) {
+    if (histPrice != null && histBaseline != null) {
+      const p = Number(histPrice);
+      const b = Number(histBaseline);
+      const pctChange = mr?.historical_price_change_pct != null
+        ? Number(mr.historical_price_change_pct)
+        : (mr?.price_change_pct != null
+          ? Number(mr.price_change_pct)
+          : (b > 0 ? ((p - b) / b) * 100 : 0));
+      const pctVal = `${pctChange > 0 ? '+' : ''}${pctChange.toFixed(1)}%`;
+      const classLabel = outlook === 'favorable'
+        ? 'Favorable'
+        : outlook === 'unfavorable'
+        ? 'Unfavorable'
+        : 'Neutral';
+
+      return {
+        key: 'farmer.factors.price.historical_seasonal_explanation',
+        params: {
+          price: p.toFixed(2),
+          baseline: b.toFixed(2),
+          pct: pctVal,
+          classification: classLabel,
+        },
+        text: mr?.price_explanation || `Historical seasonal average price (₱${p.toFixed(2)}/kg) for expected harvest season is ${pctVal} relative to multi-year macro baseline (₱${b.toFixed(2)}/kg), classified as ${classLabel}.`,
+      };
+    }
+    if (mr?.price_explanation) {
+      return {
+        key: 'farmer.factors.price.historical_seasonal_explanation',
+        params: {},
+        text: mr.price_explanation,
+      };
+    }
+  }
   const forecast = formatPrice(hasEligibleForecast ? mr?.forecast_midpoint : (histPrice ?? mr?.forecast_midpoint));
   const average = formatPrice(hasEligibleForecast ? mr?.recent_average_price : (histBaseline ?? mr?.recent_average_price));
   const difference = formatAbsoluteDifference(
@@ -285,6 +334,7 @@ function collectCandidates(moduleResults, cropName, horizonDays, contributions, 
       module,
       key: reason.key,
       params: reason.params,
+      text: reason.text,
       weighted: score?.weighted ?? 0,
       raw: score?.raw ?? 0,
       weight: score?.weight ?? 0,
@@ -375,11 +425,12 @@ export function composeAdvisoryReasons({ moduleResults, contributions, vetoes, c
   if (candidates.length === 0) {
     return [{ key: 'farmer.advisory.advisory_reasons_unavailable', params: {} }];
   }
-  return candidates.map(({ key, params, module }) => ({
+  return candidates.map(({ key, params, module, text }) => ({
     key,
     params,
     module,
     labelKey: FACTOR_NAME_KEY[module],
+    text,
   }));
 }
 

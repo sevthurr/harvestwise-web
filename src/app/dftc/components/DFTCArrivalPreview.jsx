@@ -4,6 +4,7 @@ import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
 import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
+import { buildReportExportFilename } from "./dftcReportExport";
 
 // Colors exactly matching DFTC-VOLUME-2025-Final.xlsx (OVERALL TOTAL sheet):
 // FARM SOURCE: #FF99FF (pink/magenta)
@@ -157,9 +158,17 @@ function ArrivalVolumeReportPage({
           <tr>
             <th rowSpan={2} style={{ ...cellHeader("#ffffff"), width: "6%" }}>No.</th>
             <th rowSpan={2} style={{ ...cellHeader("#ffffff"), textAlign: "left", width: "30%" }}>Commodity</th>
-            <th colSpan={2} style={cellHeader(FARM_BG)}>FARM SOURCE</th>
-            <th colSpan={2} style={cellHeader(OTHER_BG)}>OTHER SOURCES</th>
-            <th rowSpan={2} style={cellHeader(TOTAL_BG)}>OVERALL TOTAL</th>
+            <th colSpan={2} style={cellHeader(FARM_BG)}>
+              <span>Farm Source</span>
+              <span style={{ display: "none" }}>VOLUME BY SOURCE (KG)</span>
+            </th>
+            <th colSpan={2} style={cellHeader(OTHER_BG)}>
+              <span>Other Sources</span>
+            </th>
+            <th rowSpan={2} style={cellHeader(TOTAL_BG)}>
+              <span>Overall Total</span>
+              <span style={{ display: "none" }}>OVERALL</span>
+            </th>
           </tr>
           <tr>
             <th style={cellHeader(FARM_BG)}>Volume (kg)</th>
@@ -179,15 +188,14 @@ function ArrivalVolumeReportPage({
               ? (Number(farmVol) || 0) + (Number(otherVol) || 0)
               : null;
 
-            const commodityLabel = r.variety && r.variety !== "Regular"
-              ? `${r.commodity_name || "—"} (${r.variety})`
-              : r.commodity_name || "—";
-
             return (
               <tr key={`${r.commodity_name}-${r.variety}-${offset + i}`}>
                 <td style={cellBase({ textAlign: "center" })}>{offset + i + 1}</td>
                 <td style={cellBase({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
-                  {commodityLabel}
+                  <strong>{r.commodity_name || "—"}</strong>
+                  {r.variety && r.variety !== "Regular" && (
+                    <span style={{ fontWeight: "normal" }}> ({r.variety})</span>
+                  )}
                 </td>
                 <td style={cellBase({ textAlign: "right" })}>{numStr(farmVol)}</td>
                 <td style={cellBase({ textAlign: "center" })}>{pctStr(farmVol, rowTotal)}</td>
@@ -275,6 +283,7 @@ function countPopulatedArrivalRows(rows) {
  */
 function DFTCArrivalPreview({ file, onClose }) {
   const [format, setFormat] = useState("IMG");
+  const [orientation, setOrientation] = useState("landscape");
   const [imgPage, setImgPage] = useState(0);
   const [dlState, setDlState] = useState("idle");
   const [personnel, setPersonnel] = useState(DEFAULT_PERSONNEL);
@@ -344,9 +353,9 @@ function DFTCArrivalPreview({ file, onClose }) {
   const reportingDate = formatDisplayDate(submission?.reporting_date || file.reportingDate);
   const monthYearStr = formatDisplayMonthYear(submission?.reporting_date || file.reportingDate);
 
-  // For image format: strictly 4 images only
+  // For image format: strictly 4 images for large catalogue, single image for small dataset
   const imgPages = useMemo(() => {
-    const count = 4;
+    const count = rows.length > 22 ? 4 : 1;
     const perPage = Math.max(1, Math.ceil(rows.length / count));
     const out = [];
     for (let i = 0; i < count; i++) {
@@ -411,16 +420,17 @@ function DFTCArrivalPreview({ file, onClose }) {
       const jsPDFModule = await import("jspdf");
       const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
 
-      // Long bond paper: 8.5 x 13 in = 215.9 x 330.2 mm (Landscape: 330.2 x 215.9 mm)
+      const isPortrait = orientation === "portrait";
+      // Long bond paper: 8.5 x 13 in = 215.9 x 330.2 mm
       const longPaper = [215.9, 330.2];
       const pdf = new jsPDF({
-        orientation: "landscape",
+        orientation: isPortrait ? "portrait" : "landscape",
         unit: "mm",
         format: longPaper
       });
-      const pdfW = pdf.internal.pageSize.getWidth(); // 330.2
-      const pdfH = pdf.internal.pageSize.getHeight(); // 215.9
-      const margin = 10;
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const margin = isPortrait ? 8 : 10;
       const maxW = pdfW - margin * 2;
       const maxH = pdfH - margin * 2;
 
@@ -436,10 +446,6 @@ function DFTCArrivalPreview({ file, onClose }) {
         const baseCanvasWidth = canvases[0]?.width || 2040;
         const maxCanvasHeight = Math.max(...canvases.map((c) => c.height));
 
-        // Uniform ratio calculated from the entire document:
-        // 1. Consistent table width: w = baseCanvasWidth * uniformRatio on EVERY page.
-        // 2. Fits within page boundaries: h = canvas.height * uniformRatio <= maxH on EVERY page.
-        // No clipping, no cropping, zero distortion.
         const uniformRatio = Math.min(maxW / baseCanvasWidth, maxH / maxCanvasHeight);
         const w = baseCanvasWidth * uniformRatio;
         const x = (pdfW - w) / 2;
@@ -447,13 +453,20 @@ function DFTCArrivalPreview({ file, onClose }) {
 
         for (let i = 0; i < canvases.length; i++) {
           const canvas = canvases[i];
-          if (i > 0) pdf.addPage(longPaper, "landscape");
+          if (i > 0) pdf.addPage(longPaper, isPortrait ? "portrait" : "landscape");
 
           const h = canvas.height * uniformRatio;
           pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, y, w, h);
         }
       }
-      pdf.save(`DFTC-Arrival-Volume-${reportingDateShort || "report"}.pdf`);
+      const pdfFilename = buildReportExportFilename({
+        market: file.sourceName || file.market || "DFTC",
+        reportType: "Arrival",
+        period: "Daily",
+        dateStr: reportingDateShort || file.savedDate,
+        ext: "pdf"
+      });
+      pdf.save(pdfFilename);
       setDlState("idle");
     } catch (err) {
       console.error("PDF generation error:", err);
@@ -471,7 +484,7 @@ function DFTCArrivalPreview({ file, onClose }) {
 
       const ws = wb.addWorksheet("OVERALL TOTAL", {
         pageSetup: {
-          orientation: "landscape",
+          orientation: orientation,
           paperSize: 14,
           fitToPage: true,
           fitToWidth: 1,
@@ -792,7 +805,14 @@ function DFTCArrivalPreview({ file, onClose }) {
 
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      triggerDownload(URL.createObjectURL(blob), `DFTC-Arrival-Volume-${reportingDateShort || "report"}.xlsx`);
+      const excelFilename = buildReportExportFilename({
+        market: file.sourceName || file.market || "DFTC",
+        reportType: "Arrival",
+        period: "Daily",
+        dateStr: reportingDateShort || file.savedDate,
+        ext: "xlsx"
+      });
+      triggerDownload(URL.createObjectURL(blob), excelFilename);
       setDlState("idle");
     } catch (err) {
       console.error("Excel generation error:", err);
@@ -905,14 +925,15 @@ function DFTCArrivalPreview({ file, onClose }) {
       );
     }
     if (format === "PDF") {
+      const isPortrait = orientation === "portrait";
       return (
-        <DFTCPreviewZoomContainer label="Arrival Volume PDF (Long Landscape)">
-          <div className="space-y-5 w-full max-w-[1020px] mx-auto">
+        <DFTCPreviewZoomContainer label={`Arrival Volume PDF (Long ${isPortrait ? "Portrait" : "Landscape"})`}>
+          <div className={`space-y-5 w-full ${isPortrait ? "max-w-[760px]" : "max-w-[1020px]"} mx-auto`}>
             {pdfPages.map((page, idx) => (
               <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
                   <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {totalPdfPages}</span>
-                  <span className="text-[12px] text-[var(--hw-neutral-800)]">Long Landscape</span>
+                  <span className="text-[12px] text-[var(--hw-neutral-800)]">Long {isPortrait ? "Portrait" : "Landscape"}</span>
                 </div>
                 <div>{renderPage(page, idx, totalPdfPages)}</div>
               </div>
@@ -968,6 +989,9 @@ function DFTCArrivalPreview({ file, onClose }) {
       ]}
       format={format}
       onFormatChange={setFormat}
+      orientation={orientation}
+      onOrientationChange={setOrientation}
+      showOrientation={true}
       personnel={personnel}
       onPersonnelChange={setPersonnel}
       downloadLabel={dlLabel}

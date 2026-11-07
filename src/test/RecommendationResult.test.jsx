@@ -74,6 +74,8 @@ const baseData = {
   variant: "Ball",
   plantingDate: "2026-10-20",
   harvestDate: "2026-12-01",
+  harvestWindowStart: "2026-12-18",
+  harvestWindowEnd: "2026-12-22",
   farmArea: 500,
   harvestQuantity: 600,
   costMethod: "simple",
@@ -100,6 +102,13 @@ beforeEach(() => {
 });
 
 describe("RecommendationResult — View basis navigation", () => {
+  it("shows the selected harvest window and formats both dates consistently", () => {
+    renderResult(baseData);
+
+    expect(screen.getByText("Oct 20, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Dec 18, 2026 — Dec 22, 2026")).toBeInTheDocument();
+  });
+
   it("passes the real commodity id, not the catalog icon key, to the factors page", () => {
     renderResult(baseData);
 
@@ -144,5 +153,23 @@ describe("RecommendationResult — View basis navigation", () => {
         })
       );
     });
+  });
+
+  it("toggles collapsible 'Why this recommendation?' factors card", async () => {
+    renderResult(baseData);
+
+    const toggle = screen.getByRole("button", { name: /Why this recommendation\?|Ngano kini nga tambag\?/i });
+    expect(toggle).toBeInTheDocument();
+
+    // Initially collapsed: main reasons not visible
+    expect(screen.queryByText(/Main reasons|Pangunang mga rason/i)).not.toBeInTheDocument();
+
+    // Click to expand
+    fireEvent.click(toggle);
+    expect(screen.getByText(/Main reasons|Pangunang mga rason/i)).toBeInTheDocument();
+
+    // Click to collapse
+    fireEvent.click(toggle);
+    expect(screen.queryByText(/Main reasons|Pangunang mga rason/i)).not.toBeInTheDocument();
   });
 });

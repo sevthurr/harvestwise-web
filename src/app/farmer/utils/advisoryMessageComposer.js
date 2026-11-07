@@ -25,16 +25,48 @@ export { normalizeLifecycleStage };
  * If key is missing or template interpolation is invalid, falls back safely.
  */
 export function renderComposedMessage(composed, lang = 'ceb', fallbackText = '') {
-  if (!composed || !composed.key) return fallbackText;
+  if (typeof composed === 'string') return composed;
+  if (!composed) return fallbackText;
+  if (!composed.key) return composed.text || fallbackText;
   const params = { ...(composed.params || {}) };
   if (composed.levelKey) {
     params.arrival_level = t(composed.levelKey, {}, lang);
+  }
+  if (params.classification && (lang === 'ceb' || lang === 'tl')) {
+    const rawC = String(params.classification).toLowerCase();
+    if (rawC === 'favorable') {
+      params.classification = lang === 'ceb' ? 'Maayo' : 'Maganda';
+    } else if (rawC === 'unfavorable') {
+      params.classification = lang === 'ceb' ? 'Dili Maayo' : 'Hindi Maganda';
+    } else if (rawC === 'neutral') {
+      params.classification = lang === 'ceb' ? 'Sakto ug normal' : 'Katamtaman';
+    }
+  }
+  if (params.pct && (lang === 'ceb' || lang === 'tl')) {
+    const rawPct = String(params.pct);
+    const num = parseFloat(rawPct.replace(/[^\d.-]/g, ''));
+    if (!isNaN(num)) {
+      const absVal = Math.abs(num).toFixed(1);
+      if (lang === 'ceb') {
+        params.pct = num < 0
+          ? `mas ubos og ${absVal}%`
+          : num > 0
+          ? `mas taas og ${absVal}%`
+          : 'halos pareho (0.0%)';
+      } else if (lang === 'tl') {
+        params.pct = num < 0
+          ? `mas mababa nang ${absVal}%`
+          : num > 0
+          ? `mas mataas nang ${absVal}%`
+          : 'halos pareho (0.0%)';
+      }
+    }
   }
   const rawText = t(composed.key, params, lang);
   if (validateTemplateParams(rawText, params)) {
     return rawText;
   }
-  return fallbackText;
+  return composed.text || fallbackText;
 }
 
 // ==========================================
@@ -460,6 +492,12 @@ export function composeAdvisoryBadge(advisoryCode, cropStage) {
   // Red = Avoid For Now
 
   if (adv === 'avoid_for_now' || adv === 'avoid' || adv === 'high_risk' || adv === 'unfavorable' || adv === 'severe' || adv === 'red') {
+    if (stage === 'harvest') {
+      return {
+        key: 'farmer.advisory.labels.avoid_harvest',
+        type: 'avoid',
+      };
+    }
     return {
       key: 'farmer.advisory.labels.avoid_for_now',
       type: 'avoid',

@@ -134,6 +134,11 @@ const HW_NAME_TO_ID = {
 const HW_ID_TO_NAME = Object.fromEntries(
   Object.entries(HW_NAME_TO_ID).map(([n, id]) => [id, n])
 );
+const HW_TOP10_IDS = new Set([
+  "COM-0001", "COM-0003", "COM-0004", "COM-0008", "COM-0010",
+  "COM-0023", "COM-0024", "COM-0025", "COM-0026", "COM-0027",
+  "COM-0028", "COM-0029", "COM-0036", "COM-0037"
+]);
 function getVariants(commodityName) {
   const found = ALL_COMMODITY_ITEMS.find((c) => c.name === commodityName);
   return found ? found.variants.map((v) => v.name) : [];
@@ -142,7 +147,12 @@ function getCategoryFor(commodityName) {
   return COMMODITY_CATEGORIES.find((cat) => cat.items.some((i) => i.name === commodityName))?.category;
 }
 function isHWCommodity(nameOrId) {
-  return HW_COMMODITY_NAMES.has(nameOrId) || nameOrId in HW_ID_TO_NAME;
+  if (!nameOrId) return false;
+  if (HW_COMMODITY_NAMES.has(nameOrId) || nameOrId in HW_ID_TO_NAME || HW_TOP10_IDS.has(nameOrId)) {
+    return true;
+  }
+  const baseName = String(nameOrId).split(" ")[0];
+  return HW_COMMODITY_NAMES.has(baseName);
 }
 export {
   ALL_COMMODITY_ITEMS,

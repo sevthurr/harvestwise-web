@@ -13,6 +13,8 @@ import {
   listNotifications,
   markRead as apiMarkRead,
   markAllRead as apiMarkAllRead,
+  NOTIFICATION_STALE_TIME,
+  STAFF_NOTIFICATION_KEY,
 } from "../../../services/api/notificationsApi";
 import { NotificationIcon } from "../../global/components/shared/NotificationIcon";
 import { resolveNotificationRoute } from "../../global/utils/notificationRoutes";
@@ -167,19 +169,28 @@ function AdminNotifications() {
   const { readIds, isRead, markReadLocally } = useNotificationReadState(auth?.user?.id);
 
   const { data: notificationsData, isLoading: loading, error: queryErr, refetch } = useQuery({
-    queryKey: ["admin-notifications"],
+    queryKey: STAFF_NOTIFICATION_KEY,
     queryFn: () => listNotifications(1, 50),
-    refetchOnMount: "always",
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+    staleTime: NOTIFICATION_STALE_TIME,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id) => apiMarkRead(id),
     // Optimistic: show it as read immediately, even if the request fails.
-    onMutate: (id) => markReadLocally(id),
+    onMutate: (id) => {
+      const item = (notificationsData?.items ?? []).find((notification) => notification.id === id);
+      if (item && !isRead(item)) {
+        queryClient.setQueryData(["notifications", "unread-count"], (current) =>
+          Math.max(0, (typeof current === "number" ? current : notificationsData?.unread_count ?? 0) - 1),
+        );
+      }
+      markReadLocally(id);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
   });
@@ -191,14 +202,14 @@ function AdminNotifications() {
       queryClient.setQueryData(["notifications", "unread-count"], 0);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
       queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
     },
   });
 
   // Real-time live updates on the shared app-wide notification stream
   useNotificationEvent("NOTIFICATION_CREATED", () => {
-    queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    queryClient.invalidateQueries({ queryKey: STAFF_NOTIFICATION_KEY });
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
   });
 
