@@ -629,12 +629,12 @@ function DFTCFilePreview({ file, onClose }) {
       };
 
       const hRow1 = ws.addRow(["No.", "Commodity", "UOM", "BANKEROHAN MARKET", "", "", "DFTC TABOAN", ""]);
-      ws.mergeCells(`A${hRow1.number}:A${hRow1.number + 1}`);
-      ws.mergeCells(`B${hRow1.number}:B${hRow1.number + 1}`);
-      ws.mergeCells(`C${hRow1.number}:C${hRow1.number + 1}`);
+      const hRow2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
+      ws.mergeCells(`A${hRow1.number}:A${hRow2.number}`);
+      ws.mergeCells(`B${hRow1.number}:B${hRow2.number}`);
+      ws.mergeCells(`C${hRow1.number}:C${hRow2.number}`);
       ws.mergeCells(`D${hRow1.number}:F${hRow1.number}`);
       ws.mergeCells(`G${hRow1.number}:H${hRow1.number}`);
-      const hRow2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
 
       const applyHStyle = (row, cols, bg) => {
         cols.forEach((c) => {
@@ -656,12 +656,12 @@ function DFTCFilePreview({ file, onClose }) {
         if (cat.name === "Rootcrops") {
           ws.addRow([]);
           const hR1 = ws.addRow(["No.", "Commodity", "UOM", "BANKEROHAN MARKET", "", "", "DFTC TABOAN", ""]);
-          ws.mergeCells(`A${hR1.number}:A${hR1.number + 1}`);
-          ws.mergeCells(`B${hR1.number}:B${hR1.number + 1}`);
-          ws.mergeCells(`C${hR1.number}:C${hR1.number + 1}`);
+          const hR2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
+          ws.mergeCells(`A${hR1.number}:A${hR2.number}`);
+          ws.mergeCells(`B${hR1.number}:B${hR2.number}`);
+          ws.mergeCells(`C${hR1.number}:C${hR2.number}`);
           ws.mergeCells(`D${hR1.number}:F${hR1.number}`);
           ws.mergeCells(`G${hR1.number}:H${hR1.number}`);
-          const hR2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
           applyHStyle(hR1, [1, 2, 3], LEFT_BG);
           applyHStyle(hR1, [4, 5, 6], BANK_BG);
           applyHStyle(hR1, [7, 8], DFTC_BG);
