@@ -7,7 +7,8 @@ import { buildReportExportFilename } from "./dftcReportExport";
 import {
   PAGE_CATEGORY_GROUPS,
   IMG_PAGE_CATEGORY_GROUPS,
-  PDF_PAGE_CATEGORY_GROUPS
+  PDF_PAGE_CATEGORY_GROUPS,
+  PDF_PORTRAIT_PAGE_CATEGORY_GROUPS
 } from "./dftcReportCategories";
 import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
 
@@ -153,19 +154,27 @@ function ReportColumnHeaders({ headerPadding = "5px 8px", headerFontSize = 11 })
   );
 }
 
-function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, reportDate, personnel }) {
+function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, reportDate, personnel, orientation = "landscape" }) {
+  const isPortrait = orientation === "portrait";
   const rowCount = categories.reduce((sum, cat) => sum + (cat.commodities || []).reduce((cSum, com) => cSum + (com.variants?.length || 1), 0), 0);
-  const cellPadding = rowCount > 20 ? "2.5px 6px" : rowCount > 15 ? "3px 6px" : "4px 8px";
-  const cellFontSize = rowCount > 20 ? 10.5 : rowCount > 15 ? 11 : 12;
-  const headerPadding = rowCount > 20 ? "3px 6px" : "5px 8px";
-  const headerFontSize = rowCount > 20 ? 10 : 11;
+  const cellPadding = isPortrait ? "3.5px 6px" : (rowCount > 20 ? "2.5px 6px" : rowCount > 15 ? "3px 6px" : "4px 8px");
+  const cellFontSize = isPortrait ? 11 : (rowCount > 20 ? 10.5 : rowCount > 15 ? 11 : 12);
+  const headerPadding = isPortrait ? "4px 6px" : (rowCount > 20 ? "3px 6px" : "5px 8px");
+  const headerFontSize = isPortrait ? 10.5 : (rowCount > 20 ? 10 : 11);
 
   const cellL = (extra = {}) => ({ background: LEFT_BG, border: "1px solid #000", padding: cellPadding, fontSize: cellFontSize, ...extra });
   const cellB = (extra = {}) => ({ background: BANK_BG, border: "1px solid #000", padding: cellPadding, textAlign: "right", fontSize: cellFontSize, ...extra });
   const cellD = (extra = {}) => ({ background: DFTC_BG, border: "1px solid #000", padding: cellPadding, textAlign: "right", fontSize: cellFontSize, ...extra });
 
   return (
-    <div className="font-sans bg-white px-5 py-3 w-full max-w-[1020px] mx-auto box-border" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+    <div
+      className="font-sans bg-white px-5 py-3 w-full mx-auto box-border"
+      style={{
+        fontFamily: "Arial, Helvetica, sans-serif",
+        width: "100%",
+        maxWidth: isPortrait ? "760px" : "1020px"
+      }}
+    >
       {isFirst && (
         <div style={{ textAlign: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: "bold", textTransform: "uppercase", lineHeight: 1.3 }}>Davao Food Terminal Complex Price Monitoring</div>
@@ -240,11 +249,12 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
 }
 
 function PDFPreviewContent({ personnel, reportDate, categories, orientation = "landscape" }) {
-  const pages = PDF_PAGE_CATEGORY_GROUPS.map((group) =>
+  const isPortrait = orientation === "portrait";
+  const groupList = isPortrait ? PDF_PORTRAIT_PAGE_CATEGORY_GROUPS : PDF_PAGE_CATEGORY_GROUPS;
+  const pages = groupList.map((group) =>
     group.map((n) => categories.find((c) => c.name === n)).filter(Boolean)
   );
   const total = pages.length;
-  const isPortrait = orientation === "portrait";
 
   return (
     <DFTCPreviewZoomContainer label={`PDF Document (Long ${isPortrait ? "Portrait" : "Landscape"})`}>
@@ -264,6 +274,7 @@ function PDFPreviewContent({ personnel, reportDate, categories, orientation = "l
                 isLast={idx === total - 1}
                 reportDate={reportDate}
                 personnel={idx === total - 1 ? personnel : void 0}
+                orientation={orientation}
               />
             </div>
           </div>
@@ -491,7 +502,7 @@ function DFTCFilePreview({ file, onClose }) {
       const marginY = 12;
       const targetW = pdfW - marginX * 2;
 
-      const total = PDF_PAGE_CATEGORY_GROUPS.length;
+      const total = activeCategoryGroups.length;
       const canvases = [];
       for (let i = 0; i < total; i++) {
         const el = pageRefs.current[i];
@@ -503,7 +514,7 @@ function DFTCFilePreview({ file, onClose }) {
       if (canvases.length > 0) {
         // Uniform scale based on targetW so every single page renders at the exact same table width
         // with clean, balanced margins identical to Arrival Volume.
-        const baseCanvasWidth = canvases[0]?.width || 2040;
+        const baseCanvasWidth = canvases[0]?.width || (isPortrait ? 1520 : 2040);
         const uniformRatio = targetW / baseCanvasWidth;
 
         for (let i = 0; i < canvases.length; i++) {
@@ -729,7 +740,10 @@ function DFTCFilePreview({ file, onClose }) {
     Number(file.records) || 0
   );
 
-  const activeCategoryGroups = format === "PDF" ? PDF_PAGE_CATEGORY_GROUPS : IMG_PAGE_CATEGORY_GROUPS;
+  const isPortrait = orientation === "portrait";
+  const activeCategoryGroups = format === "PDF"
+    ? (isPortrait ? PDF_PORTRAIT_PAGE_CATEGORY_GROUPS : PDF_PAGE_CATEGORY_GROUPS)
+    : IMG_PAGE_CATEGORY_GROUPS;
 
   return (
     <DFTCReportShell
@@ -762,7 +776,11 @@ function DFTCFilePreview({ file, onClose }) {
         activeCategoryGroups.map((group, idx) => {
           const cats = group.map((n) => resolvedCategories.find((c) => c.name === n)).filter(Boolean);
           return (
-            <div key={idx} ref={(el) => { pageRefs.current[idx] = el; }}>
+            <div
+              key={idx}
+              ref={(el) => { pageRefs.current[idx] = el; }}
+              style={{ width: isPortrait ? 760 : 1020 }}
+            >
               <DFTCReportPage
                 pageIndex={idx}
                 totalPages={activeCategoryGroups.length}
@@ -771,6 +789,7 @@ function DFTCFilePreview({ file, onClose }) {
                 isLast={idx === activeCategoryGroups.length - 1}
                 reportDate={reportingDate}
                 personnel={idx === activeCategoryGroups.length - 1 ? personnel : void 0}
+                orientation={orientation}
               />
             </div>
           );

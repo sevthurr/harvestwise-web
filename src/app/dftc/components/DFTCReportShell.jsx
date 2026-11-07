@@ -26,7 +26,7 @@ function DFTCReportShell({
   title,
   subtitle,
   onClose,
-  metaFields,
+  metaFields = [],
   formats = ["PDF", "Excel", "IMG"],
   format,
   onFormatChange,
@@ -103,7 +103,7 @@ function DFTCReportShell({
           ))}
         </div>
 
-        {showOrientation && onOrientationChange && (
+        {showOrientation && format === "PDF" && onOrientationChange && (
           <div className="flex items-center gap-1 bg-[var(--hw-neutral-100)] p-0.5 rounded-xl text-[12px]">
             <button
               type="button"
@@ -113,7 +113,7 @@ function DFTCReportShell({
                   ? "bg-white text-[var(--hw-green-800)] shadow-xs font-semibold"
                   : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
               }`}
-              title="A4 Landscape Orientation"
+              title="Long Landscape (13 x 8.5 in)"
             >
               Landscape
             </button>
@@ -125,7 +125,7 @@ function DFTCReportShell({
                   ? "bg-white text-[var(--hw-green-800)] shadow-xs font-semibold"
                   : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
               }`}
-              title="A4 Portrait Orientation"
+              title="Long Portrait (8.5 x 13 in)"
             >
               Portrait
             </button>

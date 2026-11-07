@@ -105,13 +105,15 @@ function ArrivalVolumeReportPage({
   personnel,
   totalVolume,
   totalFarmVolume,
-  totalOtherVolume
+  totalOtherVolume,
+  orientation = "landscape"
 }) {
+  const isPortrait = orientation === "portrait";
   const cellBorder = { border: `1px solid ${BORDER_COLOR}` };
   const cellBase = (extra = {}) => ({
     ...cellBorder,
-    padding: "4px 8px",
-    fontSize: 12,
+    padding: isPortrait ? "3.5px 6px" : "4px 8px",
+    fontSize: isPortrait ? 11 : 12,
     fontFamily: "Tahoma, Arial, sans-serif",
     ...extra
   });
@@ -119,8 +121,8 @@ function ArrivalVolumeReportPage({
   const cellHeader = (bg, extra = {}) => ({
     ...cellBorder,
     background: bg,
-    padding: "5px 6px",
-    fontSize: 11,
+    padding: isPortrait ? "4px 6px" : "5px 6px",
+    fontSize: isPortrait ? 10.5 : 11,
     fontWeight: "bold",
     textAlign: "center",
     verticalAlign: "middle",
@@ -130,8 +132,12 @@ function ArrivalVolumeReportPage({
 
   return (
     <div
-      className="bg-white px-5 py-4 w-full max-w-[1020px] mx-auto box-border"
-      style={{ fontFamily: "Tahoma, Arial, sans-serif", width: "100%", maxWidth: "1020px" }}
+      className="bg-white px-5 py-4 w-full mx-auto box-border"
+      style={{
+        fontFamily: "Tahoma, Arial, sans-serif",
+        width: "100%",
+        maxWidth: isPortrait ? "760px" : "1020px"
+      }}
     >
       {isFirst && (
         <div style={{ textAlign: "center", marginBottom: 14 }}>
@@ -367,8 +373,9 @@ function DFTCArrivalPreview({ file, onClose }) {
     return out;
   }, [rows]);
 
-  // For PDF format: comfortable un-cramped rows per page (18 rows/page in landscape)
-  const pdfRowsPerPage = 18;
+  // For PDF format: comfortable un-cramped rows per page (18 rows/page in landscape, 30 rows/page in portrait)
+  const isPortrait = orientation === "portrait";
+  const pdfRowsPerPage = isPortrait ? 30 : 18;
   const totalPdfPages = Math.max(1, Math.ceil(rows.length / pdfRowsPerPage));
   const pdfPages = useMemo(() => {
     const out = [];
@@ -443,7 +450,7 @@ function DFTCArrivalPreview({ file, onClose }) {
       }
 
       if (canvases.length > 0) {
-        const baseCanvasWidth = canvases[0]?.width || 2040;
+        const baseCanvasWidth = canvases[0]?.width || (isPortrait ? 1520 : 2040);
         const maxCanvasHeight = Math.max(...canvases.map((c) => c.height));
 
         const uniformRatio = Math.min(maxW / baseCanvasWidth, maxH / maxCanvasHeight);
@@ -856,6 +863,7 @@ function DFTCArrivalPreview({ file, onClose }) {
         totalVolume={totalVolume}
         totalFarmVolume={totalFarmVolume}
         totalOtherVolume={totalOtherVolume}
+        orientation={orientation}
       />
     );
   }
@@ -1002,7 +1010,11 @@ function DFTCArrivalPreview({ file, onClose }) {
       onRetryDownload={() => setDlState("idle")}
       renderHiddenPages={() =>
         activeHiddenPages.map((page, idx) => (
-          <div key={idx} ref={(el) => { pageRefs.current[idx] = el; }}>
+          <div
+            key={idx}
+            ref={(el) => { pageRefs.current[idx] = el; }}
+            style={{ width: isPortrait ? 760 : 1020 }}
+          >
             {renderPage(page, idx, activeHiddenTotal)}
           </div>
         ))
