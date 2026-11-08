@@ -164,7 +164,10 @@ function buildProductionInsight(name, classification, quarter, locationLabel, av
       : `Based on historical production, no strong seasonal warning is present. Review prices, arrivals, weather, and costs before planting.`
   };
 }
-const DEFAULT_FILTERS = { view: "quarterly", location: "davao-city", quarter: "Q3" };
+function currentQuarter() {
+  return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+}
+const DEFAULT_FILTERS = { view: "quarterly", location: "all", quarter: currentQuarter() };
 const FilterDrawer = ({ open, filters, onClose, onApply }) => {
   const { t } = useLanguage();
   const [draft, setDraft] = useState(filters);

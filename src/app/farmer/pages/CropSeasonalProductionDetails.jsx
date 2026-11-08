@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 import {
@@ -24,6 +24,10 @@ const LEVEL_CLASS = {
   Moderate: "text-blue-700",
   Low: "text-emerald-700",
 };
+
+function currentQuarter() {
+  return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+}
 
 function quarterForDate(dateValue) {
   const date = dateValue
@@ -51,8 +55,9 @@ function CropSeasonalProductionDetailsPage() {
   const { t } = useLanguage();
   const { crops = [], loading: cropsLoading } = useCrops();
   const crop = crops.find((item) => item.id === cropId);
-  const [selectedQuarter, setSelectedQuarter] = useState(null);
-  const quarter = selectedQuarter || quarterForDate(crop?.harvestDate || crop?.plantingDate);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter);
+  const [selectedLocation, setSelectedLocation] = useState("all");
+  const quarter = selectedQuarter;
   const commodityId = crop?.commodityId || crop?.commodity;
   const productionQuery = useQuery({
     queryKey: ["farmer", "seasonal-production", commodityId, quarter],
@@ -91,13 +96,41 @@ function CropSeasonalProductionDetailsPage() {
   const differencePercent = difference != null && overallAverage > 0
     ? (difference / overallAverage) * 100
     : null;
-  const quarterRecords = (data?.records || [])
-    .filter((record) => record.reference_quarter === quarter && record.volume_produced != null)
-    .map((record) => ({
-      year: String(record.reference_year),
-      production_mt: Number(record.volume_produced),
-    }))
-    .sort((a, b) => Number(a.year) - Number(b.year));
+
+  const locations = useMemo(() => {
+    const locSet = new Set([
+      ...(data?.source_areas || []).map((area) => area.name),
+      ...(data?.geo_records || []).map((r) => r.location),
+    ]);
+    return [...locSet].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [data?.source_areas, data?.geo_records]);
+
+  const quarterRecords = useMemo(() => {
+    if (selectedLocation === "all") {
+      return (data?.records || [])
+        .filter((record) => record.reference_quarter === quarter && record.volume_produced != null)
+        .map((record) => ({
+          year: String(record.reference_year),
+          production_mt: Number(record.volume_produced),
+        }))
+        .sort((a, b) => Number(a.year) - Number(b.year));
+    }
+    return (data?.geo_records || [])
+      .filter((record) => record.location === selectedLocation && record.reference_quarter === quarter && record.volume_produced != null)
+      .map((record) => ({
+        year: String(record.reference_year),
+        production_mt: Number(record.volume_produced),
+      }))
+      .sort((a, b) => Number(a.year) - Number(b.year));
+  }, [data?.records, data?.geo_records, selectedLocation, quarter]);
+
+  const effectiveSeasonalAverage = useMemo(() => {
+    if (selectedLocation === "all") return historicalAverage;
+    if (quarterRecords.length === 0) return null;
+    const sum = quarterRecords.reduce((acc, r) => acc + r.production_mt, 0);
+    return sum / quarterRecords.length;
+  }, [selectedLocation, historicalAverage, quarterRecords]);
+
   const quarterlyComparison = (data?.quarterly_profiles || [])
     .filter((profile) => profile.years_available > 0 && profile.average_production_mt != null)
     .map((profile) => ({
@@ -189,9 +222,35 @@ function CropSeasonalProductionDetailsPage() {
       </section>
 
       <section className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--hw-neutral-900)]">Historical production by year · {quarter}</h2>
-          <p className="text-xs text-[var(--hw-neutral-600)]">Annual records for the selected quarter, compared with its historical average.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--hw-neutral-900)]">Historical production by year · {quarter}</h2>
+            <p className="text-xs text-[var(--hw-neutral-600)]">
+              {selectedLocation === "all"
+                ? "Annual records for the selected quarter, compared with its historical average."
+                : `Annual records for ${selectedLocation} · ${quarter}`}
+            </p>
+          </div>
+          {locations.length > 0 && (
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <label htmlFor="crop-seasonal-source-filter" className="text-xs font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">
+                Source:
+              </label>
+              <select
+                id="crop-seasonal-source-filter"
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="text-xs font-medium text-[var(--hw-neutral-800)] bg-white border border-[var(--hw-neutral-200)] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] shadow-xs"
+              >
+                <option value="all">All Locations (Overall)</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         {productionQuery.isLoading ? (
           <p className="py-12 text-center text-sm text-[var(--hw-neutral-600)]">Loading production history…</p>
@@ -205,8 +264,8 @@ function CropSeasonalProductionDetailsPage() {
                 <XAxis dataKey="year" tick={{ fill: "var(--hw-neutral-500)", fontSize: 10 }} tickLine={false} />
                 <YAxis tick={{ fill: "var(--hw-neutral-500)", fontSize: 10 }} tickLine={false} width={64} tickFormatter={(value) => Number(value).toLocaleString()} />
                 <Tooltip formatter={(value) => [formatMt(value), "Production"]} labelFormatter={(year) => `Year ${year}`} />
-                {historicalAverage != null && (
-                  <ReferenceLine y={historicalAverage} stroke="#D97706" strokeDasharray="5 4" label={{ value: "Seasonal average", fill: "#92400E", fontSize: 10 }} />
+                {effectiveSeasonalAverage != null && (
+                  <ReferenceLine y={effectiveSeasonalAverage} stroke="#D97706" strokeDasharray="5 4" label={{ value: "Seasonal average", fill: "#92400E", fontSize: 10 }} />
                 )}
                 <Bar dataKey="production_mt" name="Production" fill="#78A943" radius={[4, 4, 0, 0]} />
               </BarChart>

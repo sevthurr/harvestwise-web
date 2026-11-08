@@ -13,6 +13,10 @@ import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { ADVISORY_CODES, normalizeAdvisoryCode } from "../utils/farmerCodes";
 
+function currentQuarter() {
+  return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+}
+
 function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
   const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
@@ -62,11 +66,7 @@ function FactorDetailPage() {
     (commodityId && !commodityId.startsWith("COM-") ? (commodityId.charAt(0).toUpperCase() + commodityId.slice(1)) : null) ||
     t("farmer.common.unspecified_crop", {}, "Tanom");
 
-  const selectedQuarter = state?.selectedQuarter || quarterForDate(
-    state?.resultData?.harvestDate
-      || state?.resultData?.expected_harvest_date
-      || state?.resultData?.expectedHarvestDate
-  );
+  const selectedQuarter = state?.selectedQuarter || currentQuarter();
 
   const resolvedCommodityId = useMemo(() => {
     if (!commodityId) return null;
@@ -226,6 +226,8 @@ function FactorDetailPage() {
     selectedQuarter,
     grandAverageQuarterlyMt: productionSummary?.grand_average_quarterly_mt ?? null,
     records: productionSummary?.records || [],
+    geoRecords: productionSummary?.geo_records || [],
+    sourceAreas: productionSummary?.source_areas || [],
     sources: (productionSummary?.source_areas || []).map((area) => ({
       name: area.name,
       value: Number(area.value),

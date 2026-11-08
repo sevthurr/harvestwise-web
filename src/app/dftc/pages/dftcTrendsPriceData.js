@@ -109,6 +109,11 @@ function buildTableRows(varietyDetails, commodity, preset, customFrom, customTo)
         date: isoDate(row.price_date),
         variety: entry.varietyKey,
         price,
+        change: row.change,
+        change_pct: row.change_pct,
+        volatility_reason: row.volatility_reason,
+        volatility_notes: row.volatility_notes,
+        is_volatility_flagged: row.is_volatility_flagged,
       });
     }
   }

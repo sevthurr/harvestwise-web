@@ -37,6 +37,7 @@ import {
 } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { isHWCommodity } from "../../global/data/commodities";
 
 const TwoToneStormIcon = ({ className }) => (
   <svg
@@ -766,11 +767,16 @@ function RecommendationPage() {
   const localizedMonth = t(`farmer.calendar.months.${rawMonthName.toLowerCase()}`, {}, rawMonthName);
   const selMarkers = selectedDay !== null ? dayMarkers[selectedDay] ?? null : null;
 
-  // Filter ONLY Recommended crops for the "Good crops to plant" section
+  // Filter ONLY Recommended crops for the "Good crops to plant" section (Top 10 commodities only)
   const recommendedCrops = useMemo(() => {
-    const list = rawRecommendations.filter(
-      (rec) => rec.advisory_category === "Recommended"
-    );
+    const list = rawRecommendations.filter((rec) => {
+      if (rec.advisory_category !== "Recommended") return false;
+      const cname = rec.commodity_name || rec.commodityName;
+      const cid = rec.commodity_id || rec.commodityId;
+      if (rec.is_top10 !== undefined && !rec.is_top10) return false;
+      if (rec.isTop10 !== undefined && !rec.isTop10) return false;
+      return isHWCommodity(cname) || isHWCommodity(cid);
+    });
 
     // Deduplicate by commodity name or base id
     const seen = new Set();
@@ -779,6 +785,7 @@ function RecommendationPage() {
     for (const rec of list) {
       const cid = rec.commodity_id;
       const cname = rec.commodity_name || rec.commodityId || "Crop";
+      if (!isHWCommodity(cname) && !isHWCommodity(cid)) continue;
       if (seen.has(cname)) continue;
       seen.add(cname);
 

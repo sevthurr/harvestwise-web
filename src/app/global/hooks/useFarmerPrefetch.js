@@ -250,7 +250,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
   if (Array.isArray(bundle.price_detail)) {
     bundle.price_detail.forEach((entry) => {
       const camel = toCamelCase(entry);
-      if (!camel.commodityId || !camel.selectedPriceType || !preferredMatcher.isPreferred(camel)) return;
+      if (!camel.commodityId || !camel.selectedPriceType || (preferredMatcher.count > 0 && !preferredMatcher.isPreferred(camel))) return;
       // Same transformation the page's queryFn applies, so a bundle hit and a
       // network hit are byte-identical in the cache.
       queryClient.setQueryData(
@@ -271,7 +271,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
       // because CommodityDetail.jsx camelCases inside its own queryFn.
       const commodityId = entry.commodity_id;
       const priceTypeKey = entry.selected_price_type;
-      if (!commodityId || !priceTypeKey || !preferredMatcher.isPreferred(entry)) return;
+      if (!commodityId || !priceTypeKey || (preferredMatcher.count > 0 && !preferredMatcher.isPreferred(entry))) return;
       // Selected price type, not BUNDLE_TREND_PRICE_TYPE: the server builds this
       // section from get_price_detail, which echoes back the type it was asked
       // for, and keying off the echo keeps the two sides from drifting.
@@ -324,11 +324,11 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
   const priceItems = [...(bundle.price_trends || []), ...supportedItems];
   const preferredPriceIds = [...new Set(priceItems
-    .filter((item) => preferredMatcher.isPreferred(item))
+    .filter((item) => preferredMatcher.count === 0 || preferredMatcher.isPreferred(item))
     .map((item) => item.commodity_id || item.commodityId)
     .filter(Boolean))];
   const preferredCropIds = [...new Set((bundle.crop_plans || [])
-    .filter((plan) => preferredMatcher.isPreferred(plan))
+    .filter((plan) => preferredMatcher.count === 0 || preferredMatcher.isPreferred(plan))
     .map((plan) => plan.commodity_id || plan.commodityId)
     .filter(Boolean))];
   const supportedVarietyById = new Map(
@@ -593,6 +593,11 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     farmerOfflineLoadPromise = null;
   });
   return farmerOfflineLoadPromise;
+}
+
+export function resetFarmerOfflineDedupeForTests() {
+  lastFarmerOfflineLoadAt = 0;
+  farmerOfflineLoadPromise = null;
 }
 
 export function useFarmerPrefetch() {

@@ -608,7 +608,9 @@ export const en = {
         forecast_price_change_label: "Forecast Price Change",
         historical_seasonal_avg_label: "Historical Seasonal Average Price",
         historical_change_label: "Historical Price Change",
-        price_reference_notice: "Price reference: ₱{price}/kg (baseline: ₱{baseline}/kg)."
+        price_reference_notice: "Price reference: ₱{price}/kg (baseline: ₱{baseline}/kg).",
+        forecast_historical_only_notice: "Forecasts are based on past price trends alone. Actual market prices may vary due to weather, fuel, and supply changes.",
+        forecast_historical_disclaimer_short: "Forecasts are based on past price trends alone. Actual market prices may vary due to weather, fuel, and supply changes."
       },
 
 

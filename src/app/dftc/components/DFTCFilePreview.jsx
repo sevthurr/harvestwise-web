@@ -3,12 +3,21 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
-import { PAGE_CATEGORY_GROUPS } from "./dftcReportCategories";
+import { buildReportExportFilename } from "./dftcReportExport";
+import {
+  PAGE_CATEGORY_GROUPS,
+  IMG_PAGE_CATEGORY_GROUPS,
+  PDF_PAGE_CATEGORY_GROUPS,
+  PDF_PORTRAIT_PAGE_CATEGORY_GROUPS
+} from "./dftcReportCategories";
 import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
+import { DFTCFacebookImageCard } from "./DFTCFacebookImageCard";
+import { renderFBCardToCanvas } from "./dftcFacebookImageCanvas";
 
-const LEFT_BG = "#c6efce";
-const BANK_BG = "#ffeb9c";
-const DFTC_BG = "#dae8fc";
+const LEFT_BG = "#d9ead3";
+const BANK_BG = "#fff2cc";
+const DFTC_BG = "#cfe2f3";
+const CATEGORY_BG = "#cbd5e1";
 
 const USER_ID_TO_NAME = {
   "USR-0001": "MARIA S. SANTOS"
@@ -53,21 +62,28 @@ function formatDisplayDateShort(dateStr) {
   return String(dateStr);
 }
 
+function getDayName(dateStr, fallbackStr) {
+  for (const s of [dateStr, fallbackStr]) {
+    if (!s) continue;
+    try {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-US", { weekday: "long" });
+      }
+    } catch {}
+  }
+  return new Date().toLocaleDateString("en-US", { weekday: "long" });
+}
+
 function getEncodedByName(file) {
   if (file.encodedBy) return file.encodedBy;
   if (file.encodedUserId && USER_ID_TO_NAME[file.encodedUserId]) {
     return USER_ID_TO_NAME[file.encodedUserId];
   }
-  return file.encodedUserId || "MARIA S. SANTOS";
+  return file.encodedUserId || "IVY JOYCE P. BOLODO";
 }
 
-// ── Real-data lookup helpers (preview prices come from the API, not mock rows) ──
-
 function normalizeKey(str) {
-  // Fold diacritics before stripping them: the workbook spells a Saging variety
-  // "señorita" and the seeded row spells it "Senorita", and a bare [^a-z0-9]
-  // strip turns the first into "se orita" but the second into "senorita" — two
-  // different keys for one variety, so the row silently lost its price.
   return (str || "")
     .toLowerCase()
     .normalize("NFD")
@@ -93,10 +109,6 @@ function buildRowsLookup(rows) {
   return lookup;
 }
 
-// `variety` is the raw seeded name, exactly as the preview payload carries it.
-// It is deliberately NOT a display descriptor: a descriptor like "(Wakamini)" only
-// normalises back to the same key by accident, and reading the wrong property here
-// blanked every named variety and left the NULL-variety rows as the only survivors.
 function resolvePriceRow(commodity, variety, lookup) {
   const rows = lookup.get(normalizeKey(commodity.name));
   if (!rows || rows.length === 0) return null;
@@ -104,14 +116,8 @@ function resolvePriceRow(commodity, variety, lookup) {
   if (vKey) {
     const exact = rows.find((r) => vKey === normalizeKey(r.variety));
     if (exact) return exact;
-    // A descriptor with no matching variety resolves to nothing. It used to fall
-    // back to the first variety row, which printed another variety's price under
-    // this row's label — Repolyo green and red cabbage both showed Wakamini,
-    // Ampalaya (white/pale) showed Galaxy. A blank is honest; a borrowed number
-    // is not.
     return null;
   }
-  // No descriptor: the commodity-level row is the only correct answer.
   return rows.find((r) => !normalizeKey(r.variety)) ?? null;
 }
 
@@ -124,7 +130,7 @@ function triggerDownload(url, filename) {
   document.body.removeChild(a);
 }
 
-function ReportColumnHeaders({ headerPadding = "5px 8px", headerFontSize = 11 }) {
+function ColumnHeaderRows({ headerPadding = "5px 8px", headerFontSize = 11 }) {
   const thBase = (bg, extra = {}) => ({
     background: bg,
     border: "1px solid #000",
@@ -136,7 +142,7 @@ function ReportColumnHeaders({ headerPadding = "5px 8px", headerFontSize = 11 })
     ...extra
   });
   return (
-    <thead>
+    <>
       <tr>
         <th rowSpan={2} style={thBase(LEFT_BG)}>No.</th>
         <th rowSpan={2} style={thBase(LEFT_BG)}>Commodity</th>
@@ -146,28 +152,45 @@ function ReportColumnHeaders({ headerPadding = "5px 8px", headerFontSize = 11 })
       </tr>
       <tr>
         {["Landing", "Wholesale", "Retail"].map((h) => (
-          <th key={h} style={{ background: BANK_BG, border: "1px solid #000", padding: headerPadding, textAlign: "center", fontSize: headerFontSize }}>{h}</th>
+          <th key={h} style={{ background: BANK_BG, border: "1px solid #000", padding: headerPadding, textAlign: "center", fontSize: headerFontSize, fontWeight: "bold" }}>{h}</th>
         ))}
         {["Wholesale", "Retail"].map((h) => (
-          <th key={h} style={{ background: DFTC_BG, border: "1px solid #000", padding: headerPadding, textAlign: "center", fontSize: headerFontSize }}>{h}</th>
+          <th key={h} style={{ background: DFTC_BG, border: "1px solid #000", padding: headerPadding, textAlign: "center", fontSize: headerFontSize, fontWeight: "bold" }}>{h}</th>
         ))}
       </tr>
+    </>
+  );
+}
+
+function ReportColumnHeaders({ headerPadding = "5px 8px", headerFontSize = 11 }) {
+  return (
+    <thead>
+      <ColumnHeaderRows headerPadding={headerPadding} headerFontSize={headerFontSize} />
     </thead>
   );
 }
 
-function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, reportDate, personnel }) {
-  const cellPadding = "4px 8px";
-  const cellFontSize = 12;
-  const headerPadding = "5px 8px";
-  const headerFontSize = 11;
+function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, reportDate, personnel, orientation = "landscape" }) {
+  const isPortrait = orientation === "portrait";
+  const rowCount = categories.reduce((sum, cat) => sum + (cat.commodities || []).reduce((cSum, com) => cSum + (com.variants?.length || 1), 0), 0);
+  const cellPadding = isPortrait ? "3.5px 6px" : (rowCount > 20 ? "2.5px 6px" : rowCount > 15 ? "3px 6px" : "4px 8px");
+  const cellFontSize = isPortrait ? 11 : (rowCount > 20 ? 10.5 : rowCount > 15 ? 11 : 12);
+  const headerPadding = isPortrait ? "4px 6px" : (rowCount > 20 ? "3px 6px" : "5px 8px");
+  const headerFontSize = isPortrait ? 10.5 : (rowCount > 20 ? 10 : 11);
 
   const cellL = (extra = {}) => ({ background: LEFT_BG, border: "1px solid #000", padding: cellPadding, fontSize: cellFontSize, ...extra });
   const cellB = (extra = {}) => ({ background: BANK_BG, border: "1px solid #000", padding: cellPadding, textAlign: "right", fontSize: cellFontSize, ...extra });
   const cellD = (extra = {}) => ({ background: DFTC_BG, border: "1px solid #000", padding: cellPadding, textAlign: "right", fontSize: cellFontSize, ...extra });
 
   return (
-    <div className="font-sans bg-white p-4 md:p-6 w-full max-w-[960px] mx-auto box-border" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+    <div
+      className="font-sans bg-white px-5 py-3 w-full mx-auto box-border"
+      style={{
+        fontFamily: "Arial, Helvetica, sans-serif",
+        width: "100%",
+        maxWidth: isPortrait ? "760px" : "1020px"
+      }}
+    >
       {isFirst && (
         <div style={{ textAlign: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 15, fontWeight: "bold", textTransform: "uppercase", lineHeight: 1.3 }}>Davao Food Terminal Complex Price Monitoring</div>
@@ -177,8 +200,8 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
       )}
       <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", fontSize: cellFontSize }}>
         <colgroup>
-          <col style={{ width: "5%" }} />
-          <col style={{ width: "35%" }} />
+          <col style={{ width: "6%" }} />
+          <col style={{ width: "34%" }} />
           <col style={{ width: "10%" }} />
           <col style={{ width: "10%" }} />
           <col style={{ width: "10%" }} />
@@ -188,12 +211,28 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
         </colgroup>
         <ReportColumnHeaders headerPadding={headerPadding} headerFontSize={headerFontSize} />
         <tbody>
-          {categories.map((cat) => (
+          {categories.map((cat, catIdx) => (
             <React.Fragment key={cat.name}>
+              {catIdx > 0 && cat.name === "Rootcrops" && (
+                <ColumnHeaderRows headerPadding={headerPadding} headerFontSize={headerFontSize} />
+              )}
               <tr>
-                <td colSpan={3} style={{ ...cellL(), fontWeight: "bold", fontStyle: "italic", textDecoration: "underline", textAlign: "left" }}>{cat.name}</td>
-                <td style={cellB()} /><td style={cellB()} /><td style={cellB()} />
-                <td style={cellD()} /><td style={cellD()} />
+                <td
+                  colSpan={8}
+                  style={{
+                    background: "#cbd5e1",
+                    border: "1px solid #000",
+                    padding: headerPadding,
+                    fontWeight: "bold",
+                    fontStyle: "italic",
+                    textTransform: "uppercase",
+                    fontSize: cellFontSize + 0.5,
+                    textAlign: "left",
+                    letterSpacing: "0.5px"
+                  }}
+                >
+                  {cat.name}
+                </td>
               </tr>
               {cat.commodities.map((com) =>
                 com.variants.map((v, vi) => (
@@ -220,51 +259,55 @@ function DFTCReportPage({ pageIndex, totalPages, categories, isFirst, isLast, re
         </tbody>
       </table>
       {isLast && personnel && (
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 8, borderTop: "1px solid #000" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20, paddingTop: 10, borderTop: "1px solid #000" }}>
           <div>
             <div style={{ fontSize: 10, marginBottom: 1 }}>Encoded by:</div>
             <div style={{ fontSize: 11, fontWeight: "bold", textDecoration: "underline" }}>{personnel.encodedBy}</div>
             <div style={{ fontSize: 10 }}>{personnel.encodedByRole}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 10, marginBottom: 1 }}>Prepared by:</div>
-            <div style={{ fontSize: 11, fontWeight: "bold", textDecoration: "underline" }}>{personnel.preparedBy}</div>
-            <div style={{ fontSize: 10 }}>{personnel.preparedByRole}</div>
+            <div style={{ fontSize: 10, marginBottom: 1 }}>Reviewed by:</div>
+            <div style={{ fontSize: 11, fontWeight: "bold", textDecoration: "underline" }}>{personnel.reviewedBy || personnel.preparedBy}</div>
+            <div style={{ fontSize: 10 }}>{personnel.reviewedByRole || personnel.preparedByRole}</div>
           </div>
         </div>
       )}
-      <div style={{ textAlign: "right", fontSize: 10, marginTop: 6, color: "#555" }}>Page {pageIndex + 1} of {totalPages}</div>
+      <div style={{ textAlign: "right", fontSize: 10, marginTop: 8, color: "#555" }}>Page {pageIndex + 1} of {totalPages}</div>
     </div>
   );
 }
 
-function PDFPreviewContent({ personnel, reportDate, categories }) {
-  const total = PAGE_CATEGORY_GROUPS.length;
+function PDFPreviewContent({ personnel, reportDate, categories, orientation = "landscape" }) {
+  const isPortrait = orientation === "portrait";
+  const groupList = isPortrait ? PDF_PORTRAIT_PAGE_CATEGORY_GROUPS : PDF_PAGE_CATEGORY_GROUPS;
+  const pages = groupList.map((group) =>
+    group.map((n) => categories.find((c) => c.name === n)).filter(Boolean)
+  );
+  const total = pages.length;
+
   return (
-    <DFTCPreviewZoomContainer label="PDF Document (A4 Landscape)">
-      <div className="space-y-5 w-full max-w-[960px] mx-auto">
-        {PAGE_CATEGORY_GROUPS.map((group, idx) => {
-          const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
-          return (
-            <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
-                <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {total}</span>
-                <span className="text-[12px] text-[var(--hw-neutral-800)]">A4 Landscape</span>
-              </div>
-              <div className="w-full">
-                <DFTCReportPage
-                  pageIndex={idx}
-                  totalPages={total}
-                  categories={cats}
-                  isFirst={idx === 0}
-                  isLast={idx === total - 1}
-                  reportDate={reportDate}
-                  personnel={idx === total - 1 ? personnel : void 0}
-                />
-              </div>
+    <DFTCPreviewZoomContainer label={`PDF Document (Long ${isPortrait ? "Portrait" : "Landscape"})`}>
+      <div className={`space-y-5 w-full ${isPortrait ? "max-w-[760px]" : "max-w-[1020px]"} mx-auto`}>
+        {pages.map((cats, idx) => (
+          <div key={idx} className="bg-white shadow-sm rounded-xl border border-[var(--hw-neutral-300)] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 bg-[var(--hw-neutral-100)] border-b border-[var(--hw-neutral-200)]">
+              <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">Page {idx + 1} of {total}</span>
+              <span className="text-[12px] text-[var(--hw-neutral-800)]">Long {isPortrait ? "Portrait" : "Landscape"}</span>
             </div>
-          );
-        })}
+            <div className="w-full">
+              <DFTCReportPage
+                pageIndex={idx}
+                totalPages={total}
+                categories={cats}
+                isFirst={idx === 0}
+                isLast={idx === total - 1}
+                reportDate={reportDate}
+                personnel={idx === total - 1 ? personnel : void 0}
+                orientation={orientation}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </DFTCPreviewZoomContainer>
   );
@@ -287,7 +330,7 @@ function ExcelPreviewContent({ personnel, reportDate, reportDateShort, categorie
         <div className="bg-white">
           {PAGE_CATEGORY_GROUPS.map((group, idx) => {
             const cats = group.map((n) => categories.find((c) => c.name === n)).filter(Boolean);
-            return <DFTCReportPage key={idx} pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} />;
+            return <DFTCReportPage key={idx} pageIndex={idx} totalPages={total} categories={cats} isFirst={idx === 0} isLast={idx === total - 1} reportDate={reportDate} personnel={idx === total - 1 ? personnel : void 0} orientation="landscape" />;
           })}
         </div>
         <div className="bg-[#f3f3f3] border-t border-[var(--hw-neutral-300)] px-3 py-1.5 flex items-center gap-1">
@@ -299,8 +342,8 @@ function ExcelPreviewContent({ personnel, reportDate, reportDateShort, categorie
 }
 
 function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
-  const total = PAGE_CATEGORY_GROUPS.length;
-  const currentCats = PAGE_CATEGORY_GROUPS[page].map((name) => categories.find((c) => c.name === name)).filter(Boolean);
+  const total = IMG_PAGE_CATEGORY_GROUPS.length; // strictly 4
+  const currentCats = IMG_PAGE_CATEGORY_GROUPS[page].map((name) => categories.find((c) => c.name === name)).filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -329,15 +372,14 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
         </button>
       </div>
 
-      <DFTCPreviewZoomContainer label={`Image ${page + 1} of ${total}`}>
-        <DFTCReportPage
+      <DFTCPreviewZoomContainer label={`Facebook Image ${page + 1} of ${total}`}>
+        <DFTCFacebookImageCard
           pageIndex={page}
           totalPages={total}
           categories={currentCats}
-          isFirst={page === 0}
-          isLast={page === total - 1}
           reportDate={reportDate}
           personnel={page === total - 1 ? personnel : void 0}
+          isLast={page === total - 1}
         />
       </DFTCPreviewZoomContainer>
 
@@ -348,9 +390,9 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
           <p className="text-[12px] text-[var(--hw-neutral-700)]">{personnel.encodedByRole}</p>
         </div>
         <div className="p-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl">
-          <p className="text-[11px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide mb-1">Prepared by</p>
-          <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{personnel.preparedBy}</p>
-          <p className="text-[12px] text-[var(--hw-neutral-700)]">{personnel.preparedByRole}</p>
+          <p className="text-[11px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wide mb-1">Reviewed by</p>
+          <p className="text-[13px] font-bold text-[var(--hw-neutral-900)]">{personnel.reviewedBy || personnel.preparedBy}</p>
+          <p className="text-[12px] text-[var(--hw-neutral-700)]">{personnel.reviewedByRole || personnel.preparedByRole}</p>
         </div>
       </div>
     </div>
@@ -359,16 +401,19 @@ function IMGPreview({ page, onPageChange, personnel, reportDate, categories }) {
 
 function DFTCFilePreview({ file, onClose }) {
   const [format, setFormat] = useState("IMG");
+  const [orientation, setOrientation] = useState("landscape");
   const [imgPage, setImgPage] = useState(0);
   const [dlState, setDlState] = useState("idle");
   const [personnel, setPersonnel] = useState(() => ({
     encodedBy: file.encodedBy || DEFAULT_PERSONNEL.encodedBy,
     encodedByRole: file.encodedByRole || DEFAULT_PERSONNEL.encodedByRole,
     preparedBy: file.reviewedBy || file.preparedBy || DEFAULT_PERSONNEL.preparedBy,
-    preparedByRole: file.reviewedByRole || file.preparedByRole || DEFAULT_PERSONNEL.preparedByRole
+    preparedByRole: file.reviewedByRole || file.preparedByRole || DEFAULT_PERSONNEL.preparedByRole,
+    reviewedBy: file.reviewedBy || file.preparedBy || DEFAULT_PERSONNEL.reviewedBy,
+    reviewedByRole: file.reviewedByRole || file.preparedByRole || DEFAULT_PERSONNEL.reviewedByRole
   }));
+
   const pageRefs = useRef([]);
-  const total = PAGE_CATEGORY_GROUPS.length;
 
   const reportingDateShort = formatDisplayDateShort(file.reportingDate || file.savedDate);
 
@@ -393,13 +438,12 @@ function DFTCFilePreview({ file, onClose }) {
       encodedBy: file.encodedBy || backendEncodedBy || prev.encodedBy || DEFAULT_PERSONNEL.encodedBy,
       encodedByRole: file.encodedByRole || prev.encodedByRole || DEFAULT_PERSONNEL.encodedByRole,
       preparedBy: file.reviewedBy || file.preparedBy || backendPreparedBy || prev.preparedBy || DEFAULT_PERSONNEL.preparedBy,
-      preparedByRole: file.reviewedByRole || file.preparedByRole || prev.preparedByRole || DEFAULT_PERSONNEL.preparedByRole
+      preparedByRole: file.reviewedByRole || file.preparedByRole || prev.preparedByRole || DEFAULT_PERSONNEL.preparedByRole,
+      reviewedBy: file.reviewedBy || file.preparedBy || backendPreparedBy || prev.reviewedBy || DEFAULT_PERSONNEL.reviewedBy,
+      reviewedByRole: file.reviewedByRole || file.preparedByRole || prev.reviewedByRole || DEFAULT_PERSONNEL.reviewedByRole
     }));
   }, [file, backendEncodedBy, backendPreparedBy]);
 
-  // The catalogue comes from the API (commodity master, ordered by
-  // display_order); prices come from the same payload. A commodity or variety
-  // with no price record renders as an em dash — never a neighbour's number.
   const resolvedCategories = useMemo(() => {
     const lookup = buildRowsLookup(reportPreviewData?.rows);
     return (reportPreviewData?.categories ?? []).map((cat) => ({
@@ -427,22 +471,29 @@ function DFTCFilePreview({ file, onClose }) {
     ? reportPreviewData.subtitle.replace("Prevailing Market Prices as of ", "")
     : formatDisplayDate(file.reportingDate || file.savedDate);
   const reportReference = reportPreviewData?.report_reference_no || file.reportId || file.reportReferenceNo || file.fileId || "—";
-  // The names selected in the final review card are authoritative for the
-  // printed report. Backend attribution remains the fallback for older reports
-  // that have no saved review metadata.
   const encodedByName = file.encodedBy || backendEncodedBy || getEncodedByName(file);
-  const reviewedByName = personnel.preparedBy || backendPreparedBy || file.reviewedBy || file.preparedBy || "—";
+  const reviewedByName = personnel.reviewedBy || personnel.preparedBy || backendPreparedBy || file.reviewedBy || file.preparedBy || "—";
 
   async function downloadImages() {
     setDlState("generating-img");
     try {
-      const html2canvas = (await import("html2canvas")).default;
       const JSZip = (await import("jszip")).default;
       const blobs = [];
+      const total = IMG_PAGE_CATEGORY_GROUPS.length; // strictly 4
       for (let i = 0; i < total; i++) {
-        const el = pageRefs.current[i];
-        if (!el) continue;
-        const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+        // Drawn on a native canvas from the same layout numbers as the preview card
+        const cats = IMG_PAGE_CATEGORY_GROUPS[i]
+          .map((n) => resolvedCategories.find((c) => c.name === n))
+          .filter(Boolean);
+        const canvas = renderFBCardToCanvas(
+          {
+            categories: cats,
+            reportDate: reportingDate,
+            personnel: i === total - 1 ? personnel : undefined,
+            isLast: i === total - 1
+          },
+          2
+        );
         const blob = await new Promise((resolve, reject) => {
           canvas.toBlob((b) => b ? resolve(b) : reject(new Error("toBlob failed")), "image/png");
         });
@@ -473,10 +524,21 @@ function DFTCFilePreview({ file, onClose }) {
       const html2canvas = (await import("html2canvas")).default;
       const jsPDFModule = await import("jspdf");
       const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+      const isPortrait = orientation === "portrait";
+      // Philippine Long bond paper: 8.5 x 13 in = 215.9 x 330.2 mm
+      const longPaper = [215.9, 330.2];
+      const pdf = new jsPDF({
+        orientation: isPortrait ? "portrait" : "landscape",
+        unit: "mm",
+        format: longPaper
+      });
       const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
-      
+      const marginX = isPortrait ? 10 : 14;
+      const marginY = 12;
+      const targetW = pdfW - marginX * 2;
+
+      const total = activeCategoryGroups.length;
       const canvases = [];
       for (let i = 0; i < total; i++) {
         const el = pageRefs.current[i];
@@ -486,24 +548,34 @@ function DFTCFilePreview({ file, onClose }) {
       }
 
       if (canvases.length > 0) {
-        // Standardize scaling across all pages so no single page looks zoomed out or disproportionate
-        const baseWidth = canvases[0].width || 960;
-        const uniformRatio = (pdfW - 16) / baseWidth;
+        // For Landscape, scale to targetW so horizontal margins are clean and normal (not shrunk/oversized margins).
+        // For Portrait, ensure ratio fits within maxH so tall content is never cropped.
+        const baseCanvasWidth = canvases[0]?.width || (isPortrait ? 1520 : 2040);
+        const pdfH = pdf.internal.pageSize.getHeight();
+        const maxH = pdfH - marginY * 2;
+        const maxCanvasHeight = Math.max(...canvases.map((c) => c.height));
+        const uniformRatio = isPortrait
+          ? Math.min(targetW / baseCanvasWidth, maxH / maxCanvasHeight)
+          : targetW / baseCanvasWidth;
+        const w = baseCanvasWidth * uniformRatio;
+        const x = (pdfW - w) / 2;
 
         for (let i = 0; i < canvases.length; i++) {
           const canvas = canvases[i];
-          const imgData = canvas.toDataURL("image/png");
-          if (i > 0) pdf.addPage("a4", "landscape");
+          if (i > 0) pdf.addPage(longPaper, isPortrait ? "portrait" : "landscape");
 
-          const w = canvas.width * uniformRatio;
           const h = canvas.height * uniformRatio;
-          const x = (pdfW - w) / 2;
-          const y = h < pdfH ? (pdfH - h) / 2 : 8;
-
-          pdf.addImage(imgData, "PNG", x, y, w, Math.min(h, pdfH - 16));
+          pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, marginY, w, h);
         }
       }
-      pdf.save(`DFTC-Price-Monitoring-${reportingDateShort}.pdf`);
+      const pdfFilename = buildReportExportFilename({
+        market: "DFTC Taboan",
+        reportType: "Price",
+        period: "Daily",
+        dateStr: reportingDateShort,
+        ext: "pdf"
+      });
+      pdf.save(pdfFilename);
       setDlState("idle");
     } catch (err) {
       console.error("PDF generation error:", err);
@@ -518,8 +590,9 @@ function DFTCFilePreview({ file, onClose }) {
       const wb = new ExcelJS.Workbook();
       wb.creator = "HarvestWise DFTC System";
       wb.created = new Date();
-      const ws = wb.addWorksheet("Price Monitoring", {
-        pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+      const sheetName = getDayName(reportingDate, reportingDateShort);
+      const ws = wb.addWorksheet(sheetName, {
+        pageSetup: { orientation: orientation, paperSize: 14, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
       });
       ws.columns = [
         { key: "no", width: 6 },
@@ -556,19 +629,19 @@ function DFTCFilePreview({ file, onClose }) {
       };
 
       const hRow1 = ws.addRow(["No.", "Commodity", "UOM", "BANKEROHAN MARKET", "", "", "DFTC TABOAN", ""]);
-      ws.mergeCells(`A${hRow1.number}:A${hRow1.number + 1}`);
-      ws.mergeCells(`B${hRow1.number}:B${hRow1.number + 1}`);
-      ws.mergeCells(`C${hRow1.number}:C${hRow1.number + 1}`);
+      const hRow2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
+      ws.mergeCells(`A${hRow1.number}:A${hRow2.number}`);
+      ws.mergeCells(`B${hRow1.number}:B${hRow2.number}`);
+      ws.mergeCells(`C${hRow1.number}:C${hRow2.number}`);
       ws.mergeCells(`D${hRow1.number}:F${hRow1.number}`);
       ws.mergeCells(`G${hRow1.number}:H${hRow1.number}`);
-      const hRow2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
 
       const applyHStyle = (row, cols, bg) => {
         cols.forEach((c) => {
           const cell = row.getCell(c);
           cell.font = { bold: true, size: 10, name: "Arial" };
           cell.alignment = { horizontal: "center", vertical: "middle" };
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg.replace("#", "FF") } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg.replace("#", "FF").toUpperCase() } };
           cell.border = borderAll;
         });
       };
@@ -580,11 +653,27 @@ function DFTCFilePreview({ file, onClose }) {
       applyHStyle(hRow2, [7, 8], DFTC_BG);
 
       resolvedCategories.forEach((cat) => {
-        const catRow = ws.addRow([cat.name, "", "", "", "", "", "", ""]);
+        if (cat.name === "Rootcrops") {
+          ws.addRow([]);
+          const hR1 = ws.addRow(["No.", "Commodity", "UOM", "BANKEROHAN MARKET", "", "", "DFTC TABOAN", ""]);
+          const hR2 = ws.addRow(["", "", "", "Landing", "Wholesale", "Retail", "Wholesale", "Retail"]);
+          ws.mergeCells(`A${hR1.number}:A${hR2.number}`);
+          ws.mergeCells(`B${hR1.number}:B${hR2.number}`);
+          ws.mergeCells(`C${hR1.number}:C${hR2.number}`);
+          ws.mergeCells(`D${hR1.number}:F${hR1.number}`);
+          ws.mergeCells(`G${hR1.number}:H${hR1.number}`);
+          applyHStyle(hR1, [1, 2, 3], LEFT_BG);
+          applyHStyle(hR1, [4, 5, 6], BANK_BG);
+          applyHStyle(hR1, [7, 8], DFTC_BG);
+          applyHStyle(hR2, [1, 2, 3], LEFT_BG);
+          applyHStyle(hR2, [4, 5, 6], BANK_BG);
+          applyHStyle(hR2, [7, 8], DFTC_BG);
+        }
+        const catRow = ws.addRow([cat.name.toUpperCase(), "", "", "", "", "", "", ""]);
         ws.mergeCells(`A${catRow.number}:H${catRow.number}`);
         const cCell = catRow.getCell(1);
-        cCell.font = { bold: true, italic: true, underline: true, size: 10, name: "Arial" };
-        cCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEFT_BG.replace("#", "FF") } };
+        cCell.font = { bold: true, italic: true, size: 10, name: "Arial" };
+        cCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: CATEGORY_BG.replace("#", "FF").toUpperCase() } };
         cCell.border = borderAll;
 
         cat.commodities.forEach((com) => {
@@ -602,19 +691,19 @@ function DFTCFilePreview({ file, onClose }) {
             dataRow.font = { size: 10, name: "Arial" };
             [1, 2, 3].forEach((c) => {
               const cell = dataRow.getCell(c);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEFT_BG.replace("#", "FF") } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LEFT_BG.replace("#", "FF").toUpperCase() } };
               cell.border = borderAll;
               if (c === 1 || c === 3) cell.alignment = { horizontal: "center" };
             });
             [4, 5, 6].forEach((c) => {
               const cell = dataRow.getCell(c);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BANK_BG.replace("#", "FF") } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BANK_BG.replace("#", "FF").toUpperCase() } };
               cell.alignment = { horizontal: "right" };
               cell.border = borderAll;
             });
             [7, 8].forEach((c) => {
               const cell = dataRow.getCell(c);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DFTC_BG.replace("#", "FF") } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DFTC_BG.replace("#", "FF").toUpperCase() } };
               cell.alignment = { horizontal: "right" };
               cell.border = borderAll;
             });
@@ -623,15 +712,15 @@ function DFTCFilePreview({ file, onClose }) {
       });
 
       ws.addRow([]);
-      const pRow1 = ws.addRow(["Encoded by:", "", "", "", "", "Prepared by:", "", ""]);
+      const pRow1 = ws.addRow(["Encoded by:", "", "", "", "", "Reviewed by:", "", ""]);
       pRow1.getCell(1).font = { bold: false };
       pRow1.getCell(6).font = { bold: false };
-      const pRow2 = ws.addRow([personnel.encodedBy, "", "", "", "", personnel.preparedBy, "", ""]);
+      const pRow2 = ws.addRow([personnel.encodedBy, "", "", "", "", personnel.reviewedBy || personnel.preparedBy, "", ""]);
       pRow2.getCell(1).font = { bold: true, underline: true };
       pRow2.getCell(6).font = { bold: true, underline: true };
       ws.mergeCells(`A${pRow2.number}:E${pRow2.number}`);
       ws.mergeCells(`F${pRow2.number}:H${pRow2.number}`);
-      const pRow3 = ws.addRow([personnel.encodedByRole, "", "", "", "", personnel.preparedByRole, "", ""]);
+      const pRow3 = ws.addRow([personnel.encodedByRole, "", "", "", "", personnel.reviewedByRole || personnel.preparedByRole, "", ""]);
       ws.mergeCells(`A${pRow3.number}:E${pRow3.number}`);
       ws.mergeCells(`F${pRow3.number}:H${pRow3.number}`);
       ws.pageSetup.printArea = `A1:H${ws.rowCount}`;
@@ -639,7 +728,14 @@ function DFTCFilePreview({ file, onClose }) {
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
-      triggerDownload(url, `DFTC-Price-Monitoring-${reportingDateShort}.xlsx`);
+      const excelFilename = buildReportExportFilename({
+        market: "DFTC Taboan",
+        reportType: "Price",
+        period: "Daily",
+        dateStr: reportingDateShort,
+        ext: "xlsx"
+      });
+      triggerDownload(url, excelFilename);
       URL.revokeObjectURL(url);
       setDlState("idle");
     } catch (err) {
@@ -688,6 +784,11 @@ function DFTCFilePreview({ file, onClose }) {
     Number(file.records) || 0
   );
 
+  const isPortrait = orientation === "portrait";
+  const activeCategoryGroups = format === "PDF"
+    ? (isPortrait ? PDF_PORTRAIT_PAGE_CATEGORY_GROUPS : PDF_PAGE_CATEGORY_GROUPS)
+    : IMG_PAGE_CATEGORY_GROUPS;
+
   return (
     <DFTCReportShell
       title="Preview Daily Report"
@@ -700,10 +801,13 @@ function DFTCFilePreview({ file, onClose }) {
         ["Records Included", String(recordsIncluded || 1)],
         ["Saved Date", file.savedDate || "—"],
         ["Encoded By", encodedByName],
-        ["Reviewed By", reviewedByName]
+        ["Prepared By", reviewedByName]
       ]}
       format={format}
       onFormatChange={setFormat}
+      orientation={orientation}
+      onOrientationChange={setOrientation}
+      showOrientation={true}
       personnel={personnel}
       onPersonnelChange={setPersonnel}
       downloadLabel={dlLabel}
@@ -713,18 +817,41 @@ function DFTCFilePreview({ file, onClose }) {
       errorLabel={errorFormat === "PDF" ? "PDF" : errorFormat === "EXCEL" ? "Excel" : "Image"}
       onRetryDownload={() => setDlState("idle")}
       renderHiddenPages={() =>
-        PAGE_CATEGORY_GROUPS.map((group, idx) => {
+        activeCategoryGroups.map((group, idx) => {
           const cats = group.map((n) => resolvedCategories.find((c) => c.name === n)).filter(Boolean);
+          if (format === "IMG") {
+            return (
+              <div
+                key={idx}
+                ref={(el) => { pageRefs.current[idx] = el; }}
+                style={{ width: 1040 }}
+              >
+                <DFTCFacebookImageCard
+                  pageIndex={idx}
+                  totalPages={activeCategoryGroups.length}
+                  categories={cats}
+                  reportDate={reportingDate}
+                  personnel={idx === activeCategoryGroups.length - 1 ? personnel : void 0}
+                  isLast={idx === activeCategoryGroups.length - 1}
+                />
+              </div>
+            );
+          }
           return (
-            <div key={idx} ref={(el) => { pageRefs.current[idx] = el; }}>
+            <div
+              key={idx}
+              ref={(el) => { pageRefs.current[idx] = el; }}
+              style={{ width: isPortrait ? 760 : 1020 }}
+            >
               <DFTCReportPage
                 pageIndex={idx}
-                totalPages={total}
+                totalPages={activeCategoryGroups.length}
                 categories={cats}
                 isFirst={idx === 0}
-                isLast={idx === total - 1}
+                isLast={idx === activeCategoryGroups.length - 1}
                 reportDate={reportingDate}
-                personnel={idx === total - 1 ? personnel : void 0}
+                personnel={idx === activeCategoryGroups.length - 1 ? personnel : void 0}
+                orientation={orientation}
               />
             </div>
           );
@@ -740,12 +867,24 @@ function DFTCFilePreview({ file, onClose }) {
           categories={resolvedCategories}
         />
       )}
-      {format === "PDF" && <PDFPreviewContent personnel={personnel} reportDate={reportingDate} categories={resolvedCategories} />}
-      {format === "Excel" && <ExcelPreviewContent personnel={personnel} reportDate={reportingDate} reportDateShort={reportingDateShort} categories={resolvedCategories} />}
+      {format === "PDF" && (
+        <PDFPreviewContent
+          personnel={personnel}
+          reportDate={reportingDate}
+          categories={resolvedCategories}
+          orientation={orientation}
+        />
+      )}
+      {format === "Excel" && (
+        <ExcelPreviewContent
+          personnel={personnel}
+          reportDate={reportingDate}
+          reportDateShort={reportingDateShort}
+          categories={resolvedCategories}
+        />
+      )}
     </DFTCReportShell>
   );
 }
 
-// normalizeKey / buildRowsLookup / resolvePriceRow are exported for the
-// regression test in src/test/dftcPriceCellResolution.test.js.
-export { DFTCFilePreview, buildRowsLookup, normalizeKey, resolvePriceRow };
+export { DFTCFilePreview, buildRowsLookup, normalizeKey, resolvePriceRow, DEFAULT_PERSONNEL };

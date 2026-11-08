@@ -18,6 +18,7 @@ import {
 } from "../../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../../utils/cropPreferences";
 import { PreferredStar } from "../shared/PreferredStar";
+import { isHWCommodity } from "../../../global/data/commodities";
 
 const DEFAULT_RECOMMENDED_PROFILES = {
   "COM-0004": {
@@ -97,11 +98,16 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
 
   const rawRecommendations = recommendationsData?.items ?? [];
 
-  // Filter ONLY Recommended crops (matching Market Calendar)
+  // Filter ONLY Recommended crops (matching Market Calendar, Top 10 commodities only)
   const recommendedCrops = useMemo(() => {
-    const list = rawRecommendations.filter(
-      (rec) => rec.advisory_category === "Recommended"
-    );
+    const list = rawRecommendations.filter((rec) => {
+      if (rec.advisory_category !== "Recommended") return false;
+      const cname = rec.commodity_name || rec.commodityName;
+      const cid = rec.commodity_id || rec.commodityId;
+      if (rec.is_top10 !== undefined && !rec.is_top10) return false;
+      if (rec.isTop10 !== undefined && !rec.isTop10) return false;
+      return isHWCommodity(cname) || isHWCommodity(cid);
+    });
 
     const seen = new Set();
     const result = [];
@@ -109,6 +115,7 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
     for (const rec of list) {
       const cid = rec.commodity_id;
       const cname = rec.commodity_name || rec.commodityId || "Crop";
+      if (!isHWCommodity(cname) && !isHWCommodity(cid)) continue;
       if (seen.has(cname)) continue;
       seen.add(cname);
 

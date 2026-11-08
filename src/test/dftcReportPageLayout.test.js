@@ -24,7 +24,11 @@
  * with the numbering the server sent.
  */
 import { describe, it, expect } from "vitest";
-import { PAGE_CATEGORY_GROUPS } from "../app/dftc/components/dftcReportCategories.js";
+import {
+  PAGE_CATEGORY_GROUPS,
+  PDF_PAGE_CATEGORY_GROUPS,
+  PDF_PORTRAIT_PAGE_CATEGORY_GROUPS
+} from "../app/dftc/components/dftcReportCategories.js";
 
 // A `/dftc/reports/preview` payload in the shape the endpoint returns: the
 // categories the commodity master holds, already in survey order.
@@ -81,8 +85,7 @@ describe("report page layout", () => {
       ["Lowland Vegetables"],
       ["Highland Vegetables"],
       ["Spices", "Rootcrops"],
-      ["Fruits"],
-      ["Others"],
+      ["Fruits", "Others"],
     ]);
   });
 
@@ -90,6 +93,23 @@ describe("report page layout", () => {
     const onPages = PAGE_CATEGORY_GROUPS.flat();
     expect(onPages).toEqual(CATEGORIES.map((c) => c.name));
     expect(new Set(onPages).size).toBe(onPages.length);
+  });
+
+  it("splits categories into 3 pages for PDF Long Portrait layout", () => {
+    const onPortraitPages = PDF_PORTRAIT_PAGE_CATEGORY_GROUPS.flat();
+    expect(onPortraitPages).toEqual(CATEGORIES.map((c) => c.name));
+    expect(new Set(onPortraitPages).size).toBe(onPortraitPages.length);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS).toHaveLength(3);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[0]).toEqual(["Lowland Vegetables", "Highland Vegetables"]);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[1]).toEqual(["Spices", "Rootcrops"]);
+    expect(PDF_PORTRAIT_PAGE_CATEGORY_GROUPS[2]).toEqual(["Fruits", "Others"]);
+  });
+
+  it("splits categories into 5 pages for PDF Landscape layout", () => {
+    const onLandscapePages = PDF_PAGE_CATEGORY_GROUPS.flat();
+    expect(onLandscapePages).toEqual(CATEGORIES.map((c) => c.name));
+    expect(new Set(onLandscapePages).size).toBe(onLandscapePages.length);
+    expect(PDF_PAGE_CATEGORY_GROUPS).toHaveLength(5);
   });
 
   // Two categories share page 3 and two share page 4, so a row number is only

@@ -58,6 +58,8 @@ export const price = {
   "forecast_price_change_label": "Pagbabago sa Presyo ng Forecast",
   "historical_seasonal_avg_label": "Karaniwang Presyo sa Panahon ng Ani",
   "historical_change_label": "Makasaysayang Pagbabago sa Presyo",
-  "price_reference_notice": "Batayan ng presyo: ₱{price}/kg (baseline: ₱{baseline}/kg)."
+  "price_reference_notice": "Batayan ng presyo: ₱{price}/kg (baseline: ₱{baseline}/kg).",
+  "forecast_historical_only_notice": "Batay lamang ito sa nakaraang presyo. Maaaring magbago ang aktwal na presyo dahil sa panahon, gasolina, at suplay.",
+  "forecast_historical_disclaimer_short": "Batay lamang ito sa nakaraang presyo. Maaaring magbago ang aktwal na presyo dahil sa panahon, gasolina, at suplay."
 };
 
