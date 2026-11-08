@@ -19,6 +19,7 @@ import {
   filterRecordsByPeriod,
   numericPrice,
   isoDate,
+  formatPriceChangeDisplay,
 } from "../../../global/utils/priceChartTransforms";
 import { getVariants } from "../../../global/data/commodities";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
@@ -438,12 +439,12 @@ function PriceSummaryStrip({
                     ? t("farmer.factors.price.dual_comparison_unavailable", {}, "Comparison unavailable because both valid positive prices are required.")
                     : dualDirection === "same"
                     ? t("farmer.factors.price.dual_comparison_same", {}, "The forecast is about the same as the historical seasonal average.")
-                    : `The forecast is ${dualDirection} the historical seasonal average by ₱${Math.abs(dualDifference).toFixed(2)}/kg (${Math.abs(dualPercent).toFixed(1)}%).`}
+                    : `The forecast is ${dualDirection} the historical seasonal average by ${formatPriceChangeDisplay(dualDifference, dualPercent)}.`}
                 </p>
               </div>
               <div className="text-[12px] font-semibold text-black whitespace-nowrap">
                 {dualDifference != null
-                  ? `${dualDifference >= 0 ? "+" : "−"}₱${Math.abs(dualDifference).toFixed(2)}/kg · ${dualPercent >= 0 ? "+" : "−"}${Math.abs(dualPercent).toFixed(1)}%`
+                  ? formatPriceChangeDisplay(dualDifference, dualPercent)
                   : "—"}
               </div>
             </div>
@@ -458,6 +459,9 @@ function PriceSummaryStrip({
       const curPrice = currentMarketPrice ?? priceOutlookModel?.currentMarketPrice ?? priceOutlookModel?.comparisonBaseline;
       const fcPrice = dynamicForecastPrice ?? priceOutlookModel?.referencePrice ?? priceOutlookModel?.forecastMidpoint;
       const diffPct = dynamicForecastDiff ?? priceOutlookModel?.forecastDifferencePct;
+      const diffAmount = (fcPrice != null && curPrice != null)
+        ? (fcPrice - curPrice)
+        : (priceOutlookModel?.absoluteChange ?? null);
       const direction = dynamicDirection || priceOutlookModel?.expectedPriceDirection || (diffPct != null && diffPct > 0.05 ? "Rising" : diffPct != null && diffPct < -0.05 ? "Dropping" : "Stable");
       return (
         <div className="pt-2">
@@ -482,7 +486,11 @@ function PriceSummaryStrip({
             />
             <StatCard
               label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference & Direction")}
-              value={diffPct != null ? `${diffPct >= 0 ? "+" : ""}${diffPct.toFixed(2)}% · ${direction}` : changeDisplay}
+              value={
+                (diffPct != null || diffAmount != null)
+                  ? formatPriceChangeDisplay(diffAmount, diffPct, { direction, referencePrice: curPrice })
+                  : changeDisplay
+              }
               sub={t("farmer.factors.price.vs_current_price", {}, "vs. current market price")}
               valueColor={diffPct != null && diffPct > 0.05 ? "text-emerald-700" : diffPct != null && diffPct < -0.05 ? "text-red-600" : "text-black"}
               isLoading={isDataLoading}
@@ -499,6 +507,9 @@ function PriceSummaryStrip({
       const mktPosPct = (curPrice != null && recentAvg != null && recentAvg > 0)
         ? ((curPrice - recentAvg) / recentAvg) * 100
         : priceOutlookModel?.marketPositionPct;
+      const mktPosDiff = (curPrice != null && recentAvg != null)
+        ? (curPrice - recentAvg)
+        : null;
       const classification = mktPosPct != null
         ? (mktPosPct > 10.0 ? "Above Recent Trend" : mktPosPct < -10.0 ? "Below Recent Trend" : "Within Recent Trend")
         : (priceOutlookModel?.marketPositionClassification || "Within Recent Trend");
@@ -519,7 +530,11 @@ function PriceSummaryStrip({
             />
             <StatCard
               label={t("farmer.factors.price.market_position_label", {}, "Market Position")}
-              value={mktPosPct != null ? `${mktPosPct >= 0 ? "+" : ""}${mktPosPct.toFixed(2)}%` : changeDisplay}
+              value={
+                (mktPosPct != null || mktPosDiff != null)
+                  ? formatPriceChangeDisplay(mktPosDiff, mktPosPct, { referencePrice: recentAvg })
+                  : changeDisplay
+              }
               sub={t("farmer.factors.price.vs_xd_average", { days: historicalRangeDays }, `vs. ${historicalRangeDays}-day average`)}
               valueColor={mktPosPct != null && mktPosPct > 10.0 ? "text-emerald-700" : mktPosPct != null && mktPosPct < -10.0 ? "text-red-600" : "text-amber-700"}
               isLoading={isDataLoading}
@@ -646,6 +661,9 @@ function PriceSummaryStrip({
   const generalRecentAvg = selectedRecentAverage ?? priceOutlookModel?.recentAverage;
   const generalForecastPrice = dynamicForecastPrice ?? priceOutlookModel?.forecastMidpoint;
   const generalDiffPct = dynamicForecastDiff ?? priceOutlookModel?.percentChange;
+  const generalDiffAmount = (generalForecastPrice != null && currentMarketPrice != null)
+    ? (generalForecastPrice - currentMarketPrice)
+    : (priceOutlookModel?.absoluteChange ?? null);
   const generalLower = dynamicLowerForecast ?? priceOutlookModel?.lowerForecast;
   const generalUpper = dynamicUpperForecast ?? priceOutlookModel?.upperForecast;
   const generalDir = dynamicDirection || (generalDiffPct != null && generalDiffPct > 0.05 ? "Rising" : generalDiffPct != null && generalDiffPct < -0.05 ? "Dropping" : "Stable");
@@ -706,8 +724,8 @@ function PriceSummaryStrip({
       <StatCard
         label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference & Direction")}
         value={
-          generalDiffPct != null
-            ? `${generalDiffPct >= 0 ? "+" : ""}${generalDiffPct.toFixed(2)}% · ${generalDir}`
+          (generalDiffPct != null || generalDiffAmount != null)
+            ? formatPriceChangeDisplay(generalDiffAmount, generalDiffPct, { direction: generalDir, referencePrice: currentMarketPrice })
             : changeDisplay
         }
         valueColor={generalDiffPct != null && generalDiffPct > 0.05 ? "text-emerald-700" : generalDiffPct != null && generalDiffPct < -0.05 ? "text-red-600" : "text-black"}
@@ -730,13 +748,15 @@ function PriceDetailView({
   plantingWindowStart = null,
   plantingWindowEnd = null,
   plantingWindowLabel = null,
+  initialHistoricalRange = "7d",
+  initialHorizon = "7d",
 }) {
   const { t, effectiveLanguage, langCode } = useLanguage();
   const currentLang = effectiveLanguage || langCode || "ceb";
   const [market, setMarket] = useState("Bangkerohan Public Market");
   const [priceType, setPriceType] = useState("Retail");
-  const [historicalRange, setHistoricalRange] = useState("7d");
-  const [horizon, setHorizon] = useState("7d");
+  const [historicalRange, setHistoricalRange] = useState(initialHistoricalRange);
+  const [horizon, setHorizon] = useState(initialHorizon);
   const [variety, setVariety] = useState(null);
 
   const days = HDAYS[horizon] || 7;
@@ -1264,19 +1284,22 @@ function PriceDetailView({
     if (effectiveCropStage === "near_harvest" && dynamicForecastPrice != null && currentMarketPrice != null) {
       const p = dynamicForecastPrice.toFixed(2);
       const cur = currentMarketPrice.toFixed(2);
-      const pctSign = dynamicForecastDiff >= 0 ? "+" : "";
-      const pctVal = `${pctSign}${dynamicForecastDiff.toFixed(1)}%`;
+      const diffVal = dynamicForecastPrice - currentMarketPrice;
+      const formattedDiff = formatPriceChangeDisplay(diffVal, dynamicForecastDiff);
       const dirText = dynamicDirection === "Rising"
         ? (currentLang === "ceb" ? "nagkataas" : currentLang === "tl" ? "tumataas" : "rising")
         : dynamicDirection === "Dropping"
         ? (currentLang === "ceb" ? "nagkaubos" : currentLang === "tl" ? "bumababa" : "dropping")
         : (currentLang === "ceb" ? "stable" : currentLang === "tl" ? "matatag" : "stable");
-      return `Forecast price (₱${p}/kg) is ${pctVal} relative to current market price (₱${cur}/kg), indicating ${dirText} prices.`;
+      return `Forecast price (₱${p}/kg) is ${formattedDiff} relative to current market price (₱${cur}/kg), indicating ${dirText} prices.`;
     }
     if (effectiveCropStage === "before_planting" || priceOutlookModel.priceReferenceType === "historical_seasonal") {
       const p = priceOutlookModel.referencePrice != null ? priceOutlookModel.referencePrice.toFixed(2) : "—";
       const b = priceOutlookModel.comparisonBaseline != null ? priceOutlookModel.comparisonBaseline.toFixed(2) : "—";
-      const pctVal = priceOutlookModel.percentChange != null ? `${priceOutlookModel.percentChange > 0 ? "+" : ""}${priceOutlookModel.percentChange.toFixed(1)}%` : "0.0%";
+      const diffVal = (priceOutlookModel.referencePrice != null && priceOutlookModel.comparisonBaseline != null)
+        ? priceOutlookModel.referencePrice - priceOutlookModel.comparisonBaseline
+        : priceOutlookModel.absoluteChange;
+      const formattedDiff = formatPriceChangeDisplay(diffVal, priceOutlookModel.percentChange);
       const classKey = priceOutlookModel.classification || "neutral";
       const classLabel = classKey === "favorable"
         ? (currentLang === "ceb" ? "Maayo" : currentLang === "tl" ? "Maganda" : "Favorable")
@@ -1284,26 +1307,10 @@ function PriceDetailView({
         ? (currentLang === "ceb" ? "Dili Maayo" : currentLang === "tl" ? "Hindi Maganda" : "Unfavorable")
         : (currentLang === "ceb" ? "Sakto ug normal" : currentLang === "tl" ? "Katamtaman" : "Neutral");
 
-      let pctDisplay = pctVal;
-      if (priceOutlookModel.percentChange != null) {
-        const absVal = Math.abs(priceOutlookModel.percentChange).toFixed(1);
-        if (currentLang === "ceb") {
-          pctDisplay = priceOutlookModel.percentChange < 0
-            ? `mas ubos og ${absVal}%`
-            : priceOutlookModel.percentChange > 0
-            ? `mas taas og ${absVal}%`
-            : "halos pareho (0.0%)";
-        } else if (currentLang === "tl") {
-          pctDisplay = priceOutlookModel.percentChange < 0
-            ? `mas mababa nang ${absVal}%`
-            : priceOutlookModel.percentChange > 0
-            ? `mas mataas nang ${absVal}%`
-            : "halos pareho (0.0%)";
-        }
-      }
+      let pctDisplay = formattedDiff;
 
       const defaultFallback = priceOutlookModel.explanation ||
-        `Historical seasonal average price (₱${p}/kg) for expected harvest season is ${pctVal} relative to multi-year macro baseline (₱${b}/kg), classified as ${classLabel}.`;
+        `Historical seasonal average price (₱${p}/kg) for expected harvest season is ${formattedDiff} relative to multi-year macro baseline (₱${b}/kg), classified as ${classLabel}.`;
 
       return t(
         "farmer.factors.price.historical_seasonal_explanation",
@@ -1339,21 +1346,17 @@ function PriceDetailView({
     ? dynamicForecastPrice - currentMarketPrice
     : priceOutlookModel?.absoluteChange;
 
-  if (activePct != null) {
-    if (activeDiff != null && Math.abs(activeDiff) < 0.05 && Math.abs(activePct) < 0.1) {
-      changeDisplay = t("farmer.factors.price.about_the_same", {}, "About the same");
+  if (activePct != null || activeDiff != null) {
+    if (activeDiff != null && Math.abs(activeDiff) < 0.05 && Math.abs(activePct ?? 0) < 0.1) {
+      changeDisplay = "₱0 (0%)";
       changeColor = "text-black";
-    } else if (activePct > 0) {
-      const diffStr = activeDiff != null ? `↑ ₱${activeDiff.toFixed(2)}/kg · ` : "↑ ";
-      changeDisplay = `${diffStr}${Math.abs(activePct).toFixed(1)}%`;
-      changeColor = "text-emerald-700";
-    } else if (activePct < 0) {
-      const diffStr = activeDiff != null ? `↓ ₱${Math.abs(activeDiff).toFixed(2)}/kg · ` : "↓ ";
-      changeDisplay = `${diffStr}${Math.abs(activePct).toFixed(1)}%`;
-      changeColor = "text-red-600";
     } else {
-      changeDisplay = `0.0% (${t("farmer.factors.price.stable_word", {}, "no change")})`;
-      changeColor = "text-black";
+      changeDisplay = formatPriceChangeDisplay(activeDiff, activePct);
+      changeColor = (activeDiff > 0.005 || (activeDiff == null && activePct > 0))
+        ? "text-emerald-700"
+        : (activeDiff < -0.005 || (activeDiff == null && activePct < 0))
+        ? "text-red-600"
+        : "text-black";
     }
   }
 
@@ -1365,21 +1368,17 @@ function PriceDetailView({
 
   let histChangeDisplay = "—";
   let histChangeColor = "text-black";
-  if (histPct != null) {
-    if (histDiff != null && Math.abs(histDiff) < 0.05 && Math.abs(histPct) < 0.1) {
-      histChangeDisplay = t("farmer.factors.price.about_the_same", {}, "About the same");
+  if (histPct != null || histDiff != null) {
+    if (histDiff != null && Math.abs(histDiff) < 0.05 && Math.abs(histPct ?? 0) < 0.1) {
+      histChangeDisplay = "₱0 (0%)";
       histChangeColor = "text-black";
-    } else if (histPct > 0) {
-      const diffStr = histDiff != null ? `↑ ₱${histDiff.toFixed(2)}/kg · ` : "↑ ";
-      histChangeDisplay = `${diffStr}${Math.abs(histPct).toFixed(1)}%`;
-      histChangeColor = "text-emerald-700";
-    } else if (histPct < 0) {
-      const diffStr = histDiff != null ? `↓ ₱${Math.abs(histDiff).toFixed(2)}/kg · ` : "↓ ";
-      histChangeDisplay = `${diffStr}${Math.abs(histPct).toFixed(1)}%`;
-      histChangeColor = "text-red-600";
     } else {
-      changeDisplay = `0.0% (${t("farmer.factors.price.stable_word", {}, "no change")})`;
-      histChangeColor = "text-black";
+      histChangeDisplay = formatPriceChangeDisplay(histDiff, histPct);
+      histChangeColor = (histDiff > 0.005 || (histDiff == null && histPct > 0))
+        ? "text-emerald-700"
+        : (histDiff < -0.005 || (histDiff == null && histPct < 0))
+        ? "text-red-600"
+        : "text-black";
     }
   }
 

@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../../../global/components/ui/Card";
+import { formatPriceChangeDisplay } from "../../../global/utils/priceFormatting";
 const ForecastCard = ({
   title,
   timeframe,
@@ -10,7 +11,7 @@ const ForecastCard = ({
   currency = "\u20B1"
 }) => {
   const change = predictedValue - currentValue;
-  const percentChange = (change / currentValue * 100).toFixed(1);
+  const percentChange = currentValue > 0 ? (change / currentValue * 100) : 0;
   const isIncrease = change > 0;
   const confidenceColor = confidence >= 80 ? "text-[var(--hw-success)]" : confidence >= 60 ? "text-[var(--hw-warning)]" : "text-[var(--hw-error)]";
   return <Card variant="default" className="border-l-4 border-l-[var(--hw-green-700)]">
@@ -44,7 +45,7 @@ const ForecastCard = ({
           <div className="flex items-center gap-2">
             {isIncrease ? <TrendingUp className="w-4 h-4 text-[var(--hw-error)]" /> : <TrendingDown className="w-4 h-4 text-[var(--hw-success)]" />}
             <span className={isIncrease ? "text-[var(--hw-error)]" : "text-[var(--hw-success)]"}>
-              {isIncrease ? "+" : ""}{percentChange}% from current
+              {formatPriceChangeDisplay(change, percentChange, { referencePrice: currentValue })} from current
             </span>
           </div>
 

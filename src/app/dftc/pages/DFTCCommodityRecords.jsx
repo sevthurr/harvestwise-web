@@ -8,6 +8,7 @@ import { DFTCFilePreview } from "../components/DFTCFilePreview";
 import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
 import { formatDateOrMonth } from "./dftcSavedDatasets";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
 const PAGE_SIZE = 20;
 
@@ -653,9 +654,25 @@ function DFTCCommodityRecords() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-[13px] whitespace-nowrap">
-                          {r.changePct != null ? (
-                            <span className={`font-semibold ${r.changePct > 0 ? "text-emerald-700" : r.changePct < 0 ? "text-rose-600" : "text-neutral-600"}`}>
-                              {r.changePct > 0 ? "🔺 +" : r.changePct < 0 ? "🔻 " : ""}{r.changePct}%
+                          {r.changePct != null || r.change != null ? (
+                            <span className={`font-semibold ${
+                              (r.change != null ? r.change > 0 : r.changePct > 0)
+                                ? "text-emerald-700"
+                                : (r.change != null ? r.change < 0 : r.changePct < 0)
+                                ? "text-rose-600"
+                                : "text-neutral-600"
+                            }`}>
+                              {formatPriceChangeDisplay(
+                                r.change != null
+                                  ? r.change
+                                  : (r.price != null && r.changePct != null
+                                    ? r.price - (r.price / (1 + r.changePct / 100))
+                                    : null),
+                                r.changePct,
+                                {
+                                  referencePrice: r.price != null && r.change != null ? r.price - r.change : undefined
+                                }
+                              )}
                             </span>
                           ) : (
                             <span className="text-neutral-400">—</span>

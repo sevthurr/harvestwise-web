@@ -13,7 +13,7 @@ const {
 } = RechartsModule;
 const ReferenceLine = RechartsModule.ReferenceLine || (() => null);
 import { HW_GREEN_SHADES } from "./trendChartData";
-import { formatChartDate } from "../../utils/priceChartTransforms";
+import { formatChartDate, formatPriceChangeDisplay } from "../../utils/priceChartTransforms";
 import { useLanguage } from "../../contexts/LanguageContext";
 
 function UnifiedFcTooltip({
@@ -67,11 +67,16 @@ function UnifiedFcTooltip({
               Last observed price
             </div>
           )}
-          {point.change_pct != null && (
+          {(point.change != null || point.change_pct != null) && (
             <div className="flex items-center gap-1.5 pt-0.5 text-[11px] font-semibold">
               <span className="text-black font-medium">Change:</span>
-              <span className={point.change_pct >= 0 ? "text-emerald-700" : "text-rose-600"}>
-                {point.change_pct >= 0 ? "🔺 +" : "🔻 "}{point.change_pct}%
+              <span className={(point.change ?? point.change_pct ?? 0) >= 0 ? "text-emerald-700" : "text-rose-600"}>
+                {formatPriceChangeDisplay(
+                  point.change != null
+                    ? point.change
+                    : (actual != null && point.change_pct != null ? actual - (actual / (1 + point.change_pct / 100)) : null),
+                  point.change_pct
+                )}
               </span>
             </div>
           )}

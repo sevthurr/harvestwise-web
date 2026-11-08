@@ -34,6 +34,8 @@ export const profitability = {
   estimated_farmgate: "Estimated farmgate price",
   farmgate_price_label: "Estimated farmgate price",
   not_set_reference: "Not set — using market price as reference.",
+  not_set_reference_with_market: "Not set — using market price ({market}) as reference.",
+  forecast_reference_notice_with_market: "Using market price ({market}) as reference. Actual buyer price may be different.",
   estimate_disclaimer: "Estimate only. Actual income may change.",
   based_on_current_market: "Based on current market price",
   market_price_reference: "Market price reference",

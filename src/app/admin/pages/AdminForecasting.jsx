@@ -23,6 +23,7 @@ import { formatDate, formatPrice } from "../../global/utils/apiTransforms";
 import { filterRecordsByPeriod } from "../../global/utils/priceChartTransforms";
 import { pricesApi } from "../../../services/api";
 import { formatPriceOutlookExplanation, ADMIN_TEXT_TEMPLATES } from "../utils/textTemplates";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
 const FALLBACK_MARKETS = ["Bankerohan", "DFTC"];
 
@@ -99,10 +100,12 @@ function formatSummaryPriceRange(lower, upper) {
   return `${formatVal(lo)} – ${formatVal(hi)}/kg`;
 }
 
-function formatChange(percent) {
+function formatChange(percent, midpoint, baseline) {
   if (percent == null || !Number.isFinite(percent)) return "-";
-  const sign = percent > 0 ? "+" : "";
-  return `${sign}${percent.toFixed(2)}%`;
+  const numMid = midpoint != null && Number.isFinite(Number(midpoint)) ? Number(midpoint) : null;
+  const numBase = baseline != null && Number.isFinite(Number(baseline)) ? Number(baseline) : null;
+  const diff = numMid != null && numBase != null ? numMid - numBase : null;
+  return formatPriceChangeDisplay(diff, percent, { referencePrice: numBase, pctDecimals: 2 });
 }
 
 const RECENT_AVERAGE_WINDOW = 7;
@@ -832,7 +835,7 @@ function AdminForecasting() {
           <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
             <p className="text-[11px] font-semibold text-black text-left">Forecast Change</p>
             <p className="text-[14px] font-bold text-black mt-1.5 text-right">
-              {formatChange(changePercent)}
+              {formatChange(changePercent, forecastMidpoint, recentAverage ?? latestActualPrice)}
             </p>
           </div>
           <div className="p-2.5 sm:p-3 bg-[var(--hw-neutral-50)] rounded-xl border border-[var(--hw-neutral-100)] flex flex-col justify-between">
