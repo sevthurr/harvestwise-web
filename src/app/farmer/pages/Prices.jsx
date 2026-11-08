@@ -45,13 +45,6 @@ function getDirectionFromData(trendDetail, fallbackForecast) {
   return forecastPrice != null ? forecast.trend : null;
 }
 
-function getForecastMidpoint(trendDetail, fallbackForecast) {
-  const forecast = trendDetail?.forecast || fallbackForecast;
-  if (!forecast) return null;
-  const value = forecast.forecast_midpoint ?? forecast.forecastMidpoint;
-  const numeric = Number(value);
-  return value == null || value === "" || !Number.isFinite(numeric) ? null : numeric;
-}
 
 const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
 
@@ -186,7 +179,6 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
   const { t } = useLanguage();
   const unit = commodity.unitOfMeasure || 'kg';
   const direction = data.direction ?? getDirectionFromData(data.trendDetail, commodity.forecast);
-  const forecastMidpoint = getForecastMidpoint(data.trendDetail, commodity.forecast);
   const hasForecast = Boolean(direction);
   const cfg = direction ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
   const DirIcon = cfg.Icon;
@@ -264,14 +256,6 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
           </p>
           <p className="text-[15px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
             {formatPriceValue(data.dftcWholesale)}
-          </p>
-        </div>
-        <div>
-          <p className="text-[11px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wider">
-            FORECASTED PRICE
-          </p>
-          <p className="text-[15px] font-bold text-[var(--hw-green-800)] mt-0.5">
-            {formatPriceValue(forecastMidpoint)}
           </p>
         </div>
       </div>

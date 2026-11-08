@@ -9,7 +9,8 @@ import {
   Upload,
   ChevronRight,
   TrendingUp,
-  ArrowRight
+  ArrowRight,
+  FileText
 } from "lucide-react";
 import { DFTCKpiCard } from "../components/DFTCKpiCard";
 import { DFTCArrivalVolumeCard } from "../components/DFTCArrivalVolumeCard";
@@ -30,6 +31,53 @@ import {
   getLocalDateString,
   isSubmissionToday
 } from "./dftcSavedDatasets";
+
+const PAGE_SIZE = 10;
+
+function Pagination({ page, total, pageSize = PAGE_SIZE, onChange }) {
+  const pages = Math.ceil(total / pageSize);
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-3.5 border-t border-[var(--hw-neutral-100)]">
+      <p className="text-[13px] text-[var(--hw-neutral-800)]">
+        Showing {start}–{end} of {total} datasets
+      </p>
+      {pages > 1 && (
+        <div className="flex gap-1.5 items-center">
+          <button
+            disabled={page === 1}
+            onClick={() => onChange(page - 1)}
+            className="px-3 py-1.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            Prev
+          </button>
+          {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={`px-3 py-1.5 text-[13px] border rounded-lg transition-colors cursor-pointer ${
+                p === page
+                  ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white font-semibold"
+                  : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+          <button
+            disabled={page === pages}
+            onClick={() => onChange(page + 1)}
+            className="px-3 py-1.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function getTimeOfDay() {
   const hour = new Date().getHours();
@@ -106,23 +154,16 @@ function DFTCHome() {
     ).length;
   }, [todayReportPreview]);
 
-  const sevenDaysAgo = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+  const [page, setPage] = useState(1);
 
-  const recentSaved = useMemo(() => {
+  const savedDataList = useMemo(() => {
     const all = buildSavedDatasetsList(submissions, todayStr, todayReportRecordCount);
-    return all.filter((item) => {
-      const rawDate = item.savedAtRaw || item.reportingDate;
-      if (!rawDate) return false;
-      const d = new Date(rawDate);
-      const isWithin7Days = !isNaN(d.getTime()) && d >= sevenDaysAgo;
-      return isWithin7Days || item.isToday;
-    });
-  }, [submissions, todayStr, todayReportRecordCount, sevenDaysAgo]);
+    return all.filter((s) => s.isToday || s.isJustSaved);
+  }, [submissions, todayStr, todayReportRecordCount]);
+
+  const totalPages = Math.ceil(savedDataList.length / PAGE_SIZE);
+  const currentPage = Math.min(page, Math.max(1, totalPages));
+  const displayedSavedData = savedDataList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleSelectFile = (file) => {
     if (file.isFileUpload) {
@@ -296,85 +337,6 @@ function DFTCHome() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-        <div className="px-3.5 sm:px-5 py-3 sm:py-4 border-b border-[var(--hw-neutral-100)] flex items-start sm:items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
-            <p className="text-[12px] text-[var(--hw-neutral-800)] mt-0.5">
-              Datasets saved and validated in the last 7 days
-            </p>
-          </div>
-          <button
-            onClick={() => navigate("/dftc/submissions")}
-            className="text-[12px] sm:text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors shrink-0 text-right"
-          >
-            View Data History
-          </button>
-        </div>
-        {isLoading ? (
-          <div className="p-4 space-y-3 animate-pulse">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
-                <div className="space-y-1.5 flex-1">
-                  <div className="h-4 w-40 bg-[var(--hw-neutral-200)] rounded" />
-                  <div className="h-3 w-56 bg-[var(--hw-neutral-200)] rounded" />
-                </div>
-                <div className="h-4 w-16 bg-[var(--hw-neutral-200)] rounded" />
-              </div>
-            ))}
-          </div>
-        ) : recentSaved.length === 0 ? (
-          <div className="p-6 text-center text-[var(--hw-neutral-500)] text-[13px]">
-            No saved datasets from the last 7 days. Encoded or uploaded datasets will appear here.
-          </div>
-        ) : (
-          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[320px] sm:max-h-[360px] overflow-y-auto">
-            {recentSaved.map((row) => (
-              <button
-                key={row.id}
-                onClick={() => handleSelectFile(row)}
-                className="w-full px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-start sm:items-center gap-2.5 sm:gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer group"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    <p className="text-[13.5px] sm:text-[14px] font-semibold sm:font-medium text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
-                      {row.name}
-                    </p>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {row.isToday && (
-                        <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
-                          Today
-                        </span>
-                      )}
-                      <span className="sm:hidden text-[11px] font-medium text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)] px-1.5 py-0.5 rounded">
-                        {row.submissionId || row.id}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-1 sm:mt-0.5">
-                    <span className="font-medium text-[var(--hw-neutral-700)]">{row.market}</span>
-                    <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{row.entryMethod}</span>
-                    <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{row.savedAt}</span>
-                  </div>
-                </div>
-
-                <div className="hidden sm:block shrink-0 text-right">
-                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.submissionId || row.id}</p>
-                  <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 font-medium capitalize">{row.status}</p>
-                </div>
-
-                <div className="flex sm:flex-col items-center sm:items-end justify-center self-center shrink-0">
-                  <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-600)] transition-colors" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-5">
           <div className="flex items-center justify-between mb-4">
@@ -459,6 +421,141 @@ function DFTCHome() {
             navigate(`/dftc/trends?tab=arrival&commodity=${encodeURIComponent(target)}`);
           }}
         />
+      </div>
+
+      {/* Today's Saved Data */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">Today's Saved Data</h2>
+          <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+            Datasets saved or imported today. All records are securely retained.
+          </p>
+        </div>
+
+        {isLoading ? (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 space-y-4 animate-pulse">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-4 w-48 bg-[var(--hw-neutral-200)] rounded" />
+                  <div className="h-3 w-32 bg-[var(--hw-neutral-200)] rounded" />
+                </div>
+                <div className="h-4 w-16 bg-[var(--hw-neutral-200)] rounded" />
+              </div>
+            ))}
+          </div>
+        ) : savedDataList.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-12 text-center">
+            <FileText className="w-9 h-9 text-[var(--hw-neutral-300)] mx-auto mb-2" />
+            <p className="text-[14px] text-[var(--hw-neutral-700)] font-medium">No saved data today.</p>
+            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">Datasets saved or uploaded today will appear here.</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
+                  <tr>
+                    {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Saved Date", "Records"].map((h) => (
+                      <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+                  {displayedSavedData.map((file) => (
+                    <tr
+                      key={file.id}
+                      onClick={() => handleSelectFile(file)}
+                      className="hover:bg-[var(--hw-neutral-50)] cursor-pointer transition-colors"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] text-[var(--hw-neutral-900)] font-medium">{file.dataName}</span>
+                          {file.isNew && (
+                            <span className="text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-1.5 py-0.5 leading-none whitespace-nowrap">
+                              New
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.dataType}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.market}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.submissionMethod || file.entryMethod}</td>
+                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.savedDate}</td>
+                      <td className="px-5 py-4 text-[13px] font-medium text-[var(--hw-neutral-900)]">{file.records ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <Pagination page={currentPage} total={savedDataList.length} pageSize={PAGE_SIZE} onChange={setPage} />
+            </div>
+
+            {/* Mobile cards */}
+            <div className="block md:hidden space-y-3">
+              {displayedSavedData.map((file) => (
+                <button
+                  key={file.id}
+                  onClick={() => handleSelectFile(file)}
+                  className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.99] cursor-pointer group"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
+                      {file.dataName}
+                    </p>
+                    {file.isNew && (
+                      <span className="text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-2 py-0.5 leading-none shrink-0">
+                        New
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-[var(--hw-neutral-600)]">
+                    <span className="font-medium text-[var(--hw-neutral-700)]">{file.dataType}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{file.market}</span>
+                    {(file.submissionMethod || file.entryMethod) && (
+                      <>
+                        <span className="text-[var(--hw-neutral-300)]">•</span>
+                        <span>{file.submissionMethod || file.entryMethod}</span>
+                      </>
+                    )}
+                    {file.savedBy && (
+                      <>
+                        <span className="text-[var(--hw-neutral-300)]">•</span>
+                        <span>Saved by {file.savedBy}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[12px]">
+                    <span className="font-semibold text-[var(--hw-neutral-900)]">{file.records ?? 0} records</span>
+                  </div>
+                </button>
+              ))}
+
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setPage((p) => p - 1)}
+                    className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-3 py-1.5 text-[13px] text-[var(--hw-neutral-800)] font-medium">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    disabled={currentPage === totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

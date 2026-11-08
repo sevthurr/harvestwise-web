@@ -10,6 +10,7 @@ import {
   AlertOctagon,
 } from "lucide-react";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { weatherOccurrenceText, weatherOccurrenceFallback } from "../../utils/weatherOccurrence";
 import {
   evaluateSuitability,
   getTemperatureStatus,
@@ -437,6 +438,7 @@ export function WeatherForecastOutlook({
         rainPct: rainPct != null ? Math.round(Number(rainPct)) : null,
         humidity: humidity != null ? Math.round(Number(humidity)) : null,
         windSpeed: windSpeed != null ? Number(windSpeed).toFixed(1) : null,
+        occurrence: d.occurrence || null,
         visual,
         suitability,
       };
@@ -691,6 +693,17 @@ export function WeatherForecastOutlook({
               <p className="text-[13px] text-black leading-relaxed pt-1">
                 {guidanceNote}
               </p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3.5">
+            <p className="text-[12px] font-bold uppercase tracking-wider text-blue-900">
+              {t("farmer.factors.weather.when_to_expect", {}, "When to expect it")}
+            </p>
+            <div className="mt-1 space-y-0.5 text-[13px] leading-relaxed text-blue-950">
+              {(weatherOccurrenceText(selectedDay.occurrence, t).length
+                ? weatherOccurrenceText(selectedDay.occurrence, t)
+                : [weatherOccurrenceFallback(selectedDay, t)]
+              ).map((line) => <p key={line}>{line}</p>)}
             </div>
           </div>
         </div>

@@ -4,6 +4,24 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminAuditLogs from '../app/admin/pages/AdminAuditLogs';
 
+// Language is pinned to English so assertions match the English copy the
+// component renders; the Cebuano default would produce untranslated strings.
+vi.mock('../app/global/contexts/LanguageContext', async () => {
+  const { t, formatDate } = await import('../app/global/i18n');
+  return {
+    useLanguage: () => ({
+      t: (key, params, fallback) => {
+        const res = t(key, params, 'en');
+        return res === key && fallback ? fallback : res;
+      },
+      formatDate: (value, options) => formatDate(value, options, 'en'),
+      langCode: 'en',
+      effectiveLanguage: 'en',
+    }),
+    LanguageProvider: ({ children }) => children,
+  };
+});
+
 vi.mock('../app/global/api', () => ({
   apiGet: vi.fn().mockResolvedValue({
     items: [
@@ -87,12 +105,13 @@ describe('AdminAuditLogs', () => {
       'DFTC',
       'Farmer',
       'User Management',
+      'Positions',
     ]);
 
     // Each option's value is the namespace the backend matches via ilike.
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual([
-      '', 'auth', 'import', 'config', 'dftc', 'farmer', 'user',
+      '', 'auth', 'import', 'config', 'dftc', 'farmer', 'user', 'position',
     ]);
   });
 });

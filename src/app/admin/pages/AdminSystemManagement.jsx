@@ -17,6 +17,7 @@ import {
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
 import { capitalizeNameInput, formatDateTime, formatDisplayLabel, formatPersonName } from "../../global/utils/apiTransforms";
+import PositionSelect from "../components/PositionSelect";
 
 
 const TABS = [
@@ -150,13 +151,10 @@ const AddUserModal = ({ onClose, onAdd }) => {
             <FieldLabel htmlFor="au-pos" optional>
               Position
             </FieldLabel>
-            <input
+            <PositionSelect
               id="au-pos"
-              type="text"
-              placeholder="e.g. Market Monitoring Staff"
-              className={inputCls}
               value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: capitalizeNameInput(e.target.value) }))}
+              onChange={(name) => setForm((f) => ({ ...f, position: name }))}
             />
           </div>
         </div>

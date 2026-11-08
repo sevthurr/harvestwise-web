@@ -15,6 +15,7 @@ import {
 } from "../../global/components/ui/hw-ui";
 import { adminApi } from "../../../services/api";
 import { capitalizeNameInput, formatDateTime, formatPersonName } from "../../global/utils/apiTransforms";
+import PositionSelect from "../components/PositionSelect";
 
 const EditForm = ({ user, onSave, onCancel }) => {
   const [form, setForm] = useState({
@@ -30,7 +31,7 @@ const EditForm = ({ user, onSave, onCancel }) => {
   });
 
   const set = (k) => (e) => {
-    const value = ["firstName", "lastName", "middleName", "position"].includes(k)
+    const value = ["firstName", "lastName", "middleName"].includes(k)
       ? capitalizeNameInput(e.target.value)
       : e.target.value;
     setForm((f) => ({ ...f, [k]: value }));
@@ -133,13 +134,10 @@ const EditForm = ({ user, onSave, onCancel }) => {
             <FieldLabel htmlFor="ud-pos" optional>
               Position
             </FieldLabel>
-            <input
+            <PositionSelect
               id="ud-pos"
-              type="text"
               value={form.position}
-              onChange={set("position")}
-              placeholder="e.g. Market Monitoring Staff"
-              className={inputCls}
+              onChange={(name) => setForm((f) => ({ ...f, position: name }))}
             />
           </div>
         )}
@@ -230,6 +228,7 @@ function AdminUserDetails() {
         phone: updated.phone,
         role: updated.roleName,
         is_active: updated.is_active,
+        position: updated.position || null,
       });
       setUser(updated);
       setEditing(false);

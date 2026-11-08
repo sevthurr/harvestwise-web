@@ -1,0 +1,809 @@
+/**
+ * AuditLogsView.jsx
+ *
+ * Shared renderer for the audit trail from the `logs` table. Both the admin
+ * Audit Logs page and the farmer "My Activities" page render through this
+ * component; each supplies its own data source and labels.
+ *
+ * DB schema (logs):
+ *   id          VARCHAR(15)   LOG-xxxx
+ *   user_id     VARCHAR(15)   FK to users.id, NULLABLE — NULL means a
+ *                             system-initiated event (API sync, cron, weather
+ *                             backfill) with no human actor
+ *   action      VARCHAR(100)  dot-notation, namespaced by resource:
+ *                             auth.*, import.*, config.*, analytics.*,
+ *                             system.*, dftc.*, farmer.*, user.*
+ *   details     TEXT nullable  free-form description
+ *   ip_address  VARCHAR(45) nullable
+ *   created_at  DATETIME
+ *
+ * NOTE: `actor_name` is resolved from `user_id` by the backend join in
+ * audit/repository.py; both it and the raw `user_id` are rendered together
+ * by formatActorLabel() so an actor is never ambiguous in an export.
+ *
+ * Props:
+ *   title             string    PageHeader title.
+ *   description       string    PageHeader description.
+ *   queryKeyPrefix    string    React Query key root; also invalidated after
+ *                               an export is recorded.
+ *   fetchLogs         function  (params) => { items, total, page, page_size }.
+ *   actionOptions     array     [{ value, label }] action-namespace filter
+ *                               options; include the empty "All …" entry.
+ *   showUserFilter    boolean   Render the actor search and send `user_id`
+ *                               (default true). When false the backend already
+ *                               scopes rows to the caller.
+ *   exportFileName    string    PDF filename stem, e.g. "audit-logs".
+ *   onRecordExport    function  Optional (payload) => Promise. Records the
+ *                               export activity; failures are only warned.
+ *   generatedByFallback string  Attribution when no signed-in user is known.
+ *   emptyDescription  string    Copy shown when no rows exist at all.
+ *   formatAction      function  Optional (action) => string label. The raw
+ *                               code stays available as the title attribute.
+ */
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
+
+import {
+  Search,
+  Download,
+  ClipboardList,
+  ChevronDown,
+  RotateCcw,
+  FileText,
+  Eye
+} from "lucide-react";
+import { PageHeader } from "../shared/PageHeader";
+import { createAuditLogsPdf } from "../../utils/auditLogsPdf";
+import { formatActorLabel } from "../../utils/auditActor";
+import { formatDateTime, formatPersonName } from "../../utils/apiTransforms";
+// Optional, not useAuth(): this view renders in unit tests without an
+// AuthProvider, and useAuth() throws in that case.
+import { useOptionalAuth } from "../../contexts/AuthContext";
+import { useLanguage } from "../../contexts/LanguageContext";
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "../ui/tooltip";
+
+// ─── Components ───────────────────────────────────────────────────────────────
+
+function ActionText({ action, formatAction }) {
+  // The raw code is what the backend matches on, so it stays in the title
+  // whenever the visible label is a humanised one.
+  return (
+    <span
+      className="text-[13px] text-[var(--hw-neutral-800)] font-mono"
+      title={formatAction ? action : undefined}
+    >
+      {formatAction ? formatAction(action) : action}
+    </span>
+  );
+}
+
+function DetailsCell({ details, t }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!details) {
+    return <span className="text-[var(--hw-neutral-400)] italic">{t("common.audit.no_details")}</span>;
+  }
+
+  return (
+    <Tooltip open={isOpen ? true : undefined} onOpenChange={setIsOpen}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="text-left max-w-[300px] truncate block text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] cursor-default md:cursor-help focus:outline-none"
+          title={details}
+        >
+          {details}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        className="max-w-md bg-[var(--hw-neutral-900)] text-white p-2.5 rounded-lg shadow-xl text-[12px] leading-relaxed break-words z-50 pointer-events-auto"
+      >
+        <p>{details}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function MobileDetails({ details, t }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!details) return null;
+  const isLong = details.length > 70;
+
+  return (
+    <div
+      onClick={() => isLong && setExpanded((v) => !v)}
+      className={`text-[12px] text-[var(--hw-neutral-700)] ${isLong ? "cursor-pointer" : ""}`}
+    >
+      <p className={expanded ? "break-words" : "line-clamp-2"}>
+        {details}
+      </p>
+      {isLong && (
+        <span className="text-[11px] font-medium text-[var(--hw-green-700)] mt-0.5 inline-block">
+          {expanded ? t("common.audit.show_less") : t("common.audit.tap_to_view")}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function FilterSelect({ label, id, value, onChange, options }) {
+  return (
+    <div className="relative w-full sm:w-auto">
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full sm:w-auto appearance-none bg-white border border-[var(--hw-neutral-200)] rounded-xl px-3 pr-8 py-2 text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)] cursor-pointer"
+        aria-label={label}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)] pointer-events-none" />
+    </div>
+  );
+}
+
+function EmptyState({ filtered, emptyDescription, t }) {
+  return (
+    <div className="flex flex-col items-center gap-3 text-center max-w-xs mx-auto">
+      <div className="w-12 h-12 rounded-2xl bg-[var(--hw-neutral-100)] flex items-center justify-center">
+        <ClipboardList className="w-6 h-6 text-[var(--hw-neutral-400)]" />
+      </div>
+      <div>
+        <p className="text-[14px] font-semibold text-[var(--hw-neutral-700)]">
+          {filtered ? t("common.audit.no_matching_logs") : t("common.audit.no_logs_yet")}
+        </p>
+        <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">
+          {filtered
+            ? t("common.audit.no_matching_desc")
+            : emptyDescription}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── View ─────────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
+const EXPORT_PAGE_SIZE = 100;
+
+function buildLogParams({
+  actionPrefix,
+  search,
+  userSearch = "",
+  dateFrom,
+  dateTo,
+  page,
+  pageSize,
+  includeUserFilter = true,
+}) {
+  const params = { page, page_size: pageSize };
+  const actionParts = [];
+  if (actionPrefix) actionParts.push(actionPrefix);
+  if (search.trim()) actionParts.push(search.trim());
+  if (actionParts.length) params.action = actionParts.join(".");
+  if (includeUserFilter && userSearch.trim()) params.user_id = userSearch.trim();
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+  return params;
+}
+
+export default function AuditLogsView({
+  title,
+  description,
+  queryKeyPrefix,
+  fetchLogs,
+  actionOptions = [],
+  showUserFilter = true,
+  exportFileName,
+  onRecordExport,
+  generatedByFallback = "Unknown",
+  emptyDescription,
+  formatAction,
+}) {
+  const [searchParams] = useSearchParams();
+  const searchParam = searchParams.get("search") || searchParams.get("action") || "";
+  const initialUserSearch = showUserFilter ? searchParams.get("user_id") || "" : "";
+  const highlightParam = searchParams.get("highlight") || searchParam;
+
+  // Initialize prefix and search term from URL query if provided
+  const initialPrefix = (() => {
+    if (!searchParam) return "";
+    const prefix = searchParam.split(".")[0]?.toLowerCase();
+    return actionOptions.some((o) => o.value === prefix && o.value !== "") ? prefix : "";
+  })();
+  const initialSearch = (() => {
+    if (!searchParam) return "";
+    if (initialPrefix && searchParam.includes(".")) {
+      return searchParam.slice(initialPrefix.length + 1);
+    }
+    return searchParam;
+  })();
+
+  // ── Filter state ─────────────────────────────────────────────────────────
+  const [search, setSearch]         = useState(initialSearch);   // maps to action ilike
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
+  const [userSearch, setUserSearch] = useState(initialUserSearch);
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState(initialUserSearch);
+  const [actionPrefix, setPrefix]   = useState(initialPrefix);   // resource prefix filter
+  const [highlightedId, setHighlightedId] = useState(highlightParam);
+  const [dateFrom, setDateFrom]     = useState("");   // ISO date string
+  const [dateTo, setDateTo]         = useState("");   // ISO date string
+  const [page, setPage]             = useState(1);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting]   = useState(null); // null | "preview" | "download"
+
+  // Avoid one API request per keystroke while searching audit actions.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedUserSearch(userSearch), 400);
+    return () => clearTimeout(timer);
+  }, [userSearch]);
+
+  // 3-second temporary highlight timer (matching DFTC pattern)
+  useEffect(() => {
+    if (!highlightParam) return;
+    setHighlightedId(highlightParam);
+    const timer = setTimeout(() => {
+      setHighlightedId(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [highlightParam]);
+  const auth = useOptionalAuth();
+  const user = auth?.user;
+  const { t } = useLanguage();
+  const queryClient = useQueryClient();
+  const { data: logsRes, isLoading: loading, error: queryErr } = useQuery({
+    queryKey: [queryKeyPrefix, actionPrefix, debouncedSearch, debouncedUserSearch, dateFrom, dateTo, page],
+    queryFn: () =>
+      fetchLogs(
+        buildLogParams({ actionPrefix, search: debouncedSearch, userSearch: debouncedUserSearch, dateFrom, dateTo, page, pageSize: PAGE_SIZE, includeUserFilter: showUserFilter })
+      ),
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: true,
+  });
+
+  const error = queryErr ? (queryErr.message || t("common.audit.failed_load")) : null;
+
+  const data = logsRes || { items: [], total: 0, page, page_size: PAGE_SIZE };
+
+  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+
+  const hasFilters = search.trim() !== "" || userSearch.trim() !== "" || actionPrefix !== "" || dateFrom !== "" || dateTo !== "";
+
+  const handleReset = () => {
+    setSearch("");
+    setUserSearch("");
+    setPrefix("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  };
+
+  // Smooth scroll to highlighted log entry
+  useEffect(() => {
+    if (!highlightedId || loading) return;
+    const t = setTimeout(() => {
+      const hl = highlightedId.toLowerCase();
+      const el =
+        document.getElementById(`log-row-${hl}`) ||
+        document.querySelector(`[data-log-row*="${hl}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [highlightedId, loading, data.items]);
+
+  // Fetch every row matching the current filters (usable for full PDF export).
+  const fetchAllLogs = async () => {
+    const all = [];
+    let pageNo = 1;
+    let total = 0;
+    for (;;) {
+      const res = await fetchLogs(
+        buildLogParams({
+          actionPrefix,
+          search: debouncedSearch,
+          userSearch: debouncedUserSearch,
+          dateFrom,
+          dateTo,
+          page: pageNo,
+          pageSize: EXPORT_PAGE_SIZE,
+          includeUserFilter: showUserFilter,
+        })
+      );
+      total = res.total;
+      all.push(...res.items);
+      if (all.length >= total || res.items.length === 0) break;
+      pageNo += 1;
+    }
+    return { logs: all, total };
+  };
+
+  const buildFilterLabel = () => {
+    const parts = [];
+    const actionParts = [];
+    if (actionPrefix) actionParts.push(actionPrefix);
+    if (debouncedSearch.trim()) actionParts.push(debouncedSearch.trim());
+    if (actionParts.length) parts.push(`Action: ${actionParts.join(".")}`);
+    if (showUserFilter && debouncedUserSearch.trim()) parts.push(`User: ${debouncedUserSearch.trim()}`);
+    if (dateFrom) parts.push(`From ${dateFrom}`);
+    if (dateTo) parts.push(`To ${dateTo}`);
+    return parts.length ? parts.join("  |  ") : t("common.audit.all_logs");
+  };
+
+  // Attribution printed on the export: "<Full Name> (<USER-ID>)".
+  const buildGeneratedBy = () => {
+    const fullName = [user?.first_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const label = formatPersonName(fullName) || user?.email || generatedByFallback;
+    return user?.id ? `${label} (${user.id})` : label;
+  };
+
+  // Build a pixel-perfect PDF and either open it for preview or download it.
+  const generatePdf = async (mode) => {
+    if (exporting) return;
+    setExporting(mode);
+    try {
+      const { logs, total } = await fetchAllLogs();
+      const generatedAt = new Date().toLocaleString("en-PH", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Manila",
+      });
+      const doc = await createAuditLogsPdf({
+        logs,
+        total,
+        filterLabel: buildFilterLabel(),
+        generatedAt,
+        generatedBy: buildGeneratedBy(),
+      });
+
+      const slug = new Date().toISOString().slice(0, 10);
+      const filename = `${exportFileName}-${slug}.pdf`;
+
+      if (mode === "preview") {
+        const blob = doc.output("blob");
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, "_blank");
+        if (!win) doc.save(filename); // pop-up blocked — fall back to download
+      } else {
+        doc.save(filename);
+      }
+
+      if (onRecordExport) {
+        try {
+          const verb = mode === "preview" ? t("common.audit.previewed") : t("common.audit.exported");
+          await onRecordExport({
+            action: `export.${exportFileName.replace(/-/g, "_")}_pdf`,
+            details: `${verb} ${title} PDF report '${filename}' (${logs.length} record(s), filter: ${buildFilterLabel()}).`,
+            metadata: { filename, count: logs.length, mode },
+          });
+          // The recorded activity raises a notification; refresh the badges and
+          // drop the stale page so the new row is visible.
+          queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+          queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
+        } catch (actErr) {
+          console.warn("Could not record export activity:", actErr);
+        }
+      }
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert(t("common.audit.failed_pdf"));
+    } finally {
+      setExporting(null);
+    }
+  };
+
+
+  // Format ISO datetime for display
+  function fmtDatetime(isoStr) {
+    return formatDateTime(isoStr) || "—";
+  }
+
+  return (
+    <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
+      {/* ── Header ── */}
+      <div className="mb-4 sm:mb-5">
+        <PageHeader title={title} description={description} />
+      </div>
+
+      {/* ── Filter bar ── */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2.5 sm:gap-2">
+          {/* Search → maps to action ilike filter */}
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--hw-neutral-400)]" />
+            <input
+              id="audit-search"
+              type="text"
+              placeholder={t("common.audit.search_placeholder")}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full pl-9 pr-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+            />
+          </div>
+
+          {showUserFilter && (
+            <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
+              <input
+                id="audit-user-filter"
+                type="text"
+                placeholder={t("common.audit.search_user_placeholder")}
+                value={userSearch}
+                onChange={(e) => { setUserSearch(e.target.value); setPage(1); }}
+                className="w-full px-3 py-2 text-[13px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+              />
+            </div>
+          )}
+
+          {/* Row containing All Actions and Date Filters on the same row across all screen sizes */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+            {/* Resource prefix filter */}
+            <div className="w-full sm:w-auto min-w-0">
+              <FilterSelect
+                id="audit-action-filter"
+                label={t("common.audit.action_category")}
+                value={actionPrefix}
+                onChange={(v) => { setPrefix(v); setPage(1); }}
+                options={actionOptions}
+              />
+            </div>
+
+            {/* Date range in same row */}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 w-full sm:w-auto min-w-0">
+              <input
+                id="audit-date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                aria-label={t("common.audit.date_from")}
+                className="w-full min-w-0 bg-white border border-[var(--hw-neutral-200)] rounded-xl px-1.5 xs:px-2 py-2 text-[11px] xs:text-[12px] sm:text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+              />
+              <span className="text-[10px] xs:text-[11px] text-[var(--hw-neutral-400)] text-center px-0.5">{t("common.audit.to")}</span>
+              <input
+                id="audit-date-to"
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                aria-label={t("common.audit.date_to")}
+                className="w-full min-w-0 bg-white border border-[var(--hw-neutral-200)] rounded-xl px-1.5 xs:px-2 py-2 text-[11px] xs:text-[12px] sm:text-[13px] text-black focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-400)]"
+              />
+            </div>
+          </div>
+
+          {hasFilters && (
+            <button
+              onClick={handleReset}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-[13px] font-medium text-[var(--hw-neutral-600)] hover:text-black border border-[var(--hw-neutral-200)] rounded-xl bg-white hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{t("common.audit.reset")}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Small Export PDF button below the search/filter container, right-justified ── */}
+      <div className="flex items-center justify-end mb-3">
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            disabled={!!exporting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-medium rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-700)] bg-white hover:bg-[var(--hw-neutral-50)] transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <FileText className={`w-3.5 h-3.5 text-[#245501] ${exporting ? "animate-pulse" : ""}`} />
+            <span>{exporting ? t("common.audit.preparing_pdf") : t("common.audit.export_pdf")}</span>
+          </button>
+          {showExportMenu && (
+            <div className="absolute right-0 mt-1.5 w-36 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg overflow-hidden z-20">
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  generatePdf("preview");
+                }}
+                className="w-full text-left px-3.5 py-2 text-[12px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" /> {t("common.audit.preview")}
+              </button>
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  generatePdf("download");
+                }}
+                className="w-full text-left px-3.5 py-2 text-[12px] text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] flex items-center gap-2 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> {t("common.audit.download")}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Table ── */}
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-[var(--hw-neutral-100)] bg-[var(--hw-neutral-50)]">
+                {[
+                  { key: "id",         label: t("common.audit.col_log_id")    },
+                  { key: "timestamp",  label: t("common.audit.col_timestamp") },
+                  { key: "actor",      label: t("common.audit.col_actor")     },
+                  { key: "action",     label: t("common.audit.col_action")    },
+                  { key: "details",    label: t("common.audit.col_details")   },
+                  { key: "ip",         label: t("common.audit.col_ip")        },
+                ].map((h) => (
+                  <th
+                    key={h.key}
+                    className="text-left px-5 py-3 font-semibold text-[var(--hw-neutral-700)] text-[11px] uppercase tracking-wide whitespace-nowrap"
+                  >
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--hw-neutral-100)]">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-6 h-6 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-[13px] text-[var(--hw-neutral-500)]">{t("common.audit.loading")}</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <p className="text-[13px] text-red-600">{error}</p>
+                  </td>
+                </tr>
+              ) : data.items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <EmptyState filtered={hasFilters} emptyDescription={emptyDescription} t={t} />
+                  </td>
+                </tr>
+              ) : (
+                data.items.map((row) => {
+                  const hl = (highlightedId || "").toLowerCase();
+                  const isHighlighted = Boolean(
+                    hl &&
+                    (row.id?.toLowerCase() === hl ||
+                     row.action?.toLowerCase().includes(hl) ||
+                     (row.user_id && row.user_id.toLowerCase().includes(hl)) ||
+                     (row.actor_name && row.actor_name.toLowerCase().includes(hl)) ||
+                     (row.details && row.details.toLowerCase().includes(hl)))
+                  );
+                  const rowDataMatcher = `${row.id} ${row.action} ${row.user_id || ""} ${row.actor_name || ""}`.toLowerCase();
+
+                  return (
+                    <tr
+                      key={row.id}
+                      id={`log-row-${row.id.toLowerCase()}`}
+                      data-log-row={rowDataMatcher}
+                      className={`transition-colors duration-500 ${isHighlighted ? "bg-emerald-50/70 font-medium" : ""}`}
+                    >
+                      <td className="px-5 py-3 font-mono text-[11px] text-[var(--hw-neutral-500)] whitespace-nowrap">
+                        {row.id}
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-700)] whitespace-nowrap text-[12px]">
+                        {fmtDatetime(row.created_at)}
+                      </td>
+                      <td className="px-5 py-3 font-medium text-[var(--hw-neutral-800)] whitespace-nowrap">
+                        {formatActorLabel(row)}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <ActionText action={row.action} formatAction={formatAction} />
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-700)] max-w-[300px]">
+                        <DetailsCell details={row.details} t={t} />
+                      </td>
+                      <td className="px-5 py-3 text-[var(--hw-neutral-600)] whitespace-nowrap font-mono text-[12px]">
+                        {row.ip_address || "—"}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="md:hidden">
+          {loading ? (
+            <div className="px-5 py-16 flex flex-col items-center gap-3">
+              <div className="w-6 h-6 border-2 border-[var(--hw-green-600)] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[13px] text-[var(--hw-neutral-500)]">{t("common.audit.loading")}</p>
+            </div>
+          ) : error ? (
+            <div className="px-5 py-16 flex justify-center">
+              <p className="text-[13px] text-red-600">{error}</p>
+            </div>
+          ) : data.items.length === 0 ? (
+            <div className="px-5 py-16 flex justify-center">
+              <EmptyState filtered={hasFilters} emptyDescription={emptyDescription} t={t} />
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--hw-neutral-100)]">
+              {data.items.map((row) => {
+                const hl = (highlightedId || "").toLowerCase();
+                const isHighlighted = Boolean(
+                  hl &&
+                  (row.id?.toLowerCase() === hl ||
+                   row.action?.toLowerCase().includes(hl) ||
+                   (row.user_id && row.user_id.toLowerCase().includes(hl)) ||
+                   (row.actor_name && row.actor_name.toLowerCase().includes(hl)) ||
+                   (row.details && row.details.toLowerCase().includes(hl)))
+                );
+                const rowDataMatcher = `${row.id} ${row.action} ${row.user_id || ""} ${row.actor_name || ""}`.toLowerCase();
+
+                return (
+                  <div
+                    key={row.id}
+                    data-log-row={rowDataMatcher}
+                    className={`p-2.5 sm:p-3 space-y-1 transition-colors duration-500 ${
+                      isHighlighted ? "bg-emerald-50/70" : ""
+                    }`}
+                  >
+                    {/* Header: Action & Plain Text Log ID (no badge) */}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="break-all font-medium">
+                        <ActionText action={row.action} formatAction={formatAction} />
+                      </div>
+                      <span className="shrink-0 text-[11px] font-mono text-[var(--hw-neutral-400)]">
+                        {row.id}
+                      </span>
+                    </div>
+
+                    {/* Compact Actor & Timestamp in one line or compact row */}
+                    <div className="flex items-center justify-between gap-2 text-[12px]">
+                      <span className="font-semibold text-[var(--hw-neutral-800)] truncate">
+                        {formatActorLabel(row)}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-[var(--hw-neutral-500)]">
+                        {fmtDatetime(row.created_at)}
+                      </span>
+                    </div>
+
+                    {/* Details */}
+                    {row.details && (
+                      <div className="pt-0.5">
+                        <MobileDetails details={row.details} t={t} />
+                      </div>
+                    )}
+
+                    {/* IP Address (compact) */}
+                    {row.ip_address && (
+                      <div className="text-[10.5px] text-[var(--hw-neutral-400)] font-mono">
+                        {t("common.audit.ip_label")} {row.ip_address}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Pagination ── */}
+      {totalPages > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 bg-white border border-[var(--hw-neutral-200)] rounded-xl sm:rounded-2xl shadow-[var(--shadow-xs)] text-[12px] text-[var(--hw-neutral-700)]">
+          <p className="text-center sm:text-left text-[13px] font-medium text-[var(--hw-neutral-700)]">
+            {data.total > 0
+              ? t("common.audit.activities_count", { start: (page - 1) * PAGE_SIZE + 1, end: Math.min(page * PAGE_SIZE, data.total), total: data.total })
+              : t("common.audit.no_entries")}
+          </p>
+
+          {/* Mobile view: Compact Prev / Page X of Y / Next */}
+          <div className="flex sm:hidden items-center justify-between w-full pt-1 border-t border-[var(--hw-neutral-100)]">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("common.audit.prev")}
+            </button>
+            <span className="text-[12px] font-semibold text-[var(--hw-neutral-800)]">
+              {t("common.audit.page_of", { page, total: totalPages })}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[12px] font-medium text-[var(--hw-neutral-700)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("common.audit.next")}
+            </button>
+          </div>
+
+          {/* Desktop/Tablet view: Sliding window with ellipsis so numbers never wrap into multiple rows */}
+          <div className="hidden sm:flex items-center gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("common.audit.prev")}
+            </button>
+
+            {(() => {
+              const pages = [];
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (page > 3) pages.push("...");
+                const start = Math.max(2, page - 1);
+                const end = Math.min(totalPages - 1, page + 1);
+                for (let i = start; i <= end; i++) {
+                  if (!pages.includes(i)) pages.push(i);
+                }
+                if (page < totalPages - 2) pages.push("...");
+                if (!pages.includes(totalPages)) pages.push(totalPages);
+              }
+
+              return pages.map((item, idx) => {
+                if (item === "...") {
+                  return (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-1 text-[var(--hw-neutral-400)] select-none">
+                      …
+                    </span>
+                  );
+                }
+                return (
+                  <button
+                    key={item}
+                    onClick={() => setPage(item)}
+                    className={`min-w-[32px] px-2.5 py-1 border rounded-lg transition-colors ${
+                      item === page
+                        ? "border-[var(--hw-green-600)] bg-[var(--hw-green-700)] text-white font-medium"
+                        : "border-[var(--hw-neutral-200)] text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)]"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              });
+            })()}
+
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2.5 py-1 border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-600)] hover:bg-[var(--hw-neutral-50)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("common.audit.next")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

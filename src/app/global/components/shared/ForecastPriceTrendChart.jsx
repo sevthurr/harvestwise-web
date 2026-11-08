@@ -67,6 +67,33 @@ function UnifiedFcTooltip({
               Last observed price
             </div>
           )}
+          {point.change_pct != null && (
+            <div className="flex items-center gap-1.5 pt-0.5 text-[11px] font-semibold">
+              <span className="text-black font-medium">Change:</span>
+              <span className={point.change_pct >= 0 ? "text-emerald-700" : "text-rose-600"}>
+                {point.change_pct >= 0 ? "🔺 +" : "🔻 "}{point.change_pct}%
+              </span>
+            </div>
+          )}
+          {point.volatility_reason && (
+            <div className="pt-1.5 text-[11px] border-t border-[var(--hw-neutral-100)] mt-1.5 space-y-0.5">
+              <div className="flex items-center gap-1">
+                <span className="text-[9.5px] text-amber-800 font-bold uppercase tracking-wider bg-amber-50 border border-amber-300 px-1 py-0.5 rounded">
+                  ⚠ Volatility Event
+                </span>
+              </div>
+              <div className="text-black mt-0.5">
+                <span className="font-semibold text-neutral-700">Reason: </span>
+                <span className="font-bold text-neutral-900">{point.volatility_reason}</span>
+              </div>
+              {point.volatility_notes && (
+                <div className="text-[10.5px] text-neutral-600 italic">
+                  <span className="font-semibold not-italic text-neutral-700">Notes: </span>
+                  &ldquo;{point.volatility_notes}&rdquo;
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -131,6 +158,40 @@ function LegacyFcTooltip({ active, payload, label, commodity }) {
       ))}
     </div>
   );
+}
+
+function renderVolatilityDot(props) {
+  const { cx, cy, payload } = props;
+  if (!cx || !cy || !payload) return null;
+  if (payload.is_volatility_flagged || payload.volatility_reason) {
+    const isUp = (payload.change_pct ?? 0) >= 0;
+    return (
+      <svg key={`vdot-${cx}-${cy}`} x={cx - 7} y={cy - 7} width={14} height={14} viewBox="0 0 14 14" className="overflow-visible pointer-events-none">
+        <circle cx={7} cy={7} r={6.5} fill={isUp ? "#16a34a" : "#dc2626"} stroke="#ffffff" strokeWidth={1.5} />
+        <text x={7} y={9.5} textAnchor="middle" fontSize={8} fill="#ffffff" fontWeight="bold">
+          {isUp ? "▲" : "▼"}
+        </text>
+      </svg>
+    );
+  }
+  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={3.5} fill="white" stroke="#15803d" strokeWidth={2} />;
+}
+
+function renderActiveVolatilityDot(props) {
+  const { cx, cy, payload } = props;
+  if (!cx || !cy) return null;
+  if (payload?.is_volatility_flagged || payload?.volatility_reason) {
+    const isUp = (payload.change_pct ?? 0) >= 0;
+    return (
+      <svg key={`avdot-${cx}-${cy}`} x={cx - 9} y={cy - 9} width={18} height={18} viewBox="0 0 18 18" className="overflow-visible pointer-events-none">
+        <circle cx={9} cy={9} r={8.5} fill={isUp ? "#15803d" : "#b91c1c"} stroke="#ffffff" strokeWidth={2} />
+        <text x={9} y={12} textAnchor="middle" fontSize={10} fill="#ffffff" fontWeight="bold">
+          {isUp ? "▲" : "▼"}
+        </text>
+      </svg>
+    );
+  }
+  return <circle key={`adot-${cx}-${cy}`} cx={cx} cy={cy} r={5.5} fill="#15803d" stroke="white" strokeWidth={1} />;
 }
 
 function ForecastPriceTrendChart({
@@ -444,8 +505,8 @@ function ForecastPriceTrendChart({
                 dataKey="actual"
                 stroke="#15803d"
                 strokeWidth={2.5}
-                dot={{ r: 3.5, fill: "white", stroke: "#15803d", strokeWidth: 2 }}
-                activeDot={{ r: 5.5, strokeWidth: 0, fill: "#15803d" }}
+                dot={renderVolatilityDot}
+                activeDot={renderActiveVolatilityDot}
                 connectNulls={false}
                 isAnimationActive={false}
                 name={actualLabel}

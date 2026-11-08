@@ -17,6 +17,7 @@ import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { MONTH_NAMES } from "../../utils/calendarMarkers";
 import { formatCropLabel } from "../../utils/formatters";
 import { WeatherGlyph } from "./CalendarGrid";
+import { weatherOccurrenceText, weatherOccurrenceFallback } from "../../../global/utils/weatherOccurrence";
 
 const WEATHER_TONE = {
   heat: "text-orange-500",
@@ -95,6 +96,12 @@ export default function DayDetailCard({ year, month, day, marker }) {
           <p className="text-[13px] text-[var(--hw-neutral-900)] leading-snug">
             {weatherLine(marker.weatherInfo, marker.weather, t)}
           </p>
+          <div className="ml-9 text-[12px] text-[var(--hw-neutral-700)]">
+            {(weatherOccurrenceText(marker.weatherInfo?.occurrence, t).length
+              ? weatherOccurrenceText(marker.weatherInfo.occurrence, t)
+              : [weatherOccurrenceFallback(marker.weatherInfo, t)]
+            ).map((line) => <p key={line}>{line}</p>)}
+          </div>
         </div>
       )}
 

@@ -109,6 +109,7 @@ export function buildWeatherRiskAnalysis({
       rainfallMm: day.rainfall_mm,
       humidity: day.humidity_pct,
       windSpeed: day.wind_speed_max_kmh,
+      occurrence: day.occurrence || null,
       weatherCondition: day.weather_condition,
       suitability: severe ? "Severe" : caution ? "Caution" : "Suitable",
     };

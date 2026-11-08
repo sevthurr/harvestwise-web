@@ -6,3 +6,4 @@ export * as analyticsApi from "./analyticsApi";
 export * as pricesApi from "./pricesApi";
 export * as notificationsApi from "./notificationsApi";
 export * as dftcApi from "./dftcApi";
+export * as farmerApi from "./farmerApi";

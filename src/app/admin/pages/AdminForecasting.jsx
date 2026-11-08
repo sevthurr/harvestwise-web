@@ -496,6 +496,13 @@ const ForecastChart = ({
         </div>
       </div>
 
+      <div className="flex items-center gap-1.5 text-[12px] font-medium text-black mt-1">
+        <Info className="w-4 h-4 text-black shrink-0" />
+        <span>
+          Forecasts are based on past price trends alone. Actual market prices may vary due to weather, fuel, and supply changes.
+        </span>
+      </div>
+
       <div className="w-full flex-1 flex flex-col justify-center my-2 relative">
         {loading ? (
           <div className="h-[380px] w-full flex items-center justify-center bg-[var(--hw-neutral-50)] rounded-xl animate-pulse">

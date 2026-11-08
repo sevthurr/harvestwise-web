@@ -1,4 +1,13 @@
 export const weather = {
+  "when_to_expect": "When to expect it",
+  "rain_expected": "Rain expected {window}{probability}.",
+  "hottest_around": "Hottest around {time}.",
+  "coolest_around": "Coolest around {time}.",
+  "strongest_wind_around": "Strongest wind around {time}.",
+  "most_humid_around": "Most humid around {time}.",
+  "rain_timing_unavailable": "Rain is expected, but the exact time is not available.",
+  "timing_unavailable": "Exact timing is not available for this day.",
+  "last_updated": "Last updated: {time}",
   "weather_suitable": "Favorable and generally sunny weather for the next {days} days — well-suited and ideal for growing {crop_name}.",
   "weather_caution": "Some weather conditions for {crop_name} need attention. The main concern is {risk_name}.",
   "weather_severe": "Weather risk for {crop_name} is severe. The main concern is {risk_name}.",

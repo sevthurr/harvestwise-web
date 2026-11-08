@@ -49,3 +49,12 @@ lerna-debug.log*
 *.tmp
 *.temp
 exclude.txt
+*.patch
+.backup_dftc_preview_safe/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

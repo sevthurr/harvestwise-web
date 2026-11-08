@@ -161,9 +161,11 @@ const ProfitCalcAccordion = ({
               <span className="text-[var(--hw-neutral-900)]">{r.label}</span>
               <span className={r.bold ? "font-bold text-emerald-700" : "font-medium text-[var(--hw-neutral-900)]"}>{r.value}</span>
             </div>)}
-          {!hasFarmgate && <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-1 border-t border-[var(--hw-neutral-100)]">
+          {!hasFarmgate && (
+            <p className="text-[12px] text-[var(--hw-neutral-900)] italic pt-1 border-t border-[var(--hw-neutral-100)]">
               {t("farmer.factors.profitability.forecast_reference_notice", {}, "Using market price as reference. Actual buyer price may be different.")}
-            </p>}
+            </p>
+          )}
         </div>}
     </div>;
 };

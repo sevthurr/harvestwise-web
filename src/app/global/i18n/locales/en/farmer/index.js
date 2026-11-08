@@ -23,6 +23,7 @@ import { notifications } from './notifications.js';
 import { about } from './about.js';
 import { errors } from './errors.js';
 import { emptyStates } from './emptyStates.js';
+import { myActivities } from './myActivities.js';
 
 export const farmer = {
   advisory,
@@ -53,5 +54,6 @@ export const farmer = {
   notifications,
   about,
   errors,
-  emptyStates
+  emptyStates,
+  myActivities
 };

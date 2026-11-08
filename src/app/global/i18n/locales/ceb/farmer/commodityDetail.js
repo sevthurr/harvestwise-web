@@ -33,5 +33,9 @@ export const commodityDetail = {
   btn_retry: "Sulayi pag-usab",
   price_trend_details: "Detalye sa Lihok sa Presyo",
   assess_crop_btn: "Susiha kining tanoma",
-  select_variety: "Pili og barayti"
+  select_variety: "Pili og barayti",
+  volatility_reason_drop: "Hinungdan sa kalit nga pag-ubos: {reason}",
+  volatility_reason_rise: "Hinungdan sa kalit nga pagsaka: {reason}",
+  volatility_reason_change: "Hinungdan sa kalit nga pagbag-o: {reason}",
+  sudden_movement: "Gitala nga kalit nga lihok sa presyo"
 };

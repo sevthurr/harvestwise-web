@@ -29,9 +29,13 @@ const profileMock = vi.hoisted(() => ({
   data: { preferredCrops: ["COM-0008"] }, // Pipino
 }));
 
-vi.mock("../app/global/hooks/useFarmerPrefetch.js", () => ({
-  fetchFarmerProfile: vi.fn(async () => profileMock.data),
-}));
+vi.mock("../app/global/hooks/useFarmerPrefetch.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    fetchFarmerProfile: vi.fn(async () => profileMock.data),
+  };
+});
 
 const mockApiGet = vi.hoisted(() => vi.fn());
 const mockParseResponse = vi.hoisted(() => vi.fn());
