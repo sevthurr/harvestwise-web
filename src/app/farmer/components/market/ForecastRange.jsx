@@ -1,4 +1,5 @@
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { formatPriceChangeDisplay } from "../../../global/utils/priceFormatting";
 const dirConfig = {
   rising: { Icon: TrendingUp, color: "text-amber-600", bg: "bg-amber-50", label: "Likely to rise" },
   stable: { Icon: Minus, color: "text-[var(--hw-neutral-700)]", bg: "bg-[var(--hw-neutral-100)]", label: "Remain stable" },
@@ -115,7 +116,7 @@ const ForecastRange = ({
     { label: "Forecast high", value: `\u20B1${forecastHigh}/kg` },
     { label: `Recent avg (14d)`, value: `\u20B1${recentAvg}/kg` },
     { label: "Diff from avg", value: `${diffFromAvg >= 0 ? "+" : ""}\u20B1${diffFromAvg}/kg` },
-    { label: "Forecast change", value: `${Number(changePct) >= 0 ? "+" : ""}${changePct}%`, accent: Number(changePct) !== 0 }
+    { label: "Forecast change", value: formatPriceChangeDisplay(forecastedPrice - currentPrice, Number(changePct), { referencePrice: currentPrice }), accent: Number(changePct) !== 0 }
   ].map((m) => <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
                   <p className="text-xs text-[var(--hw-neutral-700)]">{m.label}</p>
                   <p className={`text-sm font-semibold mt-0.5 ${m.accent ? color : "text-[var(--hw-neutral-900)]"}`}>{m.value}</p>

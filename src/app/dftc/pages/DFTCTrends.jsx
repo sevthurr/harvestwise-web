@@ -16,6 +16,7 @@ import { ArrivalSourcePieChart } from "../../global/components/shared/ArrivalSou
 import { HistoricalAveragePriceSection } from "../../global/components/shared/HistoricalAveragePriceSection";
 import { useIsMobile } from "../../global/components/ui/use-mobile";
 import { normalizeCommodityLabel } from "../../global/utils/priceChartTransforms";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import * as pricesApi from "../../../services/api/pricesApi";
 import * as dftcApi from "../../../services/api/dftcApi";
@@ -1775,14 +1776,22 @@ function DFTCTrends() {
                         {item.uom && <span className="text-neutral-400 font-normal text-[11px]"> /{item.uom}</span>}
                       </td>
                       <td className="py-2.5">
-                        {changeAbs != null ? (
+                        {item.change_pct != null || item.change != null ? (
                           <span
                             className={`inline-flex items-center gap-0.5 font-semibold tabular-nums ${
                               isIncrease ? "text-emerald-700" : "text-rose-700"
                             }`}
                           >
-                            <span>{isIncrease ? "↑ +" : "↓ -"}</span>
-                            <span>{changeAbs}%</span>
+                            <span>
+                              {formatPriceChangeDisplay(
+                                item.change != null
+                                  ? item.change
+                                  : (item.price != null && item.change_pct != null
+                                    ? item.price - (item.price / (1 + item.change_pct / 100))
+                                    : null),
+                                item.change_pct
+                              )}
+                            </span>
                           </span>
                         ) : (
                           <span className="text-neutral-400">—</span>
@@ -1914,9 +1923,25 @@ function DFTCTrends() {
                           {row.price != null ? `₱${row.price.toFixed(2)}` : "—"}
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px]">
-                          {row.change_pct != null ? (
-                            <span className={`font-semibold ${row.change_pct > 0 ? "text-emerald-700" : row.change_pct < 0 ? "text-rose-600" : "text-neutral-600"}`}>
-                              {row.change_pct > 0 ? "🔺 +" : row.change_pct < 0 ? "🔻 " : ""}{row.change_pct}%
+                          {row.change_pct != null || row.change != null ? (
+                            <span className={`font-semibold ${
+                              (row.change != null ? row.change > 0 : row.change_pct > 0)
+                                ? "text-emerald-700"
+                                : (row.change != null ? row.change < 0 : row.change_pct < 0)
+                                ? "text-rose-600"
+                                : "text-neutral-600"
+                            }`}>
+                              {formatPriceChangeDisplay(
+                                row.change != null
+                                  ? row.change
+                                  : (row.price != null && row.change_pct != null
+                                    ? row.price - (row.price / (1 + row.change_pct / 100))
+                                    : null),
+                                row.change_pct,
+                                {
+                                  referencePrice: row.price != null && row.change != null ? row.price - row.change : undefined
+                                }
+                              )}
                             </span>
                           ) : (
                             <span className="text-neutral-400">—</span>
@@ -2359,9 +2384,14 @@ function DFTCTrends() {
                                 }`}
                               >
                                 {comm.change_pct != null
-                                  ? `${comm.direction === "down" ? "↓" : "↑"} ${Math.abs(
+                                  ? formatPriceChangeDisplay(
+                                      comm.change != null
+                                        ? comm.change
+                                        : (comm.current_price != null
+                                          ? comm.current_price - (comm.current_price / (1 + comm.change_pct / 100))
+                                          : null),
                                       comm.change_pct
-                                    )}%`
+                                    )
                                   : "Volatile"}
                               </p>
                             </>

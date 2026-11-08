@@ -45,6 +45,7 @@ import { useArrivalPressure, useHistoricalSeasonalProduction, usePriceOutlook } 
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { useIsMobile } from "../../global/components/ui/use-mobile";
 import { formatDateTime } from "../../global/utils/apiTransforms";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
 const PRODUCTION_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -1163,7 +1164,16 @@ function buildBasisResultFromDetail(detail, resultId, defaultTemplate) {
       "Lower forecast": raw.lower_forecast != null ? `${raw.lower_forecast}/kg` : "-/kg",
       "Forecast midpoint": raw.forecast_midpoint != null ? `${raw.forecast_midpoint}/kg` : "-/kg",
       "Upper forecast": raw.upper_forecast != null ? `${raw.upper_forecast}/kg` : "-/kg",
-      "Forecast price change": raw.forecast_price_change_pct != null ? `${raw.forecast_price_change_pct}%` : "-"
+      "Forecast price change":
+        raw.forecast_price_change_pct != null
+          ? formatPriceChangeDisplay(
+              raw.forecast_midpoint != null && raw.recent_average_price != null
+                ? Number(raw.forecast_midpoint) - Number(raw.recent_average_price)
+                : null,
+              raw.forecast_price_change_pct,
+              { referencePrice: raw.recent_average_price, pctDecimals: 2 }
+            )
+          : "-"
     };
   } else if (resultId === "arrival-pressure") {
     basisInputs = {
@@ -1615,7 +1625,16 @@ function AdminAnalyticsBasis() {
         "Lower forecast": money(priceOutlook?.lower_forecast),
         "Forecast midpoint": money(priceOutlook?.forecast_midpoint),
         "Upper forecast": money(priceOutlook?.upper_forecast),
-        "Forecast price change": priceOutlook?.forecast_price_change_pct == null ? "-" : `${priceOutlook.forecast_price_change_pct > 0 ? "+" : ""}${Number(priceOutlook.forecast_price_change_pct).toFixed(2)}%`
+        "Forecast price change":
+          priceOutlook?.forecast_price_change_pct == null
+            ? "-"
+            : formatPriceChangeDisplay(
+                priceOutlook?.forecast_midpoint != null && priceOutlook?.recent_average_price != null
+                  ? Number(priceOutlook.forecast_midpoint) - Number(priceOutlook.recent_average_price)
+                  : null,
+                priceOutlook.forecast_price_change_pct,
+                { referencePrice: priceOutlook.recent_average_price, pctDecimals: 2 }
+              )
       },
       forecastPoints: processed
         ? (priceOutlook.forecast_points || []).map((point) => ({

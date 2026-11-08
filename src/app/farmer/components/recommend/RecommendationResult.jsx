@@ -18,7 +18,7 @@ import {
   Cloud
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { getTotalCost, formatPeso, COMMODITY_OPTIONS, suggestHarvestDate, toSqm } from "./types";
+import { getTotalCost, formatPeso, COMMODITY_OPTIONS, suggestHarvestDate, toSqm, formatFarmgateSummary } from "./types";
 import { findCatalogOption, useCommodityCatalog } from "./useCommodityCatalog";
 import { useCrops, normalizeCropPlan } from "../crops/CropsContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
@@ -112,7 +112,7 @@ const ADVISORY_CFG = {
   },
 };
 
-const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, priceBasisShort, margin, hasFarmgate }) => {
+const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, priceBasisShort, margin, hasFarmgate, marketSourceLabel = "Bangkerohan Retail" }) => {
   const [open, setOpen] = useState(false);
   const { t } = useLanguage();
   return (
@@ -140,7 +140,7 @@ const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, pric
               { label: t("farmer.factors.profitability.expected_harvest_volume_label"), value: `${qty} kg` },
               { label: t("farmer.factors.profitability.total_estimated_cost_label"), value: formatPeso(totalCost) },
               { label: t("farmer.factors.profitability.price_basis_used_label"), value: priceBasisShort },
-              { label: t("farmer.factors.profitability.price_basis_per_kg_label"), value: `₱${sellingBasis}/kg` },
+              { label: t("farmer.factors.profitability.price_basis_per_kg_label"), value: `₱${sellingBasis}/kg (${hasFarmgate ? t("farmer.factors.profitability.farmgate_price_label", {}, "Farmgate") : marketSourceLabel})` },
               { label: t("farmer.factors.profitability.cost_to_recover_short_label"), value: `₱${costToRecover}/kg` },
               { label: `${t("farmer.factors.profitability.estimated_profit_per_kg_label")} (₱${sellingBasis} − ₱${costToRecover})`, value: `₱${margin}/kg`, bold: true },
             ].map((r) => (
@@ -152,7 +152,7 @@ const ProfitCalcAccordion = ({ qty, totalCost, costToRecover, sellingBasis, pric
           </div>
           {!hasFarmgate && (
             <p className="text-[12px] text-[var(--hw-neutral-600)] italic pt-1 border-t border-[var(--hw-neutral-100)]">
-              {t("farmer.factors.profitability.forecast_reference_notice")}
+              {t("farmer.factors.profitability.forecast_reference_notice_with_market", { market: marketSourceLabel }, `Using market price (${marketSourceLabel}) as reference. Actual buyer price may be different.`)}
             </p>
           )}
         </div>
@@ -165,21 +165,25 @@ function buildCropPlanPayload(data, status = "Draft") {
   const totalCost = getTotalCost(data);
   const productionCosts = data.costMethod === "detailed"
     ? (data.expenses || [])
-        .filter((e) => {
-          const amt = Number(e.amount);
-          return !isNaN(amt) && amt > 0;
-        })
-        .map((e) => ({
-          category: e.name || "Additional",
-          amount: Number(e.amount),
-          cost_type: "initial",
-        }))
+      .filter((e) => {
+        const amt = Number(e.amount);
+        return !isNaN(amt) && amt > 0;
+      })
+      .map((e) => ({
+        category: e.name || "Additional",
+        amount: Number(e.amount),
+        cost_type: "initial",
+      }))
     : totalCost > 0
       ? [{ category: "Total Cost", amount: totalCost, cost_type: "initial" }]
       : [];
 
   const harvestQty = Number(data.harvestQuantity);
+  const rawHarvestQty = Number(data.harvestQuantityRaw !== "" && data.harvestQuantityRaw !== undefined ? data.harvestQuantityRaw : data.harvestQuantity);
+  const harvestConvWeight = Number(data.harvestConversionWeight);
   const farmgatePrice = Number(data.farmgatePrice);
+  const rawFarmgatePrice = Number(data.farmgatePriceRaw !== "" && data.farmgatePriceRaw !== undefined ? data.farmgatePriceRaw : data.farmgatePrice);
+  const convWeight = Number(data.farmgateConversionWeight || data.harvestConversionWeight);
 
   return {
     plan_id: data.draftId || null,
@@ -190,7 +194,13 @@ function buildCropPlanPayload(data, status = "Draft") {
     harvest_window_end: data.harvestWindowEnd || data.harvest_window_end || null,
     farm_area: toSqm(data.farmArea, data.farmAreaUnit),
     expected_harvest_qty: !isNaN(harvestQty) && harvestQty > 0 ? harvestQty : null,
+    harvest_qty_unit: data.harvestQuantityUnit || "kg",
+    harvest_qty_entered: !isNaN(rawHarvestQty) && rawHarvestQty > 0 ? rawHarvestQty : null,
+    harvest_conversion_weight: !isNaN(harvestConvWeight) && harvestConvWeight > 0 ? harvestConvWeight : null,
     expected_farmgate_price: !isNaN(farmgatePrice) && farmgatePrice > 0 ? farmgatePrice : null,
+    farmgate_price_unit: data.useFarmgate ? (data.farmgatePriceUnit || "kg") : "kg",
+    farmgate_price_entered: data.useFarmgate && !isNaN(rawFarmgatePrice) && rawFarmgatePrice > 0 ? rawFarmgatePrice : null,
+    farmgate_conversion_weight: data.useFarmgate && !isNaN(convWeight) && convWeight > 0 ? convWeight : null,
     status,
     cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
     production_costs: productionCosts,
@@ -307,26 +317,31 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const forecastHi = data.forecastUpper || moduleResults.upper_forecast_price || null;
   // sellingBasis and priceBasisLabel reuse seasonalRef, hasEligibleForecast, planningOrNoForecast from above
   const forecastMid = forecastLo != null && forecastHi != null ? (forecastLo + forecastHi) / 2 : (moduleResults.forecast_midpoint || currentPx);
+  const marketSourceLabel = advisoryResponse?.module_results?.market_price_label
+    || (advisoryResponse?.module_results?.market && advisoryResponse?.module_results?.price_type
+      ? `${advisoryResponse.module_results.market} ${advisoryResponse.module_results.price_type}`
+      : "Bangkerohan Retail");
+
   const sellingBasis = hasFarmgate
     ? data.farmgatePrice
     : (planningOrNoForecast ? (seasonalRef || forecastMid) : (forecastMid || seasonalRef));
   const priceBasisLabel = hasFarmgate
     ? t("farmer.factors.profitability.based_on_farmgate", {}, "Based on estimated farmgate price")
     : planningOrNoForecast
-    ? t("farmer.factors.profitability.based_on_seasonal", {}, "Based on historical seasonal price")
-    : t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price");
+      ? `${t("farmer.factors.profitability.based_on_seasonal", {}, "Based on historical seasonal price")} (${marketSourceLabel})`
+      : `${t("farmer.factors.profitability.based_on_forecast_market", {}, "Based on forecasted market price")} (${marketSourceLabel})`;
   const priceBasisShort = hasFarmgate
     ? t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")
     : planningOrNoForecast
-    ? t("farmer.factors.price.reference_price_label", {}, "Historical seasonal price")
-    : t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference");
+      ? `${t("farmer.factors.price.reference_price_label", {}, "Historical seasonal price")} (${marketSourceLabel})`
+      : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")} (${marketSourceLabel})`;
   const priceBasisDetail = hasFarmgate
-    ? `${t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}: \u20B1${data.farmgatePrice}/kg`
+    ? `${t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}: \u20B1${data.farmgatePrice}/kg (Farmgate)`
     : planningOrNoForecast && seasonalRef != null
-    ? `${t("farmer.factors.price.reference_price_label", {}, "Reference price")}: ₱${Number(seasonalRef).toFixed(2)}/kg`
-    : (forecastLo != null && forecastHi != null
-        ? t("farmer.factors.price.forecast_reference_range", { forecast_lo: forecastLo, forecast_hi: forecastHi })
-        : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")}: -/kg`);
+      ? `${t("farmer.factors.price.reference_price_label", {}, "Reference price")} (${marketSourceLabel}): ₱${Number(seasonalRef).toFixed(2)}/kg`
+      : (forecastLo != null && forecastHi != null
+        ? `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")} (${marketSourceLabel}): ₱${forecastLo}–₱${forecastHi}/kg`
+        : `${t("farmer.factors.profitability.forecast_price_reference", {}, "Forecasted price reference")} (${marketSourceLabel}): -/kg`);
   const margin = costToRecover !== null && sellingBasis != null ? sellingBasis - costToRecover : null;
   const hasProfit = margin !== null && qty !== null && margin > 0;
   const profitLo = hasProfit ? Math.floor(margin * qty * 0.85 / 1e3) * 1e3 : 0;
@@ -341,14 +356,16 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const priceTabData = {
     currentPrice: currentPx,
     previousPrice: currentPx ? Math.round(currentPx + (priceDir === PRICE_TREND_CODES.RISING ? -5 : priceDir === PRICE_TREND_CODES.FALLING ? 5 : 0)) : null,
-    market: data.market || "Not available",
+    market: advisoryResponse?.module_results?.market || data.market || "Bangkerohan",
+    priceType: advisoryResponse?.module_results?.price_type || "Retail",
+    marketLabel: marketSourceLabel,
     direction: priceDir,
     directionLabel: priceDir === PRICE_TREND_CODES.RISING
       ? t("farmer.factors.price.trend_label_rising")
       : priceDir === PRICE_TREND_CODES.FALLING
         ? t("farmer.factors.price.trend_label_falling")
         : t("farmer.factors.price.trend_label_stable"),
-    forecastRange: forecastLo != null && forecastHi != null ? `₱${forecastLo}–₱${forecastHi}/kg` : "-/kg",
+    forecastRange: forecastLo != null && forecastHi != null ? `₱${forecastLo}–₱${forecastHi}/kg (${marketSourceLabel})` : "-/kg",
     points: pricePoints,
     summary: data.priceInsight || ""
   };
@@ -366,10 +383,10 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
     level: moduleResults.profitability || null,
     summary: hasProfit
       ? t("farmer.factors.profitability.summary_positive", {
-          selling_price: sellingBasis,
-          margin: margin,
-          total_profit: ((margin ?? 0) * qty).toLocaleString("en-PH")
-        })
+        selling_price: sellingBasis,
+        margin: margin,
+        total_profit: ((margin ?? 0) * qty).toLocaleString("en-PH")
+      })
       : t("farmer.factors.profitability.summary_negative")
   } : void 0;
   const handleSavePlan = async () => {
@@ -382,7 +399,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       addCrop(normalizeCropPlan(savedPlan));
       try {
         localStorage.removeItem("harvestwise_assessment_draft");
-      } catch {}
+      } catch { }
       await refreshCrops?.();
       navigate("/farmer/crops", {
         state: {
@@ -411,7 +428,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       addCrop(normalizeCropPlan(savedPlan));
       try {
         localStorage.removeItem("harvestwise_assessment_draft");
-      } catch {}
+      } catch { }
       await refreshCrops?.();
       navigate("/farmer/crops", {
         state: {
@@ -436,76 +453,76 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       "on-hold": t("farmer.crops.saved_on_hold", {}, "na-save ug gipadaplin una")
     };
     return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-          <div className="bg-[var(--hw-green-50)] border border-[var(--hw-green-400)] rounded-2xl p-5 text-center space-y-2">
-            <div className="flex justify-center mb-2">
-              <div className="p-3 bg-[var(--hw-green-700)] rounded-full"><Check className="w-6 h-6 text-white" /></div>
-            </div>
-            <p className="font-semibold text-[var(--hw-green-900)]">
-              {t("farmer.common.crop_plan_saved_toast", { displayName, action_status: lm[saved] })}
-            </p>
-            <p className="text-sm text-[var(--hw-green-800)]">
-              {t("farmer.common.crop_plan_saved_desc")}
-            </p>
-          </div>
-          <button
-            onClick={() => navigate("/farmer/crops")}
-            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-          >
-            {t("farmer.crops.title", {}, "Go to My Crops")} <ChevronRight className="w-4 h-4" />
-          </button>
-      </div>;
+      <div className="bg-[var(--hw-green-50)] border border-[var(--hw-green-400)] rounded-2xl p-5 text-center space-y-2">
+        <div className="flex justify-center mb-2">
+          <div className="p-3 bg-[var(--hw-green-700)] rounded-full"><Check className="w-6 h-6 text-white" /></div>
+        </div>
+        <p className="font-semibold text-[var(--hw-green-900)]">
+          {t("farmer.common.crop_plan_saved_toast", { displayName, action_status: lm[saved] })}
+        </p>
+        <p className="text-sm text-[var(--hw-green-800)]">
+          {t("farmer.common.crop_plan_saved_desc")}
+        </p>
+      </div>
+      <button
+        onClick={() => navigate("/farmer/crops")}
+        className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+      >
+        {t("farmer.crops.title", {}, "Go to My Crops")} <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>;
   }
   if (showPlantedForm) {
     const inputCls = "w-full px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition bg-white";
     return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
-          <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
-          <button
-            onClick={() => setShowPlantedForm(false)}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />{t("farmer.advisory.back_to_recommendation", {}, "Back to recommendation")}
-          </button>
-          <div>
-            <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">{t("farmer.crops.adjust_planting_details", {}, "Adjust planting details")}</h2>
-            <p className="text-sm text-[var(--hw-neutral-900)] mt-1">{t("farmer.crops.confirm_details_monitoring", { displayName }, `Confirm your details to start monitoring ${displayName}.`)}</p>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planting_date", {}, "Actual planting date")}</label>
-              <input
-                type="date"
-                value={plantedForm.actualPlantingDate}
-                onChange={(e) => {
-                  const newPlantingDate = e.target.value;
-                  const suggestion = newPlantingDate
-                    ? suggestHarvestDate(newPlantingDate, data.commodityId || data.commodity, data.variant)
-                    : null;
-                  setPlantedForm((f) => ({
-                    ...f,
-                    actualPlantingDate: newPlantingDate,
-                    ...(suggestion?.minDate ? { updatedHarvestDate: suggestion.minDate } : {}),
-                  }));
-                }}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planted_area", {}, "Actual planted area (sq m)")}</label>
-              <input type="number" min="0" step="1" value={plantedForm.actualArea} onChange={(e) => setPlantedForm((f) => ({ ...f, actualArea: e.target.value === "" ? "" : Math.trunc(Number(e.target.value)) }))} placeholder="e.g. 500" className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.updated_expected_harvest", {}, "Updated expected harvest date")}</label>
-              <input type="date" value={plantedForm.updatedHarvestDate} onChange={(e) => setPlantedForm((f) => ({ ...f, updatedHarvestDate: e.target.value }))} className={inputCls} />
-            </div>
-          </div>
-          <button
-            onClick={handleConfirmPlanted}
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Sprout className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
-          </button>
-      </div>;
+      <Breadcrumb items={[{ label: t("farmer.assess.title", {}, "Crop Assessment") }, { label: t("farmer.assess.result", {}, "Result") }]} />
+      <button
+        onClick={() => setShowPlantedForm(false)}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-neutral-900)] hover:text-[var(--hw-neutral-900)] transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />{t("farmer.advisory.back_to_recommendation", {}, "Back to recommendation")}
+      </button>
+      <div>
+        <h2 className="text-xl font-bold text-[var(--hw-neutral-900)]">{t("farmer.crops.adjust_planting_details", {}, "Adjust planting details")}</h2>
+        <p className="text-sm text-[var(--hw-neutral-900)] mt-1">{t("farmer.crops.confirm_details_monitoring", { displayName }, `Confirm your details to start monitoring ${displayName}.`)}</p>
+      </div>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planting_date", {}, "Actual planting date")}</label>
+          <input
+            type="date"
+            value={plantedForm.actualPlantingDate}
+            onChange={(e) => {
+              const newPlantingDate = e.target.value;
+              const suggestion = newPlantingDate
+                ? suggestHarvestDate(newPlantingDate, data.commodityId || data.commodity, data.variant)
+                : null;
+              setPlantedForm((f) => ({
+                ...f,
+                actualPlantingDate: newPlantingDate,
+                ...(suggestion?.minDate ? { updatedHarvestDate: suggestion.minDate } : {}),
+              }));
+            }}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.actual_planted_area", {}, "Actual planted area (sq m)")}</label>
+          <input type="number" min="0" step="1" value={plantedForm.actualArea} onChange={(e) => setPlantedForm((f) => ({ ...f, actualArea: e.target.value === "" ? "" : Math.trunc(Number(e.target.value)) }))} placeholder="e.g. 500" className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[var(--hw-neutral-900)] mb-1.5">{t("farmer.crops.updated_expected_harvest", {}, "Updated expected harvest date")}</label>
+          <input type="date" value={plantedForm.updatedHarvestDate} onChange={(e) => setPlantedForm((f) => ({ ...f, updatedHarvestDate: e.target.value }))} className={inputCls} />
+        </div>
+      </div>
+      <button
+        onClick={handleConfirmPlanted}
+        disabled={saving}
+        className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Sprout className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
+      </button>
+    </div>;
   }
   return (
     <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">
@@ -686,6 +703,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
           priceBasisShort={priceBasisShort}
           margin={margin != null ? margin : "-"}
           hasFarmgate={hasFarmgate}
+          marketSourceLabel={marketSourceLabel}
         />
 
         {/* Supporting values */}
@@ -699,7 +717,15 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
             <p className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)] mt-0.5">{qty ? `${qty} kg` : "- kg"}</p>
           </div>
           <div>
-            <p className="text-[11px] sm:text-[12px] text-[var(--hw-neutral-600)]">{t("farmer.factors.profitability.price_basis", {}, "Price basis")}</p>
+            <p
+              className="text-[11px] sm:text-[12px] text-[var(--hw-neutral-600)] truncate"
+              title={`${t("farmer.factors.profitability.price_basis", {}, "Price basis")} (${hasFarmgate ? "Farmgate" : marketSourceLabel})`}
+            >
+              {t("farmer.factors.profitability.price_basis", {}, "Price basis")}
+              <span className="text-[var(--hw-neutral-500)]">
+                {" "}({hasFarmgate ? "Farmgate" : marketSourceLabel})
+              </span>
+            </p>
             <p className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)] mt-0.5">{sellingBasis != null ? `₱${sellingBasis}/kg` : "-/kg"}</p>
           </div>
           <div>
@@ -709,9 +735,18 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
           <div className="col-span-2">
             <p className="text-[11px] sm:text-[12px] text-[var(--hw-neutral-600)]">{t("farmer.factors.profitability.estimated_farmgate", {}, "Estimated farmgate price")}</p>
             {hasFarmgate ? (
-              <p className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)] mt-0.5">₱{data.farmgatePrice}/kg</p>
+              <p className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)] mt-0.5">
+                {formatFarmgateSummary({
+                  enteredPrice: data.farmgatePriceRaw !== "" && data.farmgatePriceRaw !== undefined ? data.farmgatePriceRaw : data.farmgatePrice,
+                  unit: data.farmgatePriceUnit || "kg",
+                  conversionWeight: data.farmgateConversionWeight || data.harvestConversionWeight,
+                  normalizedPrice: data.farmgatePrice,
+                }) || `₱${data.farmgatePrice}/kg (Farmgate)`}
+              </p>
             ) : (
-              <p className="text-[12px] text-[var(--hw-neutral-500)] italic mt-0.5">{t("farmer.factors.profitability.not_set_reference", {}, "Not set — using market price as reference.")}</p>
+              <p className="text-[12px] text-[var(--hw-neutral-500)] italic mt-0.5">
+                {t("farmer.factors.profitability.not_set_reference_with_market", { market: marketSourceLabel }, `Not set — using market price (${marketSourceLabel}) as reference.`)}
+              </p>
             )}
           </div>
         </div>

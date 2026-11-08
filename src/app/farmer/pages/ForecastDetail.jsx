@@ -25,6 +25,7 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { getHistoryRows } from "../components/market/HistoricalPriceTable";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { composePriceOutlook, renderComposedMessage } from "../utils/advisoryMessageComposer";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 import { useQuery } from "@tanstack/react-query";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
@@ -303,7 +304,7 @@ function ForecastDetailPage() {
     { label: "Recent average", value: `\u20B1${rec.recentAvg}/kg` },
     { label: "Forecasted price", value: `\u20B1${rec.forecastedPrice}/kg`, accent: true },
     { label: "Forecast range", value: `\u20B1${rec.forecastLow}\u2013\u20B1${rec.forecastHigh}/kg` },
-    { label: "Forecast change", value: `${rec.changePct >= 0 ? "+" : ""}${rec.changePct.toFixed(1)}%` },
+    { label: "Forecast change", value: formatPriceChangeDisplay(rec.forecastedPrice - (rec.currentPrice ?? rec.recentAvg), rec.changePct, { referencePrice: rec.currentPrice ?? rec.recentAvg }) },
     { label: "Reliability", value: rec.reliability }
   ].map((m) => <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
                       <p className="text-xs text-[var(--hw-neutral-700)]">{m.label}</p>

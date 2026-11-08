@@ -34,6 +34,8 @@ export const profitability = {
   estimated_farmgate: "Tinatayang Presyong Farmgate",
   farmgate_price_label: "Tinatayang Presyong Farmgate",
   not_set_reference: "Hindi nakatakda — presyo sa palengke ang gagamiting batayan.",
+  not_set_reference_with_market: "Hindi nakatakda — presyo sa merkado ({market}) ang gagamiting batayan.",
+  forecast_reference_notice_with_market: "Ginagamit ang presyo sa merkado ({market}) bilang batayan. Maaaring magbago ang totoong presyo ng mamimili.",
   estimate_disclaimer: "Tantiya lamang ito. Maaaring magbago ang aktwal na kita.",
   based_on_current_market: "Batay sa kasalukuyang presyo sa palengke",
   market_price_reference: "Presyo sa palengke bilang sanggunian",

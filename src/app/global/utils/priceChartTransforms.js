@@ -6,6 +6,8 @@
  * into unified timeline data for ForecastPriceTrendChart and summary metrics.
  */
 
+export { formatPriceChangeDisplay } from "./priceFormatting.js";
+
 export function isoDate(value) {
   if (!value) return "";
   return String(value).slice(0, 10);
