@@ -26,6 +26,7 @@ import { useCrops } from "../components/crops/CropsContext";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 import * as pricesApi from "../../../services/api/pricesApi";
 
 const DIR_CFG = {
@@ -62,19 +63,8 @@ function formatPriceChange(forecast, currentPrice) {
   if (current == null || current <= 0) return null;
 
   const diff = midpoint - current;
-  const absDiff = Math.abs(diff);
-  const formattedVal = absDiff < 1 && absDiff > 0.05
-    ? absDiff.toFixed(2)
-    : Math.round(absDiff).toString();
-
-  const direction = forecast.trend;
-  if (direction === "Rising" || (direction !== "Falling" && diff > 0.05)) {
-    return `+₱${formattedVal}`;
-  }
-  if (direction === "Falling" || (direction !== "Rising" && diff < -0.05)) {
-    return `-₱${formattedVal}`;
-  }
-  return `₱${formattedVal}`;
+  const pct = (diff / current) * 100;
+  return formatPriceChangeDisplay(diff, pct, { hidePercent: true });
 }
 
 /**
@@ -506,10 +496,10 @@ function DashboardPage() {
                               </p>
                               <p className="text-[12px] text-[var(--hw-neutral-900)] leading-tight mt-0.5">{formattedPrice}</p>
                             </div>
-                            <div className={`flex items-center gap-1.5 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
-                              {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
-                              <span className="flex flex-col items-end text-[13px] font-medium leading-tight">
-                                <span className={hasForecast && priceChange ? "font-bold text-[14px]" : ""}>
+                            <div className={`flex flex-col items-end flex-shrink-0 leading-tight ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+                              <div className="flex items-center gap-1">
+                                {hasForecast && <DirIcon className="w-3.5 h-3.5 shrink-0" />}
+                                <span className={hasForecast && priceChange ? "font-semibold text-[12px] sm:text-[12.5px]" : "text-[12px] font-medium"}>
                                   {isQueryLoading
                                   ? t("farmer.prices.trend_loading", {}, "Loading trend")
                                   : hasForecast
@@ -518,12 +508,12 @@ function DashboardPage() {
                                       ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
                                       : t("farmer.prices.trend_no_data", {}, "No trend data")}
                                 </span>
-                                {hasForecast && priceChange && (
-                                  <span className="text-[11px] font-normal opacity-85 mt-0.5">
-                                    {t(cfg.key, {}, cfg.label)}
-                                  </span>
-                                )}
-                              </span>
+                              </div>
+                              {hasForecast && priceChange && (
+                                <span className="text-[11px] font-normal opacity-85 mt-0.5">
+                                  {t(cfg.key, {}, cfg.label)}
+                                </span>
+                              )}
                             </div>
                           </button>
                         );

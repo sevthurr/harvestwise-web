@@ -9,7 +9,9 @@ import {
   TOTAL_STEPS,
   getTotalCost,
   makeDefaultExpenses,
-  toSqm
+  toSqm,
+  formatHarvestQuantitySummary,
+  calculateNormalizedPrice
 } from "../components/recommend/types";
 import { RecommendEntry } from "../components/recommend/RecommendEntry";
 import { StepProgress } from "../components/recommend/StepProgress";
@@ -32,16 +34,42 @@ function validateStep(step, data, t) {
     if (!data.harvestDate) errors.harvestDate = t ? t("farmer.assess.validation_harvest_date", {}, "Enter your expected harvest date.") : "Enter your expected harvest date.";
   }
   if (step === 2) {
-    if (data.farmArea === "" || Number(data.farmArea) <= 0) errors.farmArea = t ? t("farmer.assess.validation_area", {}, "Enter your farm area.") : "Enter your farm area.";
-    if (data.harvestQuantity === "" || Number(data.harvestQuantity) <= 0)
+    if (data.farmArea === "" || Number(data.farmArea) <= 0) {
+      errors.farmArea = t ? t("farmer.assess.validation_area", {}, "Enter your farm area.") : "Enter your farm area.";
+    }
+    const harvestRaw = data.harvestQuantityRaw !== "" && data.harvestQuantityRaw !== undefined && data.harvestQuantityRaw !== null
+      ? Number(data.harvestQuantityRaw)
+      : Number(data.harvestQuantity);
+    if (!Number.isFinite(harvestRaw) || harvestRaw <= 0) {
       errors.harvestQuantity = t ? t("farmer.assess.validation_harvest_qty", {}, "Expected harvest must be greater than zero.") : "Expected harvest must be greater than zero.";
+    }
+    if (data.harvestQuantityUnit === "crate" || data.harvestQuantityUnit === "sack") {
+      const w = Number(data.harvestConversionWeight);
+      if (data.harvestConversionWeight === "" || !Number.isFinite(w) || w <= 0) {
+        errors.harvestConversionWeight = data.harvestQuantityUnit === "crate"
+          ? (t ? t("farmer.assess.validation_weight_crate", {}, "Enter a valid estimated weight per crate in kg.") : "Enter a valid estimated weight per crate in kg.")
+          : (t ? t("farmer.assess.validation_weight_sack", {}, "Enter a valid estimated weight per sack in kg.") : "Enter a valid estimated weight per sack in kg.");
+      }
+    }
   }
   if (step === 3) {
     if (getTotalCost(data) <= 0) errors.totalCost = t ? t("farmer.assess.validation_total_cost", {}, "Enter your estimated total cost.") : "Enter your estimated total cost.";
   }
   if (step === 4) {
-    if (data.useFarmgate && (data.farmgatePrice === "" || Number(data.farmgatePrice) <= 0)) {
-      errors.farmgatePrice = t ? t("farmer.assess.validation_farmgate_price", {}, "Enter your estimated farmgate price, or uncheck the option above.") : "Enter your estimated farmgate price, or uncheck the option above.";
+    if (data.useFarmgate) {
+      const raw = data.farmgatePriceRaw !== "" && data.farmgatePriceRaw !== undefined ? Number(data.farmgatePriceRaw) : Number(data.farmgatePrice);
+      if (!Number.isFinite(raw) || raw <= 0) {
+        errors.farmgatePrice = t ? t("farmer.assess.validation_farmgate_price", {}, "Enter your estimated farmgate price, or uncheck the option above.") : "Enter your estimated farmgate price, or uncheck the option above.";
+      }
+      if (data.farmgatePriceUnit === "crate" || data.farmgatePriceUnit === "sack") {
+        const matches = (data.harvestQuantityUnit || "kg").toLowerCase() === data.farmgatePriceUnit.toLowerCase();
+        const w = Number(data.harvestConversionWeight);
+        if (!matches || data.harvestConversionWeight === "" || !Number.isFinite(w) || w <= 0) {
+          errors.farmgateConversionWeight = data.farmgatePriceUnit === "crate"
+            ? (t ? t("farmer.assess.validation_missing_step2_crate", {}, "Enter a valid estimated weight per crate in Step 2 (Farm & Harvest).") : "Enter a valid estimated weight per crate in Step 2 (Farm & Harvest).")
+            : (t ? t("farmer.assess.validation_missing_step2_sack", {}, "Enter a valid estimated weight per sack in Step 2 (Farm & Harvest).") : "Enter a valid estimated weight per sack in Step 2 (Farm & Harvest).");
+        }
+      }
     }
   }
   return errors;
@@ -51,15 +79,23 @@ function buildDraftPayload(data) {
   const totalCost = getTotalCost(data);
   const productionCosts = data.costMethod === "detailed"
     ? (data.expenses || [])
-        .filter((e) => typeof e.amount === "number" && e.amount > 0)
-        .map((e) => ({
-          category: e.name || "Additional",
-          amount: e.amount,
-          cost_type: "initial",
-        }))
+      .filter((e) => typeof e.amount === "number" && e.amount > 0)
+      .map((e) => ({
+        category: e.name || "Additional",
+        amount: e.amount,
+        cost_type: "initial",
+      }))
     : totalCost > 0
       ? [{ category: "Total Cost", amount: totalCost, cost_type: "initial" }]
       : [];
+
+  const harvestRaw = Number(data.harvestQuantityRaw !== "" && data.harvestQuantityRaw !== undefined ? data.harvestQuantityRaw : data.harvestQuantity);
+  const harvestConvWeight = Number(data.harvestConversionWeight);
+  const normHarvest = typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null;
+
+  const rawPrice = Number(data.farmgatePriceRaw !== "" && data.farmgatePriceRaw !== undefined ? data.farmgatePriceRaw : data.farmgatePrice);
+  const convWeight = Number(data.farmgateConversionWeight || data.harvestConversionWeight);
+  const normPrice = typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null;
 
   return {
     plan_id: data.draftId || null,
@@ -67,8 +103,14 @@ function buildDraftPayload(data) {
     planned_planting_date: data.plantingDate || null,
     expected_harvest_date: data.harvestDate || null,
     farm_area: toSqm(data.farmArea, data.farmAreaUnit),
-    expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
-    expected_farmgate_price: data.useFarmgate && typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
+    expected_harvest_qty: normHarvest,
+    harvest_qty_unit: data.harvestQuantityUnit || "kg",
+    harvest_qty_entered: Number.isFinite(harvestRaw) && harvestRaw > 0 ? harvestRaw : null,
+    harvest_conversion_weight: Number.isFinite(harvestConvWeight) && harvestConvWeight > 0 ? harvestConvWeight : null,
+    expected_farmgate_price: data.useFarmgate && normPrice ? normPrice : null,
+    farmgate_price_unit: data.useFarmgate ? (data.farmgatePriceUnit || "kg") : "kg",
+    farmgate_price_entered: data.useFarmgate && Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null,
+    farmgate_conversion_weight: data.useFarmgate && Number.isFinite(convWeight) && convWeight > 0 ? convWeight : null,
     cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
     production_costs: productionCosts,
   };
@@ -258,10 +300,16 @@ function AssessPage() {
                 farmArea: parsed.farmArea ?? "",
                 farmAreaUnit: parsed.farmAreaUnit || "sqm",
                 harvestQuantity: parsed.harvestQuantity ?? "",
+                harvestQuantityRaw: parsed.harvestQuantityRaw !== undefined ? parsed.harvestQuantityRaw : (parsed.harvestQuantity ?? ""),
+                harvestQuantityUnit: parsed.harvestQuantityUnit || "kg",
+                harvestConversionWeight: parsed.harvestConversionWeight ?? "",
                 costMethod: parsed.costMethod || "simple",
                 totalCost: parsed.totalCost || parsed.simpleCost || 0,
                 expenses: parsed.expenses,
                 farmgatePrice: parsed.farmgatePrice,
+                farmgatePriceRaw: parsed.farmgatePriceRaw !== undefined ? parsed.farmgatePriceRaw : parsed.farmgatePrice,
+                farmgatePriceUnit: parsed.farmgatePriceUnit || "kg",
+                farmgateConversionWeight: parsed.farmgateConversionWeight ?? "",
                 status: "Draft",
                 isDraft: true,
               };
@@ -288,11 +336,17 @@ function AssessPage() {
           farmArea: match.farmArea ?? "",
           farmAreaUnit: match.farmAreaUnit || "sqm",
           harvestQuantity: match.harvestQuantity ?? "",
+          harvestQuantityRaw: match.harvestQuantityRaw !== undefined ? match.harvestQuantityRaw : (match.harvestQuantity ?? ""),
+          harvestQuantityUnit: match.harvestQuantityUnit || "kg",
+          harvestConversionWeight: match.harvestConversionWeight ?? "",
           costMethod: match.costMethod || "simple",
           simpleCost: match.costMethod !== "detailed" ? (match.totalCost || "") : "",
           expenses,
           useFarmgate: Boolean(match.farmgatePrice && match.farmgatePrice > 0),
           farmgatePrice: match.farmgatePrice ?? "",
+          farmgatePriceRaw: match.farmgatePriceRaw !== undefined ? match.farmgatePriceRaw : (match.farmgatePrice ?? ""),
+          farmgatePriceUnit: match.farmgatePriceUnit || "kg",
+          farmgateConversionWeight: match.farmgateConversionWeight ?? "",
           draftId: match.id === "local_draft" ? null : match.id,
           isDraft: true,
         });
@@ -332,11 +386,17 @@ function AssessPage() {
               farmArea: rawPlan.farm_area ?? "",
               farmAreaUnit: "sqm",
               harvestQuantity: rawPlan.expected_harvest_qty == null ? "" : Number(rawPlan.expected_harvest_qty),
+              harvestQuantityRaw: rawPlan.harvest_qty_entered ?? rawPlan.expected_harvest_qty ?? "",
+              harvestQuantityUnit: rawPlan.harvest_qty_unit || "kg",
+              harvestConversionWeight: rawPlan.harvest_conversion_weight ?? "",
               costMethod: rawPlan.cost_entry_mode || "simple",
               simpleCost: rawPlan.cost_entry_mode !== "detailed" && prodCosts[0] ? Number(prodCosts[0].amount || 0) : "",
               expenses: exps,
               useFarmgate: Boolean(rawPlan.expected_farmgate_price && Number(rawPlan.expected_farmgate_price) > 0),
               farmgatePrice: rawPlan.expected_farmgate_price ?? "",
+              farmgatePriceRaw: rawPlan.farmgate_price_entered ?? rawPlan.expected_farmgate_price ?? "",
+              farmgatePriceUnit: rawPlan.farmgate_price_unit || "kg",
+              farmgateConversionWeight: rawPlan.farmgate_conversion_weight ?? "",
               draftId: rawPlan.id,
               isDraft: true,
             });
@@ -392,11 +452,17 @@ function AssessPage() {
           farmArea: existingCropDraft.farmArea ?? "",
           farmAreaUnit: existingCropDraft.farmAreaUnit || "sqm",
           harvestQuantity: existingCropDraft.harvestQuantity ?? "",
+          harvestQuantityRaw: existingCropDraft.harvestQuantityRaw !== undefined ? existingCropDraft.harvestQuantityRaw : (existingCropDraft.harvestQuantity ?? ""),
+          harvestQuantityUnit: existingCropDraft.harvestQuantityUnit || "kg",
+          harvestConversionWeight: existingCropDraft.harvestConversionWeight ?? "",
           costMethod: existingCropDraft.costMethod || "simple",
           simpleCost: existingCropDraft.costMethod !== "detailed" ? (existingCropDraft.totalCost || "") : "",
           expenses: existingCropDraft.expenses && existingCropDraft.expenses.length > 0 ? existingCropDraft.expenses : makeDefaultExpenses(),
           useFarmgate: Boolean(existingCropDraft.farmgatePrice && existingCropDraft.farmgatePrice > 0),
           farmgatePrice: existingCropDraft.farmgatePrice ?? "",
+          farmgatePriceRaw: existingCropDraft.farmgatePriceRaw !== undefined ? existingCropDraft.farmgatePriceRaw : (existingCropDraft.farmgatePrice ?? ""),
+          farmgatePriceUnit: existingCropDraft.farmgatePriceUnit || "kg",
+          farmgateConversionWeight: existingCropDraft.farmgateConversionWeight ?? "",
           draftId: existingCropDraft.id,
           isDraft: true,
         });
@@ -409,7 +475,33 @@ function AssessPage() {
   }, [searchParams, crops, cropsLoading]);
 
   const patch = (p) => {
-    setData((d) => ({ ...d, ...p }));
+    setData((d) => {
+      const next = { ...d, ...p };
+      // Step 2 is single source of truth for crate/sack conversion weight
+      // If Step 2 conversion weight or unit changes, keep Step 4 normalized farmgate price in sync
+      if (
+        ("harvestConversionWeight" in p || "harvestQuantityUnit" in p) &&
+        next.useFarmgate &&
+        next.farmgatePriceUnit &&
+        next.farmgatePriceUnit !== "kg"
+      ) {
+        const matches = (next.harvestQuantityUnit || "kg").toLowerCase() === next.farmgatePriceUnit.toLowerCase();
+        const w = Number(next.harvestConversionWeight);
+        if (matches && Number.isFinite(w) && w > 0) {
+          next.farmgateConversionWeight = w;
+          const raw = next.farmgatePriceRaw !== "" && next.farmgatePriceRaw !== undefined
+            ? Number(next.farmgatePriceRaw)
+            : Number(next.farmgatePrice);
+          if (Number.isFinite(raw) && raw > 0) {
+            next.farmgatePrice = calculateNormalizedPrice(raw, next.farmgatePriceUnit, w);
+          }
+        } else {
+          next.farmgateConversionWeight = "";
+          next.farmgatePrice = "";
+        }
+      }
+      return next;
+    });
     const cleared = Object.keys(p);
     setErrors((e) => {
       const next = { ...e };
@@ -669,114 +761,121 @@ function AssessPage() {
     return <RecommendEntry onStart={handleStart} />;
   }
   const SidePanel = () => <div className="hidden md:flex flex-col gap-3 sticky top-24">
-      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-        <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
-          {t("farmer.assess.running_summary", {}, "Running summary")}
+    <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
+      <p className="text-xs font-semibold text-[var(--hw-neutral-700)] uppercase tracking-wide">
+        {t("farmer.assess.running_summary", {}, "Running summary")}
+      </p>
+      {data.commodity && <div>
+        <p className="text-xs text-[var(--hw-neutral-700)]">
+          {t("farmer.prices.category_vegetables", {}, "Vegetable")}
         </p>
-        {data.commodity && <div>
-            <p className="text-xs text-[var(--hw-neutral-700)]">
-              {t("farmer.prices.category_vegetables", {}, "Vegetable")}
-            </p>
-            <p className="text-sm font-medium text-[var(--hw-neutral-900)]">
-              {(() => {
-                const n = commodityOptions.find((c) => c.id === data.commodity)?.name || "";
-                return data.variant ? `${n} (${data.variant})` : n;
-              })()}
-            </p>
-          </div>}
-        {data.harvestQuantity !== "" && <div>
-            <p className="text-xs text-[var(--hw-neutral-700)]">
-              {t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}
-            </p>
-            <p className="text-sm font-medium text-[var(--hw-neutral-900)]">{data.harvestQuantity} kg</p>
-          </div>}
-        <div>
-          <p className="text-xs text-[var(--hw-neutral-700)]">
-            {t("farmer.factors.profitability.total_estimated_cost_label", {}, "Total production cost")}
-          </p>
-          <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">{total > 0 ? formatPeso(total) : "—"}</p>
-        </div>
-        {breakEven && <div className="pt-2 border-t border-[var(--hw-neutral-100)]">
-            <p className="text-xs text-[var(--hw-neutral-700)]">
-              {t("farmer.factors.profitability.cost_to_recover_short_label", {}, "Break-even price")}
-            </p>
-            <p className="text-sm font-bold text-[var(--hw-green-700)]">{formatPeso(breakEven)}/kg</p>
-          </div>}
+        <p className="text-sm font-medium text-[var(--hw-neutral-900)]">
+          {(() => {
+            const n = commodityOptions.find((c) => c.id === data.commodity)?.name || "";
+            return data.variant ? `${n} (${data.variant})` : n;
+          })()}
+        </p>
+      </div>}
+      {data.harvestQuantity !== "" && <div>
+        <p className="text-xs text-[var(--hw-neutral-700)]">
+          {t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}
+        </p>
+        <p className="text-sm font-medium text-[var(--hw-neutral-900)]">
+          {formatHarvestQuantitySummary({
+            enteredQty: data.harvestQuantityRaw !== "" && data.harvestQuantityRaw !== undefined ? data.harvestQuantityRaw : data.harvestQuantity,
+            unit: data.harvestQuantityUnit || "kg",
+            conversionWeight: data.harvestConversionWeight,
+            normalizedQty: data.harvestQuantity,
+          }) || `${data.harvestQuantity} kg`}
+        </p>
+      </div>}
+      <div>
+        <p className="text-xs text-[var(--hw-neutral-700)]">
+          {t("farmer.factors.profitability.total_estimated_cost_label", {}, "Total production cost")}
+        </p>
+        <p className="text-sm font-semibold text-[var(--hw-neutral-900)]">{total > 0 ? formatPeso(total) : "—"}</p>
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          setView("entry");
-          setErrors({});
-        }}
-        className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-white text-[var(--hw-neutral-900)] text-sm font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
-      >
-        <RotateCcw className="w-4 h-4" />
-        {t("farmer.assess.start_again", {}, "Start again")}
-      </button>
-    </div>;
+      {breakEven && <div className="pt-2 border-t border-[var(--hw-neutral-100)]">
+        <p className="text-xs text-[var(--hw-neutral-700)]">
+          {t("farmer.factors.profitability.cost_to_recover_short_label", {}, "Break-even price")}
+        </p>
+        <p className="text-sm font-bold text-[var(--hw-green-700)]">{formatPeso(breakEven)}/kg</p>
+      </div>}
+    </div>
+    <button
+      type="button"
+      onClick={() => {
+        setView("entry");
+        setErrors({});
+      }}
+      className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-white text-[var(--hw-neutral-900)] text-sm font-medium rounded-xl border border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)] transition-colors"
+    >
+      <RotateCcw className="w-4 h-4" />
+      {t("farmer.assess.start_again", {}, "Start again")}
+    </button>
+  </div>;
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
-        <div className={`md:grid gap-8 ${showSidePanel ? "md:grid-cols-[1fr_280px]" : ""}`}>
-          <div className="space-y-6">
-            {(data.isDraft || data.draftId) && (
-              <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-xs">
-                <div className="w-9 h-9 rounded-xl bg-amber-100/80 flex items-center justify-center flex-shrink-0 text-amber-700">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800">
-                    {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Dili Kompleto")}
-                  </p>
-                  <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">
-                    {t(
-                      "farmer.assess.draft_banner_notice",
-                      {},
-                      "Gipadayon nimo ang wala pa nahuman nga assessment. Rebyuha, usba, ug kompletoha ang Step 1 bago mopadayon."
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-            <StepProgress currentStep={step} />
-            <div>
-              <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
-                {t(`farmer.assess.step${step}_title`, {}, STEP_LABELS[step])}
-              </h1>
+    <div className={`md:grid gap-8 ${showSidePanel ? "md:grid-cols-[1fr_280px]" : ""}`}>
+      <div className="space-y-6">
+        {(data.isDraft || data.draftId) && (
+          <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-amber-100/80 flex items-center justify-center flex-shrink-0 text-amber-700">
+              <FileText className="w-4 h-4" />
             </div>
-            {step === 1 && <Step1CropSchedule data={data} onChange={patch} errors={errors} />}
-            {step === 2 && <Step2FarmHarvest data={data} onChange={patch} errors={errors} />}
-            {step === 3 && <Step3ProductionCosts data={data} onChange={patch} errors={errors} />}
-            {step === 4 && <Step4ReviewBreakEven data={data} onChange={patch} onEditStep={handleEditStep} errors={errors} />}
-            <StepActions
-              step={step}
-              onBack={handleBack}
-              onContinue={handleContinue}
-              onSaveDraft={handleSaveDraft}
-              isLastStep={step === TOTAL_STEPS}
-              onGenerate={handleGenerateAdvisory}
-              loading={loadingAdvisory}
-              savingDraft={savingDraft}
-              draftStatus={draftStatus}
-              error={advisoryError}
-              onRetry={handleGenerateAdvisory}
-              t={t}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setView("entry");
-                setErrors({});
-              }}
-              className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-sm text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              {t("farmer.assess.start_again", {}, "Start again")}
-            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800">
+                {t("farmer.assess.draft_incomplete_badge", {}, "Draft – Dili Kompleto")}
+              </p>
+              <p className="text-[12px] sm:text-[13px] text-[var(--hw-neutral-700)] mt-0.5 leading-snug">
+                {t(
+                  "farmer.assess.draft_banner_notice",
+                  {},
+                  "Gipadayon nimo ang wala pa nahuman nga assessment. Rebyuha, usba, ug kompletoha ang Step 1 bago mopadayon."
+                )}
+              </p>
+            </div>
           </div>
-          {showSidePanel && <SidePanel />}
+        )}
+        <StepProgress currentStep={step} />
+        <div>
+          <h1 className="text-xl font-bold text-[var(--hw-neutral-900)]">
+            {t(`farmer.assess.step${step}_title`, {}, STEP_LABELS[step])}
+          </h1>
         </div>
+        {step === 1 && <Step1CropSchedule data={data} onChange={patch} errors={errors} />}
+        {step === 2 && <Step2FarmHarvest data={data} onChange={patch} errors={errors} />}
+        {step === 3 && <Step3ProductionCosts data={data} onChange={patch} errors={errors} />}
+        {step === 4 && <Step4ReviewBreakEven data={data} onChange={patch} onEditStep={handleEditStep} errors={errors} />}
+        <StepActions
+          step={step}
+          onBack={handleBack}
+          onContinue={handleContinue}
+          onSaveDraft={handleSaveDraft}
+          isLastStep={step === TOTAL_STEPS}
+          onGenerate={handleGenerateAdvisory}
+          loading={loadingAdvisory}
+          savingDraft={savingDraft}
+          draftStatus={draftStatus}
+          error={advisoryError}
+          onRetry={handleGenerateAdvisory}
+          t={t}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setView("entry");
+            setErrors({});
+          }}
+          className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-sm text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)] transition-colors"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          {t("farmer.assess.start_again", {}, "Start again")}
+        </button>
+      </div>
+      {showSidePanel && <SidePanel />}
+    </div>
 
-    </div>;
+  </div>;
 }
 export {
   AssessPage as default,

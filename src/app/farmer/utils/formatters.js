@@ -2,6 +2,9 @@
  * Farmer-specific formatters adhering strictly to the frozen specification formatting rules.
  */
 
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting.js";
+export { formatPriceChangeDisplay };
+
 export const SUPPORTED_PRICE_HORIZONS = [7, 14, 21, 28];
 
 export function isValidHorizon(days) {

@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../global/components/ui/Card";
+import { formatPriceChangeDisplay } from "../../../global/utils/priceFormatting";
 const PriceCard = ({
   commodity,
   currentPrice,
@@ -9,7 +10,7 @@ const PriceCard = ({
   dateUpdated
 }) => {
   const priceChange = currentPrice - previousPrice;
-  const percentChange = (priceChange / previousPrice * 100).toFixed(1);
+  const percentChange = previousPrice > 0 ? (priceChange / previousPrice * 100) : 0;
   const isPositive = priceChange > 0;
   const isNeutral = priceChange === 0;
   const TrendIcon = isNeutral ? Minus : isPositive ? TrendingUp : TrendingDown;
@@ -32,7 +33,7 @@ const PriceCard = ({
           <div className={`flex items-center gap-1 ${trendColor}`}>
             <TrendIcon className="w-5 h-5" />
             <span className="font-semibold">
-              {isPositive && "+"}{percentChange}%
+              {formatPriceChangeDisplay(priceChange, percentChange, { referencePrice: previousPrice })}
             </span>
           </div>
         </div>

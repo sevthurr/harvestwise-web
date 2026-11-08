@@ -38,6 +38,7 @@ import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
 import { useDftcStaff } from "../../global/hooks/useDftcStaff";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
 function hwId(name) {
   return _HW_NAME_TO_ID[name] ?? null;
@@ -848,8 +849,17 @@ function MobileVariantRow({
                       Price movement:{" "}
                       <strong className="text-[var(--hw-neutral-900)]">
                         {f.previousPrice != null
-                          ? `previous ₱${fmt(f.previousPrice)} (${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`
-                          : `(${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`}
+                          ? `${formatPriceChangeDisplay(
+                              f.prevailing != null ? Number(f.prevailing) - Number(f.previousPrice) : null,
+                              f.priceChangePct,
+                              { referencePrice: f.previousPrice }
+                            )} vs. previous ₱${fmt(f.previousPrice)}`
+                          : formatPriceChangeDisplay(
+                              f.prevailing != null && f.priceChangePct != null
+                                ? Number(f.prevailing) - (Number(f.prevailing) / (1 + f.priceChangePct / 100))
+                                : null,
+                              f.priceChangePct
+                            )}
                       </strong>
                     </span>
                   ) : (
@@ -3050,11 +3060,20 @@ function DFTCPriceInput() {
                         </span>
                         {item.field.previousPrice != null ? (
                           <span className="text-[var(--hw-neutral-500)] ml-1 font-normal">
-                            (previous ₱{fmt(item.field.previousPrice)} ({(changePct ?? 0) >= 0 ? "+" : ""}{changePct}%))
+                            ({formatPriceChangeDisplay(
+                              item.field.prevailing != null ? Number(item.field.prevailing) - Number(item.field.previousPrice) : null,
+                              changePct,
+                              { referencePrice: item.field.previousPrice }
+                            )} vs. previous ₱{fmt(item.field.previousPrice)})
                           </span>
                         ) : changePct != null ? (
                           <span className="text-[var(--hw-neutral-500)] ml-1 font-normal">
-                            ({(changePct ?? 0) >= 0 ? "+" : ""}{changePct}%)
+                            ({formatPriceChangeDisplay(
+                              item.field.prevailing != null
+                                ? Number(item.field.prevailing) - (Number(item.field.prevailing) / (1 + changePct / 100))
+                                : null,
+                              changePct
+                            )})
                           </span>
                         ) : null}
                       </div>
@@ -3634,8 +3653,17 @@ function DFTCPriceInput() {
                                         Significant price movement detected:{" "}
                                         <span className="font-semibold text-[var(--hw-neutral-900)]">
                                           {f.previousPrice != null
-                                            ? `previous ₱${fmt(f.previousPrice)} (${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`
-                                            : `(${(f.priceChangePct ?? 0) >= 0 ? "+" : ""}${f.priceChangePct ?? 0}%)`}
+                                            ? `${formatPriceChangeDisplay(
+                                                f.prevailing != null ? Number(f.prevailing) - Number(f.previousPrice) : null,
+                                                f.priceChangePct,
+                                                { referencePrice: f.previousPrice }
+                                              )} vs. previous ₱${fmt(f.previousPrice)}`
+                                            : formatPriceChangeDisplay(
+                                                f.prevailing != null && f.priceChangePct != null
+                                                  ? Number(f.prevailing) - (Number(f.prevailing) / (1 + f.priceChangePct / 100))
+                                                  : null,
+                                                f.priceChangePct
+                                              )}
                                         </span>
                                         . Please provide a reason for this change.
                                       </>

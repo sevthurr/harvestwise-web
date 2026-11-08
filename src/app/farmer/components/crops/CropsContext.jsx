@@ -80,8 +80,18 @@ export function normalizeCropPlan(raw, pricesMap) {
     isCustom: true,
   }));
   const farmgatePrice = item.expectedFarmgatePrice != null ? Number(item.expectedFarmgatePrice) : null;
+  const farmgatePriceUnit = item.farmgatePriceUnit || item.farmgate_price_unit || "kg";
+  const rawPriceVal = item.farmgatePriceEntered ?? item.farmgate_price_entered ?? item.farmgatePriceRaw ?? farmgatePrice;
+  const farmgatePriceRaw = rawPriceVal != null ? Number(rawPriceVal) : null;
+  const convWeightVal = item.farmgateConversionWeight ?? item.farmgate_conversion_weight;
+  const farmgateConversionWeight = convWeightVal != null ? Number(convWeightVal) : null;
 
   const qty = item.expectedHarvestQty != null ? Number(item.expectedHarvestQty) : (item.harvestQuantity != null ? Number(item.harvestQuantity) : null);
+  const harvestQtyUnit = item.harvestQtyUnit || item.harvest_qty_unit || "kg";
+  const rawHarvestQtyVal = item.harvestQtyEntered ?? item.harvest_qty_entered ?? item.harvestQuantityRaw ?? qty;
+  const harvestQuantityRaw = rawHarvestQtyVal != null ? Number(rawHarvestQtyVal) : null;
+  const harvestConvWeightVal = item.harvestConversionWeight ?? item.harvest_conversion_weight;
+  const harvestConversionWeight = harvestConvWeightVal != null ? Number(harvestConvWeightVal) : null;
   const breakEven = (qty && qty > 0 && totalCost > 0)
     ? Math.ceil(totalCost / qty)
     : (item.breakevenPricePerKg != null ? Number(item.breakevenPricePerKg) : (item.breakEvenPrice != null ? Number(item.breakEvenPrice) : null));
@@ -203,6 +213,9 @@ export function normalizeCropPlan(raw, pricesMap) {
     farmAreaUnit: "sqm",
     harvestQuantity: qty,
     expectedHarvestQty: qty,
+    harvestQuantityRaw,
+    harvestQuantityUnit: harvestQtyUnit,
+    harvestConversionWeight,
     harvestRecords: sortedHarvestRecords,
     actualHarvestDate: latestHarvest
       ? formatLocalDate(latestHarvest.actualHarvestDate)
@@ -213,6 +226,9 @@ export function normalizeCropPlan(raw, pricesMap) {
     costMethod,
     expenses,
     farmgatePrice,
+    farmgatePriceUnit,
+    farmgatePriceRaw,
+    farmgateConversionWeight,
     totalCost,
     initialCost,
     addedCosts,

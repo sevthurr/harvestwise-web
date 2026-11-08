@@ -130,10 +130,10 @@ describe('DFTC Price Volatility Reason Tracking', () => {
     const inputs = screen.getAllByPlaceholderText('0.00');
     fireEvent.change(inputs[0], { target: { value: '65' } });
 
-    // Verify significant price movement alert is displayed with "previous price (percent)" format
+    // Verify significant price movement alert is displayed with "Price Difference (Percentage) vs. previous price" format
     await waitFor(() => {
       expect(screen.getByText(/Significant price movement detected/i)).toBeInTheDocument();
-      expect(screen.getByText(/previous ₱50\.00 \(\+30(\.0)?%\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/(\+₱15|\+₱15\.00) \(\+30(\.0)?%\) vs\. previous ₱50\.00/i)).toBeInTheDocument();
     });
 
     // Reason dropdown is displayed
@@ -170,7 +170,7 @@ describe('DFTC Price Volatility Reason Tracking', () => {
     // Verify Review page displays the volatility section, price with previous price (percent), reason, and notes
     expect(screen.getByText(/Price Volatility & Market Observations/i)).toBeInTheDocument();
     expect(screen.getByText(/Other \(Requires custom note\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/previous ₱50\.00 \(\+30/i)).toBeInTheDocument();
+    expect(screen.getByText(/(\+₱15|\+₱15\.00) \(\+30(\.0)?%\) vs\. previous ₱50\.00/i)).toBeInTheDocument();
     expect(screen.getByText(/Vegetable demand increased during local festival week\./i)).toBeInTheDocument();
   });
 

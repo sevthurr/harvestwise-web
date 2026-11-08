@@ -31,6 +31,7 @@ import {
   getLocalDateString,
   isSubmissionToday
 } from "./dftcSavedDatasets";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
 const PAGE_SIZE = 10;
 
@@ -395,7 +396,10 @@ function DFTCHome() {
                       </p>
                       <p className={`text-[12px] font-medium ${item.direction === "down" ? "text-red-600" : item.direction === "up" ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}>
                         {item.change_pct != null
-                          ? `${item.direction === "down" ? "↓" : "↑"} ${Math.abs(item.change_pct)}%`
+                          ? formatPriceChangeDisplay(
+                              item.current_price != null ? item.current_price - (item.current_price / (1 + item.change_pct / 100)) : null,
+                              item.change_pct
+                            )
                           : "\u2014"}
                       </p>
                     </div>

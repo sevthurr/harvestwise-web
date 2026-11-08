@@ -50,6 +50,8 @@ function renderPriceDetailView(props = {}) {
           commodityId="COM-0036"
           commodityName="Atsal"
           cropStage="near_harvest"
+          initialHistoricalRange="14d"
+          initialHorizon="14d"
           {...props}
         />
       </MemoryRouter>
@@ -138,8 +140,8 @@ describe("PriceDetailView dynamic Stage 3 forecast dependency", () => {
     // Forecast Price = 131.42857 * (1 + 0.10) = 144.57
     expect(screen.getByText("₱144.57")).toBeInTheDocument();
 
-    // Forecast Difference = ((144.5714 - 140) / 140) * 100 = +3.27%
-    expect(screen.getByText(/\+3\.27% · Rising/i)).toBeInTheDocument();
+    // Forecast Difference = ((144.5714 - 140) / 140) * 100 = +3.27%, Diff = +₱4.57
+    expect(screen.getByText(/\+₱4\.57 \(\+3\.27%\) · Rising/i)).toBeInTheDocument();
   });
 
   it("dynamically updates forecast price when user changes historical range to 7 days, 21 days, and 28 days", async () => {
@@ -157,34 +159,34 @@ describe("PriceDetailView dynamic Stage 3 forecast dependency", () => {
     // 1. Change to 7 days
     // 7d records: 140 + 6*120 = 860 / 7 = 122.86
     // Forecast Price = 122.857 * 1.10 = 135.14
-    // Diff vs 140 = ((135.14 - 140) / 140) * 100 = -3.47% · Dropping
+    // Diff vs 140 = ((135.14 - 140) / 140) * 100 = -3.47% · Dropping, Diff = -₱4.86
     fireEvent.change(historicalSelect, { target: { value: "7d" } });
 
     expect(screen.getByText(/Last 7 days average/i)).toBeInTheDocument();
     expect(screen.getByText("₱122.86")).toBeInTheDocument();
     expect(screen.getByText("₱135.14")).toBeInTheDocument();
-    expect(screen.getByText(/-3\.47% · Dropping/i)).toBeInTheDocument();
+    expect(screen.getByText(/-₱4\.86 \(-3\.47%\) · Dropping/i)).toBeInTheDocument();
 
     // 2. Change to 28 days
     // 28d records: (140 + 6*120 + 7*140 + 7*160 + 7*180) / 28 = 4220 / 28 = 150.71
     // Forecast Price = 150.714 * 1.10 = 165.79
-    // Diff vs 140 = ((165.79 - 140) / 140) * 100 = +18.42% · Rising
+    // Diff vs 140 = ((165.79 - 140) / 140) * 100 = +18.42% · Rising, Diff = +₱25.79
     fireEvent.change(historicalSelect, { target: { value: "28d" } });
 
     expect(screen.getByText(/Last 28 days average/i)).toBeInTheDocument();
     expect(screen.getByText("₱150.71")).toBeInTheDocument();
     expect(screen.getByText("₱165.79")).toBeInTheDocument();
-    expect(screen.getByText(/\+18\.42% · Rising/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+₱25\.79 \(\+18\.42%\) · Rising/i)).toBeInTheDocument();
 
     // 3. Change to 21 days
     // 21d records: (140 + 6*120 + 7*140 + 7*160) / 21 = 2960 / 21 = 140.95
     // Forecast Price = 140.952 * 1.10 = 155.05
-    // Diff vs 140 = ((155.05 - 140) / 140) * 100 = +10.75% · Rising
+    // Diff vs 140 = ((155.05 - 140) / 140) * 100 = +10.75% · Rising, Diff = +₱15.05
     fireEvent.change(historicalSelect, { target: { value: "21d" } });
 
     expect(screen.getByText(/Last 21 days average/i)).toBeInTheDocument();
     expect(screen.getByText("₱140.95")).toBeInTheDocument();
     expect(screen.getByText("₱155.05")).toBeInTheDocument();
-    expect(screen.getByText(/\+10\.75% · Rising/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+₱15\.05 \(\+10\.75%\) · Rising/i)).toBeInTheDocument();
   });
 });
