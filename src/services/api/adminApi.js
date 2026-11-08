@@ -61,6 +61,14 @@ export async function updateSystemSecurity(payload) {
   return parseResponse(await apiPut("/admin/system/security", payload));
 }
 
+export async function listPositions() {
+  return parseResponse(await apiGet("/admin/positions"));
+}
+
+export async function createPosition(payload) {
+  return parseResponse(await apiPost("/admin/positions", payload));
+}
+
 /**
  * Account removal requests. A non-SuperAdmin caller only receives their own
  * rows from the backend.

@@ -2,7 +2,7 @@
  * auditLogsPdf.js
  *
  * Renders the audit log table into a proper, text-based PDF document using
- * jsPDF. Used by AdminAuditLogs for both "Preview" (open in a new tab) and
+ * jsPDF. Used by AuditLogsView for both "Preview" (open in a new tab) and
  * "Download".
  *
  * The table is drawn natively as vector text — selectable text, small file

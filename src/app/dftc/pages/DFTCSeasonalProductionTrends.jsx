@@ -5,6 +5,7 @@ import * as analyticsApi from "../../../services/api/analyticsApi";
 import { getClassificationColor, getClassificationTextColor } from "./dftcClassificationColors";
 import { useIsMobile } from "../../global/components/ui/use-mobile";
 import { SearchableCombobox } from "./DFTCTrends";
+import { ProductionSourcePieChart } from "../../global/components/shared/ProductionSourcePieChart";
 
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 const QUARTER_NAMES = { Q1: "Jan–Mar", Q2: "Apr–Jun", Q3: "Jul–Sep", Q4: "Oct–Dec" };
@@ -17,6 +18,7 @@ function currentQuarter() {
 function SeasonalProductionTrends({ commodity, commodityId, categories, onCommodityChange }) {
   const isMobile = useIsMobile();
   const [quarter, setQuarter] = useState(currentQuarter);
+  const [selectedLocation, setSelectedLocation] = useState("all");
   const commodityRef = commodityId || commodity;
   const query = useQuery({
     queryKey: ["dftc-trends-seasonal-production", commodityRef, quarter],
@@ -30,19 +32,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
   const selected = profiles.find((profile) => profile.quarter === quarter);
   const summaryProfile = selected || profiles[0];
   const hasData = data?.status === "processed" && (data?.records || []).length > 0;
-  const chartData = useMemo(() => {
-    const rows = new Map();
-    (data?.records || []).forEach((record) => {
-      const year = Number(record.reference_year);
-      const recordQuarter = record.reference_quarter;
-      const volume = Number(record.volume_produced);
-      if (!Number.isFinite(year) || !QUARTERS.includes(recordQuarter) || !Number.isFinite(volume)) return;
-      const row = rows.get(year) || { year };
-      row[recordQuarter] = (row[recordQuarter] || 0) + volume;
-      rows.set(year, row);
-    });
-    return [...rows.values()].sort((a, b) => a.year - b.year);
-  }, [data?.records]);
+
   const chartQuarters = quarter ? [quarter] : QUARTERS;
   const geoRecords = (data?.geo_records || [])
     .filter((record) => !quarter || record.reference_quarter === quarter)
@@ -55,8 +45,83 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
     }, {});
   const locations = [...new Set([
     ...(data?.source_areas || []).map((area) => area.name),
+    ...(data?.geo_records || []).map((r) => r.location),
     ...Object.values(geoRecords).flatMap((areas) => Object.keys(areas)),
-  ])].sort((a, b) => a.localeCompare(b));
+  ])].filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+  const chartData = useMemo(() => {
+    const rows = new Map();
+    (data?.records || []).forEach((record) => {
+      const year = Number(record.reference_year);
+      if (Number.isFinite(year) && !rows.has(year)) {
+        rows.set(year, { year });
+      }
+    });
+
+    if (selectedLocation === "all") {
+      (data?.records || []).forEach((record) => {
+        const year = Number(record.reference_year);
+        const recordQuarter = record.reference_quarter;
+        const volume = Number(record.volume_produced);
+        if (!Number.isFinite(year) || !QUARTERS.includes(recordQuarter) || !Number.isFinite(volume)) return;
+        const row = rows.get(year) || { year };
+        row[recordQuarter] = (row[recordQuarter] || 0) + volume;
+        rows.set(year, row);
+      });
+    } else {
+      (data?.geo_records || []).forEach((record) => {
+        if (record.location !== selectedLocation) return;
+        const year = Number(record.reference_year);
+        const recordQuarter = record.reference_quarter;
+        const volume = Number(record.volume_produced);
+        if (!Number.isFinite(year) || !QUARTERS.includes(recordQuarter) || !Number.isFinite(volume)) return;
+        const row = rows.get(year) || { year };
+        row[recordQuarter] = (row[recordQuarter] || 0) + volume;
+        rows.set(year, row);
+      });
+    }
+    return [...rows.values()].sort((a, b) => a.year - b.year);
+  }, [data?.records, data?.geo_records, selectedLocation]);
+
+  const seasonalStats = useMemo(() => {
+    if (selectedLocation === "all") {
+      return {
+        seasonalAvg: summaryProfile?.average_production_mt,
+        grandAvg: data?.grand_average_quarterly_mt,
+      };
+    }
+    const matchingGeo = (data?.geo_records || []).filter(
+      (r) => r.location === selectedLocation && Number.isFinite(Number(r.volume_produced))
+    );
+    const seasonGeo = quarter ? matchingGeo.filter((r) => r.reference_quarter === quarter) : matchingGeo;
+    const seasonAvg = seasonGeo.length > 0
+      ? seasonGeo.reduce((sum, r) => sum + Number(r.volume_produced), 0) / seasonGeo.length
+      : null;
+
+    const qAverages = QUARTERS.map((q) => {
+      const qRecords = matchingGeo.filter((r) => r.reference_quarter === q);
+      return qRecords.length > 0
+        ? qRecords.reduce((sum, r) => sum + Number(r.volume_produced), 0) / qRecords.length
+        : 0;
+    });
+    const grandAvg = qAverages.some((v) => v > 0)
+      ? qAverages.reduce((sum, v) => sum + v, 0) / 4
+      : null;
+
+    return {
+      seasonalAvg: seasonAvg,
+      grandAvg,
+    };
+  }, [selectedLocation, data?.geo_records, quarter, summaryProfile, data?.grand_average_quarterly_mt]);
+
+  const pieData = useMemo(() => {
+    return (data?.source_areas || []).map((area) => ({
+      name: area.name,
+      value: Number(area.value),
+      total_production_mt: Number(area.total_production_mt),
+    }));
+  }, [data?.source_areas]);
+
   const records = (data?.records || [])
     .filter((record) => (!quarter || record.reference_quarter === quarter) && record.volume_produced != null)
     .map((record) => ({
@@ -127,11 +192,35 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
       {hasData && (
         <>
           <section className={`${CARD_CLASS} p-3.5 sm:p-5 md:p-6 space-y-3`}>
-            <div>
-              <h2 className="text-[14px] sm:text-[15px] font-bold text-[var(--hw-neutral-900)]">Historical production by season</h2>
-              <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
-                Backend quarterly averages across {commodity} production records · MT
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div>
+                <h2 className="text-[14px] sm:text-[15px] font-bold text-[var(--hw-neutral-900)]">Historical production by season</h2>
+                <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                  {selectedLocation === "all"
+                    ? `Backend quarterly averages across ${commodity} production records · MT`
+                    : `Historical production for ${selectedLocation} · MT`}
+                </p>
+              </div>
+              {locations.length > 0 && (
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <label htmlFor="dftc-source-filter" className="text-[11.5px] sm:text-[12px] font-semibold text-[var(--hw-neutral-600)] whitespace-nowrap">
+                    Source:
+                  </label>
+                  <select
+                    id="dftc-source-filter"
+                    value={selectedLocation}
+                    onChange={(e) => setSelectedLocation(e.target.value)}
+                    className="text-[11.5px] sm:text-[12px] font-medium text-[var(--hw-neutral-800)] bg-white border border-[var(--hw-neutral-200)] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] shadow-xs"
+                  >
+                    <option value="all">All Locations (Overall)</option>
+                    {locations.map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="w-full overflow-x-auto touch-pan-x [scrollbar-width:thin]">
               <div style={{ minWidth: isMobile ? Math.max(560, chartData.length * 56) : "100%" }}>
@@ -183,7 +272,9 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                   Historical seasonal average
                 </p>
                 <p className="sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
-                  {summaryProfile?.average_production_mt == null ? "—" : `${Number(summaryProfile.average_production_mt).toLocaleString()} MT`}
+                  {seasonalStats.seasonalAvg == null
+                    ? "—"
+                    : `${Number(seasonalStats.seasonalAvg).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT`}
                 </p>
               </div>
               <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
@@ -191,8 +282,8 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
                   Grand average production
                 </p>
                 <p className="sm:mt-1 text-[13px] sm:text-[14px] md:text-[15px] font-bold text-black leading-tight">
-                  {data.grand_average_quarterly_mt != null
-                    ? `${Number(data.grand_average_quarterly_mt).toLocaleString()} MT`
+                  {seasonalStats.grandAvg != null
+                    ? `${Number(seasonalStats.grandAvg).toLocaleString(undefined, { maximumFractionDigits: 2 })} MT`
                     : "—"}
                 </p>
               </div>
@@ -201,6 +292,20 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
               {data.source || "PSA OpenSTAT"} · {data.years_covered || "historical records"}
             </p>
           </section>
+
+          {pieData.length > 0 && (
+            <section className={`${CARD_CLASS} p-3.5 sm:p-5 md:p-6 space-y-3`}>
+              <div>
+                <h2 className="text-[14px] sm:text-[15px] font-bold text-[var(--hw-neutral-900)]">
+                  Major Production Sources
+                </h2>
+                <p className="text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-500)] mt-0.5">
+                  Share of production volume from regional source areas (Bukidnon, Davao del Sur, City of Davao)
+                </p>
+              </div>
+              <ProductionSourcePieChart data={pieData} height={260} />
+            </section>
+          )}
 
           <section className={`${CARD_CLASS} overflow-hidden`}>
             <div className="border-b border-[var(--hw-neutral-100)] px-3.5 sm:px-5 py-3 sm:py-4">

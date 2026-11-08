@@ -317,4 +317,47 @@ describe("Farmer Crop Calendar Page", () => {
       apiGet.mockImplementation(original);
     }
   });
+
+  it("strictly excludes non-top-10 crops even if their category is Recommended", async () => {
+    const original = apiGet.getMockImplementation();
+    apiGet.mockImplementation((url) => {
+      if (url.includes("/market/monthly-recommendations")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              items: [
+                {
+                  commodity_id: "COM-0099",
+                  commodity_name: "Ahos",
+                  advisory_category: "Recommended",
+                  explanation: "Favorable conditions",
+                  is_top10: false,
+                },
+                {
+                  commodity_id: "COM-0004",
+                  commodity_name: "Kamatis",
+                  advisory_category: "Recommended",
+                  explanation: "Favorable conditions",
+                  is_top10: true,
+                },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+
+    try {
+      renderComponent();
+
+      // Kamatis should appear as it's a top-10 commodity
+      expect(await screen.findByText("Kamatis")).toBeInTheDocument();
+
+      // Ahos is not a top-10 commodity and must be excluded
+      expect(screen.queryByText("Ahos")).not.toBeInTheDocument();
+    } finally {
+      apiGet.mockImplementation(original);
+    }
+  });
 });

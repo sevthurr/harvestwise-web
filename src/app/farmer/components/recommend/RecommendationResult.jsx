@@ -165,15 +165,21 @@ function buildCropPlanPayload(data, status = "Draft") {
   const totalCost = getTotalCost(data);
   const productionCosts = data.costMethod === "detailed"
     ? (data.expenses || [])
-        .filter((e) => typeof e.amount === "number" && e.amount > 0)
+        .filter((e) => {
+          const amt = Number(e.amount);
+          return !isNaN(amt) && amt > 0;
+        })
         .map((e) => ({
           category: e.name || "Additional",
-          amount: e.amount,
+          amount: Number(e.amount),
           cost_type: "initial",
         }))
     : totalCost > 0
       ? [{ category: "Total Cost", amount: totalCost, cost_type: "initial" }]
       : [];
+
+  const harvestQty = Number(data.harvestQuantity);
+  const farmgatePrice = Number(data.farmgatePrice);
 
   return {
     plan_id: data.draftId || null,
@@ -183,8 +189,8 @@ function buildCropPlanPayload(data, status = "Draft") {
     harvest_window_start: data.harvestWindowStart || data.harvest_window_start || null,
     harvest_window_end: data.harvestWindowEnd || data.harvest_window_end || null,
     farm_area: toSqm(data.farmArea, data.farmAreaUnit),
-    expected_harvest_qty: typeof data.harvestQuantity === "number" && data.harvestQuantity > 0 ? data.harvestQuantity : null,
-    expected_farmgate_price: typeof data.farmgatePrice === "number" && data.farmgatePrice > 0 ? data.farmgatePrice : null,
+    expected_harvest_qty: !isNaN(harvestQty) && harvestQty > 0 ? harvestQty : null,
+    expected_farmgate_price: !isNaN(farmgatePrice) && farmgatePrice > 0 ? farmgatePrice : null,
     status,
     cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
     production_costs: productionCosts,
@@ -389,7 +395,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       });
     } catch (err) {
       console.error("Failed to save crop plan:", err);
-      setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+      setSaveError(err?.message || t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -418,7 +424,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       });
     } catch (err) {
       console.error("Failed to save crop plan as planted:", err);
-      setSaveError(t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+      setSaveError(err?.message || t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
     } finally {
       setSaving(false);
     }

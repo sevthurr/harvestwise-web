@@ -42,6 +42,7 @@ import ShowcasePage from "./farmer/pages/Showcase";
 import FarmerProfile from "./farmer/pages/FarmerProfile";
 import FarmerSettings from "./farmer/pages/FarmerSettings";
 import AboutPage from "./farmer/pages/About";
+import MyActivitiesPage from "./farmer/pages/MyActivities";
 
 import PrivacyPolicyPage from "./global/pages/PrivacyPolicyPage";
 import TermsPage from "./global/pages/TermsPage";
@@ -54,6 +55,7 @@ import DFTCTrends           from "./dftc/pages/DFTCTrends";
 import DFTCSubmissions      from "./dftc/pages/DFTCSubmissions";
 import DFTCPriceInput       from "./dftc/pages/DFTCPriceInput";
 import DFTCArrivalInput     from "./dftc/pages/DFTCArrivalInput";
+import DFTCGenerateReport   from "./dftc/pages/DFTCGenerateReport";
 import DFTCUpload              from "./dftc/pages/DFTCUpload";
 import DFTCTemporaryRecords    from "./dftc/pages/DFTCTemporaryRecords";
 import DFTCTemporaryRecordDetail from "./dftc/pages/DFTCTemporaryRecordDetail";
@@ -63,6 +65,8 @@ import DFTCNotifications         from "./dftc/pages/DFTCNotifications";
 import DFTCProfile               from "./dftc/pages/DFTCProfile";
 import DFTCSettings              from "./dftc/pages/DFTCSettings";
 import DFTCAbout                 from "./dftc/pages/DFTCAbout";
+import DFTCAuditLogs             from "./dftc/pages/DFTCAuditLogs";
+import DFTCEditApprovalRequests  from "./dftc/pages/DFTCEditApprovalRequests";
 // Admin workspace
 import AdminDashboard from "./admin/pages/AdminDashboard";
 import AdminDataSources from "./admin/pages/AdminDataSources";
@@ -170,6 +174,7 @@ export const router = createBrowserRouter([
       { path: "showcase",      Component: ShowcasePage },
       { path: "profile",       Component: FarmerProfile  },
       { path: "settings",      Component: FarmerSettings },
+      { path: "activities",    Component: MyActivitiesPage },
       { path: "about",         Component: AboutPage      },
     ],
   },
@@ -185,6 +190,7 @@ export const router = createBrowserRouter([
       { path: "input/commodity/:commodityName", Component: DFTCCommodityRecords },
       { path: "price-input",       Component: DFTCPriceInput   },
       { path: "arrival-input",     Component: DFTCArrivalInput },
+      { path: "generate-report",   Component: DFTCGenerateReport },
       { path: "trends",            Component: DFTCTrends       },
       { path: "submissions",                  Component: DFTCSubmissions      },
       { path: "submissions/:submissionId",    Component: DFTCSubmissionDetail },
@@ -195,6 +201,8 @@ export const router = createBrowserRouter([
       { path: "profile",                        Component: DFTCProfile    },
       { path: "settings",                       Component: DFTCSettings   },
       { path: "about",                          Component: DFTCAbout      },
+      { path: "audit-logs",                     Component: DFTCAuditLogs },
+      { path: "edit-approval-requests",         Component: DFTCEditApprovalRequests },
     ],
   },
 

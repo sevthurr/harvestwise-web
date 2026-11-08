@@ -141,6 +141,7 @@ export function buildCalendarMarkers(
       rainfall: f.rainfall_mm,
       rainProb: f.rain_probability_pct,
       condition: f.suitability || f.weather_condition || null,
+      occurrence: f.occurrence || null,
     };
   });
 

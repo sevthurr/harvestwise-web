@@ -119,6 +119,34 @@ describe('Topnav avatar reflects the uploaded profile picture', () => {
     });
   });
 
+  it('hides DFTC audit logs from users who are not the acting section head', () => {
+    authState.user = {
+      first_name: 'Ana',
+      last_name: 'Reyes',
+      role: { role_name: 'DFTC' },
+      position: 'DFTC Staff',
+    };
+    renderInProviders(<DFTCLayout />, '/dftc');
+
+    fireEvent.click(screen.getByRole('button', { name: /Ana Reyes/ }));
+
+    expect(screen.queryByText('Audit Logs')).not.toBeInTheDocument();
+  });
+
+  it('shows DFTC audit logs to the acting section head', () => {
+    authState.user = {
+      first_name: 'Ana',
+      last_name: 'Reyes',
+      role: { role_name: 'DFTC' },
+      position: 'Acting Section Head',
+    };
+    renderInProviders(<DFTCLayout />, '/dftc');
+
+    fireEvent.click(screen.getByRole('button', { name: /Ana Reyes/ }));
+
+    expect(screen.getByText('Audit Logs')).toBeInTheDocument();
+  });
+
   it('shows the picture in the Admin topbar', async () => {
     authState.user = {
       first_name: 'Ana',

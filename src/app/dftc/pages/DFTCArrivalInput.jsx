@@ -27,6 +27,7 @@ import {
 import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/components/shared/CommodityIllustrations";
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../global/api";
+import { useAuth } from "../../global/contexts/AuthContext";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
@@ -101,6 +102,12 @@ const MONTHS = [
   { val: "10", name: "October" },
   { val: "11", name: "November" },
   { val: "12", name: "December" }
+];
+
+// Market tabs for Arrival Volume manual encoding
+export const ARRIVAL_MARKET_TABS = [
+  { id: "dftc-arrival", label: "DFTC Arrival", sourceId: "dftc_volume", market: "DFTC" },
+  { id: "bankerohan-arrival", label: "Bankerohan Arrival", sourceId: "bankerohan", market: "Bankerohan" },
 ];
 
 // Authentic Excel Fills & Borders from DFTC-VOLUME-2025-Final.xlsx (OVERALL TOTAL sheet)
@@ -702,35 +709,52 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
 
 // ─── DFTCArrivalInput Main Component ─────────────────────────────────────────
 export default function DFTCArrivalInput() {
+  const { user } = useAuth();
+  const canSave = user?.position === "Acting Section Head" || user?.staff_profile?.position_name === "Acting Section Head";
   const { data: catalogData } = useDftcCatalog();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const navState = location.state;
 
-  // Period / Frequency selection: 'monthly' (Daily and Weekly removed per requirements)
-  const [periodType, setPeriodType] = useState(() => navState?.periodType || "monthly");
+  // Selected daily date (no future dates allowed)
   const [selectedDate, setSelectedDate] = useState(() => navState?.date ?? localToday());
-  const [selectedWeek, setSelectedWeek] = useState(() => navState?.week ?? getCurrentWeekOfMonth());
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date();
-    return String(d.getMonth() + 1).padStart(2, "0");
-  });
-  const [selectedYear, setSelectedYear] = useState(() => {
-    return String(new Date().getFullYear());
-  });
+  const [activeTabId, setActiveTabId] = useState(() => navState?.activeTab || ARRIVAL_MARKET_TABS[0].id);
 
-  const availableWeeks = useMemo(() => {
-    return getWeeksForMonth(selectedYear, selectedMonth);
-  }, [selectedYear, selectedMonth]);
+  // Tab fields: separate arrival data for DFTC Arrival and Bankerohan Arrival
+  const [tabFields, setTabFields] = useState(() => ({
+    "dftc-arrival": {},
+    "bankerohan-arrival": {}
+  }));
 
-  const activeWeekObj = useMemo(() => {
-    const found = availableWeeks.find((w) => w.weekNum === selectedWeek);
-    return found || availableWeeks[availableWeeks.length - 1];
-  }, [availableWeeks, selectedWeek]);
+  const fields = useMemo(() => tabFields[activeTabId] || {}, [tabFields, activeTabId]);
+  const setFields = useCallback((updater) => {
+    setTabFields((prev) => {
+      const cur = prev[activeTabId] || {};
+      const next = typeof updater === "function" ? updater(cur) : updater;
+      return {
+        ...prev,
+        [activeTabId]: next
+      };
+    });
+  }, [activeTabId]);
 
-  // fields: { [variantId]: { farmSource: string, otherSource: string, uom: string } }
-  const [fields, setFields] = useState({});
+  const getTabCount = useCallback((tabId) => {
+    const tf = tabFields[tabId] || {};
+    let count = 0;
+    for (const k of Object.keys(tf)) {
+      if (hasValue(tf[k])) count++;
+    }
+    return count;
+  }, [tabFields]);
+
+  const totalEnteredCount = useMemo(() => {
+    return ARRIVAL_MARKET_TABS.reduce((sum, tab) => sum + getTabCount(tab.id), 0);
+  }, [getTabCount]);
+
+  const currentTabCount = useMemo(() => {
+    return getTabCount(activeTabId);
+  }, [activeTabId, getTabCount]);
 
   // Category collapsed state: starts collapsed initially
   const [collapsedComs, setCollapsedComs] = useState(() => new Set());
@@ -763,6 +787,8 @@ export default function DFTCArrivalInput() {
   const [draftDismissed, setDraftDismissed] = useState(false);
   const arrivalDraftVersionRef = useRef(0);
   const arrivalDraftPollRef = useRef(null);
+
+  // Review mode state
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewFilter, setReviewFilter] = useState("all");
   const reviewScrollRef = useRef(null);
@@ -786,19 +812,15 @@ export default function DFTCArrivalInput() {
     }, 50);
     return () => clearTimeout(timer);
   }, [reviewFilter, reviewMode]);
+
   const [dataName, setDataName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState(0);
   const [saveProgressStage, setSaveProgressStage] = useState("Validating arrival records...");
   const [saveError, setSaveError] = useState("");
   const catalogRef = useRef(null);
-  // The DB catalogue items behind the map above. Kept so a row can be placed
-  // for a commodity the static mirror has never heard of.
   const catalogItemsRef = useRef([]);
-  // The rows the grid gained from the DB catalogue.
   const catalogRowsRef = useRef([]);
-  // Bumped whenever a catalogue row is added, so the grid re-renders and any
-  // memo that walks the catalogue is invalidated.
   const [catalogRowsVersion, setCatalogRowsVersion] = useState(0);
 
   // DFTC personnel is shared with Price Input through React Query.
@@ -813,57 +835,35 @@ export default function DFTCArrivalInput() {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   arrivalDraftStateRef.current = {
-    periodType, selectedDate, selectedWeek, selectedMonth, selectedYear,
-    fields, customVariants, customCommodities,
+    selectedDate, activeTabId, tabFields, customVariants, customCommodities,
   };
 
   // Calculate reporting label, subtitle, and effective date
   const effectivePeriodInfo = useMemo(() => {
-    if (periodType === "monthly") {
-      const monthObj = MONTHS.find((m) => m.val === selectedMonth) || MONTHS[0];
-      const label = `${monthObj.name} ${selectedYear}`;
-      const lastDay = new Date(parseInt(selectedYear, 10), parseInt(selectedMonth, 10), 0).getDate();
-      const iso = `${selectedYear}-${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
-      const startIso = `${selectedYear}-${selectedMonth}-01`;
-      const subtitle = `For the Month of ${monthObj.name} ${selectedYear}`;
-      return { label, subtitle, rangeLabel: `${monthObj.name} 1 – ${lastDay}, ${selectedYear}`, iso, startIso, freq: "Monthly" };
-    }
-    if (periodType === "weekly") {
-      const label = activeWeekObj.fullLabel; // e.g. "Week 1 of September 2026"
-      const subtitle = `For ${activeWeekObj.fullLabel} (${activeWeekObj.rangeLabel})`;
-      return {
-        label,
-        subtitle,
-        rangeLabel: activeWeekObj.rangeLabel, // e.g. "Sep 1 – Sep 7, 2026"
-        iso: activeWeekObj.endIso,
-        startIso: activeWeekObj.startIso,
-        freq: "Weekly"
-      };
-    }
     const label = formatDateLabel(selectedDate);
-    return { label, subtitle: `For ${label}`, rangeLabel: label, iso: selectedDate, startIso: selectedDate, freq: "Daily" };
-  }, [periodType, selectedDate, selectedMonth, selectedYear, activeWeekObj]);
+    return {
+      label,
+      subtitle: `Commodity Arrival Volumes as of ${label}`,
+      iso: selectedDate,
+      freq: "Daily"
+    };
+  }, [selectedDate]);
 
   // Update default data name whenever period changes
   useEffect(() => {
     setDataName(`DFTC Arrival Volume — ${effectivePeriodInfo.label}`);
   }, [effectivePeriodInfo.label]);
 
-  // Reporting-date guard, mirroring the server rule in
-  // `ManualArrivalSubmissionCreate`.
-  //
-  // Daily submissions are stamped with the day the data was observed, so that
-  // date must not be in the future. Weekly/monthly submissions are stamped with
-  // the *last* day of the period, which legitimately falls in the future while
-  // the period is still running — staff file figures for the week or month in
-  // progress. What must never be allowed is a period that has not begun, so
-  // those are validated on the period start instead.
-  const reportingDateError =
-    periodType === "daily"
-      ? getReportingDateError(effectivePeriodInfo.iso)
-      : isFutureDate(effectivePeriodInfo.startIso)
-        ? "Reporting period cannot start in the future."
-        : "";
+  function handleDateChange(newDate) {
+    if (!newDate) return;
+    const today = localToday();
+    if (newDate > today) newDate = today;
+    if (newDate === selectedDate) return;
+    setSelectedDate(newDate);
+    setDataName(`DFTC Arrival Volume — ${formatDateLabel(newDate)}`);
+  }
+
+  const reportingDateError = getReportingDateError(selectedDate);
 
   // Restore the selected personnel for the active reporting period once the
   // shared staff query is available.
@@ -1015,18 +1015,11 @@ export default function DFTCArrivalInput() {
       try {
         localStorage.setItem("dftc_arrival_draft", "true");
         localStorage.setItem("dftc_arrival_draft_data", JSON.stringify(payload));
-        const enteredCount = Object.values(payload.fields || {}).filter(
-          (f) =>
-            (f.farmSource && String(f.farmSource).trim() !== "") ||
-            (f.otherSource && String(f.otherSource).trim() !== "") ||
-            (f.farm && String(f.farm).trim() !== "") ||
-            (f.other && String(f.other).trim() !== "")
-        ).length;
-        if (enteredCount > 0) {
+        if (totalEnteredCount > 0) {
           apiPost("/dftc/draft/notify", {
             data_type: "arrival_volume",
-            reporting_date: effectivePeriodInfo.iso || payload.selectedDate,
-            record_count: enteredCount,
+            reporting_date: selectedDate,
+            record_count: totalEnteredCount,
           }).catch((err) => {
             console.warn("Draft notification failed:", err);
           });
@@ -1034,7 +1027,7 @@ export default function DFTCArrivalInput() {
       } catch { }
       try {
         const saved = await parseResponse(await apiPut("/dftc/arrival-draft", {
-          reporting_date: effectivePeriodInfo.iso,
+          reporting_date: selectedDate,
           payload,
           expected_version: arrivalDraftVersionRef.current || null,
         }));
@@ -1044,19 +1037,17 @@ export default function DFTCArrivalInput() {
       setSaveStatus("savedNew");
       oldTimer.current = setTimeout(() => setSaveStatus("savedOld"), 30000);
     }, 1500);
-  }, [periodType, selectedDate, selectedWeek, selectedMonth, selectedYear, effectivePeriodInfo.iso, fields, customVariants, customCommodities]);
+  }, [selectedDate, activeTabId, tabFields, customVariants, customCommodities, totalEnteredCount]);
 
   function restoreDraft() {
     try {
       const raw = localStorage.getItem("dftc_arrival_draft_data");
       if (raw) {
         const d = JSON.parse(raw);
-        if (d.periodType) setPeriodType(d.periodType);
         if (d.selectedDate) setSelectedDate(d.selectedDate);
-        if (d.selectedWeek) setSelectedWeek(d.selectedWeek);
-        if (d.selectedMonth) setSelectedMonth(d.selectedMonth);
-        if (d.selectedYear) setSelectedYear(d.selectedYear);
-        if (d.fields) setFields(d.fields);
+        if (d.activeTabId) setActiveTabId(d.activeTabId);
+        if (d.tabFields) setTabFields(d.tabFields);
+        else if (d.fields) setTabFields({ "dftc-arrival": d.fields, "bankerohan-arrival": {} });
         if (d.customVariants) setCustomVariants(d.customVariants);
         if (d.customCommodities) setCustomCommodities(migrateDraftCommodities(d.customCommodities));
       }
@@ -1077,46 +1068,48 @@ export default function DFTCArrivalInput() {
     (async () => {
       try {
         const draft = await parseResponse(
-          await apiGet(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`)
+          await apiGet(`/dftc/arrival-draft?reporting_date=${selectedDate}`)
         );
         if (cancelled) return;
         arrivalDraftVersionRef.current = draft?.version || 0;
         if (draft?.id) {
           const payload = draft.payload || {};
-          setFields(payload.fields || {});
+          if (payload.tabFields) setTabFields(payload.tabFields);
+          else if (payload.fields) setTabFields({ "dftc-arrival": payload.fields, "bankerohan-arrival": {} });
           setCustomVariants(payload.customVariants || {});
           setCustomCommodities(migrateDraftCommodities(payload.customCommodities || {}));
-          setHasDraft(Object.keys(payload.fields || {}).length > 0);
+          setHasDraft(true);
         }
         // Device-local data remains available through the explicit Resume
         // Draft action; it must not override shared server state on open.
       } catch { /* local fallback remains available offline */ }
     })();
     return () => { cancelled = true; };
-  }, [effectivePeriodInfo.iso]);
+  }, [selectedDate]);
 
   useEffect(() => {
     const id = setInterval(async () => {
       if (document.visibilityState !== "visible" || navigator.onLine === false) return;
       try {
         const draft = await parseResponse(
-          await apiGet(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`)
+          await apiGet(`/dftc/arrival-draft?reporting_date=${selectedDate}`)
         );
         if (!draft?.id || (draft.version || 0) <= arrivalDraftVersionRef.current) return;
         arrivalDraftVersionRef.current = draft.version;
         const payload = draft.payload || {};
-        setFields(payload.fields || {});
+        if (payload.tabFields) setTabFields(payload.tabFields);
+        else if (payload.fields) setTabFields({ "dftc-arrival": payload.fields, "bankerohan-arrival": {} });
         setCustomVariants(payload.customVariants || {});
         setCustomCommodities(migrateDraftCommodities(payload.customCommodities || {}));
-        setHasDraft(Object.keys(payload.fields || {}).length > 0);
+        setHasDraft(true);
       } catch { /* shared polling is best effort */ }
     }, 15000);
     return () => clearInterval(id);
-  }, [effectivePeriodInfo.iso]);
+  }, [selectedDate]);
 
   async function discardDraft() {
     try {
-      await apiDelete(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`);
+      await apiDelete(`/dftc/arrival-draft?reporting_date=${selectedDate}`);
     } catch { /* local state is still cleared */ }
     setDraftDismissed(true);
     setHasDraft(false);
@@ -1124,7 +1117,13 @@ export default function DFTCArrivalInput() {
       localStorage.removeItem("dftc_arrival_draft");
       localStorage.removeItem("dftc_arrival_draft_data");
     } catch { }
-    setFields({});
+    setTabFields({ "dftc-arrival": {}, "bankerohan-arrival": {} });
+  }
+
+  function handleDateChange(newDate) {
+    if (!newDate) return;
+    setSelectedDate(newDate);
+    triggerAutosave();
   }
 
   function getField(variantId) {
@@ -1363,32 +1362,36 @@ export default function DFTCArrivalInput() {
   // ── Metrics & Totals Calculation ──
   const enteredRows = useMemo(() => {
     const list = [];
-    PRICE_CATEGORIES.forEach((cat) => {
-      getAllCommodities(cat).forEach((com) => {
-        getVariants(com).forEach((v, vi) => {
-          const f = getField(v.id);
-          if (hasValue(f)) {
-            const farmVal = parseFloat(f.farmSource) || 0;
-            const otherVal = parseFloat(f.otherSource) || 0;
-            const combined = farmVal + otherVal;
-            list.push({
-              cat,
-              com,
-              v,
-              vi,
-              uom: f.uom || "kg",
-              farmVal,
-              otherVal,
-              combined
-            });
-          }
+    ARRIVAL_MARKET_TABS.forEach((tab) => {
+      const tFields = tabFields[tab.id] || {};
+      PRICE_CATEGORIES.forEach((cat) => {
+        getAllCommodities(cat).forEach((com) => {
+          getVariants(com).forEach((v, vi) => {
+            const f = tFields[v.id];
+            if (hasValue(f)) {
+              const farmVal = parseFloat(f.farmSource) || 0;
+              const otherVal = parseFloat(f.otherSource) || 0;
+              const combined = farmVal + otherVal;
+              list.push({
+                tabId: tab.id,
+                tabLabel: tab.label,
+                sourceId: tab.sourceId,
+                cat,
+                com,
+                v,
+                vi,
+                uom: f.uom || "kg",
+                farmVal,
+                otherVal,
+                combined
+              });
+            }
+          });
         });
       });
     });
     return list;
-  }, [fields, customCommodities, customVariants, catalogRowsVersion]);
-
-  const totalEnteredCount = enteredRows.length;
+  }, [tabFields, customCommodities, customVariants, catalogRowsVersion]);
 
   const totalFarmVolume = useMemo(() => {
     return enteredRows.reduce((acc, r) => acc + r.farmVal, 0);
@@ -1411,14 +1414,10 @@ export default function DFTCArrivalInput() {
     return enteredRows.filter((r) => r.otherVal > 0).length;
   }, [enteredRows]);
 
-  // enteredRows stays one record per commodity because it is also the save
-  // payload, so a commodity with both sources filled counts once there but
-  // fills two source cells. The review counts cells.
   const totalSourceValueCount = farmEnteredCount + otherEnteredCount;
 
-  // The review is the complete monitoring sheet, so it walks the full catalogue
-  // rather than enteredRows — that one is the save payload and the printed
-  // totals, which must stay limited to commodities that carry a volume.
+
+  // Complete monitoring sheet for Review mode
   const catalogueReviewRows = useMemo(() => {
     const list = [];
     PRICE_CATEGORIES.forEach((cat) => {
@@ -1478,145 +1477,133 @@ export default function DFTCArrivalInput() {
     setSaveProgressStage("Validating arrival records...");
     let totalSaved = 0;
 
-    const records = [];
-    for (const r of enteredRows) {
-      const baseName = COMMODITY_NAME_OVERRIDES?.[r.com.name] ?? r.com.name;
-      const baseKey = nameSlug(baseName);
-      const variantName = r.v.name;
-      const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
-      const variantKey = !isBaseOrRegular
-        ? `${baseKey}-${nameSlug(variantName)}`
-        : baseKey;
-      const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
-
-      let commodity_id = resolveCommodityId(r.com, r.v);
-
-      const base = {
-        variety: r.v.name,
-        uom: r.uom || "kg",
-        farm_source_volume_kg: r.farmVal > 0 ? r.farmVal : null,
-        other_source_volume_kg: r.otherVal > 0 ? r.otherVal : null,
-        reported_combined_volume_kg: r.combined > 0 ? Number(r.combined.toFixed(2)) : null,
-        observation_status: "Reported value"
-      };
-
-      // Register custom-added commodities / new varieties on the fly so their
-      // volumes reach the DB instead of being silently dropped as unknown ids.
-      if (!variantKnown) {
-        const registered = await registerCommodity({
-          name: baseName,
-          category: r.cat.name,
-          variety: !isBaseOrRegular ? r.v.name : null,
-          unit_of_measure: r.uom || "kg"
-        });
-        if (registered?.id) {
-          commodity_id = registered.id;
-          try {
-            if (catalogRef.current) {
-              // The base key already points at the parent commodity's row:
-              // overwriting it would send the parent's own volumes to the
-              // newly registered variety.
-              if (!catalogRef.current.has(baseKey)) {
-                catalogRef.current.set(baseKey, registered.id);
-              }
-              catalogRef.current.set(variantKey, registered.id);
-            }
-          } catch { /* ignore */ }
-        }
-      }
-
-      if (!commodity_id) {
-        // The catalog is keyed by the override-resolved DB name, not the UI
-        // label: "Pak choi / Bok choy" is stored as "Pakchoy/Bokchoy".
-        commodity_id = catalogRef.current?.get(baseKey) ?? r.com.id;
-      }
-
-      if (commodity_id) {
-        records.push({ commodity_id, ...base });
-      }
-    }
-
-    setSaveProgress(55);
-    setSaveProgressStage("Standardizing volume figures...");
-
-    const payload = {
-      data_type: "arrival_volume",
-      source_id: "dftc_volume",
-      reporting_date: effectivePeriodInfo.iso,
-      period_type: periodType,
-      // The server validates the period start, not the end: the end date of an
-      // in-progress week/month is legitimately in the future.
-      period_start: effectivePeriodInfo.startIso,
-      encoded_by: encodedBy,
-      reviewed_by: reviewedBy,
-      records
-    };
-
-    setSaveProgress(75);
-    setSaveProgressStage("Saving records to database...");
-
-    try {
-      await parseResponse(await apiPost("/dftc/submissions/manual", payload));
-      totalSaved = records.length;
-    } catch (err) {
-      console.error("Failed to save arrival volume submission:", err);
-      setSaveError(
-        "Could not save this arrival volume submission. Your entries are still on " +
-        "this page — check your connection and press Save again."
-      );
+    const tabsWithRecords = ARRIVAL_MARKET_TABS.filter((tab) => getTabCount(tab.id) > 0);
+    if (tabsWithRecords.length === 0) {
+      setSaveError("No arrival volume records entered to save.");
       setIsSaving(false);
       return;
     }
 
-    setSaveProgress(95);
-    setSaveProgressStage("Consolidating arrival volume records...");
-
     try {
-      await apiDelete(`/dftc/arrival-draft?reporting_date=${effectivePeriodInfo.iso}`);
-      localStorage.setItem(
-        `dftc_arrival_personnel_${effectivePeriodInfo.iso}`,
-        JSON.stringify({
-          encodedBy,
-          encodedByRole,
-          reviewedBy,
-          reviewedByRole
-        })
-      );
-      localStorage.removeItem("dftc_arrival_draft");
-      localStorage.removeItem("dftc_arrival_draft_data");
-    } catch { }
+      for (let tIdx = 0; tIdx < tabsWithRecords.length; tIdx++) {
+        const tab = tabsWithRecords[tIdx];
+        const tFields = tabFields[tab.id] || {};
+        const records = [];
 
-    setHasDraft(false);
-    setSaveProgress(100);
-    setSaveProgressStage("Arrival volume data saved successfully!");
-    queryClient.setQueryData(["dftc", "shared-drafts", effectivePeriodInfo.iso], (current) => (
-      current ? { ...current, arrival: null } : current
-    ));
-    queryClient.invalidateQueries({ queryKey: ["dftc", "shared-drafts", effectivePeriodInfo.iso] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
-    queryClient.invalidateQueries({ queryKey: ["dftc", "requirements"] });
+        for (const cat of PRICE_CATEGORIES) {
+          for (const com of getAllCommodities(cat)) {
+            for (const v of getVariants(com)) {
+              const f = tFields[v.id];
+              if (!hasValue(f)) continue;
 
-    navTimer.current = setTimeout(() => {
-      setIsSaving(false);
-      navigate("/dftc/input", {
-        state: {
-          successMsg: `${dataName} saved successfully (${totalSaved} commodity records, ${totalSourceValueCount} source values across Farm Source and Other Sources).`,
-          justSavedType: "arrival",
-          justSavedDate: effectivePeriodInfo.iso,
-          justSavedAt: new Date().toISOString(),
-          savedData: {
-            title: dataName,
-            recordsCount: totalSaved,
-            timestamp: new Date().toISOString(),
-            date: effectivePeriodInfo.iso,
-            category: "DFTC Arrival Volume",
-            status: "Saved"
+              const baseName = COMMODITY_NAME_OVERRIDES?.[com.name] ?? com.name;
+              const baseKey = nameSlug(baseName);
+              const variantName = v.name;
+              const isBaseOrRegular = !variantName || variantName === "Base" || variantName === "Regular";
+              const variantKey = !isBaseOrRegular ? `${baseKey}-${nameSlug(variantName)}` : baseKey;
+              const variantKnown = !!(catalogRef.current && catalogRef.current.has(variantKey));
+
+              let commodity_id = resolveCommodityId(com, v);
+
+              if (!variantKnown) {
+                const registered = await registerCommodity({
+                  name: baseName,
+                  category: cat.name,
+                  variety: !isBaseOrRegular ? v.name : null,
+                  unit_of_measure: f.uom || "kg"
+                });
+                if (registered?.id) {
+                  commodity_id = registered.id;
+                  try {
+                    if (catalogRef.current) {
+                      if (!catalogRef.current.has(baseKey)) {
+                        catalogRef.current.set(baseKey, registered.id);
+                      }
+                      catalogRef.current.set(variantKey, registered.id);
+                    }
+                  } catch { /* ignore */ }
+                }
+              }
+
+              if (!commodity_id) {
+                commodity_id = catalogRef.current?.get(baseKey) ?? com.id;
+              }
+
+              const farmVal = parseFloat(f.farmSource);
+              const otherVal = parseFloat(f.otherSource);
+              const combinedVal = (isNaN(farmVal) ? 0 : farmVal) + (isNaN(otherVal) ? 0 : otherVal);
+
+              if (commodity_id) {
+                records.push({
+                  commodity_id,
+                  variety: v.name,
+                  uom: f.uom || "kg",
+                  farm_source_volume_kg: !isNaN(farmVal) && farmVal > 0 ? farmVal : null,
+                  other_source_volume_kg: !isNaN(otherVal) && otherVal > 0 ? otherVal : null,
+                  reported_combined_volume_kg: combinedVal > 0 ? Number(combinedVal.toFixed(2)) : null,
+                  observation_status: "Reported value"
+                });
+              }
+            }
           }
         }
-      });
-    }, 600);
+
+        if (records.length === 0) continue;
+
+        setSaveProgress(40 + Math.floor((tIdx / tabsWithRecords.length) * 40));
+        setSaveProgressStage(`Saving ${tab.label} records...`);
+
+        const payload = {
+          data_type: "arrival_volume",
+          source_id: tab.sourceId,
+          reporting_date: selectedDate,
+          period_type: "daily",
+          period_start: selectedDate,
+          encoded_by: encodedBy,
+          reviewed_by: reviewedBy,
+          records
+        };
+
+        await parseResponse(await apiPost("/dftc/submissions/manual", payload));
+        totalSaved += records.length;
+      }
+
+      setSaveProgress(95);
+      setSaveProgressStage("Finalizing submission...");
+
+      try {
+        localStorage.removeItem("dftc_arrival_draft");
+        localStorage.removeItem("dftc_arrival_draft_data");
+      } catch { }
+
+      setHasDraft(false);
+      setSaveProgress(100);
+      setSaveProgressStage("Arrival volume data saved successfully!");
+
+      queryClient.invalidateQueries({ queryKey: ["dftc", "submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-arrival-report-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
+
+      navTimer.current = setTimeout(() => {
+        setIsSaving(false);
+        navigate("/dftc/input", {
+          state: {
+            successMsg: `Arrival volume saved successfully (${totalSaved} commodity records across ${tabsWithRecords.map((t) => t.label).join(" and ")}).`,
+            justSavedType: "arrival",
+            justSavedDate: selectedDate,
+          }
+        });
+      }, 900);
+    } catch (err) {
+      console.error("Failed to save arrival volume submission:", err);
+      setSaveError(
+        err?.message
+          ? `Could not save this arrival volume submission: ${err.message}`
+          : "Could not save this arrival volume submission. Your entries are safe — check connection and try again."
+      );
+      setIsSaving(false);
+    }
   }
 
   // Timers scheduled above outlive unmount and fire setState/navigate on a dead
@@ -1658,6 +1645,8 @@ export default function DFTCArrivalInput() {
 
   // ── RENDER REVIEW MODE ─────────────────────────────────────────────────────
   if (reviewMode) {
+    const currentTab = ARRIVAL_MARKET_TABS.find((t) => t.id === activeTabId) || ARRIVAL_MARKET_TABS[0];
+
     return (
       <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto" style={{ overflowX: "hidden" }}>
         {/* Top bar with back button */}
@@ -1676,7 +1665,7 @@ export default function DFTCArrivalInput() {
         </div>
 
         <p className="text-[13px] text-[var(--hw-neutral-700)] mb-4 pl-8">
-          Davao Food Terminal Complex · Volume of Commodities Dropped at DFTC · {effectivePeriodInfo.subtitle}
+          {currentTab.label === "Bankerohan Arrival" ? "Bankerohan Public Market" : "Davao Food Terminal Complex"} · Volume of Commodities Dropped · {effectivePeriodInfo.subtitle}
         </p>
 
         {/* Info Banner */}
@@ -1689,6 +1678,33 @@ export default function DFTCArrivalInput() {
             {reportingDateError}
           </DFTCNotificationBanner>
         )}
+
+        {/* Market Source Tab Switcher in Review Mode */}
+        <div className="flex items-center gap-2 mb-4">
+          {ARRIVAL_MARKET_TABS.map((tab) => {
+            const count = getTabCount(tab.id);
+            const isActive = activeTabId === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTabId(tab.id)}
+                className={`px-4 py-2 rounded-xl text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-2 border ${
+                  isActive
+                    ? "bg-[var(--hw-green-700)] text-white border-[var(--hw-green-700)] shadow-xs"
+                    : "bg-white text-[var(--hw-neutral-700)] border-[var(--hw-neutral-200)] hover:bg-[var(--hw-neutral-50)]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${
+                  isActive ? "bg-white/20 text-white" : "bg-[var(--hw-neutral-100)] text-[var(--hw-neutral-600)]"
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         {/* Summary Badges Card — Clickable to filter details (Matching Add Price Data Review) */}
         <div className="bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3 sm:p-4 mb-4 sm:mb-5">
@@ -1750,10 +1766,10 @@ export default function DFTCArrivalInput() {
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-2.5 sm:p-6 mb-6">
           <div className="text-center mb-4">
             <h2 className="text-[14px] sm:text-[15px] font-bold text-black uppercase tracking-wide">
-              Davao Food Terminal Complex
+              {currentTab.label === "Bankerohan Arrival" ? "Bankerohan Public Market" : "Davao Food Terminal Complex"}
             </h2>
             <p className="text-[12px] sm:text-[13px] font-bold text-black mt-0.5 uppercase tracking-wide">
-              VOLUME (KG) OF COMMODITIES DROPPED AT DFTC
+              VOLUME (KG) OF COMMODITIES DROPPED AT {currentTab.label === "Bankerohan Arrival" ? "BANKEROHAN" : "DFTC"}
             </p>
             <p className="text-[12px] font-medium text-[var(--hw-neutral-700)]">
               {effectivePeriodInfo.subtitle}
@@ -2000,10 +2016,11 @@ export default function DFTCArrivalInput() {
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}
-              disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError)}
+              disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError) || !canSave}
+              title={!canSave ? "Only an Acting Section Head can save or finalize review" : undefined}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              Save {dataName} ({totalEnteredCount} commodities)
+              {canSave ? `Save ${dataName} (${totalEnteredCount} commodities)` : "Only Acting Section Head can save"}
             </button>
           </div>
 
@@ -2125,43 +2142,67 @@ export default function DFTCArrivalInput() {
         </p>
       </div>
 
-      {/* Controls Bar: Monthly Period selection */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] font-semibold text-[var(--hw-neutral-700)] shrink-0">Period:</span>
-          <div className="flex rounded-full border border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)] p-0.5">
-            <span
-              className="px-3.5 py-1 text-[11.5px] sm:text-[12px] font-semibold rounded-full bg-[var(--hw-green-700)] text-white shadow-xs text-center cursor-default inline-block"
-            >
-              Monthly
-            </span>
-          </div>
+      {/* Tab Navigation for Arrival Markets (DFTC Arrival & Bankerohan Arrival) + Editable Date Picker */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1 mb-4">
+        {/* Arrival Market Tabs */}
+        <div className="flex-1 min-w-0 grid grid-cols-2 sm:flex rounded-lg border border-[var(--hw-neutral-200)] overflow-hidden bg-white shadow-[var(--shadow-xs)]">
+          {ARRIVAL_MARKET_TABS.map((tab) => {
+            const active = activeTabId === tab.id;
+            const count = getTabCount(tab.id);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTabId(tab.id)}
+                className={`flex-1 min-w-0 py-2 sm:py-2.5 px-2 sm:px-4 text-[12px] sm:text-[13px] leading-tight font-medium transition-colors text-center cursor-pointer flex items-center justify-center gap-1.5 last:border-r-0 border-r border-[var(--hw-neutral-200)] ${
+                  active
+                    ? "bg-[var(--hw-green-700)] text-white font-semibold"
+                    : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"
+                }`}
+              >
+                <span className="sm:truncate">{tab.label}</span>
+                {count > 0 && (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight shrink-0 ${
+                      active ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--hw-neutral-100)]">
-          <span className="text-[12px] font-medium text-[var(--hw-neutral-600)] shrink-0">Month:</span>
-          <div className="flex items-center gap-1.5">
-            <select
-              id="arrival-monthly-month-select"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
+        {/* Editable Date Picker (Cannot enter data for future dates) */}
+        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] self-end lg:self-auto">
+          <Calendar className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0" />
+          <label htmlFor="arrival-date-picker" className="text-[12px] font-medium text-[var(--hw-neutral-700)] shrink-0">
+            Date:
+          </label>
+          <input
+            id="arrival-date-picker"
+            type="date"
+            max={localToday()}
+            value={selectedDate}
+            onChange={(e) => handleDateChange(e.target.value)}
+            onBlur={(e) => {
+              if (e.target.value > localToday()) {
+                handleDateChange(localToday());
+              }
+            }}
+            className="w-[118px] sm:w-auto text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
+          />
+          {selectedDate !== localToday() && (
+            <button
+              type="button"
+              onClick={() => handleDateChange(localToday())}
+              className="text-[11px] font-semibold text-[var(--hw-green-700)] hover:underline ml-1 cursor-pointer whitespace-nowrap"
             >
-              {MONTHS.map((m) => (
-                <option key={m.val} value={m.val}>{m.name}</option>
-              ))}
-            </select>
-            <select
-              id="arrival-monthly-year-select"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-2 py-1 rounded-lg border border-[var(--hw-neutral-200)] bg-white text-[12px] font-medium text-[var(--hw-neutral-800)] focus:outline-none focus:border-[var(--hw-green-700)] shadow-[var(--shadow-xs)] cursor-pointer"
-            >
-              {["2025", "2026", "2027"].map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </div>
+              Today
+            </button>
+          )}
         </div>
       </div>
 

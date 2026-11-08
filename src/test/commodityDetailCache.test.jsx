@@ -328,6 +328,59 @@ describe("CommodityDetail offline and error states", () => {
     expect(screen.queryByText(LOAD_FAILED)).toBeNull();
   });
 
+  it("displays the sudden volatility reason in the current price card when present", async () => {
+    const client = makeClient();
+    parseResponse.mockResolvedValue({
+      ...DETAIL,
+      volatility_reason: "Heavy Rainfall",
+      is_volatility_flagged: true,
+      recent_records: [
+        {
+          record_id: "r1",
+          price_date: "2026-09-28",
+          prevail_price: 35.0,
+          change: -15.0,
+          volatility_reason: "Heavy Rainfall",
+          is_volatility_flagged: true,
+        },
+      ],
+    });
+
+    renderPage(client);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Reason for sudden price drop: Heavy Rainfall")
+      ).toBeInTheDocument()
+    );
+  });
+
+  it("does not display the volatility advisory when the reason is 'Other'", async () => {
+    const client = makeClient();
+    parseResponse.mockResolvedValue({
+      ...DETAIL,
+      volatility_reason: "Other",
+      volatility_notes: "Personal note",
+      is_volatility_flagged: true,
+      recent_records: [
+        {
+          record_id: "r1",
+          price_date: "2026-09-28",
+          prevail_price: 35.0,
+          change: -15.0,
+          volatility_reason: "Other",
+          volatility_notes: "Personal note",
+          is_volatility_flagged: true,
+        },
+      ],
+    });
+
+    renderPage(client);
+
+    await waitFor(() => expect(screen.getAllByText("Tomato").length).toBeGreaterThan(0));
+    expect(screen.queryByText(/Reason for sudden price/i)).toBeNull();
+  });
+
   it("shows a generic failure message and retries on a server error", async () => {
     const client = makeClient();
     apiGet.mockImplementation(async (url) =>

@@ -6,11 +6,16 @@ import {
   Upload,
   FileText,
   X,
+  Search,
   ChevronRight,
+  ChevronDown,
+  Check,
   CheckCircle,
   Truck,
   Trash2,
-  Loader2
+  Loader2,
+  ArrowRight,
+  FileSpreadsheet
 } from "lucide-react";
 import { PageHeader } from "../../global/components/shared/PageHeader";
 import { apiDelete, apiGet, parseResponse } from "../../global/api";
@@ -115,6 +120,30 @@ export default function DFTCInput() {
   const [deleteModalDraft, setDeleteModalDraft] = useState(null);
   const [deletingDraft, setDeletingDraft] = useState(false);
   const [deletedDraftIds, setDeletedDraftIds] = useState(new Set());
+  const [dateRangeFilter, setDateRangeFilter] = useState("7d"); // "7d" | "30d"
+  const [datasetTypeFilter, setDatasetTypeFilter] = useState("all"); // "all" | "arrival" | "price"
+  const [searchFilter, setSearchFilter] = useState("");
+  const [isDaysDropdownOpen, setIsDaysDropdownOpen] = useState(false);
+  const [isModuleDropdownOpen, setIsModuleDropdownOpen] = useState(false);
+  const daysDropdownRef = useRef(null);
+  const moduleDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (daysDropdownRef.current && !daysDropdownRef.current.contains(event.target)) {
+        setIsDaysDropdownOpen(false);
+      }
+      if (moduleDropdownRef.current && !moduleDropdownRef.current.contains(event.target)) {
+        setIsModuleDropdownOpen(false);
+      }
+    }
+    if (isDaysDropdownOpen || isModuleDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isDaysDropdownOpen, isModuleDropdownOpen]);
 
   // Preserve just-saved submission context across history.replaceState so that freshly saved items
   // are immediately pinned as the latest (first) item in Today's Saved Data.
@@ -139,7 +168,7 @@ export default function DFTCInput() {
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
     queryKey: ["dftc", "submissions"],
     queryFn: async () => {
-      const res = await apiGet("/dftc/submissions?page=1&page_size=50");
+      const res = await apiGet("/dftc/submissions?page=1&page_size=100");
       return parseResponse(res);
     },
     // Global defaults set staleTime: 30min and refetchOnMount: false, so
@@ -195,17 +224,80 @@ export default function DFTCInput() {
 
   const rawSubmissions = submissionsData?.items || [];
 
-  // Format submissions: manual price entries for the same reporting date are consolidated into ONE report file.
-  // File uploads are kept separate as individual datasets.
-  const savedDataList = useMemo(() => {
+  const cutoffDays = dateRangeFilter === "60d" ? 60 : dateRangeFilter === "30d" ? 30 : 7;
+  const cutoffDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - cutoffDays);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [cutoffDays]);
+
+  const recentSaved = useMemo(() => {
     const all = buildSavedDatasetsList(
       rawSubmissions,
       todayStr,
       todayReportRecordCount,
       justSavedRef.current
     );
-    return all.filter((s) => s.isToday || s.isJustSaved);
-  }, [rawSubmissions, todayStr, todayReportRecordCount, justSavedType, justSavedDate, justSavedAt]);
+    const query = searchFilter.trim().toLowerCase();
+
+    return all.filter((item) => {
+      // 1. Timeframe filter
+      const rawDate = item.savedAtRaw || item.reportingDate;
+      let isWithinCutoff = item.isToday || item.isJustSaved;
+      if (rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime()) && d >= cutoffDate) {
+          isWithinCutoff = true;
+        }
+      }
+      if (!isWithinCutoff) return false;
+
+      // 2. Module / Dataset Type filter
+      if (datasetTypeFilter === "arrival" && !item.isArrival) return false;
+      if (datasetTypeFilter === "price" && item.isArrival) return false;
+
+      // 3. Search filter: dataset name, ID, date, user, market, etc.
+      if (query) {
+        const searchableFields = [
+          item.name,
+          item.dataName,
+          item.id,
+          item.submissionId,
+          item.reportingDate,
+          item.savedDate,
+          item.savedAt,
+          item.savedAtRaw,
+          item.savedBy,
+          item.submitted_by_name,
+          item.encoded_by,
+          item.preparedBy,
+          item.userId,
+          item.market,
+          item.submissionMethod,
+          item.entryMethod,
+          item.dataType,
+          item.status
+        ].filter(Boolean);
+        const matchesSearch = searchableFields.some((f) =>
+          String(f).toLowerCase().includes(query)
+        );
+        if (!matchesSearch) return false;
+      }
+
+      return true;
+    });
+  }, [
+    rawSubmissions,
+    todayStr,
+    todayReportRecordCount,
+    cutoffDate,
+    datasetTypeFilter,
+    searchFilter,
+    justSavedType,
+    justSavedDate,
+    justSavedAt
+  ]);
 
   // Today's Draft: unsaved entries in progress
   const draftList = useMemo(() => {
@@ -473,10 +565,6 @@ export default function DFTCInput() {
     if (location.state) window.history.replaceState({}, "");
   }, []);
 
-  const totalPages = Math.ceil(savedDataList.length / PAGE_SIZE) || 1;
-  const currentPage = Math.min(Math.max(1, page), totalPages);
-  const displayedSavedData = savedDataList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
   const handleSelectDraft = (draft) => {
     navigate(draft.route, {
       state: {
@@ -487,8 +575,10 @@ export default function DFTCInput() {
   };
 
   const handleSelectFile = (file) => {
-    if (file.submissionMethod === "File Upload" || file.isFileUpload) {
-      navigate(`/dftc/submissions/${file.submissionId || file.id}`);
+    if (file.isGeneratedReport) {
+      navigate("/dftc/generate-report", {
+        state: { prefill: file }
+      });
       return;
     }
 
@@ -500,11 +590,11 @@ export default function DFTCInput() {
 
     setPreviewFile({
       reportId: file.id,
-      submissionId: file.submissionId,
+      submissionId: file.submissionId || file.id,
       isArrival: file.isArrival,
       analyticsRecords: file.analyticsRecords,
       otherRecords: file.otherRecords,
-      dataName: file.dataName,
+      dataName: file.dataName || file.name,
       dataType: file.dataType,
       market: file.market,
       submissionMethod: file.submissionMethod,
@@ -512,7 +602,7 @@ export default function DFTCInput() {
       reportingDate: file.reportingDate || file.savedDate,
       savedDate: file.savedDate,
       records: file.records,
-      encodedBy: meta.encodedBy || file.encodedBy || "",
+      encodedBy: meta.encodedBy || file.encodedBy || file.submitted_by_name || file.savedBy || "",
       encodedByRole: meta.encodedByRole || file.encodedByRole || "Data Analyst",
       reviewedBy: meta.reviewedBy || file.reviewedBy || "",
       reviewedByRole: meta.reviewedByRole || file.reviewedByRole || "Data Analyst"
@@ -755,133 +845,282 @@ export default function DFTCInput() {
         )}
       </div>
 
-      {/* Today's Saved Data */}
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-[16px] sm:text-[17px] font-bold text-[var(--hw-neutral-900)]">Today's Saved Data</h2>
-          <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
-            Datasets saved or imported today. All records are securely retained.
-          </p>
+      {/* Recent Saved Data */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-[var(--hw-neutral-100)] flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-[var(--hw-neutral-900)]">Recent Saved Data</p>
+            <p className="text-[12px] text-[var(--hw-neutral-600)] mt-0.5">
+              Datasets saved and validated in the last {dateRangeFilter === "60d" ? "60" : dateRangeFilter === "30d" ? "30" : "7"} days
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* Search records filter */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-[var(--hw-neutral-400)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Search records..."
+                aria-label="Filter records"
+                className="w-36 sm:w-44 pl-7 pr-6 py-1.5 text-[12px] bg-white border border-[var(--hw-neutral-200)] rounded-lg text-[var(--hw-neutral-900)] placeholder:text-[var(--hw-neutral-400)] focus:outline-none focus:border-[var(--hw-green-600)] transition-colors shadow-xs"
+              />
+              {searchFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSearchFilter("")}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-0.5 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Module Dropdown Button */}
+            <div className="relative" ref={moduleDropdownRef}>
+              <button
+                type="button"
+                aria-label="Filter by module"
+                onClick={() => {
+                  setIsModuleDropdownOpen((prev) => !prev);
+                  setIsDaysDropdownOpen(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+              >
+                <span>
+                  {datasetTypeFilter === "arrival"
+                    ? "Arrival Volume"
+                    : datasetTypeFilter === "price"
+                    ? "Price Monitoring"
+                    : "All Modules"}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[var(--hw-neutral-500)] transition-transform duration-150 ${isModuleDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isModuleDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1.5 z-30 w-40 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1 text-[12px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDatasetTypeFilter("all");
+                      setIsModuleDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      datasetTypeFilter === "all" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>All Modules</span>
+                    {datasetTypeFilter === "all" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDatasetTypeFilter("arrival");
+                      setIsModuleDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      datasetTypeFilter === "arrival" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>Arrival Volume</span>
+                    {datasetTypeFilter === "arrival" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDatasetTypeFilter("price");
+                      setIsModuleDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      datasetTypeFilter === "price" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>Price Monitoring</span>
+                    {datasetTypeFilter === "price" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Days Dropdown Button */}
+            <div className="relative" ref={daysDropdownRef}>
+              <button
+                type="button"
+                aria-label="Filter by days"
+                onClick={() => {
+                  setIsDaysDropdownOpen((prev) => !prev);
+                  setIsModuleDropdownOpen(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] bg-white border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+              >
+                <span>
+                  {dateRangeFilter === "60d"
+                    ? "Last 60 Days"
+                    : dateRangeFilter === "30d"
+                    ? "Last 30 Days"
+                    : "Last 7 Days"}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[var(--hw-neutral-500)] transition-transform duration-150 ${isDaysDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isDaysDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1.5 z-30 w-36 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1 text-[12px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateRangeFilter("7d");
+                      setIsDaysDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      dateRangeFilter === "7d" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>Last 7 Days</span>
+                    {dateRangeFilter === "7d" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateRangeFilter("30d");
+                      setIsDaysDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      dateRangeFilter === "30d" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>Last 30 Days</span>
+                    {dateRangeFilter === "30d" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateRangeFilter("60d");
+                      setIsDaysDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer ${
+                      dateRangeFilter === "60d" ? "font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)]/50" : "text-[var(--hw-neutral-700)]"
+                    }`}
+                  >
+                    <span>Last 60 Days</span>
+                    {dateRangeFilter === "60d" && <Check className="w-3.5 h-3.5 text-[var(--hw-green-700)]" />}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <span className="hidden sm:inline text-[var(--hw-neutral-200)] font-light">|</span>
+
+            {/* Generate Report */}
+            <button
+              type="button"
+              onClick={() => navigate("/dftc/generate-report")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] sm:text-[13px] font-semibold text-white bg-[var(--hw-green-700)] hover:bg-[var(--hw-green-800)] rounded-lg transition-colors shrink-0 cursor-pointer whitespace-nowrap shadow-xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Generate Report
+            </button>
+          </div>
         </div>
 
         {loadingSubmissions ? (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 space-y-4 animate-pulse">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="p-4 space-y-3 animate-pulse">
+            {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">
                 <div className="space-y-1.5 flex-1">
-                  <div className="h-4 w-48 bg-[var(--hw-neutral-200)] rounded" />
-                  <div className="h-3 w-32 bg-[var(--hw-neutral-200)] rounded" />
+                  <div className="h-4 w-40 bg-[var(--hw-neutral-200)] rounded" />
+                  <div className="h-3 w-56 bg-[var(--hw-neutral-200)] rounded" />
                 </div>
                 <div className="h-4 w-16 bg-[var(--hw-neutral-200)] rounded" />
               </div>
             ))}
           </div>
-        ) : savedDataList.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] px-5 py-12 text-center">
-            <FileText className="w-9 h-9 text-[var(--hw-neutral-300)] mx-auto mb-2" />
-            <p className="text-[14px] text-[var(--hw-neutral-700)] font-medium">No saved data today.</p>
-            <p className="text-[12px] text-[var(--hw-neutral-500)] mt-1">Datasets saved or uploaded today will appear here.</p>
+        ) : recentSaved.length === 0 ? (
+          <div className="p-6 text-center text-[var(--hw-neutral-500)] text-[13px] space-y-2">
+            <p>
+              {datasetTypeFilter !== "all" || dateRangeFilter !== "7d" || searchFilter.trim()
+                ? "No saved datasets match the selected filters."
+                : `No saved datasets from the last ${dateRangeFilter === "60d" ? "60" : dateRangeFilter === "30d" ? "30" : "7"} days. Encoded or uploaded datasets will appear here.`}
+            </p>
+            {(datasetTypeFilter !== "all" || dateRangeFilter !== "7d" || Boolean(searchFilter.trim())) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDatasetTypeFilter("all");
+                  setDateRangeFilter("7d");
+                  setSearchFilter("");
+                }}
+                className="text-[12px] font-medium text-[var(--hw-green-700)] hover:underline cursor-pointer"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         ) : (
-          <>
-            {/* Desktop table */}
-            <div className="hidden md:block bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-[var(--hw-neutral-50)] border-b border-[var(--hw-neutral-200)]">
-                  <tr>
-                    {["Data Name", "Data Type", "Market or Facility", "Submission Method", "Saved Date", "Records"].map((h) => (
-                      <th key={h} className="px-5 py-3.5 text-left text-[12px] font-semibold text-[var(--hw-neutral-600)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--hw-neutral-100)]">
-                  {displayedSavedData.map((file) => (
-                    <tr
-                      key={file.id}
-                      onClick={() => handleSelectFile(file)}
-                      className="hover:bg-[var(--hw-neutral-50)] cursor-pointer transition-colors"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] text-[var(--hw-neutral-900)] font-medium">{file.dataName}</span>
-                          {file.isNew && (
-                            <span className="text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-1.5 py-0.5 leading-none whitespace-nowrap">
-                              New
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.dataType}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.market}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.submissionMethod || file.entryMethod}</td>
-                      <td className="px-5 py-4 text-[13px] text-[var(--hw-neutral-700)] whitespace-nowrap">{file.savedDate}</td>
-                      <td className="px-5 py-4 text-[13px] font-medium text-[var(--hw-neutral-900)]">{file.records ?? 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <Pagination page={currentPage} total={savedDataList.length} pageSize={PAGE_SIZE} onChange={setPage} />
-            </div>
-
-            {/* Mobile cards */}
-            <div className="block md:hidden space-y-3">
-              {displayedSavedData.map((file) => (
-                <button
-                  key={file.id}
-                  onClick={() => handleSelectFile(file)}
-                  className="w-full bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors active:scale-[.99] cursor-pointer group"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
-                      {file.dataName}
+          <div className="divide-y divide-[var(--hw-neutral-100)] max-h-[320px] sm:max-h-[360px] overflow-y-auto">
+            {recentSaved.map((row) => (
+              <button
+                key={row.id}
+                onClick={() => handleSelectFile(row)}
+                className="w-full px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-start sm:items-center gap-2.5 sm:gap-4 text-left hover:bg-[var(--hw-neutral-50)] transition-colors cursor-pointer group"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <p className="text-[13.5px] sm:text-[14px] font-semibold sm:font-medium text-[var(--hw-neutral-900)] leading-snug group-hover:text-[var(--hw-green-800)] transition-colors">
+                      {row.name}
                     </p>
-                    {file.isNew && (
-                      <span className="text-[10px] font-semibold text-[var(--hw-green-700)] bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded px-2 py-0.5 leading-none shrink-0">
-                        New
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {row.isToday && (
+                        <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-[var(--hw-green-50)] text-[var(--hw-green-700)] border border-[var(--hw-green-200)] shrink-0">
+                          Today
+                        </span>
+                      )}
+                      <span className="sm:hidden text-[11px] font-medium text-[var(--hw-neutral-500)] bg-[var(--hw-neutral-100)] px-1.5 py-0.5 rounded">
+                        {row.submissionId || row.id}
                       </span>
-                    )}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-[var(--hw-neutral-600)]">
-                    <span className="font-medium text-[var(--hw-neutral-700)]">{file.dataType}</span>
+
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] sm:text-[12px] text-[var(--hw-neutral-600)] mt-1 sm:mt-0.5">
+                    <span className="font-medium text-[var(--hw-neutral-700)]">{row.market}</span>
                     <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{file.market}</span>
-                    {(file.submissionMethod || file.entryMethod) && (
+                    <span>{row.entryMethod}</span>
+                    <span className="text-[var(--hw-neutral-300)]">•</span>
+                    <span>{row.savedAt}</span>
+                    {row.savedBy && (
                       <>
                         <span className="text-[var(--hw-neutral-300)]">•</span>
-                        <span>{file.submissionMethod || file.entryMethod}</span>
+                        <span>Saved by {row.savedBy}</span>
                       </>
                     )}
                   </div>
-                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[var(--hw-neutral-100)] text-[12px]">
-                    <span className="font-semibold text-[var(--hw-neutral-900)]">{file.records ?? 0} records</span>
-                  </div>
-                </button>
-              ))}
-
-              {totalPages > 1 && (
-                <div className="flex justify-center gap-2 pt-2">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() => setPage((p) => p - 1)}
-                    className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
-                  >
-                    Prev
-                  </button>
-                  <span className="px-3 py-1.5 text-[13px] text-[var(--hw-neutral-800)] font-medium">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <button
-                    disabled={currentPage === totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="px-3 py-1.5 border border-[var(--hw-neutral-200)] rounded-lg text-[13px] text-[var(--hw-neutral-800)] disabled:opacity-40 transition-colors cursor-pointer"
-                  >
-                    Next
-                  </button>
                 </div>
-              )}
-            </div>
-          </>
+
+                <div className="hidden sm:block shrink-0 text-right">
+                  <p className="text-[13px] font-medium text-[var(--hw-neutral-900)]">{row.submissionId || row.id}</p>
+                  <p className="text-[12px] text-[var(--hw-green-700)] mt-0.5 font-medium capitalize">{row.status}</p>
+                </div>
+
+                <div className="flex sm:flex-col items-center sm:items-end justify-center self-center shrink-0">
+                  <ChevronRight className="w-4 h-4 text-[var(--hw-neutral-400)] group-hover:text-[var(--hw-neutral-600)] transition-colors" />
+                </div>
+              </button>
+            ))}
+          </div>
         )}
+      </div>
+
+      {/* View Data History redirect link below Recent Saved Data container */}
+      <div className="flex justify-end -mt-3 md:-mt-6">
+        <button
+          type="button"
+          onClick={() => navigate("/dftc/submissions")}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] hover:bg-[var(--hw-green-50)]/60 rounded-lg transition-colors cursor-pointer group"
+        >
+          <span>View Data History</span>
+          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+        </button>
       </div>
 
       {/* Delete Draft Confirmation Modal */}

@@ -50,7 +50,9 @@ const KNOWN_ACTIVITY_NAMES = {
   "user.created": "User Created",
   "user.updated": "User Updated",
   "user.approved": "Account Approved",
-  "user.rejected": "Account Rejected"
+  "user.rejected": "Account Rejected",
+  "user.position_changed": "User Position Changed",
+  "position.created": "Position Added"
 };
 
 function formatActivityName(action) {

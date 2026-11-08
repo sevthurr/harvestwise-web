@@ -1,4 +1,4 @@
-import { formatPersonName } from "../../global/utils/apiTransforms";
+import { formatPersonName } from "./apiTransforms";
 
 /**
  * auditActor.js

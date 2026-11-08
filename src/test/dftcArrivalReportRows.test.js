@@ -70,9 +70,9 @@ describe("countPopulatedArrivalRows", () => {
 });
 
 describe("numStr", () => {
-  it("renders a blank volume cell as an em dash, not 0.00", () => {
-    expect(numStr(null)).toBe("—");
-    expect(numStr(undefined)).toBe("—");
+  it("renders a blank volume cell as blank, not 0.00", () => {
+    expect(numStr(null)).toBe("");
+    expect(numStr(undefined)).toBe("");
   });
 
   it("still renders a reported zero as a figure", () => {

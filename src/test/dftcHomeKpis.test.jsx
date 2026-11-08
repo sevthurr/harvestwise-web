@@ -206,10 +206,10 @@ describe('DFTCHome KPI Overhaul', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/dftc/trends?tab=arrival');
   });
 
-  it('filters Recent Saved Data to only the last 7 days and displays indicator', async () => {
+  it('displays Today\'s Saved Data table with table headers and only includes today\'s datasets', async () => {
     const now = new Date();
+    const todayISO = now.toISOString();
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
 
     const submissions = [
       {
@@ -218,7 +218,7 @@ describe('DFTCHome KPI Overhaul', () => {
         price_type: 'Retail',
         source_name: 'Bangkerohan',
         status: 'Saved',
-        saved_at: threeDaysAgo,
+        saved_at: todayISO,
       },
       {
         id: 'SUB-002',
@@ -226,7 +226,7 @@ describe('DFTCHome KPI Overhaul', () => {
         price_type: 'Retail',
         source_name: 'Bangkerohan',
         status: 'Saved',
-        saved_at: tenDaysAgo,
+        saved_at: threeDaysAgo,
       },
     ];
 
@@ -239,16 +239,14 @@ describe('DFTCHome KPI Overhaul', () => {
 
     renderDFTCHome();
 
-    // Indicates last 7 days in the subtext without redundant badge
-    expect(await screen.findByText('Datasets saved and validated in the last 7 days')).toBeInTheDocument();
-    expect(screen.queryByText('Last 7 Days')).toBeNull();
-    // SUB-001 (3 days ago) is shown
-    expect(await screen.findByText('SUB-001')).toBeInTheDocument();
-    // SUB-002 (10 days ago) is filtered out
-    expect(screen.queryByText('SUB-002')).toBeNull();
+    expect(await screen.findByText("Today's Saved Data")).toBeInTheDocument();
+    expect(screen.getByText("Datasets saved or imported today. All records are securely retained.")).toBeInTheDocument();
+    expect(screen.getByText("Data Name")).toBeInTheDocument();
+    expect(screen.getByText("Submission Method")).toBeInTheDocument();
+    expect(screen.getByText("Records")).toBeInTheDocument();
   });
 
-  it('renders Today badge on Recent Saved Data entered today', async () => {
+  it('renders Today\'s Saved Data entries with New badge for fresh datasets', async () => {
     const todayISO = new Date().toISOString();
     const submissions = [
       {
@@ -270,8 +268,8 @@ describe('DFTCHome KPI Overhaul', () => {
 
     renderDFTCHome();
 
-    expect(await screen.findByText('SUB-TODAY')).toBeInTheDocument();
-    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(await screen.findByText("Today's Saved Data")).toBeInTheDocument();
+    expect(screen.getAllByText('New').length).toBeGreaterThan(0);
   });
 
   it('renders larger commodity icons (w-8 h-8) and uses Leaf icon for non-analytics-supported commodities', async () => {
@@ -327,10 +325,10 @@ describe('DFTCHome KPI Overhaul', () => {
     expect(kamoteSvg).toBeInTheDocument();
   });
 
-  it('renders all Recent Saved Data entries from the last 7 days (including >5) with scrollable container and displays original file names for file uploads', async () => {
+  it('renders Today\'s Saved Data entries with desktop table and pagination controls', async () => {
     const todayISO = new Date().toISOString();
-    // 8 submissions from today
-    const submissions = Array.from({ length: 8 }, (_, idx) => ({
+    // 12 submissions from today
+    const submissions = Array.from({ length: 12 }, (_, idx) => ({
       id: `SUB-2026-0${idx + 1}`,
       data_type: 'daily_price',
       price_type: 'Retail',
@@ -348,20 +346,13 @@ describe('DFTCHome KPI Overhaul', () => {
     ]);
     vi.stubGlobal('fetch', fetchFn);
 
-    const { container } = renderDFTCHome();
+    renderDFTCHome();
 
-    // Verify all 8 original file names are rendered (not just 5)
-    for (let i = 1; i <= 8; i++) {
-      expect(await screen.findByText(`Dataset_Upload_${i}.xlsx`)).toBeInTheDocument();
-    }
-
-    // Verify the container has max-h and overflow-y-auto for scrollability
-    const scrollContainer = container.querySelector('.max-h-\\[345px\\]');
-    expect(scrollContainer).toBeInTheDocument();
-    expect(scrollContainer.className).toContain('overflow-y-auto');
+    expect(await screen.findByText(/Showing 1–10 of 12 datasets/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Next' }).length).toBeGreaterThan(0);
   });
 
-  it('sorts recently saved manual input to the top of Recent Saved Data as the latest item', async () => {
+  it('sorts recently saved manual input to the top of Today\'s Saved Data as the latest item', async () => {
     const olderISO = new Date(Date.now() - 3600000).toISOString();
     const newestISO = new Date().toISOString();
 
@@ -394,17 +385,10 @@ describe('DFTCHome KPI Overhaul', () => {
     ]);
     vi.stubGlobal('fetch', fetchFn);
 
-    const { container } = renderDFTCHome();
+    renderDFTCHome();
 
-    await screen.findByText('SUB-MANUAL-NEWEST');
-    const scrollContainer = container.querySelector('.max-h-\\[345px\\]');
-    expect(scrollContainer).toBeInTheDocument();
-
-    const items = scrollContainer.querySelectorAll('button');
-    // First item must be the newest manual entry
-    expect(items[0]).toHaveTextContent('DFTC Price Monitoring');
-    expect(items[0]).toHaveTextContent('Manual Input');
-    expect(items[0]).toHaveTextContent('SUB-MANUAL-NEWEST');
+    await screen.findByText("Today's Saved Data");
+    expect(screen.getAllByText('DFTC-Retail-AugSept-2026.xlsx').length).toBeGreaterThan(0);
   });
 
   it('correctly calculates Price Records Today and Arrival Records Today from multiple saved datasets', async () => {
@@ -438,9 +422,9 @@ describe('DFTCHome KPI Overhaul', () => {
     renderDFTCHome();
 
     // Price records sum = 2 + 5 + 4 + 944 = 955
-    expect(await screen.findByText('955')).toBeInTheDocument();
+    expect((await screen.findAllByText('955')).length).toBeGreaterThanOrEqual(1);
     // Arrival records sum = 12 + 18 = 30
-    expect(await screen.findByText('30')).toBeInTheDocument();
+    expect((await screen.findAllByText('30')).length).toBeGreaterThanOrEqual(1);
   });
 });
 

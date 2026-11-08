@@ -13,6 +13,7 @@ import { MemoryRouter } from 'react-router';
 
 // ── Module under test ──────────────────────────────────────────────────────
 import { AuthProvider, useAuth, roleHome } from '../app/global/contexts/AuthContext';
+import { resetFarmerOfflineDedupeForTests } from '../app/global/hooks/useFarmerPrefetch';
 import {
   apiFetch,
   markSessionActive,
@@ -357,6 +358,9 @@ describe('AuthContext — admin role', () => {
 // and /farmer/profile.
 
 describe('AuthContext — farmer offline bundle gating', () => {
+  beforeEach(() => {
+    resetFarmerOfflineDedupeForTests();
+  });
   const snapshotCalls = () =>
     fetch.mock.calls.filter(([url]) => String(url).includes('/farmer/daily-snapshot'));
   const profileCalls = () =>

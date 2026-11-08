@@ -303,9 +303,15 @@ function DFTCHistory() {
           ? "Retail"
           : "";
         const methodRaw = (item.submission_method || "").toLowerCase();
+        const isGeneratedReport = methodRaw.includes("generated report");
         const hasFile = Boolean(item.original_file_name || item.file_name);
-        const isManual = methodRaw.includes("manual") || (!hasFile && !methodRaw.includes("upload") && !methodRaw.includes("file"));
-        const dType = isArrival
+        const isManual =
+          !isGeneratedReport &&
+          (methodRaw.includes("manual") || (!hasFile && !methodRaw.includes("upload") && !methodRaw.includes("file")));
+        const freqLabel = item.report_period === "weekly" ? "Weekly" : item.report_period === "monthly" ? "Monthly" : "Daily";
+        const dType = isGeneratedReport
+          ? (isArrival ? `${freqLabel} Arrival Volume Report` : `${freqLabel} ${pTypeDisplay || "Retail"} Price Report`)
+          : isArrival
           ? "DFTC Arrival Volume"
           : isManual
           ? (pTypeDisplay ? `Manual Input · ${pTypeDisplay} Prices` : "Manual Input · Daily Prices")

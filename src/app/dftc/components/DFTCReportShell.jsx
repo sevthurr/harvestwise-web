@@ -1,34 +1,38 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Download, ArrowLeft, AlertCircle, Check } from "lucide-react";
+import { Download, ArrowLeft, AlertCircle } from "lucide-react";
 
 export const DFTC_PERSONNEL_LIST = [
+  { name: "IVY JOYCE P. BOLODO", role: "Agri-Service & Related Worker I" },
+  { name: "CHRISTIAN JOEY PAUL M. HERMOSO", role: "Agricultural Technologist" },
   { name: "MARIA S. SANTOS", role: "Data Analyst" }
 ];
 
 export const DEFAULT_PERSONNEL = {
   encodedBy: DFTC_PERSONNEL_LIST[0].name,
   encodedByRole: DFTC_PERSONNEL_LIST[0].role,
-  preparedBy: DFTC_PERSONNEL_LIST[0].name,
-  preparedByRole: DFTC_PERSONNEL_LIST[0].role
+  preparedBy: DFTC_PERSONNEL_LIST[1].name,
+  preparedByRole: DFTC_PERSONNEL_LIST[1].role,
+  reviewedBy: DFTC_PERSONNEL_LIST[1].name,
+  reviewedByRole: DFTC_PERSONNEL_LIST[1].role
 };
 
 /**
  * Shared chrome for every DFTC report preview.
  *
- * Price monitoring and arrival volume are different datasets, but they are
- * presented the same way: same header, metadata grid, format tabs, personnel
- * selectors, error strip, and action bar. Only the preview body and the
- * download builders differ, so those stay in each preview component and are
- * passed in here.
+ * Price monitoring and arrival volume are presented in official landscape format:
+ * header, metadata grid, format tabs, personnel selectors, error strip, and action bar.
  */
 function DFTCReportShell({
   title,
   subtitle,
   onClose,
-  metaFields,
+  metaFields = [],
   formats = ["PDF", "Excel", "IMG"],
   format,
   onFormatChange,
+  orientation = "landscape",
+  onOrientationChange,
+  showOrientation = true,
   children,
   personnelList = DFTC_PERSONNEL_LIST,
   personnel = DEFAULT_PERSONNEL,
@@ -85,8 +89,8 @@ function DFTCReportShell({
         </div>
       </div>
 
-      {/* Format tabs */}
-      <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-[var(--hw-neutral-100)]">
+      {/* Format tabs and Orientation selector */}
+      <div className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-[var(--hw-neutral-100)] flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {formats.map((f) => (
             <button
@@ -98,11 +102,39 @@ function DFTCReportShell({
             </button>
           ))}
         </div>
+
+        {showOrientation && format === "PDF" && onOrientationChange && (
+          <div className="flex items-center gap-1 bg-[var(--hw-neutral-100)] p-0.5 rounded-xl text-[12px]">
+            <button
+              type="button"
+              onClick={() => onOrientationChange("landscape")}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                orientation === "landscape"
+                  ? "bg-white text-[var(--hw-green-800)] shadow-xs font-semibold"
+                  : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+              }`}
+              title="Long Landscape (13 x 8.5 in)"
+            >
+              Landscape
+            </button>
+            <button
+              type="button"
+              onClick={() => onOrientationChange("portrait")}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                orientation === "portrait"
+                  ? "bg-white text-[var(--hw-green-800)] shadow-xs font-semibold"
+                  : "text-[var(--hw-neutral-600)] hover:text-[var(--hw-neutral-900)]"
+              }`}
+              title="Long Portrait (8.5 x 13 in)"
+            >
+              Portrait
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Preview body */}
       <div className="p-1.5 sm:p-3 md:p-6 bg-[var(--hw-neutral-50)] overflow-x-auto">{children}</div>
-
 
       {/* Error state */}
       {isError && (
@@ -144,7 +176,7 @@ function DFTCReportShell({
 
       {/* Hidden off-screen pages for html2canvas rendering */}
       {renderHiddenPages && (
-        <div style={{ position: "fixed", left: -9999, top: 0, width: 960, pointerEvents: "none" }}>
+        <div style={{ position: "fixed", left: -9999, top: 0, width: 1020, pointerEvents: "none" }}>
           {renderHiddenPages()}
         </div>
       )}

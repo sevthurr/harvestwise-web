@@ -33,5 +33,9 @@ export const commodityDetail = {
   btn_retry: "Retry",
   price_trend_details: "Price Trend Details",
   assess_crop_btn: "Assess this crop",
-  select_variety: "Select a variety"
+  select_variety: "Select a variety",
+  volatility_reason_drop: "Reason for sudden price drop: {reason}",
+  volatility_reason_rise: "Reason for sudden price increase: {reason}",
+  volatility_reason_change: "Reason for sudden price change: {reason}",
+  sudden_movement: "Sudden price movement observed"
 };

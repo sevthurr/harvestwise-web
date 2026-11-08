@@ -1957,6 +1957,14 @@ function AdminAnalyticsBasis() {
                 </div>
               </div>
             </div>
+
+            <div className="flex items-center gap-1.5 text-[12px] font-medium text-black">
+              <Info className="w-4 h-4 text-black shrink-0" />
+              <span>
+                Forecasts are based on past price trends alone. Actual market prices may vary due to weather, fuel, and supply changes.
+              </span>
+            </div>
+
             {displayResult.forecastPoints && displayResult.forecastPoints.length > 0 ? (
               <ForecastPriceTrendChart commodity={selectedCommodity} chartData={displayResult.forecastPoints} varieties={displayResult.varieties || []} height={360} />
             ) : (
