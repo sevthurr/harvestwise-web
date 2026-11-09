@@ -9,17 +9,19 @@ export const DFTC_STAFF_KEY = ["dftc", "staff"];
 export const DFTC_WORKSPACE_STALE_TIME = 5 * 60 * 1000;
 
 export async function fetchDftcHome() {
-  return parseResponse(await apiGet("/dftc/home"));
+  // Cold-cache build runs ~15 N+1 DB queries; give it more headroom than the
+  // global 15s default so a slow Render cold-start doesn't abort a valid response.
+  return parseResponse(await apiGet("/dftc/home", { timeoutMs: 40000 }));
 }
 
 export async function fetchDftcSubmissions() {
-  return parseResponse(await apiGet("/dftc/submissions?page=1&page_size=50"));
+  return parseResponse(await apiGet("/dftc/submissions?page=1&page_size=50", { timeoutMs: 30000 }));
 }
 
 // Lightweight fetch for the home page — today's activity only needs the
 // most recent records, and page_size=10 stays well under the 10 MB cache limit.
 export async function fetchDftcSubmissionsRecent() {
-  return parseResponse(await apiGet("/dftc/submissions?page=1&page_size=10"));
+  return parseResponse(await apiGet("/dftc/submissions?page=1&page_size=10", { timeoutMs: 30000 }));
 }
 
 export async function fetchDftcStaff() {
