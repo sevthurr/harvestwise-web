@@ -63,6 +63,24 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Farmer data freshness. The global defaults skip refetches on mount so the
+// 7-day persisted cache is not re-requested on every navigation. These key
+// prefixes opt the surfaces that mirror DFTC input back into a stale-aware
+// refetch on mount. Arrival pressure also refetches when the PWA becomes
+// visible again: that is the safety net for SSE frames missed while offline,
+// backgrounded, or disconnected. Query defaults match by key prefix.
+queryClient.setQueryDefaults(["prices"], { refetchOnMount: true });
+queryClient.setQueryDefaults(["dashboard"], { refetchOnMount: true });
+queryClient.setQueryDefaults(["price-detail"], { refetchOnMount: true });
+queryClient.setQueryDefaults(["farmer-price-card-trend"], { refetchOnMount: true });
+queryClient.setQueryDefaults(["farmer", "admin-price-outlook"], {
+  refetchOnMount: true,
+});
+queryClient.setQueryDefaults(["farmer", "arrival-pressure"], {
+  refetchOnMount: true,
+  refetchOnWindowFocus: true,
+});
+
 export const persister = createAsyncStoragePersister({
   storage: {
     getItem: async (key) => await get(key),

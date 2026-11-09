@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { getUnreadCount, prefetchNotificationFeed, STAFF_NOTIFICATION_KEY } from "../../../../services/api/notificationsApi";
+import { getUnreadCount, STAFF_NOTIFICATION_KEY } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   Home,
@@ -27,7 +27,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
-import { prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
 
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
@@ -152,11 +151,6 @@ function DFTCLayoutInner() {
     refetchOnReconnect: true,
   });
   const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
-
-  useEffect(() => {
-    prefetchNotificationFeed(queryClient, "dftc");
-    prefetchDftcWorkspace(queryClient);
-  }, [queryClient, user?.id]);
 
   useNotificationEvent("NOTIFICATION_CREATED", () => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
