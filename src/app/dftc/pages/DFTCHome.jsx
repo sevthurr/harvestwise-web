@@ -20,10 +20,10 @@ import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
 import {
   DFTC_HOME_KEY,
-  DFTC_SUBMISSIONS_KEY,
+  DFTC_SUBMISSIONS_RECENT_KEY,
   DFTC_WORKSPACE_STALE_TIME,
   fetchDftcHome,
-  fetchDftcSubmissions,
+  fetchDftcSubmissionsRecent,
 } from "../../global/hooks/dftcWorkspaceQueries";
 import {
   buildSavedDatasetsList,
@@ -95,8 +95,8 @@ function DFTCHome() {
   const todayStr = getLocalDateString(todayDate);
 
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
-    queryKey: DFTC_SUBMISSIONS_KEY,
-    queryFn: fetchDftcSubmissions,
+    queryKey: DFTC_SUBMISSIONS_RECENT_KEY,
+    queryFn: fetchDftcSubmissionsRecent,
     staleTime: DFTC_WORKSPACE_STALE_TIME,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
