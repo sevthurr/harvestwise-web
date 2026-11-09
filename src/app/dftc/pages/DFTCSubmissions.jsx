@@ -282,7 +282,7 @@ function DFTCHistory() {
   const { data: submissionsData, isLoading, isError, refetch } = useQuery({
     queryKey: ["dftc-submissions"],
     queryFn: async () => {
-      const res = await apiGet("/dftc/submissions?page_size=100");
+      const res = await apiGet("/dftc/submissions?page_size=50");
       return parseResponse(res);
     },
     staleTime: 0,

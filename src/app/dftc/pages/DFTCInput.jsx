@@ -168,7 +168,7 @@ export default function DFTCInput() {
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
     queryKey: ["dftc", "submissions"],
     queryFn: async () => {
-      const res = await apiGet("/dftc/submissions?page=1&page_size=100");
+      const res = await apiGet("/dftc/submissions?page=1&page_size=50");
       return parseResponse(res);
     },
     // Global defaults set staleTime: 30min and refetchOnMount: false, so
