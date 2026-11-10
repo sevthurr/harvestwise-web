@@ -511,11 +511,13 @@ function AssessPage() {
   };
 
   const handleStart = () => {
-    try {
-      localStorage.removeItem("harvestwise_assessment_draft");
-    } catch {
-      // ignore
-    }
+    // Does NOT clear `harvestwise_assessment_draft`.
+    //
+    // Starting a new assessment is not an instruction to discard a saved one:
+    // the previous draft may be the only copy of work done while the server was
+    // unreachable. It is replaced only when this new assessment is itself saved
+    // as a draft, and removed when a save is confirmed by the server. Deleting
+    // it here lost a farmer's offline draft on a single, unrelated tap.
     setDraftLoadError(null);
     setDraftLoading(false);
     setData(DEFAULT_ASSESSMENT);

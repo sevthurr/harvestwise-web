@@ -6,7 +6,7 @@
  */
 export const myActivities = {
   title: "Aking Mga Gawain",
-  description: "Tingnan ang iyong mga ginawa sa HarvestWise — mga sign-in, pagbabago sa profile, mga plano sa pananim, pag-aani at mga export. Ito ay read-only na pahina.",
+  description: "Talaan ng iyong mga gawain sa pagsasaka sa HarvestWise — mga plano sa pananim, pag-aani, pagbabago sa profile at mga export. Ito ay read-only na pahina.",
   generatedByFallback: "HarvestWise user",
   emptyDescription: "Lalabas dito ang iyong mga gawain habang ginagamit mo ang HarvestWise.",
   filter: "I-filter ang mga gawain",
@@ -30,10 +30,16 @@ export const myActivities = {
   },
 
   friendlyActions: {
-    "auth.login": "Binuksan mo ang HarvestWise",
-    "auth.logout": "Isinara mo ang HarvestWise",
     "auth.login_failed": "Hindi matagumpay ang pagtatangkang mag-sign in",
     "auth.account_locked": "Pansamantalang naka-lock ang account",
+    "farmer.onboarding_completed": "Natapos mo ang pag-setup ng iyong farmer profile",
+    "farmer.crop_plan_created": "Gumawa ka ng bagong plano sa pananim",
+    "farmer.crop_plan_updated": "Binago mo ang plano sa pananim",
+    "farmer.crop_plan_promoted": "Sinimulan mo ang plano sa pananim",
+    "farmer.crop_plan_status_updated": "Binago mo ang katayuan ng plano sa pananim",
+    "farmer.harvest_logged": "Naitala mo ang iyong ani",
+    "farmer.harvest_record_logged": "Nagrekord ka ng ani",
+    "user.profile_updated": "Binago mo ang iyong profile",
     "notification.all_marked_read": "Sinuri mo ang iyong mga abiso",
     "notification.mark_read": "Binasa mo ang isang abiso",
   },
@@ -53,8 +59,6 @@ export const myActivities = {
 
   actions: {
     // ── Sign-ins & security ────────────────────────────────────────────
-    "auth.login": "Naka-sign in",
-    "auth.logout": "Naka-log out",
     "auth.login_failed": "Nabigo ang pag-sign in",
     "auth.account_locked": "Naka-lock ang account matapos ang mga nabigong sign-in",
     "auth.password_changed": "Pinapalitan ang iyong password",

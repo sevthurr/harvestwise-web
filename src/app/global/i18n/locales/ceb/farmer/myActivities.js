@@ -6,7 +6,7 @@
  */
 export const myActivities = {
   title: "Akong Mga Kalihokan",
-  description: "Tan-awa ang imong gihimo sa HarvestWise — mga sign-in, pagbag-o sa profile, mga plano sa tanom, pag-ani ug mga export. Ini nga panid read-only.",
+  description: "Talaan sa imong mga kalihokan sa pag-uma sa HarvestWise — mga plano sa tanom, pag-ani, pagbag-o sa profile ug mga export. Ini nga panid read-only.",
   generatedByFallback: "HarvestWise user",
   emptyDescription: "Imong mga kalihokan mugawas dinhi samtang nag-gamit ka sa HarvestWise.",
   filter: "I-filter ang mga kalihokan",
@@ -30,10 +30,16 @@ export const myActivities = {
   },
 
   friendlyActions: {
-    "auth.login": "Giablihan nimo ang HarvestWise",
-    "auth.logout": "Gisirado nimo ang HarvestWise",
     "auth.login_failed": "Napakyas ang pagsulay sa pag-sign in",
     "auth.account_locked": "Temporaryong naka-lock ang account",
+    "farmer.onboarding_completed": "Nahuman nimo ang pag-setup sa imong farmer profile",
+    "farmer.crop_plan_created": "Naghimo ka og bag-ong plano sa tanom",
+    "farmer.crop_plan_updated": "Giusab nimo ang plano sa tanom",
+    "farmer.crop_plan_promoted": "Gisugdan nimo ang plano sa tanom",
+    "farmer.crop_plan_status_updated": "Giusab nimo ang kahimtang sa plano sa tanom",
+    "farmer.harvest_logged": "Girekord nimo ang imong ani",
+    "farmer.harvest_record_logged": "Nagrekord ka og ani",
+    "user.profile_updated": "Gipabag-o nimo ang imong profile",
     "notification.all_marked_read": "Gisusi nimo ang imong mga pahibalo",
     "notification.mark_read": "Gibasa nimo ang usa ka pahibalo",
   },
@@ -53,8 +59,6 @@ export const myActivities = {
 
   actions: {
     // ── Sign-ins & security ────────────────────────────────────────────
-    "auth.login": "Naka-sign in",
-    "auth.logout": "Naka-log out",
     "auth.login_failed": "Napakyas ang pag-sign in",
     "auth.account_locked": "Naka-lock ang account human sa mga napakyas nga sign-in",
     "auth.password_changed": "Gipalitan ang imong password",

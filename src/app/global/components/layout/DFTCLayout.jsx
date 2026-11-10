@@ -32,7 +32,7 @@ const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
   { id: "input", label: "Submit Data", path: "/dftc/input", Icon: FileInput },
   { id: "trends", label: "Trends", path: "/dftc/trends", Icon: TrendingUp },
-  { id: "submissions", label: "History", path: "/dftc/submissions", Icon: History }
+  { id: "submissions", label: "Submission Logs", path: "/dftc/submissions", Icon: History }
 ];
 function getActive(pathname) {
   if (pathname === "/dftc") return "home";

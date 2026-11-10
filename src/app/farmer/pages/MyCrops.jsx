@@ -245,13 +245,22 @@ function MyCropsPage() {
       const parsed = JSON.parse(raw);
       if (!parsed || !parsed.isDraft) return null;
 
-      // 1. If draftId is present and already in crops, skip
+      // 1. If draftId is present and already in crops, skip.
+      //
+      // Hide, never delete. `crops` is a cached list: offline it can be days
+      // old, and the device copy is written precisely when the server was
+      // unreachable (Assess.jsx) — so at that moment it may be the only record
+      // of the farmer's work. Deduplication only needs the card to be absent
+      // from this render, not the storage to be destroyed. Removal is reserved
+      // for a server-confirmed save (Assess.jsx) and an explicit user discard.
       if (parsed.draftId && crops.some((c) => c.id === parsed.draftId)) {
-        try { localStorage.removeItem("harvestwise_assessment_draft"); } catch {}
         return null;
       }
 
-      // 2. If crops already has an assessment draft for the same commodity, skip to prevent duplicates
+      // 2. If crops already has an assessment draft for the same commodity, skip
+      // to prevent two cards for one crop. Same rule as (1): compare and hide,
+      // never remove — a same-commodity match in a cached list is not proof that
+      // this device copy has been safely persisted anywhere.
       const parsedCommodityId = parsed.commodityId || parsed.commodity;
       const parsedName = (parsed.commodityName || "").toLowerCase().trim();
       if (
@@ -263,7 +272,6 @@ function MyCropsPage() {
           return false;
         })
       ) {
-        try { localStorage.removeItem("harvestwise_assessment_draft"); } catch {}
         return null;
       }
 

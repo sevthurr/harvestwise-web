@@ -12,7 +12,7 @@
  */
 export const myActivities = {
   title: "My Activities",
-  description: "See what you have done on HarvestWise — sign-ins, profile changes, crop plans, harvests and exports. This page is read-only.",
+  description: "A record of your farming actions on HarvestWise — crop plans, harvests, profile updates and exports. This page is read-only.",
   generatedByFallback: "HarvestWise user",
   emptyDescription: "Your activities will appear here as you use HarvestWise.",
   filter: "Filter activities",
@@ -36,10 +36,16 @@ export const myActivities = {
   },
 
   friendlyActions: {
-    "auth.login": "You opened HarvestWise",
-    "auth.logout": "You closed HarvestWise",
     "auth.login_failed": "Sign-in attempt was unsuccessful",
     "auth.account_locked": "Account was temporarily locked",
+    "farmer.onboarding_completed": "You finished setting up your farmer profile",
+    "farmer.crop_plan_created": "You created a new crop plan",
+    "farmer.crop_plan_updated": "You updated a crop plan",
+    "farmer.crop_plan_promoted": "You started a crop plan",
+    "farmer.crop_plan_status_updated": "You updated a crop plan status",
+    "farmer.harvest_logged": "You logged a harvest",
+    "farmer.harvest_record_logged": "You recorded a harvest",
+    "user.profile_updated": "You updated your profile",
     "notification.all_marked_read": "You checked your notifications",
     "notification.mark_read": "You read a notification",
   },
@@ -59,8 +65,6 @@ export const myActivities = {
 
   actions: {
     // ── Sign-ins & security ────────────────────────────────────────────
-    "auth.login": "Logged in",
-    "auth.logout": "Logged out",
     "auth.login_failed": "Failed sign-in attempt",
     "auth.account_locked": "Account locked after failed sign-ins",
     "auth.password_changed": "Changed your password",
