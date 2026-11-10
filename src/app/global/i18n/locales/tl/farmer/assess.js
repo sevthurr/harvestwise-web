@@ -110,6 +110,7 @@ export const assess = {
   draft_require_crop: "Pumili muna ng pananim bago i-save ang draft.",
   draft_saved: "Na-save ang draft. Maaari kang magpatuloy anumang oras sa crop assessment home.",
   draft_save_failed: "Hindi ma-save ang draft ngayon. Pakisubukan muli.",
+  market_price_basis_label: "Batayan ng presyo sa pamilihan:",
   farmgate_price_comparison: "Paghahambing ng presyong farmgate laban sa break-even na presyo",
   current_market_price: "Kasalukuyang presyo sa merkado",
   current_market_prices: "Mga kasalukuyang presyo sa merkado",

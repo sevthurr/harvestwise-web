@@ -110,6 +110,7 @@ export const assess = {
   draft_require_crop: "Select a crop first before saving a draft.",
   draft_saved: "Draft saved. Continue anytime from the crop assessment home.",
   draft_save_failed: "We couldn't save your draft right now. Please try again.",
+  market_price_basis_label: "Market price basis:",
   farmgate_price_comparison: "Farmgate price comparison with break-even price",
   current_market_price: "Current market price",
   current_market_prices: "Current market prices",
