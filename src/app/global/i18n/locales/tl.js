@@ -393,7 +393,8 @@ export const tl = {
       pre_harvest: "Malapit Nang Anihin",
       harvesting: "Nag-aani",
       harvested: "Naani Na",
-      completed: "Kumpleto Na"
+      completed: "Kumpleto Na",
+      archived: "Naka-archive"
     },
 
     cropCard: {
@@ -831,6 +832,8 @@ export const tl = {
 
     empty: {
       no_crops: "Wala ka pang sinusubaybayang tanim.",
+      no_archived: "Walang naka-archive na plano sa pananim.",
+      no_archived_desc: "Dito maiipon ang mga natapos at nakanselang plano.",
       no_price_data: "Walang datos ng presyo ngayon.",
       no_arrival_data: "Walang datos ng mga dumating mula sa DFTC ngayon.",
       no_production_data: "Hindi available ang datos ng produksyon",

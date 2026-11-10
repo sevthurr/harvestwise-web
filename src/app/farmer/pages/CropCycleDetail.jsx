@@ -451,6 +451,8 @@ function CropCycleDetailPage() {
           lastUpdated: "Just now",
           isOnHold: false,
           ...(isComp ? {
+            isArchived: true,
+            archivedAt: new Date().toISOString(),
             totalCost: finalCost,
             productionCost: finalCost,
             actualHarvestQty: finalQty > 0 ? finalQty : (crop.actualHarvestQty ?? crop.harvestQuantity),
@@ -498,6 +500,9 @@ function CropCycleDetailPage() {
             ...(action.fields?.expectedHarvestQty != null && action.fields?.expectedHarvestQty !== "" ? { harvestQuantity: Number(action.fields.expectedHarvestQty) } : {})
           })
         });
+        if (isComp) {
+          try { await refreshCrops(); } catch {}
+        }
       } else if (action.kind === "hold") {
         await updateCropStatusApi(crop.id, "On Hold", action.reason);
         const today = (new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -857,7 +862,8 @@ function CropCycleDetailPage() {
   );
   const isCompleted = phaseCode === PHASE_CODES.COMPLETED ||
     String(crop.status || "").toLowerCase() === "completed" ||
-    String(crop.phase || "").toLowerCase() === "completed";
+    String(crop.phase || "").toLowerCase() === "completed" ||
+    Boolean(crop.isArchived);
   const isActive = !isCompleted;
   const isPlanted = isActive && [PHASE_CODES.GROWING, PHASE_CODES.PRE_HARVEST].includes(phaseCode);
   const isHarvesting = isActive && phaseCode === PHASE_CODES.HARVESTED;
@@ -965,6 +971,11 @@ function CropCycleDetailPage() {
               </h1>
               <div className="mt-1 flex items-center gap-2 flex-wrap">
                 <PhasePill phase={crop.phase} isOnHold={crop.isOnHold} />
+                {isCompleted && (
+                  <span className="inline-flex items-center text-[11px] font-semibold text-[var(--hw-neutral-600)] bg-[var(--hw-neutral-100)] border border-[var(--hw-neutral-200)] px-2 py-0.5 rounded-full">
+                    {t("farmer.phases.archived", {}, "Archived")}
+                  </span>
+                )}
               </div>
               {crop.isOnHold && crop.holdReason && (
                 <p className="text-xs text-[var(--hw-neutral-700)] mt-1.5 leading-snug">
@@ -972,15 +983,17 @@ function CropCycleDetailPage() {
                 </p>
               )}
             </div>
-            <button
-              onClick={() => {
-                setDrawerMode("update-phase");
-                setDrawerOpen(true);
-              }}
-              className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--hw-green-50)]"
-            >
-              <Pencil className="w-3.5 h-3.5" />{t("farmer.cropCycle.update_phase", {}, "Update phase")}
-            </button>
+            {!isCompleted && (
+              <button
+                onClick={() => {
+                  setDrawerMode("update-phase");
+                  setDrawerOpen(true);
+                }}
+                className="flex-shrink-0 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--hw-green-50)]"
+              >
+                <Pencil className="w-3.5 h-3.5" />{t("farmer.cropCycle.update_phase", {}, "Update phase")}
+              </button>
+            )}
           </div>
           <div className="mt-2.5 space-y-1 text-[13px] text-[var(--hw-neutral-600)]" style={{ fontSize: "13px", lineHeight: "1.45" }}>
             {phaseCode === PHASE_CODES.PLANNING ? (

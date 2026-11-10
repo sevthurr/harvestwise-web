@@ -25,7 +25,7 @@ import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
-import { useCrops } from "../components/crops/CropsContext";
+import { useCrops, isArchivedCrop } from "../components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 import { explainRainfall } from "../../global/components/shared/weatherExplanations";
@@ -132,8 +132,8 @@ function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, m
     }
   });
 
-  // 2. Existing Crop Plans Milestones (Target planting, planted, near-harvest, estimated harvest, harvested)
-  (cropPlans || []).forEach((c) => {
+  // 2. Existing Active Crop Plans Milestones (Target planting, planted, near-harvest, estimated harvest, harvested)
+  (cropPlans || []).filter((c) => !isArchivedCrop(c)).forEach((c) => {
     const name = c.commodityName && c.commodityName !== "\u2013" ? c.commodityName : "Crop";
     const variant = c.variant || c.variety || null;
     const cropId = c.commodityId || c.commodity || "crop";

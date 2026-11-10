@@ -394,7 +394,8 @@ export const en = {
       pre_harvest: "Pre-Harvest",
       harvesting: "Harvesting",
       harvested: "Harvested",
-      completed: "Completed"
+      completed: "Completed",
+      archived: "Archived"
     },
 
     cropCard: {
@@ -873,6 +874,8 @@ export const en = {
 
     empty: {
       no_crops: "No tracked crops yet.",
+      no_archived: "No archived crop plans.",
+      no_archived_desc: "Completed and cancelled crop plans will be archived here.",
       no_price_data: "Price information is not available right now.",
       no_arrival_data: "DFTC arrival information is not available right now.",
       no_production_data: "Production data not available",

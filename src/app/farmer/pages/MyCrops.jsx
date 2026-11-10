@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Sprout, ChevronRight, CheckCircle2, X } from "lucide-react";
-import { useCrops, formatLocalDate } from "../components/crops/CropsContext";
+import { useCrops, formatLocalDate, isArchivedCrop } from "../components/crops/CropsContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { PhasePill } from "../components/crops/CropCard";
@@ -25,9 +25,14 @@ const STAGE_TABS = [
   { id: "planning", key: "farmer.phases.planning", label: "Planning" },
   { id: "planted", key: "farmer.phases.planted", label: "Planted" },
   { id: "harvesting", key: "farmer.phases.harvesting", label: "Harvesting" },
-  { id: "completed", key: "farmer.phases.completed", label: "Completed" }
+  { id: "archived", key: "farmer.phases.archived", label: "Archived" }
 ];
 function matchesStage(crop, tab) {
+  // Completed / Cancelled plans are auto-archived: they only appear in the
+  // Archived tab and never in "All" or the active stage tabs.
+  const archived = isArchivedCrop(crop);
+  if (tab === "archived" || tab === "completed") return archived;
+  if (archived) return false;
   if (tab === "all") return true;
   if (tab === "draft" || tab === "drafts") {
     return Boolean(crop.phase === "draft" || crop.status === "Draft" || crop.isDraft);
@@ -37,7 +42,6 @@ function matchesStage(crop, tab) {
   }
   if (tab === "planted") return crop.phase === "growing";
   if (tab === "harvesting") return crop.phase === "pre-harvest" || crop.phase === "harvested";
-  if (tab === "completed") return crop.phase === "completed";
   return false;
 }
 function profitRange(crop) {
@@ -155,26 +159,33 @@ const MyCropCard = ({ crop, onView, isPreferred = false }) => {
 const MyCropsEmpty = ({ stage, onNew }) => {
   const { t } = useLanguage();
   const isDraftStage = stage === "drafts" || stage === "draft";
+  const isArchivedStage = stage === "archived" || stage === "completed";
   return (
     <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
       <Sprout className="w-10 h-10 text-[var(--hw-neutral-300)]" />
       <p className="font-semibold text-[var(--hw-neutral-700)]">
         {isDraftStage
           ? t("farmer.empty.no_drafts", {}, "No draft crop plans.")
+          : isArchivedStage
+          ? t("farmer.empty.no_archived", {}, "No archived crop plans.")
           : t("farmer.empty.no_crops", {}, "No crop plans yet.")}
       </p>
       <p className="text-sm text-[var(--hw-neutral-900)] max-w-xs">
         {isDraftStage
           ? t("farmer.empty.no_drafts_desc", {}, "Incomplete crop assessments will appear here.")
+          : isArchivedStage
+          ? t("farmer.empty.no_archived_desc", {}, "Completed and cancelled crop plans will be archived here.")
           : t("farmer.dashboard.add_crop_plan_desc", {}, "Add a crop plan to start tracking your farm.")}
       </p>
-      <button
-        onClick={onNew}
-        className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
-      >
-        <Plus className="w-4 h-4" />
-        {t("farmer.crops.add_crop_btn", {}, "Add crop")}
-      </button>
+      {!isArchivedStage && (
+        <button
+          onClick={onNew}
+          className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          {t("farmer.crops.add_crop_btn", {}, "Add crop")}
+        </button>
+      )}
     </div>
   );
 };
