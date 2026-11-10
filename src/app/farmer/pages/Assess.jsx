@@ -111,6 +111,9 @@ function buildDraftPayload(data) {
     farmgate_price_unit: data.useFarmgate ? (data.farmgatePriceUnit || "kg") : "kg",
     farmgate_price_entered: data.useFarmgate && Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null,
     farmgate_conversion_weight: data.useFarmgate && Number.isFinite(convWeight) && convWeight > 0 ? convWeight : null,
+    market_price_basis: data.marketPriceBasis || "bankerohan_retail",
+    market: data.market || "Bankerohan",
+    price_type: data.priceType || "Retail",
     cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
     production_costs: productionCosts,
   };
@@ -397,6 +400,9 @@ function AssessPage() {
               farmgatePriceRaw: rawPlan.farmgate_price_entered ?? rawPlan.expected_farmgate_price ?? "",
               farmgatePriceUnit: rawPlan.farmgate_price_unit || "kg",
               farmgateConversionWeight: rawPlan.farmgate_conversion_weight ?? "",
+              marketPriceBasis: rawPlan.market_price_basis || "bankerohan_retail",
+              market: rawPlan.market || "Bankerohan",
+              priceType: rawPlan.price_type || "Retail",
               draftId: rawPlan.id,
               isDraft: true,
             });
@@ -674,6 +680,9 @@ function AssessPage() {
         estimated_selling_price: data.useFarmgate && Number(data.farmgatePrice) > 0
           ? Number(data.farmgatePrice)
           : null,
+        market_price_basis: data.marketPriceBasis || "bankerohan_retail",
+        market: data.market || "Bankerohan",
+        price_type: data.priceType || "Retail",
       };
 
       const res = await apiPost("/advisory/plan", payload);

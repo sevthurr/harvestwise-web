@@ -229,6 +229,9 @@ const DEFAULT_ASSESSMENT = {
   farmgatePriceRaw: "",
   farmgatePriceUnit: "kg",
   farmgateConversionWeight: "",
+  marketPriceBasis: "bankerohan_retail",
+  market: "Bankerohan",
+  priceType: "Retail",
   draftId: null,
   isDraft: false
 };

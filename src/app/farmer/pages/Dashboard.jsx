@@ -22,7 +22,7 @@ import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { Skeleton, SkeletonListRow } from "../components/shared/FarmerSkeletons";
 import PlantingSuitabilityCard from "../components/crops/PlantingSuitabilityCard";
 import { getPhaseConfig } from "../components/crops/types";
-import { useCrops } from "../components/crops/CropsContext";
+import { useCrops, isArchivedCrop } from "../components/crops/CropsContext";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
@@ -265,7 +265,9 @@ function DashboardPage() {
     refetchOnMount: "always",
   });
 
-  const { crops: cropPlans = [], loading: cropsLoading } = useCrops();
+  const { crops: allCropPlans = [], loading: cropsLoading } = useCrops();
+  // Completed / Cancelled plans are auto-archived and stay out of the dashboard.
+  const cropPlans = useMemo(() => allCropPlans.filter((c) => !isArchivedCrop(c)), [allCropPlans]);
 
   const pricesQuery = useQuery({
     queryKey: ["dashboard", "prices"],

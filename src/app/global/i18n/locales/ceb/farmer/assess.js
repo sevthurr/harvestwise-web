@@ -110,6 +110,7 @@ export const assess = {
   draft_require_crop: "Pili muna ug tanom sa wala pa i-save ang draft.",
   draft_saved: "Na-save ang draft. Pwede kang magpadayon bisan kanus-a sa crop assessment home.",
   draft_save_failed: "Dili pwede i-save ang draft karon. Pakisulayan pag-usab.",
+  market_price_basis_label: "Basehanan sa presyo sa merkado:",
   farmgate_price_comparison: "Pagtandi sa presyong farmgate batok sa break-even nga presyo",
   current_market_price: "Kasamtangang presyo sa merkado",
   current_market_prices: "Mga kasamtangang presyo sa merkado",

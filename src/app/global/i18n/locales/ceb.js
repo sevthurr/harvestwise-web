@@ -431,7 +431,8 @@ export const ceb = {
       pre_harvest: "Hapit Na Anihon",
       harvesting: "Pag-ani",
       harvested: "Naani Na",
-      completed: "Nahuman"
+      completed: "Nahuman",
+      archived: "Naka-archive"
     },
 
     cropCard: {
@@ -877,6 +878,8 @@ export const ceb = {
 
     empty: {
       no_crops: "Wala pa kay tanom nga nasubay.",
+      no_archived: "Walay naka-archive nga plano sa tanom.",
+      no_archived_desc: "Dinhi mabutang ang mga nahuman ug nakansela nga mga plano.",
       no_price_data: "Walay datos sa presyo karon.",
       no_arrival_data: "Walay datos sa mga naabot gikan sa DFTC karon.",
       no_production_data: "Dili magamit ang datos sa produksiyon",
