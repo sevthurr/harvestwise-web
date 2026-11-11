@@ -61,6 +61,16 @@ export const price = {
   "price_reference_notice": "Basehan sa presyo: ₱{price}/kg (baseline: ₱{baseline}/kg).",
   "forecast_diff_direction_label": "Kalainan sa Tagna",
   "forecast_diff_label": "Kalainan sa Tagna",
+  "recent_xd_sub": "Kasagaran sa miaging {days} ka adlaw",
+  "forecast_horizon_sub": "Tagna sa sunod {days} ka adlaw",
+  "expected_range_sub": "Sakop sa kasaligan",
+  "vs_current_price": "vs presyo sa palengke karon",
+  "latest_observed_sub": "Pinakabag-ong tala sa palengke",
+  "recent_xd_baseline_sub": "Baseline sa miaging {days} ka adlaw",
+  "vs_xd_average": "vs {days} ka adlaw nga kasagaran",
+  "historical_fallback": "Kasagarang presyo kaniadto",
+  "forecast_range_sub_dynamic": "Sakop: ₱{low}–₱{high}",
+  "expected_harvest_sub": "Gilaomang ting-ani: {date}",
   "forecast_historical_only_notice": "Gibase lamang kini sa miaging presyo. Mahimong mausab ang tinuod nga presyo tungod sa panahon, krudo, ug suplay.",
   "forecast_historical_disclaimer_short": "Gibase lamang kini sa miaging presyo. Mahimong mausab ang tinuod nga presyo tungod sa panahon, krudo, ug suplay."
 };
