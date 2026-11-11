@@ -316,8 +316,8 @@ function PriceSummaryStrip({
                   }
                   sub={
                     priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null
-                      ? `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`
-                      : `Expected harvest: ${priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—"}`
+                      ? t("farmer.factors.price.forecast_range_sub_dynamic", { low: priceOutlookModel.lowerForecast.toFixed(2), high: priceOutlookModel.upperForecast.toFixed(2) }, `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`)
+                      : t("farmer.factors.price.expected_harvest_sub", { date: priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—" }, `Expected harvest: ${priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—"}`)
                   }
                   isLoading={isDataLoading}
                 />
@@ -481,7 +481,7 @@ function PriceSummaryStrip({
             <StatCard
               label={t("farmer.factors.price.forecast_price_label", {}, "Forecast Price")}
               value={fcPrice != null ? <>₱{fcPrice.toFixed(2)}<span className="text-[10px] sm:text-[12px] font-medium text-black"> / kg</span></> : "—"}
-              sub={priceOutlookModel?.isFallback ? "Historical fallback" : t("farmer.factors.price.forecast_horizon_sub", { days: horizonDays }, `Next ${horizonDays} days forecast`)}
+              sub={priceOutlookModel?.isFallback ? t("farmer.factors.price.historical_fallback", {}, "Historical fallback") : t("farmer.factors.price.forecast_horizon_sub", { days: horizonDays }, `Next ${horizonDays} days forecast`)}
               isLoading={isDataLoading}
             />
             <StatCard
@@ -525,7 +525,7 @@ function PriceSummaryStrip({
             <StatCard
               label={t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")}
               value={recentAvg != null ? <>₱{recentAvg.toFixed(2)}<span className="text-[10px] sm:text-[12px] font-medium text-black"> / kg</span></> : "—"}
-              sub={t("farmer.factors.price.recent_xd_sub", { days: historicalRangeDays }, `Last ${historicalRangeDays} days baseline`)}
+              sub={t("farmer.factors.price.recent_xd_baseline_sub", { days: historicalRangeDays }, `Last ${historicalRangeDays} days baseline`)}
               isLoading={isDataLoading}
             />
             <StatCard
