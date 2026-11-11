@@ -524,6 +524,8 @@ export const tl = {
         next_days_sub: "· susunod na {days} araw",
         expected_price_label: "Inaasahang Presyo",
         forecast_range_label: "Saklaw ng Tantiya",
+        forecast_diff_direction_label: "Pagkakaiba sa Pagtataya",
+        forecast_diff_label: "Pagkakaiba sa Pagtataya",
         lower_bound_label: "Pinakamababang Tantiya",
         upper_bound_label: "Pinakamataas na Tantiya",
         forecast_midpoint_sub: "Gitna ng tantiya",

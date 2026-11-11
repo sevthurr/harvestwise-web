@@ -485,7 +485,7 @@ function PriceSummaryStrip({
               isLoading={isDataLoading}
             />
             <StatCard
-              label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference & Direction")}
+              label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference")}
               value={
                 (diffPct != null || diffAmount != null)
                   ? formatPriceChangeDisplay(diffAmount, diffPct, { hidePercent: true, referencePrice: curPrice })
@@ -722,7 +722,7 @@ function PriceSummaryStrip({
         isLoading={isDataLoading}
       />
       <StatCard
-        label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference & Direction")}
+        label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference")}
         value={
           (generalDiffPct != null || generalDiffAmount != null)
             ? formatPriceChangeDisplay(generalDiffAmount, generalDiffPct, { hidePercent: true, referencePrice: currentMarketPrice })
