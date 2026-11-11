@@ -16,12 +16,14 @@
  * goes through the i18n dictionary.
  */
 
-import { t as translate } from "../../global/i18n";
+import { t as translate } from "../../global/i18n/index.js";
 
 // Static English fallback map — also used by tests that verify every label
 // is non-empty.
 export const FARMER_ACTION_LABELS = {
   // ── Sign-ins & security ────────────────────────────────────────────────
+  "auth.login": "Logged in",
+  "auth.logout": "Logged out",
   "auth.login_failed": "Failed sign-in attempt",
   "auth.account_locked": "Account locked after failed sign-ins",
   "auth.password_changed": "Changed your password",
@@ -60,7 +62,7 @@ export const FARMER_ACTION_LABELS = {
 
   // ── Farming ────────────────────────────────────────────────────────────
   "farmer.onboarding_completed": "Finished setting up your farmer profile",
-  "farmer.crop_plan_created": "Created a new crop plan",
+  "farmer.crop_plan_created": "Created a crop plan",
   "farmer.crop_plan_updated": "Updated a crop plan",
   "farmer.crop_plan_draft_saved": "Saved a crop plan draft",
   "farmer.crop_plan_promoted": "Started a crop plan",

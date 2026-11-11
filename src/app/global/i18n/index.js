@@ -25,33 +25,32 @@ export function getDictionary(lang) {
   return LOCALES[code] || ceb;
 }
 
+function lookupKey(dict, path) {
+  if (!dict || typeof dict !== 'object') return null;
+  if (path in dict && typeof dict[path] === 'string') return dict[path];
+  const parts = path.split('.');
+  for (let i = 1; i <= parts.length; i++) {
+    const head = parts.slice(0, i).join('.');
+    if (head in dict) {
+      if (i === parts.length) {
+        return typeof dict[head] === 'string' ? dict[head] : null;
+      }
+      const rest = parts.slice(i).join('.');
+      const sub = lookupKey(dict[head], rest);
+      if (sub !== null && sub !== undefined) return sub;
+    }
+  }
+  return null;
+}
+
 export function t(key, params = {}, lang = 'ceb') {
   if (!key) return '';
   const dict = getDictionary(lang);
   const fallbackDict = LOCALES.en;
 
-  const keys = key.split('.');
-  let val = dict;
-  for (const k of keys) {
-    if (val && typeof val === 'object' && k in val) {
-      val = val[k];
-    } else {
-      val = null;
-      break;
-    }
-  }
-
+  let val = lookupKey(dict, key);
   if (!val && fallbackDict) {
-    let fVal = fallbackDict;
-    for (const k of keys) {
-      if (fVal && typeof fVal === 'object' && k in fVal) {
-        fVal = fVal[k];
-      } else {
-        fVal = null;
-        break;
-      }
-    }
-    val = fVal;
+    val = lookupKey(fallbackDict, key);
   }
 
   if (typeof val !== 'string') {

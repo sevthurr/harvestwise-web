@@ -26,6 +26,8 @@ export const myActivities = {
   previous: "Previous",
   next: "Next",
   page: "Page {page} of {total}",
+  pageOf: "Page {page} of {total}",
+  showingResults: "Showing {start}–{end} of {total} activities",
   showDetails: "Show details",
   hideDetails: "Hide details",
 
@@ -56,15 +58,26 @@ export const myActivities = {
     today: "Today",
     week: "This week",
     month: "This month",
+    custom: "Custom date…",
     auth: "Sign-ins & Security",
     user: "Profile & Account",
     farmer: "My Farming",
     notification: "Notifications",
     export: "Exports",
   },
+  customDate: {
+    title: "Custom date range",
+    from: "From",
+    to: "To",
+    apply: "Apply",
+    cancel: "Cancel",
+    invalidRange: "Start date cannot be after end date",
+  },
 
   actions: {
     // ── Sign-ins & security ────────────────────────────────────────────
+    "auth.login": "Logged in",
+    "auth.logout": "Logged out",
     "auth.login_failed": "Failed sign-in attempt",
     "auth.account_locked": "Account locked after failed sign-ins",
     "auth.password_changed": "Changed your password",

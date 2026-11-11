@@ -587,6 +587,10 @@ function AssessPage() {
         // ignore
       }
 
+      const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
+      const baseCropName = data.commodityName || selectedCommodity?.name || "";
+      const fullCropName = data.variant ? `${baseCropName} - ${data.variant}` : baseCropName;
+
       setData((d) => ({
         ...d,
         draftId: saved.id,
@@ -596,11 +600,17 @@ function AssessPage() {
       navigate("/farmer/crops", {
         state: {
           draftSaved: true,
-          message: t(
-            "farmer.assess.draft_saved",
-            {},
-            "Draft saved. Continue anytime from My Crops or Assessment home."
-          ),
+          message: fullCropName
+            ? t(
+                "farmer.assess.draft_saved_crop",
+                { crop: fullCropName },
+                `Draft for ${fullCropName} saved. Continue anytime from My Crops or Assessment home.`
+              )
+            : t(
+                "farmer.assess.draft_saved",
+                {},
+                "Draft saved. Continue anytime from My Crops or Assessment home."
+              ),
         },
       });
     } catch (_err) {
@@ -614,14 +624,24 @@ function AssessPage() {
       } catch {
         // ignore
       }
+      const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
+      const baseCropName = data.commodityName || selectedCommodity?.name || "";
+      const fullCropName = data.variant ? `${baseCropName} - ${data.variant}` : baseCropName;
+
       navigate("/farmer/crops", {
         state: {
           draftSaved: true,
-          message: t(
-            "farmer.assess.draft_saved_local_notice",
-            {},
-            "Draft saved locally on this device. You can continue anytime."
-          ),
+          message: fullCropName
+            ? t(
+                "farmer.assess.draft_saved_local_notice_crop",
+                { crop: fullCropName },
+                `Draft for ${fullCropName} saved locally on this device. You can continue anytime.`
+              )
+            : t(
+                "farmer.assess.draft_saved_local_notice",
+                {},
+                "Draft saved locally on this device. You can continue anytime."
+              ),
         },
       });
     } finally {

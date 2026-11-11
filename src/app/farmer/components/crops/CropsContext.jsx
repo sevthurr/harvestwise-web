@@ -533,8 +533,7 @@ const CropsProvider = ({ children }) => {
 
 const useCrops = () => {
   const ctx = useContext(CropsContext);
-  if (!ctx) throw new Error("useCrops must be used inside CropsProvider");
-  return ctx;
+  return ctx || { crops: [], loading: false };
 };
 
 export { CropsProvider, useCrops };
