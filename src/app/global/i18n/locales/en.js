@@ -524,6 +524,8 @@ export const en = {
         next_days_sub: "· next {days} days",
         expected_price_label: "Expected Price",
         forecast_range_label: "Forecast Range",
+        forecast_diff_direction_label: "Forecast Difference",
+        forecast_diff_label: "Forecast Difference",
         lower_bound_label: "Lower Bound",
         upper_bound_label: "Upper Bound",
         forecast_midpoint_sub: "Forecast midpoint",
