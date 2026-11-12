@@ -40,7 +40,7 @@ import {
 import { farmerApi } from "../../../services/api";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { formatFarmerActionLabel } from "../utils/activityActionLabels";
-import { parseApiDateTime } from "../../global/utils/apiTransforms";
+import { parseApiDateTime, manilaTodayIso } from "../../global/utils/apiTransforms";
 import { useCrops } from "../components/crops/CropsContext";
 
 // ─── Icon + colour map ────────────────────────────────────────────────────────
@@ -274,25 +274,24 @@ function friendlyDate(isoStr, langCode) {
 }
 
 // ─── Date filter → API params ─────────────────────────────────────────────────
-function filterToParams(filter) {
-  const now = new Date();
-  const mlaOffset = 8 * 60; // UTC+8
-  const mla = new Date(now.getTime() + (mlaOffset - now.getTimezoneOffset()) * 60000);
+export function filterToParams(filter) {
+  // Manila calendar date. The old hand-rolled offset math added +16h in a
+  // Manila browser, so "Today" queried tomorrow's date and returned nothing.
+  const today = manilaTodayIso();
   const pad = (n) => String(n).padStart(2, "0");
-  const today = `${mla.getFullYear()}-${pad(mla.getMonth() + 1)}-${pad(mla.getDate())}`;
 
   if (filter === "today") {
     return { date_from: today, date_to: today };
   }
   if (filter === "week") {
-    const monday = new Date(mla);
-    monday.setDate(mla.getDate() - ((mla.getDay() + 6) % 7));
+    const [year, month, day] = today.split("-").map(Number);
+    const monday = new Date(year, month - 1, day);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
     const from = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
     return { date_from: from, date_to: today };
   }
   if (filter === "month") {
-    const from = `${mla.getFullYear()}-${pad(mla.getMonth() + 1)}-01`;
-    return { date_from: from, date_to: today };
+    return { date_from: `${today.slice(0, 7)}-01`, date_to: today };
   }
   return {}; // "all"
 }

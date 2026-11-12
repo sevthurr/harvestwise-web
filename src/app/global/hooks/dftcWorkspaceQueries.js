@@ -3,7 +3,7 @@ import { apiGet, parseResponse } from "../api";
 export const DFTC_HOME_KEY = ["dftc", "home"];
 export const DFTC_SUBMISSIONS_KEY = ["dftc", "submissions"];
 export const DFTC_STAFF_KEY = ["dftc", "staff"];
-export const DFTC_WORKSPACE_STALE_TIME = 5 * 60 * 1000;
+export const DFTC_WORKSPACE_STALE_TIME = 30 * 60 * 1000;
 
 export async function fetchDftcHome() {
   return parseResponse(await apiGet("/dftc/home"));

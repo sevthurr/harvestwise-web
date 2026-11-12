@@ -10,19 +10,22 @@
  * by farmerApi is still exercised.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MyActivities, {
   getFriendlyLabel,
   formatActivityDetails,
+  filterToParams,
 } from '../app/farmer/pages/MyActivities';
 import { t as i18nTranslate } from '../app/global/i18n';
 import {
   formatFarmerActionLabel,
   FARMER_ACTION_LABELS,
 } from '../app/farmer/utils/activityActionLabels';
+import { apiGet } from '../app/global/api';
+import { manilaTodayIso } from '../app/global/utils/apiTransforms';
 
 // Language is pinned to English so assertions match the English copy the
 // component renders; the Cebuano default would produce untranslated strings.
@@ -138,6 +141,56 @@ describe('MyActivities — simplified feed', () => {
   it('does not show an Export PDF button', async () => {
     renderPage();
     expect(screen.queryByRole('button', { name: /Export PDF/i })).toBeNull();
+  });
+
+  it('sends the Manila calendar date when the Today filter is selected', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Filter activities/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+
+    const today = manilaTodayIso();
+    await waitFor(() => {
+      const urls = apiGet.mock.calls.map(([url]) => url);
+      expect(
+        urls.some((url) => url.includes(`date_from=${today}`) && url.includes(`date_to=${today}`))
+      ).toBe(true);
+    });
+  });
+});
+
+describe('filterToParams — Manila calendar dates', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('queries the Manila day for Today, not tomorrow', () => {
+    // 12:00 UTC is 20:00 on the same day in Manila. The old offset math added
+    // 16 hours in a Manila browser and asked for the next day.
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
+    expect(filterToParams('today')).toEqual({
+      date_from: '2026-11-12',
+      date_to: '2026-11-12',
+    });
+  });
+
+  it('follows the Manila date across UTC midnight', () => {
+    // 16:30 UTC on 11 Nov is 00:30 on 12 Nov in Manila.
+    vi.setSystemTime(new Date('2026-11-11T16:30:00Z'));
+    expect(filterToParams('today')).toEqual({
+      date_from: '2026-11-12',
+      date_to: '2026-11-12',
+    });
+  });
+
+  it('starts the week on Monday and the month on the 1st', () => {
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z')); // Thursday
+    expect(filterToParams('week')).toEqual({
+      date_from: '2026-11-09',
+      date_to: '2026-11-12',
+    });
+    expect(filterToParams('month')).toEqual({
+      date_from: '2026-11-01',
+      date_to: '2026-11-12',
+    });
   });
 });
 
