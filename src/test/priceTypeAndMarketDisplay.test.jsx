@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router";
 import { useLanguage } from "../app/global/contexts/LanguageContext";
@@ -162,10 +162,52 @@ describe("Price Type and Market Display in Crop Assessment & Results", () => {
       />
     );
 
-    // Current market price should include market & price type badge/label (e.g. Bangkerohan Retail)
-    expect(screen.getAllByText(/Bangkerohan Retail/i).length).toBeGreaterThan(0);
+    // Current market price should include market & price type badge/label (e.g. Bankerohan Retail)
+    expect(screen.getAllByText(/(Bankerohan|Bangkerohan) Retail/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Current market price")).toBeInTheDocument();
     expect(screen.getByText("Break-even price")).toBeInTheDocument();
+  });
+
+  it("allows selecting market price basis among Bankerohan Retail, Bankerohan Wholesale, DFTC Retail, and DFTC Wholesale", () => {
+    const handleChange = vi.fn();
+    const data = {
+      commodity: "kamatis",
+      commodityName: "Tomato",
+      variant: "Tagalog",
+      farmArea: 500,
+      farmAreaUnit: "sqm",
+      harvestQuantity: 500,
+      costMethod: "simple",
+      totalCost: 10000,
+      useFarmgate: true,
+      farmgatePrice: 30,
+      marketPriceBasis: "bankerohan_retail",
+    };
+
+    renderWithProviders(
+      <Step4ReviewBreakEven
+        data={data}
+        onChange={handleChange}
+        onEditStep={vi.fn()}
+        errors={{}}
+      />
+    );
+
+    const select = screen.getByTestId("market-price-basis-select");
+    expect(select).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Bankerohan Retail" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Bankerohan Wholesale" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "DFTC Retail" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "DFTC Wholesale" })).toBeInTheDocument();
+
+    fireEvent.change(select, { target: { value: "dftc_wholesale" } });
+    expect(handleChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        marketPriceBasis: "dftc_wholesale",
+        market: "DFTC",
+        priceType: "Wholesale",
+      })
+    );
   });
 
   it("renders market and price type in Crop Assessment Result (RecommendationResult)", () => {

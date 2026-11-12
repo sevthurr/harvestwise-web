@@ -11,7 +11,7 @@ import { apiGet, parseResponse } from "../../global/api";
 import { useDisplayMode } from "../../global/contexts/DisplayModeContext";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
-import { useCrops } from "../components/crops/CropsContext";
+import { useCrops, isArchivedCrop } from "../components/crops/CropsContext";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 
@@ -202,7 +202,8 @@ function MarketCalendarPage() {
     });
 
     const cropEvents = [];
-    const sortedCrops = sortWithPreferredFirst(cropPlansData || [], preferredCrops);
+    const activeCrops = (cropPlansData || []).filter(c => !isArchivedCrop(c));
+    const sortedCrops = sortWithPreferredFirst(activeCrops, preferredCrops);
     sortedCrops.forEach(c => {
       const name = c.commodityName && c.commodityName !== "\u2013" ? c.commodityName : 'Crop';
       const isPref = isPreferredCrop(c, preferredCrops);

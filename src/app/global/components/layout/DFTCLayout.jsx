@@ -27,12 +27,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
+import { prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
 
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
   { id: "input", label: "Submit Data", path: "/dftc/input", Icon: FileInput },
   { id: "trends", label: "Trends", path: "/dftc/trends", Icon: TrendingUp },
-  { id: "submissions", label: "History", path: "/dftc/submissions", Icon: History }
+  { id: "submissions", label: "Submission Logs", path: "/dftc/submissions", Icon: History }
 ];
 function getActive(pathname) {
   if (pathname === "/dftc") return "home";
@@ -84,6 +85,10 @@ function DFTCLayoutInner() {
     navigate(path);
   };
   const queryClient = useQueryClient();
+  useEffect(() => {
+    prefetchDftcWorkspace(queryClient);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   usePrivilegedDataVersion("dftc");
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);

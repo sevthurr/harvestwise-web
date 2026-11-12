@@ -10,15 +10,22 @@
  * by farmerApi is still exercised.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import MyActivities from '../app/farmer/pages/MyActivities';
+import MyActivities, {
+  getFriendlyLabel,
+  formatActivityDetails,
+  filterToParams,
+} from '../app/farmer/pages/MyActivities';
+import { t as i18nTranslate } from '../app/global/i18n';
 import {
   formatFarmerActionLabel,
   FARMER_ACTION_LABELS,
 } from '../app/farmer/utils/activityActionLabels';
+import { apiGet } from '../app/global/api';
+import { manilaTodayIso } from '../app/global/utils/apiTransforms';
 
 // Language is pinned to English so assertions match the English copy the
 // component renders; the Cebuano default would produce untranslated strings.
@@ -86,7 +93,7 @@ describe('MyActivities — simplified feed', () => {
 
     await waitFor(() => {
       // The friendly label for user.profile_updated should be visible
-      expect(screen.getByText('Updated your profile')).toBeInTheDocument();
+      expect(screen.getByText('You updated your profile')).toBeInTheDocument();
     });
 
     // Raw action code must NOT be visible as text (it may exist as a title attr)
@@ -97,7 +104,7 @@ describe('MyActivities — simplified feed', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Updated your profile')).toBeInTheDocument();
+      expect(screen.getByText('You updated your profile')).toBeInTheDocument();
     });
 
     // 08:00 UTC is 4:00 PM in Asia/Manila.
@@ -108,7 +115,7 @@ describe('MyActivities — simplified feed', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Updated your profile')).toBeInTheDocument();
+      expect(screen.getByText('You updated your profile')).toBeInTheDocument();
     });
 
     // Log ID should not appear as visible text
@@ -131,9 +138,59 @@ describe('MyActivities — simplified feed', () => {
     expect(screen.queryByPlaceholderText(/Search actor name/i)).toBeNull();
   });
 
-  it('shows a secondary Export PDF button', async () => {
+  it('does not show an Export PDF button', async () => {
     renderPage();
-    expect(screen.getByRole('button', { name: /Export PDF/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Export PDF/i })).toBeNull();
+  });
+
+  it('sends the Manila calendar date when the Today filter is selected', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Filter activities/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+
+    const today = manilaTodayIso();
+    await waitFor(() => {
+      const urls = apiGet.mock.calls.map(([url]) => url);
+      expect(
+        urls.some((url) => url.includes(`date_from=${today}`) && url.includes(`date_to=${today}`))
+      ).toBe(true);
+    });
+  });
+});
+
+describe('filterToParams — Manila calendar dates', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('queries the Manila day for Today, not tomorrow', () => {
+    // 12:00 UTC is 20:00 on the same day in Manila. The old offset math added
+    // 16 hours in a Manila browser and asked for the next day.
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
+    expect(filterToParams('today')).toEqual({
+      date_from: '2026-11-12',
+      date_to: '2026-11-12',
+    });
+  });
+
+  it('follows the Manila date across UTC midnight', () => {
+    // 16:30 UTC on 11 Nov is 00:30 on 12 Nov in Manila.
+    vi.setSystemTime(new Date('2026-11-11T16:30:00Z'));
+    expect(filterToParams('today')).toEqual({
+      date_from: '2026-11-12',
+      date_to: '2026-11-12',
+    });
+  });
+
+  it('starts the week on Monday and the month on the 1st', () => {
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z')); // Thursday
+    expect(filterToParams('week')).toEqual({
+      date_from: '2026-11-09',
+      date_to: '2026-11-12',
+    });
+    expect(filterToParams('month')).toEqual({
+      date_from: '2026-11-01',
+      date_to: '2026-11-12',
+    });
   });
 });
 
@@ -154,5 +211,69 @@ describe('formatFarmerActionLabel', () => {
     expect(formatFarmerActionLabel('')).toBe(' ');
     // Prototype keys must not leak an object into the table.
     expect(formatFarmerActionLabel('constructor')).toBe('Constructor');
+  });
+});
+
+describe('MyActivities — specific crop names and Bisaya/Tagalog draft translation', () => {
+  const cropsCatalog = [
+    { id: 'CRP-0004', commodityName: 'Atsal', variant: 'Sultan' },
+    { id: 'CRP-0005', commodityName: 'Kamatis', variant: null },
+  ];
+  const makeTranslate = (lang) => (key, params, fallback) => {
+    const res = i18nTranslate(key, params, lang);
+    return res === key && fallback ? fallback : res;
+  };
+
+  it('replaces CRP-0004 with exact commodity and variety in title and details when crop exists', () => {
+    const details = 'Crop plan draft CRP-0004 saved';
+    const cebLabel = getFriendlyLabel('farmer.crop_plan_draft_saved', 'ceb', makeTranslate('ceb'), details, cropsCatalog);
+    const cebDetails = formatActivityDetails(details, cropsCatalog, 'ceb');
+
+    expect(cebLabel).toBe('Gi-save nimo ang draft sa plano sa tanom alang sa Atsal - Sultan');
+    expect(cebLabel).not.toContain('CRP-0004');
+    expect(cebDetails).toBe('Na-save ang draft sa plano sa tanom alang sa Atsal - Sultan');
+    expect(cebDetails).not.toContain('CRP-0004');
+
+    const tlLabel = getFriendlyLabel('farmer.crop_plan_draft_saved', 'tl', makeTranslate('tl'), details, cropsCatalog);
+    const tlDetails = formatActivityDetails(details, cropsCatalog, 'tl');
+    expect(tlLabel).toBe('Ni-save mo ang draft ng plano sa pananim para sa Atsal - Sultan');
+    expect(tlDetails).toBe('Na-save ang draft ng plano sa pananim para sa Atsal - Sultan');
+  });
+
+  it('never leaks CRP-0004 or English "Crop plan draft saved" in Bisaya/Tagalog when crop is missing', () => {
+    const details = 'Crop plan draft CRP-0004 saved';
+    const cebLabel = getFriendlyLabel('farmer.crop_plan_draft_saved', 'ceb', makeTranslate('ceb'), details, []);
+    const cebDetails = formatActivityDetails(details, [], 'ceb');
+
+    expect(cebLabel).toBe('Gi-save nimo ang draft sa plano sa tanom');
+    expect(cebLabel).not.toContain('CRP-0004');
+    expect(cebDetails).toBe('Na-save ang draft sa plano sa tanom');
+    expect(cebDetails).not.toContain('Crop plan draft saved');
+
+    const tlLabel = getFriendlyLabel('farmer.crop_plan_draft_saved', 'tl', makeTranslate('tl'), details, []);
+    const tlDetails = formatActivityDetails(details, [], 'tl');
+    expect(tlLabel).toBe('Ni-save mo ang draft ng plano sa pananim');
+    expect(tlDetails).toBe('Na-save ang draft ng plano sa pananim');
+  });
+
+  it('resolves crop name from item.after_values when available', () => {
+    const item = {
+      action: 'farmer.crop_plan_draft_saved',
+      details: 'Crop plan draft CRP-0004 saved',
+      after_values: { commodity_name: 'Atsal - Sultan', plan_id: 'CRP-0004' },
+    };
+    const label = getFriendlyLabel(item.action, 'ceb', makeTranslate('ceb'), item.details, [], item);
+    const detail = formatActivityDetails(item.details, [], 'ceb', item);
+
+    expect(label).toBe('Gi-save nimo ang draft sa plano sa tanom alang sa Atsal - Sultan');
+    expect(detail).toBe('Na-save ang draft sa plano sa tanom alang sa Atsal - Sultan');
+  });
+
+  it('formats crops without a variety cleanly', () => {
+    const details = 'Saved a draft crop plan for Kamatis';
+    expect(getFriendlyLabel('farmer.crop_plan_draft_saved', 'ceb', makeTranslate('ceb'), details, cropsCatalog))
+      .toBe('Gi-save nimo ang draft sa plano sa tanom alang sa Kamatis');
+    expect(formatActivityDetails(details, cropsCatalog, 'ceb'))
+      .toBe('Na-save ang draft sa plano sa tanom alang sa Kamatis');
   });
 });

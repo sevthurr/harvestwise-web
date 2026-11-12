@@ -177,8 +177,8 @@ export const calendar = {
   },
   "notices": {
     "calendar_historical_basis_notice": "Kini nga plano gamit ang kasagarang presyo, naabot sa DFTC, ug produksyon sa miaging datos para sa gilaom nga panahon sa ani. Giya ra kini ug dili garantiya sa mahitabo pag-abot sa ani.",
-    "calendar_current_forecast_not_used": "Ang kasamtangang tansya sa presyo para sa 7/14/21/28 ka adlaw dili gigamit isip presyo para niining layo pa nga umaabot nga bulan.",
-    "calendar_weather_not_used": "Wala giapil ang panahon niini nga rekomendasyon para sa umaabot nga bulan. Tan-awon ang panahon kung duol na ang pagtanom ug naa nay sakto nga tansya sa panahon.",
+    "calendar_current_forecast_not_used": "Ang kasamtangang tagna sa presyo para sa 7/14/21/28 ka adlaw dili gigamit isip presyo para niining layo pa nga umaabot nga bulan.",
+    "calendar_weather_not_used": "Wala giapil ang panahon niini nga rekomendasyon para sa umaabot nga bulan. Tan-awon ang panahon kung duol na ang pagtanom ug naa nay sakto nga tagna sa panahon.",
     "calendar_profitability_not_used": "Wala giapil ang personal nga kalkulasyon sa kita kay wala pa nahimo ang aktuwal nga plano sa tanom ug wala pa na-input ang gasto ug gilaom nga ani.",
     "calendar_refresh_notice": "Puwedeng mausab ang kondisyon. Susiha pag-usab ang {crop_name} kung duol na ang {planting_month} para sa bag-ong datos sa presyo, panahon, ug personal nga kalkulasyon sa kita.",
     "calendar_event_notice": "Ang {event_name} kay sa {date}. Gipakita ra kini para makatabang sa pagplano ug dili kini maka-usab sa rekomendasyon sa tanom.",

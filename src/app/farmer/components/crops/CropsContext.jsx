@@ -36,6 +36,15 @@ const STATUS_TO_PHASE = {
   Cancelled: "completed",
 };
 
+// Terminal statuses that auto-archive a crop plan.
+export const ARCHIVED_STATUSES = new Set(["Completed", "Cancelled"]);
+
+/** True when a (normalized) crop plan is archived and therefore read-only. */
+export function isArchivedCrop(crop) {
+  if (!crop) return false;
+  return Boolean(crop.isArchived || crop.archivedAt || ARCHIVED_STATUSES.has(crop.status));
+}
+
 export function normalizeCropPlan(raw, pricesMap) {
   if (!raw) return null;
   const item = toCamelCase(raw);
@@ -177,6 +186,10 @@ export function normalizeCropPlan(raw, pricesMap) {
     variety: variant,
     phase: rawStatus === "On Hold" ? "planning" : phase,
     status: rawStatus,
+    // Completed / Cancelled plans are auto-archived by the API. Fall back to
+    // the status for responses that pre-date the archive fields.
+    archivedAt: item.archivedAt || null,
+    isArchived: Boolean(item.isArchived || item.archivedAt || ARCHIVED_STATUSES.has(rawStatus)),
     isOnHold: rawStatus === "On Hold",
     holdReason: item.holdReason || null,
     holdDate: formatLocalDate(item.updatedAt),
@@ -520,8 +533,7 @@ const CropsProvider = ({ children }) => {
 
 const useCrops = () => {
   const ctx = useContext(CropsContext);
-  if (!ctx) throw new Error("useCrops must be used inside CropsProvider");
-  return ctx;
+  return ctx || { crops: [], loading: false };
 };
 
 export { CropsProvider, useCrops };

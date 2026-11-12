@@ -277,7 +277,7 @@ describe("Step 1 Assessment Draft Saving and Continuation", () => {
     expect(screen.getByRole("button", { name: /Start new assessment/i })).toBeInTheDocument();
   });
 
-  it("cleans up stale localStorage drafts and prevents duplicates when crops already has the draft", async () => {
+  it("keeps the device draft while still showing a single card when crops already has the draft", async () => {
     const { default: MyCropsPage } = await import("../app/farmer/pages/MyCrops");
     const { useCrops } = await import("../app/farmer/components/crops/CropsContext");
 
@@ -329,8 +329,13 @@ describe("Step 1 Assessment Draft Saving and Continuation", () => {
       expect(draftCards.length).toBe(1);
     });
 
-    // The stale localStorage entry should have been cleaned up
-    expect(localStorage.getItem("harvestwise_assessment_draft")).toBeNull();
+    // The device copy must survive. Showing one card is a rendering decision;
+    // deleting the farmer's copy is not. This list is cached and can be stale,
+    // and `harvestwise_assessment_draft` is written when the server was
+    // unreachable — so at that point it can be the only copy that exists.
+    // Removal is reserved for a server-confirmed save (next test) or an
+    // explicit user discard. Do not "restore" the old assertion here.
+    expect(localStorage.getItem("harvestwise_assessment_draft")).not.toBeNull();
   });
 
   it("updates existing draft and clears localStorage when save draft succeeds", async () => {

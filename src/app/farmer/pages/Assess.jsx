@@ -111,6 +111,9 @@ function buildDraftPayload(data) {
     farmgate_price_unit: data.useFarmgate ? (data.farmgatePriceUnit || "kg") : "kg",
     farmgate_price_entered: data.useFarmgate && Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null,
     farmgate_conversion_weight: data.useFarmgate && Number.isFinite(convWeight) && convWeight > 0 ? convWeight : null,
+    market_price_basis: data.marketPriceBasis || "bankerohan_retail",
+    market: data.market || "Bankerohan",
+    price_type: data.priceType || "Retail",
     cost_entry_mode: data.costMethod === "detailed" ? "detailed" : "simple",
     production_costs: productionCosts,
   };
@@ -397,6 +400,9 @@ function AssessPage() {
               farmgatePriceRaw: rawPlan.farmgate_price_entered ?? rawPlan.expected_farmgate_price ?? "",
               farmgatePriceUnit: rawPlan.farmgate_price_unit || "kg",
               farmgateConversionWeight: rawPlan.farmgate_conversion_weight ?? "",
+              marketPriceBasis: rawPlan.market_price_basis || "bankerohan_retail",
+              market: rawPlan.market || "Bankerohan",
+              priceType: rawPlan.price_type || "Retail",
               draftId: rawPlan.id,
               isDraft: true,
             });
@@ -511,11 +517,13 @@ function AssessPage() {
   };
 
   const handleStart = () => {
-    try {
-      localStorage.removeItem("harvestwise_assessment_draft");
-    } catch {
-      // ignore
-    }
+    // Does NOT clear `harvestwise_assessment_draft`.
+    //
+    // Starting a new assessment is not an instruction to discard a saved one:
+    // the previous draft may be the only copy of work done while the server was
+    // unreachable. It is replaced only when this new assessment is itself saved
+    // as a draft, and removed when a save is confirmed by the server. Deleting
+    // it here lost a farmer's offline draft on a single, unrelated tap.
     setDraftLoadError(null);
     setDraftLoading(false);
     setData(DEFAULT_ASSESSMENT);
@@ -579,6 +587,10 @@ function AssessPage() {
         // ignore
       }
 
+      const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
+      const baseCropName = data.commodityName || selectedCommodity?.name || "";
+      const fullCropName = data.variant ? `${baseCropName} - ${data.variant}` : baseCropName;
+
       setData((d) => ({
         ...d,
         draftId: saved.id,
@@ -588,11 +600,17 @@ function AssessPage() {
       navigate("/farmer/crops", {
         state: {
           draftSaved: true,
-          message: t(
-            "farmer.assess.draft_saved",
-            {},
-            "Draft saved. Continue anytime from My Crops or Assessment home."
-          ),
+          message: fullCropName
+            ? t(
+                "farmer.assess.draft_saved_crop",
+                { crop: fullCropName },
+                `Draft for ${fullCropName} saved. Continue anytime from My Crops or Assessment home.`
+              )
+            : t(
+                "farmer.assess.draft_saved",
+                {},
+                "Draft saved. Continue anytime from My Crops or Assessment home."
+              ),
         },
       });
     } catch (_err) {
@@ -606,14 +624,24 @@ function AssessPage() {
       } catch {
         // ignore
       }
+      const selectedCommodity = commodityOptions.find((c) => c.id === data.commodity);
+      const baseCropName = data.commodityName || selectedCommodity?.name || "";
+      const fullCropName = data.variant ? `${baseCropName} - ${data.variant}` : baseCropName;
+
       navigate("/farmer/crops", {
         state: {
           draftSaved: true,
-          message: t(
-            "farmer.assess.draft_saved_local_notice",
-            {},
-            "Draft saved locally on this device. You can continue anytime."
-          ),
+          message: fullCropName
+            ? t(
+                "farmer.assess.draft_saved_local_notice_crop",
+                { crop: fullCropName },
+                `Draft for ${fullCropName} saved locally on this device. You can continue anytime.`
+              )
+            : t(
+                "farmer.assess.draft_saved_local_notice",
+                {},
+                "Draft saved locally on this device. You can continue anytime."
+              ),
         },
       });
     } finally {
@@ -672,6 +700,9 @@ function AssessPage() {
         estimated_selling_price: data.useFarmgate && Number(data.farmgatePrice) > 0
           ? Number(data.farmgatePrice)
           : null,
+        market_price_basis: data.marketPriceBasis || "bankerohan_retail",
+        market: data.market || "Bankerohan",
+        price_type: data.priceType || "Retail",
       };
 
       const res = await apiPost("/advisory/plan", payload);

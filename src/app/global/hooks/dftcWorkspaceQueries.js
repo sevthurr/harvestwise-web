@@ -6,7 +6,7 @@ export const DFTC_SUBMISSIONS_KEY = ["dftc", "submissions"];
 // never shares the cache entry with the full submissions list (page_size=50).
 export const DFTC_SUBMISSIONS_RECENT_KEY = ["dftc", "submissions-recent"];
 export const DFTC_STAFF_KEY = ["dftc", "staff"];
-export const DFTC_WORKSPACE_STALE_TIME = 5 * 60 * 1000;
+export const DFTC_WORKSPACE_STALE_TIME = 30 * 60 * 1000;
 
 export async function fetchDftcHome() {
   // Cold-cache build runs ~15 N+1 DB queries; give it more headroom than the

@@ -316,8 +316,8 @@ function PriceSummaryStrip({
                   }
                   sub={
                     priceOutlookModel?.lowerForecast != null && priceOutlookModel?.upperForecast != null
-                      ? `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`
-                      : `Expected harvest: ${priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—"}`
+                      ? t("farmer.factors.price.forecast_range_sub_dynamic", { low: priceOutlookModel.lowerForecast.toFixed(2), high: priceOutlookModel.upperForecast.toFixed(2) }, `Range: ₱${priceOutlookModel.lowerForecast.toFixed(2)}–₱${priceOutlookModel.upperForecast.toFixed(2)}`)
+                      : t("farmer.factors.price.expected_harvest_sub", { date: priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—" }, `Expected harvest: ${priceOutlookModel?.forecastDate || priceOutlookModel?.expectedHarvestDate || "—"}`)
                   }
                   isLoading={isDataLoading}
                 />
@@ -439,12 +439,12 @@ function PriceSummaryStrip({
                     ? t("farmer.factors.price.dual_comparison_unavailable", {}, "Comparison unavailable because both valid positive prices are required.")
                     : dualDirection === "same"
                     ? t("farmer.factors.price.dual_comparison_same", {}, "The forecast is about the same as the historical seasonal average.")
-                    : `The forecast is ${dualDirection} the historical seasonal average by ${formatPriceChangeDisplay(dualDifference, dualPercent)}.`}
+                    : `The forecast is ${dualDirection} the historical seasonal average by ${formatPriceChangeDisplay(dualDifference, dualPercent, { hidePercent: true })}.`}
                 </p>
               </div>
               <div className="text-[12px] font-semibold text-black whitespace-nowrap">
                 {dualDifference != null
-                  ? formatPriceChangeDisplay(dualDifference, dualPercent)
+                  ? formatPriceChangeDisplay(dualDifference, dualPercent, { hidePercent: true })
                   : "—"}
               </div>
             </div>
@@ -481,14 +481,14 @@ function PriceSummaryStrip({
             <StatCard
               label={t("farmer.factors.price.forecast_price_label", {}, "Forecast Price")}
               value={fcPrice != null ? <>₱{fcPrice.toFixed(2)}<span className="text-[10px] sm:text-[12px] font-medium text-black"> / kg</span></> : "—"}
-              sub={priceOutlookModel?.isFallback ? "Historical fallback" : t("farmer.factors.price.forecast_horizon_sub", { days: horizonDays }, `Next ${horizonDays} days forecast`)}
+              sub={priceOutlookModel?.isFallback ? t("farmer.factors.price.historical_fallback", {}, "Historical fallback") : t("farmer.factors.price.forecast_horizon_sub", { days: horizonDays }, `Next ${horizonDays} days forecast`)}
               isLoading={isDataLoading}
             />
             <StatCard
-              label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference & Direction")}
+              label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference")}
               value={
                 (diffPct != null || diffAmount != null)
-                  ? formatPriceChangeDisplay(diffAmount, diffPct, { direction, referencePrice: curPrice })
+                  ? formatPriceChangeDisplay(diffAmount, diffPct, { hidePercent: true, referencePrice: curPrice })
                   : changeDisplay
               }
               sub={t("farmer.factors.price.vs_current_price", {}, "vs. current market price")}
@@ -525,14 +525,14 @@ function PriceSummaryStrip({
             <StatCard
               label={t("farmer.factors.price.recent_average_price_label", {}, "Recent Average Price")}
               value={recentAvg != null ? <>₱{recentAvg.toFixed(2)}<span className="text-[10px] sm:text-[12px] font-medium text-black"> / kg</span></> : "—"}
-              sub={t("farmer.factors.price.recent_xd_sub", { days: historicalRangeDays }, `Last ${historicalRangeDays} days baseline`)}
+              sub={t("farmer.factors.price.recent_xd_baseline_sub", { days: historicalRangeDays }, `Last ${historicalRangeDays} days baseline`)}
               isLoading={isDataLoading}
             />
             <StatCard
               label={t("farmer.factors.price.market_position_label", {}, "Market Position")}
               value={
                 (mktPosPct != null || mktPosDiff != null)
-                  ? formatPriceChangeDisplay(mktPosDiff, mktPosPct, { referencePrice: recentAvg })
+                  ? formatPriceChangeDisplay(mktPosDiff, mktPosPct, { hidePercent: true, referencePrice: recentAvg })
                   : changeDisplay
               }
               sub={t("farmer.factors.price.vs_xd_average", { days: historicalRangeDays }, `vs. ${historicalRangeDays}-day average`)}
@@ -722,10 +722,10 @@ function PriceSummaryStrip({
         isLoading={isDataLoading}
       />
       <StatCard
-        label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference & Direction")}
+        label={t("farmer.factors.price.forecast_diff_direction_label", {}, "Forecast Difference")}
         value={
           (generalDiffPct != null || generalDiffAmount != null)
-            ? formatPriceChangeDisplay(generalDiffAmount, generalDiffPct, { direction: generalDir, referencePrice: currentMarketPrice })
+            ? formatPriceChangeDisplay(generalDiffAmount, generalDiffPct, { hidePercent: true, referencePrice: currentMarketPrice })
             : changeDisplay
         }
         valueColor={generalDiffPct != null && generalDiffPct > 0.05 ? "text-emerald-700" : generalDiffPct != null && generalDiffPct < -0.05 ? "text-red-600" : "text-black"}
@@ -1285,7 +1285,7 @@ function PriceDetailView({
       const p = dynamicForecastPrice.toFixed(2);
       const cur = currentMarketPrice.toFixed(2);
       const diffVal = dynamicForecastPrice - currentMarketPrice;
-      const formattedDiff = formatPriceChangeDisplay(diffVal, dynamicForecastDiff);
+      const formattedDiff = formatPriceChangeDisplay(diffVal, dynamicForecastDiff, { hidePercent: true });
       const dirText = dynamicDirection === "Rising"
         ? (currentLang === "ceb" ? "nagkataas" : currentLang === "tl" ? "tumataas" : "rising")
         : dynamicDirection === "Dropping"
@@ -1299,7 +1299,7 @@ function PriceDetailView({
       const diffVal = (priceOutlookModel.referencePrice != null && priceOutlookModel.comparisonBaseline != null)
         ? priceOutlookModel.referencePrice - priceOutlookModel.comparisonBaseline
         : priceOutlookModel.absoluteChange;
-      const formattedDiff = formatPriceChangeDisplay(diffVal, priceOutlookModel.percentChange);
+      const formattedDiff = formatPriceChangeDisplay(diffVal, priceOutlookModel.percentChange, { hidePercent: true });
       const classKey = priceOutlookModel.classification || "neutral";
       const classLabel = classKey === "favorable"
         ? (currentLang === "ceb" ? "Maayo" : currentLang === "tl" ? "Maganda" : "Favorable")
@@ -1348,10 +1348,10 @@ function PriceDetailView({
 
   if (activePct != null || activeDiff != null) {
     if (activeDiff != null && Math.abs(activeDiff) < 0.05 && Math.abs(activePct ?? 0) < 0.1) {
-      changeDisplay = "₱0 (0%)";
+      changeDisplay = "₱0";
       changeColor = "text-black";
     } else {
-      changeDisplay = formatPriceChangeDisplay(activeDiff, activePct);
+      changeDisplay = formatPriceChangeDisplay(activeDiff, activePct, { hidePercent: true });
       changeColor = (activeDiff > 0.005 || (activeDiff == null && activePct > 0))
         ? "text-emerald-700"
         : (activeDiff < -0.005 || (activeDiff == null && activePct < 0))
@@ -1370,10 +1370,10 @@ function PriceDetailView({
   let histChangeColor = "text-black";
   if (histPct != null || histDiff != null) {
     if (histDiff != null && Math.abs(histDiff) < 0.05 && Math.abs(histPct ?? 0) < 0.1) {
-      histChangeDisplay = "₱0 (0%)";
+      histChangeDisplay = "₱0";
       histChangeColor = "text-black";
     } else {
-      histChangeDisplay = formatPriceChangeDisplay(histDiff, histPct);
+      histChangeDisplay = formatPriceChangeDisplay(histDiff, histPct, { hidePercent: true });
       histChangeColor = (histDiff > 0.005 || (histDiff == null && histPct > 0))
         ? "text-emerald-700"
         : (histDiff < -0.005 || (histDiff == null && histPct < 0))

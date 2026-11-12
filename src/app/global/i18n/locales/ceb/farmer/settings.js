@@ -54,7 +54,7 @@ export const settings = {
   export_email: "Email",
   export_phone: "Telepono",
   export_account_type: "Klase sa account",
-  export_language: "Pinulongan",
+  export_language: "Lenggwahe",
   export_registered: "Petsa sa pagparehistro",
   export_name: "Ngalan",
   export_farm_size: "Gidak-on sa Uma",

@@ -449,8 +449,8 @@ function DFTCHistory() {
     <div className="px-3 xs:px-4 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-5">
       {/* Header */}
       <PageHeader
-        title="Submission History"
-        description="Review previously saved or uploaded datasets by DFTC personnel."
+        title="Submission Logs"
+        description="Review all previously saved submissions — manual inputs, file uploads, upserts, and edits made by DFTC personnel."
       />
 
       {/* Filters — compact one-row card */}

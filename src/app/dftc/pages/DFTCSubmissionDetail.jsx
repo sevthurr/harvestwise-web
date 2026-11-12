@@ -389,7 +389,7 @@ function DFTCSubmissionDetail() {
           className="flex items-center gap-1.5 text-[14px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
-          Back to History
+          Back to Submission Logs
         </button>
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-8 text-center space-y-3">
           <Loader2 className="w-6 h-6 animate-spin mx-auto text-[var(--hw-green-700)]" />
@@ -407,7 +407,7 @@ function DFTCSubmissionDetail() {
           className="flex items-center gap-1.5 text-[14px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
-          Back to History
+          Back to Submission Logs
         </button>
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] p-12 text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-[var(--hw-neutral-400)] mx-auto" />
@@ -431,6 +431,11 @@ function DFTCSubmissionDetail() {
   const showValidation = effectiveStatus === "Saved";
   const isManual = ds.entryMethod === "Manual Input";
   const isGeneratedReport = Boolean(ds.isGeneratedReport || ds.entryMethod === "Generated Report");
+  const staff = user?.staff_profile || user?.staffProfile || {};
+  const canUpsert =
+    user?.position === "Acting Section Head" ||
+    staff.position_name === "Acting Section Head" ||
+    staff.position_title === "Acting Section Head";
 
   const INFO_ROWS = isGeneratedReport
     ? [
@@ -479,7 +484,7 @@ function DFTCSubmissionDetail() {
         className="flex items-center gap-1.5 text-[14px] text-[var(--hw-neutral-800)] hover:text-[var(--hw-neutral-900)] transition-colors cursor-pointer"
       >
         <ChevronLeft className="w-4 h-4" />
-        Back to History
+        Back to Submission Logs
       </button>
 
       {/* Header */}
@@ -569,6 +574,36 @@ function DFTCSubmissionDetail() {
       {retried && (
         <div className="px-4 py-2.5 bg-[var(--hw-green-50)] border border-[var(--hw-green-200)] rounded-xl text-[14px] font-medium text-[var(--hw-green-800)]">
           Retry completed. Status updated to Saved.
+        </div>
+      )}
+
+      {/* Edit Saved Entry — Acting Section Head only */}
+      {effectiveStatus === "Saved" && canUpsert && !isGeneratedReport && (
+        <div className={`${cardCls} p-4 space-y-3`}>
+          <div>
+            <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">Edit Saved Entry</p>
+            <p className="text-[13px] text-[var(--hw-neutral-600)] mt-0.5">
+              Re-submit data for this entry. The upsert will overwrite existing records for the same date and source.
+            </p>
+          </div>
+          <button
+            onClick={() =>
+              navigate(
+                isManual
+                  ? isArrival
+                    ? "/dftc/arrival-input"
+                    : "/dftc/price-input"
+                  : "/dftc/upload"
+              )
+            }
+            className="w-full py-2.5 bg-[var(--hw-green-700)] text-white rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
+          >
+            {isManual
+              ? isArrival
+                ? "Edit in Arrival Input"
+                : "Edit in Price Input"
+              : "Re-upload File"}
+          </button>
         </div>
       )}
 

@@ -431,7 +431,8 @@ export const en = {
       pre_harvest: "Pre-Harvest",
       harvesting: "Harvesting",
       harvested: "Harvested",
-      completed: "Completed"
+      completed: "Completed",
+      archived: "Archived"
     },
 
     cropCard: {
@@ -523,6 +524,18 @@ export const en = {
         next_days_sub: "· next {days} days",
         expected_price_label: "Expected Price",
         forecast_range_label: "Forecast Range",
+        forecast_diff_direction_label: "Forecast Difference",
+        forecast_diff_label: "Forecast Difference",
+        recent_xd_sub: "Last {days} days average",
+        forecast_horizon_sub: "Next {days} days forecast",
+        expected_range_sub: "Confidence interval",
+        vs_current_price: "vs. current market price",
+        latest_observed_sub: "Latest market observation",
+        recent_xd_baseline_sub: "Last {days} days baseline",
+        vs_xd_average: "vs. {days}-day average",
+        historical_fallback: "Historical fallback",
+        forecast_range_sub_dynamic: "Range: ₱{low}–₱{high}",
+        expected_harvest_sub: "Expected harvest: {date}",
         lower_bound_label: "Lower Bound",
         upper_bound_label: "Upper Bound",
         forecast_midpoint_sub: "Forecast midpoint",
@@ -910,6 +923,8 @@ export const en = {
 
     empty: {
       no_crops: "No tracked crops yet.",
+      no_archived: "No archived crop plans.",
+      no_archived_desc: "Completed and cancelled crop plans will be archived here.",
       no_price_data: "Price information is not available right now.",
       no_arrival_data: "DFTC arrival information is not available right now.",
       no_production_data: "Production data not available",
