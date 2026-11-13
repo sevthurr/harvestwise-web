@@ -25,6 +25,11 @@ vi.mock("../app/global/contexts/AuthContext.jsx", () => ({
 
 vi.mock("../app/global/hooks/useFarmerPrefetch.js", () => ({
   fetchFarmerProfile: vi.fn(async () => ({})),
+  monthlyRecommendationsKey: (referenceMonth = "2026-01-01") => [
+    "market",
+    "monthly-recommendations",
+    referenceMonth,
+  ],
 }));
 
 vi.mock("../app/farmer/components/crops/CropsContext.jsx", () => ({

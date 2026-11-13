@@ -28,6 +28,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 const WHOLESALE_FORECAST_DATA = {
   kamatis: { direction: "rising", directionLabel: "Likely to rise", currentPrice: 78, recentAvg: 76, forecastedPrice: 80, forecastLow: 75, forecastHigh: 86, changePct: 5.3, reliability: "Moderate", reliabilityNote: "Based on available DFTC Wholesale price records." },
   talong: { direction: "stable", directionLabel: "Likely to remain stable", currentPrice: 55, recentAvg: 55, forecastedPrice: 55, forecastLow: 52, forecastHigh: 59, changePct: 0, reliability: "Moderate", reliabilityNote: "Based on available DFTC Wholesale price records." },
@@ -242,7 +243,7 @@ function DftcWholesaleForecastPage() {
     { label: "DFTC Wholesale recent avg", value: `\u20B1${rec.recentAvg}/kg` },
     { label: "DFTC Wholesale forecast", value: `\u20B1${rec.forecastedPrice}/kg`, accent: true },
     { label: "DFTC Wholesale range", value: `\u20B1${rec.forecastLow}\u2013\u20B1${rec.forecastHigh}/kg` },
-    { label: "DFTC Wholesale change", value: `${rec.changePct >= 0 ? "+" : ""}${rec.changePct.toFixed(1)}%` },
+    { label: "DFTC Wholesale change", value: formatPriceChangeDisplay(rec.forecastedPrice - (rec.currentPrice ?? rec.recentAvg), rec.changePct, { referencePrice: rec.currentPrice ?? rec.recentAvg }) },
     { label: "Reliability", value: rec.reliability }
   ].map((m) => <div key={m.label} className="bg-[var(--hw-neutral-50)] rounded-xl px-3 py-2">
                       <p className="text-xs text-[var(--hw-neutral-700)]">{m.label}</p>

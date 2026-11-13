@@ -46,27 +46,27 @@ import MyActivitiesPage from "./farmer/pages/MyActivities";
 
 import PrivacyPolicyPage from "./global/pages/PrivacyPolicyPage";
 import TermsPage from "./global/pages/TermsPage";
-// DFTC workspace
-
+// DFTC workspace — lazy loaded so the login bundle excludes all DFTC page code
+import { lazy } from "react";
 import { DFTCLayout }       from "./global/components/layout/DFTCLayout";
-import DFTCHome             from "./dftc/pages/DFTCHome";
-import DFTCInput            from "./dftc/pages/DFTCInput";
-import DFTCTrends           from "./dftc/pages/DFTCTrends";
-import DFTCSubmissions      from "./dftc/pages/DFTCSubmissions";
-import DFTCPriceInput       from "./dftc/pages/DFTCPriceInput";
-import DFTCArrivalInput     from "./dftc/pages/DFTCArrivalInput";
-import DFTCGenerateReport   from "./dftc/pages/DFTCGenerateReport";
-import DFTCUpload              from "./dftc/pages/DFTCUpload";
-import DFTCTemporaryRecords    from "./dftc/pages/DFTCTemporaryRecords";
-import DFTCTemporaryRecordDetail from "./dftc/pages/DFTCTemporaryRecordDetail";
-import DFTCSubmissionDetail      from "./dftc/pages/DFTCSubmissionDetail";
-import DFTCCommodityRecords      from "./dftc/pages/DFTCCommodityRecords";
-import DFTCNotifications         from "./dftc/pages/DFTCNotifications";
-import DFTCProfile               from "./dftc/pages/DFTCProfile";
-import DFTCSettings              from "./dftc/pages/DFTCSettings";
-import DFTCAbout                 from "./dftc/pages/DFTCAbout";
-import DFTCAuditLogs             from "./dftc/pages/DFTCAuditLogs";
-import DFTCEditApprovalRequests  from "./dftc/pages/DFTCEditApprovalRequests";
+const DFTCHome             = lazy(() => import("./dftc/pages/DFTCHome"));
+const DFTCInput            = lazy(() => import("./dftc/pages/DFTCInput"));
+const DFTCTrends           = lazy(() => import("./dftc/pages/DFTCTrends"));
+const DFTCSubmissions      = lazy(() => import("./dftc/pages/DFTCSubmissions"));
+const DFTCPriceInput       = lazy(() => import("./dftc/pages/DFTCPriceInput"));
+const DFTCArrivalInput     = lazy(() => import("./dftc/pages/DFTCArrivalInput"));
+const DFTCGenerateReport   = lazy(() => import("./dftc/pages/DFTCGenerateReport"));
+const DFTCUpload              = lazy(() => import("./dftc/pages/DFTCUpload"));
+const DFTCTemporaryRecords    = lazy(() => import("./dftc/pages/DFTCTemporaryRecords"));
+const DFTCTemporaryRecordDetail = lazy(() => import("./dftc/pages/DFTCTemporaryRecordDetail"));
+const DFTCSubmissionDetail      = lazy(() => import("./dftc/pages/DFTCSubmissionDetail"));
+const DFTCCommodityRecords      = lazy(() => import("./dftc/pages/DFTCCommodityRecords"));
+const DFTCNotifications         = lazy(() => import("./dftc/pages/DFTCNotifications"));
+const DFTCProfile               = lazy(() => import("./dftc/pages/DFTCProfile"));
+const DFTCSettings              = lazy(() => import("./dftc/pages/DFTCSettings"));
+const DFTCAbout                 = lazy(() => import("./dftc/pages/DFTCAbout"));
+const DFTCAuditLogs             = lazy(() => import("./dftc/pages/DFTCAuditLogs"));
+const DFTCEditApprovalRequests  = lazy(() => import("./dftc/pages/DFTCEditApprovalRequests"));
 // Admin workspace
 import AdminDashboard from "./admin/pages/AdminDashboard";
 import AdminDataSources from "./admin/pages/AdminDataSources";

@@ -9,13 +9,74 @@ import {
   TrendingDown,
   Minus
 } from "lucide-react";
-import { getTotalCost, formatPeso, formatDurationLabel, COMMODITY_OPTIONS, getCropDuration } from "./types";
+import {
+  getTotalCost,
+  formatPeso,
+  formatDurationLabel,
+  COMMODITY_OPTIONS,
+  getCropDuration,
+  formatFarmgateSummary,
+  formatHarvestQuantitySummary,
+} from "./types";
 import { durationForOption, findCatalogOption, useCommodityCatalog } from "./useCommodityCatalog";
+import { FarmgatePriceInput } from "./FarmgatePriceInput";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { fetchPricesList } from "../../../global/hooks/useFarmerPrefetch";
 import { getCommodityIconKey } from "../../../global/components/shared/CommodityIllustrations";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
 import { getVariants, HW_ID_TO_NAME } from "../../../global/data/commodities";
+
+export const MARKET_PRICE_BASIS_OPTIONS = [
+  { id: "bankerohan_retail", label: "Bankerohan Retail", market: "Bankerohan", priceType: "Retail" },
+  { id: "bankerohan_wholesale", label: "Bankerohan Wholesale", market: "Bankerohan", priceType: "Wholesale" },
+  { id: "dftc_retail", label: "DFTC Retail", market: "DFTC", priceType: "Retail" },
+  { id: "dftc_wholesale", label: "DFTC Wholesale", market: "DFTC", priceType: "Wholesale" },
+];
+
+export function normalizeMarketBasis(val) {
+  if (!val) return "bankerohan_retail";
+  const s = String(val).toLowerCase().replace(/[^a-z0-9]/g, "_");
+  if (s.includes("dftc") && s.includes("wholesale")) return "dftc_wholesale";
+  if (s.includes("dftc")) return "dftc_retail";
+  if (s.includes("wholesale")) return "bankerohan_wholesale";
+  return "bankerohan_retail";
+}
+
+export function getMarketBasisPrice(item, basisKey) {
+  if (!item) return null;
+  const p = item.prices || {};
+  const normKey = normalizeMarketBasis(basisKey);
+
+  let val = null;
+  if (normKey === "dftc_wholesale") {
+    val = p.dftcWholesale ?? p.dftc_wholesale ?? p.price_dftc_wholesale ?? p.priceDftcWholesale
+      ?? item.price_dftc_wholesale ?? item.priceDftcWholesale ?? item.dftcWholesale ?? item.dftc_wholesale;
+  } else if (normKey === "dftc_retail") {
+    val = p.dftcRetail ?? p.dftc_retail ?? p.price_dftc_retail ?? p.priceDftcRetail
+      ?? item.price_dftc_retail ?? item.priceDftcRetail ?? item.dftcRetail ?? item.dftc_retail;
+  } else if (normKey === "bankerohan_wholesale") {
+    val = p.bankerohanWholesale ?? p.bankerohan_wholesale ?? p.bangkerohanWholesale ?? p.bangkerohan_wholesale
+      ?? p.price_bangkerohan_wholesale ?? p.price_bankerohan_wholesale ?? p.priceBangkerohanWholesale ?? p.priceBankerohanWholesale
+      ?? item.price_bangkerohan_wholesale ?? item.price_bankerohan_wholesale ?? item.priceBangkerohanWholesale ?? item.priceBankerohanWholesale
+      ?? item.bangkerohanWholesale ?? item.bangkerohan_wholesale ?? item.bankerohanWholesale ?? item.bankerohan_wholesale;
+  } else {
+    // Bankerohan Retail
+    val = p.bankerohanRetail ?? p.bankerohan_retail ?? p.bangkerohanRetail ?? p.bangkerohan_retail
+      ?? p.price_bangkerohan_retail ?? p.price_bankerohan_retail ?? p.priceBangkerohanRetail ?? p.priceBankerohanRetail
+      ?? item.price_bangkerohan_retail ?? item.price_bankerohan_retail ?? item.priceBangkerohanRetail ?? item.priceBankerohanRetail
+      ?? item.bangkerohanRetail ?? item.bangkerohan_retail ?? item.bankerohanRetail ?? item.bankerohan_retail
+      ?? item.prevailing_price ?? item.prevailingPrice ?? p.prevailing_price ?? p.prevailingPrice;
+  }
+
+  const num = Number(val);
+  return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+export function getMarketBasisLabel(basisKey) {
+  const normKey = normalizeMarketBasis(basisKey);
+  const opt = MARKET_PRICE_BASIS_OPTIONS.find((o) => o.id === normKey);
+  return opt ? opt.label : "Bankerohan Retail";
+}
 
 const ReviewRow = ({ label, value, onEdit, t }) => (
   <div className="flex items-start justify-between gap-3 py-2.5">
@@ -64,6 +125,9 @@ const MarketPriceCard = ({ variantItem, farmgatePrice, breakEven, commodityName,
               ? `₱${variantItem.avgPrice.toFixed(2)}/kg`
               : t("farmer.assess.no_market_price", {}, "No current market price")}
           </span>
+          <span className="text-[10px] text-[var(--hw-neutral-500)] font-medium block mt-0.5">
+            {variantItem.priceSourceLabel || "Bankerohan Retail"}
+          </span>
         </div>
         <div className="p-2 rounded-lg border border-slate-200 bg-white">
           <span className="text-[11px] font-medium text-black block leading-tight">
@@ -73,6 +137,9 @@ const MarketPriceCard = ({ variantItem, farmgatePrice, breakEven, commodityName,
             {breakEven !== null
               ? `₱${breakEven}/kg`
               : t("farmer.assess.no_break_even_data", {}, "No break-even price")}
+          </span>
+          <span className="text-[10px] text-[var(--hw-neutral-500)] font-medium block mt-0.5">
+            {t("farmer.assess.cost_to_recover_label", {}, "Cost to recover")}
           </span>
         </div>
       </div>
@@ -93,6 +160,9 @@ const MarketPriceCard = ({ variantItem, farmgatePrice, breakEven, commodityName,
               : difference < -0.005
                 ? t("farmer.assess.diff_lower_break_even", { diff: differenceAbs.toFixed(2), pct: percentage }, `₱${differenceAbs.toFixed(2)} lower (-${percentage}%) than break-even price`)
                 : t("farmer.assess.diff_equal_break_even", {}, "Equal to break-even price")}
+            <span className="text-[11px] text-[var(--hw-neutral-500)] font-normal ml-1">
+              ({t("farmer.factors.profitability.farmgate_price_label", {}, "Farmgate")})
+            </span>
           </p>
         </div>
       )}
@@ -108,6 +178,19 @@ const Step4ReviewBreakEven = ({
 }) => {
   const { t } = useLanguage();
   const [calcOpen, setCalcOpen] = useState(false);
+  const [localBasis, setLocalBasis] = useState(data?.marketPriceBasis || "bankerohan_retail");
+  const selectedBasis = normalizeMarketBasis(data?.marketPriceBasis || localBasis);
+
+  const handleBasisChange = (newBasis) => {
+    setLocalBasis(newBasis);
+    const opt = MARKET_PRICE_BASIS_OPTIONS.find((o) => o.id === newBasis) || MARKET_PRICE_BASIS_OPTIONS[0];
+    onChange?.({
+      marketPriceBasis: newBasis,
+      market: opt.market,
+      priceType: opt.priceType,
+    });
+  };
+
   const { options } = useCommodityCatalog();
   const selectedOption = findCatalogOption(options, data.commodity);
   const commodityKey = selectedOption?.id || data.commodity;
@@ -164,24 +247,38 @@ const Step4ReviewBreakEven = ({
         varietyName = nameStr.split("-").slice(1).join("-").trim();
       }
 
-      const p = camelItem.prices || item.prices || {};
-      const validPrices = [
-        p.bangkerohanRetail ?? p.bangkerohan_retail,
-        p.bangkerohanWholesale ?? p.bangkerohan_wholesale,
-        p.dftcRetail ?? p.dftc_retail,
-        p.dftcWholesale ?? p.dftc_wholesale,
-      ].filter((v) => typeof v === "number" && v > 0);
+      const mergedItem = {
+        ...item,
+        ...camelItem,
+        prices: {
+          ...(item?.prices || {}),
+          ...(camelItem?.prices || {}),
+        },
+      };
 
-      const avgPrice = validPrices.length > 0
-        ? validPrices.reduce((sum, v) => sum + v, 0) / validPrices.length
-        : null;
+      let resolvedPrice = getMarketBasisPrice(mergedItem, selectedBasis);
+      let priceSourceLabel = getMarketBasisLabel(selectedBasis);
+
+      if (resolvedPrice === null && selectedBasis === "bankerohan_retail") {
+        const p = mergedItem.prices || {};
+        const validPrices = [
+          p.bankerohanRetail ?? p.bankerohan_retail ?? p.bangkerohanRetail ?? p.bangkerohan_retail,
+          p.bankerohanWholesale ?? p.bankerohan_wholesale ?? p.bangkerohanWholesale ?? p.bangkerohan_wholesale,
+          p.dftcRetail ?? p.dftc_retail,
+          p.dftcWholesale ?? p.dftc_wholesale,
+        ].filter((v) => typeof v === "number" && v > 0);
+        if (validPrices.length > 0) {
+          resolvedPrice = validPrices.reduce((sum, v) => sum + v, 0) / validPrices.length;
+        }
+      }
 
       matching.push({
         id: camelItem.commodityId || item.id,
         name: camelItem.name || nameStr,
         baseName: camelItem.baseName || nameStr.split("-")[0].trim(),
         variety: varietyName,
-        avgPrice,
+        avgPrice: resolvedPrice,
+        priceSourceLabel,
       });
     });
 
@@ -195,6 +292,7 @@ const Step4ReviewBreakEven = ({
           name: `${baseName} (${v})`,
           variety: v,
           avgPrice: null,
+          priceSourceLabel: getMarketBasisLabel(selectedBasis),
         }));
       }
       return [{
@@ -202,11 +300,12 @@ const Step4ReviewBreakEven = ({
         name: baseName,
         variety: "",
         avgPrice: null,
+        priceSourceLabel: getMarketBasisLabel(selectedBasis),
       }];
     }
 
     return matching;
-  }, [pricesListData, commodityKey, commodityLabel]);
+  }, [pricesListData, commodityKey, commodityLabel, selectedBasis]);
 
   const displayedVariants = useMemo(() => {
     if (!data.commodity) return [];
@@ -214,20 +313,22 @@ const Step4ReviewBreakEven = ({
       const normSelected = data.variant.toLowerCase().trim();
       const match = variantPricingList.find(
         (v) => (v.variety && v.variety.toLowerCase().trim() === normSelected) ||
-               (v.name && v.name.toLowerCase().includes(normSelected))
+          (v.name && v.name.toLowerCase().includes(normSelected))
       );
       if (match) return [match];
 
       const fallbackAvg = variantPricingList[0]?.avgPrice ?? null;
+      const fallbackSourceLabel = variantPricingList[0]?.priceSourceLabel || getMarketBasisLabel(selectedBasis);
       return [{
         id: `${commodityKey}-${normSelected}`,
         name: `${commodityLabel} (${data.variant})`,
         variety: data.variant,
         avgPrice: fallbackAvg,
+        priceSourceLabel: fallbackSourceLabel,
       }];
     }
     return variantPricingList;
-  }, [variantPricingList, data.commodity, data.variant, commodityLabel]);
+  }, [variantPricingList, data.commodity, data.variant, commodityLabel, commodityKey, selectedBasis]);
 
   return (
     <div className="space-y-5">
@@ -260,42 +361,48 @@ const Step4ReviewBreakEven = ({
 
         {data.useFarmgate ? (
           <div className="space-y-3 pt-2 border-t border-slate-200">
-            <div>
-              <label
-                htmlFor="farmgate-price"
-                className="block text-xs sm:text-sm font-bold text-black mb-1"
-              >
-                {t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-black flex-shrink-0">₱</span>
-                <input
-                  id="farmgate-price"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={data.farmgatePrice}
-                  onChange={(e) => onChange({ farmgatePrice: e.target.value === "" ? "" : Number(e.target.value) })}
-                  placeholder="e.g. 70"
-                  className={`
-                    flex-1 px-3 py-2 rounded-xl border text-sm font-semibold text-black outline-none transition
-                    focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)]
-                    ${errors?.farmgatePrice ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"}
-                  `}
-                />
-                <span className="text-sm font-bold text-black flex-shrink-0">/kg</span>
-              </div>
-              {errors?.farmgatePrice && <p className="mt-1 text-sm font-semibold text-red-600">{errors.farmgatePrice}</p>}
-            </div>
+            <FarmgatePriceInput
+              data={data}
+              onChange={onChange}
+              onEditStep={onEditStep}
+              errors={errors}
+              idPrefix="farmgate"
+              showTitle={true}
+              titleText={t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated farmgate price")}
+              t={t}
+            />
 
             {/* Current market price reference */}
             {displayedVariants.length > 0 && (
               <div className="space-y-2 pt-1">
-                <p className="text-xs font-bold text-black uppercase tracking-wide">
-                  {!data.variant && displayedVariants.length > 1
-                    ? t("farmer.assess.current_market_prices", {}, "Current market prices")
-                    : t("farmer.assess.farmgate_price_comparison", {}, "Farmgate price comparison with break-even price")}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-black uppercase tracking-wide">
+                    {!data.variant && displayedVariants.length > 1
+                      ? t("farmer.assess.current_market_prices", {}, "Current market prices")
+                      : t("farmer.assess.farmgate_price_comparison", {}, "Farmgate price comparison with break-even price")}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="market-price-basis-select" className="text-xs font-semibold text-black whitespace-nowrap">
+                      {t("farmer.assess.market_price_basis_label", {}, "Market price basis:")}
+                    </label>
+                    <div className="relative inline-block">
+                      <select
+                        id="market-price-basis-select"
+                        data-testid="market-price-basis-select"
+                        value={selectedBasis}
+                        onChange={(e) => handleBasisChange(e.target.value)}
+                        className="appearance-none bg-slate-50 hover:bg-slate-100 border border-slate-300 text-xs font-semibold text-black rounded-lg py-1.5 pl-2.5 pr-7 focus:outline-none focus:ring-1 focus:ring-[var(--hw-green-600)] focus:border-[var(--hw-green-600)] cursor-pointer transition-colors"
+                      >
+                        {MARKET_PRICE_BASIS_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {displayedVariants.map((v) => (
                     <MarketPriceCard
@@ -318,7 +425,7 @@ const Step4ReviewBreakEven = ({
           </div>
         ) : (
           <p className="text-xs font-medium text-black pt-2 border-t border-slate-200">
-            {t("farmer.assess.market_reference_note", {}, "Market price will be used as reference. Actual buyer price may be different.")}
+            {t("farmer.assess.market_reference_note_with_market", { market: displayedVariants[0]?.priceSourceLabel || getMarketBasisLabel(selectedBasis) }, `Market price (${displayedVariants[0]?.priceSourceLabel || getMarketBasisLabel(selectedBasis)}) will be used as reference. Actual buyer price may be different.`)}
           </p>
         )}
       </div>
@@ -392,7 +499,16 @@ const Step4ReviewBreakEven = ({
           <ReviewRow label={t("farmer.assess.farm_area_label", {}, "Farm area")} value={farmAreaText} onEdit={() => onEditStep(2)} t={t} />
           <ReviewRow
             label={t("farmer.factors.profitability.expected_harvest_volume_label", {}, "Expected harvest")}
-            value={data.harvestQuantity !== "" ? `${data.harvestQuantity} kg` : "—"}
+            value={
+              data.harvestQuantity !== ""
+                ? (formatHarvestQuantitySummary({
+                  enteredQty: data.harvestQuantityRaw !== "" && data.harvestQuantityRaw !== undefined ? data.harvestQuantityRaw : data.harvestQuantity,
+                  unit: data.harvestQuantityUnit || "kg",
+                  conversionWeight: data.harvestConversionWeight,
+                  normalizedQty: data.harvestQuantity,
+                }) || `${data.harvestQuantity} kg`)
+                : "—"
+            }
             onEdit={() => onEditStep(2)}
             t={t}
           />
@@ -404,7 +520,19 @@ const Step4ReviewBreakEven = ({
           />
           <ReviewRow
             label={t("farmer.factors.profitability.farmgate_price_label", {}, "Estimated Farmgate Price")}
-            value={data.useFarmgate && data.farmgatePrice !== "" && Number(data.farmgatePrice) > 0 ? `₱${data.farmgatePrice}/kg` : t("farmer.assess.not_set", {}, "Not set")}
+            value={
+              data.useFarmgate && (data.farmgatePriceRaw !== "" || data.farmgatePrice !== "") && Number(data.farmgatePriceRaw || data.farmgatePrice) > 0
+                ? formatFarmgateSummary({
+                  enteredPrice: data.farmgatePriceRaw !== "" ? data.farmgatePriceRaw : data.farmgatePrice,
+                  unit: data.farmgatePriceUnit || "kg",
+                  conversionWeight: data.farmgateConversionWeight
+                    || ((data.harvestQuantityUnit || "kg").toLowerCase() === (data.farmgatePriceUnit || "kg").toLowerCase()
+                      ? data.harvestConversionWeight
+                      : ""),
+                  normalizedPrice: data.farmgatePrice,
+                })
+                : t("farmer.assess.not_set", {}, "Not set")
+            }
             onEdit={() => {
               const el = document.getElementById("farmgate-price");
               if (el) el.focus();

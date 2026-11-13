@@ -16,7 +16,7 @@
  * goes through the i18n dictionary.
  */
 
-import { t as translate } from "../../global/i18n";
+import { t as translate } from "../../global/i18n/index.js";
 
 // Static English fallback map — also used by tests that verify every label
 // is non-empty.
@@ -65,15 +65,15 @@ export const FARMER_ACTION_LABELS = {
   "farmer.crop_plan_created": "Created a crop plan",
   "farmer.crop_plan_updated": "Updated a crop plan",
   "farmer.crop_plan_draft_saved": "Saved a crop plan draft",
-  "farmer.crop_plan_promoted": "Moved a crop plan forward",
-  "farmer.crop_plan_status_updated": "Changed a crop plan status",
-  "farmer.farmgate_price_updated": "Updated a farmgate price",
+  "farmer.crop_plan_promoted": "Started a crop plan",
+  "farmer.crop_plan_status_updated": "Updated a crop plan status",
+  "farmer.farmgate_price_updated": "Updated expected farmgate price",
   "farmer.cost_added": "Added a production cost",
   "farmer.calendar_created": "Added a calendar entry",
   "farmer.calendar_updated": "Updated a calendar entry",
   "farmer.calendar_deleted": "Deleted a calendar entry",
   "farmer.harvest_logged": "Logged a harvest",
-  "farmer.harvest_record_logged": "Logged a harvest record",
+  "farmer.harvest_record_logged": "Recorded a harvest",
 
   // ── Notifications ──────────────────────────────────────────────────────
   "notification.preference_created": "Added a notification preference",

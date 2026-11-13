@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { getUnreadCount, prefetchNotificationFeed, STAFF_NOTIFICATION_KEY } from "../../../../services/api/notificationsApi";
+import { getUnreadCount, STAFF_NOTIFICATION_KEY } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
 import {
   Home,
@@ -33,7 +33,7 @@ const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
   { id: "input", label: "Submit Data", path: "/dftc/input", Icon: FileInput },
   { id: "trends", label: "Trends", path: "/dftc/trends", Icon: TrendingUp },
-  { id: "submissions", label: "History", path: "/dftc/submissions", Icon: History }
+  { id: "submissions", label: "Submission Logs", path: "/dftc/submissions", Icon: History }
 ];
 function getActive(pathname) {
   if (pathname === "/dftc") return "home";
@@ -85,6 +85,10 @@ function DFTCLayoutInner() {
     navigate(path);
   };
   const queryClient = useQueryClient();
+  useEffect(() => {
+    prefetchDftcWorkspace(queryClient);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   usePrivilegedDataVersion("dftc");
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
@@ -152,11 +156,6 @@ function DFTCLayoutInner() {
     refetchOnReconnect: true,
   });
   const unreadCount = typeof unreadData === "number" ? unreadData : (unreadData?.unread_count ?? 0);
-
-  useEffect(() => {
-    prefetchNotificationFeed(queryClient, "dftc");
-    prefetchDftcWorkspace(queryClient);
-  }, [queryClient, user?.id]);
 
   useNotificationEvent("NOTIFICATION_CREATED", () => {
     queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });

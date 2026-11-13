@@ -431,7 +431,8 @@ export const tl = {
       pre_harvest: "Malapit Nang Anihin",
       harvesting: "Nag-aani",
       harvested: "Naani Na",
-      completed: "Kumpleto Na"
+      completed: "Kumpleto Na",
+      archived: "Naka-archive"
     },
 
     cropCard: {
@@ -523,6 +524,18 @@ export const tl = {
         next_days_sub: "· susunod na {days} araw",
         expected_price_label: "Inaasahang Presyo",
         forecast_range_label: "Saklaw ng Tantiya",
+        forecast_diff_direction_label: "Pagkakaiba sa Pagtataya",
+        forecast_diff_label: "Pagkakaiba sa Pagtataya",
+        recent_xd_sub: "Karaniwan sa nakaraang {days} araw",
+        forecast_horizon_sub: "Pagtataya sa susunod na {days} araw",
+        expected_range_sub: "Saklaw ng pagiging maaasahan",
+        vs_current_price: "vs kasalukuyang presyo sa pamilihan",
+        latest_observed_sub: "Pinakabagong tala sa pamilihan",
+        recent_xd_baseline_sub: "Baseline sa nakaraang {days} araw",
+        vs_xd_average: "vs {days}-araw na karaniwan",
+        historical_fallback: "Makasaysayang fallback",
+        forecast_range_sub_dynamic: "Saklaw: ₱{low}–₱{high}",
+        expected_harvest_sub: "Inaasahang pag-aani: {date}",
         lower_bound_label: "Pinakamababang Tantiya",
         upper_bound_label: "Pinakamataas na Tantiya",
         forecast_midpoint_sub: "Gitna ng tantiya",
@@ -869,6 +882,8 @@ export const tl = {
 
     empty: {
       no_crops: "Wala ka pang sinusubaybayang tanim.",
+      no_archived: "Walang naka-archive na plano sa pananim.",
+      no_archived_desc: "Dito maiipon ang mga natapos at nakanselang plano.",
       no_price_data: "Walang datos ng presyo ngayon.",
       no_arrival_data: "Walang datos ng mga dumating mula sa DFTC ngayon.",
       no_production_data: "Hindi available ang datos ng produksyon",

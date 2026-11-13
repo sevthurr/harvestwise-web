@@ -133,7 +133,6 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
       last_name: form.lastName,
       middle_name: form.middleName || null,
       suffix: form.suffix === "None" ? null : form.suffix,
-      position_title: form.position || null,
       email: form.email !== email ? (form.email || null) : undefined
     };
     if (currentPassword && form.email !== email) payload.current_password = currentPassword;
@@ -242,7 +241,13 @@ const AccountTab = ({ showToast, onRemovalRequest, removalStatus, removalBlocked
           </div>
           <div>
             <FieldLabel htmlFor="ac-pos">Position</FieldLabel>
-            <input id="ac-pos" type="text" value={form.position} onChange={set("position")} className={inputCls} />
+            <input
+              id="ac-pos"
+              type="text"
+              value={form.position}
+              readOnly
+              className={`${inputCls} bg-[var(--hw-neutral-100)] opacity-70 cursor-not-allowed`}
+            />
           </div>
           <GreenBtn onClick={handlePreSave} className="w-full sm:w-auto">Save changes</GreenBtn>
         </div>

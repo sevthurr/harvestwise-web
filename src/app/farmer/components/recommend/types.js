@@ -217,12 +217,21 @@ const DEFAULT_ASSESSMENT = {
   farmArea: "",
   farmAreaUnit: "sqm",
   harvestQuantity: "",
+  harvestQuantityRaw: "",
+  harvestQuantityUnit: "kg",
+  harvestConversionWeight: "",
   costMethod: "simple",
   simpleCost: "",
   expenses: makeDefaultExpenses(),
   sellingPrice: "",
   useFarmgate: true,
   farmgatePrice: "",
+  farmgatePriceRaw: "",
+  farmgatePriceUnit: "kg",
+  farmgateConversionWeight: "",
+  marketPriceBasis: "bankerohan_retail",
+  market: "Bankerohan",
+  priceType: "Retail",
   draftId: null,
   isDraft: false
 };
@@ -245,6 +254,82 @@ function getTotalCost(data) {
 function formatPeso(amount) {
   return `\u20B1${amount.toLocaleString("en-PH")}`;
 }
+
+function calculateNormalizedPrice(enteredPrice, unit = "kg", conversionWeight = null) {
+  const price = typeof enteredPrice === "number" ? enteredPrice : Number(enteredPrice);
+  if (enteredPrice === "" || enteredPrice == null || !Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+  const normUnit = String(unit || "kg").toLowerCase();
+  if (normUnit === "kg") {
+    return Math.round(price * 100) / 100;
+  }
+  const weight = typeof conversionWeight === "number" ? conversionWeight : Number(conversionWeight);
+  if (conversionWeight === "" || conversionWeight == null || !Number.isFinite(weight) || weight <= 0) {
+    return null;
+  }
+  return Math.round((price / weight) * 100) / 100;
+}
+
+function calculateNormalizedHarvestQuantity(enteredQuantity, unit = "kg", conversionWeight = null) {
+  const qty = typeof enteredQuantity === "number" ? enteredQuantity : Number(enteredQuantity);
+  if (enteredQuantity === "" || enteredQuantity == null || !Number.isFinite(qty) || qty <= 0) {
+    return null;
+  }
+  const normUnit = String(unit || "kg").toLowerCase();
+  if (normUnit === "kg") {
+    return Math.round(qty * 100) / 100;
+  }
+  const weight = typeof conversionWeight === "number" ? conversionWeight : Number(conversionWeight);
+  if (conversionWeight === "" || conversionWeight == null || !Number.isFinite(weight) || weight <= 0) {
+    return null;
+  }
+  return Math.round(qty * weight * 100) / 100;
+}
+
+function formatHarvestQuantitySummary({ enteredQty, unit = "kg", conversionWeight = null, normalizedQty = null }) {
+  const qtyNum = typeof enteredQty === "number" ? enteredQty : Number(enteredQty);
+  if (enteredQty === "" || enteredQty == null || !Number.isFinite(qtyNum) || qtyNum <= 0) {
+    return null;
+  }
+  const normUnit = String(unit || "kg").toLowerCase();
+  if (normUnit === "kg") {
+    return `${qtyNum.toLocaleString("en-PH")} kg`;
+  }
+  const norm = normalizedQty != null ? normalizedQty : calculateNormalizedHarvestQuantity(qtyNum, normUnit, conversionWeight);
+  const unitLabel = normUnit === "crate"
+    ? (qtyNum === 1 ? "crate" : "crates")
+    : (qtyNum === 1 ? "sack" : "sacks");
+  const singleLabel = normUnit === "crate" ? "crate" : "sack";
+  if (norm != null && conversionWeight) {
+    return `${qtyNum.toLocaleString("en-PH")} ${unitLabel} (${conversionWeight} kg/${singleLabel}) · ${norm.toLocaleString("en-PH")} kg`;
+  }
+  return `${qtyNum.toLocaleString("en-PH")} ${unitLabel}`;
+}
+
+function formatFarmgateSummary({ enteredPrice, unit = "kg", conversionWeight = null, normalizedPrice = null }) {
+  const priceNum = typeof enteredPrice === "number" ? enteredPrice : Number(enteredPrice);
+  if (enteredPrice === "" || enteredPrice == null || !Number.isFinite(priceNum) || priceNum <= 0) {
+    return null;
+  }
+  const normUnit = String(unit || "kg").toLowerCase();
+  if (normUnit === "kg") {
+    return `₱${priceNum}/kg`;
+  }
+  const weightNum = Number(conversionWeight);
+  const hasWeight = conversionWeight !== "" && conversionWeight != null && Number.isFinite(weightNum) && weightNum > 0;
+  const hasNormalized = normalizedPrice !== "" && normalizedPrice != null;
+  const norm = hasNormalized
+    ? Number(normalizedPrice)
+    : (hasWeight ? calculateNormalizedPrice(priceNum, normUnit, weightNum) : null);
+  const unitLabel = normUnit === "crate" ? "crate" : normUnit === "sack" ? "sack" : normUnit;
+  // Only show the per-kg conversion when both a valid weight and a valid normalized price exist
+  if (hasWeight && norm != null && Number.isFinite(norm) && norm > 0) {
+    return `₱${priceNum}/${unitLabel} (${weightNum} kg/${unitLabel}) · ₱${norm}/kg`;
+  }
+  return `₱${priceNum}/${unitLabel}`;
+}
+
 export {
   COMMODITY_OPTIONS,
   CROP_DURATIONS,
@@ -252,7 +337,11 @@ export {
   SQM_PER_HECTARE,
   STEP_LABELS,
   TOTAL_STEPS,
+  calculateNormalizedPrice,
+  calculateNormalizedHarvestQuantity,
   formatDurationLabel,
+  formatFarmgateSummary,
+  formatHarvestQuantitySummary,
   formatPeso,
   getCropDuration,
   getHarvestHorizon,
