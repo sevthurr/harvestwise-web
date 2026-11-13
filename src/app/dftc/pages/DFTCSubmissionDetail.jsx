@@ -593,7 +593,10 @@ function DFTCSubmissionDetail() {
                   ? isArrival
                     ? "/dftc/arrival-input"
                     : "/dftc/price-input"
-                  : "/dftc/upload"
+                  : "/dftc/upload",
+                isManual && apiSubmission?.reporting_date
+                  ? { state: { date: apiSubmission.reporting_date } }
+                  : undefined
               )
             }
             className="w-full py-2.5 bg-[var(--hw-green-700)] text-white rounded-xl text-[13px] font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"

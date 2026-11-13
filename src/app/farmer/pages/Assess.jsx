@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Save, RotateCcw, AlertCircle, RefreshCw, Check, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, RotateCcw, AlertCircle, RefreshCw, Check, FileText, WifiOff } from "lucide-react";
 import { RecommendationResult } from "../components/recommend/RecommendationResult";
 import {
   DEFAULT_ASSESSMENT,
@@ -132,6 +132,7 @@ const StepActions = ({
   error = null,
   onRetry = null,
   t = null,
+  offline = false,
 }) => (
   <div className="pt-4 border-t border-[var(--hw-neutral-200)] space-y-3">
     {error && (
@@ -159,24 +160,31 @@ const StepActions = ({
       </div>
     )}
     {isLastStep ? (
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {loading ? (
-          <>
-            <RefreshCw className="w-4 h-4 animate-spin" />
-            {t ? t("farmer.common.analyzing_plan", {}, "Analyzing crop plan...") : "Analyzing crop plan..."}
-          </>
-        ) : (
-          <>
-            {t ? t("farmer.common.see_advisory", {}, "See advisory") : "See advisory"}
-            <ChevronRight className="w-4 h-4" />
-          </>
+      <>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={loading || offline}
+          className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              {t ? t("farmer.common.analyzing_plan", {}, "Analyzing crop plan...") : "Analyzing crop plan..."}
+            </>
+          ) : (
+            <>
+              {t ? t("farmer.common.see_advisory", {}, "See advisory") : "See advisory"}
+              <ChevronRight className="w-4 h-4" />
+            </>
+          )}
+        </button>
+        {offline && (
+          <p className="text-[12px] text-amber-800">
+            {t ? t("farmer.assess.offline_step4_hint", {}, "Connect to the internet to see your advisory and save this crop plan.") : "Connect to the internet to see your advisory and save this crop plan."}
+          </p>
         )}
-      </button>
+      </>
     ) : (
       <button
         type="button"
@@ -232,6 +240,18 @@ function AssessPage() {
   const [loadingAdvisory, setLoadingAdvisory] = useState(false);
   const [advisoryError, setAdvisoryError] = useState(null);
   const [advisoryResponse, setAdvisoryResponse] = useState(null);
+
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false);
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   const { crops, loading: cropsLoading, refreshCrops } = useCrops();
   const [draftLoading, setDraftLoading] = useState(false);
@@ -546,7 +566,6 @@ function AssessPage() {
       };
       try {
         localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
-        setLocalDraft(draftSnapshot);
       } catch {
         // ignore
       }
@@ -582,7 +601,6 @@ function AssessPage() {
 
       try {
         localStorage.removeItem("harvestwise_assessment_draft");
-        setLocalDraft(null);
       } catch {
         // ignore
       }
@@ -620,7 +638,6 @@ function AssessPage() {
       };
       try {
         localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(offlineSnapshot));
-        setLocalDraft(offlineSnapshot);
       } catch {
         // ignore
       }
@@ -785,6 +802,7 @@ function AssessPage() {
         advisoryResponse={advisoryResponse}
         onEdit={() => setShowResult(false)}
         onCompareAnother={handleStart}
+        isOffline={isOffline}
       />
     );
   }
@@ -848,6 +866,19 @@ function AssessPage() {
   return <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto">
     <div className={`md:grid gap-8 ${showSidePanel ? "md:grid-cols-[1fr_280px]" : ""}`}>
       <div className="space-y-6">
+        {isOffline && (
+          <div className="flex items-start gap-2.5 p-3.5 sm:p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-900 shadow-xs">
+            <WifiOff className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[12px] font-bold uppercase tracking-wider">
+                {t("farmer.assess.offline_banner_title", {}, "You're offline")}
+              </p>
+              <p className="text-[12px] sm:text-[13px] leading-snug mt-0.5">
+                {t("farmer.assess.offline_banner_notice", {}, "You can save your progress as a draft on this device, but the final crop plan can only be saved once you're back online.")}
+              </p>
+            </div>
+          </div>
+        )}
         {(data.isDraft || data.draftId) && (
           <div className="flex items-center gap-3 p-3.5 sm:p-4 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-xs">
             <div className="w-9 h-9 rounded-xl bg-amber-100/80 flex items-center justify-center flex-shrink-0 text-amber-700">
@@ -890,6 +921,7 @@ function AssessPage() {
           error={advisoryError}
           onRetry={handleGenerateAdvisory}
           t={t}
+          offline={isOffline}
         />
         <button
           type="button"
