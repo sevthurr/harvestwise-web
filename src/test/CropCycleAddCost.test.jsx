@@ -221,7 +221,7 @@ describe("CropCycleDetailPage Add Cost flow", () => {
     });
   });
 
-  it("renders sections in the expected order: Harvest progress immediately above Estimated Profit, followed by weekly actions and Cost and selling price", () => {
+  it("renders sections in the expected order: Harvest progress immediately above actual earnings, followed by weekly actions and Cost and selling price", () => {
     cropState.current = {
       id: "CRP-0002",
       commodity: "COM-0025",
@@ -259,19 +259,58 @@ describe("CropCycleDetailPage Add Cost flow", () => {
     );
 
     const harvestProgressSection = screen.getByText("Harvest progress");
-    const estimatedProfitSection = screen.getByText("Estimated Profit");
+    const earningsSection = screen.getByText("Actual earnings");
     const weeklyActionsSection = screen.getByText("What to do this week");
     const costAndSellingSection = screen.getByText("Cost and selling price");
 
     expect(harvestProgressSection).toBeInTheDocument();
-    expect(estimatedProfitSection).toBeInTheDocument();
+    expect(earningsSection).toBeInTheDocument();
     expect(weeklyActionsSection).toBeInTheDocument();
     expect(costAndSellingSection).toBeInTheDocument();
 
-    // Verify ordering: harvestProgress before estimatedProfit, before weeklyActions, before costAndSelling
-    expect(harvestProgressSection.compareDocumentPosition(estimatedProfitSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(estimatedProfitSection.compareDocumentPosition(weeklyActionsSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Verify ordering: harvestProgress before earnings, before weeklyActions, before costAndSelling
+    expect(harvestProgressSection.compareDocumentPosition(earningsSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(earningsSection.compareDocumentPosition(weeklyActionsSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(weeklyActionsSection.compareDocumentPosition(costAndSellingSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows cumulative recorded earnings and actual harvest values in the harvesting stage", () => {
+    cropState.current = {
+      id: "CRP-0003",
+      commodity: "COM-0025",
+      commodityId: "COM-0025",
+      commodityName: "Lettuce",
+      phase: "harvested",
+      status: "Harvesting",
+      harvestQuantity: 600,
+      harvestRecords: [
+        { id: "HVR-1", actualHarvestDate: "2026-10-29", actualHarvestQty: 100, actualSellingPricePerKg: 40 },
+        { id: "HVR-2", actualHarvestDate: "2026-11-02", actualHarvestQty: 50, actualSellingPricePerKg: 60 },
+      ],
+      totalCost: 27000,
+      breakEvenPrice: 45,
+      isOnHold: false,
+    };
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/farmer/crops/CRP-0003"]}>
+          <Routes>
+            <Route path="/farmer/crops/:cropId" element={<CropCycleDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText("Actual earnings")).toBeInTheDocument();
+    expect(screen.getByText("₱7,000")).toBeInTheDocument();
+    expect(screen.getAllByText("150 kg").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₱27,000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₱45/kg").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₱46.67/kg").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Estimated Profit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Expected harvest volume")).not.toBeInTheDocument();
   });
 
   it("accumulates multiple added costs as separate records that add up into total cost", () => {

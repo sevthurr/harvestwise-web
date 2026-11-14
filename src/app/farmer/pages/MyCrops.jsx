@@ -411,7 +411,11 @@ function MyCropsPage() {
                 isPreferred={isPreferredCrop(crop, preferredCrops)}
                 onView={(id) => {
                   if (crop.phase === "draft" || crop.status === "Draft" || crop.isDraft) {
-                    navigate(id === "local_draft" ? "/farmer/assess" : `/farmer/assess?resumeDraft=${id}`);
+                    // A device-only draft ("local_draft") must resume through the same
+                    // query param: Assess.jsx loads it from localStorage only when the id
+                    // is passed. Dropping it lands on the entry screen with an empty form
+                    // instead of the farmer's saved work.
+                    navigate(`/farmer/assess?resumeDraft=${id}`);
                   } else {
                     navigate(`/farmer/crops/${id}`);
                   }

@@ -207,7 +207,7 @@ function buildCropPlanPayload(data, status = "Draft") {
   };
 }
 
-const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, onCompareAnother }) => {
+const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, onCompareAnother, isOffline = false }) => {
   const { t, langCode } = useLanguage();
   const navigate = useNavigate();
   const { addCrop, refreshCrops, crops } = useCrops();
@@ -517,7 +517,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       </div>
       <button
         onClick={handleConfirmPlanted}
-        disabled={saving}
+        disabled={saving || isOffline}
         className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Sprout className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
@@ -773,17 +773,22 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
 
       {/* 5. Actions */}
       <div className="space-y-2.5 sm:space-y-3 pt-1">
+        {isOffline && (
+          <p className="text-[13px] text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">
+            {t("farmer.assess.offline_result_hint", {}, "You're offline. Connect to the internet to save this crop plan to My Crops.")}
+          </p>
+        )}
         {saveError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{saveError}</p>}
         <button
           onClick={handleSavePlan}
-          disabled={saving}
+          disabled={saving || isOffline}
           className="w-full min-h-[46px] flex items-center justify-center gap-2 py-3 px-4 sm:px-5 bg-[var(--hw-green-700)] text-white text-[13px] sm:text-[14px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
         >
           <Save className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.save_to_crops", {}, "Save to My Crops")}
         </button>
         <button
           onClick={() => setShowPlantedForm(true)}
-          disabled={saving}
+          disabled={saving || isOffline}
           className="w-full min-h-[46px] flex items-center justify-center gap-2 py-3 px-4 sm:px-5 bg-white text-[var(--hw-green-700)] text-[13px] sm:text-[14px] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Sprout className="w-4 h-4" />{t("farmer.crops.already_planted", {}, "I already planted this")}

@@ -453,15 +453,36 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   // Crop Factors and Crop Cycle Details use a parameterized advisory result
   // for each saved crop plan. Recreate the exact key and payload from the
   // normalized offline crop record.
+  //
+  // Two bugs fixed here:
+  //   1. The query key must use rawPlantingDate / rawHarvestDate (ISO strings
+  //      like "2026-11-05"), not the formatted display strings stored in
+  //      plantingDate / harvestDate ("Nov 5, 2026"). CropCycleDetail builds
+  //      pDateStr / hDateStr from rawPlantingDate, so using the display string
+  //      produces a key that never matches the page's query — always a cache miss.
+  //   2. Advisory data should be seeded for every active crop plan, not only
+  //      preferred ones. The preferred filter is appropriate for heavy analytics
+  //      endpoints but not for a farmer's own crop advisory — they will navigate
+  //      to any of their plans while offline.
   const cachedCrops = (queryClient.getQueryData(["farmer", "crops"]) || [])
-    .filter((crop) => preferredMatcher.isPreferred(crop));
+    .filter((crop) => !crop.isArchived && crop.phase !== "draft" && crop.status !== "Draft");
   cachedCrops.forEach((crop) => {
     const totalCost = crop.totalCost || 0;
     const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
+    // Use raw ISO dates — must match CropCycleDetail.jsx's pDateStr / hDateStr
+    const pDateStr = crop.rawPlantingDate
+      ? (typeof crop.rawPlantingDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(crop.rawPlantingDate)
+        ? crop.rawPlantingDate.slice(0, 10)
+        : new Date(crop.rawPlantingDate).toISOString().split("T")[0])
+      : null;
+    const hDateStr = crop.rawHarvestDate
+      ? (typeof crop.rawHarvestDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(crop.rawHarvestDate)
+        ? crop.rawHarvestDate.slice(0, 10)
+        : new Date(crop.rawHarvestDate).toISOString().split("T")[0])
+      : null;
+    const validDates = pDateStr && hDateStr && /^\d{4}-\d{2}-\d{2}$/.test(pDateStr) && /^\d{4}-\d{2}-\d{2}$/.test(hDateStr) && pDateStr < hDateStr;
     const canQuery = Boolean(
-      crop.id && crop.commodityName &&
-      hasValidAdvisoryDatePair(crop.plantingDate, crop.harvestDate) &&
-      totalCost > 0 && quantity > 0
+      crop.id && crop.commodityName && validDates && totalCost > 0 && quantity > 0
     );
     if (!canQuery) return;
     const rawPhase = String(crop.phase || "").toLowerCase();
@@ -475,15 +496,15 @@ async function prefetchFarmerPageData(queryClient, bundle) {
             ? "harvest"
             : null;
     const queryKey = [
-      "advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate,
-      crop.harvestDate, totalCost, quantity, explicitStage,
+      "advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr,
+      hDateStr, totalCost, quantity, explicitStage,
     ];
     requests.push(
       safePrefetch(queryKey, async () => {
         const response = await apiPost("/advisory/plan", {
           crop_name: crop.commodityName,
-          planting_date: crop.plantingDate,
-          expected_harvest_date: crop.harvestDate,
+          planting_date: pDateStr,
+          expected_harvest_date: hDateStr,
           total_production_cost: totalCost,
           expected_yield_kg: quantity,
           crop_stage: explicitStage,

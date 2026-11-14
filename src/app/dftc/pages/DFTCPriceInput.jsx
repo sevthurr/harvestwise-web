@@ -3394,7 +3394,7 @@ function DFTCPriceInput() {
             })}
           </div>
 
-          {/* Editable Date Picker (Cannot enter data for future dates) */}
+          {/* Editable Date Picker (Acting Section Head: any past/today date; others: today only) */}
           <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] self-end lg:self-auto">
             <Calendar className="w-4 h-4 text-[var(--hw-neutral-500)] shrink-0" />
             <label htmlFor="price-date-picker" className="text-[12px] font-medium text-[var(--hw-neutral-700)] shrink-0">
@@ -3403,17 +3403,19 @@ function DFTCPriceInput() {
             <input
               id="price-date-picker"
               type="date"
+              min={canFinalize ? undefined : localToday()}
               max={localToday()}
               value={selectedDate}
+              disabled={!canFinalize}
               onChange={(e) => handleDateChange(e.target.value)}
               onBlur={(e) => {
                 if (e.target.value > localToday()) {
                   handleDateChange(localToday());
                 }
               }}
-              className="w-[118px] sm:w-auto text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none cursor-pointer"
+              className={`w-[118px] sm:w-auto text-[12px] sm:text-[13px] font-medium text-[var(--hw-neutral-900)] bg-transparent border-0 focus:outline-none ${canFinalize ? "cursor-pointer" : "cursor-default"}`}
             />
-            {selectedDate !== localToday() && (
+            {canFinalize && selectedDate !== localToday() && (
               <button
                 type="button"
                 onClick={() => handleDateChange(localToday())}
