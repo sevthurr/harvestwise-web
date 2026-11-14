@@ -852,7 +852,7 @@ function RecommendationPage() {
         name: cname,
         varietyCount: profile.varietyCount || t("farmer.calendar.variety_count_single", {}, "1 variety"),
         priceOutlookText: rec.explanation || profile.priceOutlookText || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
-        bestVariety: profile.bestVariety || rec.bestVariety || null,
+        bestVariety: profile.bestVariety || rec.bestVariety || rec.commodity_variety || rec.commodityVariety || rec.variety || null,
         plantWindow: plantWindowStr,
         harvestWindow: harvestWindowStr,
         factors,
