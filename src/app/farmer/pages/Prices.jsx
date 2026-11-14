@@ -63,6 +63,12 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
         : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
     }`;
 
+  const categoryLabelMap = {
+    "Highland Vegetables": t("farmer.prices.category_highland", {}, "Highland Vegetables"),
+    "Lowland Vegetables": t("farmer.prices.category_lowland", {}, "Lowland Vegetables"),
+    "Spices": t("farmer.prices.category_spices", {}, "Spices"),
+  };
+
   const sortOptions = [
     ["name", t("farmer.prices.sort_name", {}, "Commodity name (A–Z)")],
     ["rising-first", t("farmer.prices.sort_rising_first", {}, "Price rising first")],
@@ -72,7 +78,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
   ];
 
   const directionOptions = [
-    ["All", "All"],
+    ["All", t("common.filter_all", {}, "All")],
     ["Rising", t("farmer.prices.trend_rising", {}, "Rising")],
     ["Stable", t("farmer.prices.trend_stable", {}, "Stable")],
     ["Falling", t("farmer.prices.trend_falling", {}, "Falling")]
@@ -141,7 +147,7 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
                     onClick={() => setDraft((d) => ({ ...d, category: v }))}
                     className={chip(draft.category === v)}
                   >
-                    {v}
+                    {v === "All" ? t("common.filter_all", {}, "All") : (categoryLabelMap[v] || v)}
                   </button>
                 ))}
               </div>
@@ -512,6 +518,18 @@ function PricesPage() {
     "price-low": t("farmer.prices.sort_price_low", {}, "Lowest price first"),
     "price-high": t("farmer.prices.sort_price_high", {}, "Highest price first"),
   };
+
+  const directionLabelMap = {
+    "Rising": t("farmer.prices.trend_rising", {}, "Rising"),
+    "Falling": t("farmer.prices.trend_falling", {}, "Falling"),
+    "Stable": t("farmer.prices.trend_stable", {}, "Stable"),
+  };
+
+  const categoryLabelMap = {
+    "Highland Vegetables": t("farmer.prices.category_highland", {}, "Highland Vegetables"),
+    "Lowland Vegetables": t("farmer.prices.category_lowland", {}, "Lowland Vegetables"),
+    "Spices": t("farmer.prices.category_spices", {}, "Spices"),
+  };
   
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
@@ -587,7 +605,7 @@ function PricesPage() {
             )}
             {filter.direction !== "All" && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
-                {filter.direction}
+                {directionLabelMap[filter.direction] || filter.direction}
                 <button
                   type="button"
                   onClick={() => setFilter((f) => ({ ...f, direction: "All" }))}
@@ -600,7 +618,7 @@ function PricesPage() {
             )}
             {filter.category !== "All" && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
-                {filter.category}
+                {categoryLabelMap[filter.category] || filter.category}
                 <button
                   type="button"
                   onClick={() => setFilter((f) => ({ ...f, category: "All" }))}

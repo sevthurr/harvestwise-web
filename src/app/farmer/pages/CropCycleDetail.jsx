@@ -232,12 +232,39 @@ function CropCycleDetailPage() {
   const [isSavingHarvestEntry, setIsSavingHarvestEntry] = useState(false);
 
   const expectedTotalVolume = Number(crop?.harvestQuantity ?? crop?.expectedHarvestQty ?? 0);
-  const savedHarvestProgress = Array.isArray(crop?.harvestRecords) && crop.harvestRecords.length > 0
-    ? crop.harvestRecords.reduce((sum, record) => {
+  const harvestRecords = Array.isArray(crop?.harvestRecords) ? crop.harvestRecords : [];
+  const savedHarvestProgress = harvestRecords.length > 0
+    ? harvestRecords.reduce((sum, record) => {
       const q = record.actualHarvestQty ?? record.actual_harvest_qty;
       return sum + (q != null && !isNaN(Number(q)) ? Number(q) : 0);
     }, 0)
     : 0;
+  const actualHarvestedQty = harvestRecords.length > 0
+    ? savedHarvestProgress
+    : Number(crop?.actualHarvestQty || 0);
+  const pricedHarvestQty = harvestRecords.reduce((sum, record) => {
+    const quantity = Number(record.actualHarvestQty ?? record.actual_harvest_qty ?? 0);
+    const price = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg;
+    return price != null && Number.isFinite(Number(price)) ? sum + quantity : sum;
+  }, 0);
+  const actualHarvestRevenue = harvestRecords.length > 0
+    ? harvestRecords.reduce((sum, record) => {
+      const quantity = Number(record.actualHarvestQty ?? record.actual_harvest_qty ?? 0);
+      const price = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg;
+      return price != null && Number.isFinite(Number(price)) ? sum + quantity * Number(price) : sum;
+    }, 0)
+    : (actualHarvestedQty > 0 && crop?.actualSellingPrice != null
+      ? actualHarvestedQty * Number(crop.actualSellingPrice)
+      : 0);
+  const hasCompleteActualRevenue = actualHarvestedQty === 0
+    || (harvestRecords.length > 0
+      ? pricedHarvestQty >= actualHarvestedQty
+      : crop?.actualSellingPrice != null);
+  const actualAverageSellingPrice = pricedHarvestQty > 0
+    ? actualHarvestRevenue / pricedHarvestQty
+    : harvestRecords.length === 0
+      ? crop?.actualSellingPrice ?? null
+      : null;
   const parsedHarvestEntry = harvestEntryQty !== "" && !isNaN(Number(harvestEntryQty))
     ? Number(harvestEntryQty)
     : 0;
@@ -1220,9 +1247,9 @@ function CropCycleDetailPage() {
         <p className="text-xs text-[var(--hw-neutral-700)]">
           {t("farmer.cropCycle.remaining_expected", {}, "Remaining expected (kg)")}: {remainingExpected === "" ? "—" : remainingExpected}
         </p>
-        {crop.harvestRecords?.length > 0 && (
+        {harvestRecords.length > 0 && (
           <div className="rounded-xl border border-[var(--hw-neutral-200)] divide-y divide-[var(--hw-neutral-100)] max-h-40 overflow-y-auto">
-            {crop.harvestRecords.map((record) => {
+            {harvestRecords.map((record) => {
               const recordDate = record.actualHarvestDate || record.actual_harvest_date;
               const rawQty = record.actualHarvestQty ?? record.actual_harvest_qty;
               const recordQty = rawQty != null && !isNaN(Number(rawQty)) ? Number(rawQty) : 0;
@@ -1265,63 +1292,93 @@ function CropCycleDetailPage() {
       </div>
     )}
 
-    {/* ── 4. Estimated Profit ── */}
+    {/* ── 4. Harvest earnings / estimated profit ── */}
     {isActive && <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 space-y-3">
-      <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
-        {t("farmer.factors.profitability.title", {}, "Estimated Profit")}
-      </p>
-
-      <p className="text-[20px] font-bold text-emerald-700 leading-none">
-        {margin > 0 ? `₱${profitLo.toLocaleString("en-PH")} – ₱${profitHi.toLocaleString("en-PH")}` : "-"}
-      </p>
-
-      <div className="space-y-0.5">
-        <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
-        <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
-      </div>
-
-      {margin > 0 ? (
-        <ProfitCalcAccordion
-          qty={qty}
-          totalCost={totalCost}
-          sellingBasis={sellingBasis}
-          costToRecover={costToRecover}
-          hasFarmgate={hasFarmgate}
-          margin={margin}
-          marketSourceLabel={marketSourceLabel}
-        />
-      ) : (
-        <p className="text-[13px] text-[var(--hw-neutral-900)] italic">{t ? t("farmer.empty.profit_unavailable") : "Profit details unavailable."}</p>
-      )}
-
-      {/* Supporting values below the accordion */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
-        <div>
-          <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost")}</p>
-          <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : t("farmer.advisory.not_available")}</p>
-        </div>
-        <div>
-          <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest")}</p>
-          <p className="font-medium text-[var(--hw-neutral-900)]">{harvestVolumeDisplay || t("farmer.advisory.not_available")}</p>
-        </div>
-        <div>
-          <p className="text-[var(--hw-neutral-900)]">
-            {t("farmer.factors.profitability.price_basis", {}, "Price basis")}
-            <span className="text-[10px] text-[var(--hw-neutral-500)] block">
-              ({hasFarmgate ? "Farmgate" : marketSourceLabel})
-            </span>
+      {isHarvesting ? (
+        <>
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.cropCycle.actual_earnings", {}, "Actual earnings")}
           </p>
-          <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis ? `₱${Number(sellingBasis).toFixed(2)}/kg` : t("farmer.advisory.not_available")}</p>
-        </div>
-        <div>
-          <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>
-          <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover ? `₱${costToRecover}/kg` : t("farmer.advisory.not_available")}</p>
-        </div>
-      </div>
-
-      <p className="text-[12px] text-[var(--hw-neutral-900)]">
-        {t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may change.")}
-      </p>
+          <p className="text-[20px] font-bold text-emerald-700 leading-none">
+            {hasCompleteActualRevenue ? formatPeso(actualHarvestRevenue) : "—"}
+          </p>
+          <p className="text-[13px] text-[var(--hw-neutral-900)]">
+            {t("farmer.cropCycle.based_on_recorded_harvests", {}, "Based on recorded harvests")}
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.actual_cost", {}, "Actual cost")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : t("farmer.advisory.not_available")}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.actual_harvested", {}, "Actual harvested")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{actualHarvestedQty.toLocaleString()} kg</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.cropCycle.actual_average_price", {}, "Average actual selling price")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">
+                {actualAverageSellingPrice != null ? `₱${Number(actualAverageSellingPrice).toFixed(2)}/kg` : t("farmer.advisory.not_available")}
+              </p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover ? `₱${costToRecover}/kg` : t("farmer.advisory.not_available")}</p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)] uppercase tracking-wide">
+            {t("farmer.factors.profitability.title", {}, "Estimated Profit")}
+          </p>
+          <p className="text-[20px] font-bold text-emerald-700 leading-none">
+            {margin > 0 ? `₱${profitLo.toLocaleString("en-PH")} – ₱${profitHi.toLocaleString("en-PH")}` : "-"}
+          </p>
+          <div className="space-y-0.5">
+            <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">{priceBasisLabel}</p>
+            <p className="text-[13px] text-[var(--hw-neutral-900)]">{priceBasisDetail}</p>
+          </div>
+          {margin > 0 ? (
+            <ProfitCalcAccordion
+              qty={qty}
+              totalCost={totalCost}
+              sellingBasis={sellingBasis}
+              costToRecover={costToRecover}
+              hasFarmgate={hasFarmgate}
+              margin={margin}
+              marketSourceLabel={marketSourceLabel}
+            />
+          ) : (
+            <p className="text-[13px] text-[var(--hw-neutral-900)] italic">{t ? t("farmer.empty.profit_unavailable") : "Profit details unavailable."}</p>
+          )}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px] pt-1 border-t border-[var(--hw-neutral-100)]">
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.estimated_cost", {}, "Estimated cost")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{totalCost > 0 ? formatPeso(totalCost) : t("farmer.advisory.not_available")}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.expected_harvest", {}, "Expected harvest")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{harvestVolumeDisplay || t("farmer.advisory.not_available")}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">
+                {t("farmer.factors.profitability.price_basis", {}, "Price basis")}
+                <span className="text-[10px] text-[var(--hw-neutral-500)] block">
+                  ({hasFarmgate ? "Farmgate" : marketSourceLabel})
+                </span>
+              </p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{sellingBasis ? `₱${Number(sellingBasis).toFixed(2)}/kg` : t("farmer.advisory.not_available")}</p>
+            </div>
+            <div>
+              <p className="text-[var(--hw-neutral-900)]">{t("farmer.factors.profitability.cost_to_recover", {}, "Cost to recover")}</p>
+              <p className="font-medium text-[var(--hw-neutral-900)]">{costToRecover ? `₱${costToRecover}/kg` : t("farmer.advisory.not_available")}</p>
+            </div>
+          </div>
+          <p className="text-[12px] text-[var(--hw-neutral-900)]">
+            {t("farmer.factors.profitability.estimate_disclaimer", {}, "Estimate only. Actual income may change.")}
+          </p>
+        </>
+      )}
     </div>}
 
     {/* ── 5. What to do this week ── */}
@@ -1436,7 +1493,17 @@ function CropCycleDetailPage() {
         )}
 
         <div className="divide-y divide-[var(--hw-neutral-100)]">
-          {[
+          {(isHarvesting ? [
+            { label: t("farmer.cropCycle.actual_cost", {}, "Actual cost"), value: totalCost > 0 ? formatPeso(totalCost) : "-" , bold: true },
+            {
+              key: "added_costs",
+              label: t("farmer.cropCycle.added_costs", {}, "Added costs"),
+              value: addedCosts > 0 ? formatPeso(addedCosts) : "-",
+            },
+            { label: t("farmer.cropCycle.actual_harvested", {}, "Actual harvested"), value: `${actualHarvestedQty.toLocaleString()} kg` },
+            { label: t("farmer.cropCycle.actual_average_price", {}, "Average actual selling price"), value: actualAverageSellingPrice != null ? `₱${Number(actualAverageSellingPrice).toFixed(2)}/kg` : "-" },
+            { label: t("farmer.cropCycle.cost_to_recover_per_kg", {}, "Cost to recover per kg"), value: costToRecover > 0 ? `₱${costToRecover}/kg` : "-/kg", bold: true },
+          ] : [
             { label: t("farmer.cropCycle.estimated_cost", {}, "Estimated cost"), value: initialCost > 0 ? formatPeso(initialCost) : "-" },
             {
               key: "added_costs",
@@ -1460,7 +1527,7 @@ function CropCycleDetailPage() {
                 : t("farmer.cropCycle.not_set", {}, "Not set"),
               muted: !hasFarmgate
             }
-          ].map((r) => (
+          ]).map((r) => (
             <div key={r.label}>
               <div className="flex items-center justify-between py-2.5 gap-3">
                 <p className="text-[13px] text-[var(--hw-neutral-900)]">{r.label}</p>
@@ -1511,7 +1578,7 @@ function CropCycleDetailPage() {
         </div>
 
         {/* Farmgate price */}
-        <div className="border-t border-[var(--hw-neutral-100)] pt-3 space-y-2">
+        {!isHarvesting && <div className="border-t border-[var(--hw-neutral-100)] pt-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-[13px] font-semibold text-[var(--hw-neutral-900)]">
               {t("farmer.cropCycle.estimated_farmgate_price", {}, "Estimated farmgate price")}
@@ -1603,7 +1670,7 @@ function CropCycleDetailPage() {
               </p>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Phase actions */}
         {normalizePhaseCode(crop.phase) === PHASE_CODES.PRE_HARVEST && (

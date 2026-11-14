@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   apiGet,
   apiPost,
@@ -16,7 +16,7 @@ const AuthContext = createContext(null);
 
 const USER_CACHE_KEY = 'HARVESTWISE_USER_CACHE_V1';
 const PENDING_LOGOUT_KEY = 'hw_logout_pending';
-const OFFLINE_GRACE_MS = 1000 * 60 * 60 * 24;
+const OFFLINE_GRACE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days — matches server SESSION_IDLE_DAYS
 
 function browserIsOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -38,6 +38,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [offlineCacheStatus, setOfflineCacheStatus] = useState('idle');
+
+  // Ref that always holds the current user value so event handlers registered
+  // with empty deps (the auth/expiry listeners) can read the latest user
+  // without being re-registered on every render.
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   // Seed the offline bundle after a successful farmer session restore.
   // /auth/me nests the role as { role: { role_name } } — reading a top-level
@@ -172,6 +178,17 @@ export function AuthProvider({ children }) {
         }
       }
     };
+    const handleOnline = async () => {
+      await flushPendingLogout();
+      // Re-seed the offline bundle so the farmer sees fresh data after
+      // reconnecting. seedFarmerOffline checks the role before fetching, and
+      // loadFarmerOfflineData has a 30-min deduplication window so rapid
+      // online/offline cycles do not fire multiple bundle requests.
+      const currentUser = userRef.current;
+      if (currentUser) {
+        await seedFarmerOffline(currentUser);
+      }
+    };
     // A token key changing value in another tab means the session identity
     // changed underneath us.
     const handleStorage = (e) => {
@@ -181,12 +198,12 @@ export function AuthProvider({ children }) {
     };
     window.addEventListener('hw:auth:expired', handleExpiry);
     window.addEventListener('hw:session:changed', handleSessionChange);
-    window.addEventListener('online', flushPendingLogout);
+    window.addEventListener('online', handleOnline);
     window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('hw:auth:expired', handleExpiry);
       window.removeEventListener('hw:session:changed', handleSessionChange);
-      window.removeEventListener('online', flushPendingLogout);
+      window.removeEventListener('online', handleOnline);
       window.removeEventListener('storage', handleStorage);
     };
   }, []);
