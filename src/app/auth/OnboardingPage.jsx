@@ -10,7 +10,12 @@ import { useLanguage } from "../global/contexts/LanguageContext";
 import { useAuth } from "../global/contexts/AuthContext";
 import { FarmLocationFields } from "../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../global/hooks/useFarmLocation";
-import { FARMER_PROFILE_KEY, loadFarmerOfflineData } from "../global/hooks/useFarmerPrefetch";
+import {
+  FARMER_COMMODITIES_KEY,
+  FARMER_PROFILE_KEY,
+  loadFarmerCommodities,
+  loadFarmerOfflineData,
+} from "../global/hooks/useFarmerPrefetch";
 
 // ---------------------------------------------------------------------------
 // Commodities are fetched from GET /farmer/commodities (active, is_top10=true).
@@ -499,11 +504,18 @@ function OnboardingPage() {
 
   // Fetch lookup data on mount
   useEffect(() => {
-    apiGet("/api/v1/farmer/commodities")
-      .then(parseResponse)
-      .then(setFetchedCommodities)
-      .catch(() => { /* non-fatal — crop submission falls back to empty */ });
-  }, []);
+    let active = true;
+    const cached = queryClient.getQueryData(FARMER_COMMODITIES_KEY);
+    if (Array.isArray(cached)) setFetchedCommodities(cached);
+
+    loadFarmerCommodities(queryClient)
+      .then((commodities) => {
+        if (active && Array.isArray(commodities)) setFetchedCommodities(commodities);
+      })
+      .catch(() => { /* non-fatal — the persisted catalog remains available offline */ });
+
+    return () => { active = false; };
+  }, [queryClient]);
 
   const patch = (d) => setData((prev) => ({ ...prev, ...d }));
   const next  = () => setStep((s) => (s < 4 ? s + 1 : 4));

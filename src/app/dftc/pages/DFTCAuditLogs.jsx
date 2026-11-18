@@ -5,7 +5,6 @@ import { dftcApi } from "../../../services/api/dftcApi";
 
 const ACTION_FILTER_OPTIONS = [
   { value: "", label: "All Actions" },
-  { value: "auth", label: "Auth" },
   { value: "dftc", label: "DFTC" },
   { value: "import", label: "Import" },
   { value: "user", label: "Account" },

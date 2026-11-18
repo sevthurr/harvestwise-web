@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { persistQueryClientSave } from "@tanstack/query-persist-client-core";
 import { get, set, del, clear } from "idb-keyval";
 
 // Offline-first farming use: match AuthContext's offline session grace so a
@@ -90,6 +91,11 @@ export const persister = createAsyncStoragePersister({
   },
   key: "HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1",
 });
+
+/** Flush the current query cache before a caller reports offline data ready. */
+export function persistOfflineQueryCache() {
+  return persistQueryClientSave({ queryClient, persister });
+}
 
 /**
  * CacheStorage name for runtime-cached API GETs, configured in vite.config.js.

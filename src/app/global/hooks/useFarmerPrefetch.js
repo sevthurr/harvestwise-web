@@ -5,6 +5,7 @@ import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
 import { toCamelCase, manilaTodayParts, hasValidAdvisoryDatePair } from "../utils/apiTransforms";
 import { getPreferredCropMatcher } from "../../farmer/utils/cropPreferences";
+import { persistOfflineQueryCache } from "../lib/queryClient";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
 export const FARMER_COMMODITIES_KEY = ["farmer", "commodities"];
@@ -142,6 +143,22 @@ export function fetchFarmerProfile() {
 
 export function fetchFarmerCommodities() {
   return apiGet("/farmer/commodities").then(parseResponse);
+}
+
+export function loadFarmerCommodities(queryClient) {
+  return queryClient.fetchQuery({
+    queryKey: FARMER_COMMODITIES_KEY,
+    queryFn: fetchFarmerCommodities,
+    staleTime: STALE_TIME,
+  });
+}
+
+export function loadFarmerPrices(queryClient) {
+  return queryClient.fetchQuery({
+    queryKey: ["prices", "list"],
+    queryFn: fetchPricesList,
+    staleTime: 0,
+  });
 }
 
 export function fetchCropPlans(pricesMap) {
@@ -327,8 +344,7 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     .filter((item) => preferredMatcher.count === 0 || preferredMatcher.isPreferred(item))
     .map((item) => item.commodity_id || item.commodityId)
     .filter(Boolean))];
-  const preferredCropIds = [...new Set((bundle.crop_plans || [])
-    .filter((plan) => preferredMatcher.count === 0 || preferredMatcher.isPreferred(plan))
+  const cropPlanIds = [...new Set((bundle.crop_plans || [])
     .map((plan) => plan.commodity_id || plan.commodityId)
     .filter(Boolean))];
   const supportedVarietyById = new Map(
@@ -339,7 +355,10 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       ])
       .filter(([id]) => Boolean(id))
   );
-  const basisIds = [...new Set([...preferredCropIds, ...preferredPriceIds])];
+  // A farmer's own crop plans are always eligible for basis prefetching, even
+  // when the crop is not in the farmer's preferred list. The crop factors and
+  // commodity detail pages can open any saved plan offline.
+  const basisIds = [...new Set([...cropPlanIds, ...preferredPriceIds])];
   const quarters = ["Q1", "Q2", "Q3", "Q4"];
 
   const requests = [
@@ -450,26 +469,23 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     safePrefetch(monthlyRecommendationsKey(), () => fetchMonthlyRecommendations())
   );
 
-  // Crop Factors and Crop Cycle Details use a parameterized advisory result
-  // for each saved crop plan. Recreate the exact key and payload from the
-  // normalized offline crop record.
-  //
-  // Two bugs fixed here:
-  //   1. The query key must use rawPlantingDate / rawHarvestDate (ISO strings
-  //      like "2026-11-05"), not the formatted display strings stored in
-  //      plantingDate / harvestDate ("Nov 5, 2026"). CropCycleDetail builds
-  //      pDateStr / hDateStr from rawPlantingDate, so using the display string
-  //      produces a key that never matches the page's query — always a cache miss.
-  //   2. Advisory data should be seeded for every active crop plan, not only
-  //      preferred ones. The preferred filter is appropriate for heavy analytics
-  //      endpoints but not for a farmer's own crop advisory — they will navigate
-  //      to any of their plans while offline.
-  const cachedCrops = (queryClient.getQueryData(["farmer", "crops"]) || [])
-    .filter((crop) => !crop.isArchived && crop.phase !== "draft" && crop.status !== "Draft");
-  cachedCrops.forEach((crop) => {
+  for (const commodityId of basisIds) {
+    await Promise.all(buildCommodityRequests(commodityId));
+  }
+
+  await Promise.all(requests);
+}
+
+// Crop Factors and Crop Cycle Details use a parameterized advisory result for
+// each saved crop plan. Keep the key and payload identical to CropCycleDetail;
+// otherwise the page misses the persisted entry and issues another POST.
+export async function prefetchFarmerPlanAdvisories(queryClient, crops = queryClient.getQueryData(["farmer", "crops"]) || []) {
+  const prefetches = [];
+  const activeCrops = crops.filter((crop) => !crop.isArchived && crop.phase !== "draft" && crop.status !== "Draft");
+
+  activeCrops.forEach((crop) => {
     const totalCost = crop.totalCost || 0;
     const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
-    // Use raw ISO dates — must match CropCycleDetail.jsx's pDateStr / hDateStr
     const pDateStr = crop.rawPlantingDate
       ? (typeof crop.rawPlantingDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(crop.rawPlantingDate)
         ? crop.rawPlantingDate.slice(0, 10)
@@ -481,10 +497,8 @@ async function prefetchFarmerPageData(queryClient, bundle) {
         : new Date(crop.rawHarvestDate).toISOString().split("T")[0])
       : null;
     const validDates = pDateStr && hDateStr && /^\d{4}-\d{2}-\d{2}$/.test(pDateStr) && /^\d{4}-\d{2}-\d{2}$/.test(hDateStr) && pDateStr < hDateStr;
-    const canQuery = Boolean(
-      crop.id && crop.commodityName && validDates && totalCost > 0 && quantity > 0
-    );
-    if (!canQuery) return;
+    if (!crop.id || !crop.commodityName || !validDates || totalCost <= 0 || quantity <= 0) return;
+
     const rawPhase = String(crop.phase || "").toLowerCase();
     const explicitStage = rawPhase.includes("plan")
       ? "before_planting"
@@ -499,27 +513,26 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       "advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr,
       hDateStr, totalCost, quantity, explicitStage,
     ];
-    requests.push(
-      safePrefetch(queryKey, async () => {
+    prefetches.push(queryClient.prefetchQuery({
+      queryKey,
+      queryFn: async () => {
         const response = await apiPost("/advisory/plan", {
           crop_name: crop.commodityName,
           planting_date: pDateStr,
           expected_harvest_date: hDateStr,
           total_production_cost: totalCost,
           expected_yield_kg: quantity,
+          estimated_selling_price: crop.farmgatePrice > 0 ? crop.farmgatePrice : undefined,
           crop_stage: explicitStage,
         });
-        if (!response.ok) return null;
+        if (!response.ok) throw new Error(`advisory failed: ${response.status}`);
         return parseResponse(response);
-      })
-    );
+      },
+      staleTime: STALE_TIME,
+    }).catch(() => {}));
   });
 
-  for (const commodityId of basisIds) {
-    await Promise.all(buildCommodityRequests(commodityId));
-  }
-
-  await Promise.all(requests);
+  await Promise.all(prefetches);
 }
 
 // Fallback when the bundle endpoint is unavailable (e.g. offline restore that
@@ -565,6 +578,7 @@ export async function prefetchFarmerFullData(queryClient) {
   const priceItems = supportedItems.length
     ? supportedItems
     : queryClient.getQueryData(["prices", "list"])?.items || [];
+  await prefetchFarmerPlanAdvisories(queryClient);
   await prefetchFarmerPageData(queryClient, {
     crop_plans: queryClient.getQueryData(["farmer", "crops"]) || [],
     price_trends: priceItems,
@@ -615,11 +629,13 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     // Settings → Farm Profile uses these exact cache keys. Warm the catalogue
     // alongside the login bundle so opening that tab does not wait on a second
     // round trip after the farmer is already signed in.
-    await queryClient.prefetchQuery({
-      queryKey: FARMER_COMMODITIES_KEY,
-      queryFn: fetchFarmerCommodities,
-      staleTime: STALE_TIME,
-    }).catch(() => {});
+    await loadFarmerCommodities(queryClient).catch(() => {});
+    // The assessment catalog reads the canonical prices list, not the optional
+    // snapshot price_trends section. Refresh it explicitly so Top-10 crops are
+    // available after an online login and remain available offline.
+    await loadFarmerPrices(queryClient).catch(() => {});
+    await prefetchFarmerPlanAdvisories(queryClient);
+    await persistOfflineQueryCache();
     lastFarmerOfflineLoadAt = Date.now();
     try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}
     scheduleFullFarmerPrefetch(queryClient);

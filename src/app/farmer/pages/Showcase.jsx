@@ -85,6 +85,8 @@ function ShowcasePage() {
           <img
             src="/vertical-logo.png"
             alt="HarvestWise"
+            width="938"
+            height="938"
             className="h-32 mx-auto mb-6"
           />
           <h1 className="text-4xl md:text-5xl font-bold text-[var(--hw-green-900)]">

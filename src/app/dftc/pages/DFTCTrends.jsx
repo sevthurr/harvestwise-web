@@ -82,6 +82,8 @@ const TOP10_COMMODITY_CATEGORIES = COMMODITY_CATEGORIES.map((cat) => ({
   commodities: cat.items.filter((i) => HW_COMMODITY_NAMES.has(i.name)).map((i) => i.name),
 })).filter((cat) => cat.commodities.length > 0);
 
+const DFTC_DAILY_TRENDS_STALE_TIME = 24 * 60 * 60 * 1000;
+
 function getCommodityCategory(name) {
   return getCategoryFor(name) ?? "—";
 }
@@ -408,7 +410,7 @@ function DateSelect({ preset, customFrom, customTo, onChange }) {
   );
 }
 
-function PeriodSelect({ preset, customFrom, customTo, onChange }) {
+function PeriodSelect({ preset, customFrom, customTo, onChange, disabled = false }) {
   const [dropOpen, setDropOpen] = useState(false);
   const [popOpen, setPopOpen] = useState(false);
   const [pendingFrom, setPendingFrom] = useState("");
@@ -426,7 +428,7 @@ function PeriodSelect({ preset, customFrom, customTo, onChange }) {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const displayLabel = getPeriodLabel(preset, customFrom, customTo);
+  const displayLabel = disabled ? "All recorded years" : getPeriodLabel(preset, customFrom, customTo);
 
   const options = [
     { key: "2m", label: "Last 2 months" },
@@ -442,11 +444,13 @@ function PeriodSelect({ preset, customFrom, customTo, onChange }) {
     <div ref={containerRef} className="relative w-full">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           setDropOpen(!dropOpen);
           setPopOpen(false);
         }}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors ${disabled ? "opacity-60 cursor-not-allowed" : "hover:border-[var(--hw-neutral-400)] cursor-pointer"}`}
       >
         <span className="truncate font-medium">{displayLabel}</span>
         <ChevronDown size={14} className={`shrink-0 text-[var(--hw-neutral-500)] ml-2 transition-transform ${dropOpen ? "rotate-180" : ""}`} />
@@ -785,6 +789,8 @@ function TableSkeleton({ cols = 8, rows = 5 }) {
 
 function DFTCTrends() {
   const isMobile = useIsMobile();
+  const { year: todayYear, month: todayMonth, day: todayDay } = manilaTodayParts();
+  const trendDateKey = `${todayYear}-${todayMonth}-${todayDay}`;
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined" && window.location) {
       const params = new URLSearchParams(window.location.search);
@@ -1023,6 +1029,7 @@ function DFTCTrends() {
   const [aDatePreset, setADatePreset] = useState("all");
   const [aCustomFrom, setACustomFrom] = useState("");
   const [aCustomTo, setACustomTo] = useState("");
+  const [aGranularity, setAGranularity] = useState("daily");
   const [aYear, setAYear] = useState(Number(manilaTodayParts().year));
   const [aPage, setAPage] = useState(1);
   const [aShowAll, setAShowAll] = useState(false);
@@ -1037,7 +1044,7 @@ function DFTCTrends() {
   useEffect(() => {
     setAPage(1);
     setAShowAll(false);
-  }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo, aYear]);
+  }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo, aGranularity, aYear]);
 
   // Live Price Queries — catalog commodity_id + persisted forecast.points
   const apiBacked = useMemo(() => isApiBackedPriceSeries(pMarket, pPriceType), [pMarket, pPriceType]);
@@ -1046,7 +1053,7 @@ function DFTCTrends() {
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
     queryKey: ["dftc-trends-price-catalog"],
     queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 100 }),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   const catalogPairs = useMemo(
@@ -1061,7 +1068,7 @@ function DFTCTrends() {
     queryKey: ["dftc-trends-price-catalog-supported"],
     queryFn: () =>
       pricesApi.getPriceList({ include_supported_varieties: true, page_size: 100 }),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   const priceCatalogPairs = useMemo(() => {
@@ -1135,7 +1142,7 @@ function DFTCTrends() {
     : pCommodity;
 
   const { data: priceDetailData, isLoading: isPriceDetailLoading } = useQuery({
-    queryKey: ["dftc-trends-price-detail", pCommodityId, pPriceTypeKey, fHorizon],
+    queryKey: ["dftc-trends-price-detail", trendDateKey, pCommodityId, pPriceTypeKey, fHorizon],
     queryFn: () =>
       pricesApi.getPriceDetail(pCommodityId, {
         price_type: pPriceTypeKey,
@@ -1144,7 +1151,7 @@ function DFTCTrends() {
       }),
     enabled: Boolean(pCommodityId) && apiBacked,
     placeholderData: (prev) => prev,
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   const isPricesLoading =
@@ -1258,7 +1265,7 @@ function DFTCTrends() {
   const { data: commodityCatalog, isLoading: isCommodityCatalogLoading } = useQuery({
     queryKey: ["dftc-trends-commodity-catalog"],
     queryFn: () => dftcApi.getCommodityCatalog(),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   // Arrival trends are intentionally limited to HarvestWise's supported
@@ -1302,7 +1309,7 @@ function DFTCTrends() {
     isLoading: isArrivalLoading,
     isError: isArrivalError,
   } = useQuery({
-    queryKey: ["dftc-trends-arrivals", aCommodityId],
+    queryKey: ["dftc-trends-arrivals", trendDateKey, aCommodityId],
     queryFn: () =>
       analyticsApi.getArrivalPressure(aCommodityId, null, null, {
         aggregateVarieties: true,
@@ -1314,7 +1321,7 @@ function DFTCTrends() {
       // name, which the endpoint cannot resolve for a name that only exists
       // per variety — the request would 404 and flash an error banner.
       !isCommodityCatalogLoading,
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   // Use the full arrival history (all years on record) rather than the 90-day
@@ -1345,25 +1352,26 @@ function DFTCTrends() {
   }, [arrivalYears, aYear]);
 
   const filteredArrivalRecords = useMemo(() => {
+    const compareYears = aGranularity === "yearly";
     let startDate = null;
     let endDate = null;
       const today = parseManilaDate(`${manilaTodayParts().year}-${manilaTodayParts().month}-${manilaTodayParts().day}`);
-    if (["2m", "3m", "6m"].includes(aDatePreset)) {
+    if (!compareYears && ["2m", "3m", "6m"].includes(aDatePreset)) {
       startDate = new Date(today);
       startDate.setMonth(today.getMonth() - Number(aDatePreset.slice(0, -1)));
-    } else if (aDatePreset === "custom") {
+    } else if (!compareYears && aDatePreset === "custom") {
       startDate = aCustomFrom ? new Date(`${aCustomFrom.slice(0, 10)}T00:00:00`) : null;
       endDate = aCustomTo ? new Date(`${aCustomTo.slice(0, 10)}T23:59:59`) : null;
     }
     return rawArrivalRecords.filter((record) => {
       const recordDate = parseManilaDate(String(record.arrival_date || "").slice(0, 10));
       if (!recordDate) return false;
-      if (!startDate && !endDate && aYear != null && recordDate.getFullYear() !== aYear) {
+      if (!compareYears && !startDate && !endDate && aYear != null && recordDate.getFullYear() !== aYear) {
         return false;
       }
       return (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
     });
-  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo, aYear]);
+  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo, aGranularity, aYear]);
 
   const aVarietyKeys = useMemo(() => [aCommodity], [aCommodity]);
 
@@ -1374,6 +1382,7 @@ function DFTCTrends() {
       const dStr = r.arrival_date || r.date;
       if (!dStr) return;
       const dateKey = String(dStr).slice(0, 10);
+      const key = aGranularity === "yearly" ? dateKey.slice(0, 4) : aGranularity === "monthly" ? dateKey.slice(0, 7) : dateKey;
       const val = aVolumeType === "Farm Source"
         ? r.farm_source_volume_kg
         : aVolumeType === "Other Source"
@@ -1381,7 +1390,7 @@ function DFTCTrends() {
         : r.volume_kg;
       if (val == null) return;
 
-      grouped.set(dateKey, (grouped.get(dateKey) || 0) + Number(val));
+      grouped.set(key, (grouped.get(key) || 0) + Number(val));
     });
 
     return [...grouped.entries()]
@@ -1390,14 +1399,30 @@ function DFTCTrends() {
       const dObj = parseManilaDate(date);
         const month = !dObj
           ? date
-          : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
+          : aGranularity === "yearly"
+            ? date
+            : aGranularity === "monthly"
+              ? dObj.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "Asia/Manila" })
+              : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
         return { month, [aCommodity]: val };
       });
-  }, [filteredArrivalRecords, aVolumeType, aCommodity]);
+  }, [filteredArrivalRecords, aVolumeType, aCommodity, aGranularity]);
 
   const aSourcesBreakdown = useMemo(() => {
-    const totalFarm = Number(arrivalQueryData?.source_breakdown?.farm_source_volume_kg || 0);
-    const totalOther = Number(arrivalQueryData?.source_breakdown?.other_source_volume_kg || 0);
+    const recordTotals = filteredArrivalRecords.reduce(
+      (totals, record) => ({
+        farm: totals.farm + Number(record.farm_source_volume_kg || 0),
+        other: totals.other + Number(record.other_source_volume_kg || 0),
+      }),
+      { farm: 0, other: 0 }
+    );
+    const hasRecordSourceData = recordTotals.farm > 0 || recordTotals.other > 0;
+    const totalFarm = hasRecordSourceData
+      ? recordTotals.farm
+      : Number(arrivalQueryData?.source_breakdown?.farm_source_volume_kg || 0);
+    const totalOther = hasRecordSourceData
+      ? recordTotals.other
+      : Number(arrivalQueryData?.source_breakdown?.other_source_volume_kg || 0);
     const combined = totalFarm + totalOther;
     if (combined === 0) return [];
     const farmPct = Math.round((totalFarm / combined) * 100);
@@ -1406,7 +1431,7 @@ function DFTCTrends() {
       { name: "Farm Source", value: farmPct, volumeKg: totalFarm, color: "#15803d" },
       { name: "Other Sources", value: otherPct, volumeKg: totalOther, color: "#f59e0b" }
     ];
-  }, [arrivalQueryData]);
+  }, [arrivalQueryData, filteredArrivalRecords]);
 
   const aVarietySummaries = useMemo(() => {
     if (!rawArrivalRecords.length) return [];
@@ -1446,7 +1471,9 @@ function DFTCTrends() {
 
   const aTotalPages = Math.max(1, Math.ceil(aTableRows.length / PAGE_SIZE));
   const aPageRows = aTableRows.slice((aPage - 1) * PAGE_SIZE, aPage * PAGE_SIZE);
-  const aPeriodLabel = aDatePreset === "all"
+  const aPeriodLabel = aGranularity === "yearly"
+    ? "All recorded years"
+    : aDatePreset === "all"
     ? arrivalQueryData?.data_is_stale
       ? "Historical fallback records"
       : `${arrivalQueryData?.lookback_days ?? 90}-day window`
@@ -1981,7 +2008,7 @@ function DFTCTrends() {
       {/* 1. Filters */}
       <div className={`${cardCls} p-3 sm:p-4 md:p-5`}>
         <h2 className="text-[11px] sm:text-[12px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-2 sm:mb-2.5">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4">
           <div className="col-span-2 sm:col-span-1">
             <label className={labelCls}>Commodity</label>
             <SearchableCombobox categories={arrivalCommodityCategories} value={aCommodity} onChange={setACommodity} />
@@ -2028,6 +2055,7 @@ function DFTCTrends() {
               preset={aDatePreset}
               customFrom={aCustomFrom}
               customTo={aCustomTo}
+              disabled={aGranularity === "yearly"}
               onChange={(p, from, to) => {
                 setADatePreset(p);
                 if (from !== undefined) setACustomFrom(from);
@@ -2036,13 +2064,33 @@ function DFTCTrends() {
             />
           </div>
           <div>
-            <label className={labelCls}>Year</label>
+            <label htmlFor="arrival-granularity" className={labelCls}>Trend view</label>
             <div className="relative">
               <select
-                value={aYear}
-                onChange={(e) => setAYear(Number(e.target.value))}
+                id="arrival-granularity"
+                aria-label="Arrival trend view"
+                value={aGranularity}
+                onChange={(e) => setAGranularity(e.target.value)}
                 className={selectCls + " appearance-none pr-9 cursor-pointer"}
               >
+                <option value="daily">Day</option>
+                <option value="monthly">Month</option>
+                <option value="yearly">Year vs Year</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="arrival-year" className={labelCls}>Year</label>
+            <div className="relative">
+              <select
+                id="arrival-year"
+                value={aGranularity === "yearly" ? "all" : aYear}
+                onChange={(e) => setAYear(Number(e.target.value))}
+                disabled={aGranularity === "yearly"}
+                className={selectCls + " appearance-none pr-9 cursor-pointer"}
+              >
+                <option value="all">All years</option>
                 {(() => {
                   return arrivalYears.length > 0 ? arrivalYears : [Number(manilaTodayParts().year)];
                 })().map((y) => (

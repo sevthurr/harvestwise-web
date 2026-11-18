@@ -178,6 +178,8 @@ function DFTCLayoutInner() {
             <img 
               src="/horizontal-logo.png" 
               alt="HarvestWise" 
+              width="933"
+              height="137"
               className="w-[104px] xs:w-[120px] sm:w-[140px] h-5 object-contain flex-shrink-0"
             />
             <span className="hidden md:block text-[11px] font-semibold text-[var(--hw-neutral-500)] tracking-wide border-l border-[var(--hw-neutral-200)] pl-2 ml-1">

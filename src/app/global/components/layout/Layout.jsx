@@ -126,6 +126,8 @@ const Layout = () => {
           <img
             src="/horizontal-logo.png"
             alt="HarvestWise"
+            width="933"
+            height="137"
             style={{ width: "190px", height: "28px", objectFit: "contain" }}
           />
         }

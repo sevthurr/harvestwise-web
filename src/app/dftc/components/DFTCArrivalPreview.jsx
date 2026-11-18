@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
+import { DFTC_DAILY_CACHE_TIME } from "../../global/hooks/dftcWorkspaceQueries";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
 import { DFTCPreviewZoomContainer } from "./DFTCPreviewZoomContainer";
 import { buildReportExportFilename } from "./dftcReportExport";
@@ -303,7 +304,8 @@ function DFTCArrivalPreview({ file, onClose }) {
       const res = await apiGet(`/dftc/submissions/${encodeURIComponent(submissionId)}`);
       return parseResponse(res);
     },
-    enabled: !!submissionId
+    enabled: !!submissionId,
+    staleTime: DFTC_DAILY_CACHE_TIME
   });
 
   const { data: reportPreviewData, isLoading: previewLoading, isError: previewError } = useQuery({
@@ -314,7 +316,8 @@ function DFTCArrivalPreview({ file, onClose }) {
       );
       return parseResponse(res);
     },
-    enabled: !!submissionId
+    enabled: !!submissionId,
+    staleTime: DFTC_DAILY_CACHE_TIME
   });
 
   const backendEncodedBy = reportPreviewData?.encoded_by && reportPreviewData.encoded_by !== "DFTC Encoder"

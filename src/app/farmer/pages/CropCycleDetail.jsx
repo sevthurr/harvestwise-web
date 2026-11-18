@@ -640,15 +640,17 @@ function CropCycleDetailPage() {
         estimated_selling_price: crop.farmgatePrice > 0 ? crop.farmgatePrice : undefined,
         crop_stage: explicitStage,
       };
-      const res = await apiPost("/advisory/plan", payload);
-      if (!res.ok) {
+      try {
+        const res = await apiPost("/advisory/plan", payload);
+        if (!res.ok) throw new Error(`advisory request failed: ${res.status}`);
+        return await parseResponse(res);
+      } catch {
         throw new Error(t(
           "farmer.cropCycle.advisory_request_failed",
           {},
           "The crop advisory could not be loaded. Please try again later."
         ));
       }
-      return await parseResponse(res);
     },
     enabled: canQueryPlan,
     staleTime: 1000 * 60 * 15,
@@ -740,8 +742,10 @@ function CropCycleDetailPage() {
   const profitLo = margin != null ? Math.max(0, Math.floor(margin * qty * 0.85 / 1e3) * 1e3) : 0;
   const profitHi = margin != null ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
   const rawAdvisory = planAdvisoryData?.advisory?.advisory || crop.advisoryCategory;
-  const advisoryCode = normalizeAdvisoryCode(rawAdvisory) || ADVISORY_CODES.RECOMMENDED;
-  const badge = composeAdvisoryBadge(advisoryCode, currentCropStage);
+  const advisoryCode = normalizeAdvisoryCode(rawAdvisory);
+  const badge = advisoryCode
+    ? composeAdvisoryBadge(advisoryCode, currentCropStage)
+    : { key: "farmer.advisory.not_available", type: "unavailable" };
   const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
   const AdvisoryIcon = advisoryCfg?.Icon;
   const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");

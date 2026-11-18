@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, AlertCircle, Loader2, Info } from "lucide-re
 import { useAuth } from "../../global/contexts/AuthContext";
 import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 import { apiGet, parseResponse } from "../../global/api";
+import { DFTC_DAILY_CACHE_TIME } from "../../global/hooks/dftcWorkspaceQueries";
 import { formatMarketName, formatDateOrMonth } from "./dftcSavedDatasets";
 import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
@@ -280,7 +281,8 @@ function DFTCSubmissionDetail() {
         return null;
       }
     },
-    enabled: !!submissionId
+    enabled: !!submissionId,
+    staleTime: DFTC_DAILY_CACHE_TIME
   });
 
   const ds = useMemo(() => {

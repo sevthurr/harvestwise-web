@@ -6,6 +6,7 @@ node_modules/
 # Production build - Generated, not source
 dist/
 build/
+bundle-stats.html
 
 # Development cache
 .vite/

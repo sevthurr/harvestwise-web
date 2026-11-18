@@ -711,6 +711,23 @@ describe("DFTC Trends page prices API integration", () => {
     );
   });
 
+  it("filters arrival trends by day, month, and year versus year", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
+
+    const chart = await screen.findByTestId("arrival-chart-dates");
+    const view = screen.getByLabelText("Arrival trend view");
+    const year = screen.getByLabelText("Year");
+
+    fireEvent.change(year, { target: { value: "2025" } });
+    fireEvent.change(view, { target: { value: "monthly" } });
+    await waitFor(() => expect(chart).toHaveTextContent("Mar 2025|Sep 2025"));
+
+    fireEvent.change(view, { target: { value: "yearly" } });
+    await waitFor(() => expect(chart).toHaveTextContent("2025|2026"));
+  });
+
   it("does not offer arrival commodities outside the top-10 list", async () => {
     installApi();
     renderTrends(<DFTCTrends />);

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { DFTC_DAILY_CACHE_TIME } from "../../global/hooks/dftcWorkspaceQueries";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { getClassificationColor, getClassificationTextColor } from "./dftcClassificationColors";
@@ -24,7 +25,7 @@ function SeasonalProductionTrends({ commodity, commodityId, categories, onCommod
     queryKey: ["dftc-trends-seasonal-production", commodityRef, quarter],
     queryFn: () => analyticsApi.getHistoricalSeasonalProduction(commodityRef, quarter),
     enabled: Boolean(commodityRef),
-    staleTime: 30 * 60 * 1000,
+    staleTime: DFTC_DAILY_CACHE_TIME,
   });
 
   const data = query.data;

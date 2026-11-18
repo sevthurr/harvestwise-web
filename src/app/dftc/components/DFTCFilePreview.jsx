@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, parseResponse } from "../../global/api";
+import { DFTC_DAILY_CACHE_TIME } from "../../global/hooks/dftcWorkspaceQueries";
 import { DFTCReportShell, DEFAULT_PERSONNEL } from "./DFTCReportShell";
 import { buildReportExportFilename } from "./dftcReportExport";
 import {
@@ -423,7 +424,8 @@ function DFTCFilePreview({ file, onClose }) {
       const res = await apiGet(`/dftc/reports/preview?date=${reportingDateShort}`);
       return parseResponse(res);
     },
-    enabled: !!reportingDateShort
+    enabled: !!reportingDateShort,
+    staleTime: DFTC_DAILY_CACHE_TIME
   });
 
   const backendEncodedBy = reportPreviewData?.encoded_by && reportPreviewData.encoded_by !== "DFTC Encoder"
