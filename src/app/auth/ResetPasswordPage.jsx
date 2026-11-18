@@ -12,7 +12,7 @@ import { isValidEmail, validatePasswordStrength } from "./authValidation";
 
 const OTP_LENGTH = 6;
 const inputClass =
-  "w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]";
+  "w-full h-11 px-3.5 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-500)]";
 
 function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -62,7 +62,7 @@ function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
+    <main className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm relative flex flex-col items-center mb-6">
         <div className="absolute right-0 top-1 z-10"><AuthLanguageSwitcher /></div>
         <div className="w-[180px] h-[130px] overflow-hidden">
@@ -91,7 +91,7 @@ function ResetPasswordPage() {
             <label htmlFor="new-password" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">{t("auth.reset_password_new_password", {}, "New password")}</label>
             <div className="relative">
               <input id="new-password" type={showPassword ? "text" : "password"} autoComplete="new-password" required value={password} onChange={(event) => { setPassword(event.target.value); setError(""); }} className={`${inputClass} pr-11`} />
-              <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1" aria-label={showPassword ? "Hide password" : "Show password"}>
+              <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-600)] p-1" aria-label={showPassword ? "Hide password" : "Show password"}>
                 {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
               </button>
             </div>
@@ -100,7 +100,7 @@ function ResetPasswordPage() {
             <label htmlFor="confirm-password" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">{t("auth.reset_password_confirm_password", {}, "Confirm new password")}</label>
             <div className="relative">
               <input id="confirm-password" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" required value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError(""); }} className={`${inputClass} pr-11`} />
-              <button type="button" onClick={() => setShowConfirmPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1" aria-label={showConfirmPassword ? "Hide password" : "Show password"}>
+              <button type="button" onClick={() => setShowConfirmPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-600)] p-1" aria-label={showConfirmPassword ? "Hide password" : "Show password"}>
                 {showConfirmPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
               </button>
             </div>
@@ -113,7 +113,7 @@ function ResetPasswordPage() {
         <div className="text-center mt-5"><Link to="/login" className="text-[13px] font-medium text-[var(--hw-green-700)] hover:text-[var(--hw-green-800)]">{t("auth.back_to_sign_in", {}, "Back to sign in")}</Link></div>
       </div>
       <Footer lang={authLang} className="mt-4" />
-    </div>
+    </main>
   );
 }
 

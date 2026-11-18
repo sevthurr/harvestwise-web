@@ -574,6 +574,18 @@ export async function prefetchFarmerFullData(queryClient) {
 let farmerOfflineLoadPromise = null;
 let lastFarmerOfflineLoadAt = 0;
 const OFFLINE_LOAD_DEDUPE_MS = 1000 * 60 * 30;
+const OFFLINE_SEED_MARKER_KEY = 'hw_offline_seed_marker_v1';
+
+export function hasOfflineSeedMarker() {
+  try {
+    const raw = localStorage.getItem(OFFLINE_SEED_MARKER_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed?.at);
+  } catch {
+    return false;
+  }
+}
 
 function scheduleFullFarmerPrefetch(queryClient) {
   const run = () => prefetchFarmerFullData(queryClient).catch(() => {});
@@ -609,6 +621,7 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
       staleTime: STALE_TIME,
     }).catch(() => {});
     lastFarmerOfflineLoadAt = Date.now();
+    try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}
     scheduleFullFarmerPrefetch(queryClient);
   })().finally(() => {
     farmerOfflineLoadPromise = null;

@@ -1,0 +1,9 @@
+# HarvestWise
+
+> Mobile-first AgriTech platform for farmers and agricultural trading
+
+## Pages
+
+- [Login](/login)
+- [Privacy](/privacy)
+- [Terms](/terms)

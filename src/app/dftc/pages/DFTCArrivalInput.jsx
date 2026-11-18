@@ -28,6 +28,7 @@ import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/componen
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../global/api";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
@@ -710,7 +711,7 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
 // ─── DFTCArrivalInput Main Component ─────────────────────────────────────────
 export default function DFTCArrivalInput() {
   const { user } = useAuth();
-  const canSave = user?.position === "Acting Section Head" || user?.staff_profile?.position_name === "Acting Section Head";
+  const canSave = isPrivilegedDftcPosition(user);
   const { data: catalogData } = useDftcCatalog();
   const navigate = useNavigate();
   const location = useLocation();
@@ -2017,10 +2018,10 @@ export default function DFTCArrivalInput() {
               type="button"
               onClick={() => setConfirmOpen(true)}
               disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError) || !canSave}
-              title={!canSave ? "Only an Acting Section Head can save or finalize review" : undefined}
+              title={!canSave ? "Only an Acting Section Head or Division Chief can save or finalize review" : undefined}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              {canSave ? `Save ${dataName} (${totalEnteredCount} commodities)` : "Only Acting Section Head can save"}
+              {canSave ? `Save ${dataName} (${totalEnteredCount} commodities)` : "Only Acting Section Head or Division Chief can save"}
             </button>
           </div>
 

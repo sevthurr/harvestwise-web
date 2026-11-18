@@ -28,6 +28,7 @@ import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
 import { prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
+import { isPrivilegedDftcPosition } from "../../../dftc/utils/positionAccess";
 
 const DFTC_NAV = [
   { id: "home", label: "Home", path: "/dftc", Icon: Home },
@@ -62,8 +63,7 @@ function DFTCLayoutInner() {
   const active = getActive(location.pathname);
   const roleName = user?.role_name || user?.role?.role_name || (typeof user?.role === "string" ? user.role : null) || "DFTC";
   const staff = user?.staff_profile || user?.staffProfile || {};
-  const isActingHead = [user?.position, staff.position_name, staff.position_title]
-    .some((position) => String(position ?? "").trim().toLowerCase() === "acting section head");
+  const isPrivilegedPosition = isPrivilegedDftcPosition(user);
   const name = formatPersonName([
     staff.first_name || user?.first_name,
     staff.middle_name,
@@ -262,7 +262,7 @@ function DFTCLayoutInner() {
                     <Settings className="w-4 h-4 flex-shrink-0 text-[var(--hw-neutral-500)]" />
                     Settings
                   </button>
-                  {isActingHead && <button
+                  {isPrivilegedPosition && <button
     onClick={() => go("/dftc/audit-logs")}
     className="w-full flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-black hover:bg-[var(--hw-neutral-50)] transition-colors text-left"
   >

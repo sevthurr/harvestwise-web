@@ -10,13 +10,13 @@ import {
 } from '../api';
 import { get, set, del } from 'idb-keyval';
 import { clearQueryPersistedCache, queryClient } from '../lib/queryClient';
-import { loadFarmerOfflineData } from '../hooks/useFarmerPrefetch';
+import { loadFarmerOfflineData, hasOfflineSeedMarker } from '../hooks/useFarmerPrefetch';
 
 const AuthContext = createContext(null);
 
 const USER_CACHE_KEY = 'HARVESTWISE_USER_CACHE_V1';
 const PENDING_LOGOUT_KEY = 'hw_logout_pending';
-const OFFLINE_GRACE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days — matches server SESSION_IDLE_DAYS
+const OFFLINE_GRACE_MS = 1000 * 60 * 60 * 24 * 30; // 30 days offline grace for rural/spotty connectivity
 
 function browserIsOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -60,9 +60,37 @@ export function AuthProvider({ children }) {
       try {
         await loadFarmerOfflineData(queryClient, { force });
         setOfflineCacheStatus('ready');
+        try {
+          const { requestPersistentStorage } = await import('../lib/pwaUpdate');
+          await requestPersistentStorage();
+        } catch {
+          // ignore
+        }
       } catch {
         setOfflineCacheStatus('error');
       }
+    }
+  };
+
+  const clearAssessmentDraftForOtherUser = (me) => {
+    try {
+      const raw = localStorage.getItem('harvestwise_assessment_draft');
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      const meId = me?.id || me?.user_id || me?.userId;
+      if (!meId) return;
+      const ownerId = draft?.ownerUserId || draft?.owner_user_id || draft?.ownerId;
+      if (ownerId && String(ownerId) !== String(meId)) {
+        localStorage.removeItem('harvestwise_assessment_draft');
+        return;
+      }
+      if (!ownerId && draft && typeof draft === 'object') {
+        // Legacy draft: adopt to current user to avoid accidental deletion later.
+        draft.ownerUserId = meId;
+        localStorage.setItem('harvestwise_assessment_draft', JSON.stringify(draft));
+      }
+    } catch {
+      // ignore parse/storage errors
     }
   };
 
@@ -109,6 +137,7 @@ export function AuthProvider({ children }) {
           me = await apiGet('/api/v1/auth/me').then(parseResponse);
         }
         markSessionActive();
+        clearAssessmentDraftForOtherUser(me);
         setUser(me);
         // Cache user profile for offline restoration
         await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
@@ -126,7 +155,7 @@ export function AuthProvider({ children }) {
           const expiresAt = cached?.expiresAt ?? 0;
           if (cachedUser && expiresAt > Date.now()) {
             setUser(cachedUser);
-            setOfflineCacheStatus('ready');
+            setOfflineCacheStatus(hasOfflineSeedMarker() ? 'ready' : 'idle');
             // Don't clear tokens — farmer is still "logged in", just offline
           } else {
             clearTokens();
@@ -216,6 +245,7 @@ export function AuthProvider({ children }) {
     storeTokens(tokens);
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
     markSessionActive();
+    clearAssessmentDraftForOtherUser(me);
     setUser(me);
     await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
     await seedFarmerOffline(me, { force: true });
@@ -268,7 +298,10 @@ export function AuthProvider({ children }) {
   const refreshUser = async () => {
     const me = await apiGet('/api/v1/auth/me').then(parseResponse);
     setUser(me);
-    await set(USER_CACHE_KEY, me);
+    // Keep the offline cache shape identical to login/patchUser/restore:
+    // { user, cachedAt, expiresAt }. Writing a bare `me` here drops expiresAt,
+    // so the next offline restore reads 0 and logs the farmer out.
+    await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
     return me;
   };
 

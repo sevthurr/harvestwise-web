@@ -207,6 +207,27 @@ describe('AuthContext — token restoration', () => {
     expect(offlineAuth.user.email).toBe('juan@example.com');
   });
 
+  it('restores the offline identity after refreshUser rewrote the cache', async () => {
+    // Regression: refreshUser used to write a bare `me` into USER_CACHE_KEY,
+    // dropping expiresAt. The next offline restore read expiresAt=0 and logged
+    // the farmer out — so any profile edit followed by going offline lost the
+    // session. refreshUser must write the same wrapped shape as login/patchUser.
+    vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_FARMER }));
+    let firstAuth;
+    const first = renderWithAuth(<AuthConsumer onRender={(a) => { firstAuth = a; }} />);
+    await waitFor(() => expect(firstAuth?.loading).toBe(false));
+
+    // Make refreshUser the last writer of the offline cache.
+    await act(async () => { await firstAuth.refreshUser(); });
+    first.unmount();
+
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    let offlineAuth;
+    renderWithAuth(<AuthConsumer onRender={(a) => { offlineAuth = a; }} />);
+    await waitFor(() => expect(offlineAuth?.loading).toBe(false));
+    expect(offlineAuth.user.email).toBe('juan@example.com');
+  });
+
   it('does not restore cached identity after an authentication failure', async () => {
     vi.stubGlobal('fetch', mockFetch({ ok: true, status: 200, body: FAKE_USER_FARMER }));
     let firstAuth;

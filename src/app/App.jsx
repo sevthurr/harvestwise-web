@@ -17,7 +17,7 @@ export default function App() {
     <AppErrorBoundary>
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7 }}
+        persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 30 }}
       >
         <AuthProvider>
           <LanguageProvider>

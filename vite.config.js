@@ -69,7 +69,7 @@ export default defineConfig({
             //     so a save-then-navigate could hand back the *pre-save*
             //     response and silently revert the change on screen.
             //  2. Isolation. The cache key is the URL, with no notion of who
-            //     is signed in, and entries live 7 days. On a shared handset —
+            //     is signed in, and entries live 30 days. On a shared handset —
             //     the case AuthContext already guards against for tokens — user
             //     A's cached identity, email, and role could be served to user
             //     B during a slow request.
@@ -97,7 +97,7 @@ export default defineConfig({
               networkTimeoutSeconds: 5,
               expiration: {
                 maxEntries: 200,
-                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days, matches offline session grace
               },
               cacheableResponse: {
                 statuses: [0, 200],
@@ -114,6 +114,9 @@ export default defineConfig({
     },
   },
   assetsInclude: ['**/*.svg', '**/*.csv'],
+  build: {
+    sourcemap: true,
+  },
   esbuild: {
     sourcemap: false,
   },

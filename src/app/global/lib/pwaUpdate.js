@@ -37,3 +37,15 @@ export function subscribeUpdateAvailable(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+export async function requestPersistentStorage() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persist === 'function') {
+      const granted = await navigator.storage.persist();
+      return granted;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}

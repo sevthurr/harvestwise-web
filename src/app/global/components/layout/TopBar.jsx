@@ -24,6 +24,8 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { usePWAInstall } from "../../hooks/usePWAInstall";
 import { UserAvatar } from "../profile/UserAvatar";
 import { formatManilaTime } from "../../utils/apiTransforms";
+import { loadFarmerOfflineData } from "../../hooks/useFarmerPrefetch";
+import { requestPersistentStorage } from "../../lib/pwaUpdate";
 
 const TopBar = ({
   logo,
@@ -83,7 +85,8 @@ const TopBar = ({
     preparing: t("farmer.offline_preparing", {}, "Preparing offline data"),
     ready: t("farmer.offline_ready", {}, "Offline data ready"),
     error: t("farmer.offline_incomplete", {}, "Offline data incomplete"),
-  }[cacheStatus];
+    idle: t("farmer.offline_none", {}, "No offline data saved yet"),
+  }[cacheStatus] || t("farmer.offline_none", {}, "No offline data saved yet");
 
   // Keep the "Last updated" timestamp in sync when a background process
   // completes and triggers an automatic live resync.
@@ -100,12 +103,15 @@ const TopBar = ({
     if (isSyncing) return;
     setIsManualSyncing(true);
     try {
-      await queryClient.invalidateQueries();
-      setLastSyncedTime(
-        formatManilaTime()
-      );
+      if (user?.role?.role_name?.toLowerCase() === 'farmer') {
+        await loadFarmerOfflineData(queryClient, { force: true });
+        await requestPersistentStorage();
+      } else {
+        await queryClient.invalidateQueries();
+      }
+      setLastSyncedTime(formatManilaTime());
     } catch (e) {
-      console.error("Data resync failed:", e);
+      console.error('Data resync failed:', e);
     } finally {
       setIsManualSyncing(false);
     }
@@ -237,7 +243,10 @@ const TopBar = ({
                           ? t("farmer.offline_desc_error", {}, "Some offline data could not be saved. Check your connection and tap Sync Now.")
                           : cacheStatus === "preparing"
                           ? t("farmer.offline_desc_preparing", {}, "Saving latest market prices and crop recommendations to your device...")
+                          : cacheStatus === "idle"
+                          ? t("farmer.offline_desc_none", {}, "No offline data saved yet. Connect to the internet and tap Sync Now to save prices and crops for offline use.")
                           : t("farmer.offline_desc_ready", {}, "Prices, forecasts, and recommendations are saved on this device for offline use.")}
+                        {!isOnline && ` ${t("farmer.errors.offline_plan_readonly", {}, "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again.")}`}
                       </p>
                     </div>
                   </div>

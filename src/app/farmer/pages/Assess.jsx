@@ -23,6 +23,7 @@ import { formatPeso } from "../components/recommend/types";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { apiGet, apiPost, parseResponse } from "../../global/api";
 import { useCrops } from "../components/crops/CropsContext";
+import { useAuth } from "../../global/contexts/AuthContext";
 
 import { useLanguage } from "../../global/contexts/LanguageContext";
 
@@ -254,6 +255,7 @@ function AssessPage() {
   }, []);
 
   const { crops, loading: cropsLoading, refreshCrops } = useCrops();
+  const { user } = useAuth();
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftLoadError, setDraftLoadError] = useState(null);
 
@@ -563,6 +565,7 @@ function AssessPage() {
       const draftSnapshot = {
         ...data,
         isDraft: true,
+        ownerUserId: user?.id || user?.user_id || user?.userId || null,
       };
       try {
         localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(draftSnapshot));
@@ -635,6 +638,7 @@ function AssessPage() {
       const offlineSnapshot = {
         ...data,
         isDraft: true,
+        ownerUserId: user?.id || user?.user_id || user?.userId || null,
       };
       try {
         localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(offlineSnapshot));

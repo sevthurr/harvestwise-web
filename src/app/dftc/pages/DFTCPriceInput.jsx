@@ -39,6 +39,7 @@ import { capitalizeNameInput } from "../../global/utils/apiTransforms";
 import { useDftcCatalog } from "../../global/hooks/useDftcCatalog";
 import { useDftcStaff } from "../../global/hooks/useDftcStaff";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
 function hwId(name) {
@@ -966,7 +967,7 @@ function MobileVariantRow({
 function DFTCPriceInput() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canFinalize = user?.position === "Acting Section Head" || user?.staff_profile?.position_name === "Acting Section Head";
+  const canFinalize = isPrivilegedDftcPosition(user);
   const location = useLocation();
   const queryClient = useQueryClient();
   const navState = location.state;
@@ -3183,11 +3184,11 @@ function DFTCPriceInput() {
               type="button"
               onClick={handleOpenConfirm}
               disabled={totalEnteredCount === 0 || isSaving || !canFinalize}
-              title={!canFinalize ? "Only an Acting Section Head can save or finalize review" : undefined}
+              title={!canFinalize ? "Only an Acting Section Head or Division Chief can save or finalize review" : undefined}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
               {!canFinalize
-                ? "Only Acting Section Head can save"
+                ? "Only Acting Section Head or Division Chief can save"
                 : draftFinalized
                 ? `Re-finalize ${dataName} (${totalEnteredCount} records)`
                 : `Finalize ${dataName} (${totalEnteredCount} records)`}

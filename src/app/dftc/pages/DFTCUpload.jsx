@@ -20,6 +20,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { parseFileReal } from "../../global/utils/excelFilePreview";
 import { useFileDropZone } from "../../global/hooks/useFileDropZone";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 
 const DATA_TYPE_MAP = {
   "DFTC Wholesale Prices": "dftc_daily_wholesale",
@@ -322,8 +323,7 @@ const ISSUE_CODE_LABELS = {
 
 function DFTCUpload() {
   const { user } = useAuth();
-  const position = user?.position || user?.staff_profile?.position_name || user?.staff_profile?.position_title;
-  const canUpsert = position === "Acting Section Head";
+  const canUpsert = isPrivilegedDftcPosition(user);
   const queryClient = useQueryClient();
   let navigate;
   try {

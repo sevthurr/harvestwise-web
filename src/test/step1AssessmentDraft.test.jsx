@@ -14,6 +14,12 @@ vi.mock("../app/global/contexts/LanguageContext", () => ({
   useLanguage: vi.fn(),
 }));
 
+vi.mock("../app/global/contexts/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "test-user-1" }, isLoggedIn: true, loading: false }),
+  useOptionalAuth: () => ({ user: { id: "test-user-1" }, isLoggedIn: true, loading: false }),
+  AuthProvider: ({ children }) => children,
+}));
+
 vi.mock("../app/global/api", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),

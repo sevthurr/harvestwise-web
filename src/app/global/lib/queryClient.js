@@ -2,8 +2,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { get, set, del, clear } from "idb-keyval";
 
-// 7-day cache for offline-first farming use
-const SEVEN_DAYS = 1000 * 60 * 60 * 24 * 7;
+// Offline-first farming use: match AuthContext's offline session grace so a
+// restored session still has data to show (both expire together).
+const OFFLINE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 /**
  * Never retry a request whose failure is a decision, not a hiccup.
@@ -41,14 +42,14 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 30,        // 30 min before data is considered stale
-      gcTime: SEVEN_DAYS,                // keep in memory for 7 days
+      gcTime: OFFLINE_TTL_MS,            // keep persisted cache for 30 days
       retry: shouldRetry,
       // Exponential backoff with jitter for network/server errors that are
       // worth retrying. The jitter prevents a thundering-herd retry when a
       // server-wide 5xx recovers.
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex + Math.random() * 500, 30000),
-      // The offline layer is the service worker: vite.config.js caches every
-      // /api/v1/ GET under NetworkFirst for 7 days. React Query's default
+      // The offline layer is the service worker: vite.config.js caches the
+      // farmer-safe read routes under NetworkFirst for 30 days. React Query's default
       // networkMode ('online') refuses to issue the request at all while the
       // browser reports offline, so the service worker is never consulted and
       // its cached response can never be read. 'always' lets the request go
@@ -64,7 +65,7 @@ export const queryClient = new QueryClient({
 });
 
 // Farmer data freshness. The global defaults skip refetches on mount so the
-// 7-day persisted cache is not re-requested on every navigation. These key
+// 30-day persisted cache is not re-requested on every navigation. These key
 // prefixes opt the surfaces that mirror DFTC input back into a stale-aware
 // refetch on mount. Arrival pressure also refetches when the PWA becomes
 // visible again: that is the safety net for SSE frames missed while offline,
@@ -100,7 +101,7 @@ const API_RUNTIME_CACHE = 'harvestwise-api-cache';
  *
  * Two stores are involved and both must be cleared:
  *
- *  1. The react-query IndexedDB persister, holding up to 7 days of farmer PII.
+ *  1. The react-query IndexedDB persister, holding up to 30 days of farmer PII.
  *  2. The service worker's CacheStorage (`harvestwise-api-cache`), holding raw
  *     API GET bodies under NetworkFirst.
  *
