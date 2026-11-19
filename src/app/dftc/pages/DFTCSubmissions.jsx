@@ -4,7 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { PageHeader } from "../../global/components/shared/PageHeader";
-import { apiGet, parseResponse } from "../../global/api";
+import {
+  DFTC_SUBMISSIONS_KEY,
+  DFTC_WORKSPACE_STALE_TIME,
+  fetchDftcSubmissions,
+} from "../../global/hooks/dftcWorkspaceQueries";
 import { getLocalDateString } from "./dftcSavedDatasets";
 import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
@@ -280,13 +284,12 @@ function DFTCHistory() {
 
   // Live Query from backend API
   const { data: submissionsData, isLoading, isError, refetch } = useQuery({
-    queryKey: ["dftc-submissions"],
-    queryFn: async () => {
-      const res = await apiGet("/dftc/submissions?page_size=50");
-      return parseResponse(res);
-    },
-    staleTime: 0,
-    refetchOnMount: "always"
+    queryKey: DFTC_SUBMISSIONS_KEY,
+    queryFn: fetchDftcSubmissions,
+    staleTime: DFTC_WORKSPACE_STALE_TIME,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const rawRows = useMemo(() => {

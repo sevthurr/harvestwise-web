@@ -9,7 +9,7 @@ import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
 import { isValidEmail } from "./authValidation";
 
 const inputClass =
-  "w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]";
+  "w-full h-11 px-3.5 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-500)]";
 
 function ForgotPasswordPage() {
   const { authLang, t } = usePublicAuthLanguage();
@@ -40,7 +40,7 @@ function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
+    <main className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm relative flex flex-col items-center mb-6">
         <div className="absolute right-0 top-1 z-10"><AuthLanguageSwitcher /></div>
         <div className="w-[180px] h-[130px] overflow-hidden">
@@ -83,7 +83,7 @@ function ForgotPasswordPage() {
         </div>
       </div>
       <Footer lang={authLang} className="mt-4" />
-    </div>
+    </main>
   );
 }
 

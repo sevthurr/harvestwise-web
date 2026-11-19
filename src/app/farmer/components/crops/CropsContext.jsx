@@ -1,9 +1,11 @@
 import { createContext, useContext, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPut, parseResponse } from "../../../global/api";
+import { apiGet, parseResponse } from "../../../global/api";
 import { toCamelCase } from "../../../global/utils/apiTransforms";
 import { parseLocalDate } from "../../utils/formatters";
 import { useAuth } from "../../../global/contexts/AuthContext";
+import { useLanguage } from "../../../global/contexts/LanguageContext";
+import { writeCropPlan } from "../../utils/cropPlanWrite";
 import { suggestHarvestDate } from "../recommend/types";
 
 const CropsContext = createContext(null);
@@ -310,6 +312,7 @@ export function transformCropItems(rawItems, pricesMap = new Map()) {
 const CropsProvider = ({ children }) => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   // Crop plans are per-farmer data: GET /crop-plans answers with the caller's
   // own plans and rejects every role outside (SuperAdmin, Farmer).
@@ -322,14 +325,18 @@ const CropsProvider = ({ children }) => {
   // from the admin dashboard KPI instead.
   const isFarmerSession = (user?.role?.role_name || "").toLowerCase() === "farmer";
 
-  const { data: crops = [], isLoading: loading } = useQuery({
+  const { data: crops = [], isLoading: loading, isError } = useQuery({
     queryKey: ["farmer", "crops"],
     queryFn: async () => {
       const [res, pricesRes] = await Promise.all([
         apiGet("/crop-plans"),
         apiGet("/prices?page_size=100").catch(() => null),
       ]);
-      if (!res.ok) return [];
+      if (!res.ok) {
+        const err = new Error('Failed to load crops');
+        err.status = res.status;
+        throw err;
+      }
       const data = await parseResponse(res);
       const rawItems = data?.crop_plans || data?.items || (Array.isArray(data) ? data : []);
       const pricesData = pricesRes && pricesRes.ok ? await parseResponse(pricesRes) : null;
@@ -368,12 +375,16 @@ const CropsProvider = ({ children }) => {
 
   const addCostApi = useCallback(
     async (planId, { category = "Additional", amount, costType = "additional" }) => {
-      const res = await apiPost(`/crop-plans/${planId}/costs`, {
-        category: category || "Additional",
-        amount,
-        cost_type: costType,
+      const data = await writeCropPlan({
+        method: "POST",
+        path: `/crop-plans/${planId}/costs`,
+        body: {
+          category: category || "Additional",
+          amount,
+          cost_type: costType,
+        },
+        t,
       });
-      const data = await parseResponse(res);
       const newCost = toCamelCase(data);
       queryClient.setQueryData(["farmer", "crops"], (old) => {
         if (!old) return old;
@@ -408,7 +419,7 @@ const CropsProvider = ({ children }) => {
       await refreshCrops();
       return data;
     },
-    [queryClient, refreshCrops]
+    [queryClient, refreshCrops, t]
   );
 
   const updateCropStatusApi = useCallback(
@@ -448,12 +459,16 @@ const CropsProvider = ({ children }) => {
       if (extra?.notes) {
         body.notes = String(extra.notes).trim();
       }
-      const res = await apiPut(`/crop-plans/${planId}/status`, body);
-      const data = await parseResponse(res);
+      const data = await writeCropPlan({
+        method: "PUT",
+        path: `/crop-plans/${planId}/status`,
+        body,
+        t,
+      });
       await refreshCrops();
       return data;
     },
-    [refreshCrops]
+    [refreshCrops, t]
   );
 
   const logHarvestApi = useCallback(
@@ -469,22 +484,30 @@ const CropsProvider = ({ children }) => {
       if (extra?.notes) {
         payload.notes = String(extra.notes).trim();
       }
-      const res = await apiPost(`/crop-plans/${planId}/harvest`, payload);
-      const data = await parseResponse(res);
+      const data = await writeCropPlan({
+        method: "POST",
+        path: `/crop-plans/${planId}/harvest`,
+        body: payload,
+        t,
+      });
       await refreshCrops();
       return data;
     },
-    [refreshCrops]
+    [refreshCrops, t]
   );
 
   const saveHarvestRecordApi = useCallback(
     async (planId, harvestDate, harvestQty, sellingPricePerKg) => {
-      const res = await apiPost(`/crop-plans/${planId}/harvest-records`, {
-        actual_harvest_date: harvestDate,
-        actual_harvest_qty: harvestQty,
-        actual_selling_price_per_kg: sellingPricePerKg,
+      const data = await writeCropPlan({
+        method: "POST",
+        path: `/crop-plans/${planId}/harvest-records`,
+        body: {
+          actual_harvest_date: harvestDate,
+          actual_harvest_qty: harvestQty,
+          actual_selling_price_per_kg: sellingPricePerKg,
+        },
+        t,
       });
-      const data = await parseResponse(res);
       const camel = toCamelCase(data);
       const rawQty = camel?.actualHarvestQty ?? data?.actual_harvest_qty;
       const rawPrice = camel?.actualSellingPricePerKg ?? data?.actual_selling_price_per_kg;
@@ -521,11 +544,11 @@ const CropsProvider = ({ children }) => {
       await refreshCrops();
       return recordItem;
     },
-    [queryClient, refreshCrops]
+    [queryClient, refreshCrops, t]
   );
 
   return (
-    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi, saveHarvestRecordApi }}>
+    <CropsContext.Provider value={{ crops, addCrop, updateCrop, loading, isError, refreshCrops, addCostApi, updateCropStatusApi, logHarvestApi, saveHarvestRecordApi }}>
       {children}
     </CropsContext.Provider>
   );
@@ -533,7 +556,7 @@ const CropsProvider = ({ children }) => {
 
 const useCrops = () => {
   const ctx = useContext(CropsContext);
-  return ctx || { crops: [], loading: false };
+  return ctx || { crops: [], loading: false, isError: false };
 };
 
 export { CropsProvider, useCrops };

@@ -55,15 +55,17 @@ function CropFactorsPage() {
 
   const updatedTotalCost = crop.totalCost || 0;
   const qty = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
+  const plantingDate = crop.rawPlantingDate || crop.plantingDate;
+  const harvestDate = crop.rawHarvestDate || crop.harvestDate;
   const canQueryPlan = Boolean(
     crop.commodityName &&
-    hasValidAdvisoryDatePair(crop.plantingDate, crop.harvestDate) &&
+    hasValidAdvisoryDatePair(plantingDate, harvestDate) &&
     updatedTotalCost > 0 &&
     qty > 0
   );
 
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
-    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, crop.plantingDate, crop.harvestDate, updatedTotalCost, qty, explicitStage],
+    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, plantingDate, harvestDate, updatedTotalCost, qty, explicitStage],
     queryFn: async () => {
       const pDate = new Date(crop.plantingDate);
       const hDate = new Date(crop.harvestDate);

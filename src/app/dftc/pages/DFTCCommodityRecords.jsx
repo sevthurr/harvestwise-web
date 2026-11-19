@@ -7,6 +7,7 @@ import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { DFTCFilePreview } from "../components/DFTCFilePreview";
 import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
+import { DFTC_DAILY_CACHE_TIME } from "../../global/hooks/dftcWorkspaceQueries";
 import { formatDateOrMonth } from "./dftcSavedDatasets";
 import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 
@@ -276,7 +277,8 @@ function DFTCCommodityRecords() {
     queryFn: async () => {
       const res = await apiGet(`/prices?search=${encodeURIComponent(commodity)}&page=1&page_size=10`);
       return parseResponse(res);
-    }
+    },
+    staleTime: DFTC_DAILY_CACHE_TIME,
   });
 
   const commodityItem = priceListData?.items?.find(
@@ -291,7 +293,7 @@ function DFTCCommodityRecords() {
       return parseResponse(res);
     },
     enabled: Boolean(commodityItem?.id),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_CACHE_TIME,
   });
 
   const [selectedCollectorNote, setSelectedCollectorNote] = useState(null);

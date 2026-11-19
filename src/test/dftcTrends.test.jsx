@@ -711,6 +711,16 @@ describe("DFTC Trends page prices API integration", () => {
     );
   });
 
+  it("does not offer a trend view filter", async () => {
+    installApi();
+    renderTrends(<DFTCTrends />);
+    fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
+
+    await screen.findByTestId("arrival-chart-dates");
+    expect(screen.queryByLabelText("Arrival trend view")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Year")).toBeInTheDocument();
+  });
+
   it("does not offer arrival commodities outside the top-10 list", async () => {
     installApi();
     renderTrends(<DFTCTrends />);

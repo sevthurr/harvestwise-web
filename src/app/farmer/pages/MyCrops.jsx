@@ -194,7 +194,7 @@ function MyCropsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { crops } = useCrops();
+  const { crops, isError } = useCrops();
   const [stageFilter, setStageFilter] = useState("all");
   const [toastMessage, setToastMessage] = useState(
     () => location.state?.message || (location.state?.draftSaved ? "Assessment draft saved. Continue editing Step 1 anytime." : null)
@@ -403,7 +403,13 @@ function MyCropsPage() {
         </div>
 
         {/* Crop list */}
-        {visible.length === 0 ? <MyCropsEmpty stage={stageFilter} onNew={() => navigate("/farmer/assess")} /> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {isError ? (
+          <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-4">
+            <p className="font-semibold text-[var(--hw-neutral-700)]">
+              {t("farmer.errors.load_data_failed", {}, "Failed to load data. Please check your connection.")}
+            </p>
+          </div>
+        ) : visible.length === 0 ? <MyCropsEmpty stage={stageFilter} onNew={() => navigate("/farmer/assess")} /> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {visible.map((crop) => (
               <MyCropCard
                 key={crop.id}
@@ -411,10 +417,6 @@ function MyCropsPage() {
                 isPreferred={isPreferredCrop(crop, preferredCrops)}
                 onView={(id) => {
                   if (crop.phase === "draft" || crop.status === "Draft" || crop.isDraft) {
-                    // A device-only draft ("local_draft") must resume through the same
-                    // query param: Assess.jsx loads it from localStorage only when the id
-                    // is passed. Dropping it lands on the entry screen with an empty form
-                    // instead of the farmer's saved work.
                     navigate(`/farmer/assess?resumeDraft=${id}`);
                   } else {
                     navigate(`/farmer/crops/${id}`);

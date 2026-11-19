@@ -4,6 +4,8 @@ export function VerticalLogo({ className }) {
       <img 
         alt="HarvestWise Logo" 
         src="/vertical-logo.png" 
+        width="938"
+        height="938"
         className="w-full h-full object-contain"
       />
     </div>

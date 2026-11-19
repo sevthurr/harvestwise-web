@@ -40,7 +40,8 @@ import {
   pickUsablePriceOutlook,
 } from "../../utils/advisoryReasons";
 import { WeatherLocationBanner } from "../shared/WeatherLocationBanner";
-import { apiPost, parseResponse } from "../../../global/api";
+import { apiPost } from "../../../global/api";
+import { writeCropPlan } from "../../utils/cropPlanWrite";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { Breadcrumb } from "../shared/Breadcrumb";
 import { resolveFactorCondition } from "../../utils/factorColors";
@@ -216,12 +217,25 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
   const [saveError, setSaveError] = useState(null);
   const [showPlantedForm, setShowPlantedForm] = useState(false);
   const [whyExpanded, setWhyExpanded] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine !== false : true));
   const draftAutosavedRef = useRef(false);
   const [plantedForm, setPlantedForm] = useState({
     actualPlantingDate: data.plantingDate,
     actualArea: data.farmArea,
     updatedHarvestDate: data.harvestDate
   });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   const { options: catalogOptions } = useCommodityCatalog();
   const catalogMatch = findCatalogOption(catalogOptions, data.commodityId || data.commodity);
   const commodityName =
@@ -394,8 +408,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
     setSaveError(null);
     try {
       const payload = buildCropPlanPayload(data, "Planning");
-      const res = await apiPost("/crop-plans", payload);
-      const savedPlan = await parseResponse(res);
+      const savedPlan = await writeCropPlan({ method: "POST", path: "/crop-plans", body: payload, t });
       addCrop(normalizeCropPlan(savedPlan));
       try {
         localStorage.removeItem("harvestwise_assessment_draft");
@@ -412,7 +425,11 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       });
     } catch (err) {
       console.error("Failed to save crop plan:", err);
-      setSaveError(err?.message || t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+      if (err?.status == null && !err?.offline) {
+        setSaveError(t("farmer.errors.offline_plan_readonly", {}, "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again."));
+      } else {
+        setSaveError(err?.message || t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+      }
     } finally {
       setSaving(false);
     }
@@ -423,8 +440,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
     try {
       const payload = buildCropPlanPayload(data, "Planted");
       payload.actual_planting_date = plantedForm.actualPlantingDate || data.plantingDate || null;
-      const res = await apiPost("/crop-plans", payload);
-      const savedPlan = await parseResponse(res);
+      const savedPlan = await writeCropPlan({ method: "POST", path: "/crop-plans", body: payload, t });
       addCrop(normalizeCropPlan(savedPlan));
       try {
         localStorage.removeItem("harvestwise_assessment_draft");
@@ -441,7 +457,11 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
       });
     } catch (err) {
       console.error("Failed to save crop plan as planted:", err);
-      setSaveError(err?.message || t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+      if (err?.status == null && !err?.offline) {
+        setSaveError(t("farmer.errors.offline_plan_readonly", {}, "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again."));
+      } else {
+        setSaveError(err?.message || t("farmer.errors.crop_plan_save_failed", {}, "We couldn't save this crop plan right now. Please try again."));
+      }
     } finally {
       setSaving(false);
     }
@@ -515,9 +535,15 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
           <input type="date" value={plantedForm.updatedHarvestDate} onChange={(e) => setPlantedForm((f) => ({ ...f, updatedHarvestDate: e.target.value }))} className={inputCls} />
         </div>
       </div>
+      {(isOffline || !isOnline) && (
+        <p role="status" className="text-[13px] text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">
+          {t("farmer.errors.offline_plan_readonly", {}, "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again.")}
+        </p>
+      )}
+      {saveError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{saveError}</p>}
       <button
         onClick={handleConfirmPlanted}
-        disabled={saving || isOffline}
+        disabled={saving}
         className="w-full flex items-center justify-center gap-2 py-3 px-5 bg-[var(--hw-green-700)] text-white font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Sprout className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.confirm_planted", {}, "Confirm — I planted this")}
@@ -773,22 +799,22 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
 
       {/* 5. Actions */}
       <div className="space-y-2.5 sm:space-y-3 pt-1">
-        {isOffline && (
-          <p className="text-[13px] text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">
-            {t("farmer.assess.offline_result_hint", {}, "You're offline. Connect to the internet to save this crop plan to My Crops.")}
+        {(isOffline || !isOnline) && (
+          <p role="status" className="text-[13px] text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">
+            {t("farmer.errors.offline_plan_readonly", {}, "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again.")}
           </p>
         )}
         {saveError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{saveError}</p>}
         <button
           onClick={handleSavePlan}
-          disabled={saving || isOffline}
+          disabled={saving}
           className="w-full min-h-[46px] flex items-center justify-center gap-2 py-3 px-4 sm:px-5 bg-[var(--hw-green-700)] text-white text-[13px] sm:text-[14px] font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
         >
           <Save className="w-4 h-4" />{saving ? t("common.saving", {}, "Saving...") : t("farmer.crops.save_to_crops", {}, "Save to My Crops")}
         </button>
         <button
           onClick={() => setShowPlantedForm(true)}
-          disabled={saving || isOffline}
+          disabled={saving}
           className="w-full min-h-[46px] flex items-center justify-center gap-2 py-3 px-4 sm:px-5 bg-white text-[var(--hw-green-700)] text-[13px] sm:text-[14px] font-medium rounded-xl border border-[var(--hw-green-400)] hover:bg-[var(--hw-green-50)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Sprout className="w-4 h-4" />{t("farmer.crops.already_planted", {}, "I already planted this")}

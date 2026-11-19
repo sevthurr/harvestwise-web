@@ -49,7 +49,8 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { formatPeso } from "../components/crops/types";
 import { Breadcrumb } from "../components/shared/Breadcrumb";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
-import { apiPost, apiPut, parseResponse } from "../../global/api";
+import { apiPost, parseResponse } from "../../global/api";
+import { writeCropPlan } from "../utils/cropPlanWrite";
 import {
   ADVISORY_CODES,
   PHASE_CODES,
@@ -335,7 +336,7 @@ function CropCycleDetailPage() {
       setHarvestEntryPrice("");
       setHarvestEntryDate(getLocalDateInputValue());
     } catch (err) {
-      setActionError(t("farmer.cropCycle.save_harvest_failed", {}, "Failed to save the harvest entry. Please try again."));
+      setActionError(err?.offline ? err.message : t("farmer.cropCycle.save_harvest_failed", {}, "Failed to save the harvest entry. Please try again."));
     } finally {
       setIsSavingHarvestEntry(false);
     }
@@ -558,7 +559,7 @@ function CropCycleDetailPage() {
           "This crop was already completed. The latest information has been loaded."
         ));
       } else {
-        setActionError(t("farmer.cropCycle.action_failed", {}, "The action could not be completed. Please try again."));
+        setActionError(err?.offline ? err.message : t("farmer.cropCycle.action_failed", {}, "The action could not be completed. Please try again."));
       }
     } finally {
       setIsSubmittingAction(false);
@@ -639,15 +640,17 @@ function CropCycleDetailPage() {
         estimated_selling_price: crop.farmgatePrice > 0 ? crop.farmgatePrice : undefined,
         crop_stage: explicitStage,
       };
-      const res = await apiPost("/advisory/plan", payload);
-      if (!res.ok) {
+      try {
+        const res = await apiPost("/advisory/plan", payload);
+        if (!res.ok) throw new Error(`advisory request failed: ${res.status}`);
+        return await parseResponse(res);
+      } catch {
         throw new Error(t(
           "farmer.cropCycle.advisory_request_failed",
           {},
           "The crop advisory could not be loaded. Please try again later."
         ));
       }
-      return await parseResponse(res);
     },
     enabled: canQueryPlan,
     staleTime: 1000 * 60 * 15,
@@ -739,8 +742,10 @@ function CropCycleDetailPage() {
   const profitLo = margin != null ? Math.max(0, Math.floor(margin * qty * 0.85 / 1e3) * 1e3) : 0;
   const profitHi = margin != null ? Math.ceil(margin * qty * 1.1 / 1e3) * 1e3 : 0;
   const rawAdvisory = planAdvisoryData?.advisory?.advisory || crop.advisoryCategory;
-  const advisoryCode = normalizeAdvisoryCode(rawAdvisory) || ADVISORY_CODES.RECOMMENDED;
-  const badge = composeAdvisoryBadge(advisoryCode, currentCropStage);
+  const advisoryCode = normalizeAdvisoryCode(rawAdvisory);
+  const badge = advisoryCode
+    ? composeAdvisoryBadge(advisoryCode, currentCropStage)
+    : { key: "farmer.advisory.not_available", type: "unavailable" };
   const advisoryCfg = ADVISORY_CFG[badge.type] || ADVISORY_CFG[advisoryCode] || ADVISORY_CFG.recommended;
   const AdvisoryIcon = advisoryCfg?.Icon;
   const advisoryLabel = advisoryCode ? t(badge.key) : t("farmer.advisory.not_available");
@@ -1590,13 +1595,17 @@ function CropCycleDetailPage() {
                     onClick={async () => {
                       setActionError(null);
                       try {
-                        const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: null });
-                        if (!res.ok) throw new Error(t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
+                        await writeCropPlan({
+                          method: "PUT",
+                          path: `/crop-plans/${crop.id}/farmgate`,
+                          body: { expected_farmgate_price: null },
+                          t,
+                        });
                         setFarmgatePrice("");
                         updateCrop(crop.id, { farmgatePrice: null });
                         await refreshCrops();
                       } catch (err) {
-                        setActionError(err.message || t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
+                        setActionError(err?.offline ? err.message : t("farmer.cropCycle.remove_farmgate_failed", {}, "Failed to remove the farmgate price. Please try again."));
                       }
                     }}
                     className="text-[12px] font-medium text-red-600 hover:opacity-70"
@@ -1632,14 +1641,18 @@ function CropCycleDetailPage() {
                   if (!(v > 0)) return;
                   setActionError(null);
                   try {
-                    const res = await apiPut(`/crop-plans/${crop.id}/farmgate`, { expected_farmgate_price: v });
-                    if (!res.ok) throw new Error(t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
+                    await writeCropPlan({
+                      method: "PUT",
+                      path: `/crop-plans/${crop.id}/farmgate`,
+                      body: { expected_farmgate_price: v },
+                      t,
+                    });
                     setFarmgatePrice(v);
                     updateCrop(crop.id, { farmgatePrice: v });
                     await refreshCrops();
                     setEditFarmgate(false);
                   } catch (err) {
-                    setActionError(err.message || t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
+                    setActionError(err?.offline ? err.message : t("farmer.cropCycle.save_farmgate_failed", {}, "Failed to save the farmgate price. Please try again."));
                   }
                 }}
                 className="px-3 py-2 bg-[var(--hw-green-700)] text-white text-sm font-medium rounded-xl hover:bg-[var(--hw-green-800)] transition-colors"

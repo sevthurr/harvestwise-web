@@ -429,6 +429,9 @@ const SecurityTab = ({ showToast }) => {
                     <img
                       src={setupData.qr_code}
                       alt="Scan this QR code with Google Authenticator"
+                      width="192"
+                      height="192"
+                      loading="lazy"
                       className="w-48 h-48 object-contain border border-[var(--hw-neutral-200)] rounded-xl"
                     />
                     <p className="text-[13px] text-black text-center">

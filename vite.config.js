@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import compression from 'vite-plugin-compression'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -11,13 +13,31 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    compression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      threshold: 1024,
+    }),
+    compression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 1024,
+    }),
     VitePWA({
       registerType: 'prompt',
       devOptions: {
         enabled: true,
         type: 'module'
       },
-      includeAssets: ['favicon-browser.png', 'favicon-app.png', 'horizontal-logo.png', 'vertical-logo.png'],
+      includeAssets: [
+        'favicon-browser.png',
+        'favicon-app.png',
+        'favicon-app-192.png',
+        'favicon-app-512.png',
+        'apple-touch-icon.png',
+        'horizontal-logo.png',
+        'vertical-logo.png',
+      ],
       manifest: {
         name: 'HarvestWise',
         short_name: 'HarvestWise',
@@ -31,19 +51,19 @@ export default defineConfig({
         lang: 'en',
         icons: [
           {
-            src: '/favicon-app.png',
+            src: '/favicon-app-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/favicon-app.png',
+            src: '/favicon-app-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/favicon-app.png',
+            src: '/favicon-app-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -69,7 +89,7 @@ export default defineConfig({
             //     so a save-then-navigate could hand back the *pre-save*
             //     response and silently revert the change on screen.
             //  2. Isolation. The cache key is the URL, with no notion of who
-            //     is signed in, and entries live 7 days. On a shared handset —
+            //     is signed in, and entries live 30 days. On a shared handset —
             //     the case AuthContext already guards against for tokens — user
             //     A's cached identity, email, and role could be served to user
             //     B during a slow request.
@@ -97,7 +117,7 @@ export default defineConfig({
               networkTimeoutSeconds: 5,
               expiration: {
                 maxEntries: 200,
-                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days, matches offline session grace
               },
               cacheableResponse: {
                 statuses: [0, 200],
@@ -106,7 +126,15 @@ export default defineConfig({
           },
         ],
       }
-    })
+    }),
+    visualizer({
+      filename: './bundle-stats.html',
+      template: 'treemap',
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+      sourcemap: true,
+    }),
   ],
   resolve: {
     alias: {
@@ -114,6 +142,12 @@ export default defineConfig({
     },
   },
   assetsInclude: ['**/*.svg', '**/*.csv'],
+  build: {
+    target: 'es2020',
+    minify: 'esbuild',
+    cssCodeSplit: true,
+    sourcemap: true,
+  },
   esbuild: {
     sourcemap: false,
   },

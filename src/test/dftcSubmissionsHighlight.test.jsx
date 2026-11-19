@@ -118,6 +118,32 @@ describe('DFTCSubmissions sorting and highlight', () => {
     expect(rows[0]).toHaveTextContent('SUB-TODAY-PRICE');
   });
 
+  it('reuses cached submissions when the page is remounted while data is fresh', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 30 * 60 * 1000 } }
+    });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dftc/submissions']}>
+          <DFTCSubmissions />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await screen.findAllByText('SUB-TODAY-PRICE');
+    view.unmount();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dftc/submissions']}>
+          <DFTCSubmissions />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect((await screen.findAllByText('SUB-TODAY-PRICE')).length).toBeGreaterThan(0);
+    expect(apiModule.apiGet).toHaveBeenCalledTimes(1);
+  });
+
   it('highlights price datasets processed today when highlight=price query param is present', async () => {
     renderComponent('/dftc/submissions?highlight=price');
 

@@ -20,6 +20,7 @@ import { PageHeader } from "../../global/components/shared/PageHeader";
 import { parseFileReal } from "../../global/utils/excelFilePreview";
 import { useFileDropZone } from "../../global/hooks/useFileDropZone";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 
 const DATA_TYPE_MAP = {
   "DFTC Wholesale Prices": "dftc_daily_wholesale",
@@ -322,8 +323,7 @@ const ISSUE_CODE_LABELS = {
 
 function DFTCUpload() {
   const { user } = useAuth();
-  const position = user?.position || user?.staff_profile?.position_name || user?.staff_profile?.position_title;
-  const canUpsert = position === "Acting Section Head";
+  const canUpsert = isPrivilegedDftcPosition(user);
   const queryClient = useQueryClient();
   let navigate;
   try {
@@ -1140,13 +1140,16 @@ function DFTCUpload() {
             )}
 
             {step === "importing" && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 space-y-3">
+              <div role="status" aria-live="polite" className="p-4 sm:p-5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13.5px] sm:text-[14px] font-bold text-blue-950">Standardizing & Storing Records…</p>
-                    <p className="text-[12px] text-blue-800 mt-0.5 break-words">
-                      {uploadMessage || "Uploading and processing dataset in the background…"}
-                    </p>
+                  <div className="min-w-0 flex-1 flex items-start gap-2.5">
+                    <Loader2 className="w-5 h-5 mt-0.5 text-blue-600 animate-spin shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="text-[13.5px] sm:text-[14px] font-bold text-blue-950">Standardizing & Storing Records…</p>
+                      <p className="text-[12px] text-blue-800 mt-0.5 break-words">
+                        {uploadMessage || "Uploading and processing dataset in the background…"}
+                      </p>
+                    </div>
                   </div>
                   <span className="text-[13px] sm:text-[14px] font-bold text-blue-700 shrink-0">{importProgress}%</span>
                 </div>

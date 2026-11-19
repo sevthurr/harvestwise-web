@@ -10,7 +10,12 @@ import { useLanguage } from "../global/contexts/LanguageContext";
 import { useAuth } from "../global/contexts/AuthContext";
 import { FarmLocationFields } from "../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../global/hooks/useFarmLocation";
-import { FARMER_PROFILE_KEY, loadFarmerOfflineData } from "../global/hooks/useFarmerPrefetch";
+import {
+  FARMER_COMMODITIES_KEY,
+  FARMER_PROFILE_KEY,
+  loadFarmerCommodities,
+  loadFarmerOfflineData,
+} from "../global/hooks/useFarmerPrefetch";
 
 // ---------------------------------------------------------------------------
 // Commodities are fetched from GET /farmer/commodities (active, is_top10=true).
@@ -155,7 +160,7 @@ const Step1 = ({ data, onLanguageSelect, onContinue, onSkip, langError }) => {
   const { t } = useLanguage();
   return (
     <StepCard>
-      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-4">
         {t("common.step_indicator", { current: 1, total: TOTAL }, `Step 1 of ${TOTAL}`)}
       </p>
       <LanguageSVG />
@@ -279,7 +284,7 @@ export const Step2 = ({ data, onChange, onContinue, onBack }) => {
 
   return (
     <StepCard>
-      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-4">
         {t("common.step_indicator", { current: 2, total: TOTAL }, `Step 2 of ${TOTAL}`)}
       </p>
       <LocationSVG />
@@ -328,7 +333,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitt
 
   return (
     <StepCard>
-      <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide mb-4">
+      <p className="text-[13px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide mb-4">
         {t("common.step_indicator", { current: 3, total: TOTAL }, `Step 3 of ${TOTAL}`)}
       </p>
       <CropsSVG />
@@ -367,7 +372,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitt
 
       {Object.keys(data.crops).length > 0 && (
         <div className="mt-5 space-y-3 pt-4 border-t border-[var(--hw-neutral-100)]">
-          <p className="text-[13px] font-semibold text-[var(--hw-neutral-400)] uppercase tracking-wide">
+          <p className="text-[13px] font-semibold text-[var(--hw-neutral-500)] uppercase tracking-wide">
             {t("onboarding.preferred_variety", {}, "Preferred variety (optional)")}
           </p>
           {Object.keys(data.crops).map((cropName) => {
@@ -385,7 +390,7 @@ const Step3 = ({ data, onChange, onContinue, onBack, fetchedCommodities, submitt
                     <option value="">{t("onboarding.variety_default", {}, "Regular")}</option>
                     {variants.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
-                  <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--hw-neutral-400)] pointer-events-none" fill="none" viewBox="0 0 10 6">
+                  <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--hw-neutral-500)] pointer-events-none" fill="none" viewBox="0 0 10 6">
                     <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
@@ -499,11 +504,18 @@ function OnboardingPage() {
 
   // Fetch lookup data on mount
   useEffect(() => {
-    apiGet("/api/v1/farmer/commodities")
-      .then(parseResponse)
-      .then(setFetchedCommodities)
-      .catch(() => { /* non-fatal — crop submission falls back to empty */ });
-  }, []);
+    let active = true;
+    const cached = queryClient.getQueryData(FARMER_COMMODITIES_KEY);
+    if (Array.isArray(cached)) setFetchedCommodities(cached);
+
+    loadFarmerCommodities(queryClient)
+      .then((commodities) => {
+        if (active && Array.isArray(commodities)) setFetchedCommodities(commodities);
+      })
+      .catch(() => { /* non-fatal — the persisted catalog remains available offline */ });
+
+    return () => { active = false; };
+  }, [queryClient]);
 
   const patch = (d) => setData((prev) => ({ ...prev, ...d }));
   const next  = () => setStep((s) => (s < 4 ? s + 1 : 4));
@@ -584,7 +596,7 @@ function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
+    <main className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
 
       {/* Progress dots (steps 1–3 only) */}
       {step < 4 && (
@@ -618,7 +630,7 @@ function OnboardingPage() {
       {step === 4 && <SetupComplete data={data} onDone={done} />}
 
       <Footer className="mt-4" />
-    </div>
+    </main>
   );
 }
 

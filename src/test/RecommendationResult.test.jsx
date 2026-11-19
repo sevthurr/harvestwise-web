@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-const { navigateMock, apiPostMock } = vi.hoisted(() => ({
+const { navigateMock, apiPostMock, apiPutMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   apiPostMock: vi.fn(),
+  apiPutMock: vi.fn(),
 }));
 
 vi.mock("react-router", async (importOriginal) => {
@@ -28,9 +29,14 @@ vi.mock("../app/global/contexts/LanguageContext.jsx", () => ({
   }),
 }));
 
+const { parseResponseMock } = vi.hoisted(() => ({
+  parseResponseMock: vi.fn(async () => ({})),
+}));
+
 vi.mock("../app/global/api.js", () => ({
   apiPost: apiPostMock,
-  parseResponse: vi.fn(async () => ({})),
+  apiPut: apiPutMock,
+  parseResponse: parseResponseMock,
 }));
 
 vi.mock("../app/farmer/components/shared/WeatherLocationBanner.jsx", () => ({
@@ -85,13 +91,14 @@ const baseData = {
   expenses: [],
 };
 
-function renderResult(data) {
+function renderResult(data, extraProps = {}) {
   return render(
     <RecommendationResult
       data={data}
       advisoryResponse={advisoryResponse}
       onEdit={() => {}}
       onCompareAnother={() => {}}
+      {...extraProps}
     />
   );
 }
@@ -99,6 +106,7 @@ function renderResult(data) {
 beforeEach(() => {
   vi.clearAllMocks();
   apiPostMock.mockResolvedValue({ ok: true });
+  parseResponseMock.mockResolvedValue({});
 });
 
 describe("RecommendationResult — View basis navigation", () => {
@@ -171,5 +179,61 @@ describe("RecommendationResult — View basis navigation", () => {
     // Click to collapse
     fireEvent.click(toggle);
     expect(screen.queryByText(/Main reasons|Pangunang mga rason/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("RecommendationResult — offline save (Problem 1)", () => {
+  const offlineCopy = "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again.";
+
+  it("shows the view-only notice with zero taps and sends no crop-plan write on save", async () => {
+    const originalOnLine = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    try {
+      renderResult(baseData, { isOffline: true });
+      expect(screen.getByRole("status")).toHaveTextContent(offlineCopy);
+
+      // The mount autosave is a draft and must still be reachable offline.
+      expect(apiPostMock.mock.calls.some((c) => c[0] === "/crop-plans/draft")).toBe(true);
+
+      const saveBtn = screen.getByRole("button", { name: /Save to My Crops/i });
+      expect(saveBtn).not.toBeDisabled();
+      fireEvent.click(saveBtn);
+
+      // Only the exact non-draft path is a forbidden offline write.
+      expect(apiPostMock.mock.calls.filter((c) => c[0] === "/crop-plans")).toHaveLength(0);
+      expect(apiPutMock).not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(screen.getAllByText(offlineCopy).length).toBeGreaterThanOrEqual(2);
+      });
+    } finally {
+      Object.defineProperty(navigator, "onLine", { value: originalOnLine, configurable: true });
+    }
+  });
+
+  it("updates the view-only notice from connectivity events", () => {
+    renderResult(baseData);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    fireEvent(window, new Event("offline"));
+    expect(screen.getByRole("status")).toHaveTextContent(offlineCopy);
+
+    fireEvent(window, new Event("online"));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("keeps backend field message on 422 errors", async () => {
+    const err = new Error("commodity is required");
+    err.status = 422;
+    parseResponseMock.mockRejectedValueOnce(err);
+    renderResult(baseData);
+
+    const saveBtn = screen.getByRole("button", { name: /Save to My Crops/i });
+    fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("commodity is required")).toBeInTheDocument();
+    });
+    const saveCalls = apiPostMock.mock.calls.filter((c) => c[0] === "/crop-plans");
+    expect(saveCalls.length).toBeGreaterThanOrEqual(1);
   });
 });

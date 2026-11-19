@@ -185,6 +185,8 @@ const AdminLayoutInner = () => {
             <img 
               src="/horizontal-logo.png" 
               alt="HarvestWise" 
+              width="933"
+              height="137"
               className="w-[104px] xs:w-[118px] sm:w-[136px] h-5 object-contain flex-shrink-0"
             />
             <div className="hidden md:flex items-center gap-2 border-l border-[var(--hw-neutral-200)] pl-2.5 ml-1">

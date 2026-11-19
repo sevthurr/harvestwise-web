@@ -2,11 +2,12 @@ import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { dftcApi } from "../../../services/api/dftcApi";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 
 export default function DFTCEditApprovalRequests() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const isHead = user?.position === "Acting Section Head" || user?.staff_profile?.position_name === "Acting Section Head";
+  const isHead = isPrivilegedDftcPosition(user);
   const { data, isLoading, error } = useQuery({ queryKey: ["dftc-edit-approval-requests"], queryFn: () => dftcApi.getEditApprovalRequests(), enabled: isHead });
   const requests = data?.items || [];
   async function approve(item) {

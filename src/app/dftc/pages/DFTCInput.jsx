@@ -171,12 +171,9 @@ export default function DFTCInput() {
       const res = await apiGet("/dftc/submissions?page=1&page_size=50");
       return parseResponse(res);
     },
-    // Global defaults set staleTime: 30min and refetchOnMount: false, so
-    // returning here from the price/arrival entry pages reused the pre-save
-    // cache and the submission just saved was missing from the recent list.
-    // Saving invalidates this key while this page is unmounted, which only
-    // marks it stale — the refetch therefore has to be forced on mount.
-    refetchOnMount: "always"
+    // Refresh invalidated data after a save, but keep fresh cached data when
+    // navigating back from another DFTC page.
+    refetchOnMount: true
   });
 
   // Drafts are shared server state. Local storage is only a recovery fallback
@@ -191,7 +188,8 @@ export default function DFTCInput() {
       ]);
       return { price, arrival };
     },
-    refetchOnMount: "always",
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
     // The entry pages already synchronize their active draft. Keep this
     // overview poll as a low-frequency fallback and never run it in a hidden
     // tab, where several mounted queries can otherwise create a request burst.
@@ -207,7 +205,7 @@ export default function DFTCInput() {
       return parseResponse(res);
     },
     enabled: !!todayStr,
-    refetchOnMount: "always"
+    refetchOnMount: true
   });
 
   const todayReportRecordCount = useMemo(() => {

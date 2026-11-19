@@ -3,7 +3,9 @@ import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, AlertCircle, Loader2, Info } from "lucide-react";
 import { useAuth } from "../../global/contexts/AuthContext";
+import { isPrivilegedDftcPosition } from "../utils/positionAccess";
 import { apiGet, parseResponse } from "../../global/api";
+import { DFTC_DAILY_CACHE_TIME } from "../../global/hooks/dftcWorkspaceQueries";
 import { formatMarketName, formatDateOrMonth } from "./dftcSavedDatasets";
 import { parseApiDateTime } from "../../global/utils/apiTransforms";
 
@@ -279,7 +281,8 @@ function DFTCSubmissionDetail() {
         return null;
       }
     },
-    enabled: !!submissionId
+    enabled: !!submissionId,
+    staleTime: DFTC_DAILY_CACHE_TIME
   });
 
   const ds = useMemo(() => {
@@ -431,11 +434,7 @@ function DFTCSubmissionDetail() {
   const showValidation = effectiveStatus === "Saved";
   const isManual = ds.entryMethod === "Manual Input";
   const isGeneratedReport = Boolean(ds.isGeneratedReport || ds.entryMethod === "Generated Report");
-  const staff = user?.staff_profile || user?.staffProfile || {};
-  const canUpsert =
-    user?.position === "Acting Section Head" ||
-    staff.position_name === "Acting Section Head" ||
-    staff.position_title === "Acting Section Head";
+  const canUpsert = isPrivilegedDftcPosition(user);
 
   const INFO_ROWS = isGeneratedReport
     ? [
@@ -577,7 +576,7 @@ function DFTCSubmissionDetail() {
         </div>
       )}
 
-      {/* Edit Saved Entry — Acting Section Head only */}
+      {/* Edit Saved Entry — privileged DFTC positions only */}
       {effectiveStatus === "Saved" && canUpsert && !isGeneratedReport && (
         <div className={`${cardCls} p-4 space-y-3`}>
           <div>

@@ -88,7 +88,7 @@ const Field = ({ id, label, required = false, optional = false, optionalText = "
         <span className="text-red-500 ml-1 font-semibold" aria-hidden="true">*</span>
       )}
       {optional && (
-        <span className="ml-1 text-[13px] text-[var(--hw-neutral-400)] font-normal">
+        <span className="ml-1 text-[13px] text-[var(--hw-neutral-500)] font-normal">
           {optionalText}
         </span>
       )}
@@ -98,7 +98,7 @@ const Field = ({ id, label, required = false, optional = false, optionalText = "
 );
 
 const inputCls =
-  "w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]";
+  "w-full h-11 px-3.5 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-500)]";
 
 export function getGoogleRegistrationDestination(roleName) {
   const role = roleName || "Farmer";
@@ -352,7 +352,7 @@ function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
+    <main className="min-h-screen bg-white flex flex-col items-center px-4 py-12">
       {/* Logo + header + Language Switcher */}
       <div className="w-full max-w-xl relative flex flex-col items-center mb-6">
         <div className="absolute right-0 top-1 z-10">
@@ -437,8 +437,8 @@ function RegisterPage() {
                 value={form.suffix}
                 onChange={set("suffix")}
                 style={{ color: form.suffix === "None" ? "var(--hw-neutral-400, #9ca3af)" : "var(--hw-neutral-900, #111827)" }}
-                className={`w-full h-11 px-3.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow appearance-none pr-9 ${
-                  form.suffix === "None" ? "text-[var(--hw-neutral-400)] text-gray-400" : "text-[var(--hw-neutral-900)]"
+                className={`w-full h-11 px-3.5 text-[16px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow appearance-none pr-9 ${
+                  form.suffix === "None" ? "text-[var(--hw-neutral-500)] text-gray-400" : "text-[var(--hw-neutral-900)]"
                 }`}
               >
                 <option value="None" hidden disabled>
@@ -451,7 +451,7 @@ function RegisterPage() {
                 ))}
               </select>
               <svg
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-400)] pointer-events-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-500)] pointer-events-none"
                 fill="none"
                 viewBox="0 0 10 6"
                 aria-hidden="true"
@@ -505,7 +505,7 @@ function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-600)] p-1"
                 aria-label={showPw ? "Hide password" : "Show password"}
               >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -519,7 +519,7 @@ function RegisterPage() {
                     <li
                       key={req.key}
                       className={`flex items-center gap-1.5 text-[12px] transition-colors ${
-                        ok ? "text-emerald-600" : "text-[var(--hw-neutral-400)]"
+                        ok ? "text-emerald-600" : "text-[var(--hw-neutral-500)]"
                       }`}
                     >
                       <div
@@ -561,7 +561,7 @@ function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setShowCfm((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-600)] p-1"
                 aria-label={showCfm ? "Hide password" : "Show password"}
               >
                 {showCfm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -695,7 +695,7 @@ function RegisterPage() {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
-          <span className="text-[12px] text-[var(--hw-neutral-400)] font-medium">
+          <span className="text-[12px] text-[var(--hw-neutral-500)] font-medium">
             {t("auth.or", {}, "or")}
           </span>
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
@@ -828,7 +828,7 @@ function RegisterPage() {
           {googleConsentStep === "terms" ? <TermsContent /> : <PrivacyPolicyContent />}
         </LegalModal>
       )}
-    </div>
+    </main>
   );
 }
 

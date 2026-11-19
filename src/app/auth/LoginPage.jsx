@@ -208,7 +208,7 @@ function LoginPage() {
   });
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
+    <main className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
       {/* Logo + header + Language Switcher */}
       <div className="w-full max-w-sm relative flex flex-col items-center mb-6">
         <div className="absolute right-0 top-1 z-10">
@@ -315,7 +315,7 @@ function LoginPage() {
                       setMfaError("");
                     }}
                     placeholder="XXXXX-XXXXX"
-                    className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent placeholder:text-[var(--hw-neutral-400)]"
+                    className="w-full h-11 px-3.5 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent placeholder:text-[var(--hw-neutral-500)]"
                   />
                 </div>
                 <button
@@ -369,7 +369,7 @@ function LoginPage() {
               }}
               placeholder={t("auth.contact_placeholder", {}, "name@example.com or 09XXXXXXXXX")}
               required
-              className="w-full h-11 px-3.5 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
+              className="w-full h-11 px-3.5 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-500)]"
               error={!!error}
             />
           </div>
@@ -401,12 +401,12 @@ function LoginPage() {
                   setError("");
                 }}
                 placeholder={t("auth.password_placeholder", {}, "Enter your password")}
-                className="w-full h-11 pl-3.5 pr-11 text-[15px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-400)]"
+                className="w-full h-11 pl-3.5 pr-11 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-500)]"
               />
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-400)] hover:text-[var(--hw-neutral-600)] transition-colors p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-600)] transition-colors p-1"
                 aria-label={showPw ? "Hide password" : "Show password"}
               >
                 {showPw ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
@@ -434,7 +434,7 @@ function LoginPage() {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
-          <span className="text-[12px] text-[var(--hw-neutral-400)] font-medium">
+          <span className="text-[12px] text-[var(--hw-neutral-500)] font-medium">
             {t("auth.or", {}, "or")}
           </span>
           <div className="flex-1 h-px bg-[var(--hw-neutral-200)]" />
@@ -476,7 +476,7 @@ function LoginPage() {
       </div>
 
       <Footer lang={authLang} className="mt-4" />
-    </div>
+    </main>
   );
 }
 

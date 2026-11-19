@@ -82,6 +82,8 @@ const TOP10_COMMODITY_CATEGORIES = COMMODITY_CATEGORIES.map((cat) => ({
   commodities: cat.items.filter((i) => HW_COMMODITY_NAMES.has(i.name)).map((i) => i.name),
 })).filter((cat) => cat.commodities.length > 0);
 
+const DFTC_DAILY_TRENDS_STALE_TIME = 24 * 60 * 60 * 1000;
+
 function getCommodityCategory(name) {
   return getCategoryFor(name) ?? "—";
 }
@@ -408,7 +410,7 @@ function DateSelect({ preset, customFrom, customTo, onChange }) {
   );
 }
 
-function PeriodSelect({ preset, customFrom, customTo, onChange }) {
+function PeriodSelectLegacy({ preset, customFrom, customTo, onChange }) {
   const [dropOpen, setDropOpen] = useState(false);
   const [popOpen, setPopOpen] = useState(false);
   const [pendingFrom, setPendingFrom] = useState("");
@@ -426,7 +428,84 @@ function PeriodSelect({ preset, customFrom, customTo, onChange }) {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const displayLabel = getPeriodLabel(preset, customFrom, customTo);
+  const options = [
+    { key: "2m", label: "Last 2 months" },
+    { key: "3m", label: "Last 3 months" },
+    { key: "6m", label: "Last 6 months" },
+    { key: "all", label: "All recorded months" },
+    { key: "custom", label: "Custom" }
+  ];
+  const invalidRange = pendingFrom && pendingTo && pendingTo < pendingFrom;
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => { setDropOpen(!dropOpen); setPopOpen(false); }}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+      >
+        <span className="truncate font-medium">{getPeriodLabel(preset, customFrom, customTo)}</span>
+        <ChevronDown size={14} className={`shrink-0 text-[var(--hw-neutral-500)] ml-2 transition-transform ${dropOpen ? "rotate-180" : ""}`} />
+      </button>
+      {dropOpen && (
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-full min-w-[160px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => {
+                if (opt.key === "custom") {
+                  setPendingFrom(customFrom);
+                  setPendingTo(customTo);
+                  setDropOpen(false);
+                  setPopOpen(true);
+                } else {
+                  onChange(opt.key);
+                  setDropOpen(false);
+                }
+              }}
+              className={`w-full text-left px-4 py-2 text-[13px] transition-colors cursor-pointer ${preset === opt.key ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"}`}
+            >{opt.label}</button>
+          ))}
+        </div>
+      )}
+      {popOpen && (
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-72 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-4">
+          <div className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mb-3">Select Month Range</div>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <input type="month" value={pendingFrom ? pendingFrom.slice(0, 7) : ""} onChange={(e) => setPendingFrom(e.target.value ? `${e.target.value}-01` : "")} className="w-full px-2.5 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white" />
+            <input type="month" value={pendingTo ? pendingTo.slice(0, 7) : ""} onChange={(e) => setPendingTo(e.target.value ? `${e.target.value}-28` : "")} className="w-full px-2.5 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white" />
+          </div>
+          {invalidRange && <div className="text-[11px] text-red-500 mb-2">End month must not be before start month.</div>}
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setPopOpen(false)} className="px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg cursor-pointer">Cancel</button>
+            <button disabled={!pendingFrom || !pendingTo || !!invalidRange} onClick={() => { onChange("custom", pendingFrom, pendingTo); setPopOpen(false); }} className="px-3 py-1.5 text-[12px] bg-[var(--hw-green-700)] text-white rounded-lg disabled:opacity-50 cursor-pointer">Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PeriodSelect({ preset, customFrom, customTo, onChange, disabled = false }) {
+  const [dropOpen, setDropOpen] = useState(false);
+  const [popOpen, setPopOpen] = useState(false);
+  const [pendingFrom, setPendingFrom] = useState("");
+  const [pendingTo, setPendingTo] = useState("");
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function h(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setDropOpen(false);
+        setPopOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const displayLabel = disabled ? "All recorded years" : getPeriodLabel(preset, customFrom, customTo);
 
   const options = [
     { key: "2m", label: "Last 2 months" },
@@ -442,11 +521,13 @@ function PeriodSelect({ preset, customFrom, customTo, onChange }) {
     <div ref={containerRef} className="relative w-full">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           setDropOpen(!dropOpen);
           setPopOpen(false);
         }}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors ${disabled ? "opacity-60 cursor-not-allowed" : "hover:border-[var(--hw-neutral-400)] cursor-pointer"}`}
       >
         <span className="truncate font-medium">{displayLabel}</span>
         <ChevronDown size={14} className={`shrink-0 text-[var(--hw-neutral-500)] ml-2 transition-transform ${dropOpen ? "rotate-180" : ""}`} />
@@ -785,6 +866,8 @@ function TableSkeleton({ cols = 8, rows = 5 }) {
 
 function DFTCTrends() {
   const isMobile = useIsMobile();
+  const { year: todayYear, month: todayMonth, day: todayDay } = manilaTodayParts();
+  const trendDateKey = `${todayYear}-${todayMonth}-${todayDay}`;
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined" && window.location) {
       const params = new URLSearchParams(window.location.search);
@@ -1046,7 +1129,7 @@ function DFTCTrends() {
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
     queryKey: ["dftc-trends-price-catalog"],
     queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 100 }),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   const catalogPairs = useMemo(
@@ -1061,7 +1144,7 @@ function DFTCTrends() {
     queryKey: ["dftc-trends-price-catalog-supported"],
     queryFn: () =>
       pricesApi.getPriceList({ include_supported_varieties: true, page_size: 100 }),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   const priceCatalogPairs = useMemo(() => {
@@ -1135,7 +1218,7 @@ function DFTCTrends() {
     : pCommodity;
 
   const { data: priceDetailData, isLoading: isPriceDetailLoading } = useQuery({
-    queryKey: ["dftc-trends-price-detail", pCommodityId, pPriceTypeKey, fHorizon],
+    queryKey: ["dftc-trends-price-detail", trendDateKey, pCommodityId, pPriceTypeKey, fHorizon],
     queryFn: () =>
       pricesApi.getPriceDetail(pCommodityId, {
         price_type: pPriceTypeKey,
@@ -1144,7 +1227,7 @@ function DFTCTrends() {
       }),
     enabled: Boolean(pCommodityId) && apiBacked,
     placeholderData: (prev) => prev,
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   const isPricesLoading =
@@ -1258,7 +1341,7 @@ function DFTCTrends() {
   const { data: commodityCatalog, isLoading: isCommodityCatalogLoading } = useQuery({
     queryKey: ["dftc-trends-commodity-catalog"],
     queryFn: () => dftcApi.getCommodityCatalog(),
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   // Arrival trends are intentionally limited to HarvestWise's supported
@@ -1302,7 +1385,7 @@ function DFTCTrends() {
     isLoading: isArrivalLoading,
     isError: isArrivalError,
   } = useQuery({
-    queryKey: ["dftc-trends-arrivals", aCommodityId],
+    queryKey: ["dftc-trends-arrivals", trendDateKey, aCommodityId],
     queryFn: () =>
       analyticsApi.getArrivalPressure(aCommodityId, null, null, {
         aggregateVarieties: true,
@@ -1314,7 +1397,7 @@ function DFTCTrends() {
       // name, which the endpoint cannot resolve for a name that only exists
       // per variety — the request would 404 and flash an error banner.
       !isCommodityCatalogLoading,
-    staleTime: 60 * 1000,
+    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
 
   // Use the full arrival history (all years on record) rather than the 90-day
@@ -1374,6 +1457,7 @@ function DFTCTrends() {
       const dStr = r.arrival_date || r.date;
       if (!dStr) return;
       const dateKey = String(dStr).slice(0, 10);
+      const key = dateKey;
       const val = aVolumeType === "Farm Source"
         ? r.farm_source_volume_kg
         : aVolumeType === "Other Source"
@@ -1381,7 +1465,7 @@ function DFTCTrends() {
         : r.volume_kg;
       if (val == null) return;
 
-      grouped.set(dateKey, (grouped.get(dateKey) || 0) + Number(val));
+      grouped.set(key, (grouped.get(key) || 0) + Number(val));
     });
 
     return [...grouped.entries()]
@@ -1396,8 +1480,20 @@ function DFTCTrends() {
   }, [filteredArrivalRecords, aVolumeType, aCommodity]);
 
   const aSourcesBreakdown = useMemo(() => {
-    const totalFarm = Number(arrivalQueryData?.source_breakdown?.farm_source_volume_kg || 0);
-    const totalOther = Number(arrivalQueryData?.source_breakdown?.other_source_volume_kg || 0);
+    const recordTotals = filteredArrivalRecords.reduce(
+      (totals, record) => ({
+        farm: totals.farm + Number(record.farm_source_volume_kg || 0),
+        other: totals.other + Number(record.other_source_volume_kg || 0),
+      }),
+      { farm: 0, other: 0 }
+    );
+    const hasRecordSourceData = recordTotals.farm > 0 || recordTotals.other > 0;
+    const totalFarm = hasRecordSourceData
+      ? recordTotals.farm
+      : Number(arrivalQueryData?.source_breakdown?.farm_source_volume_kg || 0);
+    const totalOther = hasRecordSourceData
+      ? recordTotals.other
+      : Number(arrivalQueryData?.source_breakdown?.other_source_volume_kg || 0);
     const combined = totalFarm + totalOther;
     if (combined === 0) return [];
     const farmPct = Math.round((totalFarm / combined) * 100);
@@ -1406,7 +1502,7 @@ function DFTCTrends() {
       { name: "Farm Source", value: farmPct, volumeKg: totalFarm, color: "#15803d" },
       { name: "Other Sources", value: otherPct, volumeKg: totalOther, color: "#f59e0b" }
     ];
-  }, [arrivalQueryData]);
+  }, [arrivalQueryData, filteredArrivalRecords]);
 
   const aVarietySummaries = useMemo(() => {
     if (!rawArrivalRecords.length) return [];
@@ -2036,13 +2132,15 @@ function DFTCTrends() {
             />
           </div>
           <div>
-            <label className={labelCls}>Year</label>
+            <label htmlFor="arrival-year" className={labelCls}>Year</label>
             <div className="relative">
               <select
+                id="arrival-year"
                 value={aYear}
                 onChange={(e) => setAYear(Number(e.target.value))}
                 className={selectCls + " appearance-none pr-9 cursor-pointer"}
               >
+                <option value="all">All years</option>
                 {(() => {
                   return arrivalYears.length > 0 ? arrivalYears : [Number(manilaTodayParts().year)];
                 })().map((y) => (
