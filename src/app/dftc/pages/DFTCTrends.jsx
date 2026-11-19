@@ -410,6 +410,83 @@ function DateSelect({ preset, customFrom, customTo, onChange }) {
   );
 }
 
+function PeriodSelectLegacy({ preset, customFrom, customTo, onChange }) {
+  const [dropOpen, setDropOpen] = useState(false);
+  const [popOpen, setPopOpen] = useState(false);
+  const [pendingFrom, setPendingFrom] = useState("");
+  const [pendingTo, setPendingTo] = useState("");
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function h(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setDropOpen(false);
+        setPopOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const options = [
+    { key: "2m", label: "Last 2 months" },
+    { key: "3m", label: "Last 3 months" },
+    { key: "6m", label: "Last 6 months" },
+    { key: "all", label: "All recorded months" },
+    { key: "custom", label: "Custom" }
+  ];
+  const invalidRange = pendingFrom && pendingTo && pendingTo < pendingFrom;
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => { setDropOpen(!dropOpen); setPopOpen(false); }}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 text-[13px] border border-[var(--hw-neutral-200)] rounded-xl bg-white text-[var(--hw-neutral-900)] hover:border-[var(--hw-neutral-400)] focus:outline-none transition-colors cursor-pointer"
+      >
+        <span className="truncate font-medium">{getPeriodLabel(preset, customFrom, customTo)}</span>
+        <ChevronDown size={14} className={`shrink-0 text-[var(--hw-neutral-500)] ml-2 transition-transform ${dropOpen ? "rotate-180" : ""}`} />
+      </button>
+      {dropOpen && (
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-full min-w-[160px] bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg py-1">
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => {
+                if (opt.key === "custom") {
+                  setPendingFrom(customFrom);
+                  setPendingTo(customTo);
+                  setDropOpen(false);
+                  setPopOpen(true);
+                } else {
+                  onChange(opt.key);
+                  setDropOpen(false);
+                }
+              }}
+              className={`w-full text-left px-4 py-2 text-[13px] transition-colors cursor-pointer ${preset === opt.key ? "bg-[var(--hw-green-50)] text-[var(--hw-green-800)] font-semibold" : "text-[var(--hw-neutral-800)] hover:bg-[var(--hw-neutral-50)]"}`}
+            >{opt.label}</button>
+          ))}
+        </div>
+      )}
+      {popOpen && (
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-72 bg-white border border-[var(--hw-neutral-200)] rounded-xl shadow-lg p-4">
+          <div className="text-[13px] font-semibold text-[var(--hw-neutral-900)] mb-3">Select Month Range</div>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <input type="month" value={pendingFrom ? pendingFrom.slice(0, 7) : ""} onChange={(e) => setPendingFrom(e.target.value ? `${e.target.value}-01` : "")} className="w-full px-2.5 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white" />
+            <input type="month" value={pendingTo ? pendingTo.slice(0, 7) : ""} onChange={(e) => setPendingTo(e.target.value ? `${e.target.value}-28` : "")} className="w-full px-2.5 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg bg-white" />
+          </div>
+          {invalidRange && <div className="text-[11px] text-red-500 mb-2">End month must not be before start month.</div>}
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setPopOpen(false)} className="px-3 py-1.5 text-[12px] border border-[var(--hw-neutral-200)] rounded-lg cursor-pointer">Cancel</button>
+            <button disabled={!pendingFrom || !pendingTo || !!invalidRange} onClick={() => { onChange("custom", pendingFrom, pendingTo); setPopOpen(false); }} className="px-3 py-1.5 text-[12px] bg-[var(--hw-green-700)] text-white rounded-lg disabled:opacity-50 cursor-pointer">Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PeriodSelect({ preset, customFrom, customTo, onChange, disabled = false }) {
   const [dropOpen, setDropOpen] = useState(false);
   const [popOpen, setPopOpen] = useState(false);
@@ -1029,7 +1106,6 @@ function DFTCTrends() {
   const [aDatePreset, setADatePreset] = useState("all");
   const [aCustomFrom, setACustomFrom] = useState("");
   const [aCustomTo, setACustomTo] = useState("");
-  const [aGranularity, setAGranularity] = useState("daily");
   const [aYear, setAYear] = useState(Number(manilaTodayParts().year));
   const [aPage, setAPage] = useState(1);
   const [aShowAll, setAShowAll] = useState(false);
@@ -1044,7 +1120,7 @@ function DFTCTrends() {
   useEffect(() => {
     setAPage(1);
     setAShowAll(false);
-  }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo, aGranularity, aYear]);
+  }, [aCommodity, aVolumeType, aDatePreset, aCustomFrom, aCustomTo, aYear]);
 
   // Live Price Queries — catalog commodity_id + persisted forecast.points
   const apiBacked = useMemo(() => isApiBackedPriceSeries(pMarket, pPriceType), [pMarket, pPriceType]);
@@ -1352,26 +1428,25 @@ function DFTCTrends() {
   }, [arrivalYears, aYear]);
 
   const filteredArrivalRecords = useMemo(() => {
-    const compareYears = aGranularity === "yearly";
     let startDate = null;
     let endDate = null;
       const today = parseManilaDate(`${manilaTodayParts().year}-${manilaTodayParts().month}-${manilaTodayParts().day}`);
-    if (!compareYears && ["2m", "3m", "6m"].includes(aDatePreset)) {
+    if (["2m", "3m", "6m"].includes(aDatePreset)) {
       startDate = new Date(today);
       startDate.setMonth(today.getMonth() - Number(aDatePreset.slice(0, -1)));
-    } else if (!compareYears && aDatePreset === "custom") {
+    } else if (aDatePreset === "custom") {
       startDate = aCustomFrom ? new Date(`${aCustomFrom.slice(0, 10)}T00:00:00`) : null;
       endDate = aCustomTo ? new Date(`${aCustomTo.slice(0, 10)}T23:59:59`) : null;
     }
     return rawArrivalRecords.filter((record) => {
       const recordDate = parseManilaDate(String(record.arrival_date || "").slice(0, 10));
       if (!recordDate) return false;
-      if (!compareYears && !startDate && !endDate && aYear != null && recordDate.getFullYear() !== aYear) {
+      if (!startDate && !endDate && aYear != null && recordDate.getFullYear() !== aYear) {
         return false;
       }
       return (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
     });
-  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo, aGranularity, aYear]);
+  }, [rawArrivalRecords, aDatePreset, aCustomFrom, aCustomTo, aYear]);
 
   const aVarietyKeys = useMemo(() => [aCommodity], [aCommodity]);
 
@@ -1382,7 +1457,7 @@ function DFTCTrends() {
       const dStr = r.arrival_date || r.date;
       if (!dStr) return;
       const dateKey = String(dStr).slice(0, 10);
-      const key = aGranularity === "yearly" ? dateKey.slice(0, 4) : aGranularity === "monthly" ? dateKey.slice(0, 7) : dateKey;
+      const key = dateKey;
       const val = aVolumeType === "Farm Source"
         ? r.farm_source_volume_kg
         : aVolumeType === "Other Source"
@@ -1399,14 +1474,10 @@ function DFTCTrends() {
       const dObj = parseManilaDate(date);
         const month = !dObj
           ? date
-          : aGranularity === "yearly"
-            ? date
-            : aGranularity === "monthly"
-              ? dObj.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "Asia/Manila" })
-              : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
+          : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
         return { month, [aCommodity]: val };
       });
-  }, [filteredArrivalRecords, aVolumeType, aCommodity, aGranularity]);
+  }, [filteredArrivalRecords, aVolumeType, aCommodity]);
 
   const aSourcesBreakdown = useMemo(() => {
     const recordTotals = filteredArrivalRecords.reduce(
@@ -1471,9 +1542,7 @@ function DFTCTrends() {
 
   const aTotalPages = Math.max(1, Math.ceil(aTableRows.length / PAGE_SIZE));
   const aPageRows = aTableRows.slice((aPage - 1) * PAGE_SIZE, aPage * PAGE_SIZE);
-  const aPeriodLabel = aGranularity === "yearly"
-    ? "All recorded years"
-    : aDatePreset === "all"
+  const aPeriodLabel = aDatePreset === "all"
     ? arrivalQueryData?.data_is_stale
       ? "Historical fallback records"
       : `${arrivalQueryData?.lookback_days ?? 90}-day window`
@@ -2008,7 +2077,7 @@ function DFTCTrends() {
       {/* 1. Filters */}
       <div className={`${cardCls} p-3 sm:p-4 md:p-5`}>
         <h2 className="text-[11px] sm:text-[12px] font-bold text-[var(--hw-neutral-800)] uppercase tracking-wider mb-2 sm:mb-2.5">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
           <div className="col-span-2 sm:col-span-1">
             <label className={labelCls}>Commodity</label>
             <SearchableCombobox categories={arrivalCommodityCategories} value={aCommodity} onChange={setACommodity} />
@@ -2055,7 +2124,6 @@ function DFTCTrends() {
               preset={aDatePreset}
               customFrom={aCustomFrom}
               customTo={aCustomTo}
-              disabled={aGranularity === "yearly"}
               onChange={(p, from, to) => {
                 setADatePreset(p);
                 if (from !== undefined) setACustomFrom(from);
@@ -2064,30 +2132,12 @@ function DFTCTrends() {
             />
           </div>
           <div>
-            <label htmlFor="arrival-granularity" className={labelCls}>Trend view</label>
-            <div className="relative">
-              <select
-                id="arrival-granularity"
-                aria-label="Arrival trend view"
-                value={aGranularity}
-                onChange={(e) => setAGranularity(e.target.value)}
-                className={selectCls + " appearance-none pr-9 cursor-pointer"}
-              >
-                <option value="daily">Day</option>
-                <option value="monthly">Month</option>
-                <option value="yearly">Year vs Year</option>
-              </select>
-              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
-            </div>
-          </div>
-          <div>
             <label htmlFor="arrival-year" className={labelCls}>Year</label>
             <div className="relative">
               <select
                 id="arrival-year"
-                value={aGranularity === "yearly" ? "all" : aYear}
+                value={aYear}
                 onChange={(e) => setAYear(Number(e.target.value))}
-                disabled={aGranularity === "yearly"}
                 className={selectCls + " appearance-none pr-9 cursor-pointer"}
               >
                 <option value="all">All years</option>
