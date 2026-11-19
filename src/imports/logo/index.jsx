@@ -6,6 +6,8 @@ export function VerticalLogo({ className }) {
         src="/vertical-logo.png" 
         width="938"
         height="938"
+        loading="eager"
+        fetchPriority="high"
         className="w-full h-full object-contain"
       />
     </div>

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { RouterProvider } from 'react-router';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { router } from './routes';
@@ -25,7 +26,9 @@ export default function App() {
               <CropsProvider>
                 <NotificationStreamProvider>
                   <BackgroundProcessProvider>
-                    <RouterProvider router={router} />
+                    <Suspense fallback={null}>
+                      <RouterProvider router={router} />
+                    </Suspense>
                     {/* Rendered outside the router so every workspace (farmer,
                       DFTC, admin) can activate a waiting service worker. */}
                     <PwaUpdatePrompt />
