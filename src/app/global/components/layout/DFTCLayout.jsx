@@ -86,9 +86,15 @@ function DFTCLayoutInner() {
   };
   const queryClient = useQueryClient();
   useEffect(() => {
-    prefetchDftcWorkspace(queryClient);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Only warm the shared home/submission cache when a route can use it.
+    // Loading the full workspace on every DFTC page delayed first paint and
+    // fetched data that Trends, Profile, and Settings never read.
+    const warmsWorkspace =
+      location.pathname === "/dftc" ||
+      location.pathname.startsWith("/dftc/input") ||
+      location.pathname.startsWith("/dftc/submissions");
+    if (warmsWorkspace) prefetchDftcWorkspace(queryClient);
+  }, [location.pathname, queryClient]);
   usePrivilegedDataVersion("dftc");
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);

@@ -194,24 +194,28 @@ export function SearchableCombobox({ categories, value, onChange }) {
 
   return (
     <div ref={containerRef} className="relative w-full">
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="w-full flex items-center justify-between px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none hover:border-[var(--hw-neutral-400)] transition-colors cursor-pointer"
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            {selectedIconKey ? (
-              <CommodityIllustration commodityId={selectedIconKey} className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            ) : (
-              <Leaf className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--hw-green-600)] shrink-0" />
-            )}
-            <span className="truncate font-medium">{value}</span>
-          </div>
-          <ChevronDown size={13} className="shrink-0 text-[var(--hw-neutral-500)] ml-1 sm:ml-1.5" />
-        </button>
-      ) : (
-        <div className="border border-[var(--hw-green-600)] rounded-xl bg-white shadow-lg overflow-hidden z-50 relative">
+      <button
+        type="button"
+        onClick={() => setOpen((isOpen) => !isOpen)}
+        className={`w-full flex items-center justify-between px-2.5 py-1.5 sm:px-3 sm:py-2 text-[12px] sm:text-[13px] border rounded-lg sm:rounded-xl bg-white text-[var(--hw-neutral-900)] focus:outline-none transition-colors cursor-pointer ${
+          open
+            ? "border-[var(--hw-green-600)]"
+            : "border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-400)]"
+        }`}
+      >
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {selectedIconKey ? (
+            <CommodityIllustration commodityId={selectedIconKey} className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          ) : (
+            <Leaf className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--hw-green-600)] shrink-0" />
+          )}
+          <span className="truncate font-medium">{value}</span>
+        </div>
+        <ChevronDown size={13} className={`shrink-0 text-[var(--hw-neutral-500)] ml-1 sm:ml-1.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1.5 w-full border border-[var(--hw-green-600)] rounded-xl bg-white shadow-lg overflow-hidden z-50">
           <div className="flex items-center px-3 py-2 border-b border-[var(--hw-neutral-200)]">
             <Search size={14} className="text-[var(--hw-neutral-400)] shrink-0 mr-2" />
             <input

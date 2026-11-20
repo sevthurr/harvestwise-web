@@ -50,6 +50,5 @@ export function prefetchDftcWorkspace(queryClient) {
   return Promise.all([
     queryClient.prefetchQuery(options(DFTC_HOME_KEY, fetchDftcHome)),
     queryClient.prefetchQuery(options(DFTC_SUBMISSIONS_KEY, fetchDftcSubmissions)),
-    queryClient.prefetchQuery(options(DFTC_STAFF_KEY, fetchDftcStaff)),
   ]).catch(() => {});
 }

@@ -25,7 +25,7 @@ const inputCls = [
 ].join(" ");
 
 const labelCls = "block text-[13px] font-medium text-[var(--hw-neutral-800)] mb-1";
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function formatDateTime(isoStr) {
   if (!isoStr) return "—";
