@@ -12,5 +12,11 @@ export const navigation = {
   get_app: "I-install ang App",
   installed: "Naka-install na",
   installing: "Gina-install...",
+  install_help_title: "Unsaon pag-install sa app",
+  install_help_ios: "I-tap ang Share button, unya pilia ang “Add to Home Screen”.",
+  install_help_android: "Ablihi ang ⋮ menu sa browser, unya pilia ang “Install app” o “Add to Home screen”.",
+  install_help_desktop: "I-klik ang install icon sa address bar, o ablihi ang ⋮ menu → “Install, Cast, save and share” → “Install page as app”.",
+  install_help_generic: "Ablihi ang menu sa browser ug pilia ang “Install app” o “Add to Home Screen”.",
+  install_help_dismiss: "Isira",
   logout: "Mag-log out",
 };

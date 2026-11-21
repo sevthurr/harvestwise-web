@@ -195,6 +195,17 @@ describe("Farmer prices page", () => {
     expect(screen.queryByText("Carrots")).not.toBeInTheDocument();
   });
 
+  it("does not offer sort options duplicated by price direction", () => {
+    renderPricesPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+
+    expect(screen.queryByRole("button", { name: "Price rising first" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Price falling first" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rising" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Falling" })).toBeInTheDocument();
+  });
+
   it("filters commodities by price direction", async () => {
     const ampalaya = {
       commodity_id: "COM-0001",

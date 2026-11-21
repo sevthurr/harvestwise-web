@@ -12,5 +12,11 @@ export const navigation = {
   get_app: "Get the App",
   installed: "Installed",
   installing: "Installing...",
+  install_help_title: "How to install the app",
+  install_help_ios: "Tap the Share button, then choose “Add to Home Screen”.",
+  install_help_android: "Open your browser’s ⋮ menu, then choose “Install app” or “Add to Home screen”.",
+  install_help_desktop: "Click the install icon in the address bar, or open the ⋮ menu → “Install, Cast, save and share” → “Install page as app”.",
+  install_help_generic: "Open your browser menu and choose “Install app” or “Add to Home Screen”.",
+  install_help_dismiss: "Close",
   logout: "Sign Out",
 };

@@ -5,8 +5,6 @@ export const prices = {
   filter_and_sort: "Salain at Ayusin",
   sort_by: "Ayusin ayon sa",
   sort_name: "Pangalan ng gulay (A–Z)",
-  sort_rising_first: "Unahin ang tumataas na presyo",
-  sort_falling_first: "Unahin ang bumababang presyo",
   sort_price_low: "Unahin ang pinakamababang presyo",
   sort_price_high: "Unahin ang pinakamataas na presyo",
   direction_label: "Galaw ng presyo",

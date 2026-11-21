@@ -71,8 +71,6 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
 
   const sortOptions = [
     ["name", t("farmer.prices.sort_name", {}, "Commodity name (A–Z)")],
-    ["rising-first", t("farmer.prices.sort_rising_first", {}, "Price rising first")],
-    ["falling-first", t("farmer.prices.sort_falling_first", {}, "Price falling first")],
     ["price-low", t("farmer.prices.sort_price_low", {}, "Lowest price first")],
     ["price-high", t("farmer.prices.sort_price_high", {}, "Highest price first")]
   ];
@@ -475,20 +473,6 @@ function PricesPage() {
     }
     
     const secondaryCompare = (a, b) => {
-      const ORDER_RISING = { Rising: 0, Stable: 1, Falling: 2 };
-      const ORDER_FALLING = { Falling: 0, Stable: 1, Rising: 2 };
-      if (filter.sortBy === "rising-first") {
-        const orderA = a.displayData.direction in ORDER_RISING ? ORDER_RISING[a.displayData.direction] : 3;
-        const orderB = b.displayData.direction in ORDER_RISING ? ORDER_RISING[b.displayData.direction] : 3;
-        if (orderA !== orderB) return orderA - orderB;
-        return (a.name || '').localeCompare(b.name || '');
-      }
-      if (filter.sortBy === "falling-first") {
-        const orderA = a.displayData.direction in ORDER_FALLING ? ORDER_FALLING[a.displayData.direction] : 3;
-        const orderB = b.displayData.direction in ORDER_FALLING ? ORDER_FALLING[b.displayData.direction] : 3;
-        if (orderA !== orderB) return orderA - orderB;
-        return (a.name || '').localeCompare(b.name || '');
-      }
       if (filter.sortBy === "price-low" || filter.sortBy === "price-high") {
         const getPrice = (c) => {
           const d = c.displayData;
@@ -513,8 +497,6 @@ function PricesPage() {
 
   const sortLabelMap = {
     "name": t("farmer.prices.sort_name", {}, "Commodity name (A–Z)"),
-    "rising-first": t("farmer.prices.sort_rising_first", {}, "Price rising first"),
-    "falling-first": t("farmer.prices.sort_falling_first", {}, "Price falling first"),
     "price-low": t("farmer.prices.sort_price_low", {}, "Lowest price first"),
     "price-high": t("farmer.prices.sort_price_high", {}, "Highest price first"),
   };
