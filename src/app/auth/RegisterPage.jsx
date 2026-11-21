@@ -136,6 +136,11 @@ function RegisterPage() {
   const [emailOtpSending, setEmailOtpSending] = useState(false);
   const [emailOtpError, setEmailOtpError] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
+  const [phoneOtpStep, setPhoneOtpStep] = useState(null);
+  const [phoneOtpCode, setPhoneOtpCode] = useState("");
+  const [phoneOtpSending, setPhoneOtpSending] = useState(false);
+  const [phoneOtpError, setPhoneOtpError] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
 
   const capitalizeWords = (v) => v.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -251,6 +256,20 @@ function RegisterPage() {
       }
       return;
     }
+    // For phone registrations, verify the number with an SMS OTP first.
+    if (contactCheck.type === "phone" && !phoneVerified) {
+      setPhoneOtpSending(true);
+      setPhoneOtpError("");
+      try {
+        await authApi.requestPhoneOtp(contactCheck.normalized);
+        setPhoneOtpStep("verify");
+      } catch (err) {
+        setPhoneOtpError(err?.message || "Could not send the verification code. Try again.");
+      } finally {
+        setPhoneOtpSending(false);
+      }
+      return;
+    }
 
     await doRegister();
   };
@@ -272,6 +291,26 @@ function RegisterPage() {
       setEmailOtpError(err?.message || "Invalid or expired code. Try again.");
     } finally {
       setEmailOtpSending(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    const contactCheck = validateContact(form.contact.trim());
+    if (!phoneOtpCode.trim()) {
+      setPhoneOtpError("Enter the verification code.");
+      return;
+    }
+    setPhoneOtpSending(true);
+    setPhoneOtpError("");
+    try {
+      await authApi.verifyPhoneOtp(contactCheck.normalized, phoneOtpCode.trim());
+      setPhoneVerified(true);
+      setPhoneOtpStep(null);
+      await doRegister();
+    } catch (err) {
+      setPhoneOtpError(err?.message || "Invalid or expired code. Try again.");
+    } finally {
+      setPhoneOtpSending(false);
     }
   };
 
@@ -776,6 +815,40 @@ function RegisterPage() {
                 className="h-10 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-xl disabled:opacity-60"
               >
                 {emailOtpSending ? "Verifying…" : "Verify"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {phoneOtpStep === "verify" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4">
+            <h2 className="text-[18px] font-bold text-[var(--hw-neutral-900)]">Verify your phone</h2>
+            <p className="text-[13px] text-[var(--hw-neutral-600)]">Enter the code sent to {form.contact.trim()}.</p>
+            <input
+              type="text"
+              value={phoneOtpCode}
+              onChange={(e) => setPhoneOtpCode(e.target.value)}
+              placeholder="Verification code"
+              className={inputCls}
+            />
+            {phoneOtpError && <p className="text-[12px] text-red-600">{phoneOtpError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => { setPhoneOtpStep(null); setPhoneOtpCode(""); }}
+                className="h-10 px-3.5 text-[13px] font-medium border border-[var(--hw-neutral-200)] rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleVerifyPhoneOtp}
+                disabled={phoneOtpSending}
+                className="h-10 px-3.5 text-[13px] font-medium text-white bg-[var(--hw-green-700)] rounded-xl disabled:opacity-60"
+              >
+                {phoneOtpSending ? "Verifying…" : "Verify"}
               </button>
             </div>
           </div>

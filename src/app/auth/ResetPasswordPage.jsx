@@ -8,7 +8,8 @@ import { authApi } from "../../services/api";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
 import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "../global/components/ui/input-otp";
-import { isValidEmail, validatePasswordStrength } from "./authValidation";
+import { ContactInput } from "./components/ContactInput";
+import { validateContact, validatePasswordStrength } from "./authValidation";
 
 const OTP_LENGTH = 6;
 const inputClass =
@@ -17,7 +18,7 @@ const inputClass =
 function ResetPasswordPage() {
   const navigate = useNavigate();
   const { authLang, t } = usePublicAuthLanguage();
-  const [email, setEmail] = useState("");
+  const [contact, setContact] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -28,9 +29,9 @@ function ResetPasswordPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!isValidEmail(normalizedEmail)) {
-      setError(t("auth.errors.email_invalid", {}, "Enter a valid email address."));
+    const contactCheck = validateContact(contact);
+    if (!contactCheck.isValid) {
+      setError(t(`auth.errors.${contactCheck.errorKey}`, {}, "Enter a valid email address or phone number."));
       return;
     }
     if (code.length !== OTP_LENGTH) {
@@ -49,7 +50,7 @@ function ResetPasswordPage() {
     setError("");
     setLoading(true);
     try {
-      await parseResponse(await authApi.resetPassword(normalizedEmail, code, password));
+      await parseResponse(await authApi.resetPassword(contactCheck.normalized, code, password));
       navigate("/login", {
         replace: true,
         state: { passwordResetMessage: t("auth.reset_password_success", {}, "Password reset successfully. Please sign in.") },
@@ -76,8 +77,8 @@ function ResetPasswordPage() {
       <div className="w-full max-w-sm bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[0_2px_16px_0_rgba(0,0,0,0.07)] p-7">
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
-            <label htmlFor="reset-email" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">{t("auth.email", {}, "Email")}</label>
-            <input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => { setEmail(event.target.value); setError(""); }} className={inputClass} />
+            <label htmlFor="reset-contact" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">{t("auth.email_or_phone", {}, "Email or phone number")}</label>
+            <ContactInput id="reset-contact" value={contact} onChange={(value) => { setContact(value); setError(""); }} required autoComplete="username" className={inputClass} error={!!error} />
           </div>
           <div className="space-y-1.5">
             <label className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">{t("auth.reset_password_code_label", {}, "6-digit reset code")}</label>

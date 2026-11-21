@@ -21,16 +21,16 @@ export function changePassword(payload) {
 }
 
 export function requestPasswordReset(email) {
-  return apiPost("/auth/forgot-password", { email });
+  return apiPost("/auth/forgot-password", email.includes("@") ? { email } : { phone: email });
 }
 
 export function requestRegistrationEmailOtp(email) {
   return apiPost("/auth/register/request-email-otp", { email });
 }
 
-export function resetPassword(email, code, newPassword) {
+export function resetPassword(contact, code, newPassword) {
   return apiPost("/auth/reset-password", {
-    email,
+    ...(contact.includes("@") ? { email: contact } : { phone: contact }),
     code,
     new_password: newPassword,
   });
@@ -38,6 +38,14 @@ export function resetPassword(email, code, newPassword) {
 
 export function verifyRegistrationEmailOtp(email, code) {
   return apiPost("/auth/verify-email-otp", { email, code });
+}
+
+export function requestPhoneOtp(phone) {
+  return apiPost("/auth/register/request-phone-otp", { phone });
+}
+
+export function verifyPhoneOtp(phone, code) {
+  return apiPost("/auth/verify-phone-otp", { phone, code });
 }
 
 // ---------------------------------------------------------------------------

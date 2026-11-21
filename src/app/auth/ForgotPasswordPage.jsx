@@ -6,32 +6,33 @@ import { parseResponse } from "../global/api";
 import { authApi } from "../../services/api";
 import { usePublicAuthLanguage } from "./usePublicAuthLanguage";
 import { AuthLanguageSwitcher } from "./components/AuthLanguageSwitcher";
-import { isValidEmail } from "./authValidation";
+import { ContactInput } from "./components/ContactInput";
+import { validateContact } from "./authValidation";
 
 const inputClass =
   "w-full h-11 px-3.5 text-[16px] text-[var(--hw-neutral-900)] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--hw-green-700)] focus:border-transparent transition-shadow placeholder:text-[var(--hw-neutral-500)]";
 
 function ForgotPasswordPage() {
   const { authLang, t } = usePublicAuthLanguage();
-  const [email, setEmail] = useState("");
+  const [contact, setContact] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const normalized = email.trim().toLowerCase();
-    if (!isValidEmail(normalized)) {
-      setError(t("auth.errors.email_invalid", {}, "Enter a valid email address."));
+    const contactCheck = validateContact(contact);
+    if (!contactCheck.isValid) {
+      setError(t(`auth.errors.${contactCheck.errorKey}`, {}, "Enter a valid email address or phone number."));
       return;
     }
 
     setError("");
     setLoading(true);
     try {
-      const response = await authApi.requestPasswordReset(normalized);
+      const response = await authApi.requestPasswordReset(contactCheck.normalized);
       const data = await parseResponse(response);
-      setMessage(data.message || t("auth.forgot_password_success", {}, "If an account exists for that email, a reset code has been sent."));
+      setMessage(data.message || t("auth.forgot_password_success", {}, "If an account exists for that contact, a reset code has been sent."));
     } catch (err) {
       setError(err.message || t("auth.errors.sign_in_failed", {}, "Unable to process your request right now."));
     } finally {
@@ -50,7 +51,7 @@ function ForgotPasswordPage() {
           {t("auth.forgot_password_title", {}, "Forgot your password?")}
         </h1>
         <p className="mt-1 text-[15px] text-[var(--hw-neutral-500)] text-center">
-          {t("auth.forgot_password_subtitle", {}, "Enter your email and we’ll send you a reset code.")}
+          {t("auth.forgot_password_subtitle", {}, "Enter your email or phone number and we’ll send you a reset code.")}
         </p>
       </div>
 
@@ -66,9 +67,9 @@ function ForgotPasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="space-y-1.5">
               <label htmlFor="reset-email" className="block text-[15px] font-medium text-[var(--hw-neutral-700)]">
-                {t("auth.email", {}, "Email")}
+                {t("auth.email_or_phone", {}, "Email or phone number")}
               </label>
-              <input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => { setEmail(event.target.value); setError(""); }} className={inputClass} />
+              <ContactInput id="reset-contact" value={contact} onChange={(value) => { setContact(value); setError(""); }} required autoComplete="username" className={inputClass} error={!!error} />
             </div>
             {error && <p role="alert" className="text-[13px] text-red-600 font-medium">{error}</p>}
             <button type="submit" disabled={loading} className="w-full h-11 flex items-center justify-center bg-[var(--hw-green-700)] text-white text-[15px] font-semibold rounded-xl hover:bg-[var(--hw-green-800)] disabled:opacity-60 transition-colors">
