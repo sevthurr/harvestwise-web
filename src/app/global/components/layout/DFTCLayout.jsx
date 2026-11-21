@@ -27,7 +27,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
-import { prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
+import { prefetchDftcTrends, prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
 import { isPrivilegedDftcPosition } from "../../../dftc/utils/positionAccess";
 
 const DFTC_NAV = [
@@ -93,7 +93,10 @@ function DFTCLayoutInner() {
       location.pathname === "/dftc" ||
       location.pathname.startsWith("/dftc/input") ||
       location.pathname.startsWith("/dftc/submissions");
-    if (warmsWorkspace) prefetchDftcWorkspace(queryClient);
+    if (warmsWorkspace) {
+      prefetchDftcWorkspace(queryClient, { includeRecent: location.pathname === "/dftc" });
+    }
+    if (location.pathname.startsWith("/dftc/trends")) prefetchDftcTrends(queryClient);
   }, [location.pathname, queryClient]);
   usePrivilegedDataVersion("dftc");
   const { processState } = useBackgroundProcess();

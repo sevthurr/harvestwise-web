@@ -24,6 +24,11 @@ import { apiGet, parseResponse } from "../../global/api";
 import { getClassificationTextColor } from "./dftcClassificationColors";
 import SeasonalProductionTrends from "./DFTCSeasonalProductionTrends";
 import { manilaTodayParts, parseManilaDate } from "../../global/utils/apiTransforms";
+import {
+  DFTC_TRENDS_COMMODITY_CATALOG_KEY,
+  DFTC_TRENDS_PRICE_CATALOG_KEY,
+  DFTC_TRENDS_PRICE_CATALOG_SUPPORTED_KEY,
+} from "../../global/hooks/dftcWorkspaceQueries";
 
 import {
   buildForecastChartData,
@@ -1131,7 +1136,7 @@ function DFTCTrends() {
   const pPriceTypeKey = useMemo(() => toPriceTypeKey(pMarket, pPriceType), [pMarket, pPriceType]);
 
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
-    queryKey: ["dftc-trends-price-catalog"],
+    queryKey: DFTC_TRENDS_PRICE_CATALOG_KEY,
     queryFn: () => pricesApi.getPriceList({ is_top10: true, page_size: 100 }),
     staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });
@@ -1145,7 +1150,7 @@ function DFTCTrends() {
   // whose own is_top10 flag is false. Falls back to the top-10 catalogue until
   // the widened query resolves (or if it fails) so the Price tab keeps working.
   const { data: supportedCatalogData } = useQuery({
-    queryKey: ["dftc-trends-price-catalog-supported"],
+    queryKey: DFTC_TRENDS_PRICE_CATALOG_SUPPORTED_KEY,
     queryFn: () =>
       pricesApi.getPriceList({ include_supported_varieties: true, page_size: 100 }),
     staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
@@ -1343,7 +1348,7 @@ function DFTCTrends() {
   // scope comes from the DFTC commodity catalog. The top-10 price catalog
   // cannot resolve a commodity that has no top-10 row.
   const { data: commodityCatalog, isLoading: isCommodityCatalogLoading } = useQuery({
-    queryKey: ["dftc-trends-commodity-catalog"],
+    queryKey: DFTC_TRENDS_COMMODITY_CATALOG_KEY,
     queryFn: () => dftcApi.getCommodityCatalog(),
     staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
   });

@@ -112,7 +112,7 @@ function MenuPage() {
   const queryClient = useQueryClient();
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
   const { logout } = useAuth();
-  const { effectiveLanguage: language, setLanguage } = useLanguage();
+  const { effectiveLanguage: language, setLanguage, t } = useLanguage();
   const [alertPrefs, setAlertPrefs] = useState({
     price: true,
     weather: true,
@@ -367,8 +367,8 @@ function MenuPage() {
                       <RefreshCw className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm text-[var(--hw-neutral-900)]">App update available</p>
-                      <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">A new version of HarvestWise is ready to install.</p>
+                      <p className="font-medium text-sm text-[var(--hw-neutral-900)]">{t("farmer.navigation.update_available_title", {}, "App update available")}</p>
+                      <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">{t("farmer.navigation.update_available_description", {}, "A new version of HarvestWise is ready to install.")}</p>
                     </div>
                   </div>
                   <button
@@ -379,7 +379,7 @@ function MenuPage() {
     }}
     className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
   >
-                    <Download className="w-4 h-4" />Update now
+                    <Download className="w-4 h-4" />{t("farmer.navigation.update_now", {}, "Update now")}
                   </button>
                 </div>}
             </div>

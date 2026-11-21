@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { applyUpdate, subscribeUpdateAvailable } from "../../lib/pwaUpdate";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 /**
  * Global "new version available" prompt.
@@ -17,6 +18,7 @@ import { applyUpdate, subscribeUpdateAvailable } from "../../lib/pwaUpdate";
  * gives every role the same way out.
  */
 export function PwaUpdatePrompt() {
+  const { t } = useLanguage();
   const [available, setAvailable] = useState(false);
 
   useEffect(() => subscribeUpdateAvailable(setAvailable), []);
@@ -33,15 +35,19 @@ export function PwaUpdatePrompt() {
         <RefreshCw className="w-5 h-5 text-blue-600" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-[var(--hw-neutral-900)]">App update available</p>
-        <p className="text-xs text-[var(--hw-neutral-600)] mt-0.5">A new version of HarvestWise is ready to install.</p>
+        <p className="text-sm font-medium text-[var(--hw-neutral-900)]">
+          {t("farmer.navigation.update_available_title", {}, "App update available")}
+        </p>
+        <p className="text-xs text-[var(--hw-neutral-600)] mt-0.5">
+          {t("farmer.navigation.update_available_description", {}, "A new version of HarvestWise is ready to install.")}
+        </p>
       </div>
       <button
         type="button"
         onClick={applyUpdate}
         className="flex-shrink-0 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
       >
-        Update now
+        {t("farmer.navigation.update_now", {}, "Update now")}
       </button>
     </div>
   );

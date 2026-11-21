@@ -492,6 +492,11 @@ function PricesPage() {
       return (a.name || '').localeCompare(b.name || '');
     };
 
+    // Price sorting is global; preferred-crop ordering must not override it.
+    if (filter.sortBy === "price-low" || filter.sortBy === "price-high") {
+      return [...list].sort(secondaryCompare);
+    }
+
     return sortWithPreferredFirst(list, preferredCrops, secondaryCompare);
   }, [searchQuery, filter, commodities, priceTrendByCommodity, preferredCrops]);
 

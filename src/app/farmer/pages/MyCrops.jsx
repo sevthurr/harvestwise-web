@@ -6,7 +6,10 @@ import { useCrops, formatLocalDate, isArchivedCrop } from "../components/crops/C
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { PhasePill } from "../components/crops/CropCard";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import {
+  fetchFarmerProfile,
+  prefetchFarmerPlanAdvisories,
+} from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { apiGet, parseResponse } from "../../global/api";
@@ -200,6 +203,14 @@ function MyCropsPage() {
     () => location.state?.message || (location.state?.draftSaved ? "Assessment draft saved. Continue editing Step 1 anytime." : null)
   );
   const [isToastFading, setIsToastFading] = useState(false);
+
+  // Warm each saved plan's advisory while the farmer is online. Crop-plan
+  // detail uses the same query keys, so the advisory remains available from
+  // the persisted React Query cache when the farmer later opens a plan offline.
+  useEffect(() => {
+    if (!crops.length || navigator.onLine === false) return;
+    prefetchFarmerPlanAdvisories(queryClient, crops);
+  }, [crops, queryClient]);
 
   // The suitability endpoint also backfills the current monthly recommendation
   // rows on a cache miss. Run it whenever this page is entered, then make any

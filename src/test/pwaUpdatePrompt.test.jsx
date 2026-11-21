@@ -33,22 +33,22 @@ describe('PwaUpdatePrompt', () => {
 
   it('renders nothing until an update is waiting', () => {
     render(<PwaUpdatePrompt />);
-    expect(screen.queryByText('App update available')).toBeNull();
+    expect(screen.queryByText('Adunay bag-ong update sa app')).toBeNull();
   });
 
   it('shows the prompt when a new build is waiting', () => {
     render(<PwaUpdatePrompt />);
     act(() => signal(true));
 
-    expect(screen.getByText('App update available')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Update now' })).toBeInTheDocument();
+    expect(screen.getByText('Adunay bag-ong update sa app')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'I-update karon' })).toBeInTheDocument();
   });
 
   it('activates the waiting worker when Update now is clicked', () => {
     render(<PwaUpdatePrompt />);
     act(() => signal(true));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Update now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'I-update karon' }));
     expect(applyUpdate).toHaveBeenCalledTimes(1);
   });
 
@@ -57,7 +57,7 @@ describe('PwaUpdatePrompt', () => {
     act(() => signal(true));
     act(() => signal(false));
 
-    expect(screen.queryByText('App update available')).toBeNull();
+    expect(screen.queryByText('Adunay bag-ong update sa app')).toBeNull();
   });
 
   it('unsubscribes on unmount', () => {
