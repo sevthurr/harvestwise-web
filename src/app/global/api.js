@@ -40,6 +40,11 @@ function sessionGeneration() {
 export function storeTokens(_legacySession = null) {
   // Compatibility shim for callers released before cookie-only auth. The
   // values are intentionally ignored; the server sets HttpOnly cookies.
+  // Must NOT call announceSessionChange: that rotates hw_session_generation,
+  // which causes every in-flight request to see a mismatched generation and
+  // get aborted client-side even when the server already returned HTTP 200.
+  // Session generation changes are reserved for true session boundaries:
+  // logout, expiry, and clearDeviceData.
   void _legacySession;
   sessionActive = true;
 }

@@ -1,5 +1,24 @@
 import { useState, useEffect } from 'react';
 
+let deferredInstallPrompt = null;
+
+const captureInstallPrompt = (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  if (typeof window !== 'undefined') {
+    window.deferredPrompt = event;
+  }
+};
+
+if (typeof window !== 'undefined') {
+  // Keep the event available for components that mount after the browser fires it.
+  window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    window.deferredPrompt = null;
+  });
+}
+
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
@@ -16,7 +35,7 @@ export function usePWAInstall() {
 
     const handleBeforeInstallPrompt = (e) => {
       console.log('[PWA] beforeinstallprompt event fired');
-      e.preventDefault();
+      captureInstallPrompt(e);
       setDeferredPrompt(e);
       setIsInstallable(true);
     };
@@ -54,26 +73,29 @@ export function usePWAInstall() {
   }, []);
 
   const promptInstall = async () => {
+    const installPrompt = deferredPrompt || deferredInstallPrompt || window.deferredPrompt;
     console.log('[PWA] Install button clicked', { 
-      hasDeferredPrompt: !!deferredPrompt,
+      hasDeferredPrompt: !!installPrompt,
       isInstallable,
       isInstalled 
     });
     
-    if (!deferredPrompt) {
+    if (!installPrompt) {
       console.error('[PWA] No deferred prompt available');
       return { outcome: 'unavailable' };
     }
 
     try {
       console.log('[PWA] Calling deferredPrompt.prompt()');
-      await deferredPrompt.prompt();
+      await installPrompt.prompt();
       
-      const result = await deferredPrompt.userChoice;
+      const result = await installPrompt.userChoice;
       console.log('[PWA] User choice:', result.outcome);
       
       if (result.outcome === 'accepted') {
         console.log('[PWA] User accepted the install prompt');
+        deferredInstallPrompt = null;
+        window.deferredPrompt = null;
         setDeferredPrompt(null);
         setIsInstallable(false);
       } else {

@@ -7,4 +7,6 @@ export const emptyStates = {
   no_active_crop_plan: "Wala pang aktibong plano sa pananim.",
   no_crop_reminders: "Wala pang mga paalala sa pananim.",
   no_prices_desc: "Lalabas dito ang datos ng presyo ng top 10 na produkto",
+  no_filter_matches: "Walang gulay na tumutugma sa napiling filter",
+  try_clearing_filters: "Subukang baguhin o i-clear ang iyong mga filter para makakita ng mas maraming resulta.",
 };

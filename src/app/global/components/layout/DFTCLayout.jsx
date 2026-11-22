@@ -27,7 +27,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
 import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
-import { prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
+import { prefetchDftcTrends, prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
 import { isPrivilegedDftcPosition } from "../../../dftc/utils/positionAccess";
 
 const DFTC_NAV = [
@@ -86,9 +86,18 @@ function DFTCLayoutInner() {
   };
   const queryClient = useQueryClient();
   useEffect(() => {
-    prefetchDftcWorkspace(queryClient);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Only warm the shared home/submission cache when a route can use it.
+    // Loading the full workspace on every DFTC page delayed first paint and
+    // fetched data that Trends, Profile, and Settings never read.
+    const warmsWorkspace =
+      location.pathname === "/dftc" ||
+      location.pathname.startsWith("/dftc/input") ||
+      location.pathname.startsWith("/dftc/submissions");
+    if (warmsWorkspace) {
+      prefetchDftcWorkspace(queryClient, { includeRecent: location.pathname === "/dftc" });
+    }
+    if (location.pathname.startsWith("/dftc/trends")) prefetchDftcTrends(queryClient);
+  }, [location.pathname, queryClient]);
   usePrivilegedDataVersion("dftc");
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);

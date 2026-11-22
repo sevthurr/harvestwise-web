@@ -6,13 +6,12 @@
 // (see the Update card in Menu.jsx) before calling `applyUpdate()`.
 // With `autoUpdate` this event never fires, which is why the mode matters
 // here — there is no prompt to show without it.
-import { registerSW } from 'virtual:pwa-register';
-
 let updateFn = null;
 /** @type {Set<(available: boolean) => void>} */
 const listeners = new Set();
 
-export function initPWAUpdate() {
+export async function initPWAUpdate() {
+  const { registerSW } = await import('virtual:pwa-register');
   updateFn = registerSW({
     immediate: true,
     onNeedRefresh() {

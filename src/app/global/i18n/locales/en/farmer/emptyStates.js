@@ -7,4 +7,6 @@ export const emptyStates = {
   no_active_crop_plan: "No active crop plan yet.",
   no_crop_reminders: "No crop reminders yet.",
   no_prices_desc: "Price data for top 10 commodities will appear here",
+  no_filter_matches: "No commodities match the selected filter",
+  try_clearing_filters: "Try adjusting or clearing your filters to see more results.",
 };

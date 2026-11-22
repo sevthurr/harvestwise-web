@@ -66,15 +66,19 @@ export function PwaInstallPrompt() {
             <Download className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-black">Install HarvestWise App</p>
-            <p className="text-[11px] text-[var(--hw-neutral-600)] truncate">Access offline prices & forecasts instantly</p>
+            <p className="text-xs font-bold text-black">
+              {t("farmer.navigation.install_prompt_title", {}, "Install HarvestWise App")}
+            </p>
+            <p className="text-[11px] text-[var(--hw-neutral-600)] truncate">
+              {t("farmer.navigation.install_prompt_description", {}, "Access offline prices & forecasts instantly")}
+            </p>
           </div>
           <button
             type="button"
             onClick={handleInstall}
             className="px-3 py-1.5 bg-[var(--hw-green-700)] text-white text-xs font-semibold rounded-lg hover:bg-[var(--hw-green-800)] transition-colors flex-shrink-0"
           >
-            Install
+            {t("farmer.navigation.install_button", {}, "Install")}
           </button>
           <button
             type="button"

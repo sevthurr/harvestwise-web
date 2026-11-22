@@ -195,6 +195,17 @@ describe("Farmer prices page", () => {
     expect(screen.queryByText("Carrots")).not.toBeInTheDocument();
   });
 
+  it("does not offer sort options duplicated by price direction", () => {
+    renderPricesPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+
+    expect(screen.queryByRole("button", { name: "Price rising first" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Price falling first" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rising" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Falling" })).toBeInTheDocument();
+  });
+
   it("filters commodities by price direction", async () => {
     const ampalaya = {
       commodity_id: "COM-0001",
@@ -259,28 +270,30 @@ describe("Farmer prices page", () => {
       prices: { bangkerohan_retail: 40 },
     };
     const expensive = {
-      commodity_id: "COM-0025",
-      name: "Lettuce",
+      commodity_id: "COM-0028",
+      name: "Carrots",
       category: "Highland Vegetables",
       unit_of_measure: "kg",
       is_top10: true,
       prices: { bangkerohan_retail: 180 },
     };
     priceListResponse.current = {
-      items: [expensive, cheap],
+      items: [lettuce, expensive, cheap],
+      preferred_crops: [{ commodity_id: "COM-0025", commodity_name: "Lettuce" }],
     };
 
     renderPricesPage();
 
     expect(await screen.findByText("Kalabasa")).toBeInTheDocument();
     expect(screen.getByText("Lettuce")).toBeInTheDocument();
+    expect(screen.getByText("Carrots")).toBeInTheDocument();
 
     // Open filter drawer and select lowest price first
     fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
     fireEvent.click(screen.getByRole("button", { name: "Lowest price first" }));
     fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
 
-    let headings = screen.getAllByText(/Kalabasa|Lettuce/);
+    let headings = screen.getAllByText(/Kalabasa|Lettuce|Carrots/);
     expect(headings[0]).toHaveTextContent("Kalabasa");
     expect(headings[1]).toHaveTextContent("Lettuce");
 
@@ -289,9 +302,9 @@ describe("Farmer prices page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Highest price first" }));
     fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
 
-    headings = screen.getAllByText(/Kalabasa|Lettuce/);
-    expect(headings[0]).toHaveTextContent("Lettuce");
-    expect(headings[1]).toHaveTextContent("Kalabasa");
+    headings = screen.getAllByText(/Kalabasa|Lettuce|Carrots/);
+    expect(headings[0]).toHaveTextContent("Carrots");
+    expect(headings[1]).toHaveTextContent("Lettuce");
   });
 
   it("saves filter changes when clicking Save button in filter drawer", async () => {

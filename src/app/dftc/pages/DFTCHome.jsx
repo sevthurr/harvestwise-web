@@ -20,10 +20,10 @@ import { DFTCArrivalPreview } from "../components/DFTCArrivalPreview";
 import { apiGet, parseResponse } from "../../global/api";
 import {
   DFTC_HOME_KEY,
-  DFTC_SUBMISSIONS_KEY,
+  DFTC_SUBMISSIONS_RECENT_KEY,
   DFTC_WORKSPACE_STALE_TIME,
   fetchDftcHome,
-  fetchDftcSubmissions,
+  fetchDftcSubmissionsRecent,
 } from "../../global/hooks/dftcWorkspaceQueries";
 import {
   buildSavedDatasetsList,
@@ -95,8 +95,8 @@ function DFTCHome() {
   const todayStr = getLocalDateString(todayDate);
 
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
-    queryKey: DFTC_SUBMISSIONS_KEY,
-    queryFn: fetchDftcSubmissions,
+    queryKey: DFTC_SUBMISSIONS_RECENT_KEY,
+    queryFn: fetchDftcSubmissionsRecent,
     staleTime: DFTC_WORKSPACE_STALE_TIME,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -113,7 +113,9 @@ function DFTCHome() {
   });
 
   const kpis = homeData?.kpis || {};
-  const isLoading = loadingSubmissions || loadingHome;
+  const isHomeLoading = !homeData && loadingHome;
+  const isSubmissionsLoading = !submissionsData && loadingSubmissions;
+  const isLoading = isHomeLoading && isSubmissionsLoading;
   const submissions = submissionsData?.items || [];
 
   const priceSubmissionsToday = submissions.filter(
@@ -417,7 +419,7 @@ function DFTCHome() {
         </div>
 
         <DFTCArrivalVolumeCard
-          loadingHome={loadingHome}
+          loadingHome={isHomeLoading}
           latestArrivalVolume={homeData?.latest_arrival_volume}
           onViewTrends={() => navigate("/dftc/trends?tab=arrival")}
           onSelectCommodity={(commodityName, commodityId) => {
@@ -436,7 +438,7 @@ function DFTCHome() {
           </p>
         </div>
 
-        {isLoading ? (
+        {isSubmissionsLoading ? (
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-6 space-y-4 animate-pulse">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center justify-between py-2 border-b border-[var(--hw-neutral-100)] last:border-0">

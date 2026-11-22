@@ -27,6 +27,15 @@ import { formatManilaTime } from "../../utils/apiTransforms";
 import { loadFarmerOfflineData } from "../../hooks/useFarmerPrefetch";
 import { requestPersistentStorage } from "../../lib/pwaUpdate";
 
+const getInstallPlatform = () => {
+  if (typeof navigator === "undefined") return "generic";
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+  if (/Android/.test(ua)) return "android";
+  if (/Chrome|Edg\//.test(ua)) return "desktop";
+  return "generic";
+};
+
 const TopBar = ({
   logo,
   onMenuClick,
@@ -44,6 +53,7 @@ const TopBar = ({
   const [open, setOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
     formatManilaTime()
@@ -52,6 +62,9 @@ const TopBar = ({
 
   const ref = useRef(null);
   const syncRef = useRef(null);
+  const installHelpRef = useRef(null);
+  const accountButtonRef = useRef(null);
+  const installHelpWasOpenRef = useRef(false);
   const clickTimerRef = useRef(null);
   const { processState } = useBackgroundProcess();
 
@@ -62,6 +75,16 @@ const TopBar = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (showInstallHelp) {
+      installHelpWasOpenRef.current = true;
+      installHelpRef.current?.focus();
+    } else if (installHelpWasOpenRef.current) {
+      installHelpWasOpenRef.current = false;
+      accountButtonRef.current?.focus();
+    }
+  }, [showInstallHelp]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -153,6 +176,7 @@ const TopBar = ({
       if (e.key === "Escape") {
         setOpen(false);
         setSyncOpen(false);
+        setShowInstallHelp(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -166,6 +190,7 @@ const TopBar = ({
   const fullName = user?.name || (user?.first_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : "");
   const displayName = fullName || "Farmer";
   const initials = fullName ? fullName.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase() : "F";
+  const installPlatform = getInstallPlatform();
 
   const go = (path) => {
     setOpen(false);
@@ -174,12 +199,16 @@ const TopBar = ({
 
   const handleInstall = async () => {
     setInstalling(true);
-    await promptInstall();
+    const result = await promptInstall();
     setInstalling(false);
     setOpen(false);
+    if (result?.outcome === "unavailable" || result?.outcome === "error") {
+      setShowInstallHelp(true);
+    }
   };
 
   return (
+    <>
     <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-[var(--hw-neutral-200)]">
       <div className="flex items-center h-16 px-3 gap-2">
         {/* Left: sidebar toggle + logo */}
@@ -301,6 +330,7 @@ const TopBar = ({
           {/* Avatar + dropdown */}
           <div className="relative" ref={ref}>
             <button
+              ref={accountButtonRef}
               onClick={() => setOpen((v) => !v)}
               className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-[var(--hw-neutral-100)] transition-colors"
               aria-label="Account menu"
@@ -408,6 +438,67 @@ const TopBar = ({
         </div>
       </div>
     </header>
+
+    {showInstallHelp && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+        onClick={() => setShowInstallHelp(false)}
+      >
+        <div
+          ref={installHelpRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="install-help-title"
+          tabIndex={-1}
+          className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[var(--shadow-xl)] outline-none"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key !== "Tab") return;
+            const buttons = e.currentTarget.querySelectorAll("button");
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (e.shiftKey && (document.activeElement === first || document.activeElement === e.currentTarget)) {
+              e.preventDefault();
+              last?.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first?.focus();
+            }
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <h2 id="install-help-title" className="text-sm font-semibold text-black">
+              {t("farmer.navigation.install_help_title", {}, "How to install the app")}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowInstallHelp(false)}
+              className="p-1 rounded-md text-[var(--hw-neutral-400)] hover:text-black hover:bg-[var(--hw-green-50)] transition-colors flex-shrink-0 cursor-pointer"
+              aria-label={t("farmer.navigation.install_help_dismiss", {}, "Close")}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="mt-3 text-[13px] leading-snug text-[var(--hw-neutral-600)]">
+            {installPlatform === "ios"
+              ? t("farmer.navigation.install_help_ios", {}, "Tap the Share button, then choose “Add to Home Screen”.")
+              : installPlatform === "android"
+              ? t("farmer.navigation.install_help_android", {}, "Open your browser’s ⋮ menu, then choose “Install app” or “Add to Home screen”.")
+              : installPlatform === "desktop"
+              ? t("farmer.navigation.install_help_desktop", {}, "Click the install icon in the address bar, or open the ⋮ menu → “Install, Cast, save and share” → “Install page as app”.")
+              : t("farmer.navigation.install_help_generic", {}, "Open your browser menu and choose “Install app” or “Add to Home Screen”.")}
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowInstallHelp(false)}
+            className="mt-4 w-full h-9 px-3 bg-[var(--hw-green-700)] hover:bg-[var(--hw-green-800)] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+          >
+            {t("farmer.navigation.install_help_dismiss", {}, "Close")}
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

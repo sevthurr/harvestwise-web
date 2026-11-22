@@ -4,6 +4,7 @@ import { MemoryRouter, useNavigate } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../app/global/contexts/AuthContext';
 import DFTCHome from '../app/dftc/pages/DFTCHome';
+import { DFTC_SUBMISSIONS_KEY } from '../app/global/hooks/dftcWorkspaceQueries';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -41,10 +42,11 @@ function mockFetchByUrl(handlers) {
   });
 }
 
-const renderDFTCHome = () => {
+const renderDFTCHome = (seed) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  seed?.(queryClient);
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/dftc']}>
@@ -425,6 +427,31 @@ describe('DFTCHome KPI Overhaul', () => {
     expect((await screen.findAllByText('955')).length).toBeGreaterThanOrEqual(1);
     // Arrival records sum = 12 + 18 = 30
     expect((await screen.findAllByText('30')).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders cached submissions immediately while the home request is still loading', async () => {
+    const submissions = [
+      {
+        id: 'SUB-CACHED',
+        data_type: 'daily_price',
+        submission_method: 'File Upload',
+        original_file_name: 'Cached-Dataset.xlsx',
+        status: 'Saved',
+        saved_at: new Date().toISOString(),
+      },
+    ];
+    const fetchFn = mockFetchByUrl([
+      { path: '/dftc/requirements', response: { ok: true, status: 200, body: { items: [] } } },
+    ]);
+    vi.stubGlobal('fetch', (url) =>
+      String(url).includes('/dftc/home') ? new Promise(() => {}) : fetchFn(url)
+    );
+
+    renderDFTCHome((client) => client.setQueryData(DFTC_SUBMISSIONS_KEY, { items: submissions }));
+
+    expect((await screen.findAllByText('Cached-Dataset.xlsx')).length).toBeGreaterThan(0);
+    const savedSection = screen.getByText("Today's Saved Data").closest('div.space-y-4');
+    expect(savedSection.querySelector('.animate-pulse')).toBeNull();
   });
 });
 

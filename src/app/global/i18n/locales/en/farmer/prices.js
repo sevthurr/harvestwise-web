@@ -5,8 +5,6 @@ export const prices = {
   filter_and_sort: "Filter & Sort",
   sort_by: "Sort by",
   sort_name: "Commodity name (A–Z)",
-  sort_rising_first: "Price rising first",
-  sort_falling_first: "Price falling first",
   sort_price_low: "Lowest price first",
   sort_price_high: "Highest price first",
   direction_label: "Price direction",

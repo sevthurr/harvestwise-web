@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import tailwindcss from '@tailwindcss/vite'
@@ -9,8 +9,37 @@ import { visualizer } from 'rollup-plugin-visualizer'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export default defineConfig({
+function apiPreconnectPlugin(apiUrl) {
+  let apiOrigin = null
+  try {
+    apiOrigin = new URL(apiUrl).origin
+  } catch {
+    // A missing or invalid local API setting should not break the build.
+  }
+
+  return {
+    name: 'harvestwise-api-preconnect',
+    transformIndexHtml(html) {
+      if (!apiOrigin) return html
+      return {
+        html,
+        tags: [{
+          tag: 'link',
+          injectTo: 'head-prepend',
+          attrs: { rel: 'preconnect', href: apiOrigin, crossorigin: '' },
+        }],
+      }
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), ['VITE_', 'API_'])
+  const apiUrl = env.VITE_API_URL || env.VITE_API_BASE_URL || env.API_URL || env.API_BASE_URL
+
+  return {
   plugins: [
+    apiPreconnectPlugin(apiUrl),
     react(),
     tailwindcss(),
     compression({
@@ -166,4 +195,5 @@ export default defineConfig({
     // headroom for slow rendering, not a relaxation of any assertion.
     testTimeout: 15000,
   },
+  }
 })

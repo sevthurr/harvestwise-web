@@ -524,6 +524,7 @@ describe("DFTC Trends page prices API integration", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Arrival Volume Trends/ }));
     const arrivalFilter = await openCommodityCombobox("Carrots");
+    expect(arrivalFilter.dropdown()).toHaveClass("absolute");
     fireEvent.change(arrivalFilter.input, { target: { value: "Avocado" } });
     expect(within(arrivalFilter.dropdown()).getByText("No commodities found")).toBeInTheDocument();
   });
