@@ -321,7 +321,7 @@ function PricesPage() {
     const fallbackData = queryClient.getQueryData(["dashboard", "prices"]);
     const effectiveData = apiData?.items?.length
       ? apiData
-      : offline && (isError || fetchStatus === "paused") && (queryClient.getQueryData(SUPPORTED_PRICES_KEY) || (
+      : offline && (queryClient.getQueryData(SUPPORTED_PRICES_KEY) || (
         Array.isArray(fallbackData)
           ? { items: fallbackData.map((item) => ({
               commodity_id: item.id,

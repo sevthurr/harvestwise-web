@@ -679,6 +679,11 @@ export function useFarmerPrefetch() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    // On a cold offline PWA start, PersistQueryClientProvider is still
+    // hydrating IndexedDB. Starting a new seed here races that restore and
+    // can leave pages showing an empty network result instead of the saved
+    // snapshot. Auth reconnect/login paths seed when connectivity is present.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     loadFarmerOfflineData(queryClient);
   }, [queryClient]);
 }
