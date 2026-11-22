@@ -19,6 +19,7 @@ import {
 import { sortWithPreferredFirst, isPreferredCrop } from "../../utils/cropPreferences";
 import { PreferredStar } from "../shared/PreferredStar";
 import { isHWCommodity } from "../../../global/data/commodities";
+import { localizeRecommendationExplanation } from "../../utils/plantingLabels";
 
 const DEFAULT_RECOMMENDED_PROFILES = {
   "COM-0004": {
@@ -136,7 +137,7 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
         id: cid,
         name: cname,
         variety: rec.variety || profile.bestVariety || null,
-        priceOutlookText: rec.explanation || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
+        priceOutlookText: localizeRecommendationExplanation(rec, t) || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
         plantWindow: plantWindowStr,
       });
     }

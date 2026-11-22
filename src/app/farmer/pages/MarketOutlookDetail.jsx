@@ -29,6 +29,7 @@ import {
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
+import { localizeRecommendationExplanation } from "../utils/plantingLabels";
 
 // ── status style helpers ─────────────────────────────────────────────────
 const STATUS_CLS = {
@@ -235,7 +236,7 @@ function MarketOutlookDetailPage() {
   const displayName = rec.commodity_name || commodityId;
 
   // Farmer insight: use explanation from API, fall back to a sensible default
-  const insightLine1 = rec.explanation || `Market conditions have been assessed for ${displayName}.`;
+  const insightLine1 = localizeRecommendationExplanation(rec, t) || `Market conditions have been assessed for ${displayName}.`;
   const insightLine2 =
     statusCode === MARKET_STATUS_CODES.FAVORABLE
       ? `Current conditions are favorable for ${displayName}. Confirm profitability before expanding area.`

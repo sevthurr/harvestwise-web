@@ -16,7 +16,7 @@ function formatKgValue(kg) {
   return `${Number(kg).toLocaleString()} kg`;
 }
 
-export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false }) {
+export function ArrivalSourcePieChart({ data, height = 240, outerRadius, showEmpty = false }) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
   useEffect(() => {
     function onResize() {
@@ -37,6 +37,11 @@ export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false })
   const total = chartData.reduce((acc, curr) => acc + (curr.value || 0), 0);
   const isEmpty = total === 0;
 
+  // Dynamically compute safe radius based on container height and viewport width so labels never get clipped
+  const maxSafeRadius = Math.max(45, Math.floor((height - 70) / 2));
+  const effectiveRadius = outerRadius ?? (isMobile ? Math.min(maxSafeRadius, 65) : Math.min(maxSafeRadius, 75));
+  const emptyRadius = Math.max(40, effectiveRadius - 10);
+
   const renderData = isEmpty
     ? [{ name: "No data", value: 1, volumeKg: 0, color: "#e2e8f0" }]
     : chartData.map((d, i) => ({
@@ -47,13 +52,13 @@ export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false })
   return (
     <div className="w-full flex flex-col items-center">
       <ResponsiveContainer width="100%" height={height}>
-        <PieChart margin={{ top: 10, right: isMobile ? 16 : 30, bottom: 10, left: isMobile ? 16 : 30 }}>
+        <PieChart margin={{ top: 12, right: isMobile ? 16 : 32, bottom: 12, left: isMobile ? 16 : 32 }}>
           <Pie
             data={renderData}
             cx="50%"
             cy="50%"
             innerRadius={0}
-            outerRadius={isEmpty ? 60 : (isMobile ? 70 : 88)}
+            outerRadius={isEmpty ? emptyRadius : effectiveRadius}
             paddingAngle={0}
             dataKey="value"
             labelLine={!isEmpty}
@@ -87,7 +92,7 @@ export function ArrivalSourcePieChart({ data, height = 300, showEmpty = false })
       </ResponsiveContainer>
 
       {/* Legend / Breakdown List */}
-      <div className="flex flex-wrap items-center justify-center gap-2.5 mt-2 text-[11px] text-[var(--hw-neutral-800)]">
+      <div className="flex flex-wrap items-center justify-center gap-2.5 mt-3 text-[11px] text-[var(--hw-neutral-800)]">
         {chartData.map((item, index) => {
           const percentage = total > 0 ? (item.value / total) * 100 : 0;
           const color = item.color || DEFAULT_ARRIVAL_SOURCES[index % DEFAULT_ARRIVAL_SOURCES.length].color;

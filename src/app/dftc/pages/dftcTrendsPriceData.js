@@ -114,6 +114,8 @@ function buildTableRows(varietyDetails, commodity, preset, customFrom, customTo)
         volatility_reason: row.volatility_reason,
         volatility_notes: row.volatility_notes,
         is_volatility_flagged: row.is_volatility_flagged,
+        encoded_by: row.encoded_by || row.recorded_by,
+        last_updated_by: row.last_updated_by || row.updated_by,
       });
     }
   }

@@ -427,7 +427,15 @@ function CommodityRecordsModal({ data, onClose, savedFiles, onOpenFile }) {
   }, [allArrivalRecords]);
   const filteredPriceRecords = useMemo(() => {
     const filtered = allPriceRecords.filter((r) => {
-      if (pMarket !== "All Markets" && r.market !== pMarket) return false;
+      if (pMarket !== "All Markets") {
+        const normPM = pMarket.toLowerCase();
+        const normRM = (r.market || "").toLowerCase();
+        if (normPM.includes("dftc") || normPM.includes("food trm")) {
+          if (!normRM.includes("dftc") && !normRM.includes("food trm")) return false;
+        } else if (r.market !== pMarket) {
+          return false;
+        }
+      }
       if (pPriceType !== "All Types" && r.priceType !== pPriceType) return false;
       if (pVariety !== "All Varieties" && r.variety !== pVariety) return false;
       return filterPriceByDate(r, pDateFilter, pCustomFrom, pCustomTo);
@@ -529,8 +537,8 @@ function CommodityRecordsModal({ data, onClose, savedFiles, onOpenFile }) {
                   <label className="block text-[11px] font-medium text-[var(--hw-neutral-900)] mb-1">Market</label>
                   <select value={pMarket} onChange={(e) => setPMarket(e.target.value)} className={selectCls}>
                     <option>All Markets</option>
-                    <option>Bangkerohan Public Market</option>
-                    <option>DFTC Taboan</option>
+                    <option value="Bangkerohan Public Market">Bangkerohan Public Market</option>
+                    <option value="DFTC Taboan">Dvo Food Trm Cmplx</option>
                   </select>
                 </div>
                 <div>

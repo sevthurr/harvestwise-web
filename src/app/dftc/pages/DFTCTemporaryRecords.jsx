@@ -118,8 +118,8 @@ function ExcelModal({
                 <label className={labelCls}>Market</label>
                 <select className={selectCls} value={form.market} onChange={(e) => setForm((f) => ({ ...f, market: e.target.value }))}>
                   <option value="">All Markets</option>
-                  <option>Bangkerohan Public Market</option>
-                  <option>DFTC Taboan</option>
+                  <option value="Bangkerohan Public Market">Bangkerohan Public Market</option>
+                  <option value="DFTC Taboan">Dvo Food Trm Cmplx</option>
                 </select>
               </div>
               <div>
@@ -393,8 +393,8 @@ function DFTCTemporaryRecords() {
     onChange={(e) => setFilterForm((f) => ({ ...f, market: e.target.value }))}
   >
               <option value="">All Markets</option>
-              <option>Bangkerohan Public Market</option>
-              <option>DFTC Taboan</option>
+              <option value="Bangkerohan Public Market">Bangkerohan Public Market</option>
+              <option value="DFTC Taboan">Dvo Food Trm Cmplx</option>
             </select>
           </div>
           <div>

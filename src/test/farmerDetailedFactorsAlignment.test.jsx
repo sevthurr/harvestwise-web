@@ -101,7 +101,7 @@ describe("Farmer detailed factors use Admin analytics data", () => {
       "#f59e0b",
     ]);
     expect(chart).toHaveAttribute("data-average", "120");
-    expect(screen.getByText("Latest arrival")).toBeInTheDocument();
+    expect(screen.getByText("ARRIVAL ASSESSMENT")).toBeInTheDocument();
     expect(screen.getByText("180 kg")).toBeInTheDocument();
   });
 
@@ -362,9 +362,9 @@ describe("Farmer detailed factors use Admin analytics data", () => {
       </QueryClientProvider>
     );
 
-    expect(await screen.findByText("Current Observed Market Price")).toBeInTheDocument();
-    expect(screen.getByText("Seven-Day Moving Spot Average")).toBeInTheDocument();
-    expect(screen.getByText("Observed Market")).toBeInTheDocument();
+    expect(await screen.findByText("Current Market Price")).toBeInTheDocument();
+    expect(screen.getByText("Recent Average Price")).toBeInTheDocument();
+    expect(screen.getByText("Market Position")).toBeInTheDocument();
     expect(screen.getByText("Stage 4: Harvest")).toBeInTheDocument();
   });
 
@@ -460,8 +460,8 @@ describe("Farmer detailed factors use Admin analytics data", () => {
     );
 
     // Both panels must be visible
-    expect(await screen.findByText("Forecast Information (Primary Basis)")).toBeInTheDocument();
-    expect(screen.getByText("Historical Seasonal Information")).toBeInTheDocument();
+    expect(await screen.findByText("Forecast Outlook (Assessment B)")).toBeInTheDocument();
+    expect(screen.getByText("Historical Outlook (Assessment A)")).toBeInTheDocument();
     expect(screen.queryByText("Dual Assessment")).not.toBeInTheDocument();
     expect(screen.queryByText("Forecast Eligible")).not.toBeInTheDocument();
 

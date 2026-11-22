@@ -755,7 +755,18 @@ export const ceb = {
         level_high_banner: "Taas nga Presyur sa Arrival",
         meaning_low: "Nagaubos ang suplay sa merkado — ang gamay nga volume sa arrival makatabang nga mosaka o mamentinar ang maayong presyo.",
         meaning_moderate: "Balanse ang volume sa arrival karon — sakto lang ang suplay ug presyo sa merkado.",
-        meaning_high: "Daghan ang naabot nga arrival sa merkado — ang taas nga volume posibleng mopaus-os o mopugos paubos sa presyo."
+        meaning_high: "Daghan ang naabot nga arrival sa merkado — ang taas nga volume posibleng mopaus-os o mopugos paubos sa presyo.",
+        assessment_title: "PAGSUSI SA ARRIVAL",
+        assessment_expected_harvest: "Gilaumang Ting-ani",
+        assessment_classification_label: "Klasipikasyon sa Arrival",
+        assessment_range_label: "Sakup (Range)",
+        assessment_interpretation_label: "Paghubad (Interpretation)",
+        assessment_interpretation_low: "Ang mga historical nga arrival niining panahon sa ting-ani ubos sa unang quartile (Q1). Kini nga panahon kasagarang makasinati og mas ubos nga suplay sa merkado.",
+        assessment_interpretation_lower_middle: "Ang mga historical nga arrival niining panahon sa ting-ani anaa taliwala sa Q1 ug Q2. Kini nga panahon kasagarang makasinati og ubos sa kasagaran nga suplay sa merkado.",
+        assessment_interpretation_upper_middle: "Ang mga historical nga arrival niining panahon sa ting-ani anaa taliwala sa Q2 ug Q3. Kini nga panahon kasagarang makasinati og labaw sa kasagaran nga suplay sa merkado.",
+        assessment_interpretation_high: "Ang mga historical nga arrival niining panahon sa ting-ani milabaw sa Q3. Kini nga panahon kasagarang makasinati sa pinakataas nga lebel sa suplay ug kompetisyon sa merkado.",
+        expected_harvest_period_label: "Gilaumang Panahon sa Ting-ani",
+        expected_harvest_highlight: "Gilaumang Ting-ani: {period}"
       },
 
       production: {
@@ -874,6 +885,7 @@ export const ceb = {
         no_weather_note: "Wala pay available nga tagna sa panahon alang niining petsaha (magamit alang sa sunod nga 14 ka adlaw).",
         no_event_note: "Normal nga adlaw sa pamatigayon. Walay espesyal nga okasyon o holiday."
       },
+      explanation_summary: "Pagtana sa presyo: {price}; presyon sa abot: {arrival}; panahonon nga produksyon: {production}; peligro sa panahon: {weather}.",
       price_outlook_rise: "Posibleng musaka ang presyo sa dili madugay",
       price_outlook_profit: "Maayong gilaomang ginansya",
       factor_price_kamatis: "₱85/kg karon, nagsaka nga trend sa nilabayng duha ka semana.",

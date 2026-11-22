@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as RechartsModule from "recharts";
 import {
+  getArrivalClassification,
+  CLASSIFICATION_HEX,
+  CLASSIFICATION_TEXT_CLASS
+} from "../../../dftc/pages/dftcClassificationColors";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { suggestHarvestDate } from "../../../farmer/components/recommend/types";
+
+const {
   BarChart,
   Bar,
   Cell,
@@ -9,14 +18,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   Brush,
-  ReferenceLine
-} from "recharts";
-import {
-  getArrivalClassification,
-  CLASSIFICATION_HEX,
-  CLASSIFICATION_TEXT_CLASS
-} from "../../../dftc/pages/dftcClassificationColors";
-import { useLanguage } from "../../contexts/LanguageContext";
+} = RechartsModule;
+const ReferenceArea = RechartsModule.ReferenceArea || (() => null);
+const ReferenceLine = RechartsModule.ReferenceLine || (() => null);
 
 function ArrivalTooltip({ active, payload, label, commodity, sourceType, quartileThresholds, allValues }) {
   if (!active || !payload?.length) return null;
@@ -68,6 +72,20 @@ function parseDateOnly(val) {
     if (!isNaN(y) && !isNaN(m) && !isNaN(d) && y >= 1900) {
       return new Date(y, m, d);
     }
+  } else if (parts.length === 2) {
+    const y = parseInt(parts[0], 10);
+    if (parts[1].toUpperCase().startsWith("W")) {
+      const wk = parseInt(parts[1].slice(1), 10);
+      if (!isNaN(y) && !isNaN(wk)) {
+        const simple = new Date(y, 0, 4);
+        const dayOfWeek = simple.getDay() || 7;
+        return new Date(simple.getTime() + ((wk - 1) * 7 + (1 - dayOfWeek)) * 86400000);
+      }
+    }
+    const m = parseInt(parts[1], 10) - 1;
+    if (!isNaN(y) && !isNaN(m) && y >= 1900) {
+      return new Date(y, m, 1);
+    }
   }
   const parsed = new Date(val);
   return isNaN(parsed.getTime()) || parsed.getFullYear() < 1900 ? null : parsed;
@@ -87,10 +105,99 @@ function ArrivalVolumeTrendChart({
   expectedHarvestDate = null,
   plantingWindowStart = null,
   plantingWindowEnd = null,
+  harvestPeriodLabel = null,
 }) {
   const { t } = useLanguage();
   const containerRef = useRef(null);
   const touchDistRef = useRef(null);
+
+  const harvestHighlights = useMemo(() => {
+    if (!chartData || chartData.length === 0) return [];
+
+    const rawHarvest = expectedHarvestDate;
+    const rawStart = plantingDate || plantingWindowStart;
+    let targetHarvestDate = null;
+
+    if (rawHarvest) {
+      targetHarvestDate = parseDateOnly(rawHarvest);
+    } else if (rawStart) {
+      const suggestion = suggestHarvestDate(rawStart, commodity);
+      if (suggestion) {
+        targetHarvestDate = parseDateOnly(suggestion.maxDate || suggestion.minDate);
+      }
+    }
+
+    if (!targetHarvestDate) return [];
+
+    const plannedHarvestMonth = targetHarvestDate.getMonth(); // 0 to 11
+
+    const recordDates = chartData.map((item) =>
+      parseDateOnly(item[xDataKey] || item.month || item.date || item.arrival_date || item.period)
+    );
+
+    const availableYears = Array.from(
+      new Set(recordDates.filter(Boolean).map((d) => d.getFullYear()))
+    ).sort((a, b) => a - b);
+
+    if (availableYears.length === 0) return [];
+
+    const highlights = [];
+    for (const yr of availableYears) {
+      const matchingRecords = chartData.filter((item, idx) => {
+        const recDate = recordDates[idx];
+        if (!recDate) return false;
+        return recDate.getFullYear() === yr && recDate.getMonth() === plannedHarvestMonth;
+      });
+
+      if (matchingRecords.length > 0) {
+        const firstMatch = matchingRecords[0];
+        const lastMatch = matchingRecords[matchingRecords.length - 1];
+        const firstIdx = chartData.indexOf(firstMatch);
+        const lastIdx = chartData.indexOf(lastMatch);
+        const midIdx = Math.floor((firstIdx + lastIdx) / 2);
+        const centerMatch = chartData[midIdx] || firstMatch;
+
+        highlights.push({
+          x1: firstMatch[xDataKey],
+          x2: lastMatch[xDataKey],
+          xCenter: centerMatch[xDataKey],
+          year: yr,
+          firstIdx,
+          lastIdx,
+        });
+      }
+    }
+
+    // Fallback: if no records match specific year + plannedHarvestMonth, match any record with plannedHarvestMonth
+    if (highlights.length === 0) {
+      const matchingRecords = chartData.filter((item, idx) => {
+        const recDate = recordDates[idx];
+        if (!recDate) return false;
+        return recDate.getMonth() === plannedHarvestMonth;
+      });
+      if (matchingRecords.length > 0) {
+        const firstMatch = matchingRecords[0];
+        const lastMatch = matchingRecords[matchingRecords.length - 1];
+        highlights.push({
+          x1: firstMatch[xDataKey],
+          x2: lastMatch[xDataKey],
+          xCenter: firstMatch[xDataKey],
+          year: null,
+          firstIdx: 0,
+          lastIdx: matchingRecords.length - 1,
+        });
+      }
+    }
+
+    return highlights;
+  }, [
+    chartData,
+    xDataKey,
+    expectedHarvestDate,
+    plantingDate,
+    plantingWindowStart,
+    commodity,
+  ]);
 
   const defaultRange = useMemo(() => {
     const len = chartData?.length || 0;
@@ -322,6 +429,32 @@ function ArrivalVolumeTrendChart({
               stroke="#64748b"
               strokeDasharray="4 4"
             />
+          )}
+          {harvestHighlights && harvestHighlights.length > 0 && ReferenceArea && (
+            harvestHighlights.map((hl, idx) => (
+              <ReferenceArea
+                key={`harvest-area-${hl.year || idx}`}
+                x1={hl.x1}
+                x2={hl.x2}
+                yAxisId={0}
+                fill="#86efac"
+                fillOpacity={0.35}
+                stroke="#16a34a"
+                strokeWidth={1.5}
+                strokeDasharray="4 4"
+              />
+            ))
+          )}
+          {harvestHighlights && harvestHighlights.length > 0 && ReferenceLine && (
+            harvestHighlights.map((hl, idx) => (
+              <ReferenceLine
+                key={`harvest-line-${hl.year || idx}`}
+                x={hl.xCenter || hl.x1}
+                stroke="#16a34a"
+                strokeWidth={2}
+                strokeDasharray="3 3"
+              />
+            ))
           )}
           {varietyKeys.map((key) => (
             <Bar

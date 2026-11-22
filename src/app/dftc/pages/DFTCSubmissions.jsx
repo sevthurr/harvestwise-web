@@ -601,22 +601,27 @@ function DFTCHistory() {
                             r.datasetType
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">
-                          {r.isManual ? (
-                            <div className="flex flex-col">
-                              <span className="font-medium text-[var(--hw-neutral-900)]">{r.savedBy}</span>
-                              {r.encodedBy && r.encodedBy !== r.savedBy ? (
-                                <span className="text-[11.5px] text-[var(--hw-neutral-500)]">Encoded by {r.encodedBy}</span>
-                              ) : (
-                                <span className="text-[11.5px] text-[var(--hw-neutral-400)]">Manual Entry</span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex flex-col">
-                              <span className="font-medium text-[var(--hw-neutral-900)]">{r.savedBy}</span>
-                              <span className="text-[11.5px] text-[var(--hw-neutral-500)]">Uploaded</span>
-                            </div>
-                          )}
+                        <td className="px-4 py-3 whitespace-nowrap text-[13px] text-[var(--hw-neutral-800)]">
+                          <div className="flex flex-col space-y-0.5">
+                            <span className="font-medium text-[var(--hw-neutral-900)]">
+                              {r.savedBy}
+                            </span>
+                            {r.encodedBy && (
+                              <span className="text-[11.5px] text-[var(--hw-neutral-500)]">
+                                Encoded by {r.encodedBy}
+                              </span>
+                            )}
+                            {r.reviewedBy && (
+                              <span className="text-[11px] text-blue-700">
+                                Reviewed by {r.reviewedBy}
+                              </span>
+                            )}
+                            {r.approvedBy && (
+                              <span className="text-[11px] text-emerald-700">
+                                Approved by {r.approvedBy}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.savedDateTime}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-[14px] text-[var(--hw-neutral-800)]">{r.totalRecords}</td>
@@ -661,7 +666,12 @@ function DFTCHistory() {
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-[var(--hw-neutral-600)] mt-1">
                     <span>{r.savedDateTime}</span>
                     <span className="text-[var(--hw-neutral-300)]">•</span>
-                    <span>{r.isManual ? (r.encodedBy && r.encodedBy !== r.savedBy ? `${r.savedBy} (Enc: ${r.encodedBy})` : r.savedBy) : `${r.savedBy} (Uploaded)`}</span>
+                    <span>
+                      {r.savedBy}
+                      {r.encodedBy && r.encodedBy !== r.savedBy ? ` (Enc: ${r.encodedBy})` : ""}
+                      {r.reviewedBy ? ` • Rev: ${r.reviewedBy}` : ""}
+                      {r.approvedBy ? ` • Appr: ${r.approvedBy}` : ""}
+                    </span>
                   </div>
                 </button>
               );

@@ -396,11 +396,18 @@ function DFTCHome() {
                       <p className="text-[14px] font-semibold text-[var(--hw-neutral-900)]">
                         {item.current_price != null ? `₱${item.current_price}/${item.unit || ""}` : "\u2014"}
                       </p>
-                      <p className={`text-[12px] font-medium ${item.direction === "down" ? "text-red-600" : item.direction === "up" ? "text-[var(--hw-green-700)]" : "text-[var(--hw-neutral-500)]"}`}>
+                      <p className={`text-[12px] font-medium ${
+                        (item.direction === "down" || (item.change_pct != null && item.change_pct < 0))
+                          ? "text-rose-600"
+                          : (item.direction === "up" || (item.change_pct != null && item.change_pct > 0))
+                          ? "text-emerald-700"
+                          : "text-[var(--hw-neutral-500)]"
+                      }`}>
                         {item.change_pct != null
                           ? formatPriceChangeDisplay(
                               item.current_price != null ? item.current_price - (item.current_price / (1 + item.change_pct / 100)) : null,
-                              item.change_pct
+                              item.change_pct,
+                              { hidePercent: true }
                             )
                           : "\u2014"}
                       </p>

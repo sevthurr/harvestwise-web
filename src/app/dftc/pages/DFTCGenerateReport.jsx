@@ -787,7 +787,7 @@ export default function DFTCGenerateReport() {
                 className={`${inputCls} font-medium cursor-pointer`}
               >
                 <option value="Bangkerohan Public Market">Bangkerohan Public Market</option>
-                <option value="DFTC Taboan">DFTC</option>
+                <option value="DFTC Taboan">Dvo Food Trm Cmplx</option>
               </select>
             </div>
 

@@ -67,6 +67,7 @@ export const calendar = {
   plant_prefix: "Itanom: {window}",
   harvest_prefix: "Ani: {window}",
   why_good_crop_title: "Nganong maayo kini nga tanom karong bulana",
+  explanation_summary: "Pagtana sa presyo: {price}; presyon sa abot: {arrival}; panahonon nga produksyon: {production}; peligro sa panahon: {weather}.",
   price_outlook_rise: "Posibleng musaka ang presyo sa dili madugay",
   price_outlook_profit: "Maayong gilaomang ginansya",
   factor_price_kamatis: "₱85/kg karon, nagsaka nga trend sa nilabayng duha ka semana.",

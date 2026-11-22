@@ -751,7 +751,18 @@ export const tl = {
         level_high_banner: "Mataas na Presyur sa Arrival",
         meaning_low: "Bumababa ang suplay — ang mas kaunting dami sa pamilihan ay makakatulong sa mas mataas na presyo.",
         meaning_moderate: "Matatag ang dami ng arrival — balanseng suplay at kalagayan ng presyo.",
-        meaning_high: "Tumataas ang suplay — ang mas maraming dami ay maaaring magpababa ng presyo."
+        meaning_high: "Tumataas ang suplay — ang mas maraming dami ay maaaring magpababa ng presyo.",
+        assessment_title: "PAGSUSURI SA ARRIVAL",
+        assessment_expected_harvest: "Inaasahang Pag-aani",
+        assessment_classification_label: "Klasipikasyon ng Arrival",
+        assessment_range_label: "Saklaw (Range)",
+        assessment_interpretation_label: "Paliwanag (Interpretation)",
+        assessment_interpretation_low: "Ang mga historikal na arrival sa panahong ito ng pag-aani ay mas mababa sa unang quartile (Q1). Ang panahong ito ay karaniwang nakakaranas ng mas mababang suplay sa merkado.",
+        assessment_interpretation_lower_middle: "Ang mga historikal na arrival sa panahong ito ng pag-aani ay nasa pagitan ng Q1 at Q2. Ang panahong ito ay karaniwang nakakaranas ng mas mababa sa karaniwang suplay sa merkado.",
+        assessment_interpretation_upper_middle: "Ang mga historikal na arrival sa panahong ito ng pag-aani ay nasa pagitan ng Q2 at Q3. Ang panahong ito ay karaniwang nakakaranas ng mas mataas sa karaniwang suplay sa merkado.",
+        assessment_interpretation_high: "Ang mga historikal na arrival sa panahong ito ng pag-aani ay lumampas sa Q3. Ang panahong ito ay karaniwang nakakaranas ng pinakamataas na lebel ng suplay at kumpetisyon sa merkado.",
+        expected_harvest_period_label: "Inaasahang Panahon ng Pag-aani",
+        expected_harvest_highlight: "Inaasahang Pag-aani: {period}"
       },
 
       production: {
@@ -866,6 +877,7 @@ export const tl = {
         no_weather_note: "Wala pang available na taya ng panahon para sa petsang ito (available para sa susunod na 14 na araw).",
         no_event_note: "Karaniwang araw ng kalakalan. Walang espesyal na kaganapan o holiday."
       },
+      explanation_summary: "Pagtingin sa presyo: {price}; presyon ng abot: {arrival}; pana-panahong produksyon: {production}; panganib sa panahon: {weather}.",
       price_outlook_rise: "Malamang na tumaas ang presyo sa lalong madaling panahon",
       price_outlook_profit: "Magandang inaasahang kita",
       factor_price_kamatis: "₱85/kg ngayon, pataas na trend sa nakaraang dalawang linggo.",
