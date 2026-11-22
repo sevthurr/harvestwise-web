@@ -485,7 +485,10 @@ export async function prefetchFarmerPlanAdvisories(queryClient, crops = queryCli
 
   activeCrops.forEach((crop) => {
     const totalCost = crop.totalCost || 0;
-    const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 0;
+    // CropCycleDetail uses 1 kg as the advisory fallback while a planning
+    // crop has no entered yield yet. Match that page so its planning advisory
+    // is seeded under the exact same key instead of being skipped offline.
+    const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 1;
     const pDateStr = crop.rawPlantingDate
       ? (typeof crop.rawPlantingDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(crop.rawPlantingDate)
         ? crop.rawPlantingDate.slice(0, 10)
@@ -499,7 +502,7 @@ export async function prefetchFarmerPlanAdvisories(queryClient, crops = queryCli
     const validDates = pDateStr && hDateStr && /^\d{4}-\d{2}-\d{2}$/.test(pDateStr) && /^\d{4}-\d{2}-\d{2}$/.test(hDateStr) && pDateStr < hDateStr;
     if (!crop.id || !crop.commodityName || !validDates || totalCost <= 0 || quantity <= 0) return;
 
-    const rawPhase = String(crop.phase || "").toLowerCase();
+    const rawPhase = String(crop.phase || crop.status || "").toLowerCase();
     const explicitStage = rawPhase.includes("plan")
       ? "before_planting"
       : rawPhase.includes("grow") || rawPhase.includes("plant")
@@ -545,11 +548,21 @@ export async function prefetchFarmerOfflineData(queryClient) {
     prefetch(["prices", "list"], fetchPricesList),
     prefetch(["dashboard", "prices"], fetchDashboardPrices),
     prefetch(["dashboard", "recommendations"], fetchDashboardRecommendations),
+    prefetch(monthlyRecommendationsKey(), fetchMonthlyRecommendations),
     prefetch(FARMER_PROFILE_KEY, fetchFarmerProfile),
     prefetch(FARMER_COMMODITIES_KEY, fetchFarmerCommodities),
     prefetch(["farmer", "crops"], fetchCropPlans),
-    prefetch(["marketCalendar"], fetchMarketCalendar),
+    // Keep these keys identical to the page queries. The fallback path is
+    // used when the snapshot endpoint is unavailable, so an old alias here
+    // leaves the pages with an empty query after navigation.
+    prefetch(["marketCalendar", "v2"], fetchMarketCalendar),
   ]);
+
+  const recommendations = queryClient.getQueryData(monthlyRecommendationsKey());
+  if (recommendations) {
+    queryClient.setQueryData(["market", "monthly-recommendations"], recommendations);
+    queryClient.setQueryData(["recommendations", "list"], recommendations);
+  }
 
   const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
   const lat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
@@ -635,6 +648,21 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     // available after an online login and remain available offline.
     await loadFarmerPrices(queryClient).catch(() => {});
     await prefetchFarmerPlanAdvisories(queryClient);
+
+    // These are navigation-critical list pages. They must be persisted before
+    // the sync status becomes ready; leaving them to the idle detail warm-up
+    // lets a farmer go offline immediately after login and see blank pages.
+    await queryClient.prefetchQuery({
+      queryKey: SUPPORTED_PRICES_KEY,
+      queryFn: fetchSupportedPricesList,
+      staleTime: STALE_TIME,
+    }).catch(() => {});
+    await queryClient.prefetchQuery({
+      queryKey: ["marketCalendar", "v2"],
+      queryFn: fetchMarketCalendar,
+      staleTime: STALE_TIME,
+    }).catch(() => {});
+
     await persistOfflineQueryCache();
     lastFarmerOfflineLoadAt = Date.now();
     try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}

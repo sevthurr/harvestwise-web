@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   RefreshCw,
   ChevronRight,
@@ -18,7 +18,7 @@ import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { fetchFarmerProfile, SUPPORTED_PRICES_KEY } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { getCategoryFor } from "../../global/data/commodities";
@@ -287,6 +287,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
 };
 
 function PricesPage() {
+  const queryClient = useQueryClient();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -311,6 +312,7 @@ function PricesPage() {
       return parseResponse(response);
     },
     staleTime: 1000 * 60,
+    initialData: () => queryClient.getQueryData(SUPPORTED_PRICES_KEY),
     refetchOnWindowFocus: true,
     refetchOnMount: true,
   });
