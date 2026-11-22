@@ -287,9 +287,11 @@ function DFTCHistory() {
     queryKey: DFTC_SUBMISSIONS_KEY,
     queryFn: fetchDftcSubmissions,
     staleTime: DFTC_WORKSPACE_STALE_TIME,
-    refetchOnMount: true,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const rawRows = useMemo(() => {

@@ -11,12 +11,14 @@ import {
 import { get, set, del } from 'idb-keyval';
 import { clearQueryPersistedCache, queryClient } from '../lib/queryClient';
 import { loadFarmerOfflineData, hasOfflineSeedMarker } from '../hooks/useFarmerPrefetch';
+import OfflineSavePopup from '../components/shared/OfflineSavePopup';
 
 const AuthContext = createContext(null);
 
 const USER_CACHE_KEY = 'HARVESTWISE_USER_CACHE_V1';
 const PENDING_LOGOUT_KEY = 'hw_logout_pending';
 const OFFLINE_GRACE_MS = 1000 * 60 * 60 * 24 * 30; // 30 days offline grace for rural/spotty connectivity
+const OFFLINE_POPUP_VISIBLE_MS = 2000;
 
 function browserIsOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -38,6 +40,28 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [offlineCacheStatus, setOfflineCacheStatus] = useState('idle');
+  // Transient popup phase. Kept separate from offlineCacheStatus: that status
+  // stays 'ready' for the TopBar pill and flips on reconnect, while this popup
+  // is only for the login / first-open seed.
+  const [offlineSavePopup, setOfflineSavePopup] = useState('idle');
+  const offlinePopupTimerRef = useRef(null);
+
+  const clearOfflinePopupTimer = () => {
+    if (offlinePopupTimerRef.current) {
+      clearTimeout(offlinePopupTimerRef.current);
+      offlinePopupTimerRef.current = null;
+    }
+  };
+
+  const dismissOfflinePopupLater = () => {
+    clearOfflinePopupTimer();
+    offlinePopupTimerRef.current = setTimeout(() => {
+      offlinePopupTimerRef.current = null;
+      setOfflineSavePopup('idle');
+    }, OFFLINE_POPUP_VISIBLE_MS);
+  };
+
+  useEffect(() => () => clearOfflinePopupTimer(), []);
 
   // Ref that always holds the current user value so event handlers registered
   // with empty deps (the auth/expiry listeners) can read the latest user
@@ -54,8 +78,12 @@ export function AuthProvider({ children }) {
   // Farmer check. roleHome() maps any unknown or missing role name to
   // '/farmer', and the fallback path inside loadFarmerOfflineData requests
   // /crop-plans — so a session without a readable role must not seed it.
-  const seedFarmerOffline = async (me, { force = false } = {}) => {
+  const seedFarmerOffline = async (me, { force = false, showPopup = false } = {}) => {
     if ((me?.role?.role_name || '').toLowerCase() === 'farmer') {
+      if (showPopup) {
+        clearOfflinePopupTimer();
+        setOfflineSavePopup('saving');
+      }
       setOfflineCacheStatus('preparing');
       try {
         await loadFarmerOfflineData(queryClient, { force });
@@ -66,11 +94,25 @@ export function AuthProvider({ children }) {
         } catch {
           // ignore
         }
+        if (showPopup) {
+          setOfflineSavePopup('success');
+          dismissOfflinePopupLater();
+        }
       } catch {
         setOfflineCacheStatus('error');
+        if (showPopup) {
+          setOfflineSavePopup('error');
+          dismissOfflinePopupLater();
+        }
       }
     }
   };
+
+  // Onboarding is the other first-open path. refreshUser() has just returned
+  // the fresh profile, so pass that user explicitly — userRef only updates
+  // after React commits the setUser() from refreshUser().
+  const seedOfflineWithPopup = (me = userRef.current) =>
+    seedFarmerOffline(me, { force: true, showPopup: true });
 
   const clearAssessmentDraftForOtherUser = (me) => {
     try {
@@ -141,7 +183,7 @@ export function AuthProvider({ children }) {
         setUser(me);
         // Cache user profile for offline restoration
         await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
-        await seedFarmerOffline(me);
+        await seedFarmerOffline(me, { showPopup: true });
       } catch (error) {
         if (error?.status) {
           clearTokens();
@@ -189,6 +231,8 @@ export function AuthProvider({ children }) {
     const purge = ({ refetchActive = true } = {}) => {
       setUser(null);
       setOfflineCacheStatus('idle');
+      clearOfflinePopupTimer();
+      setOfflineSavePopup('idle');
       clearQueryPersistedCache({ refetchActive });
       try { del(USER_CACHE_KEY); } catch {}
     };
@@ -248,7 +292,7 @@ export function AuthProvider({ children }) {
     clearAssessmentDraftForOtherUser(me);
     setUser(me);
     await set(USER_CACHE_KEY, { user: me, cachedAt: Date.now(), expiresAt: Date.now() + OFFLINE_GRACE_MS });
-    await seedFarmerOffline(me, { force: true });
+    await seedFarmerOffline(me, { force: true, showPopup: true });
     return me;
   };
 
@@ -287,6 +331,8 @@ export function AuthProvider({ children }) {
       clearTokens();
       setUser(null);
       setOfflineCacheStatus('idle');
+      clearOfflinePopupTimer();
+      setOfflineSavePopup('idle');
       await clearQueryPersistedCache({ refetchActive: false });
       try { await del(USER_CACHE_KEY); } catch {}
     }
@@ -328,7 +374,11 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, offlineCacheStatus, login, logout, refreshUser, patchUser }}>
+    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, offlineCacheStatus, offlineSavePopup, login, logout, refreshUser, patchUser, seedOfflineWithPopup }}>
+      {/* Rendered above children: SmartRedirect renders nothing while loading,
+          so a popup mounted inside the page tree would be invisible during the
+          session-restore seed. */}
+      <OfflineSavePopup phase={offlineSavePopup} />
       {children}
     </AuthContext.Provider>
   );

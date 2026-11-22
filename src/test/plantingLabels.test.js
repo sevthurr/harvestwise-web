@@ -18,6 +18,7 @@ import {
   advisoryCategoryLabel,
   localizedRefText,
   recommendationLine,
+  recommendationSummary,
   toneClasses,
   weatherRiskLabel,
 } from "../app/farmer/utils/plantingLabels.js";
@@ -174,5 +175,28 @@ describe("recommendationLine", () => {
   it("returns nothing when no window is recorded", () => {
     expect(recommendationLine({}, tr("en"))).toBe("");
     expect(recommendationLine({ planting_window_start: "2026-10-10" }, tr("en"))).toBe("");
+  });
+});
+
+describe("recommendationSummary", () => {
+  it("localizes the structured analytics summary", () => {
+    const rec = {
+      explanation: "Price outlook: Favorable; arrival pressure: Low; seasonal production: Lower Middle; weather risk: Caution.",
+      price_outlook: "Favorable",
+      arrival_pressure: "Low",
+      historical_seasonal_production_level: "Lower Middle",
+      weather_risk_level: "Caution",
+    };
+
+    const ceb = recommendationSummary(rec, tr("ceb"));
+    expect(ceb).toContain("Pagtan-aw sa presyo: Maayo");
+    expect(ceb).toContain("Presyon sa abot: Ubos");
+    expect(ceb).toContain("Produksyon sa panahon: Katamtamang Ubos");
+    expect(ceb).toContain("Risk sa panahon: Kinahanglan Bantayan");
+    expect(ceb).not.toContain("Price outlook");
+  });
+
+  it("keeps an unstructured explanation as a safe fallback", () => {
+    expect(recommendationSummary({ explanation: "Custom explanation" }, tr("ceb"))).toBe("Custom explanation");
   });
 });

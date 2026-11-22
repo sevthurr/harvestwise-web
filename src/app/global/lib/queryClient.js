@@ -41,6 +41,15 @@ function isBrowserOffline() {
 
 export const queryClient = new QueryClient({
   defaultOptions: {
+    // A failed offline refetch (the forced prices reload on prefetch) flips
+    // status to 'error' while query-core keeps the last good data. The default
+    // dehydrate filter drops it, so the persisted snapshot loses the prices and
+    // the next cold reopen has nothing to hydrate.
+    dehydrate: {
+      shouldDehydrateQuery: (query) =>
+        query.state.status === "success" ||
+        (query.state.status === "error" && query.state.data !== undefined),
+    },
     queries: {
       staleTime: 1000 * 60 * 30,        // 30 min before data is considered stale
       gcTime: OFFLINE_TTL_MS,            // keep persisted cache for 30 days

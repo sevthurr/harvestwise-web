@@ -29,6 +29,7 @@ import {
   isSubmissionFileUpload,
   isSubmissionToday
 } from "./dftcSavedDatasets";
+import { DFTC_SUBMISSIONS_KEY, fetchDftcSubmissions } from "../../global/hooks/dftcWorkspaceQueries";
 
 const PAGE_SIZE = 10;
 
@@ -166,14 +167,12 @@ export default function DFTCInput() {
 
   // Fetch real submissions
   const { data: submissionsData, isLoading: loadingSubmissions } = useQuery({
-    queryKey: ["dftc", "submissions"],
-    queryFn: async () => {
-      const res = await apiGet("/dftc/submissions?page=1&page_size=50");
-      return parseResponse(res);
-    },
+    queryKey: DFTC_SUBMISSIONS_KEY,
+    queryFn: fetchDftcSubmissions,
     // Refresh invalidated data after a save, but keep fresh cached data when
     // navigating back from another DFTC page.
-    refetchOnMount: true
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   // Drafts are shared server state. Local storage is only a recovery fallback
@@ -193,7 +192,7 @@ export default function DFTCInput() {
     // The entry pages already synchronize their active draft. Keep this
     // overview poll as a low-frequency fallback and never run it in a hidden
     // tab, where several mounted queries can otherwise create a request burst.
-    refetchInterval: 30000,
+    refetchInterval: 10000,
     refetchIntervalInBackground: false,
   });
 

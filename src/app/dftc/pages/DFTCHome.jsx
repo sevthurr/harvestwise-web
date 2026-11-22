@@ -101,6 +101,8 @@ function DFTCHome() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: homeData, isLoading: loadingHome } = useQuery({
@@ -110,6 +112,8 @@ function DFTCHome() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const kpis = homeData?.kpis || {};

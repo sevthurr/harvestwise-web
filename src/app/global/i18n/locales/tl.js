@@ -396,6 +396,9 @@ export const tl = {
     offline_mode_active: "Aktibo ang Offline Mode",
     offline_desc_offline: "Walang internet. Ipinapakita ang naka-save na data sa iyong device.",
     offline_view_settings: "Pamahalaan ang Offline Data",
+    offline_save_saving: "Sine-save ang iyong data para magamit kahit walang internet…",
+    offline_save_success: "Naka-save na ang iyong data para magamit kahit walang internet.",
+    offline_save_error: "Hindi lahat ng offline data ay na-save.",
     advisory: {
       recommended_summary: "Sinusuportahan ng kasalukuyang kondisyon ang iyong plano para sa {crop_name}.",
       recommended_support: "Maayos ang presyo at kontrolado ang panahon ngayong linggo.",

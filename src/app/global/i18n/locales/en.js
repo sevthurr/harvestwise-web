@@ -395,6 +395,9 @@ export const en = {
     offline_mode_active: "Offline Mode Active",
     offline_desc_offline: "You are offline. Showing cached data from your device.",
     offline_view_settings: "Manage Offline Data",
+    offline_save_saving: "Saving your data for offline use…",
+    offline_save_success: "Saved for offline use",
+    offline_save_error: "Some offline data could not be saved",
 
     advisory: {
       recommended_summary: "Current conditions support your {crop_name} plan.",

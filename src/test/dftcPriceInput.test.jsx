@@ -1044,6 +1044,24 @@ describe('DFTCPriceInput shared draft resync', () => {
     await waitFor(() => expect(inputs[0].value).toBe('42'));
   });
 
+  it("Resync preserves all raw samples from the shared draft", async () => {
+    const remoteCells = [];
+    const base = byDayOn([TODAY], { [TODAY]: remoteCells });
+    renderWithFetch(base);
+
+    const inputs = expandLowland();
+    await waitFor(() => expect(inputs[0].value).toBe('35'));
+
+    remoteCells.push(draftCell({ samples: ['80', '76', '', '', ''] }));
+    fireEvent.click(screen.getByRole('button', { name: /Resync shared draft/i }));
+
+    await waitFor(() => {
+      expect(inputs[0].value).toBe('80');
+      expect(inputs[1].value).toBe('76');
+      expect(inputs[2].value).toBe('');
+    });
+  });
+
   it('Resync does not overwrite a field the local user edited', async () => {
     const remoteCells = [];
     const base = byDayOn([TODAY], { [TODAY]: remoteCells });

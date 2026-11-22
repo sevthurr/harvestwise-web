@@ -110,6 +110,13 @@ vi.mock("../app/global/api", () => ({
                 temperature_max: 34,
                 temperature_min: 25,
               },
+              {
+                date: `${ym}-30`,
+                rainfall_mm: 0,
+                suitability: "Fair",
+                temperature_max: 30,
+                temperature_min: 24,
+              },
             ],
           }),
       });
@@ -176,6 +183,13 @@ describe("Farmer Crop Calendar Page", () => {
     expect(screen.getByText(/Hot days|Init nga mga adlaw/i)).toBeInTheDocument();
     expect(screen.getByText(/Events|Mga Events/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^Crop schedule$|^Iskedyul sa tanom$/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders fair weather without requiring a crop plan", async () => {
+    renderComponent();
+
+    expect(await screen.findByText(/14-Day Weather Forecast Outlook|14-Adlaw nga Tagna sa Panahon/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Set 30|Nob 30/i)).length).toBeGreaterThanOrEqual(1);
   });
 
   it("only displays Recommended crops in the 'Good crops to plant' section, excluding Caution crops", async () => {

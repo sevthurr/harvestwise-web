@@ -113,7 +113,7 @@ function carriedSourceDate(carried, tabId, vid, date) {
 /** Field shape for a single stored prevailing price. */
 function priceField(price, uom = "kg", extra = {}) {
   return {
-    samples: [String(price), "", "", "", ""],
+    samples: extra.samples ?? [String(price), "", "", "", ""],
     uom,
     low: price,
     high: price,
@@ -161,6 +161,7 @@ function mergeDraftTargets(base, targets, removed) {
   let changed = false;
   for (const { tab, vid, cell } of targets) {
     const field = priceField(cell.prevail_price, cell.uom, {
+      samples: cell.samples,
       volatilityReasonId: cell.volatility_reason_id,
       volatilityReasonName: cell.volatility_reason_name,
       volatilityNotes: cell.volatility_notes,
@@ -1274,10 +1275,11 @@ function DFTCPriceInput() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogData]);
 
-  // Push every dirty field to the shared draft. One request per cell so two
-  // inputters never overwrite each other wholesale, and a 409 on one cell does
-  // not discard the rest. Best-effort: a failure keeps the localStorage fallback
-  // and surfaces a message rather than losing the typed value.
+  // Push every dirty field to the shared draft. Keep one request per cell so
+  // two inputters never overwrite each other wholesale, but run independent
+  // cells concurrently so a flush takes roughly one request round-trip rather
+  // than one round-trip per edited cell. A 409 on one cell does not discard
+  // the rest.
   const pushInFlightRef = useRef(null);
   const pushDraftCells = useCallback(() => {
     const flush = async () => {
@@ -1341,6 +1343,7 @@ function DFTCPriceInput() {
               price_min: f.low ?? null,
               price_max: f.high ?? null,
               prevail_price: f.prevailing ?? null,
+              samples: f.samples ?? [],
               observation_status: "Reported value",
               expected_version: draftMetaRef.current[tab.id]?.get(vid)?.version ?? null,
               volatility_reason_id: f.volatilityReasonId ?? null,
@@ -1399,7 +1402,7 @@ function DFTCPriceInput() {
         });
       }
     };
-    for (const { key, params } of cleared) {
+    await Promise.all(cleared.map(async ({ key, params }) => {
       try {
         const qs = new URLSearchParams(params).toString();
         await apiDelete(`/dftc/price-draft/cell?${qs}`);
@@ -1415,8 +1418,8 @@ function DFTCPriceInput() {
           console.error("Draft cell delete failed:", err);
         }
       }
-    }
-    for (const { key, cell } of pending) {
+    }));
+    await Promise.all(pending.map(async ({ key, cell }) => {
       try {
         const res = await parseResponse(await apiPut("/dftc/price-draft/cell", {
           ...cell,
@@ -1447,7 +1450,7 @@ function DFTCPriceInput() {
           lastSaveError = err;
         }
       }
-    }
+    }));
     // A successful autosave is no longer a local edit. Clearing this marker is
     // important: it lets a discard made by the other inputter remove the same
     // value from this form on the next shared-draft poll. Keep the marker only
@@ -1802,6 +1805,7 @@ function DFTCPriceInput() {
             const resolved = await resolveDraftCellsRef.current(draftData.cells);
             for (const { tab, vid, cell } of resolved) {
               draftByTab[tab.id][vid] = priceField(cell.prevail_price, cell.uom, {
+                samples: cell.samples,
                 volatilityReasonId: cell.volatility_reason_id,
                 volatilityReasonName: cell.volatility_reason_name,
                 volatilityNotes: cell.volatility_notes,

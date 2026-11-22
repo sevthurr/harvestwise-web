@@ -24,10 +24,12 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { recommendationSummary } from "../utils/plantingLabels";
 import { Skeleton } from "../components/shared/FarmerSkeletons";
 import { useCrops, isArchivedCrop } from "../components/crops/CropsContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
+import { WeatherForecastCarousel } from "../components/shared/WeatherForecast";
 import { explainRainfall } from "../../global/components/shared/weatherExplanations";
 import { resolveFactorCondition } from "../utils/factorColors";
 import {
@@ -93,8 +95,8 @@ function forecastMarkerType(f) {
     return "rain";
   }
 
-  // Normal weather displays no marker icon on calendar cells
-  return null;
+  // Keep fair-weather forecast days visible even when there is no crop plan.
+  return "fair";
 }
 
 function buildCalendarMarkers(marketEvents, cropPlans, weatherForecasts, year, month) {
@@ -345,7 +347,7 @@ const _weatherNote = (type, info, t) => {
   if (type === "storm") return t("farmer.calendar.weather_note_storm", { rain_mm: rainMm }, `Heavy rain / thunderstorm expected${rainMm}.`);
   if (type === "heat") return t("farmer.calendar.weather_note_heat", {}, "Consecutive hot days. Ensure sufficient irrigation for crops.");
   if (type === "rain") return t("farmer.calendar.weather_note_rain", { rain_mm: rainMm, rain_chance: rainProb }, `Light rain expected${rainMm}${rainProb}.`);
-  return t("farmer.calendar.weather_note_fair", { temps }, `Fair weather${temps}.`);
+  return t("farmer.calendar.weather_note_sun", { temps }, `Fair weather${temps}.`);
 };
 
 // Default high-quality factor profiles for recommended crops matching the design
@@ -851,7 +853,7 @@ function RecommendationPage() {
         id: cid,
         name: cname,
         varietyCount: profile.varietyCount || t("farmer.calendar.variety_count_single", {}, "1 variety"),
-        priceOutlookText: rec.explanation || profile.priceOutlookText || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
+        priceOutlookText: recommendationSummary(rec, t) || profile.priceOutlookText || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
         bestVariety: profile.bestVariety || rec.bestVariety || rec.commodity_variety || rec.commodityVariety || rec.variety || null,
         plantWindow: plantWindowStr,
         harvestWindow: harvestWindowStr,
@@ -940,6 +942,10 @@ function RecommendationPage() {
       </div>
 
       <WeatherLocationBanner />
+
+      <section className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-4 md:p-5">
+        <WeatherForecastCarousel forecast14d={weatherForecastList} />
+      </section>
 
       {/* ── 2. Crop Calendar Card ── */}
       <section className="space-y-4">

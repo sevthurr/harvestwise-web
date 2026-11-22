@@ -28,6 +28,13 @@ describe("query client offline policy", () => {
     expect(queryClient.getDefaultOptions().queries.networkMode).toBe("always");
   });
 
+  it("keeps error-status queries with data in the persisted snapshot (failed offline prices refetch)", () => {
+    const shouldDehydrateQuery = queryClient.getDefaultOptions().dehydrate.shouldDehydrateQuery;
+    expect(shouldDehydrateQuery({ state: { status: "success", data: { commodities: [] } } })).toBe(true);
+    expect(shouldDehydrateQuery({ state: { status: "error", data: { commodities: [] } } })).toBe(true);
+    expect(shouldDehydrateQuery({ state: { status: "error", data: undefined } })).toBe(false);
+  });
+
   it("leaves mutations on the default network mode", () => {
     // The app configures no mutation defaults at all, so a mutation keeps
     // query-core's default ('online'). 'always' on a mutation would attempt a
