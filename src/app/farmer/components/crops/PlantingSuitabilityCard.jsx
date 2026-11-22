@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Sprout } from "lucide-react";
 import { CommodityIllustration } from "../../../global/components/shared/CommodityIllustrations";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
@@ -74,6 +74,7 @@ function useOverflowHint(revision) {
 export default function PlantingSuitabilityCard({ preferredCropIds = [], preferredCrops = [] }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -91,13 +92,26 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
   const rawMonthName = rawMonthNames[now.getMonth()];
   const localizedMonth = t(`farmer.calendar.months.${currentMonthKey}`, {}, rawMonthName);
 
-  const { data: recommendationsData, isLoading } = useQuery({
+  const { data: recommendationsData, isLoading, isError, fetchStatus } = useQuery({
     queryKey: monthlyRecommendationsKey(formattedRefMonth),
     queryFn: () => fetchMonthlyRecommendations(formattedRefMonth),
     staleTime: 1000 * 60 * 30,
   });
 
-  const rawRecommendations = recommendationsData?.items ?? [];
+  const rawRecommendations = useMemo(() => {
+    if (recommendationsData?.items?.length) return recommendationsData.items;
+    if (typeof navigator !== "undefined" && navigator.onLine !== false) return [];
+    if (!isError && fetchStatus !== "paused") return [];
+    const legacy = queryClient.getQueryData(["market", "monthly-recommendations"]);
+    if (legacy?.items?.length) return legacy.items;
+    // Older persisted bundles kept only the dashboard projection. Rebuild the
+    // small raw shape this card needs rather than showing an empty offline card.
+    return (queryClient.getQueryData(["dashboard", "recommendations"]) || []).map((rec) => ({
+      commodity_id: rec.id,
+      commodity_name: rec.name,
+      advisory_category: rec.advisoryCategory || "Recommended",
+    }));
+  }, [recommendationsData, queryClient, isError, fetchStatus]);
 
   // Filter ONLY Recommended crops (matching Market Calendar, Top 10 commodities only)
   const recommendedCrops = useMemo(() => {
