@@ -335,13 +335,13 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   const safePrefetch = (queryKey, queryFn) =>
     queryClient.prefetchQuery({ queryKey, queryFn, staleTime: STALE_TIME }).catch(() => {});
 
-  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY) || {};
-  const preferredCrops = profile.preferred_crops || profile.preferredCrops || [];
-  const preferredMatcher = getPreferredCropMatcher(preferredCrops);
   const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
   const priceItems = [...(bundle.price_trends || []), ...supportedItems];
   const preferredPriceIds = [...new Set(priceItems
-    .filter((item) => preferredMatcher.count === 0 || preferredMatcher.isPreferred(item))
+    // The offline bundle must cover every commodity reachable from Farmer
+    // routes, not only the farmer's preferred crops. The variable name is
+    // retained for the existing request-building code.
+    .filter(() => true)
     .map((item) => item.commodity_id || item.commodityId)
     .filter(Boolean))];
   const cropPlanIds = [...new Set((bundle.crop_plans || [])
@@ -381,6 +381,9 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       const data = await parseResponse(await apiGet("/me/notifications/unread-count"));
       return data?.unread_count ?? 0;
     }),
+    safePrefetch(["farmerMyActivities", "all", { from: "", to: "" }, 1], async () =>
+      parseResponse(await apiGet("/farmer/activity?page=1&page_size=15"))
+    ),
   ];
 
   // Per-commodity requests are deliberately kept out of the shared `requests`
@@ -614,15 +617,6 @@ export function hasOfflineSeedMarker() {
   }
 }
 
-function scheduleFullFarmerPrefetch(queryClient) {
-  const run = () => prefetchFarmerFullData(queryClient).catch(() => {});
-  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 5000 });
-  } else {
-    setTimeout(run, 0);
-  }
-}
-
 /**
  * Load every top-level farmer dataset and write it into the React Query cache
  * so the persister pushes it to IndexedDB. Prefers the single snapshot bundle;
@@ -663,10 +657,13 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
       staleTime: STALE_TIME,
     }).catch(() => {});
 
+    // Finish the full read-only Farmer bundle before reporting success. This
+    // prevents mobile users from going offline while detail-page queries are
+    // still waiting in the idle queue.
+    await prefetchFarmerFullData(queryClient);
     await persistOfflineQueryCache();
     lastFarmerOfflineLoadAt = Date.now();
     try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}
-    scheduleFullFarmerPrefetch(queryClient);
   })().finally(() => {
     farmerOfflineLoadPromise = null;
   });

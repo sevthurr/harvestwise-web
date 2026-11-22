@@ -304,7 +304,7 @@ function PricesPage() {
     return profileData?.preferred_crops || profileData?.preferredCrops || [];
   }, [profileData]);
 
-  const { data: apiData, isLoading: loading } = useQuery({
+  const { data: apiData, isLoading: loading, isError, fetchStatus } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: async () => {
       const response = await apiGet("/prices?is_top10=true&page_size=50");
@@ -312,15 +312,30 @@ function PricesPage() {
       return parseResponse(response);
     },
     staleTime: 1000 * 60,
-    initialData: () => queryClient.getQueryData(SUPPORTED_PRICES_KEY),
     refetchOnWindowFocus: true,
     refetchOnMount: true,
   });
 
   const { commodities } = useMemo(() => {
-    if (!apiData) return { commodities: [] };
+    const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+    const fallbackData = queryClient.getQueryData(["dashboard", "prices"]);
+    const effectiveData = apiData?.items?.length
+      ? apiData
+      : offline && (isError || fetchStatus === "paused") && (queryClient.getQueryData(SUPPORTED_PRICES_KEY) || (
+        Array.isArray(fallbackData)
+          ? { items: fallbackData.map((item) => ({
+              commodity_id: item.id,
+              name: item.name,
+              base_name: item.baseName,
+              is_top10: true,
+              unit_of_measure: item.uom || "kg",
+              prices: { bangkerohan_retail: item.price },
+            })) }
+          : null
+      ));
+    if (!effectiveData) return { commodities: [] };
 
-    const items = apiData.items || [];
+    const items = effectiveData.items || [];
     const baseMap = new Map();
 
     items.forEach(item => {
@@ -402,7 +417,7 @@ function PricesPage() {
     return {
       commodities: Array.from(baseMap.values()),
     };
-  }, [apiData]);
+  }, [apiData, queryClient]);
 
   const priceTrendQueries = useQueries({
     queries: commodities.map((commodity) => ({
