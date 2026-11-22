@@ -1182,6 +1182,8 @@ function RecommendationPage() {
                                 state: {
                                   commodityId: crop.id,
                                   commodityName: crop.name,
+                                  plantingDate: crop.plantingDate || crop.plantWindow,
+                                  expectedHarvestDate: crop.harvestDate || crop.harvestWindow,
                                   backPath: "/farmer/market",
                                   backLabel: t("nav.market", {}, "Market"),
                                   breadcrumbs: [

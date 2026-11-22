@@ -445,17 +445,6 @@ function ArrivalVolumeTrendChart({
               />
             ))
           )}
-          {harvestHighlights && harvestHighlights.length > 0 && ReferenceLine && (
-            harvestHighlights.map((hl, idx) => (
-              <ReferenceLine
-                key={`harvest-line-${hl.year || idx}`}
-                x={hl.xCenter || hl.x1}
-                stroke="#16a34a"
-                strokeWidth={2}
-                strokeDasharray="3 3"
-              />
-            ))
-          )}
           {varietyKeys.map((key) => (
             <Bar
               key={key}

@@ -851,11 +851,58 @@ const ArrivalTab = ({
 
 const HARVEST_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 
-const ProductionTab = ({ data, commodityName }) => {
+const ProductionTab = ({
+  data,
+  commodityId,
+  commodityName,
+  cropStage,
+  plantingDate,
+  expectedHarvestDate,
+  plantingSeason,
+  moduleResults,
+  plantingWindowStart,
+  plantingWindowEnd,
+  plantingWindowLabel,
+}) => {
   const { t } = useLanguage();
   const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
-  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(data?.selectedQuarter || currentQuarter);
+
+  // Automatically determine the quarter on which the harvest window falls
+  const defaultHarvestQuarter = useMemo(() => {
+    if (data?.selectedQuarter && HARVEST_QUARTERS.includes(data.selectedQuarter)) {
+      return data.selectedQuarter;
+    }
+    if (moduleResults?.harvest_quarter && HARVEST_QUARTERS.includes(moduleResults.harvest_quarter)) {
+      return moduleResults.harvest_quarter;
+    }
+    const explicitHarvest = expectedHarvestDate || moduleResults?.expected_harvest_date;
+    const rawStart = plantingDate || plantingWindowStart;
+    let derivedHarvest = null;
+    if (!explicitHarvest && rawStart) {
+      const suggestion = suggestHarvestDate(rawStart, commodityId || commodityName);
+      if (suggestion) {
+        derivedHarvest = suggestion.maxDate || suggestion.minDate;
+      }
+    }
+    const finalHarvestStr = explicitHarvest || derivedHarvest || rawStart;
+    if (finalHarvestStr) {
+      const d = parseDateOnly(finalHarvestStr);
+      if (d && !isNaN(d.getTime())) {
+        return `Q${Math.floor(d.getMonth() / 3) + 1}`;
+      }
+    }
+    return currentQuarter;
+  }, [data?.selectedQuarter, moduleResults, expectedHarvestDate, plantingDate, plantingWindowStart, commodityId, commodityName, currentQuarter]);
+
+  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(defaultHarvestQuarter);
+
+  useEffect(() => {
+    if (defaultHarvestQuarter) {
+      setActiveHarvestQuarter(defaultHarvestQuarter);
+    }
+  }, [defaultHarvestQuarter]);
+
   const [selectedLocation, setSelectedLocation] = useState("all");
 
   const locations = useMemo(() => {
@@ -869,9 +916,11 @@ const ProductionTab = ({ data, commodityName }) => {
     return [...locSet].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [data?.sourceAreas, data?.sources, data?.geoRecords]);
 
-  const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter));
+  const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter || defaultHarvestQuarter));
+  const currentSelectedQuarter = activeHarvestQuarter || data?.selectedQuarter || defaultHarvestQuarter;
+  const isDefaultHarvestQuarter = currentSelectedQuarter === defaultHarvestQuarter;
   const normLevel = normalizeProductionLevel(
-    data?.classificationOverride || selectedProfile?.classification || data?.productionLevel
+    (isDefaultHarvestQuarter && data?.classificationOverride) || selectedProfile?.classification || data?.productionLevel
   );
   const banner = normLevel ? PRODUCTION_BANNER_CFG[normLevel] : null;
   const LevelIcon = banner?.Icon;
@@ -1519,7 +1568,21 @@ const FactorDetailTabs = ({
             plantingWindowLabel={plantingWindowLabel}
           />
         )}
-        {safeTab === "production" && <ProductionTab data={production} commodityName={commodityName ?? weather?.cropName} />}
+        {safeTab === "production" && (
+          <ProductionTab
+            data={production}
+            commodityId={commodityId}
+            commodityName={commodityName ?? weather?.cropName}
+            cropStage={cropStage}
+            plantingDate={plantingDate}
+            expectedHarvestDate={expectedHarvestDate}
+            plantingSeason={plantingSeason}
+            moduleResults={moduleResults}
+            plantingWindowStart={plantingWindowStart}
+            plantingWindowEnd={plantingWindowEnd}
+            plantingWindowLabel={plantingWindowLabel}
+          />
+        )}
         {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "profitability" && profitability && <ProfitabilityTab data={profitability} />}
       </div>

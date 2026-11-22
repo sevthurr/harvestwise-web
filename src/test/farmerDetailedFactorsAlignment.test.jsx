@@ -133,6 +133,36 @@ describe("Farmer detailed factors use Admin analytics data", () => {
     ]);
   });
 
+  it("automatically selects the quarter on which the expected harvest window falls", () => {
+    const quarterlyProfiles = [
+      { quarter: "Q1", average_production_mt: 75, classification: "Low", years_available: 5 },
+      { quarter: "Q2", average_production_mt: 150, classification: "High", years_available: 5 },
+      { quarter: "Q3", average_production_mt: 100, classification: "Upper Middle", years_available: 5 },
+      { quarter: "Q4", average_production_mt: 90, classification: "Lower Middle", years_available: 5 },
+    ];
+
+    render(
+      <FactorDetailTabs
+        defaultTab="production"
+        plantingDate="2025-11-12"
+        expectedHarvestDate="2026-01-06"
+        production={{
+          grandAverageQuarterlyMt: 100,
+          quarterlyProfiles,
+        }}
+      />
+    );
+
+    const q1Button = screen.getByRole("button", { name: "Q1" });
+    expect(q1Button).toHaveAttribute("aria-pressed", "true");
+
+    const q2Button = screen.getByRole("button", { name: "Q2" });
+    expect(q2Button).toHaveAttribute("aria-pressed", "false");
+
+    expect(screen.getByText("Low Production Season")).toBeInTheDocument();
+    expect(screen.getByText("75 MT")).toBeInTheDocument();
+  });
+
   it("shows the production empty state instead of a fabricated zero-scale chart", () => {
     render(<FactorDetailTabs defaultTab="production" production={{ quarterlyProfiles: [] }} />);
 

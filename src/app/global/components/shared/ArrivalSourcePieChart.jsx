@@ -16,6 +16,28 @@ function formatKgValue(kg) {
   return `${Number(kg).toLocaleString()} kg`;
 }
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+  if (percent < 0.08) return null;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.52;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={12}
+      fontWeight="700"
+      className="select-none pointer-events-none drop-shadow-sm"
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function ArrivalSourcePieChart({ data, height = 240, outerRadius, showEmpty = false }) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
   useEffect(() => {
@@ -61,12 +83,8 @@ export function ArrivalSourcePieChart({ data, height = 240, outerRadius, showEmp
             outerRadius={isEmpty ? emptyRadius : effectiveRadius}
             paddingAngle={0}
             dataKey="value"
-            labelLine={!isEmpty}
-            label={
-              isEmpty
-                ? false
-                : ({ percent }) => `${(percent * 100).toFixed(0)}%`
-            }
+            labelLine={false}
+            label={isEmpty ? false : renderCustomizedLabel}
           >
             {renderData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.color} />
