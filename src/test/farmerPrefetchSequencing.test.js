@@ -126,4 +126,31 @@ describe("farmer prefetch commodity sequencing", () => {
       "2026-12-03", "2027-02-06", 100000, 25000, "before_planting",
     ])).toEqual({ advisory: { advisory: "Proceed with Caution" } });
   });
+
+  it("prefetches a planning advisory before a yield is entered", async () => {
+    const client = new QueryClient();
+    const crop = {
+      id: "CRP-PLANNING",
+      commodityName: "Tomato",
+      phase: "planning",
+      status: "Planning",
+      rawPlantingDate: "2026-12-03",
+      rawHarvestDate: "2027-02-06",
+      totalCost: 100000,
+      harvestQuantity: 0,
+      farmgatePrice: null,
+    };
+
+    await prefetchFarmerPlanAdvisories(client, [crop]);
+
+    expect(apiPost).toHaveBeenCalledWith("/advisory/plan", expect.objectContaining({
+      crop_name: "Tomato",
+      expected_yield_kg: 1,
+      crop_stage: "before_planting",
+    }));
+    expect(client.getQueryData([
+      "advisory", "plan", "v2", "CRP-PLANNING", "Tomato",
+      "2026-12-03", "2027-02-06", 100000, 1, "before_planting",
+    ])).toEqual({ advisory: { advisory: "Proceed with Caution" } });
+  });
 });

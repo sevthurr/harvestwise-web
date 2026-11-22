@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
@@ -116,6 +116,7 @@ const CalendarGrid = ({ year, month, selectedDate, onSelect, events }) => {
 };
 
 function MarketCalendarPage() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { mode } = useDisplayMode();
   const isAnalytics = mode === "analytics";
@@ -136,6 +137,9 @@ function MarketCalendarPage() {
       return data.items || [];
     },
     staleTime: 1000 * 60 * 5,
+    // Read the pre-v2 key written by older app versions while the persisted
+    // query cache migrates to the canonical key.
+    initialData: () => queryClient.getQueryData(["marketCalendar"]),
     refetchOnMount: true,
   });
 
