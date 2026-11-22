@@ -14,7 +14,6 @@ import {
   FARMER_COMMODITIES_KEY,
   FARMER_PROFILE_KEY,
   loadFarmerCommodities,
-  loadFarmerOfflineData,
 } from "../global/hooks/useFarmerPrefetch";
 
 // ---------------------------------------------------------------------------
@@ -485,7 +484,7 @@ function OnboardingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setLanguage, t } = useLanguage();
-  const { refreshUser } = useAuth();
+  const { refreshUser, seedOfflineWithPopup } = useAuth();
   const [step, setStep] = useState(1);
   const [data, setData] = useState(INITIAL);
   const [langError, setLangError] = useState("");
@@ -579,8 +578,8 @@ function OnboardingPage() {
       queryClient.invalidateQueries({ queryKey: ["farmer"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["weather"] });
-      await refreshUser?.();
-      loadFarmerOfflineData(queryClient, { force: true }).catch(() => {});
+      const refreshedUser = await refreshUser?.();
+      seedOfflineWithPopup?.(refreshedUser);
       setStep(4);
     } catch (err) {
       setSubmitError(err.message || t("onboarding.save_error", {}, "Failed to save. Please try again."));

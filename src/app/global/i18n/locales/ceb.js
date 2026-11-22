@@ -396,6 +396,9 @@ export const ceb = {
     offline_mode_active: "Aktibo ang Offline Mode",
     offline_desc_offline: "Walay internet. Gipakita ang naka-save nga data sa imong device.",
     offline_view_settings: "Pagdumala sa Offline Data",
+    offline_save_saving: "Gi-save ang imong datos para magamit bisan walay internet…",
+    offline_save_success: "Naka-save na ang imong datos para offline.",
+    offline_save_error: "Dili tanan nga offline data natipigan.",
     advisory: {
       recommended_summary: "Suportahan sa karon nga kahimtang ang imong plano alang sa {crop_name}.",
       recommended_support: "Maayo ang presyo ug kontrolado ang panahon karong semanaha.",

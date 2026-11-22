@@ -154,3 +154,31 @@ export function recommendationLine(rec, t, lang = "en-US") {
     "Sow {from}–{to}",
   );
 }
+
+const SUMMARY_FIELDS = [
+  ["price_outlook", "farmer.calendar.summary_price_outlook"],
+  ["arrival_pressure", "farmer.calendar.summary_arrival_pressure"],
+  ["historical_seasonal_production_level", "farmer.calendar.summary_seasonal_production"],
+  ["weather_risk_level", "farmer.calendar.summary_weather_risk"],
+];
+
+/**
+ * Localize the compact summary assembled by the analytics API. The API keeps
+ * the values in English for classification, while the farmer UI has already
+ * received the same values as structured fields.
+ */
+export function recommendationSummary(rec, t) {
+  if (!rec || !SUMMARY_FIELDS.some(([field]) => rec[field])) {
+    return rec?.explanation || "";
+  }
+
+  const classification = (value) => {
+    const normalized = String(value || "").toLowerCase().replace(/\s+/g, "_");
+    return t(`farmer.advisory.classifications.${normalized}`, {}, value);
+  };
+
+  return SUMMARY_FIELDS
+    .filter(([field]) => rec[field])
+    .map(([field, key]) => t(key, { value: classification(rec[field]) }, `${field}: ${rec[field]}`))
+    .join("; ");
+}

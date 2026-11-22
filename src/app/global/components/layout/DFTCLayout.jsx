@@ -26,7 +26,6 @@ import { UserAvatar } from "../profile/UserAvatar";
 import { useAuth } from "../../contexts/AuthContext";
 import { useBackgroundProcess } from "../../contexts/BackgroundProcessContext";
 import { formatManilaTime, formatPersonName } from "../../utils/apiTransforms";
-import { usePrivilegedDataVersion } from "../../hooks/usePrivilegedDataVersion";
 import { prefetchDftcTrends, prefetchDftcWorkspace } from "../../hooks/dftcWorkspaceQueries";
 import { isPrivilegedDftcPosition } from "../../../dftc/utils/positionAccess";
 
@@ -98,7 +97,6 @@ function DFTCLayoutInner() {
     }
     if (location.pathname.startsWith("/dftc/trends")) prefetchDftcTrends(queryClient);
   }, [location.pathname, queryClient]);
-  usePrivilegedDataVersion("dftc");
   const { processState } = useBackgroundProcess();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState(() =>
