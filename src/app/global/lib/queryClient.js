@@ -101,6 +101,30 @@ export const persister = createAsyncStoragePersister({
   key: "HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1",
 });
 
+/**
+ * Check the persisted React Query snapshot without requiring the provider to
+ * have finished hydrating. This is used during offline mobile startup, where
+ * the auth restore and query hydration happen concurrently.
+ */
+export async function hasPersistedFarmerData() {
+  try {
+    const raw = await get("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
+    const persisted = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const queries = persisted?.clientState?.queries || [];
+    const usableKeys = new Set([
+      '["farmer","crops"]',
+      '["prices","list"]',
+      '["dashboard","prices"]',
+      '["marketCalendar","v2"]',
+    ]);
+    return queries.some((query) =>
+      query?.state?.data !== undefined && usableKeys.has(JSON.stringify(query.queryKey))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Flush the current query cache before a caller reports offline data ready. */
 export function persistOfflineQueryCache() {
   return persistQueryClientSave({ queryClient, persister });

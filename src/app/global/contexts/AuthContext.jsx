@@ -9,7 +9,7 @@ import {
   storeTokens,
 } from '../api';
 import { get, set, del } from 'idb-keyval';
-import { clearQueryPersistedCache, queryClient } from '../lib/queryClient';
+import { clearQueryPersistedCache, hasPersistedFarmerData, queryClient } from '../lib/queryClient';
 import { loadFarmerOfflineData, hasOfflineSeedMarker } from '../hooks/useFarmerPrefetch';
 import OfflineSavePopup from '../components/shared/OfflineSavePopup';
 
@@ -197,7 +197,15 @@ export function AuthProvider({ children }) {
           const expiresAt = cached?.expiresAt ?? 0;
           if (cachedUser && expiresAt > Date.now()) {
             setUser(cachedUser);
+            // Do not block offline app startup on an IndexedDB read. Restore
+            // the cached identity immediately, then correct the status once
+            // the persisted query snapshot has been inspected.
             setOfflineCacheStatus(hasOfflineSeedMarker() ? 'ready' : 'idle');
+            if (browserIsOffline()) {
+              hasPersistedFarmerData().then((hasSavedFarmerData) => {
+                setOfflineCacheStatus(hasSavedFarmerData ? 'ready' : 'idle');
+              });
+            }
             // Don't clear tokens — farmer is still "logged in", just offline
           } else {
             clearTokens();

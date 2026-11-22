@@ -28,7 +28,7 @@ import { capitalizeNameInput, toCamelCase } from "../../global/utils/apiTransfor
 import { FarmLocationFields } from "../../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
-import { queryClient } from "../../global/lib/queryClient";
+import { hasPersistedFarmerData, queryClient } from "../../global/lib/queryClient";
 import { useRemovalRequest } from "../../global/hooks/useRemovalRequest";
 import {
   FARMER_COMMODITIES_KEY,
@@ -895,6 +895,15 @@ const PreferencesTab = ({ showToast }) => {
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem("hw_last_synced") || null);
   const [hasOfflineCache, setHasOfflineCache] = useState(() => Boolean(localStorage.getItem("hw_last_synced")));
   const [syncStatus, setSyncStatus] = useState(() => (localStorage.getItem("hw_last_synced") ? "ok" : "needs_sync"));
+
+  useEffect(() => {
+    hasPersistedFarmerData().then((hasSavedData) => {
+      if (!hasSavedData) {
+        setHasOfflineCache(false);
+        setSyncStatus("needs_sync");
+      }
+    });
+  }, []);
 
   const handleLanguage = async (lang) => {
     setLanguage(lang);
