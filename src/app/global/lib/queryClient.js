@@ -151,6 +151,22 @@ export function persistOfflineQueryCache(client = queryClient) {
   return persistQueryClientSave({ queryClient: client, persister });
 }
 
+export async function getStorageHealth() {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage) {
+      return { persisted: false, unavailable: true };
+    }
+    const estimate = await navigator.storage.estimate?.();
+    return {
+      persisted: await navigator.storage.persist?.() ?? false,
+      usage: estimate?.usage ?? 0,
+      quota: estimate?.quota ?? 0,
+    };
+  } catch (error) {
+    return { persisted: false, unavailable: true, error };
+  }
+}
+
 /**
  * Migrate older snapshots that persisted only the dashboard price projection.
  * The catalog pages use the canonical list key, including during offline boot.
