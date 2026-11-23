@@ -19,7 +19,8 @@ import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
-import { fetchFarmerProfile, SUPPORTED_PRICES_KEY } from "../../global/hooks/useFarmerPrefetch";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { getPreferredCropMatcher } from "../utils/cropPreferences";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { getCategoryFor } from "../../global/data/commodities";
@@ -315,14 +316,21 @@ function PricesPage() {
     refetchOnMount: refetchOnMountIfOnline(true),
   });
 
+  const { data: dashboardPrices } = useQuery({
+    queryKey: ["dashboard", "prices"],
+    queryFn: () => queryClient.getQueryData(["dashboard", "prices"]),
+    enabled: false,
+  });
+
   const { commodities } = useMemo(() => {
-    const offline = typeof navigator !== "undefined" && navigator.onLine === false;
-    const fallbackData = queryClient.getQueryData(["dashboard", "prices"]);
+    const cachedPriceList = queryClient.getQueryData(["prices", "list"]);
     const effectiveData = apiData?.items?.length
       ? apiData
-      : offline && (queryClient.getQueryData(SUPPORTED_PRICES_KEY) || (
-        Array.isArray(fallbackData)
-          ? { items: fallbackData.map((item) => ({
+      : (
+        cachedPriceList?.items?.length
+          ? cachedPriceList
+              : Array.isArray(dashboardPrices)
+                ? { items: dashboardPrices.map((item) => ({
               commodity_id: item.id,
               name: item.name,
               base_name: item.baseName,
@@ -330,8 +338,8 @@ function PricesPage() {
               unit_of_measure: item.uom || "kg",
               prices: { bangkerohan_retail: item.price },
             })) }
-          : null
-      ));
+            : null
+      );
     if (!effectiveData) return { commodities: [] };
 
     const items = effectiveData.items || [];
@@ -416,7 +424,12 @@ function PricesPage() {
     return {
       commodities: Array.from(baseMap.values()),
     };
-  }, [apiData, queryClient]);
+  }, [apiData, dashboardPrices, queryClient]);
+
+  const preferredMatcher = useMemo(
+    () => getPreferredCropMatcher(preferredCrops),
+    [preferredCrops]
+  );
 
   const priceTrendQueries = useQueries({
     queries: commodities.map((commodity) => ({
@@ -424,9 +437,11 @@ function PricesPage() {
       queryFn: () => pricesApi.getPriceDetail(commodity.id, {
         price_type: "bangkerohan_retail",
         horizon: 7,
-        records_limit: 100,
+        records_limit: 30,
       }),
-      enabled: Boolean(commodity.id),
+      // Basic prices are available for every listed crop. Trend/detail data is
+      // intentionally warmed and queried only for the farmer's preferred crops.
+      enabled: Boolean(commodity.id) && preferredMatcher.isPreferred(commodity),
       staleTime: 60 * 1000,
       refetchOnMount: refetchOnMountIfOnline(true),
     })),

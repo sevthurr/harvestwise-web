@@ -54,11 +54,11 @@ describe("farmer offline recommendation snapshot", () => {
     expect(client.getQueryData(monthKey)).toEqual({ items: recommendations });
   });
 
-  it("warms price forecasts and basis outputs for every listed commodity", async () => {
+  it("warms detailed prices only for preferred commodities", async () => {
     const bundle = {
-      profile: null,
+      profile: { preferred_crops: ["COM-0038"] },
       crop_plans: [],
-      price_trends: [{ commodity_id: "COM-0038" }],
+      price_trends: [{ commodity_id: "COM-0038" }, { commodity_id: "COM-0099" }],
       price_detail: [],
       price_trend: [],
       advisory_summary: [],
@@ -81,6 +81,10 @@ describe("farmer offline recommendation snapshot", () => {
       "prices", "historicalAvg", "COM-0038", "bangkerohan_retail", "monthly", null,
     ])).toEqual(bundle);
     expect(client.getQueryData(["farmer", "arrival-pressure", "COM-0038"])).toEqual(bundle);
+    expect(client.getQueryData([
+      "prices", "detail", "COM-0099", "bangkerohan_retail", 7,
+    ])).toBeUndefined();
+    expect(client.getQueryData(["farmer", "arrival-pressure", "COM-0099"])).toBeUndefined();
   });
 
   it("warms only the current month recommendation endpoint", async () => {

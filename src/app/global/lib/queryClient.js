@@ -99,7 +99,12 @@ export const queryClient = new QueryClient({
 queryClient.setQueryDefaults(["prices"], { refetchOnMount: refetchOnMountIfOnline(true) });
 queryClient.setQueryDefaults(["dashboard"], { refetchOnMount: refetchOnMountIfOnline(true) });
 queryClient.setQueryDefaults(["price-detail"], { refetchOnMount: refetchOnMountIfOnline(true) });
-queryClient.setQueryDefaults(["farmer-price-card-trend"], { refetchOnMount: refetchOnMountIfOnline(true) });
+queryClient.setQueryDefaults(["farmer-price-card-trend"], {
+  refetchOnMount: refetchOnMountIfOnline(true),
+  // Card charts are a convenience projection; keep them shorter-lived than
+  // the core farmer catalog and profile to avoid retaining large histories.
+  gcTime: 1000 * 60 * 60 * 24 * 7,
+});
 queryClient.setQueryDefaults(["farmer", "admin-price-outlook"], {
   refetchOnMount: refetchOnMountIfOnline(true),
 });
@@ -142,8 +147,39 @@ export async function hasPersistedFarmerData() {
 }
 
 /** Flush the current query cache before a caller reports offline data ready. */
-export function persistOfflineQueryCache() {
-  return persistQueryClientSave({ queryClient, persister });
+export function persistOfflineQueryCache(client = queryClient) {
+  return persistQueryClientSave({ queryClient: client, persister });
+}
+
+/**
+ * Migrate older snapshots that persisted only the dashboard price projection.
+ * The catalog pages use the canonical list key, including during offline boot.
+ */
+export function ensureCanonicalPriceList(client = queryClient) {
+  const existing = client.getQueryData(["prices", "list"]);
+  if (existing?.items?.length) return existing;
+
+  const dashboardPrices = client.getQueryData(["dashboard", "prices"]);
+  if (!Array.isArray(dashboardPrices) || dashboardPrices.length === 0) return null;
+
+  const list = {
+    items: dashboardPrices
+      .filter((item) => item?.id && item?.name)
+      .map((item) => ({
+        commodity_id: item.id,
+        name: item.name,
+        base_name: item.baseName || item.name,
+        is_top10: true,
+        unit_of_measure: item.uom || "kg",
+        prices: item.price == null ? {} : { bangkerohan_retail: item.price },
+        forecast: item.direction ? { trend: item.direction } : null,
+      })),
+  };
+  if (list.items.length === 0) return null;
+
+  client.setQueryData(["prices", "list"], list);
+  client.setQueryData(["prices", "supported-list"], list);
+  return list;
 }
 
 /**

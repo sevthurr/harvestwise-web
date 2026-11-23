@@ -340,9 +340,11 @@ function DashboardPage() {
       queryFn: () => pricesApi.getPriceDetail(item.id, {
         price_type: item.priceType || "bangkerohan_retail",
         horizon: 7,
-        records_limit: 100,
+        records_limit: 30,
       }),
-      enabled: Boolean(item.id),
+      // The summary price list covers every crop; chart history is only
+      // needed offline for the farmer's preferred crops.
+      enabled: Boolean(item.id) && preferredCropIds.has(item.id),
       staleTime: 60 * 1000,
       refetchOnMount: refetchOnMountIfOnline("always"),
       refetchOnWindowFocus: true,
