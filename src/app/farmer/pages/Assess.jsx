@@ -561,6 +561,33 @@ function AssessPage() {
     setSavingDraft(true);
     setDraftStatus(null);
 
+    // Offline draft persistence is local-only. Do not even attempt the server
+    // mutation when the device has no connection.
+    if (isOffline) {
+      const offlineSnapshot = {
+        ...data,
+        isDraft: true,
+        ownerUserId: user?.id || user?.user_id || user?.userId || null,
+      };
+      try {
+        localStorage.setItem("harvestwise_assessment_draft", JSON.stringify(offlineSnapshot));
+      } catch {
+        // ignore storage failures; the form remains available in memory
+      }
+      setSavingDraft(false);
+      navigate("/farmer/crops", {
+        state: {
+          draftSaved: true,
+          message: t(
+            "farmer.assess.draft_saved_local_notice",
+            {},
+            "Draft saved locally on this device. You can continue anytime."
+          ),
+        },
+      });
+      return;
+    }
+
     if (!data.commodity) {
       const draftSnapshot = {
         ...data,

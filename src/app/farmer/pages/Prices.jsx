@@ -20,8 +20,7 @@ import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
 import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
-import { getPreferredCropMatcher } from "../utils/cropPreferences";
-import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
+import { getPreferredCropMatcher, sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { getCategoryFor } from "../../global/data/commodities";
 import * as pricesApi from "../../../services/api/pricesApi";
@@ -36,15 +35,16 @@ const DIR_CFG = {
 function getDirectionFromData(trendDetail, fallbackForecast) {
   const forecast = trendDetail?.forecast || fallbackForecast;
   if (!forecast || !forecast.trend) return null;
+  // The list endpoint already provides the lightweight trend classification.
+  // Use it for basic cards and filters without requiring chart-grade history.
+  if (!trendDetail) return forecast.trend;
+
   const forecastPrice = forecast.forecast_midpoint != null
     ? Number(forecast.forecast_midpoint)
     : (forecast.forecastMidpoint != null ? Number(forecast.forecastMidpoint) : null);
   const records = trendDetail?.recent_records || trendDetail?.recentRecords || [];
-  if (trendDetail) {
-    const hasForecast = records.length > 0 && forecastPrice != null;
-    return hasForecast ? forecast.trend : null;
-  }
-  return forecastPrice != null ? forecast.trend : null;
+  const hasForecast = records.length > 0 && forecastPrice != null;
+  return hasForecast ? forecast.trend : null;
 }
 
 
@@ -304,6 +304,11 @@ function PricesPage() {
     return profileData?.preferred_crops || profileData?.preferredCrops || [];
   }, [profileData]);
 
+  const preferredMatcher = useMemo(
+    () => getPreferredCropMatcher(preferredCrops),
+    [preferredCrops]
+  );
+
   const { data: apiData, isLoading: loading, isError, fetchStatus } = useQuery({
     queryKey: ["prices", "list"],
     queryFn: async () => {
@@ -426,11 +431,6 @@ function PricesPage() {
     };
   }, [apiData, dashboardPrices, queryClient]);
 
-  const preferredMatcher = useMemo(
-    () => getPreferredCropMatcher(preferredCrops),
-    [preferredCrops]
-  );
-
   const priceTrendQueries = useQueries({
     queries: commodities.map((commodity) => ({
       queryKey: ["farmer-price-card-trend", commodity.id, "bangkerohan_retail", 7],
@@ -439,8 +439,8 @@ function PricesPage() {
         horizon: 7,
         records_limit: 30,
       }),
-      // Basic prices are available for every listed crop. Trend/detail data is
-      // intentionally warmed and queried only for the farmer's preferred crops.
+      // Warm detailed trend data for preferred crops. Other top-10 crops fetch
+      // their detail data when the farmer opens them, then autosave persists it.
       enabled: Boolean(commodity.id) && preferredMatcher.isPreferred(commodity),
       staleTime: 60 * 1000,
       refetchOnMount: refetchOnMountIfOnline(true),

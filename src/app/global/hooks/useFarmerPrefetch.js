@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, parseResponse } from "../api";
 import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops/CropsContext";
@@ -67,6 +68,36 @@ export function weatherAdvisoryKey(lat, lon) {
   return ["weather", "advisory", lat, lon];
 }
 
+function toAdvisoryIsoDate(value) {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function cropAdvisoryStage(crop) {
+  const phase = String(crop?.phase || crop?.status || "").toLowerCase();
+  return phase.includes("plan") ? "before_planting"
+    : phase.includes("grow") || phase.includes("plant") ? "during_planting"
+      : phase.includes("pre") ? "near_harvest"
+        : phase.includes("harvest") ? "harvest" : null;
+}
+
+export function cropAdvisoryKey(crop) {
+  const plantingDate = toAdvisoryIsoDate(crop?.rawPlantingDate || crop?.plantingDate);
+  const harvestDate = toAdvisoryIsoDate(crop?.rawHarvestDate || crop?.harvestDate);
+  const totalCost = Number(crop?.totalCost || 0);
+  // Unpicked plans are keyed by the pages as 1 kg; seed that same value.
+  const quantity = Number(crop?.harvestQuantity || 0) || 1;
+  if (!crop?.id || !crop?.commodityName || !plantingDate || !harvestDate || plantingDate >= harvestDate || totalCost <= 0) return null;
+  const stage = cropAdvisoryStage(crop);
+  return ["advisory", "plan", "v2", crop.id, crop.commodityName, plantingDate, harvestDate, totalCost, quantity, stage];
+}
+
+export const cropArrivalPressureKey = (commodityId) => ["farmer", "arrival-pressure", commodityId];
+export const cropSeasonalProductionKey = (commodityId, quarter) => ["farmer", "seasonal-production", commodityId, quarter];
+export const cropWeatherRulesKey = (commodityId) => ["farmer", "weather-rules", commodityId];
+
 // Raw canonical transformation for the Dashboard summary prices. Shared by the
 // Dashboard page query and offline bundle seeding so both write the same shape.
 export function transformDashboardPrices(pricesData) {
@@ -121,16 +152,17 @@ export function fetchPricesList() {
 // trend pages also need the non-top-10 variety rows belonging to those crops.
 export async function fetchSupportedPricesList() {
   const items = [];
+  const pageSize = 100;
   let page = 1;
   let total = Infinity;
   while (items.length < total) {
     const data = await parseResponse(await apiGet(
-      `/prices?include_supported_varieties=true&page=${page}&page_size=100`
+      `/prices?include_supported_varieties=true&page=${page}&page_size=${pageSize}`
     ));
     const pageItems = data?.items || [];
     items.push(...pageItems);
     total = Number(data?.total ?? items.length);
-    if (pageItems.length === 0) break;
+    if (pageItems.length === 0 || pageItems.length < pageSize) break;
     page += 1;
   }
   return { items, total: items.length, page: 1, page_size: items.length };
@@ -163,8 +195,15 @@ export function loadFarmerPrices(queryClient) {
     // The snapshot's price_trends section is optional in local Docker builds,
     // so the canonical /prices response must also seed these aliases.
     queryClient.setQueryData(["dashboard", "prices"], transformDashboardPrices(pricesData));
-    queryClient.setQueryData(SUPPORTED_PRICES_KEY, pricesData);
     return pricesData;
+  });
+}
+
+export function loadFarmerSupportedPrices(queryClient) {
+  return queryClient.fetchQuery({
+    queryKey: SUPPORTED_PRICES_KEY,
+    queryFn: fetchSupportedPricesList,
+    staleTime: 0,
   });
 }
 
@@ -263,10 +302,6 @@ export async function seedFarmerOfflineBundle(queryClient) {
   if (Array.isArray(bundle.price_trends)) {
     const priceList = { items: bundle.price_trends };
     queryClient.setQueryData(["prices", "list"], priceList);
-    // Detail pages use this catalog key to resolve the selected commodity and
-    // variety. Keep it limited to the same basic rows instead of downloading
-    // the full supported-variety catalog during offline preparation.
-    queryClient.setQueryData(SUPPORTED_PRICES_KEY, priceList);
     queryClient.setQueryData(
       ["dashboard", "prices"],
       transformDashboardPrices({ items: bundle.price_trends })
@@ -348,14 +383,13 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   const safePrefetch = (queryKey, queryFn) =>
     queryClient.prefetchQuery({ queryKey, queryFn, staleTime: STALE_TIME }).catch(() => {});
 
-  const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
-  const priceItems = [...(bundle.price_trends || []), ...supportedItems];
   const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
   const preferredMatcher = getPreferredCropMatcher(
     profile?.preferred_crops || profile?.preferredCrops || []
   );
-  const preferredPriceIds = [...new Set(priceItems
-    .filter((item) => preferredMatcher.isPreferred(item))
+  const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
+  const priceItems = [...(bundle.price_trends || []), ...supportedItems];
+  const priceIds = [...new Set(priceItems
     .map((item) => item.commodity_id || item.commodityId)
     .filter(Boolean))];
   const cropPlanIds = [...new Set((bundle.crop_plans || [])
@@ -369,9 +403,10 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       ])
       .filter(([id]) => Boolean(id))
   );
-  // A farmer's own crop plans remain eligible for non-price basis data. Price
-  // detail/trend requests below are still restricted to preferred crops.
-  const basisIds = [...new Set([...cropPlanIds, ...preferredPriceIds])];
+  // Warm the complete top-10-plus-varieties catalog. The four price types are
+  // requested below for every catalog row so detailed views remain readable
+  // offline, not just the farmer's preferred crops.
+  const basisIds = [...new Set([...cropPlanIds, ...priceIds])];
   const quarters = ["Q1", "Q2", "Q3", "Q4"];
 
   const requests = [
@@ -399,11 +434,40 @@ async function prefetchFarmerPageData(queryClient, bundle) {
     ),
   ];
 
+  // PriceDetailView keys its outlook query by crop stage and the raw plan
+  // dates. The all-null variant cannot satisfy that key, so seed the qualified
+  // form for every dated crop plan as well.
+  const cropPlanOutlookSeeds = (bundle.crop_plans || [])
+    .map((crop) => {
+      const commodityId = crop.commodity_id || crop.commodityId;
+      const plantingDate = crop.rawPlantingDate || crop.plantingDate;
+      const harvestDate = crop.rawHarvestDate || crop.harvestDate;
+      if (!commodityId || !hasValidAdvisoryDatePair(toAdvisoryIsoDate(plantingDate), toAdvisoryIsoDate(harvestDate))) return null;
+      return { commodityId, cropStage: cropAdvisoryStage(crop), plantingDate, harvestDate };
+    })
+    .filter(Boolean);
+  cropPlanOutlookSeeds.forEach(({ commodityId, cropStage, plantingDate, harvestDate }) => {
+    FARMER_PRICE_TYPES.forEach((priceTypeKey) => {
+      FARMER_PRICE_HORIZONS.forEach((horizon) => {
+        let url = `/admin/analytics/outputs/price-outlook?commodity_id=${encodeURIComponent(commodityId)}&price_type_key=${encodeURIComponent(priceTypeKey)}&horizon=${horizon}`;
+        if (cropStage) url += `&crop_stage=${encodeURIComponent(cropStage)}`;
+        if (plantingDate) url += `&planting_date=${encodeURIComponent(plantingDate)}`;
+        if (harvestDate) url += `&harvest_date=${encodeURIComponent(harvestDate)}`;
+        requests.push(safePrefetch(
+          ["farmer", "admin-price-outlook", commodityId, priceTypeKey, horizon, cropStage, plantingDate, harvestDate],
+          async () => parseResponse(await apiGet(url))
+        ));
+      });
+    });
+  });
+
   // Per-commodity requests are deliberately kept out of the shared `requests`
-  // array and fired one preferred commodity at a time: Promise.all inside a
-  // commodity, await between commodities. Warming every preferred commodity's
-  // endpoints at once multiplies already-heavy analytics calls.
-  const preferredPriceIdSet = new Set(preferredPriceIds);
+  // array and fired one catalog row at a time. The basic price list covers all
+  // commodities; detailed price data is warmed only for preferred crops.
+  const preferredPriceIdSet = new Set(
+    priceIds.filter((commodityId) => preferredMatcher.isPreferred({ id: commodityId }))
+  );
+  const cropPlanIdSet = new Set(cropPlanIds);
   const buildCommodityRequests = (commodityId) => {
     const commodityRequests = [];
     if (preferredPriceIdSet.has(commodityId)) {
@@ -431,23 +495,25 @@ async function prefetchFarmerPageData(queryClient, bundle) {
             ),
           );
         });
-        commodityRequests.push(
-          safePrefetch(
-            ["prices", "trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD, BUNDLE_TREND_RECORDS_LIMIT],
-            async () => {
-              const raw = await parseResponse(await apiGet(
-                `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${BUNDLE_TREND_PERIOD}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
-              ));
-              if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
-                queryClient.setQueryData(
-                  ["farmer-price-card-trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD],
-                  raw
-                );
+        FARMER_PRICE_HORIZONS.forEach((trendHorizon) => {
+          commodityRequests.push(
+            safePrefetch(
+              ["prices", "trend", commodityId, priceTypeKey, trendHorizon, BUNDLE_TREND_RECORDS_LIMIT],
+              async () => {
+                const raw = await parseResponse(await apiGet(
+                  `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${trendHorizon}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
+                ));
+                if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
+                  queryClient.setQueryData(
+                    ["farmer-price-card-trend", commodityId, priceTypeKey, trendHorizon],
+                    raw
+                  );
+                }
+                return raw;
               }
-              return raw;
-            }
-          )
-        );
+            )
+          );
+        });
         ["weekly", "monthly"].forEach((frequency) => {
           commodityRequests.push(
             safePrefetch(
@@ -461,17 +527,17 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       });
     }
 
-    commodityRequests.push(
-      safePrefetch(["farmer", "arrival-pressure", commodityId], async () =>
+    if (cropPlanIdSet.has(commodityId)) commodityRequests.push(
+      safePrefetch(cropArrivalPressureKey(commodityId), async () =>
         parseResponse(await apiGet(`/admin/analytics/outputs/arrival-pressure?commodity_id=${encodeURIComponent(commodityId)}`))
       ),
       ...quarters.map((quarter) => safePrefetch(
-        ["farmer", "seasonal-production", commodityId, quarter],
+        cropSeasonalProductionKey(commodityId, quarter),
         async () => parseResponse(await apiGet(
           `/admin/analytics/outputs/historical-seasonal-production?commodity_id=${encodeURIComponent(commodityId)}&quarter=${quarter}`
         ))
       )),
-      safePrefetch(["farmer", "weather-rules", commodityId], async () =>
+      safePrefetch(cropWeatherRulesKey(commodityId), async () =>
         parseResponse(await apiGet(`/admin/crop-weather-rules?commodity_id=${encodeURIComponent(commodityId)}`))
       ),
     );
@@ -500,38 +566,9 @@ export async function prefetchFarmerPlanAdvisories(queryClient, crops = queryCli
   const activeCrops = crops.filter((crop) => !crop.isArchived && crop.phase !== "draft" && crop.status !== "Draft");
 
   activeCrops.forEach((crop) => {
-    const totalCost = crop.totalCost || 0;
-    // CropCycleDetail uses 1 kg as the advisory fallback while a planning
-    // crop has no entered yield yet. Match that page so its planning advisory
-    // is seeded under the exact same key instead of being skipped offline.
-    const quantity = crop.harvestQuantity > 0 ? crop.harvestQuantity : 1;
-    const pDateStr = crop.rawPlantingDate
-      ? (typeof crop.rawPlantingDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(crop.rawPlantingDate)
-        ? crop.rawPlantingDate.slice(0, 10)
-        : new Date(crop.rawPlantingDate).toISOString().split("T")[0])
-      : null;
-    const hDateStr = crop.rawHarvestDate
-      ? (typeof crop.rawHarvestDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(crop.rawHarvestDate)
-        ? crop.rawHarvestDate.slice(0, 10)
-        : new Date(crop.rawHarvestDate).toISOString().split("T")[0])
-      : null;
-    const validDates = pDateStr && hDateStr && /^\d{4}-\d{2}-\d{2}$/.test(pDateStr) && /^\d{4}-\d{2}-\d{2}$/.test(hDateStr) && pDateStr < hDateStr;
-    if (!crop.id || !crop.commodityName || !validDates || totalCost <= 0 || quantity <= 0) return;
-
-    const rawPhase = String(crop.phase || crop.status || "").toLowerCase();
-    const explicitStage = rawPhase.includes("plan")
-      ? "before_planting"
-      : rawPhase.includes("grow") || rawPhase.includes("plant")
-        ? "during_planting"
-        : rawPhase.includes("pre")
-          ? "near_harvest"
-          : rawPhase.includes("harvest")
-            ? "harvest"
-            : null;
-    const queryKey = [
-      "advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr,
-      hDateStr, totalCost, quantity, explicitStage,
-    ];
+    const queryKey = cropAdvisoryKey(crop);
+    if (!queryKey) return;
+    const [, , , , , pDateStr, hDateStr, totalCost, quantity, explicitStage] = queryKey;
     prefetches.push(queryClient.prefetchQuery({
       queryKey,
       queryFn: async () => {
@@ -562,6 +599,7 @@ export async function prefetchFarmerOfflineData(queryClient) {
 
   await Promise.all([
     prefetch(["prices", "list"], fetchPricesList),
+    prefetch(SUPPORTED_PRICES_KEY, fetchSupportedPricesList),
     prefetch(["dashboard", "prices"], fetchDashboardPrices),
     prefetch(["dashboard", "recommendations"], fetchDashboardRecommendations),
     prefetch(monthlyRecommendationsKey(), fetchMonthlyRecommendations),
@@ -610,39 +648,30 @@ export async function prefetchFarmerFullData(queryClient) {
   });
 }
 
-function pruneNonPreferredPriceQueries(queryClient) {
-  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
-  const matcher = getPreferredCropMatcher(
-    profile?.preferred_crops || profile?.preferredCrops || []
-  );
-  const detailedPrefixes = new Set([
-    "prices.detail",
-    "prices.trend",
-    "prices.historicalAvg",
-    "farmer.admin-price-outlook",
-    "farmer-price-card-trend",
-    "price-detail",
-  ]);
+let farmerOfflineLoadPromise = null;
 
-  queryClient.removeQueries({
-    predicate: (query) => {
-      const key = query.queryKey || [];
-      const prefix = key[0] === "prices" ? `prices.${key[1]}` : key[0] === "farmer"
-        ? `farmer.${key[1]}`
-        : key[0];
-      if (!detailedPrefixes.has(prefix)) return false;
-      const commodityId = key[0] === "prices" || key[0] === "farmer"
-        ? key[2]
-        : key[1];
-      return !matcher.isPreferred({ commodityId });
-    },
-  });
+export function isFarmerSeeding() {
+  return farmerOfflineLoadPromise != null;
 }
 
-let farmerOfflineLoadPromise = null;
 let lastFarmerOfflineLoadAt = 0;
 const OFFLINE_LOAD_DEDUPE_MS = 1000 * 60 * 30;
 const OFFLINE_SEED_MARKER_KEY = 'hw_offline_seed_marker_v1';
+
+function hasCompleteOfflineCore(queryClient) {
+  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
+  const weatherKey = weatherAdvisoryKey(
+    profile?.latitude ?? DEFAULT_WEATHER_LAT,
+    profile?.longitude ?? DEFAULT_WEATHER_LON
+  );
+  return queryClient.getQueryData(["farmer", "crops"]) !== undefined &&
+    queryClient.getQueryData(["prices", "list"])?.items?.length > 0 &&
+    queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items?.length > 0 &&
+    Array.isArray(queryClient.getQueryData(["dashboard", "prices"])) &&
+    queryClient.getQueryData(["marketCalendar", "v2"]) !== undefined &&
+    queryClient.getQueryData(weatherKey) !== undefined &&
+    queryClient.getQueryData(["farmer", "admin-weather-forecast", 14]) !== undefined;
+}
 
 export function hasOfflineSeedMarker() {
   try {
@@ -688,9 +717,7 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
       // optional detail warm-up later fails or is interrupted.
       queryClient.setQueryData(["prices", "list"], basicPrices);
       queryClient.setQueryData(["dashboard", "prices"], transformDashboardPrices(basicPrices));
-      queryClient.setQueryData(SUPPORTED_PRICES_KEY, basicPrices);
     }
-    pruneNonPreferredPriceQueries(queryClient);
     await prefetchFarmerPlanAdvisories(queryClient);
 
     await queryClient.prefetchQuery({
@@ -713,11 +740,19 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     // calendar/weather data from being available after an offline reload.
     await persistOfflineQueryCache(queryClient);
 
+    // The full variety catalog is larger and must not prevent the core shell
+    // from being persisted. It is still required before the seed is marked
+    // complete and before detailed price warm-up starts.
+    await loadFarmerSupportedPrices(queryClient).catch(() => {});
+
     // Finish the full read-only Farmer bundle before reporting success. This
     // prevents mobile users from going offline while detail-page queries are
     // still waiting in the idle queue.
     await prefetchFarmerFullData(queryClient);
     await persistOfflineQueryCache(queryClient);
+    if (!hasCompleteOfflineCore(queryClient)) {
+      throw new Error("Offline seed did not produce the complete core read cache");
+    }
     lastFarmerOfflineLoadAt = Date.now();
     try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}
   })().finally(() => {
@@ -742,4 +777,40 @@ export function useFarmerPrefetch() {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     loadFarmerOfflineData(queryClient);
   }, [queryClient]);
+}
+
+// Persist the completed read cache after page visits so detail views opened
+// once while online remain readable from IndexedDB on a later offline start.
+export function useFarmerOfflineAutosave() {
+  const queryClient = useQueryClient();
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    let timer;
+    const schedule = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      if (isFarmerSeeding()) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+        if (isFarmerSeeding()) return;
+        // A visited detail query is valuable even when the initial offline
+        // seed was partial. Persist it so a non-preferred top-10 commodity
+        // opened online remains available on the next offline visit.
+        persistOfflineQueryCache(queryClient).catch(() => {});
+      }, 1500);
+    };
+
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.mutation || !event.query || event.query.state.data === undefined) return;
+      schedule();
+    });
+    schedule();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [queryClient, pathname]);
 }

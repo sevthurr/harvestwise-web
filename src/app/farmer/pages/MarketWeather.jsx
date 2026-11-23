@@ -96,6 +96,7 @@ function MarketWeatherPage() {
       return parseResponse(response);
     },
     staleTime: 1000 * 60 * 30,
+    initialData: () => queryClient.getQueryData(["weather", "advisory", weatherLat, weatherLon]),
     refetchOnMount: refetchOnMountIfOnline(true),
   });
 
@@ -107,6 +108,7 @@ function MarketWeatherPage() {
     queryFn: () => getWeatherForecast(14),
     enabled: !isWeatherLoading && advisoryDays.length === 0,
     staleTime: 1000 * 60 * 30,
+    initialData: () => queryClient.getQueryData(["farmer", "admin-weather-forecast", 14]),
     refetchOnMount: refetchOnMountIfOnline(true),
   });
 

@@ -19,7 +19,7 @@ import {
 } from "../app/global/hooks/useFarmerPrefetch";
 
 const EXPECTED_PER_COMMODITY =
-  FARMER_PRICE_TYPES.length * (FARMER_PRICE_HORIZONS.length * 2 + 1 + 2) + 1 + 4 + 1;
+  FARMER_PRICE_TYPES.length * (FARMER_PRICE_HORIZONS.length * 3 + 1 + 2) + 1 + 4 + 1;
 
 describe("farmer prefetch commodity sequencing", () => {
   const deferreds = [];

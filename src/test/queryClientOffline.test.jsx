@@ -1,14 +1,8 @@
 /**
  * The query client's offline policy.
  *
- * The app's offline layer is the service worker: vite.config.js caches every
- * /api/v1/ GET under a NetworkFirst runtime cache for 7 days, and that cache is
- * only consulted if a request actually reaches the service worker.
- *
- * React Query's default networkMode ('online') refuses to issue the request at
- * all while the browser reports offline, so the cached response can never be
- * read. Queries therefore run with 'always'. Mutations keep the default, so a
- * half-written save is never attempted while offline.
+ * IndexedDB is the offline read layer. Queries pause while offline, while
+ * mutations keep the default online-only behavior.
  *
  * A network-level failure (no HTTP status — the request never reached the
  * server) cannot succeed on a retry while the device is offline: the service
@@ -22,6 +16,8 @@ import { get as getIndexedDb } from "idb-keyval";
 import {
   queryClient,
   restorePersistedFarmerData,
+  normalizePersistedQueryStates,
+  shouldDehydrateQuery,
   shouldPersistQueryCache,
   shouldRetry,
 } from "../app/global/lib/queryClient";
@@ -31,12 +27,21 @@ describe("query client offline policy", () => {
     vi.unstubAllGlobals();
   });
 
-  it("runs queries with networkMode 'always' so the service worker can answer offline", () => {
-    expect(queryClient.getDefaultOptions().queries.networkMode).toBe("always");
+  it("pauses queries offline so hydrated IndexedDB data remains readable", () => {
+    expect(queryClient.getDefaultOptions().queries.networkMode).toBe("online");
+  });
+
+  it("normalizes persisted error states that still contain data", () => {
+    const state = normalizePersistedQueryStates({ queries: [{
+      queryHash: 'prices',
+      state: { status: "error", data: { items: [] }, error: { message: "offline" } },
+    }] });
+    expect(state.queries[0].state.status).toBe("success");
+    expect(state.queries[0].state.error).toBeNull();
+    expect(state.queries[0].state.data).toEqual({ items: [] });
   });
 
   it("keeps error-status queries with data in the persisted snapshot (failed offline prices refetch)", () => {
-    const shouldDehydrateQuery = queryClient.getDefaultOptions().dehydrate.shouldDehydrateQuery;
     expect(shouldDehydrateQuery({ state: { status: "success", data: { commodities: [] } } })).toBe(true);
     expect(shouldDehydrateQuery({ state: { status: "error", data: { commodities: [] } } })).toBe(true);
     expect(shouldDehydrateQuery({ state: { status: "error", data: undefined } })).toBe(false);

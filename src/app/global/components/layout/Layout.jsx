@@ -8,7 +8,7 @@ import { Sidebar } from "./Sidebar";
 import { Footer } from "../Footer";
 import { Toast } from "../ui/hw-ui";
 import { PwaInstallPrompt } from "../pwa/PwaInstallPrompt";
-import { useFarmerPrefetch } from "../../hooks/useFarmerPrefetch";
+import { useFarmerPrefetch, useFarmerOfflineAutosave } from "../../hooks/useFarmerPrefetch";
 import { useFarmerDataSync } from "../../hooks/useFarmerDataSync";
 import { getUnreadCount } from "../../../../services/api/notificationsApi";
 import { useNotificationEvent } from "../../contexts/NotificationStreamContext";
@@ -38,6 +38,7 @@ function FarmerMain({ children }) {
 
 const Layout = () => {
   useFarmerPrefetch();
+  useFarmerOfflineAutosave();
   useFarmerDataSync();
   const location = useLocation();
   const navigate = useNavigate();

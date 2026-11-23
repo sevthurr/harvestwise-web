@@ -101,6 +101,19 @@ describe("normalizeCropPlan cost calculation", () => {
     expect(normalized.harvestRecords.map((record) => record.id)).toEqual(["HVR-2", "HVR-1"]);
     expect(normalized.actualHarvestDate).toBe("Nov 18, 2026");
   });
+
+  it("keeps crop-plan profitability available when plans are prefetched", () => {
+    const normalized = normalizeCropPlan({
+      id: "CRP-003",
+      commodity_id: "COM-001",
+      status: "Planning",
+      profit_lower: 53000,
+      profit_upper: 70000,
+    });
+
+    expect(normalized.profitLower).toBe(53000);
+    expect(normalized.profitUpper).toBe(70000);
+  });
 });
 
 describe("CropCycleDetailPage Add Cost flow", () => {

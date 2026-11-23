@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 
@@ -64,7 +64,10 @@ const lettuce = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  priceListResponse.current = { items: [lettuce] };
+  priceListResponse.current = {
+    items: [lettuce],
+    preferred_crops: [{ commodity_id: "COM-0025", commodity_name: "Lettuce" }],
+  };
 });
 
 describe("Farmer prices page", () => {
@@ -126,6 +129,40 @@ describe("Farmer prices page", () => {
     expect(screen.queryByText("₱0/kg")).not.toBeInTheDocument();
   });
 
+  it("uses summary trends for non-preferred commodities without loading detail data", async () => {
+    const carrots = {
+      commodity_id: "COM-0028",
+      name: "Carrots",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 105 },
+      forecast: { trend: "Rising" },
+    };
+    priceListResponse.current = {
+      items: [lettuce, carrots],
+      preferred_crops: [{ commodity_id: "COM-0025", commodity_name: "Lettuce" }],
+    };
+    getPriceDetailMock.mockResolvedValue({
+      recent_records: [{ prevail_price: 100 }],
+      forecast: { trend: "Rising", forecast_midpoint: 110, horizon_days: 7 },
+    });
+
+    renderPricesPage();
+
+    await waitFor(() => {
+      expect(getPriceDetailMock).not.toHaveBeenCalledWith("COM-0028", expect.anything());
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Open filter drawer/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Rising" }));
+    fireEvent.click(screen.getByRole("button", { name: /Save|Apply/i }));
+
+    await waitFor(() => {
+      expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", expect.anything());
+      expect(getPriceDetailMock).not.toHaveBeenCalledWith("COM-0028", expect.anything());
+    });
+  });
+
   it("renders preferred crops first before non-preferred commodities", async () => {
     const pipino = {
       commodity_id: "COM-0008",
@@ -163,6 +200,7 @@ describe("Farmer prices page", () => {
       unit_of_measure: "kg",
       is_top10: true,
       prices: { bangkerohan_retail: 96 },
+      forecast: { trend: "Rising" },
     };
     const carrots = {
       commodity_id: "COM-0028",
@@ -171,6 +209,7 @@ describe("Farmer prices page", () => {
       unit_of_measure: "kg",
       is_top10: true,
       prices: { bangkerohan_retail: 65 },
+      forecast: { trend: "Falling" },
     };
     priceListResponse.current = {
       items: [ampalaya, carrots],
