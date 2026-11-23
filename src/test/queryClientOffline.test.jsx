@@ -20,6 +20,7 @@ import {
   shouldDehydrateQuery,
   shouldPersistQueryCache,
   shouldRetry,
+  ensureCanonicalPriceList,
 } from "../app/global/lib/queryClient";
 
 describe("query client offline policy", () => {
@@ -81,6 +82,29 @@ describe("query client offline policy", () => {
     expect(targetClient.getQueryData(["dashboard", "prices"])).toEqual([
       { id: "COM-0001", price: 90 },
     ]);
+  });
+
+  it("does not replace the full supported price catalogue with the dashboard projection", () => {
+    const client = new QueryClient();
+    const supported = {
+      items: [{
+        commodity_id: "COM-VARIETY",
+        name: "Ampalaya",
+        variety: "Milky Wave",
+        prices: {
+          bangkerohan_retail: 90,
+          bangkerohan_wholesale: 80,
+          dftc_retail: 88,
+          dftc_wholesale: 78,
+        },
+      }],
+    };
+    client.setQueryData(["dashboard", "prices"], [{ id: "COM-0001", name: "Ampalaya", price: 90 }]);
+    client.setQueryData(["prices", "supported-list"], supported);
+
+    ensureCanonicalPriceList(client);
+
+    expect(client.getQueryData(["prices", "supported-list"])).toEqual(supported);
   });
 
   it("still retries a network failure while the browser is online", () => {
