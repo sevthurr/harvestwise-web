@@ -19,7 +19,7 @@ import {
 import { sortWithPreferredFirst, isPreferredCrop } from "../../utils/cropPreferences";
 import { PreferredStar } from "../shared/PreferredStar";
 import { isHWCommodity } from "../../../global/data/commodities";
-import { recommendationSummary } from "../../utils/plantingLabels";
+import { recommendationSummary, localizeRecommendationExplanation } from "../../utils/plantingLabels";
 
 const DEFAULT_RECOMMENDED_PROFILES = {
   "COM-0004": {
@@ -147,11 +147,19 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
         ? profile.plantWindow(localizedMonth)
         : `${localizedMonth} 1–20`;
 
+      // Prefer the structured summary only when it actually localized; otherwise
+      // use the raw-English localizer, then the canned-phrase fallback.
+      const summaryText = recommendationSummary(rec, t);
+      const localizedExplanation = localizeRecommendationExplanation(rec, t);
+      const priceOutlookText =
+        (summaryText && summaryText !== rec.explanation ? summaryText : localizedExplanation) ||
+        (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit"));
+
       result.push({
         id: cid,
         name: cname,
         variety: rec.variety || profile.bestVariety || null,
-        priceOutlookText: recommendationSummary(rec, t) || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
+        priceOutlookText,
         plantWindow: plantWindowStr,
       });
     }

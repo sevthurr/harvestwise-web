@@ -1327,6 +1327,13 @@ function DFTCTrends() {
       price_type: pPriceType,
       uom: priceDetailData?.unit_of_measure || "kg",
       price: row.price,
+      change: row.change,
+      change_pct: row.change_pct,
+      volatility_reason: row.volatility_reason,
+      volatility_notes: row.volatility_notes,
+      is_volatility_flagged: row.is_volatility_flagged,
+      encoded_by: row.encoded_by,
+      last_updated_by: row.last_updated_by,
     }));
   }, [
     varietyDetails,
@@ -1406,7 +1413,8 @@ function DFTCTrends() {
       // name, which the endpoint cannot resolve for a name that only exists
       // per variety — the request would 404 and flash an error banner.
       !isCommodityCatalogLoading,
-    staleTime: DFTC_DAILY_TRENDS_STALE_TIME,
+    refetchOnMount: true,
+    staleTime: 60 * 1000,
   });
 
   // Use the full arrival history (all years on record) rather than the 90-day
@@ -1531,20 +1539,35 @@ function DFTCTrends() {
     return filteredArrivalRecords.map((r) => {
       const dStr = r.arrival_date || r.date;
       const dObj = parseManilaDate(dStr);
-      const monthLabel = !dObj ? dStr : dObj.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "Asia/Manila" });
+      const dateLabel = !dObj
+        ? dStr
+        : dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
       const farm = r.farm_source_volume_kg ?? null;
       const other = r.other_source_volume_kg ?? null;
       const combined = r.volume_kg ?? (farm != null || other != null ? (farm || 0) + (other || 0) : null);
       const computed = (farm || 0) + (other || 0);
       const inconsistent = r.volume_kg != null && farm != null && other != null && r.volume_kg !== computed;
 
+      const dateAddedStr = r.recorded_at || r.recordedAt || r.date_added;
+      const dateAddedObj = dateAddedStr ? parseManilaDate(dateAddedStr) : null;
+      const dateAddedLabel = dateAddedObj
+        ? dateAddedObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" })
+        : (dateAddedStr ? String(dateAddedStr).slice(0, 10) : "—");
+
+      const entryMethod = r.submission_method || (r.source === "DFTC Arrival Volume" ? "File Upload" : r.source || "—");
+
       return {
-        month: monthLabel,
+        date: dateLabel,
+        rawDate: dStr,
         variety: r.variety || "—",
         farm,
         other,
         combined,
-        inconsistent
+        dateAdded: dateAddedLabel,
+        entryMethod,
+        inconsistent,
+        encoded_by: r.encoded_by || r.recorded_by || r.saved_by,
+        last_updated_by: r.last_updated_by || r.updated_by
       };
     });
   }, [filteredArrivalRecords]);
@@ -1628,8 +1651,8 @@ function DFTCTrends() {
             <label className={labelCls}>Market</label>
             <div className="relative">
               <select value={pMarket} onChange={(e) => setPMarket(e.target.value)} className={selectCls + " appearance-none pr-7 sm:pr-8 cursor-pointer"}>
-                <option>Bankerohan Public Market</option>
-                <option>DFTC Taboan</option>
+                <option value="Bankerohan Public Market">Bankerohan Public Market</option>
+                <option value="DFTC Taboan">Dvo Food Trm Cmplx</option>
               </select>
               <ChevronDown size={13} className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--hw-neutral-500)] pointer-events-none" />
             </div>
@@ -1884,7 +1907,7 @@ function DFTCTrends() {
                         {item.change_pct != null || item.change != null ? (
                           <span
                             className={`inline-flex items-center gap-0.5 font-semibold tabular-nums ${
-                              isIncrease ? "text-emerald-700" : "text-rose-700"
+                              isIncrease ? "text-emerald-700" : "text-rose-600"
                             }`}
                           >
                             <span>
@@ -1894,7 +1917,8 @@ function DFTCTrends() {
                                   : (item.price != null && item.change_pct != null
                                     ? item.price - (item.price / (1 + item.change_pct / 100))
                                     : null),
-                                item.change_pct
+                                item.change_pct,
+                                { hidePercent: true }
                               )}
                             </span>
                           </span>
@@ -2000,7 +2024,7 @@ function DFTCTrends() {
               <table className="w-full min-w-[620px] text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
-                    {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price", "Change", "Volatility Reason"].map((h) => (
+                    {["Date", "Commodity", "Variety", "Category", "Market", "Price Type", "UOM", "Price", "Change", "Encoded By", "Volatility Reason"].map((h) => (
                       <th key={h} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -2010,7 +2034,7 @@ function DFTCTrends() {
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                   {pPageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
+                      <td colSpan={11} className="px-4 py-12 text-center text-[13px] text-[var(--hw-neutral-500)]">
                         No price records for the selected filters.
                       </td>
                     </tr>
@@ -2044,13 +2068,17 @@ function DFTCTrends() {
                                     : null),
                                 row.change_pct,
                                 {
-                                  referencePrice: row.price != null && row.change != null ? row.price - row.change : undefined
+                                  referencePrice: row.price != null && row.change != null ? row.price - row.change : undefined,
+                                  hidePercent: true
                                 }
                               )}
                             </span>
                           ) : (
                             <span className="text-neutral-400">—</span>
                           )}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px] text-[var(--hw-neutral-800)]">
+                          {row.encoded_by || "—"}
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-[12px]">
                           {row.volatility_reason ? (
@@ -2304,14 +2332,14 @@ function DFTCTrends() {
       <div className="space-y-2.5 sm:space-y-3">
         <h3 className="text-[13px] sm:text-[14px] font-bold text-[var(--hw-neutral-900)]">Recent Arrival Volume Records</h3>
         {isArrivalLoading ? (
-          <TableSkeleton cols={7} rows={5} />
+          <TableSkeleton cols={8} rows={5} />
         ) : (
           <div className={`${cardCls} overflow-hidden`}>
             <div className="overflow-x-auto [scrollbar-width:thin] touch-pan-x">
-              <table className="w-full min-w-[620px] text-[12px]">
+              <table className="w-full min-w-[680px] text-[12px]">
                 <thead>
                   <tr className="border-b border-[var(--hw-neutral-200)] bg-[var(--hw-neutral-50)]">
-                    {["Period / Month", "Commodity", "Variety", "Farm Source", "Other Source", "Combined Total", "Unit"].map((h) => (
+                    {["Date", "Commodity", "Variety", "Farm Source", "Other Source", "Combined Total", "Date Added", "Encoded By", "Unit"].map((h) => (
                       <th key={h} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left font-bold text-[var(--hw-neutral-700)] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -2321,14 +2349,14 @@ function DFTCTrends() {
                 <tbody className="divide-y divide-[var(--hw-neutral-100)]">
                   {aPageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 sm:py-12 text-center text-[12px] sm:text-[13px] text-[var(--hw-neutral-500)]">
+                      <td colSpan={9} className="px-4 py-10 sm:py-12 text-center text-[12px] sm:text-[13px] text-[var(--hw-neutral-500)]">
                         No arrival-volume records for the selected commodity and date range.
                       </td>
                     </tr>
                   ) : (
                     aPageRows.map((row, i) => (
                       <tr key={i}>
-                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.month}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-800)] whitespace-nowrap font-medium">{row.date}</td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-900)] font-semibold whitespace-nowrap">{aCommodity}</td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">{row.variety || "—"}</td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-green-700)] font-medium whitespace-nowrap">{formatVol(row.farm)}</td>
@@ -2347,6 +2375,12 @@ function DFTCTrends() {
                               </div>
                             )}
                           </div>
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">
+                          {row.dateAdded}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-700)] whitespace-nowrap">
+                          {row.encoded_by || "—"}
                         </td>
                         <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[var(--hw-neutral-600)] whitespace-nowrap">kg</td>
                       </tr>
@@ -2485,9 +2519,11 @@ function DFTCTrends() {
                               )}
                               <p
                                 className={`text-[12px] font-bold ${
-                                  comm.direction === "down"
+                                  (comm.direction === "down" || (comm.change != null ? comm.change < 0 : comm.change_pct < 0))
                                     ? "text-rose-600"
-                                    : "text-emerald-700"
+                                    : (comm.direction === "up" || (comm.change != null ? comm.change > 0 : comm.change_pct > 0))
+                                    ? "text-emerald-700"
+                                    : "text-neutral-500"
                                 }`}
                               >
                                 {comm.change_pct != null
@@ -2497,7 +2533,8 @@ function DFTCTrends() {
                                         : (comm.current_price != null
                                           ? comm.current_price - (comm.current_price / (1 + comm.change_pct / 100))
                                           : null),
-                                      comm.change_pct
+                                      comm.change_pct,
+                                      { hidePercent: true }
                                     )
                                   : "Volatile"}
                               </p>

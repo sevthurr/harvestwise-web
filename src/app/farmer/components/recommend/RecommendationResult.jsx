@@ -595,6 +595,8 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
                     ],
                     backPath: "/farmer/assess",
                     backLabel: t("farmer.assess.result", {}, "Assessment Result"),
+                    plantingDate: data.plantingDate || advisoryResponse?.planting_date,
+                    expectedHarvestDate: data.harvestDate || data.expectedHarvestDate || advisoryResponse?.expected_harvest_date,
                     price: priceTabData,
                     arrival: arrivalTabData,
                     production: productionTabData,

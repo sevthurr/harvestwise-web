@@ -28,7 +28,7 @@ import { CommodityIllustration, COMMODITY_REGISTRY } from "../../global/componen
 import { HW_NAME_TO_ID as _HW_NAME_TO_ID } from "../../global/data/commodities";
 import { apiGet, apiPost, apiPut, apiDelete, parseResponse } from "../../global/api";
 import { useAuth } from "../../global/contexts/AuthContext";
-import { isPrivilegedDftcPosition } from "../utils/positionAccess";
+import { isPrivilegedDftcPosition, isReviewerStaff } from "../utils/positionAccess";
 import DFTCNotificationBanner from "../components/DFTCNotificationBanner";
 import { normalizeKey } from "../components/DFTCFilePreview.jsx";
 import { capitalizeNameInput } from "../../global/utils/apiTransforms";
@@ -507,9 +507,11 @@ function SearchableStaffSelect({
 
   return (
     <div ref={containerRef} className="relative">
-      <label htmlFor={id} className="block text-[12px] font-medium text-[var(--hw-neutral-800)] mb-1">
-        {label} {required && <span className="text-red-500 font-bold">*</span>}
-      </label>
+      <div className="mb-1">
+        <label htmlFor={id} className="block text-[12px] font-medium text-[var(--hw-neutral-800)]">
+          {label} {required && <span className="text-red-500 font-bold">*</span>}
+        </label>
+      </div>
 
       <button
         id={id}
@@ -710,8 +712,14 @@ function MobileArrivalVariantRow({ v, f, onUpdateFarm, onUpdateOther, onUpdateUo
 
 // ─── DFTCArrivalInput Main Component ─────────────────────────────────────────
 export default function DFTCArrivalInput() {
-  const { user } = useAuth();
-  const canSave = isPrivilegedDftcPosition(user);
+  let user = null;
+  try {
+    const auth = useAuth();
+    user = auth?.user;
+  } catch {
+    // Graceful fallback for environments without AuthProvider
+  }
+  const canSave = user ? isPrivilegedDftcPosition(user) : true;
   const { data: catalogData } = useDftcCatalog();
   const navigate = useNavigate();
   const location = useLocation();
@@ -826,6 +834,10 @@ export default function DFTCArrivalInput() {
 
   // DFTC personnel is shared with Price Input through React Query.
   const { data: staffList = [] } = useDftcStaff();
+  const reviewerStaffList = useMemo(() => {
+    const privileged = staffList.filter(isReviewerStaff);
+    return privileged.length > 0 ? privileged : staffList;
+  }, [staffList]);
   const [encodedBy, setEncodedBy] = useState("");
   const [encodedByRole, setEncodedByRole] = useState("");
   const [reviewedBy, setReviewedBy] = useState("");
@@ -866,23 +878,48 @@ export default function DFTCArrivalInput() {
 
   const reportingDateError = getReportingDateError(selectedDate);
 
-  // Restore the selected personnel for the active reporting period once the
+  // Restore or automatically populate the personnel for the active reporting period once the
   // shared staff query is available.
   useEffect(() => {
     if (staffList.length === 0) return;
+
+    let currentStaff = null;
+    if (user) {
+      currentStaff = staffList.find((staff) =>
+        (staff.user_id && staff.user_id === user.id) ||
+        (user.first_name && staff.name.toLowerCase().includes(user.first_name.toLowerCase()) &&
+         user.last_name && staff.name.toLowerCase().includes(user.last_name.toLowerCase()))
+      );
+      if (!currentStaff && (user.first_name || user.full_name || user.name)) {
+        currentStaff = {
+          name: [user.first_name, user.middle_name, user.last_name, user.suffix].filter(Boolean).join(" ").toUpperCase() || (user.full_name || user.name || "DFTC Staff").toUpperCase(),
+          role: user.role?.role_name || user.position_title || "DFTC Personnel"
+        };
+      }
+    }
+
     let stored = {};
     try {
       stored = JSON.parse(localStorage.getItem(`dftc_arrival_personnel_${effectivePeriodInfo.iso}`)) || {};
     } catch {}
     const restoredEncoded = staffList.find((staff) => staff.name === stored.encodedBy);
     const restoredReviewed = staffList.find((staff) => staff.name === stored.reviewedBy);
-    const defaultEncoder = restoredEncoded || staffList[0];
-    const defaultReviewer = restoredReviewed || (staffList.length > 1 ? staffList[1] : staffList[0]);
-    setEncodedBy(defaultEncoder.name);
-    setEncodedByRole(defaultEncoder.role);
-    setReviewedBy(defaultReviewer.name);
-    setReviewedByRole(defaultReviewer.role);
-  }, [effectivePeriodInfo.iso, staffList]);
+
+    // Current logged-in user is automatically assigned as Encoder without manual input
+    const defaultEncoder = currentStaff || restoredEncoded || staffList[0];
+    const defaultReviewer = (restoredReviewed && isReviewerStaff(restoredReviewed))
+      ? restoredReviewed
+      : (reviewerStaffList.find((s) => s !== defaultEncoder) || reviewerStaffList[0] || staffList[0]);
+
+    if (defaultEncoder) {
+      setEncodedBy(defaultEncoder.name);
+      setEncodedByRole(defaultEncoder.role);
+    }
+    if (defaultReviewer) {
+      setReviewedBy(defaultReviewer.name);
+      setReviewedByRole(defaultReviewer.role);
+    }
+  }, [effectivePeriodInfo.iso, staffList, user]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
@@ -1585,6 +1622,8 @@ export default function DFTCArrivalInput() {
       queryClient.invalidateQueries({ queryKey: ["dftc-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["dftc-arrival-report-preview"] });
       queryClient.invalidateQueries({ queryKey: ["dftc", "home"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-trends-arrivals"] });
+      queryClient.invalidateQueries({ queryKey: ["dftc-trends"] });
 
       navTimer.current = setTimeout(() => {
         setIsSaving(false);
@@ -1989,7 +2028,7 @@ export default function DFTCArrivalInput() {
               required={true}
               value={reviewedBy}
               role={reviewedByRole}
-              options={staffList}
+              options={reviewerStaffList}
               onChange={handleReviewedByChange}
               placeholder="Search / select DFTC personnel"
             />
@@ -2016,12 +2055,18 @@ export default function DFTCArrivalInput() {
             )}
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => {
+                if (!canSave) {
+                  setSaveError("Only an Acting Section Head or Division Chief can review and save manual encoded data.");
+                  return;
+                }
+                setConfirmOpen(true);
+              }}
               disabled={totalEnteredCount === 0 || isSaving || Boolean(reportingDateError) || !canSave}
-              title={!canSave ? "Only an Acting Section Head or Division Chief can save or finalize review" : undefined}
+              title={!canSave ? "Only an Acting Section Head or Division Chief can review and save manual encoded data" : undefined}
               className="w-full py-3 px-4 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-50 cursor-pointer shadow-[var(--shadow-xs)]"
             >
-              {canSave ? `Save ${dataName} (${totalEnteredCount} commodities)` : "Only Acting Section Head or Division Chief can save"}
+              {canSave ? `Save ${dataName} (${totalEnteredCount} commodities)` : "Only Acting Section Head or Division Chief can review and save"}
             </button>
           </div>
 
@@ -2533,10 +2578,15 @@ export default function DFTCArrivalInput() {
         <button
           type="button"
           onClick={() => {
+            if (!canSave) {
+              setSaveError("Only an Acting Section Head or Division Chief can review and save manual encoded data.");
+              return;
+            }
             setDataName(`DFTC Arrival Volume — ${effectivePeriodInfo.label}`);
             setReviewMode(true);
           }}
-          disabled={totalEnteredCount === 0}
+          disabled={totalEnteredCount === 0 || !canSave}
+          title={!canSave ? "Only an Acting Section Head or Division Chief can review and save manual encoded data" : undefined}
           className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-[var(--hw-green-700)] text-white text-[13px] font-semibold hover:bg-[var(--hw-green-800)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[var(--shadow-xs)] flex items-center justify-center gap-2 cursor-pointer"
         >
           <span>Review Entered Data</span>

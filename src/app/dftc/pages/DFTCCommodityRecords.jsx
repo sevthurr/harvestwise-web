@@ -329,13 +329,14 @@ function DFTCCommodityRecords() {
           isVolatilityFlagged: rec.is_volatility_flagged,
           entryMethod: "Manual Input",
           reportId: rec.record_id || "—",
-          encodedBy: rec.recorded_by || "DFTC Staff"
+          encodedBy: rec.encoded_by || rec.recorded_by || rec.saved_by || "DFTC Staff"
         };
       });
     }
 
     const rows = [];
     const lastUpdated = formatSavedDate(commodityItem.last_updated || commodityItem.updated_at);
+    const itemEncoder = commodityItem.encoded_by || commodityItem.recorded_by || commodityItem.saved_by || "DFTC Staff";
 
     if (commodityItem.prices?.bangkerohan_retail != null) {
       rows.push({
@@ -355,7 +356,7 @@ function DFTCCommodityRecords() {
         isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
-        encodedBy: "DFTC Staff"
+        encodedBy: itemEncoder
       });
     }
     if (commodityItem.prices?.bangkerohan_wholesale != null) {
@@ -376,7 +377,7 @@ function DFTCCommodityRecords() {
         isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
-        encodedBy: "DFTC Staff"
+        encodedBy: itemEncoder
       });
     }
     if (commodityItem.prices?.dftc_retail != null) {
@@ -397,7 +398,7 @@ function DFTCCommodityRecords() {
         isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
-        encodedBy: "DFTC Staff"
+        encodedBy: itemEncoder
       });
     }
     if (commodityItem.prices?.dftc_wholesale != null) {
@@ -418,7 +419,7 @@ function DFTCCommodityRecords() {
         isVolatilityFlagged: false,
         entryMethod: "Manual Input",
         reportId: "—",
-        encodedBy: "DFTC Staff"
+        encodedBy: itemEncoder
       });
     }
     return rows;
@@ -452,7 +453,15 @@ function DFTCCommodityRecords() {
 
   const filteredPriceRecords = useMemo(() => {
     let result = allPriceRecords.filter((r) => {
-      if (pMarket !== "All Markets" && r.market !== pMarket) return false;
+      if (pMarket !== "All Markets") {
+        const normPM = pMarket.toLowerCase();
+        const normRM = (r.market || "").toLowerCase();
+        if (normPM.includes("dftc") || normPM.includes("food trm")) {
+          if (!normRM.includes("dftc") && !normRM.includes("food trm")) return false;
+        } else if (r.market !== pMarket) {
+          return false;
+        }
+      }
       if (pPriceType !== "All Types" && r.priceType !== pPriceType) return false;
       if (pVariety !== "All Varieties" && r.variety !== pVariety) return false;
       return true;
@@ -572,8 +581,8 @@ function DFTCCommodityRecords() {
               <label className={labelCls}>Market</label>
               <select value={pMarket} onChange={(e) => setPMarket(e.target.value)} className={selectCls}>
                 <option>All Markets</option>
-                <option>Bangkerohan Public Market</option>
-                <option>DFTC Taboan</option>
+                <option value="Bangkerohan Public Market">Bangkerohan Public Market</option>
+                <option value="DFTC Taboan">Dvo Food Trm Cmplx</option>
               </select>
             </div>
             <div>
@@ -672,7 +681,8 @@ function DFTCCommodityRecords() {
                                     : null),
                                 r.changePct,
                                 {
-                                  referencePrice: r.price != null && r.change != null ? r.price - r.change : undefined
+                                  referencePrice: r.price != null && r.change != null ? r.price - r.change : undefined,
+                                  hidePercent: true
                                 }
                               )}
                             </span>

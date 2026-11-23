@@ -162,6 +162,22 @@ describe("FactorDetailPage — arrival and production data", () => {
     expect(screen.getByTestId("weather-classification")).toHaveTextContent("Severe");
   });
 
+  it("automatically queries historical seasonal production for the harvest window quarter when expectedHarvestDate is given", async () => {
+    renderPage({
+      title: "Lettuce — Detailed Factors",
+      commodityId: "COM-0025",
+      commodityName: "Lettuce",
+      plantingDate: "2025-11-12",
+      expectedHarvestDate: "2026-01-06",
+      backPath: "/farmer/assess",
+      backLabel: "Assessment Result",
+    });
+
+    await waitFor(() =>
+      expect(getSeasonalProductionMock).toHaveBeenCalledWith("COM-0025", "Q1")
+    );
+  });
+
   it("renders the commodity icon before page title and supports clicking previous breadcrumb for back navigation", async () => {
     renderPage({
       title: "Tomato — Detailed Factors",

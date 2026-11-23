@@ -13,6 +13,7 @@ import { hasValidAdvisoryDatePair } from "../../global/utils/apiTransforms";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
+import { suggestHarvestDate } from "../components/recommend/types";
 
 function currentQuarter() {
   return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
@@ -99,7 +100,28 @@ function CropFactorsPage() {
   const effectiveModuleResults = state?.moduleResults || planAdvisoryData?.module_results || {};
 
   const commodityIdentifier = crop.commodityId || crop.commodity;
-  const selectedQuarter = state?.selectedQuarter || currentQuarter();
+  const effectivePlantingDate = state?.plantingDate || plantingDate || planAdvisoryData?.planting_date;
+  const effectiveHarvestDate = state?.expectedHarvestDate || harvestDate || planAdvisoryData?.expected_harvest_date;
+
+  const harvestQuarter = useMemo(() => {
+    if (state?.selectedQuarter && ["Q1", "Q2", "Q3", "Q4"].includes(state.selectedQuarter)) {
+      return state.selectedQuarter;
+    }
+    if (effectiveHarvestDate) {
+      return quarterForDate(effectiveHarvestDate);
+    }
+    if (effectivePlantingDate) {
+      const suggestion = suggestHarvestDate(effectivePlantingDate, commodityIdentifier || crop.commodityName);
+      if (suggestion) {
+        const derived = suggestion.maxDate || suggestion.minDate;
+        if (derived) return quarterForDate(derived);
+      }
+      return quarterForDate(effectivePlantingDate);
+    }
+    return currentQuarter();
+  }, [state?.selectedQuarter, effectiveHarvestDate, effectivePlantingDate, commodityIdentifier, crop?.commodityName]);
+
+  const selectedQuarter = harvestQuarter;
   const arrivalPressureQuery = useQuery({
     queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
     queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),

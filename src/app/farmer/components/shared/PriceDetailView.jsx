@@ -1452,7 +1452,7 @@ function PriceDetailView({
             options={MARKETS}
             value={market}
             onChange={setMarket}
-            getOptionLabel={(m) => m === "Bangkerohan Public Market" ? "Bangkerohan" : m}
+            getOptionLabel={(m) => (m === "Bangkerohan Public Market" ? "Bangkerohan" : m)}
           />
         </div>
         {varietySelectOptions.length > 0 && (

@@ -754,7 +754,18 @@ export const en = {
         level_high_banner: "High Arrival Pressure",
         meaning_low: "Supply is decreasing — lower market volume can support higher prices.",
         meaning_moderate: "Arrival volume is stable — balanced supply and price conditions.",
-        meaning_high: "Supply is increasing — higher volume may push prices down."
+        meaning_high: "Supply is increasing — higher volume may push prices down.",
+        assessment_title: "ARRIVAL ASSESSMENT",
+        assessment_expected_harvest: "Expected Harvest",
+        assessment_classification_label: "Arrival Classification",
+        assessment_range_label: "Range",
+        assessment_interpretation_label: "Interpretation",
+        assessment_interpretation_low: "Historical arrivals during this harvest period fall below the first quartile. This period typically experiences relatively lower market supply.",
+        assessment_interpretation_lower_middle: "Historical arrivals during this harvest period fall between Q1 and Q2. This period typically experiences below-average market supply.",
+        assessment_interpretation_upper_middle: "Historical arrivals during this harvest period fall between Q2 and Q3. This period typically experiences above-average market supply.",
+        assessment_interpretation_high: "Historical arrivals during this harvest period exceed Q3. This period typically experiences the highest levels of market supply and competition.",
+        expected_harvest_period_label: "Expected Harvest Period",
+        expected_harvest_highlight: "Expected Harvest: {period}"
       },
 
       production: {
@@ -869,6 +880,7 @@ export const en = {
         no_weather_note: "No weather forecast available for this date yet (available for next 14 days).",
         no_event_note: "Standard trading day. No special market event or holiday."
       },
+      explanation_summary: "Price outlook: {price}; arrival pressure: {arrival}; seasonal production: {production}; weather risk: {weather}.",
       price_outlook_rise: "Price likely to rise soon",
       price_outlook_profit: "Good estimated profit",
       factor_price_kamatis: "₱85/kg today, rising trend over the past two weeks.",

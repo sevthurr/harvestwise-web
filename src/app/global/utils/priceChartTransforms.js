@@ -34,7 +34,8 @@ export function normalizeVarietyLabel(value) {
 }
 
 export function toPriceTypeKey(market, priceType) {
-  const marketKey = String(market || "").toLowerCase().includes("dftc")
+  const normMarket = String(market || "").toLowerCase();
+  const marketKey = normMarket.includes("dftc") || normMarket.includes("food trm") || normMarket.includes("dvo food")
     ? "dftc"
     : "bangkerohan";
   const typeKey = String(priceType || "").toLowerCase().includes("wholesale")
@@ -47,7 +48,7 @@ export function isApiBackedPriceSeries(market, priceType) {
   const marketLabel = String(market || "").toLowerCase();
   const typeLabel = String(priceType || "").toLowerCase();
   if (typeLabel.includes("landing")) return false;
-  if (marketLabel.includes("dftc")) return true;
+  if (marketLabel.includes("dftc") || marketLabel.includes("food trm") || marketLabel.includes("dvo food")) return true;
   if (marketLabel.includes("bangkerohan") || marketLabel.includes("bankerohan")) return true;
   return false;
 }

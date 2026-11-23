@@ -8,6 +8,7 @@ import {
 } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { localizeRecommendationExplanation } from "../utils/plantingLabels";
 import {
   LayoutDashboard,
   CloudRain,
@@ -108,12 +109,13 @@ const MarketOutlookFilterDrawer = ({ open, filters, onClose, onApply }) => {
 
 // ── commodity card ───────────────────────────────────────────────────────
 const CommodityOutlookCard = ({ rec, priceCard, onViewDetails, isPreferred }) => {
+  const { t } = useLanguage();
   const statusCode = advisoryToStatus(rec.advisory_category);
   const cfg = STATUS_CONFIG[statusCode] || STATUS_CONFIG[MARKET_STATUS_CODES.BALANCED];
   const Icon = cfg.icon;
 
   // Short insight: use explanation from API; fall back to a neutral sentence
-  const insight = rec.explanation || "Market conditions have been assessed for this commodity.";
+  const insight = localizeRecommendationExplanation(rec, t) || "Market conditions have been assessed for this commodity.";
   // Consideration: derive from advisory category
   const consideration =
     statusCode === MARKET_STATUS_CODES.FAVORABLE

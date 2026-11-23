@@ -35,6 +35,7 @@ import {
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { isHWCommodity } from "../../global/data/commodities";
+import { localizeRecommendationExplanation } from "../utils/plantingLabels";
 
 const TwoToneStormIcon = ({ className }) => (
   <svg
@@ -746,10 +747,10 @@ function RecommendationPage() {
       const harvestWindowStr = harvestMonthLocalized;
 
       const fallbackWeatherNote = rec.weather_risk_level === "severe"
-        ? t("farmer.factors.weather.insight_severe", { crop_name: cname }, "Severe weather conditions expected; postpone planting.")
+        ? (t("farmer.weather.insight_severe", { crop_name: cname }) !== "farmer.weather.insight_severe" ? t("farmer.weather.insight_severe", { crop_name: cname }) : t("farmer.factors.weather.insight_severe", { crop_name: cname }, "Severe weather conditions expected; postpone planting."))
         : rec.weather_risk_level === "caution"
-        ? t("farmer.factors.weather.insight_caution", { crop_name: cname }, "Mixed conditions; monitor weather carefully.")
-        : t("farmer.factors.weather.insight_suitable", { crop_name: cname }, "Conditions suitable for planting.");
+        ? (t("farmer.weather.insight_caution", { crop_name: cname }) !== "farmer.weather.insight_caution" ? t("farmer.weather.insight_caution", { crop_name: cname }) : t("farmer.factors.weather.insight_caution", { crop_name: cname }, "Mixed conditions; monitor weather carefully."))
+        : (t("farmer.weather.insight_suitable", { crop_name: cname }) !== "farmer.weather.insight_suitable" ? t("farmer.weather.insight_suitable", { crop_name: cname }) : t("farmer.factors.weather.insight_suitable", { crop_name: cname }, "Conditions suitable for planting."));
 
       // Factor text always comes from the stored recommendation row so the
       // calendar shows the current factors. The old hardcoded per-crop copy
@@ -780,11 +781,20 @@ function RecommendationPage() {
         profit: rec.profitability || "favorable",
       };
 
+      // Prefer the structured summary only when it actually localized; otherwise
+      // use the raw-English localizer, then the profile/canned-phrase fallback.
+      const summaryText = recommendationSummary(rec, t);
+      const localizedExplanation = localizeRecommendationExplanation(rec, t);
+      const priceOutlookText =
+        (summaryText && summaryText !== rec.explanation ? summaryText : localizedExplanation) ||
+        profile.priceOutlookText ||
+        (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit"));
+
       result.push({
         id: cid,
         name: cname,
         varietyCount: profile.varietyCount || t("farmer.calendar.variety_count_single", {}, "1 variety"),
-        priceOutlookText: recommendationSummary(rec, t) || profile.priceOutlookText || (cid === "COM-0004" ? t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon") : t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit")),
+        priceOutlookText,
         bestVariety: profile.bestVariety || rec.bestVariety || rec.commodity_variety || rec.commodityVariety || rec.variety || null,
         plantWindow: plantWindowStr,
         harvestWindow: harvestWindowStr,
@@ -1089,6 +1099,8 @@ function RecommendationPage() {
                                 state: {
                                   commodityId: crop.id,
                                   commodityName: crop.name,
+                                  plantingDate: crop.plantingDate || crop.plantWindow,
+                                  expectedHarvestDate: crop.harvestDate || crop.harvestWindow,
                                   backPath: "/farmer/market",
                                   backLabel: t("nav.market", {}, "Market"),
                                   breadcrumbs: [

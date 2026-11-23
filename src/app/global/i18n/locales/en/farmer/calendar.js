@@ -67,6 +67,7 @@ export const calendar = {
   plant_prefix: "Plant: {window}",
   harvest_prefix: "Harvest: {window}",
   why_good_crop_title: "Why this is a good crop this month",
+  explanation_summary: "Price outlook: {price}; arrival pressure: {arrival}; seasonal production: {production}; weather risk: {weather}.",
   price_outlook_rise: "Price may rise soon",
   price_outlook_profit: "Good estimated profit",
   factor_price_kamatis: "₱85/kg today, rising trend over the past two weeks.",
