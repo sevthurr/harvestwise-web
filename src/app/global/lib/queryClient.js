@@ -35,8 +35,19 @@ export function shouldRetry(failureCount, error) {
  * True only when the browser reports being offline. `navigator` is absent in
  * non-browser environments (tests, SSR), where offline is not a thing.
  */
-function isBrowserOffline() {
+export function isBrowserOffline() {
   return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/**
+ * Avoid forcing a network refetch while offline. Refetching on mount is useful
+ * for freshness online, but offline it triggers requests that fail when the
+ * service worker has no cached response, masking persisted query data behind
+ * loading or empty states. When offline, keep the cached data and let the
+ * normal reconnect/refocus behavior refresh later.
+ */
+export function refetchOnMountIfOnline(mode = true) {
+  return isBrowserOffline() ? false : mode;
 }
 
 export const queryClient = new QueryClient({
@@ -80,15 +91,20 @@ export const queryClient = new QueryClient({
 // refetch on mount. Arrival pressure also refetches when the PWA becomes
 // visible again: that is the safety net for SSE frames missed while offline,
 // backgrounded, or disconnected. Query defaults match by key prefix.
-queryClient.setQueryDefaults(["prices"], { refetchOnMount: true });
-queryClient.setQueryDefaults(["dashboard"], { refetchOnMount: true });
-queryClient.setQueryDefaults(["price-detail"], { refetchOnMount: true });
-queryClient.setQueryDefaults(["farmer-price-card-trend"], { refetchOnMount: true });
+//
+// When offline, skip mount refetches so failed network requests do not mask
+// persisted data behind loading/empty states. These defaults are evaluated at
+// module load; per-query call sites should use refetchOnMountIfOnline(...) for
+// render-time awareness.
+queryClient.setQueryDefaults(["prices"], { refetchOnMount: refetchOnMountIfOnline(true) });
+queryClient.setQueryDefaults(["dashboard"], { refetchOnMount: refetchOnMountIfOnline(true) });
+queryClient.setQueryDefaults(["price-detail"], { refetchOnMount: refetchOnMountIfOnline(true) });
+queryClient.setQueryDefaults(["farmer-price-card-trend"], { refetchOnMount: refetchOnMountIfOnline(true) });
 queryClient.setQueryDefaults(["farmer", "admin-price-outlook"], {
-  refetchOnMount: true,
+  refetchOnMount: refetchOnMountIfOnline(true),
 });
 queryClient.setQueryDefaults(["farmer", "arrival-pressure"], {
-  refetchOnMount: true,
+  refetchOnMount: refetchOnMountIfOnline(true),
   refetchOnWindowFocus: true,
 });
 

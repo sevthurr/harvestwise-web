@@ -15,13 +15,13 @@ import { AppErrorBoundary } from './global/components/RouteError';
 
 export default function App() {
   return (
-    <AppErrorBoundary>
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 30 }}
-      >
-        <AuthProvider>
-          <LanguageProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 30 }}
+    >
+      <AuthProvider>
+        <LanguageProvider>
+          <AppErrorBoundary>
             <DisplayModeProvider>
               <CropsProvider>
                 <NotificationStreamProvider>
@@ -36,10 +36,10 @@ export default function App() {
                 </NotificationStreamProvider>
               </CropsProvider>
             </DisplayModeProvider>
-          </LanguageProvider>
-        </AuthProvider>
-      </PersistQueryClientProvider>
-    </AppErrorBoundary>
+          </AppErrorBoundary>
+        </LanguageProvider>
+      </AuthProvider>
+    </PersistQueryClientProvider>
   );
 }
 

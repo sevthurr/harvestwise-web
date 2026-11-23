@@ -133,6 +133,7 @@ describe('TopBar Offline Data Status & Sync handling', () => {
     authState.offlineCacheStatus = 'preparing';
     renderTopBar();
     const syncButton = screen.getByRole('button', { name: /Offline Data|Kahimtang sa Offline Data/i });
+    expect(syncButton).toHaveTextContent(/Syncing|Nag-u-update/i);
     fireEvent.click(syncButton);
     act(() => {
       vi.advanceTimersByTime(260);

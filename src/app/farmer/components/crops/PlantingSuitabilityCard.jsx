@@ -16,6 +16,7 @@ import {
   fetchMonthlyRecommendations,
   monthlyRecommendationsKey,
 } from "../../../global/hooks/useFarmerPrefetch";
+import { refetchOnMountIfOnline } from "../../../global/lib/queryClient";
 import { sortWithPreferredFirst, isPreferredCrop } from "../../utils/cropPreferences";
 import { PreferredStar } from "../shared/PreferredStar";
 import { isHWCommodity } from "../../../global/data/commodities";
@@ -96,6 +97,7 @@ export default function PlantingSuitabilityCard({ preferredCropIds = [], preferr
     queryKey: monthlyRecommendationsKey(formattedRefMonth),
     queryFn: () => fetchMonthlyRecommendations(formattedRefMonth),
     staleTime: 1000 * 60 * 30,
+    refetchOnMount: refetchOnMountIfOnline(true),
   });
 
   const rawRecommendations = useMemo(() => {

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { refetchOnMountIfOnline } from "../../global/lib/queryClient";
 import {
   RefreshCw,
   ChevronRight,
@@ -311,7 +312,7 @@ function PricesPage() {
     },
     staleTime: 1000 * 60,
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnMount: refetchOnMountIfOnline(true),
   });
 
   const { commodities } = useMemo(() => {
@@ -427,7 +428,7 @@ function PricesPage() {
       }),
       enabled: Boolean(commodity.id),
       staleTime: 60 * 1000,
-      refetchOnMount: true,
+      refetchOnMount: refetchOnMountIfOnline(true),
     })),
   });
 
@@ -642,7 +643,7 @@ function PricesPage() {
       )}
 
       {/* Cards grid */}
-      {loading ? (
+      {loading && visible.length === 0 ? (
         <SkeletonPriceGrid count={6} />
       ) : visible.length === 0 ? (
         searchQuery.trim() ? (

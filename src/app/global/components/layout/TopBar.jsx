@@ -102,8 +102,8 @@ const TopBar = ({
   // badge flash "Syncing..." on every route change, because Dashboard,
   // Prices, Profile and Notifications opt back into refetchOnMount:"always"
   // even though the login bundle seeded their cache.
-  const isSyncing = isManualSyncing || processState.active;
   const cacheStatus = user?.role?.role_name?.toLowerCase() === "farmer" ? offlineCacheStatus : "idle";
+  const isSyncing = isManualSyncing || processState.active || cacheStatus === "preparing";
   const cacheStatusCopy = {
     preparing: t("farmer.offline_preparing", {}, "Preparing offline data"),
     ready: t("farmer.offline_ready", {}, "Offline data ready"),

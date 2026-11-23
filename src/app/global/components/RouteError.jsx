@@ -2,7 +2,7 @@ import React from "react";
 import { useRouteError } from "react-router";
 import { useLanguage } from "../contexts/LanguageContext";
 
-function CrashScreen({ title, message, details, homeHref = "/" }) {
+function CrashScreen({ title, message, details, homeHref = "/", reloadLabel, homeLabel }) {
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center px-6 py-12 bg-[var(--hw-neutral-50)]">
       <div className="w-full max-w-md text-center space-y-4">
@@ -52,13 +52,13 @@ function CrashScreen({ title, message, details, homeHref = "/" }) {
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
-            Reload
+            {reloadLabel}
           </button>
           <a
             href={homeHref}
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] text-sm font-medium bg-white hover:bg-[var(--hw-neutral-50)] transition-colors"
           >
-            Go home
+            {homeLabel}
           </a>
         </div>
       </div>
@@ -89,13 +89,15 @@ export function RouteErrorElement() {
         {},
         "An unexpected error stopped this page from loading."
       )}
+      reloadLabel={t("common.error_reload", {}, "Reload")}
+      homeLabel={t("common.error_home", {}, "Go home")}
       details={details}
       homeHref="/"
     />
   );
 }
 
-export class AppErrorBoundary extends React.Component {
+class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { error: null };
@@ -121,8 +123,14 @@ export class AppErrorBoundary extends React.Component {
       }
       return (
         <CrashScreen
-          title="Something went wrong"
-          message="An unexpected error stopped the app from loading."
+          title={this.props.t("common.error_title", {}, "Something went wrong")}
+          message={this.props.t(
+            "common.error_body",
+            {},
+            "An unexpected error stopped the app from loading."
+          )}
+          reloadLabel={this.props.t("common.error_reload", {}, "Reload")}
+          homeLabel={this.props.t("common.error_home", {}, "Go home")}
           details={details}
           homeHref="/"
         />
@@ -130,4 +138,9 @@ export class AppErrorBoundary extends React.Component {
     }
     return this.props.children;
   }
+}
+
+export function AppErrorBoundary({ children }) {
+  const { t } = useLanguage();
+  return <ErrorBoundary t={t}>{children}</ErrorBoundary>;
 }
