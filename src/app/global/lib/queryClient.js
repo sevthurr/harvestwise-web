@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, hydrate } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { persistQueryClientSave } from "@tanstack/query-persist-client-core";
 import { get, set, del, clear } from "idb-keyval";
@@ -156,6 +156,27 @@ export async function hasPersistedFarmerData() {
     return queries.some((query) =>
       query?.state?.data !== undefined && usableKeys.has(JSON.stringify(query.queryKey))
     );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Direct offline fallback for mobile startup. The provider normally hydrates
+ * this snapshot, but an auth/network transition can finish after that restore
+ * and leave the mounted QueryClient empty. Read the same snapshot again and
+ * hydrate it without performing any network request or write.
+ */
+export async function restorePersistedFarmerData(client = queryClient) {
+  try {
+    const raw = await get("HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1");
+    const persisted = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!persisted?.clientState || persisted.buster !== "") return false;
+    if (persisted.timestamp && Date.now() - persisted.timestamp > OFFLINE_TTL_MS) return false;
+
+    hydrate(client, persisted.clientState);
+    ensureCanonicalPriceList(client);
+    return true;
   } catch {
     return false;
   }
