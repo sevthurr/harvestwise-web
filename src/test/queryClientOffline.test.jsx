@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-import { queryClient, shouldRetry } from "../app/global/lib/queryClient";
+import { queryClient, shouldPersistQueryCache, shouldRetry } from "../app/global/lib/queryClient";
 
 describe("query client offline policy", () => {
   afterEach(() => {
@@ -45,6 +45,14 @@ describe("query client offline policy", () => {
   it("does not retry a network failure while the browser is offline", () => {
     vi.stubGlobal("navigator", { onLine: false });
     expect(shouldRetry(0, new TypeError("Failed to fetch"))).toBe(false);
+  });
+
+  it("does not replace the last good IndexedDB snapshot while offline", () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    expect(shouldPersistQueryCache()).toBe(false);
+
+    vi.stubGlobal("navigator", { onLine: true });
+    expect(shouldPersistQueryCache()).toBe(true);
   });
 
   it("still retries a network failure while the browser is online", () => {

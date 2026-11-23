@@ -116,11 +116,26 @@ queryClient.setQueryDefaults(["farmer", "arrival-pressure"], {
 export const persister = createAsyncStoragePersister({
   storage: {
     getItem: async (key) => await get(key),
-    setItem: async (key, value) => await set(key, value),
+    // A failed offline refetch can produce a smaller dehydrated snapshot than
+    // the last successful online seed. Never replace the good IndexedDB copy
+    // with that partial snapshot; offline mode is read-only for this cache.
+    setItem: async (key, value) => {
+      if (!shouldPersistQueryCache()) return;
+      await set(key, value);
+    },
     removeItem: async (key) => await del(key),
   },
   key: "HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1",
 });
+
+/**
+ * React Query may persist after an offline request settles. That write is not
+ * allowed to replace the last known-good farmer read snapshot with a partial
+ * error snapshot. Explicit logout still removes the key through removeItem.
+ */
+export function shouldPersistQueryCache() {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
 
 /**
  * Check the persisted React Query snapshot without requiring the provider to
