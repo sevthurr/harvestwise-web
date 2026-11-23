@@ -38,12 +38,14 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [offlineCacheStatus, setOfflineCacheStatus] = useState('idle');
+  const mountedRef = useRef(true);
 
   // Ref that always holds the current user value so event handlers registered
   // with empty deps (the auth/expiry listeners) can read the latest user
   // without being re-registered on every render.
   const userRef = useRef(null);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   // Seed the offline bundle after a successful farmer session restore.
   // /auth/me nests the role as { role: { role_name } } — reading a top-level
@@ -59,7 +61,7 @@ export function AuthProvider({ children }) {
       setOfflineCacheStatus('preparing');
       try {
         await loadFarmerOfflineData(queryClient, { force });
-        setOfflineCacheStatus('ready');
+        if (mountedRef.current) setOfflineCacheStatus('ready');
         try {
           const { requestPersistentStorage } = await import('../lib/pwaUpdate');
           await requestPersistentStorage();
@@ -67,7 +69,7 @@ export function AuthProvider({ children }) {
           // ignore
         }
       } catch {
-        setOfflineCacheStatus('error');
+        if (mountedRef.current) setOfflineCacheStatus('error');
       }
     }
   };

@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
     VitePWA({
       registerType: 'prompt',
       devOptions: {
-        enabled: true,
+        enabled: false,
         type: 'module'
       },
       includeAssets: [
@@ -139,7 +139,7 @@ export default defineConfig(({ mode }) => {
             // Only farmer-safe read surfaces may be replayed offline. Admin,
             // DFTC, audit, notification, profile, and auth responses are not
             // stored in URL-keyed CacheStorage.
-            urlPattern: /\/api\/v1\/(farmer\/daily-snapshot|prices(?:\/[^/?]+)?|market\/(calendar|monthly-recommendations)|weather\/advisory)(?:\?|$)/i,
+            urlPattern: /\/api\/v1\/(prices(?:\/[^/?]+)?|market\/(calendar|monthly-recommendations)|weather\/advisory)(?:\?|$)/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'harvestwise-api-cache',

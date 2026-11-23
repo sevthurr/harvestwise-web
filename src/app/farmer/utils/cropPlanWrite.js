@@ -6,7 +6,6 @@ const OFFLINE_MESSAGE =
 export function isDeviceOffline() {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
-
 export function isConnectionFailure(error) {
   return isDeviceOffline() || (typeof error?.status !== "number" && error?.name !== "AbortError");
 }
@@ -30,3 +29,4 @@ export async function writeCropPlan({ method, path, body, t }) {
     throw offlineError(t);
   }
 }
+

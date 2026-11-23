@@ -24,7 +24,9 @@ function RestoredAppContent() {
     }
   }, [isRestoring]);
 
-  if (isRestoring) return null;
+  if (isRestoring) {
+    return <div role="status" className="min-h-screen grid place-items-center text-sm text-[var(--hw-neutral-600)]">Loading offline data…</div>;
+  }
 
   return (
     <AuthProvider>
