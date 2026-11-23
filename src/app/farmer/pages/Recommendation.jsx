@@ -18,7 +18,6 @@ import {
   Banknote,
   Package,
   Leaf,
-  TrendingUp
 } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { apiGet, parseResponse } from "../../global/api";
@@ -362,7 +361,6 @@ const DEFAULT_RECOMMENDED_PROFILES = {
       supply: t ? t("farmer.calendar.factor_supply_kamatis", {}, "Arrivals at DFTC dropped this week compared to last.") : "Arrivals at DFTC dropped this week compared to last.",
       production: t ? t("farmer.calendar.factor_production_kamatis", {}, "Supply is usually moderate.") : "Supply is usually moderate.",
       weather: t ? t("farmer.calendar.factor_weather_kamatis", {}, "Dry days available in early and mid-month for planting.") : "Dry days available in early and mid-month for planting.",
-      profit: t ? t("farmer.calendar.factor_profit_kamatis", {}, "Around ₱20/kg above estimated cost.") : "Around ₱20/kg above estimated cost.",
     })
   },
   "COM-0001": {
@@ -374,7 +372,6 @@ const DEFAULT_RECOMMENDED_PROFILES = {
       supply: t ? t("farmer.calendar.factor_supply_ampalaya", {}, "Arrivals at DFTC dropped this week compared to last.") : "Arrivals at DFTC dropped this week compared to last.",
       production: t ? t("farmer.calendar.factor_production_ampalaya", {}, "Supply is usually moderate.") : "Supply is usually moderate.",
       weather: t ? t("farmer.calendar.factor_weather_ampalaya", {}, "Suitable planting days available.") : "Suitable planting days available.",
-      profit: t ? t("farmer.calendar.factor_profit_ampalaya", {}, "Around ₱25/kg above estimated cost.") : "Around ₱25/kg above estimated cost.",
     })
   }
 };
@@ -849,9 +846,6 @@ function RecommendationPage() {
           `Seasonal production around ${harvestWindowStr}: ${rec.historical_seasonal_production_level || "moderate"}.`
         ),
         weather: fallbackWeatherNote,
-        profit: rec.profitability
-          ? t("farmer.calendar.factor_profitability", { level: rec.profitability }, `Profitability: ${rec.profitability}.`)
-          : t("farmer.calendar.factor_profit_favorable", {}, "Favorable margin compared to costs."),
       };
 
       const factorLevels = {
@@ -859,7 +853,6 @@ function RecommendationPage() {
         supply: rec.arrival_pressure || "favorable",
         production: rec.historical_seasonal_production_level || "upper_middle",
         weather: rec.weather_risk_level || "favorable",
-        profit: rec.profitability || "favorable",
       };
 
       // Prefer the structured summary only when it actually localized; otherwise
@@ -1143,8 +1136,6 @@ function RecommendationPage() {
                     const supplyCond = resolveFactorCondition("supply", crop.factorLevels?.supply, "", crop.factors?.supply);
                     const productionCond = resolveFactorCondition("production", crop.factorLevels?.production, "", crop.factors?.production);
                     const weatherCond = resolveFactorCondition("weather", crop.factorLevels?.weather, "", crop.factors?.weather);
-                    const profitCond = resolveFactorCondition("profit", crop.factorLevels?.profit, "", crop.factors?.profit);
-
                     return (
                       <div className="mt-3 space-y-2.5 pt-0.5 text-[14px]">
                         <div className="flex items-start gap-2.5">
@@ -1184,16 +1175,6 @@ function RecommendationPage() {
                               {t("farmer.calendar.factor_weather", {}, "Weather")}
                             </span>{" "}
                             · {crop.factors?.weather}
-                          </p>
-                        </div>
-
-                        <div className="flex items-start gap-2.5">
-                          <TrendingUp className={`w-4 h-4 flex-shrink-0 mt-0.5 ${profitCond.colorClass}`} />
-                          <p className="leading-snug text-black">
-                            <span className="font-semibold text-black">
-                              {t("farmer.calendar.factor_profit", {}, "Profit")}
-                            </span>{" "}
-                            · {crop.factors?.profit}
                           </p>
                         </div>
 

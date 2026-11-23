@@ -439,8 +439,8 @@ function PricesPage() {
         horizon: 7,
         records_limit: 30,
       }),
-      // Preferred crops are warmed for detailed views. Other crops use the
-      // lightweight trend classification from the price-list response.
+      // Warm detailed trend data for preferred crops. Other top-10 crops fetch
+      // their detail data when the farmer opens them, then autosave persists it.
       enabled: Boolean(commodity.id) && preferredMatcher.isPreferred(commodity),
       staleTime: 60 * 1000,
       refetchOnMount: refetchOnMountIfOnline(true),

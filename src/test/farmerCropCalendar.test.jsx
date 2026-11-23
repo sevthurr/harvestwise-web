@@ -216,7 +216,8 @@ describe("Farmer Crop Calendar Page", () => {
     expect(screen.getAllByText(/Supply|Suplay/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Production|Produksyon/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Weather|Panahon/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/Profit|Ginansya/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/^Profit$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Profitability:/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(/View detailed factors|Tan-awa ang detalyadong mga hinungdan/i)
     ).toBeInTheDocument();

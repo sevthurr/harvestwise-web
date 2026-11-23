@@ -383,6 +383,10 @@ async function prefetchFarmerPageData(queryClient, bundle) {
   const safePrefetch = (queryKey, queryFn) =>
     queryClient.prefetchQuery({ queryKey, queryFn, staleTime: STALE_TIME }).catch(() => {});
 
+  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
+  const preferredMatcher = getPreferredCropMatcher(
+    profile?.preferred_crops || profile?.preferredCrops || []
+  );
   const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
   const priceItems = [...(bundle.price_trends || []), ...supportedItems];
   const priceIds = [...new Set(priceItems
@@ -491,23 +495,25 @@ async function prefetchFarmerPageData(queryClient, bundle) {
             ),
           );
         });
-        commodityRequests.push(
-          safePrefetch(
-            ["prices", "trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD, BUNDLE_TREND_RECORDS_LIMIT],
-            async () => {
-              const raw = await parseResponse(await apiGet(
-                `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${BUNDLE_TREND_PERIOD}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
-              ));
-              if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
-                queryClient.setQueryData(
-                  ["farmer-price-card-trend", commodityId, priceTypeKey, BUNDLE_TREND_PERIOD],
-                  raw
-                );
+        FARMER_PRICE_HORIZONS.forEach((trendHorizon) => {
+          commodityRequests.push(
+            safePrefetch(
+              ["prices", "trend", commodityId, priceTypeKey, trendHorizon, BUNDLE_TREND_RECORDS_LIMIT],
+              async () => {
+                const raw = await parseResponse(await apiGet(
+                  `/prices/${encodeURIComponent(commodityId)}?price_type=${encodeURIComponent(priceTypeKey)}&horizon=${trendHorizon}&records_limit=${BUNDLE_TREND_RECORDS_LIMIT}`
+                ));
+                if (priceTypeKey === BUNDLE_TREND_PRICE_TYPE) {
+                  queryClient.setQueryData(
+                    ["farmer-price-card-trend", commodityId, priceTypeKey, trendHorizon],
+                    raw
+                  );
+                }
+                return raw;
               }
-              return raw;
-            }
-          )
-        );
+            )
+          );
+        });
         ["weekly", "monthly"].forEach((frequency) => {
           commodityRequests.push(
             safePrefetch(
@@ -789,7 +795,9 @@ export function useFarmerOfflineAutosave() {
         timer = undefined;
         if (typeof navigator !== "undefined" && navigator.onLine === false) return;
         if (isFarmerSeeding()) return;
-        if (!hasCompleteOfflineCore(queryClient)) return;
+        // A visited detail query is valuable even when the initial offline
+        // seed was partial. Persist it so a non-preferred top-10 commodity
+        // opened online remains available on the next offline visit.
         persistOfflineQueryCache(queryClient).catch(() => {});
       }, 1500);
     };
