@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { refetchOnMountIfOnline } from "../../global/lib/queryClient";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
@@ -255,6 +255,7 @@ function ProfitCard({ cropPlans, loading }) {
 
 function DashboardPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { t } = useLanguage();
   const { user } = useAuth();
 
@@ -263,6 +264,7 @@ function DashboardPage() {
     queryFn: fetchFarmerProfile,
     enabled: Boolean(user?.id),
     staleTime: 1000 * 60 * 5,
+    initialData: () => queryClient.getQueryData(["dashboard", "prices"]),
     refetchOnMount: refetchOnMountIfOnline("always"),
   });
 

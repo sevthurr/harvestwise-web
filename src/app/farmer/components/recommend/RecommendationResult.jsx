@@ -256,6 +256,17 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
     draftAutosavedRef.current = true;
     const alreadyTracked = Array.isArray(crops) && crops.some((c) => c.commodity === autosaveCommodityId);
     if (alreadyTracked) return;
+    if (!isOnline) {
+      try {
+        localStorage.setItem("harvestwise_assessment_draft", JSON.stringify({
+          ...data,
+          isDraft: true,
+        }));
+      } catch {
+        // ignore storage failures; the advisory remains viewable
+      }
+      return;
+    }
     const payload = buildCropPlanPayload(data);
     delete payload.status;
     (async () => {
@@ -266,7 +277,7 @@ const RecommendationResult = ({ data, advisoryResponse: propAdvisory, onEdit, on
         // noop — never block viewing the advisory
       }
     })();
-  }, [data.commodityId, data.commodity, crops]);
+  }, [data.commodityId, data.commodity, crops, isOnline]);
 
   // Real backend advisory & module results from POST /api/v1/advisory/plan
   const advisoryResponse = propAdvisory || data.advisoryResponse;

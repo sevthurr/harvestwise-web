@@ -32,6 +32,7 @@ import { formatLocalDate, useCrops } from "../components/crops/CropsContext";
 import { PhasePill } from "../components/crops/CropCard";
 import { UpdatePhaseDrawer } from "../components/crops/UpdatePhaseDrawer";
 import { suggestHarvestDate, formatFarmgateSummary, formatHarvestQuantitySummary } from "../components/recommend/types";
+import { cropAdvisoryKey, cropArrivalPressureKey, cropSeasonalProductionKey, cropWeatherRulesKey } from "../../global/hooks/useFarmerPrefetch";
 
 function toDateInputValue(val) {
   if (!val) return "";
@@ -629,7 +630,7 @@ function CropCycleDetailPage() {
   );
 
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
-    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, pDateStr, hDateStr, totalCost, qty, explicitStage],
+    queryKey: cropAdvisoryKey(crop) || ["advisory", "plan", "v2", "disabled", crop.id],
     queryFn: async () => {
       const payload = {
         crop_name: crop.commodityName,
@@ -657,13 +658,13 @@ function CropCycleDetailPage() {
   });
 
   const arrivalFallbackQuery = useQuery({
-    queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
+    queryKey: cropArrivalPressureKey(commodityIdentifier),
     queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
     enabled: Boolean(!canQueryPlan && commodityIdentifier),
     staleTime: 1000 * 60 * 5,
   });
   const productionFallbackQuery = useQuery({
-    queryKey: ["farmer", "seasonal-production", commodityIdentifier, quarterForDate(crop.harvestDate || crop.plantingDate)],
+    queryKey: cropSeasonalProductionKey(commodityIdentifier, quarterForDate(crop.harvestDate || crop.plantingDate)),
     queryFn: () => analyticsApi.getHistoricalSeasonalProduction(
       commodityIdentifier,
       quarterForDate(crop.harvestDate || crop.plantingDate)
@@ -678,7 +679,7 @@ function CropCycleDetailPage() {
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesFallbackQuery = useQuery({
-    queryKey: ["farmer", "weather-rules", commodityIdentifier],
+    queryKey: cropWeatherRulesKey(commodityIdentifier),
     queryFn: () => analyticsApi.listWeatherRules(commodityIdentifier),
     enabled: Boolean(!canQueryPlan && commodityIdentifier),
     staleTime: 1000 * 60 * 30,

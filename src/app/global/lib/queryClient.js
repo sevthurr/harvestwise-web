@@ -1,4 +1,4 @@
-import { QueryClient, hydrate } from "@tanstack/react-query";
+import { QueryClient, hydrate, onlineManager } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { persistQueryClientSave } from "@tanstack/query-persist-client-core";
 import { get, set, del, clear } from "idb-keyval";
@@ -6,6 +6,18 @@ import { get, set, del, clear } from "idb-keyval";
 // Offline-first farming use: match AuthContext's offline session grace so a
 // restored session still has data to show (both expire together).
 const OFFLINE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+
+const initialOnline = typeof navigator === "undefined" || navigator.onLine !== false;
+onlineManager.setOnline(initialOnline);
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => onlineManager.setOnline(true));
+  window.addEventListener("offline", () => onlineManager.setOnline(false));
+}
+
+export function shouldDehydrateQuery(query) {
+  return query.state.status === "success" ||
+    (query.state.status === "error" && query.state.data !== undefined);
+}
 
 /**
  * Never retry a request whose failure is a decision, not a hiccup.
@@ -57,27 +69,24 @@ export const queryClient = new QueryClient({
     // dehydrate filter drops it, so the persisted snapshot loses the prices and
     // the next cold reopen has nothing to hydrate.
     dehydrate: {
-      shouldDehydrateQuery: (query) =>
-        query.state.status === "success" ||
-        (query.state.status === "error" && query.state.data !== undefined),
+      shouldDehydrateQuery,
     },
     queries: {
       staleTime: 1000 * 60 * 30,        // 30 min before data is considered stale
-      gcTime: OFFLINE_TTL_MS,            // keep persisted cache for 30 days
+      // A finite gcTime beyond 2^31-1 ms overflows the platform timer and
+      // instantly collects hydrated offline queries with no mounted observer.
+      // 30-day retention is enforced by persist maxAge / hasPersistedFarmerData.
+      gcTime: Infinity,
       retry: shouldRetry,
       // Exponential backoff with jitter for network/server errors that are
       // worth retrying. The jitter prevents a thundering-herd retry when a
       // server-wide 5xx recovers.
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex + Math.random() * 500, 30000),
-      // The offline layer is the service worker: vite.config.js caches the
-      // farmer-safe read routes under NetworkFirst for 30 days. React Query's default
-      // networkMode ('online') refuses to issue the request at all while the
-      // browser reports offline, so the service worker is never consulted and
-      // its cached response can never be read. 'always' lets the request go
-      // out so the service worker can answer it from cache.
+      // IndexedDB is the offline read layer. Queries must pause while offline
+      // so a failed request cannot replace hydrated data with an error state.
       // Mutations keep the default, so a half-written save is never attempted
       // while offline.
-      networkMode: 'always',
+      networkMode: 'online',
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,           // refresh when farmer comes back online
       refetchOnMount: false,
@@ -113,20 +122,73 @@ queryClient.setQueryDefaults(["farmer", "arrival-pressure"], {
   refetchOnWindowFocus: true,
 });
 
+let persistWriteChain = Promise.resolve();
+
 export const persister = createAsyncStoragePersister({
   storage: {
-    getItem: async (key) => await get(key),
+    getItem: async (key) => {
+      const raw = await get(key);
+      if (!raw) return raw;
+      const persisted = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return JSON.stringify({ ...persisted, clientState: normalizePersistedQueryStates(persisted.clientState) });
+    },
     // A failed offline refetch can produce a smaller dehydrated snapshot than
     // the last successful online seed. Never replace the good IndexedDB copy
     // with that partial snapshot; offline mode is read-only for this cache.
     setItem: async (key, value) => {
       if (!shouldPersistQueryCache()) return;
-      await set(key, value);
+      persistWriteChain = persistWriteChain.catch(() => {}).then(async () => {
+        const incoming = typeof value === "string" ? JSON.parse(value) : value;
+        const existingRaw = await get(key);
+        let existing = existingRaw;
+        try {
+          existing = typeof existingRaw === "string" ? JSON.parse(existingRaw) : existingRaw;
+        } catch {
+          existing = null;
+        }
+        const existingQueries = existing?.clientState?.queries || [];
+        const incomingQueries = incoming?.clientState?.queries || [];
+        const queriesByHash = new Map(existingQueries.map((query) => [query.queryHash, query]));
+        incomingQueries.forEach((query) => {
+          const previous = queriesByHash.get(query.queryHash);
+          if (!previous || query?.state?.data !== undefined || previous?.state?.data === undefined) {
+            queriesByHash.set(query.queryHash, query);
+          }
+        });
+        const merged = {
+          ...incoming,
+          clientState: {
+            ...incoming.clientState,
+            queries: [...queriesByHash.values()],
+          },
+        };
+        await set(key, JSON.stringify(merged));
+      });
+      await persistWriteChain;
     },
     removeItem: async (key) => await del(key),
   },
   key: "HARVESTWISE_FARMER_INDEXEDDB_CACHE_V1",
 });
+
+export function normalizePersistedQueryStates(clientState) {
+  if (!clientState?.queries) return clientState;
+  return {
+    ...clientState,
+    queries: clientState.queries.map((query) => {
+      if (query?.state?.data === undefined || query.state.status !== "error") return query;
+      return {
+        ...query,
+        state: {
+          ...query.state,
+          status: "success",
+          error: null,
+          dataUpdatedAt: query.state.dataUpdatedAt || Date.now(),
+        },
+      };
+    }),
+  };
+}
 
 /**
  * React Query may persist after an offline request settles. That write is not
@@ -174,7 +236,7 @@ export async function restorePersistedFarmerData(client = queryClient) {
     if (!persisted?.clientState || persisted.buster !== "") return false;
     if (persisted.timestamp && Date.now() - persisted.timestamp > OFFLINE_TTL_MS) return false;
 
-    hydrate(client, persisted.clientState);
+    hydrate(client, normalizePersistedQueryStates(persisted.clientState));
     ensureCanonicalPriceList(client);
     return true;
   } catch {
@@ -184,7 +246,11 @@ export async function restorePersistedFarmerData(client = queryClient) {
 
 /** Flush the current query cache before a caller reports offline data ready. */
 export function persistOfflineQueryCache(client = queryClient) {
-  return persistQueryClientSave({ queryClient: client, persister });
+  return persistQueryClientSave({
+    queryClient: client,
+    persister,
+    dehydrateOptions: { shouldDehydrateQuery },
+  });
 }
 
 export async function getStorageHealth() {

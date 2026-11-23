@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCrops } from "../components/crops/CropsContext";
@@ -14,6 +15,7 @@ import { CommodityIllustration } from "../../global/components/shared/CommodityI
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
 import { suggestHarvestDate } from "../components/recommend/types";
+import { cropAdvisoryKey, cropArrivalPressureKey, cropSeasonalProductionKey, cropWeatherRulesKey } from "../../global/hooks/useFarmerPrefetch";
 
 function currentQuarter() {
   return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
@@ -64,7 +66,7 @@ function CropFactorsPage() {
   );
 
   const { data: planAdvisoryData, error: planAdvisoryError } = useQuery({
-    queryKey: ["advisory", "plan", "v2", crop.id, crop.commodityName, plantingDate, harvestDate, updatedTotalCost, qty, explicitStage],
+    queryKey: cropAdvisoryKey(crop) || ["advisory", "plan", "v2", "disabled", crop.id],
     queryFn: async () => {
       const pDate = new Date(crop.plantingDate);
       const hDate = new Date(crop.harvestDate);
@@ -121,13 +123,13 @@ function CropFactorsPage() {
 
   const selectedQuarter = harvestQuarter;
   const arrivalPressureQuery = useQuery({
-    queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
+    queryKey: cropArrivalPressureKey(commodityIdentifier),
     queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
     enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 5,
   });
   const seasonalProductionQuery = useQuery({
-    queryKey: ["farmer", "seasonal-production", commodityIdentifier, selectedQuarter],
+    queryKey: cropSeasonalProductionKey(commodityIdentifier, selectedQuarter),
     queryFn: () => analyticsApi.getHistoricalSeasonalProduction(commodityIdentifier, selectedQuarter),
     enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 30,
@@ -139,7 +141,7 @@ function CropFactorsPage() {
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesQuery = useQuery({
-    queryKey: ["farmer", "weather-rules", commodityIdentifier],
+    queryKey: cropWeatherRulesKey(commodityIdentifier),
     queryFn: () => analyticsApi.listWeatherRules(commodityIdentifier),
     enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 30,
