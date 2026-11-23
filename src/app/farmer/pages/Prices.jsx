@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { refetchOnMountIfOnline } from "../../global/lib/queryClient";
 import {
   RefreshCw,
   ChevronRight,
@@ -18,7 +19,8 @@ import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
-import { fetchFarmerProfile, SUPPORTED_PRICES_KEY } from "../../global/hooks/useFarmerPrefetch";
+import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import { getPreferredCropMatcher } from "../utils/cropPreferences";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { getCategoryFor } from "../../global/data/commodities";
@@ -57,10 +59,9 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
   if (!open) return null;
 
   const chip = (active) =>
-    `px-3.5 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${
-      active
-        ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
-        : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
+    `px-3.5 py-1.5 rounded-full text-[13px] font-medium border transition-colors ${active
+      ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
+      : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
     }`;
 
   const categoryLabelMap = {
@@ -104,11 +105,10 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
                   key={v}
                   type="button"
                   onClick={() => setDraft((d) => ({ ...d, sortBy: v }))}
-                  className={`w-full py-2.5 px-4 rounded-full text-[13px] font-medium border transition-colors text-center ${
-                    draft.sortBy === v
+                  className={`w-full py-2.5 px-4 rounded-full text-[13px] font-medium border transition-colors text-center ${draft.sortBy === v
                       ? "bg-[var(--hw-green-700)] border-[var(--hw-green-700)] text-white"
                       : "bg-white border-[var(--hw-neutral-200)] text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)]"
-                  }`}
+                    }`}
                 >
                   {label}
                 </button>
@@ -203,11 +203,11 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
       {/* Header: icon + name + direction */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <CommodityIllustration 
-            commodityId={commodity.id} 
+          <CommodityIllustration
+            commodityId={commodity.id}
             baseName={commodity.baseName}
             commodityName={commodity.name}
-            className="w-10 h-10 flex-shrink-0" 
+            className="w-10 h-10 flex-shrink-0"
           />
           <div className="flex items-center gap-1.5 min-w-0">
             <p className="font-semibold text-[var(--hw-neutral-900)] text-base truncate">{commodity.name || '–'}</p>
@@ -220,7 +220,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
           {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
           <span className="text-[13px] font-medium">
             {data.trendLoading
-                ? t("farmer.prices.trend_loading", {}, "Loading trend")
+              ? t("farmer.prices.trend_loading", {}, "Loading trend")
               : hasForecast
                 ? t(cfg.key, {}, cfg.label)
                 : outlook}
@@ -313,17 +313,24 @@ function PricesPage() {
     },
     staleTime: 1000 * 60,
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnMount: refetchOnMountIfOnline(true),
+  });
+
+  const { data: dashboardPrices } = useQuery({
+    queryKey: ["dashboard", "prices"],
+    queryFn: () => queryClient.getQueryData(["dashboard", "prices"]),
+    enabled: false,
   });
 
   const { commodities } = useMemo(() => {
-    const offline = typeof navigator !== "undefined" && navigator.onLine === false;
-    const fallbackData = queryClient.getQueryData(["dashboard", "prices"]);
+    const cachedPriceList = queryClient.getQueryData(["prices", "list"]);
     const effectiveData = apiData?.items?.length
       ? apiData
-      : offline && (queryClient.getQueryData(SUPPORTED_PRICES_KEY) || (
-        Array.isArray(fallbackData)
-          ? { items: fallbackData.map((item) => ({
+      : (
+        cachedPriceList?.items?.length
+          ? cachedPriceList
+              : Array.isArray(dashboardPrices)
+                ? { items: dashboardPrices.map((item) => ({
               commodity_id: item.id,
               name: item.name,
               base_name: item.baseName,
@@ -331,8 +338,8 @@ function PricesPage() {
               unit_of_measure: item.uom || "kg",
               prices: { bangkerohan_retail: item.price },
             })) }
-          : null
-      ));
+            : null
+      );
     if (!effectiveData) return { commodities: [] };
 
     const items = effectiveData.items || [];
@@ -417,7 +424,12 @@ function PricesPage() {
     return {
       commodities: Array.from(baseMap.values()),
     };
-  }, [apiData, queryClient]);
+  }, [apiData, dashboardPrices, queryClient]);
+
+  const preferredMatcher = useMemo(
+    () => getPreferredCropMatcher(preferredCrops),
+    [preferredCrops]
+  );
 
   const priceTrendQueries = useQueries({
     queries: commodities.map((commodity) => ({
@@ -425,11 +437,13 @@ function PricesPage() {
       queryFn: () => pricesApi.getPriceDetail(commodity.id, {
         price_type: "bangkerohan_retail",
         horizon: 7,
-        records_limit: 100,
+        records_limit: 30,
       }),
-      enabled: Boolean(commodity.id),
+      // Basic prices are available for every listed crop. Trend/detail data is
+      // intentionally warmed and queried only for the farmer's preferred crops.
+      enabled: Boolean(commodity.id) && preferredMatcher.isPreferred(commodity),
       staleTime: 60 * 1000,
-      refetchOnMount: true,
+      refetchOnMount: refetchOnMountIfOnline(true),
     })),
   });
 
@@ -444,7 +458,7 @@ function PricesPage() {
     ])),
     [commodities, priceTrendQueries],
   );
-  
+
   const activeCount = (filter.direction !== "All" ? 1 : 0)
     + (filter.sortBy !== "name" ? 1 : 0)
     + (filter.category !== "All" ? 1 : 0);
@@ -454,7 +468,7 @@ function PricesPage() {
     commodities.forEach((c) => { if (c.category) set.add(c.category); });
     return [...set].sort();
   }, [commodities]);
-  
+
   const visible = useMemo(() => {
     let list = commodities.map(commodity => {
       const data = commodity.displayData;
@@ -475,12 +489,12 @@ function PricesPage() {
         },
       };
     });
-    
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter((c) => (c.name || '').toLowerCase().includes(q));
     }
-    
+
     if (filter.direction !== "All") {
       list = list.filter((c) => c.displayData.direction === filter.direction);
     }
@@ -488,7 +502,7 @@ function PricesPage() {
     if (filter.category !== "All") {
       list = list.filter((c) => c.category === filter.category);
     }
-    
+
     const secondaryCompare = (a, b) => {
       if (filter.sortBy === "price-low" || filter.sortBy === "price-high") {
         const getPrice = (c) => {
@@ -534,166 +548,166 @@ function PricesPage() {
     "Lowland Vegetables": t("farmer.prices.category_lowland", {}, "Lowland Vegetables"),
     "Spices": t("farmer.prices.category_spices", {}, "Spices"),
   };
-  
+
   return (
     <div className="px-4 md:px-8 lg:px-10 py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-5">
 
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
-              {t("nav.prices", {}, "Prices")}
-            </h1>
-            <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
-              {t("farmer.prices.subtitle", {}, "Check today's price and likely price movement.")}
-            </p>
-          </div>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] md:text-3xl font-bold text-[var(--hw-neutral-900)] leading-tight">
+            {t("nav.prices", {}, "Prices")}
+          </h1>
+          <p className="text-[15px] text-[var(--hw-neutral-900)] mt-0.5">
+            {t("farmer.prices.subtitle", {}, "Check today's price and likely price movement.")}
+          </p>
         </div>
+      </div>
 
-        {/* Search + filter */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-700)] pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              disabled={loading}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("farmer.prices.search_placeholder", {}, "Search commodity…")}
-              className="w-full pl-9 pr-9 py-2.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
-            />
-            {searchQuery && (
+      {/* Search + filter */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--hw-neutral-700)] pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            disabled={loading}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t("farmer.prices.search_placeholder", {}, "Search commodity…")}
+            className="w-full pl-9 pr-9 py-2.5 text-[15px] bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] rounded-xl outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] transition"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)]"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          aria-label="Open filter drawer"
+          onClick={() => setFilterOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)] transition-colors text-[14px] font-medium shadow-[var(--shadow-xs)] flex-shrink-0"
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          {t("common.filter", {}, "Filter")}
+          {activeCount > 0 && (
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--hw-green-700)] text-white text-[10px] font-bold">
+              {activeCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Active filter tags */}
+      {activeCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
+            {t("farmer.prices.active_filters", {}, "Active filters:")}
+          </span>
+          {filter.sortBy !== "name" && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+              {sortLabelMap[filter.sortBy] || filter.sortBy}
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-800)]"
+                onClick={() => setFilter((f) => ({ ...f, sortBy: "name" }))}
+                className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
+                aria-label="Remove sort filter"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
-            )}
-          </div>
+            </span>
+          )}
+          {filter.direction !== "All" && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+              {directionLabelMap[filter.direction] || filter.direction}
+              <button
+                type="button"
+                onClick={() => setFilter((f) => ({ ...f, direction: "All" }))}
+                className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
+                aria-label="Remove direction filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filter.category !== "All" && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
+              {categoryLabelMap[filter.category] || filter.category}
+              <button
+                type="button"
+                onClick={() => setFilter((f) => ({ ...f, category: "All" }))}
+                className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
+                aria-label="Remove category filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
           <button
             type="button"
-            aria-label="Open filter drawer"
-            onClick={() => setFilterOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--hw-neutral-200)] bg-white text-[var(--hw-neutral-900)] hover:bg-[var(--hw-neutral-50)] transition-colors text-[14px] font-medium shadow-[var(--shadow-xs)] flex-shrink-0"
+            onClick={() => setFilter(DEFAULT_FILTER)}
+            className="text-[12px] font-medium text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] underline ml-1 cursor-pointer"
           >
-            <SlidersHorizontal className="w-4 h-4" />
-            {t("common.filter", {}, "Filter")}
-            {activeCount > 0 && (
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--hw-green-700)] text-white text-[10px] font-bold">
-                {activeCount}
-              </span>
-            )}
+            {t("farmer.prices.clear_all", {}, "Clear all")}
           </button>
         </div>
+      )}
 
-        {/* Active filter tags */}
-        {activeCount > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            <span className="text-[12px] font-medium text-[var(--hw-neutral-500)]">
-              {t("farmer.prices.active_filters", {}, "Active filters:")}
-            </span>
-            {filter.sortBy !== "name" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
-                {sortLabelMap[filter.sortBy] || filter.sortBy}
-                <button
-                  type="button"
-                  onClick={() => setFilter((f) => ({ ...f, sortBy: "name" }))}
-                  className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
-                  aria-label="Remove sort filter"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {filter.direction !== "All" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
-                {directionLabelMap[filter.direction] || filter.direction}
-                <button
-                  type="button"
-                  onClick={() => setFilter((f) => ({ ...f, direction: "All" }))}
-                  className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
-                  aria-label="Remove direction filter"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {filter.category !== "All" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium bg-[var(--hw-green-50)] text-[var(--hw-green-800)] border border-[var(--hw-green-200)]">
-                {categoryLabelMap[filter.category] || filter.category}
-                <button
-                  type="button"
-                  onClick={() => setFilter((f) => ({ ...f, category: "All" }))}
-                  className="hover:opacity-75 p-0.5 text-[var(--hw-green-800)]"
-                  aria-label="Remove category filter"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
+      {/* Cards grid */}
+      {loading && visible.length === 0 ? (
+        <SkeletonPriceGrid count={6} />
+      ) : visible.length === 0 ? (
+        searchQuery.trim() ? (
+          <MarketEmptyState query={searchQuery} />
+        ) : activeCount > 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
+              <SlidersHorizontal className="w-8 h-8 text-[var(--hw-neutral-400)]" />
+            </div>
+            <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
+              {t("farmer.emptyStates.no_filter_matches", {}, "No commodities match the selected filter")}
+            </p>
+            <p className="text-sm text-[var(--hw-neutral-500)] mb-4">
+              {t("farmer.emptyStates.try_clearing_filters", {}, "Try adjusting or clearing your filters to see more results.")}
+            </p>
             <button
               type="button"
               onClick={() => setFilter(DEFAULT_FILTER)}
-              className="text-[12px] font-medium text-[var(--hw-neutral-500)] hover:text-[var(--hw-neutral-800)] underline ml-1 cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
             >
-              {t("farmer.prices.clear_all", {}, "Clear all")}
+              {t("farmer.prices.clear_filters", {}, "Clear filters")}
             </button>
           </div>
-        )}
-
-        {/* Cards grid */}
-        {loading ? (
-          <SkeletonPriceGrid count={6} />
-        ) : visible.length === 0 ? (
-          searchQuery.trim() ? (
-            <MarketEmptyState query={searchQuery} />
-          ) : activeCount > 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
-                <SlidersHorizontal className="w-8 h-8 text-[var(--hw-neutral-400)]" />
-              </div>
-              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
-                {t("farmer.emptyStates.no_filter_matches", {}, "No commodities match the selected filter")}
-              </p>
-              <p className="text-sm text-[var(--hw-neutral-500)] mb-4">
-                {t("farmer.emptyStates.try_clearing_filters", {}, "Try adjusting or clearing your filters to see more results.")}
-              </p>
-              <button
-                type="button"
-                onClick={() => setFilter(DEFAULT_FILTER)}
-                className="px-4 py-2 rounded-xl bg-[var(--hw-green-700)] text-white text-sm font-medium hover:bg-[var(--hw-green-800)] transition-colors cursor-pointer"
-              >
-                {t("farmer.prices.clear_filters", {}, "Clear filters")}
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
-                <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
-              </div>
-              <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
-                {t("farmer.emptyStates.no_prices", {}, "No price data available")}
-              </p>
-              <p className="text-sm text-[var(--hw-neutral-700)]">
-                {t("farmer.emptyStates.no_prices_desc", {}, "Price data for top 10 commodities will appear here")}
-              </p>
-            </div>
-          )
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-            {visible.map((c) => (
-              <CropPriceCard
-                key={c.id}
-                commodity={c}
-                data={c.displayData}
-                isPreferred={isPreferredCrop(c, preferredCrops)}
-                onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
-              />
-            ))}
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="w-16 h-16 rounded-full bg-[var(--hw-neutral-100)] flex items-center justify-center mb-4">
+              <RefreshCw className="w-8 h-8 text-[var(--hw-neutral-400)]" />
+            </div>
+            <p className="text-lg font-medium text-[var(--hw-neutral-900)] mb-1">
+              {t("farmer.emptyStates.no_prices", {}, "No price data available")}
+            </p>
+            <p className="text-sm text-[var(--hw-neutral-700)]">
+              {t("farmer.emptyStates.no_prices_desc", {}, "Price data for top 10 commodities will appear here")}
+            </p>
           </div>
-        )}
+        )
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+          {visible.map((c) => (
+            <CropPriceCard
+              key={c.id}
+              commodity={c}
+              data={c.displayData}
+              isPreferred={isPreferredCrop(c, preferredCrops)}
+              onViewDetails={() => navigate(`/farmer/prices/${c.id}`)}
+            />
+          ))}
+        </div>
+      )}
       <PricesFilterDrawer
         open={filterOpen}
         filter={filter}

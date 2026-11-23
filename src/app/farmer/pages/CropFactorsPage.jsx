@@ -13,6 +13,7 @@ import { hasValidAdvisoryDatePair } from "../../global/utils/apiTransforms";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
+import { suggestHarvestDate } from "../components/recommend/types";
 
 function currentQuarter() {
   return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
@@ -34,17 +35,15 @@ function CropFactorsPage() {
   const location = useLocation();
   const state = location.state;
   const { crops } = useCrops();
-  const crop = crops.find((c) => c.id === cropId);
-  if (!crop) {
-    return (
-      <div className="px-4 py-8 text-center space-y-3">
-        <p className="text-[var(--hw-neutral-900)]">{t("farmer.empty.crop_not_found", {}, "Crop not found.")}</p>
-        <button onClick={() => navigate("/farmer/crops")} className="text-sm font-medium text-[var(--hw-green-700)]">
-          {t("farmer.crops.title", {}, "Go to My Crops")}
-        </button>
-      </div>
-    );
-  }
+  // Keep the hook order stable while the crop cache is restoring. The page
+  // renders the not-found state after all hooks below have been called.
+  const crop = crops.find((c) => c.id === cropId) || {
+    id: cropId,
+    commodityName: "",
+    phase: null,
+    totalCost: 0,
+    harvestQuantity: 0,
+  };
 
   const explicitStage = crop?.phase ? (
     crop.phase.toLowerCase().includes("plan") ? "before_planting" :
@@ -99,7 +98,28 @@ function CropFactorsPage() {
   const effectiveModuleResults = state?.moduleResults || planAdvisoryData?.module_results || {};
 
   const commodityIdentifier = crop.commodityId || crop.commodity;
-  const selectedQuarter = state?.selectedQuarter || currentQuarter();
+  const effectivePlantingDate = state?.plantingDate || plantingDate || planAdvisoryData?.planting_date;
+  const effectiveHarvestDate = state?.expectedHarvestDate || harvestDate || planAdvisoryData?.expected_harvest_date;
+
+  const harvestQuarter = useMemo(() => {
+    if (state?.selectedQuarter && ["Q1", "Q2", "Q3", "Q4"].includes(state.selectedQuarter)) {
+      return state.selectedQuarter;
+    }
+    if (effectiveHarvestDate) {
+      return quarterForDate(effectiveHarvestDate);
+    }
+    if (effectivePlantingDate) {
+      const suggestion = suggestHarvestDate(effectivePlantingDate, commodityIdentifier || crop.commodityName);
+      if (suggestion) {
+        const derived = suggestion.maxDate || suggestion.minDate;
+        if (derived) return quarterForDate(derived);
+      }
+      return quarterForDate(effectivePlantingDate);
+    }
+    return currentQuarter();
+  }, [state?.selectedQuarter, effectiveHarvestDate, effectivePlantingDate, commodityIdentifier, crop?.commodityName]);
+
+  const selectedQuarter = harvestQuarter;
   const arrivalPressureQuery = useQuery({
     queryKey: ["farmer", "arrival-pressure", commodityIdentifier],
     queryFn: () => analyticsApi.getArrivalPressure(commodityIdentifier),
@@ -115,6 +135,7 @@ function CropFactorsPage() {
   const weatherForecastQuery = useQuery({
     queryKey: ["farmer", "admin-weather-forecast", 14],
     queryFn: () => analyticsApi.getWeatherForecast(14),
+    enabled: Boolean(crop.commodityName),
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesQuery = useQuery({
@@ -280,6 +301,17 @@ function CropFactorsPage() {
     };
   }
   const StatusIcon = statusConfig.Icon;
+
+  if (!crops.some((c) => c.id === cropId)) {
+    return (
+      <div className="px-4 py-8 text-center space-y-3">
+        <p className="text-[var(--hw-neutral-900)]">{t("farmer.empty.crop_not_found", {}, "Crop not found.")}</p>
+        <button onClick={() => navigate("/farmer/crops")} className="text-sm font-medium text-[var(--hw-green-700)]">
+          {t("farmer.crops.title", {}, "Go to My Crops")}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="px-2 xs:px-3.5 sm:px-6 md:px-8 lg:px-10 py-4 sm:py-5 pb-24 md:pb-8 max-w-[1440px] mx-auto space-y-3 sm:space-y-4">

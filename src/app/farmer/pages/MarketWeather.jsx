@@ -28,8 +28,10 @@ import { useLanguage } from "../../global/contexts/LanguageContext";
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { WeatherLocationBanner } from "../components/shared/WeatherLocationBanner";
 import { WeatherForecastOutlook } from "../../global/components/shared/WeatherForecastOutlook";
+import { refetchOnMountIfOnline } from "../../global/lib/queryClient";
 
 import { CropWeatherCard } from "../components/shared/CropWeatherCard";
+import { getWeatherForecast } from "../../../services/api/analyticsApi";
 
 function _mapWeatherConditionToIcon(condition) {
   if (!condition) return "sun";
@@ -94,22 +96,40 @@ function MarketWeatherPage() {
       return parseResponse(response);
     },
     staleTime: 1000 * 60 * 30,
+    refetchOnMount: refetchOnMountIfOnline(true),
   });
 
-  const loading = (isProfileLoading && !profile) || isWeatherLoading;
+  const advisoryDays = Array.isArray(weatherData)
+    ? weatherData
+    : weatherData?.daily_forecasts || [];
+  const weatherFallbackQuery = useQuery({
+    queryKey: ["farmer", "admin-weather-forecast", 14],
+    queryFn: () => getWeatherForecast(14),
+    enabled: !isWeatherLoading && advisoryDays.length === 0,
+    staleTime: 1000 * 60 * 30,
+    refetchOnMount: refetchOnMountIfOnline(true),
+  });
+
+  const loading =
+    (isProfileLoading && !profile) ||
+    (isWeatherLoading && !weatherData) ||
+    (weatherFallbackQuery.isLoading && advisoryDays.length === 0);
 
   const transformedWeather = useMemo(() => {
-    if (!weatherData) return null;
-    const data = weatherData;
-    const daily = data.daily_forecasts || [];
+    const fallbackData = weatherFallbackQuery.data;
+    const data = weatherData || fallbackData;
+    if (!data) return null;
+    const daily = advisoryDays.length > 0
+      ? advisoryDays
+      : fallbackData?.days || [];
     const forecast14 = daily.map((d, i) => ({
       dayLabel: d.day_label || (i === 0 ? 'Today' : `+${i}d`),
       date: d.date,
       weather_condition: d.weather_condition,
-      rainfall_mm: d.rainfall_mm,
-      tempMin: d.temperature_min != null ? Math.round(d.temperature_min) : null,
-      tempMax: d.temperature_max != null ? Math.round(d.temperature_max) : null,
-      rainPct: d.rain_probability_pct != null ? Math.round(d.rain_probability_pct) : 0,
+      rainfall_mm: d.rainfall_mm ?? d.rainfall,
+      tempMin: (d.temperature_min ?? d.temp_min) != null ? Math.round(d.temperature_min ?? d.temp_min) : null,
+      tempMax: (d.temperature_max ?? d.temp_max) != null ? Math.round(d.temperature_max ?? d.temp_max) : null,
+      rainPct: (d.rain_probability_pct ?? d.rain_pct) != null ? Math.round(d.rain_probability_pct ?? d.rain_pct) : 0,
       suitability: normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.SEVERE
         ? 'Severe'
         : normalizeWeatherSuitability(d.suitability) === WEATHER_SUITABILITY_CODES.CAUTION
@@ -137,7 +157,7 @@ function MarketWeatherPage() {
       })),
       has_crops: (data.advisories || []).length > 0
     };
-  }, [weatherData, t, currentLang]);
+  }, [weatherData, advisoryDays, weatherFallbackQuery.data, t, currentLang]);
 
   const scrollBy = (dir) => carouselRef.current?.scrollBy({ left: dir * 220, behavior: "smooth" });
 
@@ -220,12 +240,14 @@ function MarketWeatherPage() {
         </p>
 
         {/* ── 1. 14-day forecast outlook ── */}
-        <WeatherForecastOutlook
-          title={t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Weather Forecast Outlook"}
-          forecast={forecast14d}
-          showSuitability={false}
-          emptyMessage={t ? t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.") : "No weather details available right now."}
-        />
+        <section className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-3.5 sm:p-4 md:p-5">
+          <WeatherForecastOutlook
+            title={t ? t("farmer.factors.weather.forecast_14day_title") : "14-Day Weather Forecast Outlook"}
+            forecast={forecast14d}
+            showSuitability={true}
+            emptyMessage={t ? t("farmer.factors.weather.empty_forecast", {}, "No weather details available right now.") : "No weather details available right now."}
+          />
+        </section>
 
         {/* ── 3. Crop-specific advisories ── */}
         <section className="space-y-3">

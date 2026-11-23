@@ -7,6 +7,7 @@ import { useAuth } from "../../../global/contexts/AuthContext";
 import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { writeCropPlan } from "../../utils/cropPlanWrite";
 import { suggestHarvestDate } from "../recommend/types";
+import { refetchOnMountIfOnline } from "../../../global/lib/queryClient";
 
 const CropsContext = createContext(null);
 
@@ -349,7 +350,7 @@ const CropsProvider = ({ children }) => {
     // once enabled flips.
     enabled: isFarmerSession,
     staleTime: 1000 * 60 * 30,
-    refetchOnMount: true,
+    refetchOnMount: refetchOnMountIfOnline(true),
   });
 
   const addCrop = useCallback(

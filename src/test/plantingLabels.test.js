@@ -21,6 +21,11 @@ import {
   recommendationSummary,
   toneClasses,
   weatherRiskLabel,
+  localizeRecommendationExplanation,
+  localizePriceOutlookLevel,
+  localizeArrivalPressureLevel,
+  localizeProductionLevel,
+  localizeWeatherRiskLevel,
 } from "../app/farmer/utils/plantingLabels.js";
 
 const tr = (lang) => (key, params = {}) => t(key, params, lang);
@@ -198,5 +203,53 @@ describe("recommendationSummary", () => {
 
   it("keeps an unstructured explanation as a safe fallback", () => {
     expect(recommendationSummary({ explanation: "Custom explanation" }, tr("ceb"))).toBe("Custom explanation");
+  });
+});
+
+describe("localizeRecommendationExplanation", () => {
+  const sampleRec = {
+    price_outlook: "Favorable",
+    arrival_pressure: "Low",
+    historical_seasonal_production_level: "Lower Middle",
+    weather_risk_level: "Caution",
+    explanation:
+      "Price outlook: Favorable; arrival pressure: Low; seasonal production: Lower Middle; weather risk: Caution.",
+  };
+
+  it("localizes the 4-factor sentence into English", () => {
+    const out = localizeRecommendationExplanation(sampleRec, tr("en"));
+    expect(out).toMatch(/Price outlook: Favorable; arrival pressure: Low; seasonal production: (?:Lower Middle|Moderately Low); weather risk: Caution\./);
+  });
+
+  it("localizes the 4-factor sentence into Cebuano", () => {
+    const out = localizeRecommendationExplanation(sampleRec, tr("ceb"));
+    expect(out).toBe(
+      "Pagtana sa presyo: Maayo; presyon sa abot: Ubos; panahonon nga produksyon: Medyo Ubos; peligro sa panahon: Kinahanglan Bantayan."
+    );
+  });
+
+  it("localizes the 4-factor sentence into Tagalog", () => {
+    const out = localizeRecommendationExplanation(sampleRec, tr("tl"));
+    expect(out).toBe(
+      "Pagtingin sa presyo: Maganda; presyon ng abot: Mababa; pana-panahong produksyon: Katamtamang Mababa; panganib sa panahon: Kailangang Bantayan."
+    );
+  });
+
+  it("localizes from raw English string when only explanation string is provided", () => {
+    const str =
+      "Price outlook: Favorable; arrival pressure: Low; seasonal production: Lower Middle; weather risk: Caution.";
+    const outCeb = localizeRecommendationExplanation(str, tr("ceb"));
+    expect(outCeb).toBe(
+      "Pagtana sa presyo: Maayo; presyon sa abot: Ubos; panahonon nga produksyon: Medyo Ubos; peligro sa panahon: Kinahanglan Bantayan."
+    );
+  });
+
+  it("localizes canned phrases like 'Price may rise soon'", () => {
+    expect(localizeRecommendationExplanation("Price may rise soon", tr("ceb"))).toBe(
+      "Posibleng musaka ang presyo sa dili madugay"
+    );
+    expect(localizeRecommendationExplanation("Good estimated profit", tr("ceb"))).toBe(
+      "Maayong gilaomang ginansya"
+    );
   });
 });

@@ -25,6 +25,7 @@ import {
 } from "../../global/hooks/useFarmerPrefetch";
 import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
+import { localizeRecommendationExplanation } from "../utils/plantingLabels";
 
 const ADV_CFG = {
   [ADVISORY_CODES.RECOMMENDED]: {
@@ -130,7 +131,7 @@ function PlantingGuidePage() {
           advisory: advisoryCode,
           profit: "–",
           harvest: camelRec.harvestWindowStart ? formatMonthShort(camelRec.harvestWindowStart) : "–",
-          reason: camelRec.explanation || "–",
+          reason: localizeRecommendationExplanation(camelRec, t) || "–",
           bestVariety: camelRec.bestVarietyName || null,
           note: null
         };

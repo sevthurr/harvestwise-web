@@ -18,7 +18,7 @@
  * the UI, which is worse than showing nothing.
  */
 
-import { formatMonthShort, formatMonthYear, parseLocalDate } from "./formatters";
+import { formatMonthShort, formatMonthYear, parseLocalDate } from "./formatters.js";
 
 /** Server `LocalizedRef.code` -> i18n key. */
 const REF_KEYS = {
@@ -181,4 +181,169 @@ export function recommendationSummary(rec, t) {
     .filter(([field]) => rec[field])
     .map(([field, key]) => t(key, { value: classification(rec[field]) }, `${field}: ${rec[field]}`))
     .join("; ");
+}
+
+/**
+ * Normalizes factor classification text into a standard lowercase token.
+ */
+function normalizeFactorLevel(val) {
+  if (!val) return "";
+  return String(val).toLowerCase().trim().replace(/[-_]/g, " ");
+}
+
+/**
+ * Localizes price outlook level (Favorable, Neutral, Unfavorable).
+ */
+export function localizePriceOutlookLevel(level, t) {
+  const norm = normalizeFactorLevel(level);
+  if (norm === "favorable") {
+    return t("farmer.calendar.factors.price_level_favorable", {}, "Favorable");
+  }
+  if (norm === "neutral") {
+    return t("farmer.calendar.factors.price_level_neutral", {}, "Neutral");
+  }
+  if (norm === "unfavorable") {
+    return t("farmer.calendar.factors.price_level_unfavorable", {}, "Unfavorable");
+  }
+  return level || "";
+}
+
+/**
+ * Localizes arrival pressure level (Low, Lower Middle, Upper Middle, High, Moderate).
+ */
+export function localizeArrivalPressureLevel(level, t) {
+  const norm = normalizeFactorLevel(level);
+  if (norm === "low") {
+    return t("farmer.factors.arrival.level_low", {}, "Low");
+  }
+  if (norm === "lower middle") {
+    return t("farmer.factors.arrival.level_lower_middle", {}, "Lower Middle");
+  }
+  if (norm === "upper middle") {
+    return t("farmer.factors.arrival.level_upper_middle", {}, "Upper Middle");
+  }
+  if (norm === "high") {
+    return t("farmer.factors.arrival.level_high", {}, "High");
+  }
+  if (norm === "moderate") {
+    return t("farmer.cropCycle.supply_moderate", {}, "Moderate");
+  }
+  return level || "";
+}
+
+/**
+ * Localizes seasonal production level (Low, Lower Middle, Upper Middle, High, Moderate).
+ */
+export function localizeProductionLevel(level, t) {
+  const norm = normalizeFactorLevel(level);
+  if (norm === "low") {
+    return t("farmer.factors.production.level_low", {}, "Low");
+  }
+  if (norm === "lower middle") {
+    return t("farmer.factors.production.level_lower_middle", {}, "Lower Middle");
+  }
+  if (norm === "upper middle") {
+    return t("farmer.factors.production.level_upper_middle", {}, "Upper Middle");
+  }
+  if (norm === "high") {
+    return t("farmer.factors.production.level_high", {}, "High");
+  }
+  if (norm === "moderate") {
+    return t("farmer.cropCycle.supply_moderate", {}, "Moderate");
+  }
+  return level || "";
+}
+
+/**
+ * Localizes weather risk level (Suitable, Caution, Severe).
+ */
+export function localizeWeatherRiskLevel(level, t) {
+  const norm = normalizeFactorLevel(level);
+  if (norm === "suitable") {
+    return t("farmer.notifications.risk_favorable", {}, "Suitable");
+  }
+  if (norm === "caution") {
+    return t("farmer.notifications.risk_caution", {}, "Caution");
+  }
+  if (norm === "severe") {
+    return t("farmer.notifications.risk_severe", {}, "Severe");
+  }
+  return level || "";
+}
+
+/**
+ * Fully localizes a monthly recommendation explanation sentence or object.
+ * Reconstructs:
+ *   "Price outlook: Favorable; arrival pressure: Low; seasonal production: Lower Middle; weather risk: Caution."
+ * into the active language using the system's i18n keys.
+ */
+export function localizeRecommendationExplanation(rec, t) {
+  if (!rec) return "";
+
+  // If rec is a string, check for known canned phrases first
+  if (typeof rec === "string") {
+    const raw = rec.trim();
+    if (raw.toLowerCase() === "price may rise soon") {
+      return t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon");
+    }
+    if (raw.toLowerCase() === "good estimated profit") {
+      return t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit");
+    }
+  }
+
+  // Extract factor levels either from object properties or by regex parsing the string
+  const rawExpl = typeof rec === "string" ? rec : (rec.explanation || rec.reason || "");
+  let price = typeof rec === "object" ? (rec.price_outlook || rec.priceOutlook || null) : null;
+  let arrival = typeof rec === "object" ? (rec.arrival_pressure || rec.arrivalPressure || null) : null;
+  let production = typeof rec === "object"
+    ? (rec.historical_seasonal_production_level || rec.production_level || rec.productionLevel || rec.historicalSeasonalProductionLevel || null)
+    : null;
+  let weather = typeof rec === "object" ? (rec.weather_risk_level || rec.weatherRiskLevel || rec.weather_risk || null) : null;
+
+  if (rawExpl) {
+    if (!price) {
+      const m = rawExpl.match(/Price\s+outlook:\s*([^;]+)/i);
+      if (m) price = m[1].trim();
+    }
+    if (!arrival) {
+      const m = rawExpl.match(/arrival\s+pressure:\s*([^;]+)/i);
+      if (m) arrival = m[1].trim();
+    }
+    if (!production) {
+      const m = rawExpl.match(/seasonal\s+production:\s*([^;]+)/i);
+      if (m) production = m[1].trim();
+    }
+    if (!weather) {
+      const m = rawExpl.match(/weather\s+risk:\s*([^.]+)/i);
+      if (m) weather = m[1].trim();
+    }
+  }
+
+  // If we have at least price or arrival or production or weather, construct the localized 4-factor sentence
+  if (price || arrival || production || weather) {
+    const locPrice = localizePriceOutlookLevel(price || "Favorable", t);
+    const locArrival = localizeArrivalPressureLevel(arrival || "Low", t);
+    const locProduction = localizeProductionLevel(production || "Lower Middle", t);
+    const locWeather = localizeWeatherRiskLevel(weather || "Caution", t);
+
+    return t(
+      "farmer.calendar.explanation_summary",
+      {
+        price: locPrice,
+        arrival: locArrival,
+        production: locProduction,
+        weather: locWeather,
+      },
+      `Price outlook: ${locPrice}; arrival pressure: ${locArrival}; seasonal production: ${locProduction}; weather risk: ${locWeather}.`
+    );
+  }
+
+  if (rawExpl && rawExpl.toLowerCase() === "price may rise soon") {
+    return t("farmer.calendar.price_outlook_rise", {}, "Price may rise soon");
+  }
+  if (rawExpl && rawExpl.toLowerCase() === "good estimated profit") {
+    return t("farmer.calendar.price_outlook_profit", {}, "Good estimated profit");
+  }
+
+  return rawExpl;
 }

@@ -34,11 +34,13 @@ export async function fetchDftcStaff() {
   const data = await parseResponse(await apiGet("/dftc/staff"));
   const items = Array.isArray(data) ? data : data?.items ?? [];
   return items.map((staff) => ({
+    id: staff.id,
+    user_id: staff.user_id,
     name: [staff.first_name, staff.middle_name, staff.last_name, staff.suffix]
       .filter(Boolean)
       .join(" ")
       .toUpperCase(),
-    role: staff.position_title || "DFTC Staff",
+    role: staff.position_title || staff.position_name || "DFTC Staff",
   }));
 }
 

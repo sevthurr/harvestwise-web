@@ -5,7 +5,7 @@ import { normalizeCropPlan, buildPricesMap } from "../../farmer/components/crops
 import { DAVAO_CITY_FALLBACK_COORDINATES } from "../constants/location";
 import { toCamelCase, manilaTodayParts, hasValidAdvisoryDatePair } from "../utils/apiTransforms";
 import { getPreferredCropMatcher } from "../../farmer/utils/cropPreferences";
-import { persistOfflineQueryCache } from "../lib/queryClient";
+import { ensureCanonicalPriceList, persistOfflineQueryCache } from "../lib/queryClient";
 
 export const FARMER_PROFILE_KEY = ["farmer", "profile"];
 export const FARMER_COMMODITIES_KEY = ["farmer", "commodities"];
@@ -158,6 +158,13 @@ export function loadFarmerPrices(queryClient) {
     queryKey: ["prices", "list"],
     queryFn: fetchPricesList,
     staleTime: 0,
+  }).then((pricesData) => {
+    // Keep every basic-price consumer backed by the same persisted payload.
+    // The snapshot's price_trends section is optional in local Docker builds,
+    // so the canonical /prices response must also seed these aliases.
+    queryClient.setQueryData(["dashboard", "prices"], transformDashboardPrices(pricesData));
+    queryClient.setQueryData(SUPPORTED_PRICES_KEY, pricesData);
+    return pricesData;
   });
 }
 
@@ -254,10 +261,12 @@ export async function seedFarmerOfflineBundle(queryClient) {
   }
 
   if (Array.isArray(bundle.price_trends)) {
-    queryClient.setQueryData(
-      ["prices", "list"],
-      { items: bundle.price_trends }
-    );
+    const priceList = { items: bundle.price_trends };
+    queryClient.setQueryData(["prices", "list"], priceList);
+    // Detail pages use this catalog key to resolve the selected commodity and
+    // variety. Keep it limited to the same basic rows instead of downloading
+    // the full supported-variety catalog during offline preparation.
+    queryClient.setQueryData(SUPPORTED_PRICES_KEY, priceList);
     queryClient.setQueryData(
       ["dashboard", "prices"],
       transformDashboardPrices({ items: bundle.price_trends })
@@ -267,7 +276,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
   if (Array.isArray(bundle.price_detail)) {
     bundle.price_detail.forEach((entry) => {
       const camel = toCamelCase(entry);
-      if (!camel.commodityId || !camel.selectedPriceType || (preferredMatcher.count > 0 && !preferredMatcher.isPreferred(camel))) return;
+      if (!camel.commodityId || !camel.selectedPriceType || !preferredMatcher.isPreferred(camel)) return;
       // Same transformation the page's queryFn applies, so a bundle hit and a
       // network hit are byte-identical in the cache.
       queryClient.setQueryData(
@@ -288,7 +297,7 @@ export async function seedFarmerOfflineBundle(queryClient) {
       // because CommodityDetail.jsx camelCases inside its own queryFn.
       const commodityId = entry.commodity_id;
       const priceTypeKey = entry.selected_price_type;
-      if (!commodityId || !priceTypeKey || (preferredMatcher.count > 0 && !preferredMatcher.isPreferred(entry))) return;
+      if (!commodityId || !priceTypeKey || !preferredMatcher.isPreferred(entry)) return;
       // Selected price type, not BUNDLE_TREND_PRICE_TYPE: the server builds this
       // section from get_price_detail, which echoes back the type it was asked
       // for, and keying off the echo keeps the two sides from drifting.
@@ -327,6 +336,10 @@ export async function seedFarmerOfflineBundle(queryClient) {
     const lat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
     const lon = profile?.longitude ?? DEFAULT_WEATHER_LON;
     queryClient.setQueryData(weatherAdvisoryKey(lat, lon), bundle.weather_forecast);
+    // The full weather page uses the advisory key, while its fallback uses the
+    // admin forecast key. Keep both backed by the snapshot so either view can
+    // render after a cold offline reload.
+    queryClient.setQueryData(["farmer", "admin-weather-forecast", 14], bundle.weather_forecast);
   }
 
 }
@@ -337,11 +350,12 @@ async function prefetchFarmerPageData(queryClient, bundle) {
 
   const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
   const priceItems = [...(bundle.price_trends || []), ...supportedItems];
+  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
+  const preferredMatcher = getPreferredCropMatcher(
+    profile?.preferred_crops || profile?.preferredCrops || []
+  );
   const preferredPriceIds = [...new Set(priceItems
-    // The offline bundle must cover every commodity reachable from Farmer
-    // routes, not only the farmer's preferred crops. The variable name is
-    // retained for the existing request-building code.
-    .filter(() => true)
+    .filter((item) => preferredMatcher.isPreferred(item))
     .map((item) => item.commodity_id || item.commodityId)
     .filter(Boolean))];
   const cropPlanIds = [...new Set((bundle.crop_plans || [])
@@ -355,9 +369,8 @@ async function prefetchFarmerPageData(queryClient, bundle) {
       ])
       .filter(([id]) => Boolean(id))
   );
-  // A farmer's own crop plans are always eligible for basis prefetching, even
-  // when the crop is not in the farmer's preferred list. The crop factors and
-  // commodity detail pages can open any saved plan offline.
+  // A farmer's own crop plans remain eligible for non-price basis data. Price
+  // detail/trend requests below are still restricted to preferred crops.
   const basisIds = [...new Set([...cropPlanIds, ...preferredPriceIds])];
   const quarters = ["Q1", "Q2", "Q3", "Q4"];
 
@@ -578,18 +591,14 @@ export async function prefetchFarmerOfflineData(queryClient) {
 // time, so a slow analytics endpoint cannot delay the dashboard.
 export async function prefetchFarmerFullData(queryClient) {
   await queryClient.prefetchQuery({
-    queryKey: SUPPORTED_PRICES_KEY,
-    queryFn: fetchSupportedPricesList,
-    staleTime: STALE_TIME,
-  }).catch(() => {});
-  await queryClient.prefetchQuery({
     queryKey: ["marketCalendar", "v2"],
     queryFn: fetchMarketCalendar,
     staleTime: STALE_TIME,
   }).catch(() => {});
 
-  // Keep the fallback path equivalent to the snapshot path for variety-aware
-  // price and basis pages.
+  // Use the already-saved basic catalog. Fetching every supported variety here
+  // made offline preparation wait on a large catalog even though only the
+  // preferred crops need detailed price data.
   const supportedItems = queryClient.getQueryData(SUPPORTED_PRICES_KEY)?.items || [];
   const priceItems = supportedItems.length
     ? supportedItems
@@ -598,6 +607,35 @@ export async function prefetchFarmerFullData(queryClient) {
   await prefetchFarmerPageData(queryClient, {
     crop_plans: queryClient.getQueryData(["farmer", "crops"]) || [],
     price_trends: priceItems,
+  });
+}
+
+function pruneNonPreferredPriceQueries(queryClient) {
+  const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
+  const matcher = getPreferredCropMatcher(
+    profile?.preferred_crops || profile?.preferredCrops || []
+  );
+  const detailedPrefixes = new Set([
+    "prices.detail",
+    "prices.trend",
+    "prices.historicalAvg",
+    "farmer.admin-price-outlook",
+    "farmer-price-card-trend",
+    "price-detail",
+  ]);
+
+  queryClient.removeQueries({
+    predicate: (query) => {
+      const key = query.queryKey || [];
+      const prefix = key[0] === "prices" ? `prices.${key[1]}` : key[0] === "farmer"
+        ? `farmer.${key[1]}`
+        : key[0];
+      if (!detailedPrefixes.has(prefix)) return false;
+      const commodityId = key[0] === "prices" || key[0] === "farmer"
+        ? key[2]
+        : key[1];
+      return !matcher.isPreferred({ commodityId });
+    },
   });
 }
 
@@ -640,28 +678,46 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     // The assessment catalog reads the canonical prices list, not the optional
     // snapshot price_trends section. Refresh it explicitly so Top-10 crops are
     // available after an online login and remain available offline.
-    await loadFarmerPrices(queryClient).catch(() => {});
+    const loadedPrices = await loadFarmerPrices(queryClient).catch(() => null);
+    const existingPrices = queryClient.getQueryData(["prices", "list"]);
+    const fallbackPrices = ensureCanonicalPriceList(queryClient);
+    const basicPrices = loadedPrices || existingPrices || fallbackPrices;
+    if (basicPrices) {
+      // Re-assert the canonical entries after the network query settles. This
+      // keeps the basic price data in the persisted snapshot even when the
+      // optional detail warm-up later fails or is interrupted.
+      queryClient.setQueryData(["prices", "list"], basicPrices);
+      queryClient.setQueryData(["dashboard", "prices"], transformDashboardPrices(basicPrices));
+      queryClient.setQueryData(SUPPORTED_PRICES_KEY, basicPrices);
+    }
+    pruneNonPreferredPriceQueries(queryClient);
     await prefetchFarmerPlanAdvisories(queryClient);
 
-    // These are navigation-critical list pages. They must be persisted before
-    // the sync status becomes ready; leaving them to the idle detail warm-up
-    // lets a farmer go offline immediately after login and see blank pages.
-    await queryClient.prefetchQuery({
-      queryKey: SUPPORTED_PRICES_KEY,
-      queryFn: fetchSupportedPricesList,
-      staleTime: STALE_TIME,
-    }).catch(() => {});
     await queryClient.prefetchQuery({
       queryKey: ["marketCalendar", "v2"],
       queryFn: fetchMarketCalendar,
       staleTime: STALE_TIME,
     }).catch(() => {});
 
+    const profile = queryClient.getQueryData(FARMER_PROFILE_KEY);
+    const weatherLat = profile?.latitude ?? DEFAULT_WEATHER_LAT;
+    const weatherLon = profile?.longitude ?? DEFAULT_WEATHER_LON;
+    await queryClient.prefetchQuery({
+      queryKey: weatherAdvisoryKey(weatherLat, weatherLon),
+      queryFn: () => fetchWeatherAdvisory(weatherLat, weatherLon),
+      staleTime: STALE_TIME,
+    }).catch(() => {});
+
+    // Persist the basic offline shell, including weather, before the optional
+    // preferred-crop detail warm-up. A slow analytics request must not prevent
+    // calendar/weather data from being available after an offline reload.
+    await persistOfflineQueryCache(queryClient);
+
     // Finish the full read-only Farmer bundle before reporting success. This
     // prevents mobile users from going offline while detail-page queries are
     // still waiting in the idle queue.
     await prefetchFarmerFullData(queryClient);
-    await persistOfflineQueryCache();
+    await persistOfflineQueryCache(queryClient);
     lastFarmerOfflineLoadAt = Date.now();
     try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}
   })().finally(() => {

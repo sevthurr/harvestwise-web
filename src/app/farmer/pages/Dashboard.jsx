@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { refetchOnMountIfOnline } from "../../global/lib/queryClient";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { getVariants } from "../../global/data/commodities";
 import { toCamelCase, formatPrice } from "../../global/utils/apiTransforms";
@@ -262,7 +263,7 @@ function DashboardPage() {
     queryFn: fetchFarmerProfile,
     enabled: Boolean(user?.id),
     staleTime: 1000 * 60 * 5,
-    refetchOnMount: "always",
+    refetchOnMount: refetchOnMountIfOnline("always"),
   });
 
   const { crops: allCropPlans = [], loading: cropsLoading } = useCrops();
@@ -314,7 +315,7 @@ function DashboardPage() {
       return itemsList;
     },
     staleTime: 1000 * 60 * 5,
-    refetchOnMount: "always",
+    refetchOnMount: refetchOnMountIfOnline("always"),
     refetchOnWindowFocus: true,
   });
 
@@ -339,18 +340,21 @@ function DashboardPage() {
       queryFn: () => pricesApi.getPriceDetail(item.id, {
         price_type: item.priceType || "bangkerohan_retail",
         horizon: 7,
-        records_limit: 100,
+        records_limit: 30,
       }),
-      enabled: Boolean(item.id),
+      // The summary price list covers every crop; chart history is only
+      // needed offline for the farmer's preferred crops.
+      enabled: Boolean(item.id) && preferredCropIds.has(item.id),
       staleTime: 60 * 1000,
-      refetchOnMount: "always",
+      refetchOnMount: refetchOnMountIfOnline("always"),
       refetchOnWindowFocus: true,
     })),
   });
   const isLoading = profileQuery.isLoading || cropsLoading || pricesQuery.isLoading;
+  const isPricesLoading = pricesQuery.isLoading;
 
   // Re-measured whenever the list content or the page loading state changes.
-  const [pricesListRef, pricesScrollable] = useOverflowHint(`${prices.length}:${isLoading}`);
+  const [pricesListRef, pricesScrollable] = useOverflowHint(`${prices.length}:${isPricesLoading}`);
 
   const sortedCropPlans = useMemo(() => {
     return sortWithPreferredFirst(cropPlans, preferredCrops);
@@ -436,7 +440,7 @@ function DashboardPage() {
               </button>
             </div>
             <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] flex-1 flex flex-col min-h-0 overflow-hidden">
-              {isLoading ? (
+              {isPricesLoading ? (
                 <div className="divide-y divide-[var(--hw-neutral-100)]">
                   <SkeletonListRow />
                   <SkeletonListRow />
@@ -566,7 +570,7 @@ function DashboardPage() {
             </button>
           </div>
           <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)]">
-            {isLoading ? (
+            {cropsLoading ? (
               <div className="divide-y divide-[var(--hw-neutral-100)]">
                 <SkeletonListRow />
                 <SkeletonListRow />

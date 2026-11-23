@@ -12,6 +12,7 @@ import { fetchPricesList, STALE_TIME } from "../../global/hooks/useFarmerPrefetc
 import { CheckCircle2, AlertCircle, XCircle, ChevronLeft } from "lucide-react";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { ADVISORY_CODES, normalizeAdvisoryCode } from "../utils/farmerCodes";
+import { suggestHarvestDate } from "../components/recommend/types";
 
 function currentQuarter() {
   return `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
@@ -66,7 +67,41 @@ function FactorDetailPage() {
     (commodityId && !commodityId.startsWith("COM-") ? (commodityId.charAt(0).toUpperCase() + commodityId.slice(1)) : null) ||
     t("farmer.common.unspecified_crop", {}, "Tanom");
 
-  const selectedQuarter = state?.selectedQuarter || currentQuarter();
+  const plantingDate =
+    state?.plantingDate ||
+    state?.planting_date ||
+    state?.resultData?.plantingDate ||
+    state?.resultData?.planting_date ||
+    state?.advisoryPayload?.planting_date ||
+    null;
+
+  const expectedHarvestDate =
+    state?.expectedHarvestDate ||
+    state?.expected_harvest_date ||
+    state?.resultData?.harvestDate ||
+    state?.resultData?.expectedHarvestDate ||
+    state?.resultData?.expected_harvest_date ||
+    state?.advisoryPayload?.expected_harvest_date ||
+    null;
+
+  const selectedQuarter = useMemo(() => {
+    if (state?.selectedQuarter && ["Q1", "Q2", "Q3", "Q4"].includes(state.selectedQuarter)) {
+      return state.selectedQuarter;
+    }
+    const explicitHarvest = expectedHarvestDate;
+    if (explicitHarvest) {
+      return quarterForDate(explicitHarvest);
+    }
+    if (plantingDate) {
+      const suggestion = suggestHarvestDate(plantingDate, commodityId || commodityName);
+      if (suggestion) {
+        const derived = suggestion.maxDate || suggestion.minDate;
+        if (derived) return quarterForDate(derived);
+      }
+      return quarterForDate(plantingDate);
+    }
+    return currentQuarter();
+  }, [state?.selectedQuarter, expectedHarvestDate, plantingDate, commodityId, commodityName]);
 
   const resolvedCommodityId = useMemo(() => {
     if (!commodityId) return null;
@@ -90,23 +125,6 @@ function FactorDetailPage() {
     state?.resultData?.phase ||
     state?.resultData?.stage ||
     (isAssessmentRoute ? "before_planting" : null);
-
-  const plantingDate =
-    state?.plantingDate ||
-    state?.planting_date ||
-    state?.resultData?.plantingDate ||
-    state?.resultData?.planting_date ||
-    state?.advisoryPayload?.planting_date ||
-    null;
-
-  const expectedHarvestDate =
-    state?.expectedHarvestDate ||
-    state?.expected_harvest_date ||
-    state?.resultData?.harvestDate ||
-    state?.resultData?.expectedHarvestDate ||
-    state?.resultData?.expected_harvest_date ||
-    state?.advisoryPayload?.expected_harvest_date ||
-    null;
 
   const plantingSeason =
     state?.plantingSeason ||

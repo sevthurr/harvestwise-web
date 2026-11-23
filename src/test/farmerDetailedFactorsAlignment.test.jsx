@@ -101,7 +101,7 @@ describe("Farmer detailed factors use Admin analytics data", () => {
       "#f59e0b",
     ]);
     expect(chart).toHaveAttribute("data-average", "120");
-    expect(screen.getByText("Latest arrival")).toBeInTheDocument();
+    expect(screen.getByText("ARRIVAL ASSESSMENT")).toBeInTheDocument();
     expect(screen.getByText("180 kg")).toBeInTheDocument();
   });
 
@@ -131,6 +131,36 @@ describe("Farmer detailed factors use Admin analytics data", () => {
       { year: "Q2", Q2: 150 },
       { year: "Q3", Q3: 100 },
     ]);
+  });
+
+  it("automatically selects the quarter on which the expected harvest window falls", () => {
+    const quarterlyProfiles = [
+      { quarter: "Q1", average_production_mt: 75, classification: "Low", years_available: 5 },
+      { quarter: "Q2", average_production_mt: 150, classification: "High", years_available: 5 },
+      { quarter: "Q3", average_production_mt: 100, classification: "Upper Middle", years_available: 5 },
+      { quarter: "Q4", average_production_mt: 90, classification: "Lower Middle", years_available: 5 },
+    ];
+
+    render(
+      <FactorDetailTabs
+        defaultTab="production"
+        plantingDate="2025-11-12"
+        expectedHarvestDate="2026-01-06"
+        production={{
+          grandAverageQuarterlyMt: 100,
+          quarterlyProfiles,
+        }}
+      />
+    );
+
+    const q1Button = screen.getByRole("button", { name: "Q1" });
+    expect(q1Button).toHaveAttribute("aria-pressed", "true");
+
+    const q2Button = screen.getByRole("button", { name: "Q2" });
+    expect(q2Button).toHaveAttribute("aria-pressed", "false");
+
+    expect(screen.getByText("Low Production Season")).toBeInTheDocument();
+    expect(screen.getByText("75 MT")).toBeInTheDocument();
   });
 
   it("shows the production empty state instead of a fabricated zero-scale chart", () => {
@@ -362,9 +392,9 @@ describe("Farmer detailed factors use Admin analytics data", () => {
       </QueryClientProvider>
     );
 
-    expect(await screen.findByText("Current Observed Market Price")).toBeInTheDocument();
-    expect(screen.getByText("Seven-Day Moving Spot Average")).toBeInTheDocument();
-    expect(screen.getByText("Observed Market")).toBeInTheDocument();
+    expect(await screen.findByText("Current Market Price")).toBeInTheDocument();
+    expect(screen.getByText("Recent Average Price")).toBeInTheDocument();
+    expect(screen.getByText("Market Position")).toBeInTheDocument();
     expect(screen.getByText("Stage 4: Harvest")).toBeInTheDocument();
   });
 
@@ -460,8 +490,8 @@ describe("Farmer detailed factors use Admin analytics data", () => {
     );
 
     // Both panels must be visible
-    expect(await screen.findByText("Forecast Information (Primary Basis)")).toBeInTheDocument();
-    expect(screen.getByText("Historical Seasonal Information")).toBeInTheDocument();
+    expect(await screen.findByText("Forecast Outlook (Assessment B)")).toBeInTheDocument();
+    expect(screen.getByText("Historical Outlook (Assessment A)")).toBeInTheDocument();
     expect(screen.queryByText("Dual Assessment")).not.toBeInTheDocument();
     expect(screen.queryByText("Forecast Eligible")).not.toBeInTheDocument();
 

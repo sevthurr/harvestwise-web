@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { refetchOnMountIfOnline } from "../../global/lib/queryClient";
 import {
   ChevronLeft,
   ChevronRight,
@@ -140,7 +141,7 @@ function MarketCalendarPage() {
     // Read the pre-v2 key written by older app versions while the persisted
     // query cache migrates to the canonical key.
     initialData: () => queryClient.getQueryData(["marketCalendar"]),
-    refetchOnMount: true,
+    refetchOnMount: refetchOnMountIfOnline(true),
   });
 
   // Use normalized farmer crop plans

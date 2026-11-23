@@ -537,14 +537,6 @@ function ForecastPriceTrendChart({
                   stroke="#9ca3af"
                   strokeDasharray="4 4"
                   strokeWidth={1.5}
-                  label={{
-                    value: forecastBoundaryLabel,
-                    position: "top",
-                    fill: "#000000",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    offset: 6,
-                  }}
                 />
               )}
             </>

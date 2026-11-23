@@ -24,13 +24,16 @@ import {
   AlertTriangle,
   AlertOctagon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown
 } from "lucide-react";
 import { PriceDetailView } from "./PriceDetailView";
 import { ArrivalVolumeTrendChart } from "../../../global/components/shared/ArrivalVolumeTrendChart";
 import { ProductionSourcePieChart } from "../../../global/components/shared/ProductionSourcePieChart";
 import { ArrivalSourcePieChart } from "../../../global/components/shared/ArrivalSourcePieChart";
 import { CostBreakdownPieChart } from "../../../global/components/shared/CostBreakdownPieChart";
+import { suggestHarvestDate } from "../recommend/types";
+import { bucketArrivals } from "../../../admin/components/analytics/arrivalVolumeSeries";
 import {
   PRICE_TREND_CODES,
   WEATHER_SUITABILITY_CODES,
@@ -41,6 +44,32 @@ import { useLanguage } from "../../../global/contexts/LanguageContext";
 import { WeatherLocationBanner } from "./WeatherLocationBanner";
 import { WeatherForecastOutlook } from "../../../global/components/shared/WeatherForecastOutlook";
 import { CropWeatherCard } from "./CropWeatherCard";
+
+function computeQuartilesFromRecords(records) {
+  if (!records || records.length === 0) return null;
+  const values = records
+    .map((r) => {
+      const v = r.volume_kg != null ? r.volume_kg : r.volumeKg != null ? r.volumeKg : r.volume;
+      return v != null ? Number(v) : NaN;
+    })
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b);
+  if (values.length === 0) return null;
+  const n = values.length;
+  const getPercentile = (p) => {
+    const pos = (p / 100) * (n + 1);
+    if (pos <= 1) return values[0];
+    if (pos >= n) return values[n - 1];
+    const lowerIdx = Math.floor(pos) - 1;
+    const fraction = pos - Math.floor(pos);
+    return values[lowerIdx] + fraction * (values[lowerIdx + 1] - values[lowerIdx]);
+  };
+  return {
+    q1: getPercentile(25),
+    q2: getPercentile(50),
+    q3: getPercentile(75),
+  };
+}
 
 function buildPricePoints(actualData, currentPrice, direction, forecastLow, forecastHigh, days = 7) {
   const forecastMid = (forecastLow + forecastHigh) / 2;
@@ -313,6 +342,7 @@ const PriceTab = ({
   plantingWindowEnd,
   plantingWindowLabel,
 }) => {
+  const { t } = useLanguage();
   return (
     <PriceDetailView
       commodityId={commodityId}
@@ -331,6 +361,34 @@ const PriceTab = ({
 };
 
 
+function parseDateOnly(val) {
+  if (val == null || typeof val === "number") return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  const s = String(val).trim().split("T")[0];
+  const parts = s.split("-");
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d) && y >= 1900) {
+      return new Date(y, m, d);
+    }
+  } else if (parts.length === 2) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    if (!isNaN(y) && !isNaN(m) && y >= 1900) {
+      return new Date(y, m, 1);
+    }
+  }
+  const parsed = new Date(val);
+  return isNaN(parsed.getTime()) || parsed.getFullYear() < 1900 ? null : parsed;
+}
+
+const MONTH_KEYS = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december"
+];
+
 const ArrivalTab = ({
   data,
   commodityId,
@@ -345,12 +403,73 @@ const ArrivalTab = ({
   plantingWindowLabel,
 }) => {
   const { t } = useLanguage();
+  const [frequency, setFrequency] = useState("monthly");
+  const [selectedYear, setSelectedYear] = useState("all");
   const farmSourceLabel = t("farmer.cropCycle.farm_source", {}, "Farm source");
   const otherSourcesLabel = t("farmer.cropCycle.other_sources", {}, "Other sources");
+
+  const availableYears = useMemo(() => {
+    if (!data?.records || data.records.length === 0) return [];
+    const years = new Set();
+    data.records.forEach((r) => {
+      const d = parseDateOnly(r.arrival_date);
+      if (d) years.add(d.getFullYear());
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [data?.records]);
+
+  // Determine expected harvest date (from explicit prop, module results, or crop maturity duration)
+  const harvestDateObj = useMemo(() => {
+    const explicitHarvest = expectedHarvestDate || moduleResults?.expected_harvest_date;
+    const rawStart = plantingDate || plantingWindowStart;
+    let derivedHarvest = null;
+    if (!explicitHarvest && rawStart) {
+      const suggestion = suggestHarvestDate(rawStart, commodityId || commodityName);
+      if (suggestion) {
+        derivedHarvest = suggestion.maxDate || suggestion.minDate;
+      }
+    }
+    const harvestDateStr = explicitHarvest || derivedHarvest;
+    return harvestDateStr ? parseDateOnly(harvestDateStr) : null;
+  }, [expectedHarvestDate, moduleResults?.expected_harvest_date, plantingDate, plantingWindowStart, commodityId, commodityName]);
+
+  const harvestPeriodLabel = useMemo(() => {
+    if (!harvestDateObj) return null;
+    const m = harvestDateObj.getMonth();
+    const y = harvestDateObj.getFullYear();
+    const enName = harvestDateObj.toLocaleDateString("en-US", { month: "long" });
+    const locMonth = t(`farmer.calendar.${MONTH_KEYS[m]}`, {}, enName);
+    return `${locMonth} ${y}`;
+  }, [harvestDateObj, t]);
+
   const realChartData = useMemo(() => {
     if (!data?.records || data.records.length === 0) return null;
-    return [...data.records]
-      .filter((record) => record.arrival_date && record.volume_kg != null)
+    let validRecords = data.records.filter((r) => r.arrival_date && r.volume_kg != null);
+    if (validRecords.length === 0) return null;
+
+    if (selectedYear !== "all") {
+      const targetYearNum = Number(selectedYear);
+      validRecords = validRecords.filter((r) => {
+        const d = parseDateOnly(r.arrival_date);
+        return d && d.getFullYear() === targetYearNum;
+      });
+      if (validRecords.length === 0) return null;
+    }
+
+    if (frequency === "weekly") {
+      const buckets = bucketArrivals(validRecords, { granularity: "weekly" });
+      if (buckets && buckets.length > 0) {
+        return buckets.map((b) => ({
+          month: b.period,
+          Volume: Number(b.total_kg),
+          [farmSourceLabel]: b.farm_kg > 0 ? Number(b.farm_kg) : null,
+          [otherSourcesLabel]: b.other_kg > 0 ? Number(b.other_kg) : null,
+        }));
+      }
+    }
+
+    // Default: return records sorted by arrival_date
+    return [...validRecords]
       .sort((a, b) => a.arrival_date.localeCompare(b.arrival_date))
       .map((record) => ({
         month: record.arrival_date,
@@ -362,7 +481,7 @@ const ArrivalTab = ({
           ? Number(record.other_source_volume_kg)
           : null,
       }));
-  }, [data?.records, farmSourceLabel, otherSourcesLabel]);
+  }, [data?.records, frequency, selectedYear, farmSourceLabel, otherSourcesLabel]);
 
   const showRealChart = Boolean(realChartData && realChartData.length > 0);
   const arrivalSeries = [
@@ -374,44 +493,162 @@ const ArrivalTab = ({
       ? [{ key: otherSourcesLabel, color: "#f59e0b" }]
       : []),
   ];
-  const normPressure = normalizeArrivalPressure(data?.arrivalPressure || data?.trend);
+  // Harvest Window Arrival Assessment using existing stored quartile thresholds or dynamically calculated from records
+  const arrivalAssessment = useMemo(() => {
+    let storedThresholds =
+      data?.quartileThresholds ||
+      moduleResults?.quartile_thresholds ||
+      moduleResults?.quartiles ||
+      null;
+
+    if (
+      (!storedThresholds || storedThresholds.q1 == null) &&
+      data?.records &&
+      data.records.length > 0
+    ) {
+      storedThresholds = computeQuartilesFromRecords(data.records);
+    }
+
+    let harvestArrivalVal = null;
+    if (harvestDateObj && data?.records && data.records.length > 0) {
+      const hMonth = harvestDateObj.getMonth();
+      const hYear = harvestDateObj.getFullYear();
+      const validRecords = data.records.filter((r) => r.arrival_date && r.volume_kg != null);
+
+      const exactMatches = validRecords.filter((r) => {
+        const d = parseDateOnly(r.arrival_date);
+        return d && d.getFullYear() === hYear && d.getMonth() === hMonth;
+      });
+
+      if (exactMatches.length > 0) {
+        harvestArrivalVal = exactMatches.reduce((sum, r) => sum + Number(r.volume_kg), 0) / exactMatches.length;
+      } else {
+        const monthMatches = validRecords.filter((r) => {
+          const d = parseDateOnly(r.arrival_date);
+          return d && d.getMonth() === hMonth;
+        });
+        if (monthMatches.length > 0) {
+          harvestArrivalVal = monthMatches.reduce((sum, r) => sum + Number(r.volume_kg), 0) / monthMatches.length;
+        }
+      }
+    }
+
+    if (harvestArrivalVal == null) {
+      harvestArrivalVal = data?.currentVolumeKg != null
+        ? Number(data.currentVolumeKg)
+        : data?.averageArrivalKg != null
+        ? Number(data.averageArrivalKg)
+        : moduleResults?.current_arrival_kg != null
+        ? Number(moduleResults.current_arrival_kg)
+        : null;
+    }
+
+    if (!storedThresholds || storedThresholds.q1 == null) {
+      const fallbackClassification = moduleResults?.arrival_pressure || null;
+      if (fallbackClassification) {
+        const norm = String(fallbackClassification).toLowerCase();
+        let code = "low";
+        let range = "< Q1";
+        let intKey = "farmer.factors.arrival.assessment_interpretation_low";
+        let defInt = "Historical arrivals during this harvest period fall below the first quartile. This period typically experiences relatively lower market supply.";
+        if (norm.includes("high")) {
+          code = "high";
+          range = "≥ Q3";
+          intKey = "farmer.factors.arrival.assessment_interpretation_high";
+          defInt = "Historical arrivals during this harvest period exceed Q3. This period typically experiences the highest levels of market supply and competition.";
+        } else if (norm.includes("upper")) {
+          code = "upper_middle";
+          range = "Q2 – Q3";
+          intKey = "farmer.factors.arrival.assessment_interpretation_upper_middle";
+          defInt = "Historical arrivals during this harvest period fall between Q2 and Q3. This period typically experiences above-average market supply.";
+        } else if (norm.includes("lower")) {
+          code = "lower_middle";
+          range = "Q1 – Q2";
+          intKey = "farmer.factors.arrival.assessment_interpretation_lower_middle";
+          defInt = "Historical arrivals during this harvest period fall between Q1 and Q2. This period typically experiences below-average market supply.";
+        }
+        return {
+          expectedHarvest: harvestPeriodLabel || "—",
+          classification: t(`farmer.factors.arrival.level_${code}`, {}, fallbackClassification),
+          classificationCode: code,
+          range,
+          interpretation: t(intKey, {}, defInt),
+          harvestVolume: harvestArrivalVal,
+          isWithheld: false,
+          thresholds: null,
+        };
+      }
+
+      return {
+        expectedHarvest: harvestPeriodLabel || "—",
+        classification: "—",
+        classificationCode: null,
+        range: "—",
+        interpretation: t(
+          "farmer.empty.no_arrival_data",
+          {},
+          "DFTC arrival information is not available right now."
+        ),
+        harvestVolume: harvestArrivalVal,
+        isWithheld: false,
+        thresholds: null,
+      };
+    }
+
+    const q1 = Number(storedThresholds.q1);
+    const q2 = Number(storedThresholds.q2);
+    const q3 = Number(storedThresholds.q3);
+    const val = harvestArrivalVal != null ? harvestArrivalVal : q2;
+
+    let code = "low";
+    let classificationLabel = t("farmer.factors.arrival.level_low", {}, "Low");
+    let range = "< Q1";
+    let interpretationKey = "farmer.factors.arrival.assessment_interpretation_low";
+    let defaultInterpretation = "Historical arrivals during this harvest period fall below the first quartile. This period typically experiences relatively lower market supply.";
+
+    if (val >= q3) {
+      code = "high";
+      classificationLabel = t("farmer.factors.arrival.level_high", {}, "High");
+      range = "≥ Q3";
+      interpretationKey = "farmer.factors.arrival.assessment_interpretation_high";
+      defaultInterpretation = "Historical arrivals during this harvest period exceed Q3. This period typically experiences the highest levels of market supply and competition.";
+    } else if (val >= q2) {
+      code = "upper_middle";
+      classificationLabel = t("farmer.factors.arrival.level_upper_middle", {}, "Upper Middle");
+      range = "Q2 – Q3";
+      interpretationKey = "farmer.factors.arrival.assessment_interpretation_upper_middle";
+      defaultInterpretation = "Historical arrivals during this harvest period fall between Q2 and Q3. This period typically experiences above-average market supply.";
+    } else if (val >= q1) {
+      code = "lower_middle";
+      classificationLabel = t("farmer.factors.arrival.level_lower_middle", {}, "Lower Middle");
+      range = "Q1 – Q2";
+      interpretationKey = "farmer.factors.arrival.assessment_interpretation_lower_middle";
+      defaultInterpretation = "Historical arrivals during this harvest period fall between Q1 and Q2. This period typically experiences below-average market supply.";
+    }
+
+    return {
+      expectedHarvest: harvestPeriodLabel || "—",
+      classification: classificationLabel,
+      classificationCode: code,
+      range,
+      interpretation: t(interpretationKey, {}, defaultInterpretation),
+      harvestVolume: harvestArrivalVal,
+      isWithheld: false,
+      thresholds: { q1, q2, q3 },
+    };
+  }, [data, moduleResults, harvestDateObj, harvestPeriodLabel, t]);
+
+  const normPressure = normalizeArrivalPressure(
+    arrivalAssessment?.classificationCode || data?.arrivalPressure || data?.trend || moduleResults?.arrival_pressure
+  );
   const banner = normPressure ? ARRIVAL_PRESSURE_CFG[normPressure] : null;
   const BannerIcon = banner?.Icon;
-  const hasData = Boolean(normPressure || showRealChart);
-  const arrivalExplanation = useMemo(() => {
-    const rawText = data?.summary || data?.message || "";
-    const match = rawText.match(/Only (\d+) arrival record/i);
-    const count = match ? match[1] : (data?.records?.length || 0);
-    const isQuartileWithheld = Boolean(match) || rawText.toLowerCase().includes("calculate quartiles") || rawText.toLowerCase().includes("withheld");
+  const hasData = Boolean(normPressure || showRealChart || (data?.records && data.records.length > 0));
 
-    if (isQuartileWithheld) {
-      return t(
-        "farmer.factors.arrival.insufficient_records_explanation",
-        { count },
-        `Aduna pay ${count} ka record sa arrival nga natala sa DFTC. Kinahanglan og labing menos 4 ka record aron makalkula ang average level. Gipakita gihapon ang volume sa ubos apan wala pay opisyal nga classification karon.`
-      );
-    }
-
-    if (data?.currentVolumeKg != null && data?.averageArrivalKg != null) {
-      return t(
-        "farmer.factors.arrival.processed_summary",
-        { current: data.currentVolumeKg.toLocaleString(), average: data.averageArrivalKg.toLocaleString() },
-        `Ang pinakabag-ong natala nga arrival volume kay ${data.currentVolumeKg.toLocaleString()} kg; samtang ang historical average sa miaging mga adlaw kay ${data.averageArrivalKg.toLocaleString()} kg.`
-      );
-    }
-
-    if (banner) {
-      return t(banner.descKey, {}, banner.fallbackDesc);
-    }
-
-    return rawText || t("farmer.empty.no_arrival_data", {}, "DFTC arrival information is not available right now.");
-  }, [data, banner, t]);
-  const currentVolume = data?.currentVolumeKg != null && Number.isFinite(Number(data.currentVolumeKg))
-    ? Number(data.currentVolumeKg)
-    : null;
   const averageVolume = data?.averageArrivalKg != null && Number.isFinite(Number(data.averageArrivalKg))
     ? Number(data.averageArrivalKg)
     : null;
+
   const sourceBreakdown = [
     { name: t("farmer.cropCycle.farm_source", {}, "Farm source"), volumeKg: Number(data?.sourceBreakdown?.farm_source_volume_kg) || 0 },
     { name: t("farmer.cropCycle.other_sources", {}, "Other sources"), volumeKg: Number(data?.sourceBreakdown?.other_source_volume_kg) || 0 },
@@ -424,6 +661,25 @@ const ArrivalTab = ({
     }
     return t("farmer.factors.arrival.chart_subtitle_actual", {}, "Actual arrivals · kg");
   }, [data?.dataIsStale, t]);
+
+  const classificationTextClass = useMemo(() => {
+    if (!arrivalAssessment?.classificationCode) return "text-black";
+    if (arrivalAssessment.classificationCode === "high") return "text-[#dc2626]";
+    if (arrivalAssessment.classificationCode === "upper_middle") return "text-[#ea580c]";
+    if (arrivalAssessment.classificationCode === "lower_middle") return "text-[#eab308]";
+    return "text-[#16a34a]";
+  }, [arrivalAssessment?.classificationCode]);
+
+  const arrivalExplanation = useMemo(() => {
+    if (arrivalAssessment.interpretation) {
+      return arrivalAssessment.interpretation;
+    }
+    const rawText = data?.summary || data?.message || "";
+    if (banner) {
+      return t(banner.descKey, {}, banner.fallbackDesc);
+    }
+    return rawText || t("farmer.empty.no_arrival_data", {}, "DFTC arrival information is not available right now.");
+  }, [arrivalAssessment.interpretation, data, banner, t]);
 
   if (!hasData) {
     return (
@@ -451,14 +707,61 @@ const ArrivalTab = ({
 
       {showRealChart && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
-          <div>
-            <p className="text-[13px] font-bold text-black">
-              {commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
-            </p>
-            <p className="text-[12px] text-black mt-0.5">
-              {chartSubtitle}
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-[var(--hw-neutral-100)]">
+            <div>
+              <p className="text-[13px] font-bold text-black">
+                {commodityName} · {t("farmer.factors.arrival.arrival_volume_trend_title", {}, "Arrival Volume Trend")}
+              </p>
+              <p className="text-[12px] text-black mt-0.5">
+                {chartSubtitle}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 self-start sm:self-auto shrink-0 pt-0.5 sm:pt-0">
+              {availableYears.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[12px] font-semibold text-black whitespace-nowrap">
+                    {t("farmer.factors.arrival.filter_year_label", {}, "Year")}:
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      className="h-8 pl-3 pr-8 text-[12px] font-semibold text-black bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer transition-colors appearance-none"
+                    >
+                      <option value="all">{t("farmer.factors.arrival.filter_all_years", {}, "All Years")}</option>
+                      {availableYears.map((yr) => (
+                        <option key={yr} value={yr}>
+                          {yr}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-black pointer-events-none" />
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5">
+                <label className="text-[12px] font-semibold text-black whitespace-nowrap">
+                  {t("farmer.factors.price.historical_avg_frequency", {}, "Frequency")}:
+                </label>
+                <div className="relative">
+                  <select
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value)}
+                    className="h-8 pl-3 pr-8 text-[12px] font-semibold text-black bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer transition-colors appearance-none"
+                  >
+                    <option value="monthly">{t("farmer.factors.price.historical_avg_monthly", {}, "Monthly")}</option>
+                    <option value="weekly">{t("farmer.factors.price.historical_avg_weekly", {}, "Weekly")}</option>
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-black pointer-events-none" />
+                </div>
+              </div>
+            </div>
           </div>
+          {harvestPeriodLabel && (
+            <p className="text-[12px] sm:text-[13px] font-medium text-black">
+              {t("farmer.factors.arrival.expected_harvest_period_label", {}, "Expected Harvest Period")}: {harvestPeriodLabel}
+            </p>
+          )}
           <ArrivalVolumeTrendChart
             commodity={commodityName ?? ""}
             chartData={realChartData}
@@ -466,67 +769,65 @@ const ArrivalTab = ({
             colors={arrivalSeries.map((series) => series.color)}
             sourceType="Actual Arrivals"
             referenceValue={averageVolume}
+            quartileThresholds={data?.quartileThresholds || moduleResults?.quartile_thresholds || arrivalAssessment?.thresholds}
             height={260}
-            year={realChartData?.length > 0 ? new Date(realChartData[0].date || realChartData[0].arrival_date).getFullYear() : undefined}
             cropStage={cropStage}
             plantingDate={plantingDate}
             expectedHarvestDate={expectedHarvestDate}
             plantingWindowStart={plantingWindowStart}
             plantingWindowEnd={plantingWindowEnd}
+            harvestPeriodLabel={harvestPeriodLabel}
           />
-          {(currentVolume != null || averageVolume != null) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
-              {currentVolume != null && (
-                <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
-                  <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
-                    {t("farmer.cropCycle.latest_arrival", {}, "Latest arrival")}
-                  </p>
-                  <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
-                    {currentVolume.toLocaleString()} kg
-                  </p>
-                </div>
-              )}
-              {averageVolume != null && (
-                <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
-                  <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
-                    {t("farmer.cropCycle.historical_average", {}, "Historical average")}
-                  </p>
-                  <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
-                    {averageVolume.toLocaleString()} kg
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
-      {!showRealChart && (currentVolume != null || averageVolume != null) && (
-        <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-            {currentVolume != null && (
-              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
-                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
-                  {t("farmer.cropCycle.latest_arrival", {}, "Latest arrival")}
-                </p>
-                <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
-                  {currentVolume.toLocaleString()} kg
-                </p>
-              </div>
-            )}
-            {averageVolume != null && (
-              <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
-                <p className="text-[12px] sm:text-[11px] font-semibold uppercase tracking-tight text-black leading-tight">
-                  {t("farmer.cropCycle.historical_average", {}, "Historical average")}
-                </p>
-                <p className="text-[13px] sm:text-[14px] font-bold text-black leading-tight">
-                  {averageVolume.toLocaleString()} kg
-                </p>
-              </div>
-            )}
+      {/* Arrival Assessment Card (replaces old Latest Arrival block) */}
+      <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3.5">
+        <div className="flex items-center justify-between border-b border-[var(--hw-neutral-100)] pb-2.5">
+          <p className="text-[12px] sm:text-[13px] font-bold uppercase tracking-wider text-black">
+            {t("farmer.factors.arrival.assessment_title", {}, "ARRIVAL ASSESSMENT")}
+          </p>
+          {arrivalAssessment.harvestVolume != null && (
+            <span className="text-[11.5px] font-semibold text-[var(--hw-neutral-600)]">
+              {Number(arrivalAssessment.harvestVolume.toFixed(1)).toLocaleString()} kg
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+          <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+            <p className="text-[11px] font-semibold uppercase tracking-tight text-[var(--hw-neutral-600)] leading-tight">
+              {t("farmer.factors.arrival.assessment_expected_harvest", {}, "Expected Harvest")}
+            </p>
+            <p className="text-[14px] sm:text-[15px] font-bold text-black sm:mt-1 leading-tight">
+              {arrivalAssessment.expectedHarvest}
+            </p>
+          </div>
+          <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+            <p className="text-[11px] font-semibold uppercase tracking-tight text-[var(--hw-neutral-600)] leading-tight">
+              {t("farmer.factors.arrival.assessment_classification_label", {}, "Arrival Classification")}
+            </p>
+            <p className={`text-[14px] sm:text-[15px] font-bold sm:mt-1 leading-tight ${classificationTextClass}`}>
+              {arrivalAssessment.classification}
+            </p>
+          </div>
+          <div className="flex sm:flex-col items-center sm:items-start justify-between rounded-xl bg-[var(--hw-neutral-50)] px-3 py-2.5 sm:p-3 border border-[var(--hw-neutral-100)]">
+            <p className="text-[11px] font-semibold uppercase tracking-tight text-[var(--hw-neutral-600)] leading-tight">
+              {t("farmer.factors.arrival.assessment_range_label", {}, "Range")}
+            </p>
+            <p className="text-[14px] sm:text-[15px] font-bold text-black sm:mt-1 leading-tight">
+              {arrivalAssessment.range}
+            </p>
           </div>
         </div>
-      )}
+        <div className="pt-2 border-t border-[var(--hw-neutral-100)]">
+          <p className="text-[11px] font-semibold uppercase tracking-tight text-[var(--hw-neutral-600)] mb-1">
+            {t("farmer.factors.arrival.assessment_interpretation_label", {}, "Interpretation")}
+          </p>
+          <p className="text-[12.5px] sm:text-[13px] text-black leading-relaxed">
+            {arrivalAssessment.interpretation}
+          </p>
+        </div>
+      </div>
 
       {sourceBreakdown.length > 0 && (
         <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 sm:p-5 space-y-3">
@@ -534,7 +835,7 @@ const ArrivalTab = ({
             <p className="text-[13px] font-bold text-black">{t("farmer.factors.arrival.source_breakdown_title", {}, "Arrival Volume by Source")}</p>
             <p className="text-[12px] text-black mt-0.5">{t("farmer.factors.arrival.source_breakdown_subtitle", {}, "DFTC registered farms vs other supplying sources.")}</p>
           </div>
-          <ArrivalSourcePieChart data={sourceBreakdown} height={200} />
+          <ArrivalSourcePieChart data={sourceBreakdown} height={240} />
         </div>
       )}
 
@@ -550,11 +851,58 @@ const ArrivalTab = ({
 
 const HARVEST_QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
 
-const ProductionTab = ({ data, commodityName }) => {
+const ProductionTab = ({
+  data,
+  commodityId,
+  commodityName,
+  cropStage,
+  plantingDate,
+  expectedHarvestDate,
+  plantingSeason,
+  moduleResults,
+  plantingWindowStart,
+  plantingWindowEnd,
+  plantingWindowLabel,
+}) => {
   const { t } = useLanguage();
   const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`;
   const profiles = Array.isArray(data?.quarterlyProfiles) ? data.quarterlyProfiles : [];
-  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(data?.selectedQuarter || currentQuarter);
+
+  // Automatically determine the quarter on which the harvest window falls
+  const defaultHarvestQuarter = useMemo(() => {
+    if (data?.selectedQuarter && HARVEST_QUARTERS.includes(data.selectedQuarter)) {
+      return data.selectedQuarter;
+    }
+    if (moduleResults?.harvest_quarter && HARVEST_QUARTERS.includes(moduleResults.harvest_quarter)) {
+      return moduleResults.harvest_quarter;
+    }
+    const explicitHarvest = expectedHarvestDate || moduleResults?.expected_harvest_date;
+    const rawStart = plantingDate || plantingWindowStart;
+    let derivedHarvest = null;
+    if (!explicitHarvest && rawStart) {
+      const suggestion = suggestHarvestDate(rawStart, commodityId || commodityName);
+      if (suggestion) {
+        derivedHarvest = suggestion.maxDate || suggestion.minDate;
+      }
+    }
+    const finalHarvestStr = explicitHarvest || derivedHarvest || rawStart;
+    if (finalHarvestStr) {
+      const d = parseDateOnly(finalHarvestStr);
+      if (d && !isNaN(d.getTime())) {
+        return `Q${Math.floor(d.getMonth() / 3) + 1}`;
+      }
+    }
+    return currentQuarter;
+  }, [data?.selectedQuarter, moduleResults, expectedHarvestDate, plantingDate, plantingWindowStart, commodityId, commodityName, currentQuarter]);
+
+  const [activeHarvestQuarter, setActiveHarvestQuarter] = useState(defaultHarvestQuarter);
+
+  useEffect(() => {
+    if (defaultHarvestQuarter) {
+      setActiveHarvestQuarter(defaultHarvestQuarter);
+    }
+  }, [defaultHarvestQuarter]);
+
   const [selectedLocation, setSelectedLocation] = useState("all");
 
   const locations = useMemo(() => {
@@ -568,9 +916,11 @@ const ProductionTab = ({ data, commodityName }) => {
     return [...locSet].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [data?.sourceAreas, data?.sources, data?.geoRecords]);
 
-  const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter));
+  const selectedProfile = profiles.find((profile) => profile.quarter === (activeHarvestQuarter || data?.selectedQuarter || defaultHarvestQuarter));
+  const currentSelectedQuarter = activeHarvestQuarter || data?.selectedQuarter || defaultHarvestQuarter;
+  const isDefaultHarvestQuarter = currentSelectedQuarter === defaultHarvestQuarter;
   const normLevel = normalizeProductionLevel(
-    data?.classificationOverride || selectedProfile?.classification || data?.productionLevel
+    (isDefaultHarvestQuarter && data?.classificationOverride) || selectedProfile?.classification || data?.productionLevel
   );
   const banner = normLevel ? PRODUCTION_BANNER_CFG[normLevel] : null;
   const LevelIcon = banner?.Icon;
@@ -1218,7 +1568,21 @@ const FactorDetailTabs = ({
             plantingWindowLabel={plantingWindowLabel}
           />
         )}
-        {safeTab === "production" && <ProductionTab data={production} commodityName={commodityName ?? weather?.cropName} />}
+        {safeTab === "production" && (
+          <ProductionTab
+            data={production}
+            commodityId={commodityId}
+            commodityName={commodityName ?? weather?.cropName}
+            cropStage={cropStage}
+            plantingDate={plantingDate}
+            expectedHarvestDate={expectedHarvestDate}
+            plantingSeason={plantingSeason}
+            moduleResults={moduleResults}
+            plantingWindowStart={plantingWindowStart}
+            plantingWindowEnd={plantingWindowEnd}
+            plantingWindowLabel={plantingWindowLabel}
+          />
+        )}
         {safeTab === "weather" && <WeatherTab data={weather} commodityName={commodityName ?? weather?.cropName} />}
         {safeTab === "profitability" && profitability && <ProfitabilityTab data={profitability} />}
       </div>

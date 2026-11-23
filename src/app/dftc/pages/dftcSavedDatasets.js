@@ -223,8 +223,11 @@ export function buildSavedDatasetsList(
 
       const isToday = isSubmissionToday(sub, todayStr);
 
-      const savedBy = sub.submitted_by_name || sub.encoded_by || sub.saved_by || sub.savedBy || "DFTC Personnel";
-      const encodedBy = sub.encoded_by || sub.encodedBy || "DFTC Encoder";
+      const savedBy = sub.saved_by || sub.submitted_by_name || sub.savedBy || "DFTC Personnel";
+      const encodedBy = sub.encoded_by || sub.encodedBy || savedBy;
+      const reviewedBy = sub.reviewed_by || sub.reviewedBy || null;
+      const approvedBy = sub.approved_by || sub.approvedBy || null;
+      const lastUpdatedBy = sub.last_updated_by || sub.lastUpdatedBy || savedBy;
 
       list.push({
         id: sub.submission_id || sub.id,
@@ -246,7 +249,17 @@ export function buildSavedDatasetsList(
         entryMethod: submissionMethod,
         savedBy,
         submitted_by_name: savedBy,
+        encodedBy,
         encoded_by: encodedBy,
+        reviewedBy,
+        reviewed_by: reviewedBy,
+        approvedBy,
+        approved_by: approvedBy,
+        lastUpdatedBy,
+        last_updated_by: lastUpdatedBy,
+        reviewedAt: sub.reviewed_at || null,
+        approvedAt: sub.approved_at || null,
+        lastUpdatedAt: sub.last_updated_at || null,
         userId: sub.submitted_by_user_id || sub.user_id,
         savedDate: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
         savedAt: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
@@ -293,7 +306,13 @@ export function buildSavedDatasetsList(
     const uniqueSubmitters = [...new Set(subs.map((s) => s.submitted_by_name || s.saved_by || s.savedBy).filter(Boolean))];
     const submittersStr = uniqueSubmitters.length > 0 ? uniqueSubmitters.join(", ") : (latestSub?.submitted_by_name || latestSub?.saved_by || latestSub?.savedBy || "DFTC Personnel");
     const uniqueEncoders = [...new Set(subs.map((s) => s.encoded_by || s.encodedBy).filter(Boolean))];
-    const encodersStr = uniqueEncoders.length > 0 ? uniqueEncoders.join(", ") : (latestSub?.encoded_by || "DFTC Encoder");
+    const encodersStr = uniqueEncoders.length > 0 ? uniqueEncoders.join(", ") : (latestSub?.encoded_by || submittersStr);
+    const uniqueReviewers = [...new Set(subs.map((s) => s.reviewed_by || s.reviewedBy).filter(Boolean))];
+    const reviewersStr = uniqueReviewers.length > 0 ? uniqueReviewers.join(", ") : (latestSub?.reviewed_by || null);
+    const uniqueApprovers = [...new Set(subs.map((s) => s.approved_by || s.approvedBy).filter(Boolean))];
+    const approversStr = uniqueApprovers.length > 0 ? uniqueApprovers.join(", ") : (latestSub?.approved_by || null);
+    const uniqueUpdaters = [...new Set(subs.map((s) => s.last_updated_by || s.lastUpdatedBy).filter(Boolean))];
+    const updatersStr = uniqueUpdaters.length > 0 ? uniqueUpdaters.join(", ") : (latestSub?.last_updated_by || submittersStr);
 
     list.push({
       id: `manual-price-${dateStr}`,
@@ -308,7 +327,17 @@ export function buildSavedDatasetsList(
       entryMethod: "Manual Input",
       savedBy: submittersStr,
       submitted_by_name: submittersStr,
+      encodedBy: encodersStr,
       encoded_by: encodersStr,
+      reviewedBy: reviewersStr,
+      reviewed_by: reviewersStr,
+      approvedBy: approversStr,
+      approved_by: approversStr,
+      lastUpdatedBy: updatersStr,
+      last_updated_by: updatersStr,
+      reviewedAt: latestSub?.reviewed_at || null,
+      approvedAt: latestSub?.approved_at || null,
+      lastUpdatedAt: latestSub?.last_updated_at || null,
       userId: latestSub?.submitted_by_user_id || latestSub?.user_id,
       savedDate: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,
       savedAt: isJustSaved && justSaved?.at ? formatSavedDate(justSaved.at) : savedDate,

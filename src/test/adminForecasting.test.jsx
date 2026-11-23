@@ -408,7 +408,7 @@ describe('AdminForecasting graph', () => {
     const fetchFn = mountWithApi();
     await waitFor(() => expect(detailUrls(fetchFn).length).toBeGreaterThan(0));
     await user.click(dropdownButton('Market'));
-    await user.click(screen.getByRole('button', { name: 'DFTC' }));
+    await user.click(screen.getByRole('button', { name: /Dvo Food Trm Cmplx|DFTC/i }));
     await waitFor(() => {
       expect(detailUrls(fetchFn).some((url) => url.includes('price_type=dftc_retail'))).toBe(true);
     });
@@ -432,7 +432,7 @@ describe('AdminForecasting graph', () => {
     const fetchFn = mountWithApi();
     await waitFor(() => expect(detailUrls(fetchFn).length).toBeGreaterThan(0));
     await user.click(dropdownButton('Market'));
-    await user.click(screen.getByRole('button', { name: 'DFTC' }));
+    await user.click(screen.getByRole('button', { name: /Dvo Food Trm Cmplx|DFTC/i }));
     await waitFor(() => {
       expect(detailUrls(fetchFn).some((url) => url.includes('price_type=dftc_retail'))).toBe(true);
     });

@@ -172,7 +172,8 @@ function normalizeVariety(value) {
 }
 
 function toPriceTypeKey(market, priceType) {
-  const marketKey = String(market || "").toLowerCase().includes("dftc")
+  const normMarket = String(market || "").toLowerCase();
+  const marketKey = normMarket.includes("dftc") || normMarket.includes("food trm") || normMarket.includes("dvo food")
     ? "dftc"
     : "bangkerohan";
   const typeKey = String(priceType || "").toLowerCase().includes("wholesale")
@@ -399,7 +400,7 @@ const CustomVarietyDropdown = ({ value, options = [], onChange }) => {
   );
 };
 
-const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
+const CustomSimpleDropdown = ({ value, options = [], onChange, getOptionLabel }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -411,6 +412,8 @@ const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const displayValue = getOptionLabel ? getOptionLabel(value) : value;
+
   return (
     <div ref={ref} className="relative w-full">
       <button
@@ -418,7 +421,7 @@ const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-[12px] sm:text-[13px] bg-[var(--hw-neutral-50)] hover:bg-white border border-[var(--hw-neutral-200)] rounded-lg sm:rounded-xl transition-colors cursor-pointer focus:border-[var(--hw-green-600)] focus:ring-2 focus:ring-[var(--hw-green-600)]/20"
       >
-        <span className="font-semibold text-black truncate">{value}</span>
+        <span className="font-semibold text-black truncate">{displayValue}</span>
         <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-black flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
@@ -435,7 +438,7 @@ const CustomSimpleDropdown = ({ value, options = [], onChange }) => {
               className={`w-full flex items-center px-3.5 py-2 text-[12px] sm:text-[13px] text-left transition-colors cursor-pointer ${opt === value ? "bg-[var(--hw-green-50)] font-semibold text-[var(--hw-green-800)]" : "text-black hover:bg-[var(--hw-neutral-50)]"
                 }`}
             >
-              <span className="flex-1 truncate">{opt}</span>
+              <span className="flex-1 truncate">{getOptionLabel ? getOptionLabel(opt) : opt}</span>
             </button>
           ))}
         </div>
@@ -767,6 +770,7 @@ function AdminForecasting() {
               value={market}
               options={markets}
               onChange={setMarket}
+              getOptionLabel={(opt) => (opt === "DFTC" || opt === "DFTC Taboan" || String(opt).toLowerCase().includes("dftc") ? "Dvo Food Trm Cmplx" : opt)}
             />
           </div>
           <div>

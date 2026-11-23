@@ -67,6 +67,7 @@ export const calendar = {
   plant_prefix: "Itanim: {window}",
   harvest_prefix: "Ani: {window}",
   why_good_crop_title: "Bakit magandang pananim ito ngayong buwan",
+  explanation_summary: "Pagtingin sa presyo: {price}; presyon ng abot: {arrival}; pana-panahong produksyon: {production}; panganib sa panahon: {weather}.",
   price_outlook_rise: "Maaaring tumaas ang presyo sa lalong madaling panahon",
   price_outlook_profit: "Magandang inaasahang kita",
   factor_price_kamatis: "₱85/kg ngayon, tumataas na trend sa nakaraang dalawang linggo.",

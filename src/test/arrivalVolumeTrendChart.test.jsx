@@ -25,6 +25,7 @@ vi.mock("recharts", async () => {
     Tooltip: () => null,
     CartesianGrid: () => null,
     ReferenceLine: () => null,
+    ReferenceArea: () => null,
     Bar: () => null,
     Cell: () => null,
     Brush: ({ startIndex, endIndex, dataKey }) => (

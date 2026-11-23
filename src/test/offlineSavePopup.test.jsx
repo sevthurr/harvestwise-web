@@ -1,10 +1,7 @@
 /**
- * The offline-save popup belongs to login / first open only.
- *
- * AuthProvider owns the transient phase, so these tests drive the real provider
- * and only replace the network/IDB boundaries. The popup must appear while the
- * seed is pending, switch to success when it resolves, and disappear after the
- * auto-dismiss. Reconnect reseeds the same bundle but must not set the phase.
+ * Offline seeding is represented by AuthProvider's cache status. The app shell
+ * surfaces that status in the top-right sync control instead of blocking the
+ * page with a modal.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
@@ -80,8 +77,8 @@ beforeEach(() => {
   mocks.clearQueryPersistedCache.mockReset().mockResolvedValue(undefined);
 });
 
-describe('offline save popup phase', () => {
-  it('shows saving during first-open seed, then success, then auto-dismisses', async () => {
+describe('offline cache status', () => {
+  it('reports preparing during first-open seed, then ready when it completes', async () => {
     let finishSeed;
     mocks.loadFarmerOfflineData.mockImplementation(
       () => new Promise((resolve) => { finishSeed = resolve; })
@@ -89,21 +86,13 @@ describe('offline save popup phase', () => {
 
     render(<AuthProvider><AuthProbe /></AuthProvider>);
 
-    expect(await screen.findByText('Saving your data for offline use…')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(mocks.loadFarmerOfflineData).toHaveBeenCalledWith({}, { force: false });
     expect(screen.getByTestId('cache-status')).toHaveTextContent('preparing');
 
     await act(async () => { finishSeed(); });
 
-    expect(await screen.findByText('Saved for offline use')).toBeInTheDocument();
     expect(screen.getByTestId('cache-status')).toHaveTextContent('ready');
-
-    await waitFor(
-      () => expect(screen.queryByText('Saved for offline use')).not.toBeInTheDocument(),
-      { timeout: 4000 }
-    );
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('shows a short error message when the first-open seed fails', async () => {
@@ -111,12 +100,11 @@ describe('offline save popup phase', () => {
 
     render(<AuthProvider><AuthProbe /></AuthProvider>);
 
-    expect(await screen.findByText('Some offline data could not be saved')).toBeInTheDocument();
-    expect(screen.queryByText('Saving your data for offline use…')).not.toBeInTheDocument();
     expect(screen.getByTestId('cache-status')).toHaveTextContent('error');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('does not set the popup phase when reconnect reseeds with showPopup false', async () => {
+  it('reports reconnect seeding through cache status without rendering a modal', async () => {
     let finishReconnectSeed;
     mocks.loadFarmerOfflineData
       .mockResolvedValueOnce(undefined) // session restore on mount
@@ -124,7 +112,6 @@ describe('offline save popup phase', () => {
 
     render(<AuthProvider><AuthProbe /></AuthProvider>);
 
-    expect(await screen.findByText('Saved for offline use')).toBeInTheDocument();
     expect(mocks.loadFarmerOfflineData).toHaveBeenCalledTimes(1);
     mocks.loadFarmerOfflineData.mockClear();
 
@@ -135,11 +122,9 @@ describe('offline save popup phase', () => {
 
     expect(mocks.loadFarmerOfflineData).toHaveBeenCalledTimes(1);
     expect(mocks.loadFarmerOfflineData).toHaveBeenCalledWith({}, { force: false });
-    expect(screen.queryByText('Saving your data for offline use…')).not.toBeInTheDocument();
     expect(screen.getByTestId('cache-status')).toHaveTextContent('preparing');
 
     await act(async () => { finishReconnectSeed(); });
-    expect(screen.queryByText('Saving your data for offline use…')).not.toBeInTheDocument();
     expect(screen.getByTestId('cache-status')).toHaveTextContent('ready');
   });
 
@@ -158,10 +143,10 @@ describe('offline save popup phase', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'log in' }));
 
-    expect(await screen.findByText('Saving your data for offline use…')).toBeInTheDocument();
     expect(mocks.loadFarmerOfflineData).toHaveBeenCalledWith({}, { force: true });
+    expect(screen.getByTestId('cache-status')).toHaveTextContent('preparing');
 
     await act(async () => { finishSeed(); });
-    expect(await screen.findByText('Saved for offline use')).toBeInTheDocument();
+    expect(screen.getByTestId('cache-status')).toHaveTextContent('ready');
   });
 });
