@@ -19,7 +19,10 @@ import { MarketEmptyState } from "../components/market/MarketStates";
 import { apiGet, parseResponse } from "../../global/api";
 import { toCamelCase } from "../../global/utils/apiTransforms";
 import { SkeletonPriceGrid } from "../components/shared/FarmerSkeletons";
-import { fetchFarmerProfile } from "../../global/hooks/useFarmerPrefetch";
+import {
+  fetchFarmerProfile,
+  fetchSupportedPricesList,
+} from "../../global/hooks/useFarmerPrefetch";
 import { getPreferredCropMatcher, sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreferences";
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { getCategoryFor } from "../../global/data/commodities";
@@ -309,13 +312,9 @@ function PricesPage() {
     [preferredCrops]
   );
 
-  const { data: apiData, isLoading: loading, isError, fetchStatus } = useQuery({
-    queryKey: ["prices", "list"],
-    queryFn: async () => {
-      const response = await apiGet("/prices?is_top10=true&page_size=50");
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return parseResponse(response);
-    },
+  const { data: apiData, isLoading: pricesLoading, isError, fetchStatus } = useQuery({
+    queryKey: ["prices", "supported-list"],
+    queryFn: fetchSupportedPricesList,
     staleTime: 1000 * 60,
     refetchOnWindowFocus: true,
     refetchOnMount: refetchOnMountIfOnline(true),
@@ -327,8 +326,14 @@ function PricesPage() {
     enabled: false,
   });
 
+  const cachedPriceList = queryClient.getQueryData(["prices", "supported-list"]) ||
+    queryClient.getQueryData(["prices", "list"]);
+  const loading = pricesLoading &&
+    !apiData?.items?.length &&
+    !cachedPriceList?.items?.length &&
+    !dashboardPrices?.length;
+
   const { commodities } = useMemo(() => {
-    const cachedPriceList = queryClient.getQueryData(["prices", "list"]);
     const effectiveData = apiData?.items?.length
       ? apiData
       : (
@@ -423,6 +428,9 @@ function PricesPage() {
           dftcRetail: existing.displayData.dftcRetail ?? itemPrices.dftcRetail,
           dftcWholesale: existing.displayData.dftcWholesale ?? itemPrices.dftcWholesale,
         };
+        if (!existing.forecast && camelItem.forecast) {
+          existing.forecast = camelItem.forecast;
+        }
       }
     });
 
@@ -452,7 +460,12 @@ function PricesPage() {
       commodity.id,
       {
         trendDetail: priceTrendQueries[index]?.data,
-        trendLoading: priceTrendQueries[index]?.isPending || priceTrendQueries[index]?.isFetching,
+        // Disabled detail queries have TanStack Query's initial `isPending`
+        // state even though no request is running. Non-preferred cards use the
+        // lightweight list summary and must not render "Loading trend" forever.
+        trendLoading: preferredMatcher.isPreferred(commodity) && (
+          priceTrendQueries[index]?.isPending || priceTrendQueries[index]?.isFetching
+        ),
         trendError: priceTrendQueries[index]?.isError,
       },
     ])),

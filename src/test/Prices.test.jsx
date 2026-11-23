@@ -33,10 +33,11 @@ vi.mock("../app/global/components/shared/CommodityIllustrations.jsx", async (imp
 
 import PricesPage from "../app/farmer/pages/Prices.jsx";
 
-function renderPricesPage() {
+function renderPricesPage(seed) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  seed?.(queryClient);
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -150,6 +151,7 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     await waitFor(() => {
+      expect(screen.queryByText("Loading trend")).not.toBeInTheDocument();
       expect(getPriceDetailMock).not.toHaveBeenCalledWith("COM-0028", expect.anything());
     });
 
@@ -386,5 +388,16 @@ describe("Farmer prices page", () => {
     // Carrots should remain, Ampalaya should be filtered out
     expect(screen.getByText("Carrots")).toBeInTheDocument();
     expect(screen.queryByText("Ampalaya")).not.toBeInTheDocument();
+  });
+
+  it("keeps search enabled when offline cached prices are available", async () => {
+    apiGet.mockResolvedValue({ ok: false, status: 503 });
+    const cachedPrices = { items: [lettuce] };
+
+    renderPricesPage((client) => client.setQueryData(["prices", "list"], cachedPrices));
+
+    const search = screen.getByPlaceholderText("Search commodity…");
+    expect(search).not.toBeDisabled();
+    expect(await screen.findByText("Lettuce")).toBeInTheDocument();
   });
 });

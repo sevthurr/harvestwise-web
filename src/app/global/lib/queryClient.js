@@ -296,7 +296,12 @@ export function ensureCanonicalPriceList(client = queryClient) {
   if (list.items.length === 0) return null;
 
   client.setQueryData(["prices", "list"], list);
-  client.setQueryData(["prices", "supported-list"], list);
+  // Keep a previously persisted full catalogue intact. The dashboard fallback
+  // is intentionally a one-price-per-commodity projection and must not erase
+  // the other market prices or non-top-level varieties.
+  if (!client.getQueryData(["prices", "supported-list"])?.items?.length) {
+    client.setQueryData(["prices", "supported-list"], list);
+  }
   return list;
 }
 
