@@ -16,8 +16,15 @@
  * only adds the backoff delay before the error surfaces.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { QueryClient, dehydrate } from "@tanstack/react-query";
+import { get as getIndexedDb } from "idb-keyval";
 
-import { queryClient, shouldPersistQueryCache, shouldRetry } from "../app/global/lib/queryClient";
+import {
+  queryClient,
+  restorePersistedFarmerData,
+  shouldPersistQueryCache,
+  shouldRetry,
+} from "../app/global/lib/queryClient";
 
 describe("query client offline policy", () => {
   afterEach(() => {
@@ -53,6 +60,22 @@ describe("query client offline policy", () => {
 
     vi.stubGlobal("navigator", { onLine: true });
     expect(shouldPersistQueryCache()).toBe(true);
+  });
+
+  it("can rehydrate the farmer snapshot directly from IndexedDB", async () => {
+    const sourceClient = new QueryClient();
+    sourceClient.setQueryData(["dashboard", "prices"], [{ id: "COM-0001", price: 90 }]);
+    vi.mocked(getIndexedDb).mockResolvedValueOnce({
+      buster: "",
+      timestamp: Date.now(),
+      clientState: dehydrate(sourceClient),
+    });
+
+    const targetClient = new QueryClient();
+    expect(await restorePersistedFarmerData(targetClient)).toBe(true);
+    expect(targetClient.getQueryData(["dashboard", "prices"])).toEqual([
+      { id: "COM-0001", price: 90 },
+    ]);
   });
 
   it("still retries a network failure while the browser is online", () => {
