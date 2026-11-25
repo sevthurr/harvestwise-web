@@ -1,9 +1,32 @@
 import { describe, it, expect } from "vitest";
 import { buildWeatherRiskAnalysis } from "../app/global/utils/weatherRiskAnalysis";
+import { normalizeWeatherAdvisoryForecast } from "../app/farmer/pages/CropFactorsPage";
 import { formatCropAdvisory } from "../app/farmer/components/shared/CropWeatherCard";
 import { t } from "../app/global/i18n";
 
 describe("Weather Multi-Language Translations", () => {
+  it("maps the farmer weather advisory response into the shared forecast shape", () => {
+    const forecast = normalizeWeatherAdvisoryForecast({
+      fetched_at: "2026-10-15T00:00:00Z",
+      daily_forecasts: [{
+        date: "2026-10-15",
+        temperature_min: 24,
+        temperature_max: 31,
+        rainfall_mm: 5.5,
+        rain_probability_pct: 40,
+        humidity_pct: 85,
+        wind_speed_max_kmh: 12,
+        weather_condition: "Partly Cloudy",
+      }],
+    });
+
+    expect(forecast).toMatchObject({
+      status: "ok",
+      fetched_at: "2026-10-15T00:00:00Z",
+      days: [{ temp_min: 24, temp_max: 31, rainfall_mm: 5.5 }],
+    });
+  });
+
   const mockForecast = {
     status: "ok",
     days: [
