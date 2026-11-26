@@ -25,6 +25,7 @@ export const prices = {
   trend_rising: "Rising",
   trend_falling: "Falling",
   trend_stable: "Stable",
+  trend_insufficient: "Insufficient Data",
   trend_no_data: "No trend data",
   trend_loading: "Loading trend",
   trend_unavailable: "Price trend unavailable",
@@ -42,5 +43,14 @@ export const prices = {
   advisory_falling: "The forecast for {commodity} indicates a drop to {range} during the stated period.",
   advisory_falling_no_range: "The forecast for {commodity} indicates falling prices during the stated period.",
   advisory_stable: "The forecast for {commodity} indicates prices near {range} during the stated period.",
-  advisory_stable_no_range: "The forecast for {commodity} indicates stable prices during the stated period."
+  advisory_stable_no_range: "The forecast for {commodity} indicates stable prices during the stated period.",
+  hist_rising: "Price increased by ₱{diff}/{unit} from previous price of ₱{prev}/{unit}.",
+  hist_falling: "Price decreased by ₱{diff}/{unit} from previous price of ₱{prev}/{unit}.",
+  hist_stable: "Price unchanged from previous price of ₱{prev}/{unit}.",
+  hist_insufficient: "No previous price record available for comparison.",
+  hist_rising_prevonly: "Price increased by ₱{diff}/{unit} from previous record.",
+  hist_falling_prevonly: "Price decreased by ₱{diff}/{unit} from previous record.",
+  hist_rising_nodiff: "Price is higher than the previous record.",
+  hist_falling_nodiff: "Price is lower than the previous record.",
+  hist_stable_nodiff: "Price is unchanged from the previous record.",
 };

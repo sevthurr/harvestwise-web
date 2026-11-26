@@ -313,6 +313,43 @@ describe("CropCycleDetailPage Add Cost flow", () => {
     expect(screen.queryByText("Expected harvest volume")).not.toBeInTheDocument();
   });
 
+  it("displays actual earnings even when some harvest records do not have a selling price recorded", () => {
+    cropState.current = {
+      id: "CRP-0004",
+      commodity: "COM-0001",
+      commodityId: "COM-0001",
+      commodityName: "Ampalaya",
+      phase: "harvested",
+      status: "Harvesting",
+      harvestQuantity: 8800,
+      harvestRecords: [
+        { id: "HVR-1", actualHarvestDate: "2026-10-29", actualHarvestQty: 300, actualSellingPricePerKg: null },
+        { id: "HVR-2", actualHarvestDate: "2026-11-26", actualHarvestQty: 8500, actualSellingPricePerKg: 55 },
+      ],
+      totalCost: 25000,
+      breakEvenPrice: 9,
+      isOnHold: false,
+    };
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/farmer/crops/CRP-0004"]}>
+          <Routes>
+            <Route path="/farmer/crops/:cropId" element={<CropCycleDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText("Actual earnings")).toBeInTheDocument();
+    // 8,500 kg * 55 = 467,500
+    expect(screen.getByText("₱467,500")).toBeInTheDocument();
+    expect(screen.getAllByText("8,800 kg").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₱25,000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₱55.00/kg").length).toBeGreaterThan(0);
+  });
+
   it("accumulates multiple added costs as separate records that add up into total cost", () => {
     const raw = {
       id: "CRP-001",

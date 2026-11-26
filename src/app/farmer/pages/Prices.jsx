@@ -10,7 +10,8 @@ import {
   Search,
   X,
   SlidersHorizontal,
-  Check
+  Check,
+  AlertCircle
 } from "lucide-react";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
@@ -24,14 +25,230 @@ import { PreferredStar } from "../components/shared/PreferredStar";
 import { getCategoryFor } from "../../global/data/commodities";
 import * as pricesApi from "../../../services/api/pricesApi";
 
-const DIR_CFG = {
-  Rising: { color: "text-emerald-700", bg: "bg-emerald-50/60", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
-  Falling: { color: "text-red-700", bg: "bg-red-50/60", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
-  Stable: { color: "text-blue-700", bg: "bg-blue-50/60", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
-  default: { color: "text-[var(--hw-neutral-500)]", bg: "bg-[var(--hw-neutral-50)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
+const MOVEMENT_CFG = {
+  Rising: { color: "text-emerald-700", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
+  Falling: { color: "text-red-700", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
+  Stable: { color: "text-[var(--hw-neutral-600)]", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  "Insufficient Data": { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_insufficient", label: "Insufficient Data" },
+  default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_insufficient", label: "Insufficient Data" }
 };
 
-function getDirectionFromData(trendDetail, fallbackForecast) {
+const FORECAST_CFG = {
+  Rising: { color: "text-emerald-700", bg: "bg-emerald-50/60" },
+  Falling: { color: "text-red-700", bg: "bg-red-50/60" },
+  Stable: { color: "text-blue-700", bg: "bg-blue-50/60" },
+  default: { color: "text-[var(--hw-neutral-500)]", bg: "bg-[var(--hw-neutral-50)]" }
+};
+
+const VOLATILITY_REASON_I18N = {
+  "Increased Supply": { ceb: "Midaghan ang Suplay", tl: "Dumami ang Suplay" },
+  "Decreased Supply": { ceb: "Mimenos ang Suplay", tl: "Bumaba ang Suplay" },
+  "Oversupply in Market": { ceb: "Sobra nga Suplay sa Palengke", tl: "Labis na Suplay sa Pamilihan" },
+  "Limited Harvest Volume": { ceb: "Gamay nga Ani", tl: "Mababang Dami ng Ani" },
+  "Crop Failure": { ceb: "Pagkadaot sa Tanom", tl: "Pagkasira ng Pananim" },
+  "Increased Consumer Demand": { ceb: "Misaka ang Panginahanglan", tl: "Tumaas ang Pangangailangan" },
+  "Decreased Consumer Demand": { ceb: "Miubos ang Panginahanglan", tl: "Bumaba ang Pangangailangan" },
+  "Seasonal Demand Increase": { ceb: "Panahon sa Pagsaka sa Panginahanglan", tl: "Pana-panahong Pagtaas ng Pangangailangan" },
+  "Seasonal Demand Decrease": { ceb: "Panahon sa Pag-ubos sa Panginahanglan", tl: "Pana-panahong Pagbaba ng Pangangailangan" },
+  "Heavy Rainfall": { ceb: "Kusog nga Ulan", tl: "Malakas na Ulan" },
+  "Drought": { ceb: "Ting-uga", tl: "Tagtuyot" },
+  "Flooding": { ceb: "Baha", tl: "Baha" },
+  "Typhoon": { ceb: "Bagyo", tl: "Bagyo" },
+  "Extreme Heat": { ceb: "Grabe nga Kainit", tl: "Matinding Init" },
+  "Transportation Cost Increase": { ceb: "Pagsaka sa Plete sa Paghatod", tl: "Pagtaas ng Gastos sa Transportasyon" },
+  "Fuel Price Increase": { ceb: "Pagsaka sa Presyo sa Gasolina", tl: "Pagtaas ng Presyo ng Krudo" },
+  "Delivery Delays": { ceb: "Kadelatar sa Paghatod", tl: "Pagkaantala ng Paghahatid" },
+  "Market Access Issues": { ceb: "Kalisod sa Pag-access sa Palengke", tl: "Kahirapan sa Pag-access sa Pamilihan" },
+  "Trader Buying Surge": { ceb: "Kalit nga Pagpamalit sa mga Komprador", tl: "Biglaang Pamimili ng mga Komprador" },
+  "Import Competition": { ceb: "Kompetisyon sa Import", tl: "Kompetisyon mula sa Import" },
+  "Export Demand Increase": { ceb: "Pagsaka sa Demand sa Export", tl: "Pagtaas ng Demand sa Export" },
+  "Competition from Alternative Products": { ceb: "Kompetisyon sa Alternatibong Produkto", tl: "Kompetisyon mula sa Ibang Produkto" },
+  "Government Intervention": { ceb: "Interbensyon sa Gobyerno", tl: "Interbensyon ng Gobyerno" },
+  "Pest Infestation": { ceb: "Peste sa Tanom", tl: "Peste sa Pananim" },
+  "Disease Outbreak": { ceb: "Sakit sa Tanom", tl: "Sakit sa Pananim" },
+  "Delayed Harvest": { ceb: "Nadelatar nga Pag-ani", tl: "Naantalang Pag-ani" },
+  "Early Harvest": { ceb: "Sayo nga Pag-ani", tl: "Maagang Pag-ani" },
+  "Other": { ceb: "Uban pa", tl: "Iba pa" },
+};
+
+export function buildVolatilityAdvisory({
+  rawReason,
+  rawCategory,
+  notes,
+  movement,
+  currentLang = "en",
+  t = (_k, _p, fallback) => fallback,
+}) {
+  const reason = (rawReason || "").trim();
+  const category = (rawCategory || "").trim();
+  const notesText = (notes || "").trim();
+
+  if (!reason) return null;
+  const lowerReason = reason.toLowerCase();
+  const lowerCategory = category.toLowerCase();
+  if (
+    lowerReason === "other" ||
+    lowerReason === "others" ||
+    lowerCategory === "other" ||
+    lowerCategory === "others"
+  ) {
+    return null;
+  }
+
+  let translatedReason = reason;
+  if (VOLATILITY_REASON_I18N[reason]?.[currentLang]) {
+    translatedReason = VOLATILITY_REASON_I18N[reason][currentLang];
+  }
+
+  const reasonText = notesText ? `${translatedReason} (${notesText})` : translatedReason;
+
+  const isRising = movement === "Rising";
+  const isFalling = movement === "Falling";
+
+  let message = "";
+  if (isRising) {
+    message = t(
+      "farmer.commodityDetail.volatility_reason_rise",
+      { reason: reasonText },
+      `Reason for sudden price increase: ${reasonText}`
+    );
+  } else if (isFalling) {
+    message = t(
+      "farmer.commodityDetail.volatility_reason_drop",
+      { reason: reasonText },
+      `Reason for sudden price drop: ${reasonText}`
+    );
+  } else {
+    message = t(
+      "farmer.commodityDetail.volatility_reason_change",
+      { reason: reasonText },
+      `Reason for sudden price change: ${reasonText}`
+    );
+  }
+
+  const Icon = isRising ? TrendingUp : isFalling ? TrendingDown : AlertCircle;
+  const color = isRising ? "text-emerald-700" : isFalling ? "text-red-700" : "text-amber-800";
+  const bg = isRising ? "bg-emerald-50/60" : isFalling ? "bg-red-50/60" : "bg-amber-50/60";
+
+  return { message, Icon, color, bg };
+}
+
+export function buildHistoricalMovementAdvisory({
+  movement,
+  diff,
+  prevPrice,
+  unit = "kg",
+  t = (_k, _p, fallback) => fallback,
+}) {
+  const isRising = movement === "Rising";
+  const isFalling = movement === "Falling";
+  const isStable = movement === "Stable";
+
+  const absDiff = diff != null ? Math.abs(diff) : null;
+  const formattedDiff = absDiff != null ? (Number.isInteger(absDiff) ? String(absDiff) : absDiff.toFixed(2)) : null;
+  const formattedPrev = prevPrice != null ? (Number.isInteger(Number(prevPrice)) ? String(Number(prevPrice)) : Number(prevPrice).toFixed(2)) : null;
+
+  let message = "";
+  if (isRising) {
+    if (formattedDiff && formattedPrev) {
+      message = t(
+        "farmer.prices.hist_rising",
+        { diff: formattedDiff, prev: formattedPrev, unit },
+        `Price increased by ₱${formattedDiff}/${unit} from previous price of ₱${formattedPrev}/${unit}.`
+      );
+    } else if (formattedDiff) {
+      message = t(
+        "farmer.prices.hist_rising_prevonly",
+        { diff: formattedDiff, unit },
+        `Price increased by ₱${formattedDiff}/${unit} from previous record.`
+      );
+    } else {
+      message = t(
+        "farmer.prices.hist_rising_nodiff",
+        {},
+        "Price is higher than the previous record."
+      );
+    }
+  } else if (isFalling) {
+    if (formattedDiff && formattedPrev) {
+      message = t(
+        "farmer.prices.hist_falling",
+        { diff: formattedDiff, prev: formattedPrev, unit },
+        `Price decreased by ₱${formattedDiff}/${unit} from previous price of ₱${formattedPrev}/${unit}.`
+      );
+    } else if (formattedDiff) {
+      message = t(
+        "farmer.prices.hist_falling_prevonly",
+        { diff: formattedDiff, unit },
+        `Price decreased by ₱${formattedDiff}/${unit} from previous record.`
+      );
+    } else {
+      message = t(
+        "farmer.prices.hist_falling_nodiff",
+        {},
+        "Price is lower than the previous record."
+      );
+    }
+  } else if (isStable) {
+    if (formattedPrev) {
+      message = t(
+        "farmer.prices.hist_stable",
+        { prev: formattedPrev, unit },
+        `Price unchanged from previous price of ₱${formattedPrev}/${unit}.`
+      );
+    } else {
+      message = t(
+        "farmer.prices.hist_stable_nodiff",
+        {},
+        "Price unchanged from previous record."
+      );
+    }
+  } else {
+    message = t(
+      "farmer.prices.hist_insufficient",
+      {},
+      "No previous price record available for comparison."
+    );
+  }
+
+  const Icon = isRising ? TrendingUp : isFalling ? TrendingDown : Minus;
+  const color = isRising ? "text-emerald-700" : isFalling ? "text-red-700" : isStable ? "text-[var(--hw-neutral-600)]" : "text-[var(--hw-neutral-500)]";
+  const bg = isRising ? "bg-emerald-50/60" : isFalling ? "bg-red-50/60" : isStable ? "bg-[var(--hw-neutral-100)]" : "bg-[var(--hw-neutral-50)]";
+
+  return { message, Icon, color, bg };
+}
+
+export function calculateMovementFromRecords(recentRecords) {
+  if (!recentRecords || recentRecords.length < 2) {
+    return { movement: "Insufficient Data", diff: null, prevPrice: null };
+  }
+  const currentPrice = Number(recentRecords[0]?.prevail_price ?? recentRecords[0]?.prevailPrice);
+  const prevPrice = Number(recentRecords[1]?.prevail_price ?? recentRecords[1]?.prevailPrice);
+  if (isNaN(currentPrice) || isNaN(prevPrice)) {
+    return { movement: "Insufficient Data", diff: null, prevPrice: null };
+  }
+  const diff = Math.round((currentPrice - prevPrice) * 100) / 100;
+  if (diff > 0) return { movement: "Rising", diff, prevPrice };
+  if (diff < 0) return { movement: "Falling", diff, prevPrice };
+  return { movement: "Stable", diff: 0, prevPrice };
+}
+
+export function getHistoricalMovement(commodity, trendDetail) {
+  const detailMovement = trendDetail?.historical_movement ?? trendDetail?.historicalMovement;
+  if (detailMovement) return detailMovement;
+
+  const cardMovement = commodity?.historicalMovement ?? commodity?.historical_movement;
+  if (cardMovement) return cardMovement;
+
+  const records = trendDetail?.recent_records || trendDetail?.recentRecords;
+  if (records && records.length > 0) {
+    return calculateMovementFromRecords(records).movement;
+  }
+
+  return "Insufficient Data";
+}
+
+export function getForecastDirection(trendDetail, fallbackForecast) {
   const forecast = trendDetail?.forecast || fallbackForecast;
   if (!forecast || !forecast.trend) return null;
   const forecastPrice = forecast.forecast_midpoint != null
@@ -44,6 +261,9 @@ function getDirectionFromData(trendDetail, fallbackForecast) {
   }
   return forecastPrice != null ? forecast.trend : null;
 }
+
+// Alias for backwards compatibility
+export const getDirectionFromData = getForecastDirection;
 
 
 const DEFAULT_FILTER = { direction: "All", sortBy: "name", category: "All" };
@@ -180,15 +400,37 @@ const PricesFilterDrawer = ({ open, filter, onClose, onApply, categories }) => {
 const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) => {
   const { t } = useLanguage();
   const unit = commodity.unitOfMeasure || 'kg';
-  const direction = data.direction ?? getDirectionFromData(data.trendDetail, commodity.forecast);
-  const hasForecast = Boolean(direction);
-  const cfg = direction ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
-  const DirIcon = cfg.Icon;
-  const outlook = hasForecast
-    ? (direction === 'Rising' ? t("farmer.prices.micro_rising", {}, "Price may improve soon.") : direction === 'Falling' ? t("farmer.prices.micro_falling", {}, "Price may drop soon.") : t("farmer.prices.micro_steady", {}, "Price is steady."))
-    : data.trendError
-      ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
-      : t("farmer.prices.trend_no_data", {}, "No trend data");
+  const movement = data.movement ?? getHistoricalMovement(commodity, data.trendDetail);
+
+  // Extract difference and previous price
+  let diff = null;
+  let prevPrice = null;
+
+  const records = data.trendDetail?.recent_records || data.trendDetail?.recentRecords;
+  if (records && records.length >= 2) {
+    const calc = calculateMovementFromRecords(records);
+    diff = calc.diff;
+    prevPrice = calc.prevPrice;
+  } else {
+    diff = data.trendDetail?.price_difference ?? data.trendDetail?.priceDifference ?? commodity.priceDifference ?? null;
+    prevPrice = data.trendDetail?.previous_price ?? data.trendDetail?.previousPrice ?? commodity.previousPrice ?? null;
+  }
+
+  const histAdv = buildHistoricalMovementAdvisory({
+    movement,
+    diff,
+    prevPrice,
+    unit,
+    t,
+  });
+
+  const moveCfg = MOVEMENT_CFG[movement] || MOVEMENT_CFG.default;
+  const MoveIcon = moveCfg.Icon;
+
+  const bannerText = histAdv.message;
+  const bannerColor = histAdv.color;
+  const bannerBg = histAdv.bg;
+  const BannerIcon = histAdv.Icon;
 
   const formatPriceValue = (value) => {
     if (value === null || value === undefined || value === '') return `-/${unit}`;
@@ -198,7 +440,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
 
   return (
     <div className="bg-white rounded-2xl border border-[var(--hw-neutral-200)] shadow-[var(--shadow-xs)] p-4 flex flex-col gap-3">
-      {/* Header: icon + name + direction */}
+      {/* Header: icon + name + historical movement indicator */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <CommodityIllustration
@@ -214,14 +456,12 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
             )}
           </div>
         </div>
-        <div className={`flex items-center gap-1 flex-shrink-0 ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
-          {hasForecast && <DirIcon className="w-3.5 h-3.5" />}
+        <div className={`flex items-center gap-1 flex-shrink-0 ${data.trendLoading ? 'text-[var(--hw-neutral-500)]' : moveCfg.color}`}>
+          <MoveIcon className="w-3.5 h-3.5" />
           <span className="text-[13px] font-medium">
             {data.trendLoading
               ? t("farmer.prices.trend_loading", {}, "Loading trend")
-              : hasForecast
-                ? t(cfg.key, {}, cfg.label)
-                : outlook}
+              : t(moveCfg.key, {}, moveCfg.label)}
           </span>
         </div>
       </div>
@@ -262,10 +502,11 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
         </div>
       </div>
 
-      {/* Outlook summary */}
-      <div className={`rounded-xl px-3.5 py-2.5 ${hasForecast ? (cfg.bg || 'bg-[var(--hw-neutral-50)]') : 'bg-[var(--hw-neutral-50)]'}`}>
-        <p className={`text-[13px] font-medium leading-snug ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
-          {data.trendLoading ? t("farmer.prices.trend_loading", {}, "Loading trend") : outlook}
+      {/* Outlook summary / Volatility Reason */}
+      <div className={`rounded-xl px-3.5 py-2.5 ${bannerBg}`}>
+        <p className={`text-[13px] font-medium leading-snug flex items-center gap-1.5 ${bannerColor}`}>
+          {BannerIcon && <BannerIcon className="w-3.5 h-3.5 flex-shrink-0" />}
+          <span>{data.trendLoading ? t("farmer.prices.trend_loading", {}, "Loading trend") : bannerText}</span>
         </p>
       </div>
 
@@ -348,6 +589,10 @@ function PricesPage() {
         displayData: itemPrices,
       };
 
+      const itemVolReason = camelItem.volatilityReason || camelItem.volatility_reason || null;
+      const itemVolCat = camelItem.volatilityCategory || camelItem.volatility_category || null;
+      const itemVolNotes = camelItem.volatilityNotes || camelItem.volatility_notes || null;
+
       if (!baseMap.has(baseName)) {
         baseMap.set(baseName, {
           id: camelItem.commodityId,
@@ -359,13 +604,32 @@ function PricesPage() {
           displayData: { ...itemPrices },
           variants: [variantItem],
           forecast: camelItem.forecast || null,
+          historicalMovement: camelItem.historicalMovement || camelItem.historical_movement || "Insufficient Data",
+          priceDifference: camelItem.priceDifference ?? camelItem.price_difference ?? null,
+          previousPrice: camelItem.previousPrice ?? camelItem.previous_price ?? null,
+          volatilityReason: itemVolReason,
+          volatilityCategory: itemVolCat,
+          volatilityNotes: itemVolNotes,
         });
       } else {
         const existing = baseMap.get(baseName);
         existing.variants.push(variantItem);
 
+        if (!existing.volatilityReason && itemVolReason) {
+          existing.volatilityReason = itemVolReason;
+          existing.volatilityCategory = itemVolCat;
+          existing.volatilityNotes = itemVolNotes;
+        }
+
         if (!existing.category && cat) {
           existing.category = cat;
+        }
+
+        const candidateMovement = camelItem.historicalMovement || camelItem.historical_movement;
+        if ((!existing.historicalMovement || existing.historicalMovement === "Insufficient Data") && candidateMovement && candidateMovement !== "Insufficient Data") {
+          existing.historicalMovement = candidateMovement;
+          existing.priceDifference = camelItem.priceDifference ?? camelItem.price_difference ?? null;
+          existing.previousPrice = camelItem.previousPrice ?? camelItem.previous_price ?? null;
         }
 
         const existingHasPrice = [
@@ -440,7 +704,8 @@ function PricesPage() {
     let list = commodities.map(commodity => {
       const data = commodity.displayData;
       const trendInfo = priceTrendByCommodity.get(commodity.id) || {};
-      const direction = getDirectionFromData(trendInfo.trendDetail, commodity.forecast);
+      const forecastDirection = getForecastDirection(trendInfo.trendDetail, commodity.forecast);
+      const movement = getHistoricalMovement(commodity, trendInfo.trendDetail);
 
       return {
         ...commodity,
@@ -452,7 +717,9 @@ function PricesPage() {
             dftcWholesale: null,
           }),
           ...trendInfo,
-          direction,
+          movement,
+          direction: movement,
+          forecastDirection,
         },
       };
     });
@@ -463,7 +730,7 @@ function PricesPage() {
     }
 
     if (filter.direction !== "All") {
-      list = list.filter((c) => c.displayData.direction === filter.direction);
+      list = list.filter((c) => (c.displayData.movement || c.displayData.direction) === filter.direction);
     }
 
     if (filter.category !== "All") {

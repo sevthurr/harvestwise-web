@@ -463,4 +463,31 @@ describe("price trend section cache seeding", () => {
 
     expect(JSON.stringify(detail)).not.toBe(JSON.stringify(trend));
   });
+
+  it("renders forecast midpoint instead of forecast range on FORECASTED PRICE card and advisory", async () => {
+    const client = makeClient();
+    parseResponse.mockResolvedValue({
+      ...DETAIL,
+      forecast: {
+        forecast_midpoint: 104.2,
+        lower_forecast: 73.37,
+        upper_forecast: 135.02,
+        trend: "Falling",
+        horizon_days: 7,
+      },
+    });
+
+    renderPage(client);
+
+    await waitFor(() => {
+      expect(screen.getByText("FORECASTED PRICE")).toBeInTheDocument();
+    });
+
+    // Midpoint should be displayed
+    expect(screen.getByText("₱104.20/kg")).toBeInTheDocument();
+    // Range should NOT be displayed
+    expect(screen.queryByText(/₱73\.37[–-]₱135\.02/)).toBeNull();
+    // Advisory message should reflect midpoint
+    expect(screen.getByText(/drop to ₱104\.20\/kg/i)).toBeInTheDocument();
+  });
 });

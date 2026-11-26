@@ -25,6 +25,7 @@ export const prices = {
   trend_rising: "Nagasaka",
   trend_falling: "Nagaubos",
   trend_stable: "Halos walay kausaban",
+  trend_insufficient: "Kulang ang datos",
   trend_no_data: "Walay datos sa trend",
   trend_loading: "Nagkuha sa trend",
   trend_unavailable: "Dili makuha ang trend sa presyo",
@@ -42,5 +43,14 @@ export const prices = {
   advisory_falling: "Nagpakita ang forecast para sa {commodity} og pag-ubos ngadto sa {range} sulod sa gitakdang panahon.",
   advisory_falling_no_range: "Nagpakita ang forecast para sa {commodity} og pag-ubos sa presyo sulod sa gitakdang panahon.",
   advisory_stable: "Nagpakita ang forecast para sa {commodity} nga magpabilin sa {range} sulod sa gitakdang panahon.",
-  advisory_stable_no_range: "Nagpakita ang forecast para sa {commodity} og lig-on nga presyo sulod sa gitakdang panahon."
+  advisory_stable_no_range: "Nagpakita ang forecast para sa {commodity} og lig-on nga presyo sulod sa gitakdang panahon.",
+  hist_rising: "Misaka ang presyo og ₱{diff}/{unit} gikan sa miaging presyo nga ₱{prev}/{unit}.",
+  hist_falling: "Miubos ang presyo og ₱{diff}/{unit} gikan sa miaging presyo nga ₱{prev}/{unit}.",
+  hist_stable: "Walay kausaban ang presyo gikan sa miaging presyo nga ₱{prev}/{unit}.",
+  hist_insufficient: "Walay miaging rekord sa presyo nga ikomparar.",
+  hist_rising_prevonly: "Misaka ang presyo og ₱{diff}/{unit} kumpara sa miaging rekord.",
+  hist_falling_prevonly: "Miubos ang presyo og ₱{diff}/{unit} kumpara sa miaging rekord.",
+  hist_rising_nodiff: "Mas taas ang presyo kumpara sa miaging rekord.",
+  hist_falling_nodiff: "Mas ubos ang presyo kumpara sa miaging rekord.",
+  hist_stable_nodiff: "Walay kausaban ang presyo kumpara sa miaging rekord.",
 };

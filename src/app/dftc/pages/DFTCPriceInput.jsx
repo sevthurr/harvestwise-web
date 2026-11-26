@@ -1288,14 +1288,19 @@ function DFTCPriceInput() {
 
     if (isCurrentUserReviewer) {
       // Reviewer account (Acting Section Head / Division Chief):
-      // Reviewed by MUST reflect current reviewer
-      defaultReviewer = currentStaff || (restoredReviewed && isReviewerStaff(restoredReviewed) ? restoredReviewed : reviewerStaffList[0]);
-      // Encoded by MUST reflect draft encoder if draft exists; if creating from scratch, default to currentStaff (self-encoding)
-      defaultEncoder = detectedDraftEncoder || restoredEncoded || currentStaff || (!user ? (staffList.find((s) => !isReviewerStaff(s)) || staffList[0]) : null);
+      // Must reflect the draft's original encoder if draft exists.
+      // If no draft exists, do not use reviewer and do NOT randomly select an encoder.
+      defaultEncoder = detectedDraftEncoder || (restoredEncoded && !isReviewerStaff(restoredEncoded) ? restoredEncoded : null);
     } else {
       // Encoder account (Agri Service and Related Worker):
-      // Encoded by MUST reflect current logged-in user
-      defaultEncoder = currentStaff || (!user ? (staffList.find((s) => !isReviewerStaff(s)) || staffList[0]) : null);
+      // Reflects draft encoder if resuming, otherwise the current logged-in encoder.
+      defaultEncoder = detectedDraftEncoder || currentStaff || staffList.find((s) => !isReviewerStaff(s)) || staffList[0];
+    }
+
+    if (isCurrentUserReviewer) {
+      // Reviewed by MUST reflect current reviewer
+      defaultReviewer = currentStaff || (restoredReviewed && isReviewerStaff(restoredReviewed) ? restoredReviewed : reviewerStaffList[0]);
+    } else {
       defaultReviewer = (restoredReviewed && isReviewerStaff(restoredReviewed))
         ? restoredReviewed
         : (reviewerStaffList.find((s) => s.user_id !== defaultEncoder?.user_id) || reviewerStaffList[0] || staffList[0]);
@@ -1304,6 +1309,9 @@ function DFTCPriceInput() {
     if (defaultEncoder) {
       setEncodedBy(defaultEncoder.name);
       setEncodedByRole(defaultEncoder.role);
+    } else if (isCurrentUserReviewer && !detectedDraftEncoder) {
+      setEncodedBy("");
+      setEncodedByRole("");
     }
     if (defaultReviewer) {
       setReviewedBy(defaultReviewer.name);
@@ -1593,6 +1601,10 @@ function DFTCPriceInput() {
         name: data.encoded_by,
         role: data.encoded_by_role,
       });
+      if (data.encoded_by) {
+        setEncodedBy(data.encoded_by);
+        if (data.encoded_by_role) setEncodedByRole(data.encoded_by_role);
+      }
     }
     const sharedDiscarded = Boolean(data.id) && data.cells.length === 0 &&
       draftUpdatedAtRef.current !== null &&
@@ -1884,6 +1896,10 @@ function DFTCPriceInput() {
               name: draftData.encoded_by,
               role: draftData.encoded_by_role,
             });
+            if (draftData.encoded_by) {
+              setEncodedBy(draftData.encoded_by);
+              if (draftData.encoded_by_role) setEncodedByRole(draftData.encoded_by_role);
+            }
           }
           if (draftData.cells.length) {
             // Same healing as the live resync: a commodity the form has no

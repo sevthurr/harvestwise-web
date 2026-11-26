@@ -296,33 +296,35 @@ function CommodityDetailPage() {
   const DirIcon = cfg.Icon;
   const uom = commodity?.unitOfMeasure || 'kg';
 
-  // Build a translated advisory from structured fields (lowerForecast / upperForecast / trend)
-  // instead of using the raw English advisoryText string from the API.
+  // Build a translated advisory from structured fields (forecastMidpoint / lowerForecast / upperForecast / trend)
+  // displaying the midpoint rather than the range.
   const buildPriceAdvisory = (forecastObj, commodityName, unitOfMeasure) => {
     const trend = forecastObj?.trend;
     const lower = forecastObj?.lowerForecast;
     const upper = forecastObj?.upperForecast;
+    const midpoint = forecastObj?.forecastMidpoint != null
+      ? forecastObj.forecastMidpoint
+      : (lower != null && upper != null ? (Number(lower) + Number(upper)) / 2 : null);
     const days = forecastObj?.horizonDays || 7;
     const name = commodityName || '';
     const unit = unitOfMeasure || 'kg';
 
-    const hasRange = lower != null && upper != null;
-    const range = hasRange
-      ? `₱${Number(lower).toFixed(2)}–₱${Number(upper).toFixed(2)}/${unit}`
+    const formattedTarget = midpoint != null
+      ? `₱${Number(midpoint).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/${unit}`
       : null;
 
     if (trend === 'Rising') {
-      return hasRange
-        ? t('farmer.prices.advisory_rising', { commodity: name, range, days }, `Prices for ${name} are expected to rise to ${range} over the next ${days} days.`)
+      return formattedTarget
+        ? t('farmer.prices.advisory_rising', { commodity: name, range: formattedTarget, days }, `Prices for ${name} are expected to rise to ${formattedTarget} over the next ${days} days.`)
         : t('farmer.prices.advisory_rising_no_range', { commodity: name }, `Prices for ${name} are expected to rise in the coming days.`);
     }
     if (trend === 'Falling') {
-      return hasRange
-        ? t('farmer.prices.advisory_falling', { commodity: name, range, days }, `Prices for ${name} are expected to drop to ${range} over the next ${days} days.`)
+      return formattedTarget
+        ? t('farmer.prices.advisory_falling', { commodity: name, range: formattedTarget, days }, `Prices for ${name} are expected to drop to ${formattedTarget} over the next ${days} days.`)
         : t('farmer.prices.advisory_falling_no_range', { commodity: name }, `Prices for ${name} are expected to drop in the coming days.`);
     }
-    return hasRange
-      ? t('farmer.prices.advisory_stable', { commodity: name, range }, `Prices for ${name} are expected to remain stable around ${range}.`)
+    return formattedTarget
+      ? t('farmer.prices.advisory_stable', { commodity: name, range: formattedTarget }, `Prices for ${name} are expected to remain stable around ${formattedTarget}.`)
       : t('farmer.prices.advisory_stable_no_range', { commodity: name }, `Prices for ${name} are expected to remain stable.`);
   };
 
@@ -445,14 +447,18 @@ function CommodityDetailPage() {
       if (!commodity) return [];
       const priceVal = forecast.currentPrice ?? resolvedDetailData?.currentPrice ?? priceRecords[0]?.prevailPrice ?? null;
       const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
-      const forecastRangeText = (lowerForecast != null && upperForecast != null)
-        ? `${formatPrice(lowerForecast)}–${formatPrice(upperForecast)}/${uom}`
+      const midpoint = forecast.forecastMidpoint != null
+        ? forecast.forecastMidpoint
+        : (lowerForecast != null && upperForecast != null ? (Number(lowerForecast) + Number(upperForecast)) / 2 : null);
+      const forecastPriceText = midpoint != null
+        ? `₱${Number(midpoint).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/${uom}`
         : `-/${uom}`;
       return [{
         id: commodity.id,
         label: commodity.variety || commodity.name,
         currentPriceText,
-        forecastRangeText,
+        forecastRangeText: forecastPriceText,
+        forecastPriceText,
       }];
     }
 
@@ -485,28 +491,36 @@ function CommodityDetailPage() {
       let priceVal = null;
       let lower = null;
       let upper = null;
+      let midpoint = null;
 
       if (isCurrentActive && resolvedDetailData) {
         priceVal = forecast.currentPrice ?? resolvedDetailData.currentPrice ?? priceRecords[0]?.prevailPrice ?? getAvailablePrice(v.prices);
+        midpoint = forecast.forecastMidpoint ?? null;
         lower = forecast.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = forecast.upperForecast ?? v.forecast?.upperForecast ?? null;
       } else {
         priceVal = getAvailablePrice(v.prices);
         const siblingDetail = siblingForecastById[v.commodityId || v.id];
+        midpoint = siblingDetail?.forecast?.forecastMidpoint ?? v.forecast?.forecastMidpoint ?? null;
         lower = siblingDetail?.forecast?.lowerForecast ?? v.forecast?.lowerForecast ?? null;
         upper = siblingDetail?.forecast?.upperForecast ?? v.forecast?.upperForecast ?? null;
       }
 
+      if (midpoint == null && lower != null && upper != null) {
+        midpoint = (Number(lower) + Number(upper)) / 2;
+      }
+
       const currentPriceText = priceVal != null ? `${formatPrice(priceVal)}/${uom}` : `-/${uom}`;
-      const forecastRangeText = (lower != null && upper != null)
-        ? `${formatPrice(lower)}–${formatPrice(upper)}/${uom}`
+      const forecastPriceText = midpoint != null
+        ? `₱${Number(midpoint).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/${uom}`
         : `-/${uom}`;
 
       return {
         id: v.commodityId || v.id || i,
         label,
         currentPriceText,
-        forecastRangeText,
+        forecastRangeText: forecastPriceText,
+        forecastPriceText,
       };
     });
   }, [familyVariants, market, uom, commodity, commodityId, resolvedDetailData, forecast, priceRecords, lowerForecast, upperForecast, siblingForecastById]);
@@ -597,14 +611,18 @@ function CommodityDetailPage() {
   }
 
   const handleViewPriceTrend = () => {
+    const midpoint = forecast.forecastMidpoint != null
+      ? forecast.forecastMidpoint
+      : (lowerForecast != null && upperForecast != null ? (Number(lowerForecast) + Number(upperForecast)) / 2 : null);
+    const forecastMidText = midpoint != null
+      ? `₱${Number(midpoint).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/${uom}`
+      : `-/${uom}`;
     const state = {
       commodityName: commodity.name,
       marketLabel: MARKET_LABEL[market],
       currentPrice: currentPrice,
       direction: forecast.trend || 'Stable',
-      range: (lowerForecast != null && upperForecast != null)
-        ? `${formatPrice(lowerForecast)}–${formatPrice(upperForecast)}/${uom}`
-        : `-/${uom}`
+      range: forecastMidText,
     };
     navigate(`/farmer/prices/${commodity.id}/price-trend`, { state });
   };

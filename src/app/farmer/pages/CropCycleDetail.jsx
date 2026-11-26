@@ -245,18 +245,21 @@ function CropCycleDetailPage() {
     : Number(crop?.actualHarvestQty || 0);
   const pricedHarvestQty = harvestRecords.reduce((sum, record) => {
     const quantity = Number(record.actualHarvestQty ?? record.actual_harvest_qty ?? 0);
-    const price = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg;
+    const price = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg ?? crop?.actualSellingPrice;
     return price != null && Number.isFinite(Number(price)) ? sum + quantity : sum;
   }, 0);
   const actualHarvestRevenue = harvestRecords.length > 0
     ? harvestRecords.reduce((sum, record) => {
       const quantity = Number(record.actualHarvestQty ?? record.actual_harvest_qty ?? 0);
-      const price = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg;
+      const price = record.actualSellingPricePerKg ?? record.actual_selling_price_per_kg ?? crop?.actualSellingPrice;
       return price != null && Number.isFinite(Number(price)) ? sum + quantity * Number(price) : sum;
     }, 0)
     : (actualHarvestedQty > 0 && crop?.actualSellingPrice != null
       ? actualHarvestedQty * Number(crop.actualSellingPrice)
       : 0);
+  const hasActualRevenue = actualHarvestRevenue > 0
+    || pricedHarvestQty > 0
+    || (actualHarvestedQty > 0 && crop?.actualSellingPrice != null);
   const hasCompleteActualRevenue = actualHarvestedQty === 0
     || (harvestRecords.length > 0
       ? pricedHarvestQty >= actualHarvestedQty
@@ -275,7 +278,6 @@ function CropCycleDetailPage() {
   const remainingExpected = expectedTotalVolume > 0
     ? Math.max(0, expectedTotalVolume - savedHarvestProgress)
     : "";
-  const isExceedingRemaining = expectedTotalVolume > 0 && parsedHarvestEntry > (expectedTotalVolume - savedHarvestProgress);
   if (!crop) {
     return <div className="px-4 py-8 text-center">
       <p className="text-[var(--hw-neutral-900)]">{t ? t("farmer.empty.crop_not_found") : "Crop not found."}</p>
@@ -291,20 +293,10 @@ function CropCycleDetailPage() {
       !harvestEntryDate
       || !Number.isFinite(quantity)
       || quantity <= 0
-      || (expectedTotalVolume > 0 && quantity > remainingExpected)
       || parsedHarvestPrice == null
       || !Number.isFinite(parsedHarvestPrice)
       || parsedHarvestPrice < 0
     ) {
-      if (expectedTotalVolume > 0 && quantity > remainingExpected) {
-        setActionError(
-          t(
-            "farmer.cropCycle.harvest_exceeds_remaining",
-            { max: remainingExpected },
-            `Harvest quantity cannot exceed remaining yield (${remainingExpected} kg).`
-          )
-        );
-      }
       return;
     }
 
@@ -1203,15 +1195,11 @@ function CropCycleDetailPage() {
               id="harvest-qty-input"
               type="number"
               min="0.01"
-              max={remainingExpected !== "" && Number(remainingExpected) > 0 ? remainingExpected : undefined}
               step="0.01"
               value={harvestEntryQty}
               onChange={(e) => setHarvestEntryQty(e.target.value)}
               placeholder="e.g. 450"
-              className={`w-full min-w-0 px-2 py-1.5 rounded-xl border text-sm outline-none focus:ring-1 bg-white ${isExceedingRemaining
-                  ? "border-red-500 focus:border-red-500 focus:ring-red-500 text-red-900"
-                  : "border-[var(--hw-neutral-200)] focus:border-[var(--hw-green-600)] focus:ring-[var(--hw-green-600)]"
-                }`}
+              className="w-full min-w-0 px-2 py-1.5 rounded-xl border border-[var(--hw-neutral-200)] text-sm outline-none focus:border-[var(--hw-green-600)] focus:ring-1 focus:ring-[var(--hw-green-600)] bg-white"
             />
           </div>
           <div>
@@ -1232,7 +1220,7 @@ function CropCycleDetailPage() {
           <button
             type="button"
             onClick={handleSaveHarvestEntry}
-            disabled={isSavingHarvestEntry || !harvestEntryDate || parsedHarvestEntry <= 0 || isExceedingRemaining || parsedHarvestPrice == null || parsedHarvestPrice < 0}
+            disabled={isSavingHarvestEntry || !harvestEntryDate || parsedHarvestEntry <= 0 || parsedHarvestPrice == null || parsedHarvestPrice < 0}
             aria-label={t("farmer.cropCycle.save_harvest_entry", {}, "Save harvest entry")}
             title={t("farmer.cropCycle.save_harvest_entry", {}, "Save harvest entry")}
             className="h-[34px] w-[38px] inline-flex items-center justify-center rounded-xl bg-[var(--hw-green-700)] text-white hover:bg-[var(--hw-green-800)] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1240,15 +1228,6 @@ function CropCycleDetailPage() {
             <Check className="w-4 h-4" />
           </button>
         </div>
-        {isExceedingRemaining && (
-          <p className="text-xs text-red-600 font-medium">
-            {t(
-              "farmer.cropCycle.harvest_exceeds_remaining",
-              { max: remainingExpected },
-              `Harvest quantity cannot exceed remaining yield (${remainingExpected} kg).`
-            )}
-          </p>
-        )}
         <p className="text-xs text-[var(--hw-neutral-700)]">
           {t("farmer.cropCycle.remaining_expected", {}, "Remaining expected (kg)")}: {remainingExpected === "" ? "—" : remainingExpected}
         </p>
@@ -1305,7 +1284,7 @@ function CropCycleDetailPage() {
             {t("farmer.cropCycle.actual_earnings", {}, "Actual earnings")}
           </p>
           <p className="text-[20px] font-bold text-emerald-700 leading-none">
-            {hasCompleteActualRevenue ? formatPeso(actualHarvestRevenue) : "—"}
+            {hasActualRevenue ? formatPeso(actualHarvestRevenue) : "—"}
           </p>
           <p className="text-[13px] text-[var(--hw-neutral-900)]">
             {t("farmer.cropCycle.based_on_recorded_harvests", {}, "Based on recorded harvests")}

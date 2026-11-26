@@ -928,14 +928,19 @@ export default function DFTCArrivalInput() {
 
     if (isCurrentUserReviewer) {
       // Reviewer account (Acting Section Head / Division Chief):
-      // Reviewed by MUST reflect current reviewer
-      defaultReviewer = currentStaff || (restoredReviewed && isReviewerStaff(restoredReviewed) ? restoredReviewed : reviewerStaffList[0]);
-      // Encoded by MUST reflect draft encoder if draft exists; if creating from scratch, default to currentStaff (self-encoding)
-      defaultEncoder = detectedDraftEncoder || restoredEncoded || currentStaff || (!user ? (staffList.find((s) => !isReviewerStaff(s)) || staffList[0]) : null);
+      // Must reflect the draft's original encoder if draft exists.
+      // If no draft exists, do not use reviewer and do NOT randomly select an encoder.
+      defaultEncoder = detectedDraftEncoder || (restoredEncoded && !isReviewerStaff(restoredEncoded) ? restoredEncoded : null);
     } else {
       // Encoder account (Agri Service and Related Worker):
-      // Encoded by MUST reflect current logged-in user
-      defaultEncoder = currentStaff || (!user ? (staffList.find((s) => !isReviewerStaff(s)) || staffList[0]) : null);
+      // Reflects draft encoder if resuming, otherwise the current logged-in encoder.
+      defaultEncoder = detectedDraftEncoder || currentStaff || staffList.find((s) => !isReviewerStaff(s)) || staffList[0];
+    }
+
+    if (isCurrentUserReviewer) {
+      // Reviewed by MUST reflect current reviewer
+      defaultReviewer = currentStaff || (restoredReviewed && isReviewerStaff(restoredReviewed) ? restoredReviewed : reviewerStaffList[0]);
+    } else {
       defaultReviewer = (restoredReviewed && isReviewerStaff(restoredReviewed))
         ? restoredReviewed
         : (reviewerStaffList.find((s) => s.user_id !== defaultEncoder?.user_id) || reviewerStaffList[0] || staffList[0]);
@@ -944,6 +949,9 @@ export default function DFTCArrivalInput() {
     if (defaultEncoder) {
       setEncodedBy(defaultEncoder.name);
       setEncodedByRole(defaultEncoder.role);
+    } else if (isCurrentUserReviewer && !detectedDraftEncoder) {
+      setEncodedBy("");
+      setEncodedByRole("");
     }
     if (defaultReviewer) {
       setReviewedBy(defaultReviewer.name);
@@ -1104,7 +1112,12 @@ export default function DFTCArrivalInput() {
       try {
         const saved = await parseResponse(await apiPut("/dftc/arrival-draft", {
           reporting_date: selectedDate,
-          payload,
+          payload: {
+            ...payload,
+            encoded_by: encodedBy,
+            encoded_by_role: encodedByRole,
+            encoded_by_user_id: detectedDraftEncoder?.user_id || currentStaff?.user_id || user?.id,
+          },
           expected_version: arrivalDraftVersionRef.current || null,
         }));
         arrivalDraftVersionRef.current = saved?.version || arrivalDraftVersionRef.current;
@@ -1154,6 +1167,10 @@ export default function DFTCArrivalInput() {
           const encoderRole = draft.encoded_by_role || draft.payload?.encoded_by_role;
           if (encoderUid || encoderName) {
             setServerDraftEncoder({ userId: encoderUid, name: encoderName, role: encoderRole });
+            if (encoderName) {
+              setEncodedBy(encoderName);
+              if (encoderRole) setEncodedByRole(encoderRole);
+            }
           }
           const payload = draft.payload || {};
           if (payload.tabFields) setTabFields(payload.tabFields);
@@ -1183,6 +1200,10 @@ export default function DFTCArrivalInput() {
         const encoderRole = draft.encoded_by_role || draft.payload?.encoded_by_role;
         if (encoderUid || encoderName) {
           setServerDraftEncoder({ userId: encoderUid, name: encoderName, role: encoderRole });
+          if (encoderName) {
+            setEncodedBy(encoderName);
+            if (encoderRole) setEncodedByRole(encoderRole);
+          }
         }
         const payload = draft.payload || {};
         if (payload.tabFields) setTabFields(payload.tabFields);
