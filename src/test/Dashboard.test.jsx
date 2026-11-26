@@ -155,4 +155,25 @@ describe("Farmer dashboard price trends", () => {
       records_limit: 100,
     });
   });
+
+  it("displays actual historical price difference (current - previous) independently of forecast", async () => {
+    // Current price: 110, previous price: 100 -> diff: +10, Rising.
+    // Forecast predicts Falling to midpoint: 90 -> forecast diff would be -20.
+    getPriceDetailMock.mockResolvedValue({
+      historical_movement: "Rising",
+      recent_records: [{ prevail_price: 110 }, { prevail_price: 100 }],
+      forecast: {
+        trend: "Falling",
+        forecast_midpoint: 90,
+        forecast_date: "2026-08-07",
+        points: [{ forecast_date: "2026-08-07" }],
+      },
+    });
+
+    renderDashboard();
+
+    expect((await screen.findAllByText("Rising")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("+₱10").length).toBeGreaterThan(0);
+    expect(screen.queryByText("-₱20")).not.toBeInTheDocument();
+  });
 });

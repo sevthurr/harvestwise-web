@@ -28,11 +28,13 @@ import { sortWithPreferredFirst, isPreferredCrop } from "../utils/cropPreference
 import { PreferredStar } from "../components/shared/PreferredStar";
 import { formatPriceChangeDisplay } from "../../global/utils/priceFormatting";
 import * as pricesApi from "../../../services/api/pricesApi";
+import { calculateMovementFromRecords, getHistoricalMovement } from "./Prices";
 
 const DIR_CFG = {
   Rising: { color: "text-emerald-600", Icon: TrendingUp, key: "farmer.prices.trend_rising", label: "Rising" },
   Falling: { color: "text-red-500", Icon: TrendingDown, key: "farmer.prices.trend_falling", label: "Falling" },
-  Stable: { color: "text-blue-500", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  Stable: { color: "text-[var(--hw-neutral-600)]", Icon: Minus, key: "farmer.prices.trend_stable", label: "Stable" },
+  "Insufficient Data": { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_insufficient", label: "Insufficient Data" },
   default: { color: "text-[var(--hw-neutral-500)]", Icon: Minus, key: "farmer.prices.trend_no_data", label: "No trend data" }
 };
 
@@ -56,15 +58,9 @@ function formatForecastPeriod(forecast) {
   return startDate === endDate ? end : `${start} – ${end}`;
 }
 
-function formatPriceChange(forecast, currentPrice) {
-  if (!forecast || forecast.forecast_midpoint == null) return null;
-  const midpoint = Number(forecast.forecast_midpoint);
-  const current = currentPrice != null ? Number(currentPrice) : null;
-  if (current == null || current <= 0) return null;
-
-  const diff = midpoint - current;
-  const pct = (diff / current) * 100;
-  return formatPriceChangeDisplay(diff, pct, { hidePercent: true });
+function formatPriceChange(diff) {
+  if (diff == null || !Number.isFinite(Number(diff))) return null;
+  return formatPriceChangeDisplay(Number(diff), null, { hidePercent: true });
 }
 
 /**
@@ -295,6 +291,9 @@ function DashboardPage() {
             price: retailPrice,
             priceType,
             uom: camelItem.unitOfMeasure || 'kg',
+            historicalMovement: camelItem.historicalMovement || camelItem.historical_movement || item.historical_movement,
+            priceDifference: camelItem.priceDifference ?? camelItem.price_difference ?? item.price_difference,
+            previousPrice: camelItem.previousPrice ?? camelItem.previous_price ?? item.previous_price,
           });
         } else {
           const existing = baseMap.get(name);
@@ -303,8 +302,10 @@ function DashboardPage() {
             existing.id = camelItem.commodityId;
             if (priceType) existing.priceType = priceType;
           }
-          if (!existing.direction && camelItem.forecast?.trend) {
-            existing.direction = camelItem.forecast.trend;
+          if (!existing.historicalMovement && (camelItem.historicalMovement || camelItem.historical_movement || item.historical_movement)) {
+            existing.historicalMovement = camelItem.historicalMovement || camelItem.historical_movement || item.historical_movement;
+            existing.priceDifference = camelItem.priceDifference ?? camelItem.price_difference ?? item.price_difference;
+            existing.previousPrice = camelItem.previousPrice ?? camelItem.previous_price ?? item.previous_price;
           }
         }
       });
@@ -456,21 +457,35 @@ function DashboardPage() {
                       {prices.map((item, index) => {
                         const trendQuery = priceTrendQueries[index];
                         const trendDetail = trendQuery?.data || (item.forecast ? { forecast: item.forecast, recent_records: item.recent_records || [] } : null);
-                        const forecast = trendDetail?.forecast || item.forecast;
-                        const direction = forecast?.trend || item.direction;
-                        const forecastPeriod = formatForecastPeriod(forecast);
-                        const hasForecast = Boolean(forecast?.forecast_midpoint != null && direction != null);
-                        const cfg = hasForecast ? (DIR_CFG[direction] || DIR_CFG.default) : DIR_CFG.default;
+
+                        let diff = null;
+                        let prevPrice = null;
+                        let movement = trendDetail?.historical_movement ?? trendDetail?.historicalMovement ?? item.historicalMovement ?? item.historical_movement;
+
+                        const records = trendDetail?.recent_records || trendDetail?.recentRecords;
+                        if (records && records.length >= 2) {
+                          const calc = calculateMovementFromRecords(records);
+                          diff = calc.diff;
+                          prevPrice = calc.prevPrice;
+                          if (!movement || movement === "Insufficient Data") {
+                            movement = calc.movement;
+                          }
+                        } else {
+                          diff = trendDetail?.price_difference ?? trendDetail?.priceDifference ?? item.priceDifference ?? null;
+                          prevPrice = trendDetail?.previous_price ?? trendDetail?.previousPrice ?? item.previousPrice ?? null;
+                        }
+
+                        if (!movement) {
+                          movement = getHistoricalMovement(item, trendDetail);
+                        }
+
+                        const hasMovement = Boolean(movement && movement !== "Insufficient Data" && movement !== "No trend data");
+                        const cfg = (hasMovement ? DIR_CFG[movement] : null) || DIR_CFG.default;
                         const DirIcon = cfg.Icon;
                         const count = getVariants(item.name).length;
                         const formattedPrice = item.price != null && item.price !== '' ? `₱${item.price}/${item.uom || 'kg'}` : `-/${item.uom || 'kg'}`;
-                        const currentPrice = item.price != null
-                          ? Number(item.price)
-                          : (trendDetail?.recent_records?.[0]?.prevail_price != null
-                            ? Number(trendDetail.recent_records[0].prevail_price)
-                            : null);
-                        const priceChange = hasForecast ? formatPriceChange(forecast, currentPrice) : null;
-                        const isQueryLoading = !item.forecast && item.id && (trendQuery?.isPending || trendQuery?.isFetching);
+                        const priceChange = diff != null ? formatPriceChange(diff) : null;
+                        const isQueryLoading = !trendDetail && item.id && (trendQuery?.isPending || trendQuery?.isFetching);
 
                         const isPreferred = isPreferredCrop(item, preferredCrops);
 
@@ -498,20 +513,20 @@ function DashboardPage() {
                               </p>
                               <p className="text-[12px] text-[var(--hw-neutral-900)] leading-tight mt-0.5">{formattedPrice}</p>
                             </div>
-                            <div className={`flex flex-col items-end flex-shrink-0 leading-tight ${hasForecast ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
+                            <div className={`flex flex-col items-end flex-shrink-0 leading-tight ${hasMovement ? cfg.color : 'text-[var(--hw-neutral-500)]'}`}>
                               <div className="flex items-center gap-1">
-                                {hasForecast && <DirIcon className="w-3.5 h-3.5 shrink-0" />}
-                                <span className={hasForecast && priceChange ? "font-semibold text-[12px] sm:text-[12.5px]" : "text-[12px] font-medium"}>
+                                {hasMovement && <DirIcon className="w-3.5 h-3.5 shrink-0" />}
+                                <span className={hasMovement && priceChange ? "font-semibold text-[12px] sm:text-[12.5px]" : "text-[12px] font-medium"}>
                                   {isQueryLoading
                                   ? t("farmer.prices.trend_loading", {}, "Loading trend")
-                                  : hasForecast
+                                  : hasMovement
                                     ? (priceChange || t(cfg.key, {}, cfg.label))
                                     : trendQuery?.isError
                                       ? t("farmer.prices.trend_unavailable", {}, "Price trend unavailable")
                                       : t("farmer.prices.trend_no_data", {}, "No trend data")}
                                 </span>
                               </div>
-                              {hasForecast && priceChange && (
+                              {hasMovement && priceChange && (
                                 <span className="text-[11px] font-normal opacity-85 mt-0.5">
                                   {t(cfg.key, {}, cfg.label)}
                                 </span>

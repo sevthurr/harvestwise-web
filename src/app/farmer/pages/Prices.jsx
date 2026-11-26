@@ -138,8 +138,10 @@ export function buildHistoricalMovementAdvisory({
   diff,
   prevPrice,
   unit = "kg",
+  market = "Bankerohan Retail",
   t = (_k, _p, fallback) => fallback,
 }) {
+  const resolvedMarket = market || t("farmer.prices.trend_series_label", {}, "Bankerohan Retail");
   const isRising = movement === "Rising";
   const isFalling = movement === "Falling";
   const isStable = movement === "Stable";
@@ -153,61 +155,61 @@ export function buildHistoricalMovementAdvisory({
     if (formattedDiff && formattedPrev) {
       message = t(
         "farmer.prices.hist_rising",
-        { diff: formattedDiff, prev: formattedPrev, unit },
-        `Price increased by ₱${formattedDiff}/${unit} from previous price of ₱${formattedPrev}/${unit}.`
+        { diff: formattedDiff, prev: formattedPrev, unit, market: resolvedMarket },
+        `Price increased by ₱${formattedDiff}/${unit} from previous price of ₱${formattedPrev}/${unit} on ${resolvedMarket}.`
       );
     } else if (formattedDiff) {
       message = t(
         "farmer.prices.hist_rising_prevonly",
-        { diff: formattedDiff, unit },
-        `Price increased by ₱${formattedDiff}/${unit} from previous record.`
+        { diff: formattedDiff, unit, market: resolvedMarket },
+        `Price increased by ₱${formattedDiff}/${unit} from previous record on ${resolvedMarket}.`
       );
     } else {
       message = t(
         "farmer.prices.hist_rising_nodiff",
-        {},
-        "Price is higher than the previous record."
+        { market: resolvedMarket },
+        `Price is higher than the previous record on ${resolvedMarket}.`
       );
     }
   } else if (isFalling) {
     if (formattedDiff && formattedPrev) {
       message = t(
         "farmer.prices.hist_falling",
-        { diff: formattedDiff, prev: formattedPrev, unit },
-        `Price decreased by ₱${formattedDiff}/${unit} from previous price of ₱${formattedPrev}/${unit}.`
+        { diff: formattedDiff, prev: formattedPrev, unit, market: resolvedMarket },
+        `Price decreased by ₱${formattedDiff}/${unit} from previous price of ₱${formattedPrev}/${unit} on ${resolvedMarket}.`
       );
     } else if (formattedDiff) {
       message = t(
         "farmer.prices.hist_falling_prevonly",
-        { diff: formattedDiff, unit },
-        `Price decreased by ₱${formattedDiff}/${unit} from previous record.`
+        { diff: formattedDiff, unit, market: resolvedMarket },
+        `Price decreased by ₱${formattedDiff}/${unit} from previous record on ${resolvedMarket}.`
       );
     } else {
       message = t(
         "farmer.prices.hist_falling_nodiff",
-        {},
-        "Price is lower than the previous record."
+        { market: resolvedMarket },
+        `Price is lower than the previous record on ${resolvedMarket}.`
       );
     }
   } else if (isStable) {
     if (formattedPrev) {
       message = t(
         "farmer.prices.hist_stable",
-        { prev: formattedPrev, unit },
-        `Price unchanged from previous price of ₱${formattedPrev}/${unit}.`
+        { prev: formattedPrev, unit, market: resolvedMarket },
+        `Price unchanged from previous price of ₱${formattedPrev}/${unit} on ${resolvedMarket}.`
       );
     } else {
       message = t(
         "farmer.prices.hist_stable_nodiff",
-        {},
-        "Price unchanged from previous record."
+        { market: resolvedMarket },
+        `Price is unchanged from the previous record on ${resolvedMarket}.`
       );
     }
   } else {
     message = t(
       "farmer.prices.hist_insufficient",
-      {},
-      "No previous price record available for comparison."
+      { market: resolvedMarket },
+      `No previous price record available for comparison on ${resolvedMarket}.`
     );
   }
 
@@ -421,6 +423,7 @@ const CropPriceCard = ({ commodity, data, onViewDetails, isPreferred = false }) 
     diff,
     prevPrice,
     unit,
+    market: t("farmer.prices.trend_series_label", {}, "Bankerohan Retail"),
     t,
   });
 

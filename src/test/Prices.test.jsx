@@ -89,7 +89,7 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     expect(await screen.findByText("Falling")).toBeInTheDocument();
-    expect(screen.getByText("Price decreased by ₱10/kg from previous price of ₱150/kg.")).toBeInTheDocument();
+    expect(screen.getByText("Price decreased by ₱10/kg from previous price of ₱150/kg on Bankerohan Retail.")).toBeInTheDocument();
     expect(screen.getByText("₱150/kg")).toBeInTheDocument();
     expect(screen.getByText("₱130/kg")).toBeInTheDocument();
     expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", {
@@ -114,7 +114,7 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     expect(await screen.findByText("Rising")).toBeInTheDocument();
-    expect(screen.getByText("Price increased by ₱10/kg from previous price of ₱100/kg.")).toBeInTheDocument();
+    expect(screen.getByText("Price increased by ₱10/kg from previous price of ₱100/kg on Bankerohan Retail.")).toBeInTheDocument();
     expect(screen.queryByText("Price may drop soon.")).not.toBeInTheDocument();
   });
 
@@ -128,7 +128,7 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     expect(await screen.findByText("Insufficient Data")).toBeInTheDocument();
-    expect(screen.getByText("No previous price record available for comparison.")).toBeInTheDocument();
+    expect(screen.getByText("No previous price record available for comparison on Bankerohan Retail.")).toBeInTheDocument();
   });
 
   it("renders preferred crops first before non-preferred commodities", async () => {
@@ -469,7 +469,7 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     expect(await screen.findByText("Rising")).toBeInTheDocument();
-    expect(screen.getByText("Price increased by ₱10/kg from previous price of ₱100/kg.")).toBeInTheDocument();
+    expect(screen.getByText("Price increased by ₱10/kg from previous price of ₱100/kg on Bankerohan Retail.")).toBeInTheDocument();
     expect(screen.queryByText("Reason for sudden price increase: Decreased Supply")).not.toBeInTheDocument();
     expect(screen.queryByText("Price may drop soon.")).not.toBeInTheDocument();
   });
