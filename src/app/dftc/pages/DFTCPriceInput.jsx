@@ -1173,6 +1173,7 @@ function DFTCPriceInput() {
     const privileged = staffList.filter(isReviewerStaff);
     return privileged.length > 0 ? privileged : staffList;
   }, [staffList]);
+  const [serverDraftEncoder, setServerDraftEncoder] = useState(null);
   const [encodedBy, setEncodedBy] = useState("");
   const [encodedByRole, setEncodedByRole] = useState("");
   const [reviewedBy, setReviewedBy] = useState("");
@@ -1238,25 +1239,42 @@ function DFTCPriceInput() {
     dirty: [...dirtyRef.current]
   };
 
+  const isCurrentUserReviewer = isPrivilegedDftcPosition(user);
+
+  const currentStaff = useMemo(() => {
+    if (!user || staffList.length === 0) return null;
+    const match = staffList.find((staff) =>
+      (staff.user_id && staff.user_id === user.id) ||
+      (user.first_name && staff.name.toLowerCase().includes(user.first_name.toLowerCase()) &&
+       user.last_name && staff.name.toLowerCase().includes(user.last_name.toLowerCase()))
+    );
+    if (match) return match;
+    if (user.first_name || user.full_name || user.name) {
+      return {
+        user_id: user.id,
+        name: [user.first_name, user.middle_name, user.last_name, user.suffix].filter(Boolean).join(" ").toUpperCase() || (user.full_name || user.name || "DFTC Staff").toUpperCase(),
+        role: user.role?.role_name || user.position_title || "DFTC Personnel"
+      };
+    }
+    return null;
+  }, [staffList, user]);
+
+  const detectedDraftEncoder = useMemo(() => {
+    if (!serverDraftEncoder || staffList.length === 0) return null;
+    return staffList.find((s) =>
+      (serverDraftEncoder.userId && s.user_id === serverDraftEncoder.userId) ||
+      (serverDraftEncoder.name && s.name.toUpperCase() === serverDraftEncoder.name.toUpperCase())
+    ) || (serverDraftEncoder.name ? {
+      user_id: serverDraftEncoder.userId,
+      name: serverDraftEncoder.name,
+      role: serverDraftEncoder.role || "Agri Service and Related Worker"
+    } : null);
+  }, [serverDraftEncoder, staffList]);
+
   // Restore or automatically populate personnel for the active reporting date once the
   // shared staff query is available.
   useEffect(() => {
     if (staffList.length === 0) return;
-
-    let currentStaff = null;
-    if (user) {
-      currentStaff = staffList.find((staff) =>
-        (staff.user_id && staff.user_id === user.id) ||
-        (user.first_name && staff.name.toLowerCase().includes(user.first_name.toLowerCase()) &&
-         user.last_name && staff.name.toLowerCase().includes(user.last_name.toLowerCase()))
-      );
-      if (!currentStaff && (user.first_name || user.full_name || user.name)) {
-        currentStaff = {
-          name: [user.first_name, user.middle_name, user.last_name, user.suffix].filter(Boolean).join(" ").toUpperCase() || (user.full_name || user.name || "DFTC Staff").toUpperCase(),
-          role: user.role?.role_name || user.position_title || "DFTC Personnel"
-        };
-      }
-    }
 
     let stored = {};
     try {
@@ -1265,11 +1283,23 @@ function DFTCPriceInput() {
     const restoredEncoded = staffList.find((staff) => staff.name === stored.encodedBy);
     const restoredReviewed = staffList.find((staff) => staff.name === stored.reviewedBy);
 
-    // Current logged-in user is automatically assigned as Encoder without manual input
-    const defaultEncoder = currentStaff || restoredEncoded || staffList[0];
-    const defaultReviewer = (restoredReviewed && isReviewerStaff(restoredReviewed))
-      ? restoredReviewed
-      : (reviewerStaffList.find((s) => s !== defaultEncoder) || reviewerStaffList[0] || staffList[0]);
+    let defaultEncoder = null;
+    let defaultReviewer = null;
+
+    if (isCurrentUserReviewer) {
+      // Reviewer account (Acting Section Head / Division Chief):
+      // Reviewed by MUST reflect current reviewer
+      defaultReviewer = currentStaff || (restoredReviewed && isReviewerStaff(restoredReviewed) ? restoredReviewed : reviewerStaffList[0]);
+      // Encoded by MUST reflect draft encoder if draft exists; if creating from scratch, default to currentStaff (self-encoding)
+      defaultEncoder = detectedDraftEncoder || restoredEncoded || currentStaff || (!user ? (staffList.find((s) => !isReviewerStaff(s)) || staffList[0]) : null);
+    } else {
+      // Encoder account (Agri Service and Related Worker):
+      // Encoded by MUST reflect current logged-in user
+      defaultEncoder = currentStaff || (!user ? (staffList.find((s) => !isReviewerStaff(s)) || staffList[0]) : null);
+      defaultReviewer = (restoredReviewed && isReviewerStaff(restoredReviewed))
+        ? restoredReviewed
+        : (reviewerStaffList.find((s) => s.user_id !== defaultEncoder?.user_id) || reviewerStaffList[0] || staffList[0]);
+    }
 
     if (defaultEncoder) {
       setEncodedBy(defaultEncoder.name);
@@ -1279,18 +1309,26 @@ function DFTCPriceInput() {
       setReviewedBy(defaultReviewer.name);
       setReviewedByRole(defaultReviewer.role);
     }
-  }, [selectedDate, staffList, user]);
+  }, [selectedDate, staffList, user, isCurrentUserReviewer, currentStaff, detectedDraftEncoder]);
 
   function handleEncodedByChange(name) {
     setEncodedBy(name);
     const found = staffList.find((s) => s.name === name);
     if (found) setEncodedByRole(found.role);
+    try {
+      const stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`)) || {};
+      localStorage.setItem(`dftc_report_personnel_${selectedDate}`, JSON.stringify({ ...stored, encodedBy: name }));
+    } catch {}
   }
 
   function handleReviewedByChange(name) {
     setReviewedBy(name);
     const found = staffList.find((s) => s.name === name);
     if (found) setReviewedByRole(found.role);
+    try {
+      const stored = JSON.parse(localStorage.getItem(`dftc_report_personnel_${selectedDate}`)) || {};
+      localStorage.setItem(`dftc_report_personnel_${selectedDate}`, JSON.stringify({ ...stored, reviewedBy: name }));
+    } catch {}
   }
 
   // Apply the shared catalog query data when it arrives. Both the mount load
@@ -1549,6 +1587,13 @@ function DFTCPriceInput() {
     if (draftRef.current.selectedDate !== date) return false;
 
     const remoteDraftToken = data.updated_at || null;
+    if (data.encoded_by_user_id || data.encoded_by) {
+      setServerDraftEncoder({
+        userId: data.encoded_by_user_id,
+        name: data.encoded_by,
+        role: data.encoded_by_role,
+      });
+    }
     const sharedDiscarded = Boolean(data.id) && data.cells.length === 0 &&
       draftUpdatedAtRef.current !== null &&
       remoteDraftToken !== draftUpdatedAtRef.current;
@@ -1833,6 +1878,13 @@ function DFTCPriceInput() {
         if (draftData && Array.isArray(draftData.cells)) {
           draftUpdatedAtRef.current = draftData.updated_at || null;
           draftFinalized = draftData.status === "saved";
+          if (draftData.encoded_by_user_id || draftData.encoded_by) {
+            setServerDraftEncoder({
+              userId: draftData.encoded_by_user_id,
+              name: draftData.encoded_by,
+              role: draftData.encoded_by_role,
+            });
+          }
           if (draftData.cells.length) {
             // Same healing as the live resync: a commodity the form has no
             // row for yet gets one before the cells are resolved.
@@ -1926,6 +1978,7 @@ function DFTCPriceInput() {
 
     setDateError("");
     setSelectedDate(newDate);
+    setServerDraftEncoder(null);
     lastRemoteCellCountRef.current = 0;
     setDataName(`DFTC Price Monitoring — ${formatDateLabel(newDate)}`);
     setCollapsed(new Set(PRICE_CATEGORIES.map((c) => c.id)));
