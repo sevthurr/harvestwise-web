@@ -690,7 +690,7 @@ function AdminForecasting() {
 
   const historicalDays = parseInt(historicalRange, 10) || 7;
   const filteredHistorical = useMemo(() => {
-    return filterRecordsByPeriod(chartPayload?.recent_records, `${historicalDays}d`);
+    return filterRecordsByPeriod(chartPayload?.recent_records, `${historicalDays}d`, null, null, { matchDayCount: true });
   }, [chartPayload, historicalDays]);
 
   const chartData = useMemo(

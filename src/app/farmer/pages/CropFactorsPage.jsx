@@ -7,10 +7,11 @@ import { FactorDetailTabs } from "../components/shared/FactorDetailTabs";
 import { useLanguage } from "../../global/contexts/LanguageContext";
 import { getPhaseConfig } from "../components/crops/types";
 import { normalizePhaseCode, PHASE_CODES, normalizeAdvisoryCode, ADVISORY_CODES } from "../utils/farmerCodes";
-import { apiPost, parseResponse } from "../../global/api";
+import { apiGet, apiPost, parseResponse } from "../../global/api";
 import * as analyticsApi from "../../../services/api/analyticsApi";
 import { buildWeatherRiskAnalysis } from "../../global/utils/weatherRiskAnalysis";
 import { hasValidAdvisoryDatePair } from "../../global/utils/apiTransforms";
+import { DAVAO_CITY_FALLBACK_COORDINATES } from "../../global/constants/location";
 import { CommodityIllustration } from "../../global/components/shared/CommodityIllustrations";
 import { CheckCircle2, AlertCircle, XCircle, AlertTriangle, AlertOctagon } from "lucide-react";
 import { composeAdvisoryBadge } from "../utils/advisoryMessageComposer";
@@ -25,6 +26,26 @@ function quarterForDate(value) {
   const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : new Date();
   const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
   return `Q${Math.floor(validDate.getMonth() / 3) + 1}`;
+}
+
+export function normalizeWeatherAdvisoryForecast(data) {
+  const dailyForecasts = Array.isArray(data?.daily_forecasts) ? data.daily_forecasts : [];
+  return {
+    status: dailyForecasts.length > 0 ? "ok" : "not_processed",
+    fetched_at: data?.fetched_at,
+    days: dailyForecasts.map((day) => ({
+      date: day.date,
+      day_label: day.day_label,
+      temp_min: day.temperature_min ?? day.temp_min,
+      temp_max: day.temperature_max ?? day.temp_max,
+      rainfall_mm: day.rainfall_mm ?? day.rainfall,
+      rain_probability_pct: day.rain_probability_pct ?? day.rain_pct,
+      humidity_pct: day.humidity_pct,
+      wind_speed_max_kmh: day.wind_speed_max_kmh,
+      occurrence: day.occurrence || null,
+      weather_condition: day.weather_condition,
+    })),
+  };
 }
 
 function CropFactorsPage() {
@@ -134,10 +155,36 @@ function CropFactorsPage() {
     enabled: Boolean(commodityIdentifier),
     staleTime: 1000 * 60 * 30,
   });
-  const weatherForecastQuery = useQuery({
+  const { data: profile } = useQuery({
+    queryKey: ["farmer", "profile"],
+    queryFn: async () => {
+      const response = await apiGet("/farmer/profile");
+      if (!response.ok) return null;
+      return parseResponse(response);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const weatherLat = profile?.latitude ?? DAVAO_CITY_FALLBACK_COORDINATES.latitude;
+  const weatherLon = profile?.longitude ?? DAVAO_CITY_FALLBACK_COORDINATES.longitude;
+  const weatherAdvisoryQuery = useQuery({
+    queryKey: ["weather", "advisory", weatherLat, weatherLon, commodityIdentifier],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        latitude: String(weatherLat),
+        longitude: String(weatherLon),
+      });
+      if (commodityIdentifier) params.set("commodity_id", commodityIdentifier);
+      const response = await apiGet(`/weather/advisory?${params.toString()}`);
+      if (!response.ok) throw new Error("Weather advisory request failed");
+      return parseResponse(response);
+    },
+    enabled: Boolean(crop.commodityName),
+    staleTime: 1000 * 60 * 30,
+  });
+  const weatherFallbackQuery = useQuery({
     queryKey: ["farmer", "admin-weather-forecast", 14],
     queryFn: () => analyticsApi.getWeatherForecast(14),
-    enabled: Boolean(crop.commodityName),
+    enabled: Boolean(crop.commodityName) && !weatherAdvisoryQuery.isLoading && !weatherAdvisoryQuery.data?.daily_forecasts?.length,
     staleTime: 1000 * 60 * 30,
   });
   const weatherRulesQuery = useQuery({
@@ -210,22 +257,31 @@ function CropFactorsPage() {
     dataSource: productionSummary?.record_count > 0 ? { name: productionSummary.commodity_name } : null,
   };
 
+  const weatherForecast = weatherAdvisoryQuery.data?.daily_forecasts?.length
+    ? normalizeWeatherAdvisoryForecast(weatherAdvisoryQuery.data)
+    : weatherFallbackQuery.data;
+  const cropWeatherAdvisory = (weatherAdvisoryQuery.data?.advisories || []).find((advisory) =>
+    advisory.commodity_id === commodityIdentifier ||
+    String(advisory.commodity_name || "").toLowerCase() === String(crop.commodityName || "").toLowerCase()
+  );
   const weatherAnalysis = buildWeatherRiskAnalysis({
-    weatherForecast: weatherForecastQuery.data,
+    weatherForecast,
     weatherRules: weatherRulesQuery.data?.items || [],
     commodityName: crop.commodityName,
-    weatherLoading: weatherForecastQuery.isLoading || weatherRulesQuery.isLoading,
-    weatherError: weatherForecastQuery.error?.message || weatherRulesQuery.error?.message || "",
+    weatherLoading: weatherAdvisoryQuery.isLoading || weatherFallbackQuery.isLoading || weatherRulesQuery.isLoading,
+    weatherError: weatherAdvisoryQuery.error?.message || weatherFallbackQuery.error?.message || weatherRulesQuery.error?.message || "",
     lang: currentLang,
   });
   const weatherTabData = {
-    risk: effectiveModuleResults.weather_risk ||
+    risk: effectiveModuleResults.weather_risk || cropWeatherAdvisory?.suitability ||
       (weatherAnalysis.classification === "Not processed" ? null : weatherAnalysis.classification),
     forecast_14d: weatherAnalysis.forecast_14d,
     commodityName: crop.commodityName,
-    actions: [],
-    why: weatherAnalysis.resultExplanation,
-    summary: weatherAnalysis.resultExplanation,
+    commodityId: commodityIdentifier,
+    riskHeadline: cropWeatherAdvisory?.headline || null,
+    actions: cropWeatherAdvisory?.recommended_actions || [],
+    why: cropWeatherAdvisory?.explanation || weatherAnalysis.resultExplanation,
+    summary: cropWeatherAdvisory?.explanation || weatherAnalysis.resultExplanation,
   };
 
   const hasProfitabilityData = Boolean(costToRecover != null && costToRecover > 0 && sellingBasis != null && sellingBasis > 0 && qty > 0);

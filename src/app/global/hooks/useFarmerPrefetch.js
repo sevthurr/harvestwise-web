@@ -684,6 +684,17 @@ export function hasOfflineSeedMarker() {
   }
 }
 
+export function getOfflineSeedSavedAt() {
+  try {
+    const raw = localStorage.getItem(OFFLINE_SEED_MARKER_KEY);
+    if (!raw) return null;
+    const at = JSON.parse(raw)?.at;
+    return Number.isFinite(at) ? at : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Load every top-level farmer dataset and write it into the React Query cache
  * so the persister pushes it to IndexedDB. Prefers the single snapshot bundle;
@@ -692,7 +703,7 @@ export function hasOfflineSeedMarker() {
 export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
   const now = Date.now();
   if (!force && (farmerOfflineLoadPromise || now - lastFarmerOfflineLoadAt < OFFLINE_LOAD_DEDUPE_MS)) {
-    return farmerOfflineLoadPromise || Promise.resolve();
+    return farmerOfflineLoadPromise || Promise.resolve({ saved: false, savedAt: getOfflineSeedSavedAt() });
   }
   farmerOfflineLoadPromise = (async () => {
     try {
@@ -755,6 +766,7 @@ export function loadFarmerOfflineData(queryClient, { force = false } = {}) {
     }
     lastFarmerOfflineLoadAt = Date.now();
     try { localStorage.setItem(OFFLINE_SEED_MARKER_KEY, JSON.stringify({ at: Date.now() })); } catch {}
+    return { saved: true, savedAt: getOfflineSeedSavedAt() ?? lastFarmerOfflineLoadAt };
   })().finally(() => {
     farmerOfflineLoadPromise = null;
   });

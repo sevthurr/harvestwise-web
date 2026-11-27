@@ -107,6 +107,8 @@ function LoginPage() {
         setError(t("auth.errors.account_inactive", {}, "Your account is inactive. Contact support."));
       } else if (err.status === 401) {
         setError(msg || t("auth.errors.invalid_credentials", {}, "Invalid email/phone or password."));
+      } else if (navigator.onLine === false) {
+        setError(t("auth.errors.offline_first_open", {}, "Connect to the internet once to install and save data for offline use."));
       } else {
         // A correct password can still fail while the second factor is being
         // prepared (for example, Supabase may reject the OTP email request).

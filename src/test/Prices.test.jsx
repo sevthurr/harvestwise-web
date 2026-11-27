@@ -74,7 +74,8 @@ beforeEach(() => {
 describe("Farmer prices page", () => {
   it("uses the series-specific price detail API for trends and forecasts", async () => {
     getPriceDetailMock.mockResolvedValue({
-      recent_records: [{ prevail_price: 150 }],
+      historical_movement: "Falling",
+      recent_records: [{ prevail_price: 140 }, { prevail_price: 150 }],
       forecast: {
         forecast_date: "2026-08-07",
         horizon_days: 7,
@@ -92,7 +93,7 @@ describe("Farmer prices page", () => {
     renderPricesPage();
 
     expect(await screen.findByText("Falling")).toBeInTheDocument();
-    expect(screen.getByText("Price may drop soon.")).toBeInTheDocument();
+    expect(screen.getByText("Price decreased by ₱10/kg from previous price of ₱150/kg on Bankerohan Retail.")).toBeInTheDocument();
     expect(screen.getByText("₱150/kg")).toBeInTheDocument();
     expect(screen.getByText("₱130/kg")).toBeInTheDocument();
     expect(getPriceDetailMock).toHaveBeenCalledWith("COM-0025", {
@@ -102,32 +103,36 @@ describe("Farmer prices page", () => {
     });
   });
 
-  it("shows the forecast midpoint on the commodity card", async () => {
+  it("shows actual price movement indicator independently of forecast direction", async () => {
+    // ₱100 -> ₱110 is Rising, even when the forecast predicts Falling
     getPriceDetailMock.mockResolvedValue({
-      recent_records: [{ prevail_price: 150 }],
+      historical_movement: "Rising",
+      recent_records: [{ prevail_price: 110 }, { prevail_price: 100 }],
       forecast: {
-        trend: "Rising",
-        forecast_midpoint: 165,
+        trend: "Falling",
+        forecast_midpoint: 95,
         horizon_days: 7,
       },
     });
 
     renderPricesPage();
 
-    expect(await screen.findByText("₱165/kg")).toBeInTheDocument();
+    expect(await screen.findByText("Rising")).toBeInTheDocument();
+    expect(screen.getByText("Price increased by ₱10/kg from previous price of ₱100/kg on Bankerohan Retail.")).toBeInTheDocument();
+    expect(screen.queryByText("Price may drop soon.")).not.toBeInTheDocument();
   });
 
-  it("shows missing trend data without inventing a forecast price", async () => {
+  it("displays Insufficient Data when there is no previous price record", async () => {
     getPriceDetailMock.mockResolvedValue({
+      historical_movement: "Insufficient Data",
       recent_records: [{ prevail_price: 150 }],
       forecast: null,
     });
 
     renderPricesPage();
 
-    expect(await screen.findAllByText("No trend data")).not.toHaveLength(0);
-    expect(screen.queryByText("Not available")).not.toBeInTheDocument();
-    expect(screen.queryByText("₱0/kg")).not.toBeInTheDocument();
+    expect(await screen.findByText("Insufficient Data")).toBeInTheDocument();
+    expect(screen.getByText("No previous price record available for comparison on Bankerohan Retail.")).toBeInTheDocument();
   });
 
   it("uses summary trends for non-preferred commodities without loading detail data", async () => {
@@ -268,17 +273,19 @@ describe("Farmer prices page", () => {
       items: [ampalaya, carrots],
     };
 
-    // Ampalaya is Rising, Carrots is Falling
+    // Ampalaya is Rising (96 > 90), Carrots is Falling (65 < 70)
     getPriceDetailMock.mockImplementation(async (id) => {
       if (id === "COM-0001") {
         return {
-          recent_records: [{ prevail_price: 96 }],
-          forecast: { trend: "Rising", forecast_midpoint: 98, horizon_days: 7 },
+          historical_movement: "Rising",
+          recent_records: [{ prevail_price: 96 }, { prevail_price: 90 }],
+          forecast: { trend: "Falling", forecast_midpoint: 85, horizon_days: 7 },
         };
       }
       return {
-        recent_records: [{ prevail_price: 65 }],
-        forecast: { trend: "Falling", forecast_midpoint: 60, horizon_days: 7 },
+        historical_movement: "Falling",
+        recent_records: [{ prevail_price: 65 }, { prevail_price: 70 }],
+        forecast: { trend: "Rising", forecast_midpoint: 80, horizon_days: 7 },
       };
     });
 
@@ -399,5 +406,122 @@ describe("Farmer prices page", () => {
     const search = screen.getByPlaceholderText("Search commodity…");
     expect(search).not.toBeDisabled();
     expect(await screen.findByText("Lettuce")).toBeInTheDocument();
+  });
+  it("determines historical price movement correctly across test matrix", async () => {
+    // ₱100 → ₱110 = Rising
+    const risingCrop = {
+      commodity_id: "COM-TEST-1",
+      name: "Rising Crop",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 110 },
+    };
+    // ₱120 → ₱100 = Falling
+    const fallingCrop = {
+      commodity_id: "COM-TEST-2",
+      name: "Falling Crop",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 100 },
+    };
+    // ₱100 → ₱100 = Stable
+    const stableCrop = {
+      commodity_id: "COM-TEST-3",
+      name: "Stable Crop",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 100 },
+    };
+    // No previous record = Insufficient Data
+    const insufficientCrop = {
+      commodity_id: "COM-TEST-4",
+      name: "Insufficient Crop",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 100 },
+    };
+
+    priceListResponse.current = {
+      items: [risingCrop, fallingCrop, stableCrop, insufficientCrop],
+    };
+
+    getPriceDetailMock.mockImplementation(async (id) => {
+      if (id === "COM-TEST-1") {
+        return {
+          historical_movement: "Rising",
+          recent_records: [{ prevail_price: 110 }, { prevail_price: 100 }],
+          forecast: { trend: "Falling", horizon_days: 7 },
+        };
+      }
+      if (id === "COM-TEST-2") {
+        return {
+          historical_movement: "Falling",
+          recent_records: [{ prevail_price: 100 }, { prevail_price: 120 }],
+          forecast: { trend: "Rising", horizon_days: 7 },
+        };
+      }
+      if (id === "COM-TEST-3") {
+        return {
+          historical_movement: "Stable",
+          recent_records: [{ prevail_price: 100 }, { prevail_price: 100 }],
+          forecast: { trend: "Rising", horizon_days: 7 },
+        };
+      }
+      return {
+        historical_movement: "Insufficient Data",
+        recent_records: [{ prevail_price: 100 }],
+        forecast: null,
+      };
+    });
+
+    renderPricesPage();
+
+    expect(await screen.findByText("Rising")).toBeInTheDocument();
+    expect(screen.getByText("Falling")).toBeInTheDocument();
+    expect(screen.getByText("Stable")).toBeInTheDocument();
+    expect(screen.getByText("Insufficient Data")).toBeInTheDocument();
+  });
+
+  it("displays historical price change banner consistently across all cards without volatility reason", async () => {
+    const ampalaya = {
+      commodity_id: "COM-0001",
+      name: "Ampalaya",
+      category: "Lowland Vegetables",
+      variety: "Galaxy",
+      unit_of_measure: "kg",
+      is_top10: true,
+      prices: { bangkerohan_retail: 110, bangkerohan_wholesale: 100, dftc_retail: 85, dftc_wholesale: 65 },
+      historical_movement: "Rising",
+      volatility_reason: "Decreased Supply",
+      volatility_category: "Supply",
+    };
+
+    priceListResponse.current = {
+      items: [ampalaya],
+    };
+
+    getPriceDetailMock.mockResolvedValue({
+      commodity_id: "COM-0001",
+      name: "Ampalaya",
+      historical_movement: "Rising",
+      volatility_reason: "Decreased Supply",
+      volatility_category: "Supply",
+      recent_records: [
+        { prevail_price: 110, volatility_reason: "Decreased Supply", volatility_category: "Supply" },
+        { prevail_price: 100 },
+      ],
+      forecast: {
+        trend: "Falling",
+        forecast_midpoint: 90,
+        horizon_days: 7,
+      },
+    });
+
+    renderPricesPage();
+
+    expect(await screen.findByText("Rising")).toBeInTheDocument();
+    expect(screen.getByText("Price increased by ₱10/kg from previous price of ₱100/kg on Bankerohan Retail.")).toBeInTheDocument();
+    expect(screen.queryByText("Reason for sudden price increase: Decreased Supply")).not.toBeInTheDocument();
+    expect(screen.queryByText("Price may drop soon.")).not.toBeInTheDocument();
   });
 });

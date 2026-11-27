@@ -47,7 +47,7 @@ export function PwaInstallPrompt() {
         <div className="fixed top-16 left-0 right-0 z-[100] bg-amber-600 text-white px-4 py-2 text-xs md:text-sm font-medium flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
             <WifiOff className="w-4 h-4 flex-shrink-0" />
-            <span>{t("farmer.offline_available", {}, "Offline Mode Active - Cached data is being used")}</span>
+            <span>{t("farmer.offline_available", {}, "No signal. Showing data saved on this phone.")}</span>
           </div>
           <button
             type="button"
@@ -69,8 +69,8 @@ export function PwaInstallPrompt() {
             <p className="text-xs font-bold text-black">
               {t("farmer.navigation.install_prompt_title", {}, "Install HarvestWise App")}
             </p>
-            <p className="text-[11px] text-[var(--hw-neutral-600)] truncate">
-              {t("farmer.navigation.install_prompt_description", {}, "Access offline prices & forecasts instantly")}
+            <p className="text-base leading-snug text-[var(--hw-neutral-600)]">
+              {t("farmer.navigation.install_prompt_description", {}, "Install while you have signal. Wait until the data is saved, then the app works without signal.")}
             </p>
           </div>
           <button

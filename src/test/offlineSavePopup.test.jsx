@@ -33,6 +33,7 @@ vi.mock('../app/global/api', () => ({
 vi.mock('../app/global/hooks/useFarmerPrefetch', () => ({
   loadFarmerOfflineData: mocks.loadFarmerOfflineData,
   hasOfflineSeedMarker: () => true,
+  getOfflineSeedSavedAt: () => null,
 }));
 
 vi.mock('../app/global/lib/queryClient', () => ({
@@ -53,11 +54,12 @@ vi.mock('../app/global/contexts/LanguageContext', () => ({
 const FARMER = { id: 'u-1', role: { role_name: 'Farmer' } };
 
 function AuthProbe() {
-  const { loading, offlineCacheStatus, login } = useAuth();
+  const { loading, offlineCacheStatus, offlineSaveOutcome, login } = useAuth();
   return (
     <div>
       <span data-testid="auth-loading">{String(loading)}</span>
       <span data-testid="cache-status">{offlineCacheStatus}</span>
+      <span data-testid="save-outcome">{offlineSaveOutcome}</span>
       <button type="button" onClick={() => login({})}>log in</button>
     </div>
   );
@@ -73,7 +75,7 @@ beforeEach(() => {
   mocks.storeTokens.mockReset();
   mocks.clearTokens.mockReset();
   mocks.markSessionActive.mockReset();
-  mocks.loadFarmerOfflineData.mockReset().mockResolvedValue(undefined);
+  mocks.loadFarmerOfflineData.mockReset().mockResolvedValue({ saved: true, savedAt: 1 });
   mocks.clearQueryPersistedCache.mockReset().mockResolvedValue(undefined);
 });
 
@@ -90,7 +92,7 @@ describe('offline cache status', () => {
     expect(mocks.loadFarmerOfflineData).toHaveBeenCalledWith({}, { force: false });
     expect(screen.getByTestId('cache-status')).toHaveTextContent('preparing');
 
-    await act(async () => { finishSeed(); });
+    await act(async () => { finishSeed({ saved: true, savedAt: 1 }); });
 
     expect(screen.getByTestId('cache-status')).toHaveTextContent('ready');
   });
@@ -107,7 +109,7 @@ describe('offline cache status', () => {
   it('reports reconnect seeding through cache status without rendering a modal', async () => {
     let finishReconnectSeed;
     mocks.loadFarmerOfflineData
-      .mockResolvedValueOnce(undefined) // session restore on mount
+      .mockResolvedValueOnce({ saved: true, savedAt: 1 }) // session restore on mount
       .mockImplementationOnce(() => new Promise((resolve) => { finishReconnectSeed = resolve; }));
 
     render(<AuthProvider><AuthProbe /></AuthProvider>);
@@ -126,6 +128,30 @@ describe('offline cache status', () => {
 
     await act(async () => { finishReconnectSeed(); });
     expect(screen.getByTestId('cache-status')).toHaveTextContent('ready');
+  });
+
+  it('reports unchanged when reconnect seeding is a dedupe no-op', async () => {
+    let finishReconnectSeed;
+    mocks.loadFarmerOfflineData
+      .mockResolvedValueOnce({ saved: true, savedAt: 1 }) // session restore on mount
+      .mockImplementationOnce(() => new Promise((resolve) => { finishReconnectSeed = resolve; }));
+
+    render(<AuthProvider><AuthProbe /></AuthProvider>);
+
+    expect(mocks.loadFarmerOfflineData).toHaveBeenCalledTimes(1);
+    mocks.loadFarmerOfflineData.mockClear();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('save-outcome')).toHaveTextContent('saving');
+
+    await act(async () => { finishReconnectSeed({ saved: false, savedAt: 1 }); });
+
+    expect(screen.getByTestId('cache-status')).toHaveTextContent('ready');
+    expect(screen.getByTestId('save-outcome')).toHaveTextContent('unchanged');
   });
 
   it('shows the popup on a fresh farmer login', async () => {
