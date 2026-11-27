@@ -15,7 +15,7 @@ import {
   queryClient,
   restorePersistedFarmerData,
 } from '../lib/queryClient';
-import { loadFarmerOfflineData, hasOfflineSeedMarker } from '../hooks/useFarmerPrefetch';
+import { loadFarmerOfflineData, hasOfflineSeedMarker, getOfflineSeedSavedAt } from '../hooks/useFarmerPrefetch';
 
 const AuthContext = createContext(null);
 
@@ -43,6 +43,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [offlineCacheStatus, setOfflineCacheStatus] = useState('idle');
+  const [offlineSaveOutcome, setOfflineSaveOutcome] = useState('idle');
+  const offlineSavedAt = getOfflineSeedSavedAt();
   const mountedRef = useRef(true);
 
   // Ref that always holds the current user value so event handlers registered
@@ -64,9 +66,13 @@ export function AuthProvider({ children }) {
   const seedFarmerOffline = async (me, { force = false } = {}) => {
     if ((me?.role?.role_name || '').toLowerCase() === 'farmer') {
       setOfflineCacheStatus('preparing');
+      setOfflineSaveOutcome('saving');
       try {
-        await loadFarmerOfflineData(queryClient, { force });
-        if (mountedRef.current) setOfflineCacheStatus('ready');
+        const result = await loadFarmerOfflineData(queryClient, { force });
+        if (mountedRef.current) {
+          setOfflineCacheStatus('ready');
+          setOfflineSaveOutcome(result?.saved === false ? 'unchanged' : 'saved');
+        }
         try {
           const { requestPersistentStorage } = await import('../lib/pwaUpdate');
           await requestPersistentStorage();
@@ -74,7 +80,10 @@ export function AuthProvider({ children }) {
           // ignore
         }
       } catch {
-        if (mountedRef.current) setOfflineCacheStatus('error');
+        if (mountedRef.current) {
+          setOfflineCacheStatus('error');
+          setOfflineSaveOutcome('error');
+        }
       }
     }
   };
@@ -173,10 +182,13 @@ export function AuthProvider({ children }) {
             await restorePersistedFarmerData(queryClient);
             // Restore the query snapshot before rendering routes so offline
             // pages can read the same IndexedDB data as the app shell.
-            setOfflineCacheStatus(hasOfflineSeedMarker() ? 'ready' : 'idle');
+            const hasMarker = hasOfflineSeedMarker();
+            setOfflineCacheStatus(hasMarker ? 'ready' : 'idle');
+            setOfflineSaveOutcome(hasMarker ? 'unchanged' : 'idle');
             if (browserIsOffline()) {
               hasPersistedFarmerData().then((hasSavedFarmerData) => {
                 setOfflineCacheStatus(hasSavedFarmerData ? 'ready' : 'idle');
+                setOfflineSaveOutcome(hasSavedFarmerData ? 'unchanged' : 'idle');
               });
             }
             // Don't clear tokens — farmer is still "logged in", just offline
@@ -212,6 +224,7 @@ export function AuthProvider({ children }) {
     const purge = ({ refetchActive = true } = {}) => {
       setUser(null);
       setOfflineCacheStatus('idle');
+      setOfflineSaveOutcome('idle');
       clearQueryPersistedCache({ refetchActive });
       try { del(USER_CACHE_KEY); } catch {}
     };
@@ -311,6 +324,7 @@ export function AuthProvider({ children }) {
       clearTokens();
       setUser(null);
       setOfflineCacheStatus('idle');
+      setOfflineSaveOutcome('idle');
       await clearQueryPersistedCache({ refetchActive: false });
       try { await del(USER_CACHE_KEY); } catch {}
     }
@@ -352,7 +366,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, offlineCacheStatus, login, logout, refreshUser, patchUser, seedOfflineWithPopup }}>
+    <AuthContext.Provider value={{ user, isLoggedIn: user !== null, loading, offlineCacheStatus, offlineSaveOutcome, offlineSavedAt, login, logout, refreshUser, patchUser, seedOfflineWithPopup }}>
       {children}
     </AuthContext.Provider>
   );

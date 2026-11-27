@@ -11,7 +11,7 @@ export const navigation = {
   farmer_role: "Farmer",
   get_app: "Get the App",
   install_prompt_title: "Install HarvestWise App",
-  install_prompt_description: "Access offline prices & forecasts instantly",
+  install_prompt_description: "Install while you have signal. Wait until the data is saved, then the app works without signal.",
   install_button: "Install",
   update_available_title: "App update available",
   update_available_description: "A new version of HarvestWise is ready to install.",

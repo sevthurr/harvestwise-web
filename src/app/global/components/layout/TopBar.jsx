@@ -45,7 +45,7 @@ const TopBar = ({
   const navigate = useNavigate();
   const location = useLocation();
   const isNotificationOpen = Boolean(location?.pathname?.includes("/notifications"));
-  const { user, logout, offlineCacheStatus } = useAuth();
+  const { user, logout, offlineCacheStatus, offlineSaveOutcome, offlineSavedAt } = useAuth();
   const { t } = useLanguage();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
   const queryClient = useQueryClient();
@@ -55,7 +55,9 @@ const TopBar = ({
   const [installing, setInstalling] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
-  const [lastSyncedTime, setLastSyncedTime] = useState(() =>
+  // The setter stays wired to the existing resync/process lifecycle; the
+  // visible saved-at text comes from the shared offline marker, not this clock.
+  const [, setLastSyncedTime] = useState(() =>
     formatManilaTime()
   );
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine !== false : true));
@@ -65,16 +67,7 @@ const TopBar = ({
   const installHelpRef = useRef(null);
   const accountButtonRef = useRef(null);
   const installHelpWasOpenRef = useRef(false);
-  const clickTimerRef = useRef(null);
   const { processState } = useBackgroundProcess();
-
-  useEffect(() => {
-    return () => {
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (showInstallHelp) {
@@ -105,11 +98,18 @@ const TopBar = ({
   const cacheStatus = user?.role?.role_name?.toLowerCase() === "farmer" ? offlineCacheStatus : "idle";
   const isSyncing = isManualSyncing || processState.active || cacheStatus === "preparing";
   const cacheStatusCopy = {
-    preparing: t("farmer.offline_preparing", {}, "Preparing offline data"),
-    ready: t("farmer.offline_ready", {}, "Offline data ready"),
-    error: t("farmer.offline_incomplete", {}, "Offline data incomplete"),
-    idle: t("farmer.offline_none", {}, "No offline data saved yet"),
-  }[cacheStatus] || t("farmer.offline_none", {}, "No offline data saved yet");
+    preparing: t("farmer.offline_preparing", {}, "Getting and saving data for offline use. Keep the app open."),
+    ready: t("farmer.offline_ready", {}, "Saved. You can go without signal now."),
+    error: t("farmer.offline_incomplete", {}, "Data not saved. Try again."),
+    idle: t("farmer.offline_none", {}, "Not saved yet. Connect to the internet."),
+  }[cacheStatus] || t("farmer.offline_none", {}, "Not saved yet. Connect to the internet.");
+  const pillStatusCopy = {
+    preparing: t("farmer.offline_pill_saving", {}, "Saving"),
+    ready: t("farmer.offline_pill_saved", {}, "Saved"),
+    error: t("farmer.offline_pill_not_saved", {}, "Not saved"),
+    idle: t("farmer.offline_pill_not_saved", {}, "Not saved"),
+  }[cacheStatus] || t("farmer.offline_pill_not_saved", {}, "Not saved");
+  const savedTime = offlineSavedAt ? formatManilaTime(new Date(offlineSavedAt)) : null;
 
   // Keep the "Last updated" timestamp in sync when a background process
   // completes and triggers an automatic live resync.
@@ -138,33 +138,6 @@ const TopBar = ({
     } finally {
       setIsManualSyncing(false);
     }
-  };
-
-  const handlePillClick = (e) => {
-    e.preventDefault();
-    if (clickTimerRef.current) {
-      // Double click detected -> sync immediately
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-      setSyncOpen(false);
-      handleResync();
-    } else {
-      // Single click -> open overlay
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null;
-        setSyncOpen((v) => !v);
-      }, 250);
-    }
-  };
-
-  const handlePillDoubleClick = (e) => {
-    e.preventDefault();
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-    }
-    setSyncOpen(false);
-    handleResync();
   };
 
   useEffect(() => {
@@ -231,21 +204,16 @@ const TopBar = ({
           <div className="relative" ref={syncRef}>
             <button
               type="button"
-              onClick={handlePillClick}
-              onDoubleClick={handlePillDoubleClick}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white hover:bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-all duration-200 text-xs font-medium cursor-pointer shadow-2xs active:scale-95 flex-shrink-0"
-              aria-label={t("farmer.offline_data_title", {}, "Offline Data Status")}
+              onClick={() => setSyncOpen(true)}
+              className="flex items-center gap-1.5 min-h-11 max-w-[calc(100vw-7rem)] px-2.5 py-1.5 rounded-full bg-white hover:bg-[var(--hw-neutral-50)] border border-[var(--hw-neutral-200)] hover:border-[var(--hw-neutral-300)] text-[var(--hw-neutral-700)] hover:text-[var(--hw-neutral-900)] transition-all duration-200 text-xs font-medium cursor-pointer shadow-2xs active:scale-95 flex-shrink-0"
+              aria-label={`${t("farmer.offline_data_title", {}, "Saved data")}: ${pillStatusCopy}`}
               aria-expanded={syncOpen}
               aria-haspopup="dialog"
-              title={`${t("common.last_updated", {}, "Last updated")} ${lastSyncedTime}`}
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[var(--hw-green-700)] flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
 
-              <span className="hidden sm:inline whitespace-nowrap">
-                {isSyncing ? t("common.syncing", {}, "Syncing...") : `${t("common.last_updated", {}, "Last updated")} ${lastSyncedTime}`}
-              </span>
-              <span className="sm:hidden text-[11px] font-semibold text-[var(--hw-neutral-700)] whitespace-nowrap">
-                {isSyncing ? t("common.syncing_short", {}, "Syncing") : lastSyncedTime}
+              <span aria-hidden="true">
+                {pillStatusCopy}
               </span>
             </button>
 
@@ -253,7 +221,7 @@ const TopBar = ({
             {syncOpen && (
               <div
                 role="dialog"
-                aria-label={t("farmer.offline_data_title", {}, "Offline Data Status")}
+                aria-label={t("farmer.offline_data_title", {}, "Saved data")}
                 className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white border border-[var(--hw-neutral-200)] rounded-2xl shadow-[var(--shadow-xl)] p-4 z-50 animate-in fade-in zoom-in-95"
               >
                 <div className="flex items-start justify-between pb-3 border-b border-[var(--hw-neutral-100)]">
@@ -263,18 +231,20 @@ const TopBar = ({
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-black leading-tight">
-                        {t("farmer.offline_data_title", {}, "Offline Data Status")}
+                        {t("farmer.offline_data_title", {}, "Saved data")}
                       </h3>
                       <p className="text-[12px] text-[var(--hw-neutral-600)] mt-1.5 leading-snug">
                         {!isOnline
-                          ? t("farmer.offline_desc_offline", {}, "You are offline. Showing cached data from your device.")
+                          ? t("farmer.offline_desc_offline", {}, "No signal. Showing data saved on this phone.")
                           : cacheStatus === "error"
-                          ? t("farmer.offline_desc_error", {}, "Some offline data could not be saved. Check your connection and tap Sync Now.")
+                          ? t("farmer.offline_desc_error", {}, "New data was not saved. Check your signal and tap Sync Now.")
                           : cacheStatus === "preparing"
-                          ? t("farmer.offline_desc_preparing", {}, "Saving latest market prices and crop recommendations to your device...")
+                          ? t("farmer.offline_desc_preparing", {}, "Getting prices and crop plans and saving them on this phone. Keep the app open.")
                           : cacheStatus === "idle"
-                          ? t("farmer.offline_desc_none", {}, "No offline data saved yet. Connect to the internet and tap Sync Now to save prices and crops for offline use.")
-                          : t("farmer.offline_desc_ready", {}, "Prices, forecasts, and recommendations are saved on this device for offline use.")}
+                          ? t("farmer.offline_desc_none", {}, "No data saved yet. Connect to the internet to save prices and crop plans.")
+                          : cacheStatus === "ready" && offlineSaveOutcome === "unchanged"
+                          ? t("farmer.offline_desc_unchanged", { time: savedTime }, "Already saved at {time}. Nothing new was saved.")
+                          : t("farmer.offline_desc_ready", {}, "Prices, forecasts and your crop plans are saved on this phone. You can go without signal now.")}
                         {!isOnline && ` ${t("farmer.errors.offline_plan_readonly", {}, "You can view crop plans offline. Creating or updating one needs an internet connection — reconnect and tap again.")}`}
                       </p>
                     </div>
@@ -290,9 +260,13 @@ const TopBar = ({
                 </div>
 
                 <div className="pt-3">
-                  <div className="flex items-center justify-between text-xs text-black mb-3">
+                  <div className="flex items-center justify-between gap-3 text-xs text-black mb-3">
                     <span>{t("farmer.last_updated", {}, "Last updated")}</span>
-                    <span className="font-semibold">{lastSyncedTime}</span>
+                    <span className="font-semibold text-right">
+                      {savedTime
+                        ? t("farmer.offline_saved_at", { time: savedTime }, "Saved at {time}")
+                        : t("farmer.offline_none", {}, "Not saved yet. Connect to the internet.")}
+                    </span>
                   </div>
 
                   <button
@@ -438,6 +412,16 @@ const TopBar = ({
         </div>
       </div>
     </header>
+
+    {cacheStatus === "preparing" && (
+      <div
+        role="status"
+        className="fixed top-16 left-0 right-0 z-40 flex items-center gap-2 px-4 py-2 bg-[var(--hw-green-50)] border-b border-[var(--hw-neutral-200)] text-[13px] font-medium text-[var(--hw-neutral-900)]"
+      >
+        <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" aria-hidden="true" />
+        <span>{t("farmer.offline_desc_preparing", {}, "Getting prices and crop plans and saving them on this phone. Keep the app open.")}</span>
+      </div>
+    )}
 
     {showInstallHelp && (
       <div

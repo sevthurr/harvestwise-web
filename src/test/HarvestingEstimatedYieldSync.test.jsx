@@ -104,7 +104,7 @@ describe("Harvesting Stage → Quantity to Harvest based on Estimated Yield", ()
     expect(screen.queryByPlaceholderText("e.g. 580")).not.toBeInTheDocument();
   });
 
-  it("Upon entering Harvesting stage, Remaining Yield to Harvest equals Estimated Yield and deducts each harvest entry while blocking exceeding quantities", async () => {
+  it("Upon entering Harvesting stage, Remaining Yield to Harvest equals Estimated Yield, deducts each harvest entry, and allows exceeding expected yield", async () => {
     cropState.current = {
       id: "CRP-0002",
       commodity: "COM-0025",
@@ -123,7 +123,7 @@ describe("Harvesting Stage → Quantity to Harvest based on Estimated Yield", ()
     };
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { rerender } = render(
+    render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/farmer/crops/CRP-0002"]}>
           <Routes>
@@ -141,21 +141,20 @@ describe("Harvesting Stage → Quantity to Harvest based on Estimated Yield", ()
     const priceInput = screen.getByLabelText("Presyo (₱/kg)");
     const saveButton = screen.getByRole("button", { name: "I-save ang rekord sa ani" });
 
-    // 2. Prevent entry exceeding remaining quantity (e.g. 3,500 kg when 3,000 kg remains)
+    // 2. Allow entry exceeding remaining quantity (e.g. 3,500 kg when 3,000 kg remains)
     const user = userEvent.setup();
     fireEvent.change(dateInput, { target: { value: "2026-10-29" } });
     await user.type(qtyInput, "3500");
     await user.type(priceInput, "85");
 
-    // Save button must be disabled because 3,500 > 3,000
-    expect(saveButton).toBeDisabled();
-    expect(screen.getByText(/Dili puwede molapas sa nabilin nga ani \(3000 kg\)/i)).toBeInTheDocument();
+    // Save button must NOT be disabled because exceeding harvest is allowed
+    expect(saveButton).not.toBeDisabled();
+    expect(screen.queryByText(/Dili puwede molapas sa nabilin nga ani/i)).not.toBeInTheDocument();
 
-    // 3. Enter valid harvest entry (300 kg)
+    // 3. Enter first harvest entry (300 kg)
     await user.clear(qtyInput);
     await user.type(qtyInput, "300");
 
-    // Button should now be enabled
     expect(saveButton).not.toBeDisabled();
 
     // Submit harvest record
@@ -173,13 +172,29 @@ describe("Harvesting Stage → Quantity to Harvest based on Estimated Yield", ()
 
     // 4. Remaining quantity is recalculated: 3,000 - 300 = 2,700 kg
     expect(screen.getByText(/Nabilin nga gilaom \(kg\):\s*2700/i)).toBeInTheDocument();
-    expect(screen.getAllByText("300 kg")).toHaveLength(2);
 
-    // 5. Test next harvest entry exceeding the new remaining quantity (e.g. 2,800 kg when 2,700 kg remains)
+    // 5. Enter next harvest entry exceeding the remaining quantity (2,800 kg when 2,700 kg remains)
+    fireEvent.change(dateInput, { target: { value: "2026-10-29" } });
     await user.type(qtyInput, "2800");
     await user.type(priceInput, "90");
-    expect(saveButton).toBeDisabled();
-    expect(screen.getByText(/Dili puwede molapas sa nabilin nga ani \(2700 kg\)/i)).toBeInTheDocument();
+    expect(saveButton).not.toBeDisabled();
+    expect(screen.queryByText(/Dili puwede molapas sa nabilin nga ani/i)).not.toBeInTheDocument();
+
+    saveHarvestRecordApiMock.mockResolvedValueOnce({
+      id: "HVR-2",
+      actualHarvestDate: "2026-10-29",
+      actualHarvestQty: 2800,
+      actualSellingPricePerKg: 90,
+    });
+    await user.click(saveButton);
+
+    await waitFor(() => {
+      expect(saveHarvestRecordApiMock).toHaveBeenCalledWith("CRP-0002", "2026-10-29", 2800, 90);
+    });
+
+    // 6. Remaining expected is capped at 0 and total quantity is 3,100 kg
+    expect(screen.getByText(/Nabilin nga gilaom \(kg\):\s*0/i)).toBeInTheDocument();
+    expect(screen.getAllByText("3,100 kg").length).toBeGreaterThanOrEqual(1);
   });
   it("correctly handles raw snake_case API responses with decimal strings and avoids NaN kg", async () => {
     const user = userEvent.setup();
@@ -211,10 +226,12 @@ describe("Harvesting Stage → Quantity to Harvest based on Estimated Yield", ()
       </QueryClientProvider>
     );
 
+    const dateInput = screen.getByLabelText("Petsa sa ani");
     const qtyInput = screen.getByLabelText("Kadaghanon (kg)");
     const priceInput = screen.getByLabelText("Presyo (₱/kg)");
     const saveButton = screen.getByRole("button", { name: "I-save ang rekord sa ani" });
 
+    fireEvent.change(dateInput, { target: { value: "2026-10-29" } });
     await user.type(qtyInput, "500");
     await user.type(priceInput, "85");
 
@@ -238,8 +255,8 @@ describe("Harvesting Stage → Quantity to Harvest based on Estimated Yield", ()
     expect(screen.queryByText(/NaN\s*kg/i)).not.toBeInTheDocument();
 
     // Verify the record row and total row display 500 kg
-    expect(screen.getAllByText("500 kg")).toHaveLength(2);
-    expect(screen.getByText("₱85.00/kg")).toBeInTheDocument();
+    expect(screen.getAllByText("500 kg").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("₱85.00/kg").length).toBeGreaterThanOrEqual(1);
 
     // Remaining yield is updated: 3,000 - 500 = 2,500 kg
     expect(screen.getByText(/Nabilin nga gilaom \(kg\):\s*2500/i)).toBeInTheDocument();

@@ -24,7 +24,7 @@ import {
   Modal
 } from "../../global/components/ui/hw-ui";
 import { apiGet, apiPut, apiPost, parseResponse } from "../../global/api";
-import { capitalizeNameInput, toCamelCase } from "../../global/utils/apiTransforms";
+import { capitalizeNameInput, formatManilaTime, toCamelCase } from "../../global/utils/apiTransforms";
 import { FarmLocationFields } from "../../global/components/location/FarmLocationFields";
 import { useFarmLocation } from "../../global/hooks/useFarmLocation";
 import { SkeletonFormCard } from "../components/shared/FarmerSkeletons";
@@ -889,21 +889,30 @@ const FarmTab = ({ showToast }) => {
 /* -------------------------------------------------------------------------- */
 const PreferencesTab = ({ showToast }) => {
   const { effectiveLanguage: language, setLanguage, t } = useLanguage();
-  const { refreshUser } = useAuth();
+  const { refreshUser, offlineCacheStatus, offlineSaveOutcome, offlineSavedAt } = useAuth();
   const [syncing, setSyncing] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [lastSynced, setLastSynced] = useState(() => localStorage.getItem("hw_last_synced") || null);
-  const [hasOfflineCache, setHasOfflineCache] = useState(() => Boolean(localStorage.getItem("hw_last_synced")));
-  const [syncStatus, setSyncStatus] = useState(() => (localStorage.getItem("hw_last_synced") ? "ok" : "needs_sync"));
+  const [hasPersistedData, setHasPersistedData] = useState(false);
 
+  // Only this "data on phone" line reads IndexedDB directly; the status and
+  // saved-at text come from the shared auth snapshot.
   useEffect(() => {
+    let active = true;
     hasPersistedFarmerData().then((hasSavedData) => {
-      if (!hasSavedData) {
-        setHasOfflineCache(false);
-        setSyncStatus("needs_sync");
-      }
+      if (active) setHasPersistedData(Boolean(hasSavedData));
     });
+    return () => { active = false; };
   }, []);
+
+  const savedTime = offlineSavedAt ? formatManilaTime(new Date(offlineSavedAt)) : null;
+  const cacheStatusCopy = {
+    preparing: t("farmer.offline_preparing", {}, "Getting and saving data for offline use. Keep the app open."),
+    ready: offlineSaveOutcome === "unchanged"
+      ? t("farmer.offline_desc_unchanged", { time: savedTime }, "Already saved at {time}. Nothing new was saved.")
+      : t("farmer.offline_ready", {}, "Saved. You can go without signal now."),
+    error: t("farmer.offline_incomplete", {}, "Data not saved. Try again."),
+    idle: t("farmer.offline_none", {}, "Not saved yet. Connect to the internet."),
+  }[offlineCacheStatus] || t("farmer.offline_none", {}, "Not saved yet. Connect to the internet.");
 
   const handleLanguage = async (lang) => {
     setLanguage(lang);
@@ -922,14 +931,8 @@ const PreferencesTab = ({ showToast }) => {
     setSaveError(null);
     try {
       await loadFarmerOfflineData(queryClient, { force: true });
-      const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      localStorage.setItem("hw_last_synced", `Today, ${nowStr}`);
-      setLastSynced(`Today, ${nowStr}`);
-      setHasOfflineCache(true);
-      setSyncStatus("ok");
       showToast(t("farmer.settings.toast_offline_success", {}, "Offline data updated successfully."));
     } catch {
-      setSyncStatus("needs_sync");
       showToast(t("farmer.settings.toast_offline_error", {}, "Could not update offline data. Check your connection and try again."));
     } finally {
       setSyncing(false);
@@ -979,9 +982,9 @@ const PreferencesTab = ({ showToast }) => {
         <SectionLabel>{t("farmer.settings.section_offline_data", {}, "Offline Data")}</SectionLabel>
         <div className="space-y-2.5 mb-4">
           {[
-            { label: t("farmer.settings.offline_last_updated", {}, "Last updated"), value: lastSynced ? lastSynced : t("farmer.settings.offline_never", {}, "Never") },
-            { label: t("farmer.settings.offline_data_label", {}, "Offline data"), value: hasOfflineCache ? t("farmer.settings.offline_available", {}, "Available") : t("farmer.settings.offline_unavailable", {}, "Unavailable") },
-            { label: t("farmer.settings.offline_status_label", {}, "Status"), value: syncStatus === "ok" ? t("farmer.settings.offline_status_ok", {}, "Up to date") : t("farmer.settings.offline_status_needs_sync", {}, "Needs sync") }
+            { label: t("farmer.settings.offline_last_updated", {}, "Last updated"), value: savedTime ? t("farmer.offline_saved_at", { time: savedTime }, "Saved at {time}") : t("farmer.offline_none", {}, "Not saved yet. Connect to the internet.") },
+            { label: t("farmer.settings.offline_data_label", {}, "Offline data"), value: hasPersistedData ? t("farmer.settings.offline_available", {}, "Available") : t("farmer.settings.offline_unavailable", {}, "Unavailable") },
+            { label: t("farmer.settings.offline_status_label", {}, "Status"), value: cacheStatusCopy }
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between">
               <span className="text-[14px] text-black">{row.label}</span>

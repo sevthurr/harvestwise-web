@@ -11,7 +11,7 @@ export const navigation = {
   farmer_role: "Magsasaka",
   get_app: "I-install ang App",
   install_prompt_title: "I-install ang HarvestWise App",
-  install_prompt_description: "Agad na ma-access ang offline na mga presyo at forecast",
+  install_prompt_description: "I-install habang may signal. Hintayin ma-save ang data, pagkatapos ay gagana ang app kahit walang signal.",
   install_button: "I-install",
   update_available_title: "May available na update sa app",
   update_available_description: "Handa nang i-install ang bagong bersyon ng HarvestWise.",

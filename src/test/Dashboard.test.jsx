@@ -83,11 +83,14 @@ beforeEach(() => {
     ],
   });
   getPriceDetailMock.mockImplementation(async (commodityId) => ({
-    recent_records: [{ prevail_price: commodityId === "COM-0025" ? 150 : 68 }],
+    historical_movement: commodityId === "COM-0025" ? "Falling" : "Insufficient Data",
+    recent_records: commodityId === "COM-0025"
+      ? [{ prevail_price: 141 }, { prevail_price: 150 }]
+      : [{ prevail_price: 68 }],
     forecast: commodityId === "COM-0025"
       ? {
           trend: "Falling",
-          forecast_midpoint: 141.39,
+          forecast_midpoint: 141,
           forecast_date: "2026-08-07",
           points: [
             { forecast_date: "2026-08-01" },
@@ -132,7 +135,8 @@ describe("Farmer dashboard price trends", () => {
       { recent_records: [], forecast: null },
     );
     getPriceDetailMock.mockResolvedValue({
-      recent_records: [{ prevail_price: 150 }],
+      historical_movement: "Falling",
+      recent_records: [{ prevail_price: 141 }, { prevail_price: 150 }],
       forecast: {
         trend: "Falling",
         forecast_midpoint: 141.39,
@@ -150,5 +154,26 @@ describe("Farmer dashboard price trends", () => {
       horizon: 7,
       records_limit: 100,
     });
+  });
+
+  it("displays actual historical price difference (current - previous) independently of forecast", async () => {
+    // Current price: 110, previous price: 100 -> diff: +10, Rising.
+    // Forecast predicts Falling to midpoint: 90 -> forecast diff would be -20.
+    getPriceDetailMock.mockResolvedValue({
+      historical_movement: "Rising",
+      recent_records: [{ prevail_price: 110 }, { prevail_price: 100 }],
+      forecast: {
+        trend: "Falling",
+        forecast_midpoint: 90,
+        forecast_date: "2026-08-07",
+        points: [{ forecast_date: "2026-08-07" }],
+      },
+    });
+
+    renderDashboard();
+
+    expect((await screen.findAllByText("Rising")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("+₱10").length).toBeGreaterThan(0);
+    expect(screen.queryByText("-₱20")).not.toBeInTheDocument();
   });
 });

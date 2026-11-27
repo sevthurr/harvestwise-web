@@ -3,6 +3,8 @@ import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../global/contexts/AuthContext";
 import { useLanguage } from "../../global/contexts/LanguageContext";
+import { formatManilaTime } from "../../global/utils/apiTransforms";
+import { loadFarmerOfflineData } from "../../global/hooks/useFarmerPrefetch";
 import { applyUpdate, subscribeUpdateAvailable } from "../../global/lib/pwaUpdate";
 import { clearDeviceData } from "../../global/lib/queryClient";
 import {
@@ -111,7 +113,7 @@ function MenuPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const profile = queryClient.getQueryData(["dashboard", "profile"]);
-  const { logout } = useAuth();
+  const { logout, offlineCacheStatus, offlineSaveOutcome, offlineSavedAt } = useAuth();
   const { effectiveLanguage: language, setLanguage, t } = useLanguage();
   const [alertPrefs, setAlertPrefs] = useState({
     price: true,
@@ -119,7 +121,7 @@ function MenuPage() {
     crops: true,
     harvest: true
   });
-  const [syncStatus, setSyncStatus] = useState("updated");
+  const [syncing, setSyncing] = useState(false);
   const [installStatus, setInstallStatus] = useState("not-installed");
   const [showSignOut, setShowSignOut] = useState(false);
 
@@ -136,20 +138,33 @@ function MenuPage() {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
-  const handleSync = () => {
-    setSyncStatus("syncing");
-    setTimeout(() => {
-      setSyncStatus(Math.random() > 0.2 ? "updated" : "failed");
-    }, 2e3);
+  const savedTime = offlineSavedAt ? formatManilaTime(new Date(offlineSavedAt)) : null;
+  const cacheStatusCopy = {
+    preparing: t("farmer.offline_preparing", {}, "Getting and saving data for offline use. Keep the app open."),
+    ready: offlineSaveOutcome === "unchanged"
+      ? t("farmer.offline_desc_unchanged", { time: savedTime }, "Already saved at {time}. Nothing new was saved.")
+      : t("farmer.offline_ready", {}, "Saved. You can go without signal now."),
+    error: t("farmer.offline_incomplete", {}, "Data not saved. Try again."),
+    idle: t("farmer.offline_none", {}, "Not saved yet. Connect to the internet."),
+  }[offlineCacheStatus] || t("farmer.offline_none", {}, "Not saved yet. Connect to the internet.");
+  const StatusIcon = offlineCacheStatus === "preparing"
+    ? Loader2
+    : offlineCacheStatus === "ready"
+    ? Wifi
+    : offlineCacheStatus === "error"
+    ? AlertCircle
+    : WifiOff;
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await loadFarmerOfflineData(queryClient, { force: true });
+      showToast(t("farmer.offline_ready", {}, "Saved. You can go without signal now."));
+    } catch {
+      showToast(t("farmer.offline_incomplete", {}, "Data not saved. Try again."));
+    } finally {
+      setSyncing(false);
+    }
   };
-  const syncStatusConfig = {
-    updated: { icon: <Wifi className="w-4 h-4" />, label: "Online \u2014 up to date", color: "text-emerald-600" },
-    syncing: { icon: <Loader2 className="w-4 h-4 animate-spin" />, label: "Syncing\u2026", color: "text-blue-500" },
-    failed: { icon: <AlertCircle className="w-4 h-4" />, label: "Sync failed", color: "text-red-500" },
-    offline: { icon: <WifiOff className="w-4 h-4" />, label: "Offline", color: "text-amber-600" },
-    pending: { icon: <Clock className="w-4 h-4" />, label: "Pending changes", color: "text-amber-600" }
-  };
-  const sc = syncStatusConfig[syncStatus];
   const notifItems = [
     { key: "price", icon: <TrendingUp className="w-4 h-4" />, label: "Price changes", desc: "Significant market price movements for your crops" },
     { key: "weather", icon: <CloudRain className="w-4 h-4" />, label: "Weather warnings", desc: "Rain and wind that may affect your farm" },
@@ -171,9 +186,9 @@ function MenuPage() {
               <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">Vegetable Farmer</p>
               <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">0912 345 6789</p>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={`inline-flex items-center gap-1 text-xs font-medium ${sc.color}`}>
-                  {sc.icon}
-                  {sc.label}
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--hw-neutral-700)]">
+                  <StatusIcon className={`w-4 h-4 ${offlineCacheStatus === "preparing" || syncing ? "animate-spin" : ""}`} aria-hidden="true" />
+                  {cacheStatusCopy}
                 </span>
               </div>
             </div>
@@ -290,10 +305,12 @@ function MenuPage() {
     /* Status */
   }
             <div className="px-4 py-3.5 flex items-center gap-3">
-              <span className={`flex-shrink-0 ${sc.color}`}>{sc.icon}</span>
+              <span className="flex-shrink-0 text-[var(--hw-neutral-700)]">
+                <StatusIcon className={`w-4 h-4 ${offlineCacheStatus === "preparing" || syncing ? "animate-spin" : ""}`} aria-hidden="true" />
+              </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--hw-neutral-900)]">Connection status</p>
-                <p className={`text-xs font-medium mt-0.5 ${sc.color}`}>{sc.label}</p>
+                <p className="text-sm font-medium text-[var(--hw-neutral-900)]">{t("farmer.offline_data_title", {}, "Saved data")}</p>
+                <p className="text-xs font-medium mt-0.5 text-[var(--hw-neutral-700)]">{cacheStatusCopy}</p>
               </div>
             </div>
             <Divider />
@@ -304,21 +321,25 @@ function MenuPage() {
             <div className="px-4 py-3.5 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-[var(--hw-neutral-900)]">Last synced</p>
-                <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">Today at 8:30 AM</p>
+                <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5">
+                  {savedTime
+                    ? t("farmer.offline_saved_at", { time: savedTime }, "Saved at {time}")
+                    : t("farmer.offline_none", {}, "Not saved yet. Connect to the internet.")}
+                </p>
               </div>
               <button
     onClick={handleSync}
-    disabled={syncStatus === "syncing"}
+    disabled={syncing}
     className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--hw-green-700)] hover:opacity-70 transition-opacity disabled:opacity-50"
   >
-                <RefreshCw className={`w-4 h-4 ${syncStatus === "syncing" ? "animate-spin" : ""}`} />
-                {syncStatus === "syncing" ? "Syncing\u2026" : "Sync now"}
+                <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? t("farmer.syncing", {}, "Updating latest data...") : t("farmer.sync_now", {}, "Sync Now")}
               </button>
             </div>
 
-            {syncStatus === "failed" && <div className="px-4 pb-3 text-xs text-red-600 flex items-start gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                Synchronization failed. Check your connection and try again.
+            {offlineCacheStatus === "error" && <div className="px-4 pb-3 text-xs text-red-600 flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                {t("farmer.offline_desc_error", {}, "New data was not saved. Check your signal and tap Sync Now.")}
               </div>}
 
             <Divider />
@@ -335,7 +356,7 @@ function MenuPage() {
                     <div>
                       <p className="font-medium text-sm text-[var(--hw-neutral-900)]">Install HarvestWise</p>
                       <p className="text-xs text-[var(--hw-neutral-900)] mt-0.5 leading-snug">
-                        Install for faster access and to view saved data while offline.
+                        {t("farmer.navigation.install_prompt_description", {}, "Install while you have signal. Wait until the data is saved, then the app works without signal.")}
                       </p>
                     </div>
                   </div>

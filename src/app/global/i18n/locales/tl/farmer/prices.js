@@ -25,6 +25,7 @@ export const prices = {
   trend_rising: "Tumataas",
   trend_falling: "Bumababa",
   trend_stable: "Halos walang pagbabago",
+  trend_insufficient: "Kulang ang datos",
   trend_no_data: "Walang datos ng trend",
   trend_loading: "Kinukuha ang trend",
   trend_unavailable: "Hindi available ang trend ng presyo",
@@ -42,5 +43,14 @@ export const prices = {
   advisory_falling: "Ipinapakita ng pagtataya para sa {commodity} na bababa ito sa {range} sa itinakdang panahon.",
   advisory_falling_no_range: "Ipinapakita ng pagtataya para sa {commodity} na bababa ang presyo sa itinakdang panahon.",
   advisory_stable: "Ipinapakita ng pagtataya para sa {commodity} na mananatili ito sa {range} sa itinakdang panahon.",
-  advisory_stable_no_range: "Ipinapakita ng pagtataya para sa {commodity} na mananatiling matatag ang presyo sa itinakdang panahon."
+  advisory_stable_no_range: "Ipinapakita ng pagtataya para sa {commodity} na mananatiling matatag ang presyo sa itinakdang panahon.",
+  hist_rising: "Tumaas ang presyo ng ₱{diff}/{unit} mula sa dating presyo na ₱{prev}/{unit} sa {market}.",
+  hist_falling: "Bumaba ang presyo ng ₱{diff}/{unit} mula sa dating presyo na ₱{prev}/{unit} sa {market}.",
+  hist_stable: "Walang pagbabago ang presyo mula sa dating presyo na ₱{prev}/{unit} sa {market}.",
+  hist_insufficient: "Walang nakaraang talaan ng presyo para maikumpara sa {market}.",
+  hist_rising_prevonly: "Tumaas ang presyo ng ₱{diff}/{unit} kumpara sa nakaraang talaan sa {market}.",
+  hist_falling_prevonly: "Bumaba ang presyo ng ₱{diff}/{unit} kumpara sa nakaraang talaan sa {market}.",
+  hist_rising_nodiff: "Mas mataas ang presyo kumpara sa nakaraang talaan sa {market}.",
+  hist_falling_nodiff: "Mas mababa ang presyo kumpara sa nakaraang talaan sa {market}.",
+  hist_stable_nodiff: "Walang pagbabago ang presyo kumpara sa nakaraang talaan sa {market}.",
 };
