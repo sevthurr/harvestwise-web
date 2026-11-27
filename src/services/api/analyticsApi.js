@@ -135,6 +135,7 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
   const stage = options.cropStage || options.crop_stage;
   const planting = options.plantingDate || options.planting_date;
   const harvest = options.harvestDate || options.harvest_date;
+  const recordsLimit = options.recordsLimit || options.records_limit || 100;
   if (stage) {
     url += `&crop_stage=${encodeURIComponent(stage)}`;
   }
@@ -143,6 +144,9 @@ export async function getPriceOutlook(commodityId, priceTypeKey = "bangkerohan_r
   }
   if (harvest) {
     url += `&harvest_date=${encodeURIComponent(harvest)}`;
+  }
+  if (recordsLimit) {
+    url += `&records_limit=${encodeURIComponent(recordsLimit)}`;
   }
   return parseResponse(await apiGet(url));
 }

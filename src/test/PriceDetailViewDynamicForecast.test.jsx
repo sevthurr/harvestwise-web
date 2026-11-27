@@ -191,4 +191,44 @@ describe("PriceDetailView dynamic Stage 3 forecast dependency", () => {
     expect(screen.getByText("₱155.05")).toBeInTheDocument();
     expect(screen.getByText("+₱15.05")).toBeInTheDocument();
   });
+
+  it("handles gapped historical records and displays the selected historical range of records", async () => {
+    // 21 records with gaps between them (e.g. 5 days apart)
+    const sparseRecords = [];
+    for (let i = 0; i < 21; i++) {
+      const d = new Date(Date.UTC(2026, 10, 26 - i * 3));
+      sparseRecords.push({
+        price_date: d.toISOString().slice(0, 10),
+        prevail_price: 100,
+        market: "Bangkerohan Public Market",
+        price_type: "retail",
+      });
+    }
+
+    getPriceOutlookMock.mockResolvedValue({
+      commodity_id: "COM-0036",
+      commodity_name: "Atsal",
+      crop_stage: "near_harvest",
+      current_prevailing_price: 100.0,
+      recent_average_price: 100.0,
+      current_market_price: 100.0,
+      price_records: sparseRecords,
+      forecast_points: [
+        {
+          forecast_date: "2026-12-03",
+          horizon_days: 7,
+          forecast_midpoint: 110.0,
+        },
+      ],
+      forecast_midpoint: 110.0,
+      forecast_difference_pct: 10.0,
+      expected_price_direction: "Rising",
+    });
+
+    renderPriceDetailView({ initialHistoricalRange: "21d" });
+
+    await screen.findAllByText(/Current Market Price/i);
+    expect(screen.getByText(/Last 21 days average/i)).toBeInTheDocument();
+    expect(screen.getAllByText("₱100.00").length).toBeGreaterThanOrEqual(2);
+  });
 });

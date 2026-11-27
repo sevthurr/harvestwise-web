@@ -820,11 +820,12 @@ function PriceDetailView({
 
   // 2. Fetch authoritative price detail using the exact same API pipeline as backend.
   const stageOptions = useMemo(() => {
-    if (!normalizedInputStage && !plantingDate && !expectedHarvestDate) return undefined;
+    if (!normalizedInputStage && !plantingDate && !expectedHarvestDate) return { recordsLimit: 100 };
     return {
       cropStage: normalizedInputStage,
       plantingDate,
       harvestDate: expectedHarvestDate,
+      recordsLimit: 100,
     };
   }, [normalizedInputStage, plantingDate, expectedHarvestDate]);
 
@@ -1122,7 +1123,7 @@ function PriceDetailView({
     if (records.length === 0) {
       return priceOutlookModel?.recentAverage ?? null;
     }
-    const filtered = filterRecordsByPeriod(records, historicalRange);
+    const filtered = filterRecordsByPeriod(records, historicalRange, null, null, { matchDayCount: true });
     const validPrices = filtered
       .map((r) => numericPrice(r.prevail_price ?? r.price))
       .filter((p) => p != null && p > 0);
