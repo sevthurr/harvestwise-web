@@ -220,11 +220,11 @@ function StatCard({
   );
 }
 
-function ClassificationBadge({ classification, labelPrefix = "" }) {
+function ClassificationBadge({ classification, labelPrefix = "", t }) {
   const norm = String(classification || "").toLowerCase().replace(/[\s-]/g, "_");
   const cfg = STATUS_CFG[norm] || STATUS_CFG.neutral;
   const Icon = cfg.Icon;
-  const label = cfg.fallback;
+  const label = t ? t(cfg.labelKey, {}, cfg.fallback) : cfg.fallback;
   const badgeClasses =
     norm === "favorable" || norm === "above_recent_trend"
       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -350,7 +350,7 @@ function PriceSummaryStrip({
                     {t("farmer.factors.price.forecast_classification", {}, "Forecast Classification")}
                   </p>
                   <div>
-                    <ClassificationBadge classification={priceOutlookModel?.forecastPriceOutlook || priceOutlookModel?.classification} />
+                    <ClassificationBadge t={t} classification={priceOutlookModel?.forecastPriceOutlook || priceOutlookModel?.classification} />
                   </div>
                   <p className="text-[9px] sm:text-[11px] text-black mt-1">
                     {t("farmer.factors.price.stage_planting", {}, "Stage 2: Planting")}
@@ -419,7 +419,7 @@ function PriceSummaryStrip({
                     {t("farmer.factors.price.historical_classification", {}, "Historical Classification")}
                   </p>
                   <div>
-                    <ClassificationBadge classification={priceOutlookModel?.historicalPriceOutlook || "neutral"} />
+                    <ClassificationBadge t={t} classification={priceOutlookModel?.historicalPriceOutlook || "neutral"} />
                   </div>
                   <p className="text-[9px] sm:text-[11px] text-black mt-1">
                     {t("farmer.factors.price.preserved_historical_benchmark", {}, "Preserved historical benchmark")}
@@ -544,7 +544,7 @@ function PriceSummaryStrip({
                 {t("farmer.factors.price.market_trend_label", {}, "Market Trend")}
               </p>
               <div>
-                <ClassificationBadge classification={classification} />
+                <ClassificationBadge t={t} classification={classification} />
               </div>
               <p className="text-[9px] sm:text-[11px] text-black mt-1">
                 {t("farmer.factors.price.stage_harvest", {}, "Stage 4: Harvest")}
@@ -1321,6 +1321,31 @@ function PriceDetailView({
           classification: classLabel,
         },
         defaultFallback
+      );
+    }
+    const midpoint = priceOutlookModel.forecastMidpoint;
+    const baseline = priceOutlookModel.comparisonBaseline;
+    if (midpoint != null && baseline != null) {
+      const comparison = midpoint < baseline
+        ? (currentLang === "ceb" ? "mas ubos" : currentLang === "tl" ? "mas mababa" : "below")
+        : midpoint > baseline
+        ? (currentLang === "ceb" ? "mas taas" : currentLang === "tl" ? "mas mataas" : "above")
+        : (currentLang === "ceb" ? "pareho" : currentLang === "tl" ? "kapantay" : "equal to");
+      const classification = t(
+        `farmer.factors.price.${priceOutlookModel.classification || "neutral"}_label`,
+        {},
+        statusCfg.fallback
+      );
+      return t(
+        "farmer.factors.price.forecast_baseline_explanation",
+        {
+          midpoint: midpoint.toFixed(2),
+          baseline: baseline.toFixed(2),
+          pct: priceOutlookModel.percentChange != null ? priceOutlookModel.percentChange.toFixed(2) : "—",
+          comparison,
+          classification,
+        },
+        priceOutlookModel.explanation || ""
       );
     }
     return priceOutlookModel.explanation || "";

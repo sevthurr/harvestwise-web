@@ -658,7 +658,7 @@ function CommodityDetailPage() {
         {/* 4-option market selector */}
         <div className="flex rounded-xl border border-[var(--hw-neutral-200)] overflow-hidden bg-white shadow-[var(--shadow-xs)]">
           <button onClick={() => setMarket("bangkerohan")} className={segCls(market === "bangkerohan")}>
-            Bangkerohan
+            Bangkerohan Retail
           </button>
           <div className="w-px bg-[var(--hw-neutral-200)]" />
           <button onClick={() => setMarket("bangkerohan-wholesale")} className={segCls(market === "bangkerohan-wholesale")}>
